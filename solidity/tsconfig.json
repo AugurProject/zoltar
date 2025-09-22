@@ -1,0 +1,26 @@
+{
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"rootDir": "ts",
+		"outDir": "js",
+		"sourceMap": false,
+		"inlineSources": false,
+		"declaration": false,
+		"declarationMap": false,
+		"noEmit": false,
+		"strict": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true,
+		"esModuleInterop": true,
+		"lib": ["ESNext", "DOM"],
+		"typeRoots": ["../node_modules/@types", "./ts/types"],
+		"types": [ "node" ],
+	},
+	"include": [
+		"./ts/**/*.ts",
+	]
+}

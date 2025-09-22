@@ -1,0 +1,5 @@
+node_modules/
+/solidity/artifacts
+/solidity/node_modules
+/solidity/js
+solidity/user-config.json
