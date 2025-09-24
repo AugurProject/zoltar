@@ -39,9 +39,8 @@ contract Zoltar {
 	// TODO: Revist what behavior the bond should be
 	uint256 constant public REP_BOND = 1 ether;
 
-	uint256 constant public DESIGNATED_REPORTING_TIME = 1 days;
+	uint256 constant public DESIGNATED_REPORTING_TIME = 3 days;
 	uint256 constant public DISPUTE_PERIOD = 1 days;
-	uint256 constant public REP_MIGRATION_WINDOW = 7 days;
 
 	constructor() {
 		universes[0] = Universe(
@@ -181,9 +180,7 @@ contract Zoltar {
 	function migrateREPInternal(uint192 universeId, uint256 amount, uint8 outcome, address migrator, address recipient) private {
 		require(outcome < 3, "Invalid outcome");
 		Universe memory universe = universes[universeId];
-		require(block.timestamp < universe.forkTime + REP_MIGRATION_WINDOW, "Universe not in REP migration window");
-
-		uint256 softBurnedREP = universe.reputationToken.balanceOf(Constants.BURN_ADDRESS);
+		require(universe.forkTime != 0, "Universe has not forked");
 
 		// Genesis is using REPv2 which we cannot actually burn
 		if (universeId == 0) {
@@ -196,11 +193,11 @@ contract Zoltar {
 			ReputationToken(address(universe.reputationToken)).burn(migrator, amount);
 		}
 
-		uint192 childUniverseId = uint192((universeId << 2) + outcome + 1);
-		Universe memory childUniverse = universes[childUniverseId];
-		ReputationToken(address(childUniverse.reputationToken)).mint(recipient, amount);
+		for (uint8 i = 1; i < Constants.NUM_OUTCOMES + 1; i++) {
+			uint192 childUniverseId = (universeId << 2) + i;
+			Universe memory childUniverse = universes[childUniverseId];
+			ReputationToken(address(childUniverse.reputationToken)).mint(recipient, amount);
+		}
 
-		universes[universeId] = universe;
-		universes[childUniverseId] = childUniverse;
 	}
 }
