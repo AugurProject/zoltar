@@ -116,12 +116,12 @@ contract Zoltar {
 		return marketResolutionData.outcome;
 	}
 
-	function migrateStakedRep(uint192 _universeId, uint56 _marketId, uint8 _outcome) external {
+	function migrateStakedRep(uint192 _universeId, uint56 _marketId) external {
 		MarketResolutionData memory marketResolutionData = marketResolutions[_universeId][_marketId];
 		require(marketResolutionData.reportTime != 0, "No REP staked in this market");
 		require(!marketResolutionDataIsFinalized(marketResolutionData), "Cannot migrate REP from finalized market");
 
-		migrateREPInternal(_universeId, REP_BOND, _outcome, address(this), marketResolutionData.initialReporter);
+		migrateREPInternal(_universeId, REP_BOND, address(this), marketResolutionData.initialReporter, 3);
 	}
 
 	function isFinalized(uint192 _universeId, uint56 _marketId) external view returns (bool) {
@@ -169,16 +169,17 @@ contract Zoltar {
 		universe.forkTime = block.timestamp;
 		universes[_universeId] = universe;
 
-		migrateREPInternal(_universeId, REP_BOND, marketResolutionData.outcome, marketResolutionData.initialReporter, marketResolutionData.initialReporter);
-		migrateREPInternal(_universeId, disputeStake, _outcome, msg.sender, msg.sender);
+		migrateREPInternal(_universeId, REP_BOND, marketResolutionData.initialReporter, marketResolutionData.initialReporter, marketResolutionData.outcome);
+		migrateREPInternal(_universeId, disputeStake, msg.sender, msg.sender, _outcome);
 	}
 
-	function migrateREP(uint192 universeId, uint256 amount, uint8 outcome) public {
-		migrateREPInternal(universeId, amount, outcome, msg.sender, msg.sender);
+	function migrateREP(uint192 universeId) public {
+		uint256 amount = universes[universeId].reputationToken.balanceOf(msg.sender);
+		migrateREPInternal(universeId, amount, msg.sender, msg.sender, 3);
 	}
 
-	function migrateREPInternal(uint192 universeId, uint256 amount, uint8 outcome, address migrator, address recipient) private {
-		require(outcome < 3, "Invalid outcome");
+	// singleOutcome will only credit the provided outcome if it is a valid outcome, else all child universe REP will be minted
+	function migrateREPInternal(uint192 universeId, uint256 amount, address migrator, address recipient, uint8 singleOutcome) private {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, "Universe has not forked");
 
@@ -194,6 +195,7 @@ contract Zoltar {
 		}
 
 		for (uint8 i = 1; i < Constants.NUM_OUTCOMES + 1; i++) {
+			if (singleOutcome < 3 && i != singleOutcome + 1) continue;
 			uint192 childUniverseId = (universeId << 2) + i;
 			Universe memory childUniverse = universes[childUniverseId];
 			ReputationToken(address(childUniverse.reputationToken)).mint(recipient, amount);

@@ -336,6 +336,27 @@ export const dispute = async (client: WriteClient, universe: bigint, market: big
 	})
 }
 
+export const migrateREP = async (client: WriteClient, universe: bigint) => {
+	const ZoltarAddress = getZoltarAddress()
+	return await client.writeContract({
+		chain: mainnet,
+		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
+		functionName: 'migrateREP',
+		address: ZoltarAddress,
+		args: [universe]
+	})
+}
+
+export const migrateStakedRep = async (client: WriteClient, universe: bigint, market: bigint) => {
+	const ZoltarAddress = getZoltarAddress()
+	return await client.writeContract({
+		chain: mainnet,
+		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
+		functionName: 'migrateStakedRep',
+		address: ZoltarAddress,
+		args: [universe, market]
+	})
+}
 
 export const isFinalized = async (client: ReadClient, universe: bigint, marketId: bigint) => {
 	const ZoltarAddress = getZoltarAddress()
