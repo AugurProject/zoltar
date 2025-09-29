@@ -336,23 +336,23 @@ export const dispute = async (client: WriteClient, universe: bigint, market: big
 	})
 }
 
-export const migrateREP = async (client: WriteClient, universe: bigint) => {
+export const splitRep = async (client: WriteClient, universe: bigint) => {
 	const ZoltarAddress = getZoltarAddress()
 	return await client.writeContract({
 		chain: mainnet,
 		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
-		functionName: 'migrateREP',
+		functionName: 'splitRep',
 		address: ZoltarAddress,
 		args: [universe]
 	})
 }
 
-export const migrateStakedRep = async (client: WriteClient, universe: bigint, market: bigint) => {
+export const splitStakedRep = async (client: WriteClient, universe: bigint, market: bigint) => {
 	const ZoltarAddress = getZoltarAddress()
 	return await client.writeContract({
 		chain: mainnet,
 		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
-		functionName: 'migrateStakedRep',
+		functionName: 'splitStakedRep',
 		address: ZoltarAddress,
 		args: [universe, market]
 	})

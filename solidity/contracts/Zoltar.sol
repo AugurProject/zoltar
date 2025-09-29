@@ -116,12 +116,12 @@ contract Zoltar {
 		return marketResolutionData.outcome;
 	}
 
-	function migrateStakedRep(uint192 _universeId, uint56 _marketId) external {
+	function splitStakedRep(uint192 _universeId, uint56 _marketId) external {
 		MarketResolutionData memory marketResolutionData = marketResolutions[_universeId][_marketId];
 		require(marketResolutionData.reportTime != 0, "No REP staked in this market");
 		require(!marketResolutionDataIsFinalized(marketResolutionData), "Cannot migrate REP from finalized market");
 
-		migrateREPInternal(_universeId, REP_BOND, address(this), marketResolutionData.initialReporter, 3);
+		splitRepInternal(_universeId, REP_BOND, address(this), marketResolutionData.initialReporter, type(uint8).max);
 	}
 
 	function isFinalized(uint192 _universeId, uint56 _marketId) external view returns (bool) {
@@ -169,17 +169,17 @@ contract Zoltar {
 		universe.forkTime = block.timestamp;
 		universes[_universeId] = universe;
 
-		migrateREPInternal(_universeId, REP_BOND, marketResolutionData.initialReporter, marketResolutionData.initialReporter, marketResolutionData.outcome);
-		migrateREPInternal(_universeId, disputeStake, msg.sender, msg.sender, _outcome);
+		splitRepInternal(_universeId, REP_BOND, marketResolutionData.initialReporter, marketResolutionData.initialReporter, marketResolutionData.outcome);
+		splitRepInternal(_universeId, disputeStake, msg.sender, msg.sender, _outcome);
 	}
 
-	function migrateREP(uint192 universeId) public {
+	function splitRep(uint192 universeId) public {
 		uint256 amount = universes[universeId].reputationToken.balanceOf(msg.sender);
-		migrateREPInternal(universeId, amount, msg.sender, msg.sender, 3);
+		splitRepInternal(universeId, amount, msg.sender, msg.sender, type(uint8).max);
 	}
 
 	// singleOutcome will only credit the provided outcome if it is a valid outcome, else all child universe REP will be minted
-	function migrateREPInternal(uint192 universeId, uint256 amount, address migrator, address recipient, uint8 singleOutcome) private {
+	function splitRepInternal(uint192 universeId, uint256 amount, address migrator, address recipient, uint8 singleOutcome) private {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, "Universe has not forked");
 
@@ -195,7 +195,7 @@ contract Zoltar {
 		}
 
 		for (uint8 i = 1; i < Constants.NUM_OUTCOMES + 1; i++) {
-			if (singleOutcome < 3 && i != singleOutcome + 1) continue;
+			if (singleOutcome != type(uint8).max && i != singleOutcome + 1) continue;
 			uint192 childUniverseId = (universeId << 2) + i;
 			Universe memory childUniverse = universes[childUniverseId];
 			ReputationToken(address(childUniverse.reputationToken)).mint(recipient, amount);

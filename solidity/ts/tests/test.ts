@@ -2,7 +2,7 @@ import { describe, beforeEach, test } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient } from '../testsuite/simulator/utils/viem.js'
 import { BURN_ADDRESS, DAY, GENESIS_REPUTATION_TOKEN, REP_BOND, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { approveToken, createMarket, ensureZoltarDeployed, getERC20Balance, getMarketData, getZoltarAddress, getUniverseData, initialTokenBalance, isZoltarDeployed, setupTestAccounts, reportOutcome, isFinalized, finalizeMarket, getWinningOutcome, dispute, migrateREP, migrateStakedRep } from '../testsuite/simulator/utils/utilities.js'
+import { approveToken, createMarket, ensureZoltarDeployed, getERC20Balance, getMarketData, getZoltarAddress, getUniverseData, initialTokenBalance, isZoltarDeployed, setupTestAccounts, reportOutcome, isFinalized, finalizeMarket, getWinningOutcome, dispute, splitRep, splitStakedRep } from '../testsuite/simulator/utils/utilities.js'
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint.js'
 
@@ -196,7 +196,7 @@ describe('Contract Test Suite', () => {
 		// migrate unstaked REP from client 1
 		const client1REPBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		const repBurned = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), addressString(1n))
-		await migrateREP(client, genesisUniverse)
+		await splitRep(client, genesisUniverse)
 
 		const repBurnedAfterMigration = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), addressString(BURN_ADDRESS))
 		assert.strictEqual(repBurnedAfterMigration, repBurned + client1REPBalance + REP_BOND + disputeBond, "REP not sent to burn address during migration")
@@ -210,7 +210,7 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(client1NoREPBalanceAfterMigrate, client1REPBalance, "REP not migrated to no as expected")
 
 		// We can migrate the REP staked in the other market as well
-		await migrateStakedRep(client, genesisUniverse, marketId2)
+		await splitStakedRep(client, genesisUniverse, marketId2)
 
 		const client1InvalidREPBalanceAfterStakedMigrate = await getERC20Balance(client, invalidREPToken, client.account.address)
 		const client1YesREPBalanceAfterStakedMigrate = await getERC20Balance(client, yesREPToken, client.account.address)
