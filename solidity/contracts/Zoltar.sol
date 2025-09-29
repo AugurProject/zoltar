@@ -39,9 +39,8 @@ contract Zoltar {
 	// TODO: Revist what behavior the bond should be
 	uint256 constant public REP_BOND = 1 ether;
 
-	uint256 constant public DESIGNATED_REPORTING_TIME = 1 days;
+	uint256 constant public DESIGNATED_REPORTING_TIME = 3 days;
 	uint256 constant public DISPUTE_PERIOD = 1 days;
-	uint256 constant public REP_MIGRATION_WINDOW = 7 days;
 
 	constructor() {
 		universes[0] = Universe(
@@ -117,12 +116,12 @@ contract Zoltar {
 		return marketResolutionData.outcome;
 	}
 
-	function migrateStakedRep(uint192 _universeId, uint56 _marketId, uint8 _outcome) external {
+	function splitStakedRep(uint192 _universeId, uint56 _marketId) external {
 		MarketResolutionData memory marketResolutionData = marketResolutions[_universeId][_marketId];
 		require(marketResolutionData.reportTime != 0, "No REP staked in this market");
 		require(!marketResolutionDataIsFinalized(marketResolutionData), "Cannot migrate REP from finalized market");
 
-		migrateREPInternal(_universeId, REP_BOND, _outcome, address(this), marketResolutionData.initialReporter);
+		splitRepInternal(_universeId, REP_BOND, address(this), marketResolutionData.initialReporter, type(uint8).max);
 	}
 
 	function isFinalized(uint192 _universeId, uint56 _marketId) external view returns (bool) {
@@ -170,20 +169,19 @@ contract Zoltar {
 		universe.forkTime = block.timestamp;
 		universes[_universeId] = universe;
 
-		migrateREPInternal(_universeId, REP_BOND, marketResolutionData.outcome, marketResolutionData.initialReporter, marketResolutionData.initialReporter);
-		migrateREPInternal(_universeId, disputeStake, _outcome, msg.sender, msg.sender);
+		splitRepInternal(_universeId, REP_BOND, marketResolutionData.initialReporter, marketResolutionData.initialReporter, marketResolutionData.outcome);
+		splitRepInternal(_universeId, disputeStake, msg.sender, msg.sender, _outcome);
 	}
 
-	function migrateREP(uint192 universeId, uint256 amount, uint8 outcome) public {
-		migrateREPInternal(universeId, amount, outcome, msg.sender, msg.sender);
+	function splitRep(uint192 universeId) public {
+		uint256 amount = universes[universeId].reputationToken.balanceOf(msg.sender);
+		splitRepInternal(universeId, amount, msg.sender, msg.sender, type(uint8).max);
 	}
 
-	function migrateREPInternal(uint192 universeId, uint256 amount, uint8 outcome, address migrator, address recipient) private {
-		require(outcome < 3, "Invalid outcome");
+	// singleOutcome will only credit the provided outcome if it is a valid outcome, else all child universe REP will be minted
+	function splitRepInternal(uint192 universeId, uint256 amount, address migrator, address recipient, uint8 singleOutcome) private {
 		Universe memory universe = universes[universeId];
-		require(block.timestamp < universe.forkTime + REP_MIGRATION_WINDOW, "Universe not in REP migration window");
-
-		uint256 softBurnedREP = universe.reputationToken.balanceOf(Constants.BURN_ADDRESS);
+		require(universe.forkTime != 0, "Universe has not forked");
 
 		// Genesis is using REPv2 which we cannot actually burn
 		if (universeId == 0) {
@@ -196,11 +194,12 @@ contract Zoltar {
 			ReputationToken(address(universe.reputationToken)).burn(migrator, amount);
 		}
 
-		uint192 childUniverseId = uint192((universeId << 2) + outcome + 1);
-		Universe memory childUniverse = universes[childUniverseId];
-		ReputationToken(address(childUniverse.reputationToken)).mint(recipient, amount);
+		for (uint8 i = 1; i < Constants.NUM_OUTCOMES + 1; i++) {
+			if (singleOutcome != type(uint8).max && i != singleOutcome + 1) continue;
+			uint192 childUniverseId = (universeId << 2) + i;
+			Universe memory childUniverse = universes[childUniverseId];
+			ReputationToken(address(childUniverse.reputationToken)).mint(recipient, amount);
+		}
 
-		universes[universeId] = universe;
-		universes[childUniverseId] = childUniverse;
 	}
 }
