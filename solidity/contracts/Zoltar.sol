@@ -24,9 +24,16 @@ contract Zoltar {
 
 	struct QuestionResolutionData {
 		address initialReporter;
-		uint8 outcome;
+		Outcome outcome;
 		uint64 reportTime;
 		bool finalized;
+	}
+
+	enum Outcome {
+		Invalid,
+		Yes,
+		No,
+		None
 	}
 
 	mapping(uint56 => QuestionData) public questions;
@@ -89,13 +96,13 @@ contract Zoltar {
 		);
 	}
 
-	function reportOutcome(uint192 _universeId, uint56 _questionId, uint8 _outcome) external {
+	function reportOutcome(uint192 _universeId, uint56 _questionId, Outcome _outcome) external {
 		Universe memory universe = universes[_universeId];
 		require(universe.forkingQuestion == 0, "Universe is forked");
 		QuestionData memory questionData = questions[_questionId];
 		QuestionResolutionData memory questionResolutionData = questionResolutions[_universeId][_questionId];
 		require(questionResolutionData.reportTime == 0, "Question already has a report");
-		require(_outcome < 3, "Invalid outcome");
+		require(_outcome != Outcome.None, "Invalid outcome");
 		require(block.timestamp > questionData.endTime, "Question has not ended");
 		require(msg.sender == questionData.designatedReporter || block.timestamp > questionData.endTime + DESIGNATED_REPORTING_TIME, "Reporter must be designated reporter");
 
@@ -104,7 +111,7 @@ contract Zoltar {
 		questionResolutions[_universeId][_questionId].reportTime = uint64(block.timestamp);
 	}
 
-	function finalizeQuestion(uint192 _universeId, uint56 _questionId) external returns (uint8) {
+	function finalizeQuestion(uint192 _universeId, uint56 _questionId) external returns (Outcome) {
 		Universe memory universe = universes[_universeId];
 		QuestionResolutionData memory questionResolutionData = questionResolutions[_universeId][_questionId];
 		if (!questionResolutionData.finalized) {
@@ -121,7 +128,7 @@ contract Zoltar {
 		require(questionResolutionData.reportTime != 0, "No REP staked in this question");
 		require(!questionResolutionDataIsFinalized(questionResolutionData), "Cannot migrate REP from finalized question");
 
-		splitRepInternal(_universeId, REP_BOND, address(this), questionResolutionData.initialReporter, type(uint8).max);
+		splitRepInternal(_universeId, REP_BOND, address(this), questionResolutionData.initialReporter, Outcome.None);
 	}
 
 	function isFinalized(uint192 _universeId, uint56 _questionId) external view returns (bool) {
@@ -134,7 +141,7 @@ contract Zoltar {
 		return questionResolutionData.reportTime != 0 && block.timestamp > questionResolutionData.reportTime + DISPUTE_PERIOD;
 	}
 
-	function getWinningOutcome(uint192 _universeId, uint56 _questionId) public view returns (uint8) {
+	function getWinningOutcome(uint192 _universeId, uint56 _questionId) public view returns (Outcome) {
 		QuestionResolutionData memory questionResolutionData = questionResolutions[_universeId][_questionId];
 		require(questionResolutionDataIsFinalized(questionResolutionData), "Question is not finalized");
 
@@ -142,13 +149,13 @@ contract Zoltar {
 	}
 
 	// TODO: Currently escalation game is a single dispute. Likely will be more complex.
-	function dispute(uint192 _universeId, uint56 _questionId, uint8 _outcome) external {
+	function dispute(uint192 _universeId, uint56 _questionId, Outcome _outcome) external {
 		Universe memory universe = universes[_universeId];
 		require(universe.forkingQuestion == 0, "Universe is forked");
 		QuestionResolutionData memory questionResolutionData = questionResolutions[_universeId][_questionId];
 		require(_outcome != questionResolutionData.outcome, "Dispute must be for a different outcome than the currently winning one");
 		require(block.timestamp < questionResolutionData.reportTime + DISPUTE_PERIOD, "Question not in dispute window");
-		require(_outcome < 3, "Invalid outcome");
+		require(_outcome != Outcome.None, "Invalid outcome");
 
 		uint256 disputeStake = REP_BOND * 2;
 
@@ -161,7 +168,7 @@ contract Zoltar {
 			);
 
 			questionResolutions[childUniverseId][_questionId].reportTime = 1;
-			questionResolutions[childUniverseId][_questionId].outcome = i - 1;
+			questionResolutions[childUniverseId][_questionId].outcome = Outcome(i - 1);
 			questionResolutions[childUniverseId][_questionId].finalized = true;
 		}
 
@@ -175,11 +182,11 @@ contract Zoltar {
 
 	function splitRep(uint192 universeId) public {
 		uint256 amount = universes[universeId].reputationToken.balanceOf(msg.sender);
-		splitRepInternal(universeId, amount, msg.sender, msg.sender, type(uint8).max);
+		splitRepInternal(universeId, amount, msg.sender, msg.sender, Outcome.None);
 	}
 
 	// singleOutcome will only credit the provided outcome if it is a valid outcome, else all child universe REP will be minted
-	function splitRepInternal(uint192 universeId, uint256 amount, address migrator, address recipient, uint8 singleOutcome) private {
+	function splitRepInternal(uint192 universeId, uint256 amount, address migrator, address recipient, Outcome singleOutcome) private {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, "Universe has not forked");
 
@@ -195,7 +202,7 @@ contract Zoltar {
 		}
 
 		for (uint8 i = 1; i < Constants.NUM_OUTCOMES + 1; i++) {
-			if (singleOutcome != type(uint8).max && i != singleOutcome + 1) continue;
+			if (singleOutcome != Outcome.None && i != uint8(singleOutcome) + 1) continue;
 			uint192 childUniverseId = (universeId << 2) + i;
 			Universe memory childUniverse = universes[childUniverseId];
 			ReputationToken(address(childUniverse.reputationToken)).mint(recipient, amount);
