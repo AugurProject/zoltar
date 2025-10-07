@@ -9,32 +9,39 @@ contract Zoltar {
 
 	struct Universe {
 		IERC20 reputationToken;
-		uint56 forkingMarket;
+		uint56 forkingQuestion;
 		uint256 forkTime;
 	}
 
 	mapping(uint192 => Universe) public universes;
 
-	struct MarketData {
+	struct QuestionData {
 		uint64 endTime;
 		uint192 originUniverse;
 		address designatedReporter;
 		string extraInfo;
 	}
 
-	struct MarketResolutionData {
+	struct QuestionResolutionData {
 		address initialReporter;
-		uint8 outcome;
+		Outcome outcome;
 		uint64 reportTime;
 		bool finalized;
 	}
 
-	mapping(uint56 => MarketData) public markets;
+	enum Outcome {
+		Invalid,
+		Yes,
+		No,
+		None
+	}
 
-	// UniverseId => MarketId => Data
-	mapping(uint192 => mapping(uint56 => MarketResolutionData)) marketResolutions;
+	mapping(uint56 => QuestionData) public questions;
 
-	uint56 marketIdCounter = 0;
+	// UniverseId => QuestionId => Data
+	mapping(uint192 => mapping(uint56 => QuestionResolutionData)) questionResolutions;
+
+	uint56 questionIdCounter = 0;
 
 	// TODO: Revist what behavior the bond should be
 	uint256 constant public REP_BOND = 1 ether;
@@ -50,11 +57,11 @@ contract Zoltar {
 		);
 	}
 
-	function isMarketLegit(uint192 _universeId, uint56 _marketId) public view returns (bool) {
-		MarketData memory marketData = markets[_marketId];
-		require(marketData.endTime != 0, "Market is not valid");
+	function isQuestionLegit(uint192 _universeId, uint56 _questionId) public view returns (bool) {
+		QuestionData memory questionData = questions[_questionId];
+		require(questionData.endTime != 0, "Question is not valid");
 
-		if (marketData.originUniverse == _universeId) return true;
+		if (questionData.originUniverse == _universeId) return true;
 
 		Universe memory universeData = universes[_universeId];
 		require(address(universeData.reputationToken) != address(0), "Universe is not valid");
@@ -65,23 +72,23 @@ contract Zoltar {
 			Universe memory curUniverseData = universes[_universeId];
 			if (curUniverseData.forkTime == 0) return false;
 
-			// A resolved market cannot have children, as a market in a forked universe does not get resolved there
-			MarketResolutionData memory marketResolutionData = marketResolutions[_universeId][_marketId];
-			if (marketResolutionDataIsFinalized(marketResolutionData)) return false;
+			// A resolved question cannot have children, as a question in a forked universe does not get resolved there
+			QuestionResolutionData memory questionResolutionData = questionResolutions[_universeId][_questionId];
+			if (questionResolutionDataIsFinalized(questionResolutionData)) return false;
 
 			// If other checks passed and the ids are equal its a legitimate child. If this never gets reached it isn't.
-			if (marketData.originUniverse == _universeId) return true;
+			if (questionData.originUniverse == _universeId) return true;
 		} while (_universeId > 0);
 
 		return false;
 	}
 
-	function createMarket(uint192 _universeId, uint64 _endTime, address _designatedReporterAddress, string memory _extraInfo) public returns (uint56 _marketId) {
+	function createQuestion(uint192 _universeId, uint64 _endTime, address _designatedReporterAddress, string memory _extraInfo) public returns (uint56 _questionId) {
 		Universe memory universe = universes[_universeId];
-		require(universe.forkingMarket == 0, "Universe is forked");
+		require(universe.forkingQuestion == 0, "Universe is forked");
 		universe.reputationToken.transferFrom(msg.sender, address(this), REP_BOND);
-		_marketId = ++marketIdCounter;
-		markets[_marketId] = MarketData(
+		_questionId = ++questionIdCounter;
+		questions[_questionId] = QuestionData(
 			_endTime,
 			_universeId,
 			_designatedReporterAddress,
@@ -89,66 +96,66 @@ contract Zoltar {
 		);
 	}
 
-	function reportOutcome(uint192 _universeId, uint56 _marketId, uint8 _outcome) external {
+	function reportOutcome(uint192 _universeId, uint56 _questionId, Outcome _outcome) external {
 		Universe memory universe = universes[_universeId];
-		require(universe.forkingMarket == 0, "Universe is forked");
-		MarketData memory marketData = markets[_marketId];
-		MarketResolutionData memory marketResolutionData = marketResolutions[_universeId][_marketId];
-		require(marketResolutionData.reportTime == 0, "Market already has a report");
-		require(_outcome < 3, "Invalid outcome");
-		require(block.timestamp > marketData.endTime, "Market has not ended");
-		require(msg.sender == marketData.designatedReporter || block.timestamp > marketData.endTime + DESIGNATED_REPORTING_TIME, "Reporter must be designated reporter");
+		require(universe.forkingQuestion == 0, "Universe is forked");
+		QuestionData memory questionData = questions[_questionId];
+		QuestionResolutionData memory questionResolutionData = questionResolutions[_universeId][_questionId];
+		require(questionResolutionData.reportTime == 0, "Question already has a report");
+		require(_outcome != Outcome.None, "Invalid outcome");
+		require(block.timestamp > questionData.endTime, "Question has not ended");
+		require(msg.sender == questionData.designatedReporter || block.timestamp > questionData.endTime + DESIGNATED_REPORTING_TIME, "Reporter must be designated reporter");
 
-		marketResolutions[_universeId][_marketId].initialReporter = msg.sender;
-		marketResolutions[_universeId][_marketId].outcome = _outcome;
-		marketResolutions[_universeId][_marketId].reportTime = uint64(block.timestamp);
+		questionResolutions[_universeId][_questionId].initialReporter = msg.sender;
+		questionResolutions[_universeId][_questionId].outcome = _outcome;
+		questionResolutions[_universeId][_questionId].reportTime = uint64(block.timestamp);
 	}
 
-	function finalizeMarket(uint192 _universeId, uint56 _marketId) external returns (uint8) {
+	function finalizeQuestion(uint192 _universeId, uint56 _questionId) external returns (Outcome) {
 		Universe memory universe = universes[_universeId];
-		MarketResolutionData memory marketResolutionData = marketResolutions[_universeId][_marketId];
-		if (!marketResolutionData.finalized) {
-			require(marketResolutionDataIsFinalized(marketResolutionData), "Cannot withdraw REP bond before finalized");
-			marketResolutionData.finalized = true;
-			marketResolutions[_universeId][_marketId] = marketResolutionData;
-			universe.reputationToken.transfer(marketResolutionData.initialReporter, REP_BOND);
+		QuestionResolutionData memory questionResolutionData = questionResolutions[_universeId][_questionId];
+		if (!questionResolutionData.finalized) {
+			require(questionResolutionDataIsFinalized(questionResolutionData), "Cannot withdraw REP bond before finalized");
+			questionResolutionData.finalized = true;
+			questionResolutions[_universeId][_questionId] = questionResolutionData;
+			universe.reputationToken.transfer(questionResolutionData.initialReporter, REP_BOND);
 		}
-		return marketResolutionData.outcome;
+		return questionResolutionData.outcome;
 	}
 
-	function splitStakedRep(uint192 _universeId, uint56 _marketId) external {
-		MarketResolutionData memory marketResolutionData = marketResolutions[_universeId][_marketId];
-		require(marketResolutionData.reportTime != 0, "No REP staked in this market");
-		require(!marketResolutionDataIsFinalized(marketResolutionData), "Cannot migrate REP from finalized market");
+	function splitStakedRep(uint192 _universeId, uint56 _questionId) external {
+		QuestionResolutionData memory questionResolutionData = questionResolutions[_universeId][_questionId];
+		require(questionResolutionData.reportTime != 0, "No REP staked in this question");
+		require(!questionResolutionDataIsFinalized(questionResolutionData), "Cannot migrate REP from finalized question");
 
-		splitRepInternal(_universeId, REP_BOND, address(this), marketResolutionData.initialReporter, type(uint8).max);
+		splitRepInternal(_universeId, REP_BOND, address(this), questionResolutionData.initialReporter, Outcome.None);
 	}
 
-	function isFinalized(uint192 _universeId, uint56 _marketId) external view returns (bool) {
-		MarketResolutionData memory marketResolutionData = marketResolutions[_universeId][_marketId];
-		if (marketResolutionData.finalized) return true;
-		return marketResolutionDataIsFinalized(marketResolutionData);
+	function isFinalized(uint192 _universeId, uint56 _questionId) external view returns (bool) {
+		QuestionResolutionData memory questionResolutionData = questionResolutions[_universeId][_questionId];
+		if (questionResolutionData.finalized) return true;
+		return questionResolutionDataIsFinalized(questionResolutionData);
 	}
 
-	function marketResolutionDataIsFinalized(MarketResolutionData memory marketResolutionData) internal view returns (bool) {
-		return marketResolutionData.reportTime != 0 && block.timestamp > marketResolutionData.reportTime + DISPUTE_PERIOD;
+	function questionResolutionDataIsFinalized(QuestionResolutionData memory questionResolutionData) internal view returns (bool) {
+		return questionResolutionData.reportTime != 0 && block.timestamp > questionResolutionData.reportTime + DISPUTE_PERIOD;
 	}
 
-	function getWinningOutcome(uint192 _universeId, uint56 _marketId) public view returns (uint8) {
-		MarketResolutionData memory marketResolutionData = marketResolutions[_universeId][_marketId];
-		require(marketResolutionDataIsFinalized(marketResolutionData), "Market is not finalized");
+	function getWinningOutcome(uint192 _universeId, uint56 _questionId) public view returns (Outcome) {
+		QuestionResolutionData memory questionResolutionData = questionResolutions[_universeId][_questionId];
+		require(questionResolutionDataIsFinalized(questionResolutionData), "Question is not finalized");
 
-		return marketResolutionData.outcome;
+		return questionResolutionData.outcome;
 	}
 
 	// TODO: Currently escalation game is a single dispute. Likely will be more complex.
-	function dispute(uint192 _universeId, uint56 _marketId, uint8 _outcome) external {
+	function dispute(uint192 _universeId, uint56 _questionId, Outcome _outcome) external {
 		Universe memory universe = universes[_universeId];
-		require(universe.forkingMarket == 0, "Universe is forked");
-		MarketResolutionData memory marketResolutionData = marketResolutions[_universeId][_marketId];
-		require(_outcome != marketResolutionData.outcome, "Dispute must be for a different outcome than the currently winning one");
-		require(block.timestamp < marketResolutionData.reportTime + DISPUTE_PERIOD, "Market not in dispute window");
-		require(_outcome < 3, "Invalid outcome");
+		require(universe.forkingQuestion == 0, "Universe is forked");
+		QuestionResolutionData memory questionResolutionData = questionResolutions[_universeId][_questionId];
+		require(_outcome != questionResolutionData.outcome, "Dispute must be for a different outcome than the currently winning one");
+		require(block.timestamp < questionResolutionData.reportTime + DISPUTE_PERIOD, "Question not in dispute window");
+		require(_outcome != Outcome.None, "Invalid outcome");
 
 		uint256 disputeStake = REP_BOND * 2;
 
@@ -160,26 +167,26 @@ contract Zoltar {
 				0
 			);
 
-			marketResolutions[childUniverseId][_marketId].reportTime = 1;
-			marketResolutions[childUniverseId][_marketId].outcome = i - 1;
-			marketResolutions[childUniverseId][_marketId].finalized = true;
+			questionResolutions[childUniverseId][_questionId].reportTime = 1;
+			questionResolutions[childUniverseId][_questionId].outcome = Outcome(i - 1);
+			questionResolutions[childUniverseId][_questionId].finalized = true;
 		}
 
-		universe.forkingMarket = _marketId;
+		universe.forkingQuestion = _questionId;
 		universe.forkTime = block.timestamp;
 		universes[_universeId] = universe;
 
-		splitRepInternal(_universeId, REP_BOND, marketResolutionData.initialReporter, marketResolutionData.initialReporter, marketResolutionData.outcome);
+		splitRepInternal(_universeId, REP_BOND, questionResolutionData.initialReporter, questionResolutionData.initialReporter, questionResolutionData.outcome);
 		splitRepInternal(_universeId, disputeStake, msg.sender, msg.sender, _outcome);
 	}
 
 	function splitRep(uint192 universeId) public {
 		uint256 amount = universes[universeId].reputationToken.balanceOf(msg.sender);
-		splitRepInternal(universeId, amount, msg.sender, msg.sender, type(uint8).max);
+		splitRepInternal(universeId, amount, msg.sender, msg.sender, Outcome.None);
 	}
 
 	// singleOutcome will only credit the provided outcome if it is a valid outcome, else all child universe REP will be minted
-	function splitRepInternal(uint192 universeId, uint256 amount, address migrator, address recipient, uint8 singleOutcome) private {
+	function splitRepInternal(uint192 universeId, uint256 amount, address migrator, address recipient, Outcome singleOutcome) private {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, "Universe has not forked");
 
@@ -195,7 +202,7 @@ contract Zoltar {
 		}
 
 		for (uint8 i = 1; i < Constants.NUM_OUTCOMES + 1; i++) {
-			if (singleOutcome != type(uint8).max && i != singleOutcome + 1) continue;
+			if (singleOutcome != Outcome.None && i != uint8(singleOutcome) + 1) continue;
 			uint192 childUniverseId = (universeId << 2) + i;
 			Universe memory childUniverse = universes[childUniverseId];
 			ReputationToken(address(childUniverse.reputationToken)).mint(recipient, amount);
