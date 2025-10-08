@@ -2,7 +2,7 @@ import { describe, beforeEach, test } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient } from '../testsuite/simulator/utils/viem.js'
 import { BURN_ADDRESS, DAY, GENESIS_REPUTATION_TOKEN, REP_BOND, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { approveToken, createMarket, ensureZoltarDeployed, getERC20Balance, getMarketData, getZoltarAddress, getUniverseData, initialTokenBalance, isZoltarDeployed, setupTestAccounts, reportOutcome, isFinalized, finalizeMarket, getWinningOutcome, dispute, splitRep, splitStakedRep } from '../testsuite/simulator/utils/utilities.js'
+import { approveToken, createQuestion, ensureZoltarDeployed, getERC20Balance, getQuestionData, getZoltarAddress, getUniverseData, initialTokenBalance, isZoltarDeployed, setupTestAccounts, reportOutcome, isFinalized, finalizeQuestion, getWinningOutcome, dispute, splitRep, splitStakedRep } from '../testsuite/simulator/utils/utilities.js'
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint.js'
 
@@ -27,7 +27,7 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(genesisUniverseData[0].toLowerCase(), addressString(GENESIS_REPUTATION_TOKEN), 'Genesis universe not recognized or not initialized properly')
 	})
 
-	test('canCreateMarket', async () => {
+	test('canCreateQuestion', async () => {
 		const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await ensureZoltarDeployed(client)
 		const zoltar = getZoltarAddress()
@@ -39,18 +39,18 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(repBalance, initialTokenBalance, "REP not initially minted")
 
 		const endTime = curentTimestamp + DAY
-		await createMarket(client, genesisUniverse, endTime, "test")
+		await createQuestion(client, genesisUniverse, endTime, "test")
 
-		const marketId = 1n
-		const marketData = await getMarketData(client, marketId)
+		const questionId = 1n
+		const questionData = await getQuestionData(client, questionId)
 
-		assert.strictEqual(marketData[0], endTime, 'Market endTime not as expected')
-		assert.strictEqual(marketData[1], genesisUniverse, 'Market origin universe not as expected')
-		assert.strictEqual(marketData[2].toLowerCase(), client.account.address, 'Market designated reporter not as expected')
-		assert.strictEqual(marketData[3], "test", 'Market extraInfo not as expected')
+		assert.strictEqual(questionData[0], endTime, 'Question endTime not as expected')
+		assert.strictEqual(questionData[1], genesisUniverse, 'Question origin universe not as expected')
+		assert.strictEqual(questionData[2].toLowerCase(), client.account.address, 'Question designated reporter not as expected')
+		assert.strictEqual(questionData[3], "test", 'Question extraInfo not as expected')
 	})
 
-	test('canResolveMarket', async () => {
+	test('canResolveQuestion', async () => {
 		const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await ensureZoltarDeployed(client)
 		const zoltar = getZoltarAddress()
@@ -59,34 +59,34 @@ describe('Contract Test Suite', () => {
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 
 		const endTime = curentTimestamp + DAY
-		await createMarket(client, genesisUniverse, endTime, "test")
+		await createQuestion(client, genesisUniverse, endTime, "test")
 
-		const marketId = 1n
+		const questionId = 1n
 		const winningOutcome = 1n
 
-		// We can't report until the market has reached its end time
-		await assert.rejects(reportOutcome(client, genesisUniverse, marketId, winningOutcome))
+		// We can't report until the question has reached its end time
+		await assert.rejects(reportOutcome(client, genesisUniverse, questionId, winningOutcome))
 
 		await mockWindow.advanceTime(DAY)
 
-		await reportOutcome(client, genesisUniverse, marketId, winningOutcome)
+		await reportOutcome(client, genesisUniverse, questionId, winningOutcome)
 
-		const isFInalized = await isFinalized(client, genesisUniverse, marketId)
-		assert.ok(!isFInalized, "Market incorrectly recognized as finalized")
-		await assert.rejects(finalizeMarket(client, genesisUniverse, marketId))
+		const isFInalized = await isFinalized(client, genesisUniverse, questionId)
+		assert.ok(!isFInalized, "Question incorrectly recognized as finalized")
+		await assert.rejects(finalizeQuestion(client, genesisUniverse, questionId))
 
 		await mockWindow.advanceTime(DAY + 1n)
 
-		const isFInalizedNow = await isFinalized(client, genesisUniverse, marketId)
-		assert.ok(isFInalizedNow, "Market not recognized as finalized")
+		const isFInalizedNow = await isFinalized(client, genesisUniverse, questionId)
+		assert.ok(isFInalizedNow, "Question not recognized as finalized")
 
 		const repBalanceBeforeReturn = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		await finalizeMarket(client, genesisUniverse, marketId)
+		await finalizeQuestion(client, genesisUniverse, questionId)
 		const repBalanceAfterReturn = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		assert.strictEqual(repBalanceAfterReturn, repBalanceBeforeReturn + REP_BOND, "REP bond not returned")
 
-		const marketOutcome = await getWinningOutcome(client, genesisUniverse, marketId)
-		assert.strictEqual(marketOutcome, winningOutcome, "Winning outcome not as expected")
+		const questionOutcome = await getWinningOutcome(client, genesisUniverse, questionId)
+		assert.strictEqual(questionOutcome, winningOutcome, "Winning outcome not as expected")
 	})
 
 	test('canInitialReport', async () => {
@@ -99,38 +99,38 @@ describe('Contract Test Suite', () => {
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 
 		const endTime = curentTimestamp + DAY
-		await createMarket(client, genesisUniverse, endTime, "test")
+		await createQuestion(client, genesisUniverse, endTime, "test")
 
-		const marketId = 1n
+		const questionId = 1n
 		const winningOutcome = 1n
 
 		await mockWindow.advanceTime(DAY)
 
 		// We can't report as a non designated reporter until their designated reporting period is over
-		await assert.rejects(reportOutcome(otherClient, genesisUniverse, marketId, winningOutcome))
+		await assert.rejects(reportOutcome(otherClient, genesisUniverse, questionId, winningOutcome))
 
 		await mockWindow.advanceTime(DAY * 3n + 1n)
 
-		await reportOutcome(otherClient, genesisUniverse, marketId, winningOutcome)
+		await reportOutcome(otherClient, genesisUniverse, questionId, winningOutcome)
 
-		// We still need to wait for the market to go without a dispute for the dispute period before it is finalized
-		const isFInalized = await isFinalized(client, genesisUniverse, marketId)
-		assert.ok(!isFInalized, "Market incorrectly recognized as finalized")
-		await assert.rejects(finalizeMarket(client, genesisUniverse, marketId))
+		// We still need to wait for the question to go without a dispute for the dispute period before it is finalized
+		const isFInalized = await isFinalized(client, genesisUniverse, questionId)
+		assert.ok(!isFInalized, "Question incorrectly recognized as finalized")
+		await assert.rejects(finalizeQuestion(client, genesisUniverse, questionId))
 
 		await mockWindow.advanceTime(DAY + 1n)
 
-		const isFInalizedNow = await isFinalized(client, genesisUniverse, marketId)
-		assert.ok(isFInalizedNow, "Market not recognized as finalized")
+		const isFInalizedNow = await isFinalized(client, genesisUniverse, questionId)
+		assert.ok(isFInalizedNow, "Question not recognized as finalized")
 
 		// The REP bond can now be returned to the initial reporter
 		const repBalanceBeforeReturn = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), otherClient.account.address)
-		await finalizeMarket(client, genesisUniverse, marketId)
+		await finalizeQuestion(client, genesisUniverse, questionId)
 		const repBalanceAfterReturn = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), otherClient.account.address)
 		assert.strictEqual(repBalanceAfterReturn, repBalanceBeforeReturn + REP_BOND, "REP bond not returned")
 	})
 
-	test('canForkMarket', async () => {
+	test('canForkQuestion', async () => {
 		const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await ensureZoltarDeployed(client)
@@ -141,25 +141,25 @@ describe('Contract Test Suite', () => {
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 
 		const endTime = curentTimestamp + DAY
-		await createMarket(client, genesisUniverse, endTime, "test")
+		await createQuestion(client, genesisUniverse, endTime, "test")
 
-		const marketId = 1n
+		const questionId = 1n
 
-		// We'll create a second market and buy complete sets with both users as well
-		await createMarket(client, genesisUniverse, endTime, "test 2")
+		// We'll create a second question and buy complete sets with both users as well
+		await createQuestion(client, genesisUniverse, endTime, "test 2")
 
-		const marketId2 = 2n
+		const questionId2 = 2n
 
 		await mockWindow.advanceTime(DAY)
 
 		const initialOutcome = 1n
-		await reportOutcome(client, genesisUniverse, marketId, initialOutcome)
+		await reportOutcome(client, genesisUniverse, questionId, initialOutcome)
 
-		// We'll also report on the second market
-		await reportOutcome(client, genesisUniverse, marketId2, initialOutcome)
+		// We'll also report on the second question
+		await reportOutcome(client, genesisUniverse, questionId2, initialOutcome)
 
 		const disputeOutcome = 2n
-		await dispute(client2, genesisUniverse, marketId, disputeOutcome)
+		await dispute(client2, genesisUniverse, questionId, disputeOutcome)
 
 		// Three child universe now exist
 		const invalidUniverseId = 1n
@@ -182,14 +182,14 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(client1YesREPBalance, REP_BOND, "REP bond not migrated during fork")
 		assert.strictEqual(client2NoREPBalance, REP_BOND * 2n, "Dispute bond not migrated during fork")
 
-		// The forking market is resolved to each respective outcome in the child universes
-		const invalidUniverseWinningOutcome = await getWinningOutcome(client, invalidUniverseId, marketId)
-		const yesUniverseWinningOutcome = await getWinningOutcome(client, yesUniverseId, marketId)
-		const noUniverseWinningOutcome = await getWinningOutcome(client, noUniverseId, marketId)
+		// The forking question is resolved to each respective outcome in the child universes
+		const invalidUniverseWinningOutcome = await getWinningOutcome(client, invalidUniverseId, questionId)
+		const yesUniverseWinningOutcome = await getWinningOutcome(client, yesUniverseId, questionId)
+		const noUniverseWinningOutcome = await getWinningOutcome(client, noUniverseId, questionId)
 
-		assert.strictEqual(invalidUniverseWinningOutcome, 0n, "Invalid universe forking market outcome not as expected")
-		assert.strictEqual(yesUniverseWinningOutcome, 1n, "Yes universe forking market outcome not as expected")
-		assert.strictEqual(noUniverseWinningOutcome, 2n, "No universe forking market outcome not as expected")
+		assert.strictEqual(invalidUniverseWinningOutcome, 0n, "Invalid universe forking question outcome not as expected")
+		assert.strictEqual(yesUniverseWinningOutcome, 1n, "Yes universe forking question outcome not as expected")
+		assert.strictEqual(noUniverseWinningOutcome, 2n, "No universe forking question outcome not as expected")
 
 		const disputeBond = REP_BOND * 2n
 
@@ -209,8 +209,8 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(client1YesREPBalanceAfterMigrate, client1REPBalance + REP_BOND, "REP not migrated to yes as expected")
 		assert.strictEqual(client1NoREPBalanceAfterMigrate, client1REPBalance, "REP not migrated to no as expected")
 
-		// We can migrate the REP staked in the other market as well
-		await splitStakedRep(client, genesisUniverse, marketId2)
+		// We can migrate the REP staked in the other question as well
+		await splitStakedRep(client, genesisUniverse, questionId2)
 
 		const client1InvalidREPBalanceAfterStakedMigrate = await getERC20Balance(client, invalidREPToken, client.account.address)
 		const client1YesREPBalanceAfterStakedMigrate = await getERC20Balance(client, yesREPToken, client.account.address)
