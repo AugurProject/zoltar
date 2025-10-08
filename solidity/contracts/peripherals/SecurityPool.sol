@@ -38,7 +38,6 @@ uint256 constant PRICE_PRECISION = 10 ** 18;
 
 // price oracle
 uint256 constant PRICE_VALID_FOR_SECONDS = 1 hours;
-IOpenOracle constant OPEN_ORACLE = IOpenOracle(0x9339811f0F6deE122d2e97dd643c07991Aaa7a29); // NOT REAL ADDRESS, this one is on base
 
 IERC20 constant WETH = IERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
@@ -76,15 +75,17 @@ contract PriceOracleManagerAndOperatorQueuer {
 	uint256 public lastPrice; // (REP * PRICE_PRECISION) / ETH;
 	IERC20 reputationToken;
 	SecurityPool public securityPool;
+	IOpenOracle public openOracle;
 
 	// operation queuing
 	uint256 public queuedOperationId;
 	mapping(uint256 => QueuedOperation) public queuedOperations;
 
-	constructor(SecurityPool _securityPool, uint256 _lastPrice) {
+	constructor(SecurityPool _securityPool, IOpenOracle _openOracle, uint256 _lastPrice) {
 		reputationToken = reputationToken;
 		lastPrice = _lastPrice;
 		securityPool = _securityPool;
+		openOracle = _openOracle;
 	}
 
 	function requestPrice() public payable {
@@ -118,11 +119,11 @@ contract PriceOracleManagerAndOperatorQueuer {
 			feeToken: true //if true, protocol fees + fees paid to previous reporter are in tokenToSwap. if false, in not(tokenToSwap)
 		}); //typically if feeToken true, fees are paid in less valuable token, if false, fees paid in more valuable token
 
-		pendingReportId = OPEN_ORACLE.createReportInstance{value: ethCost}(reportparams);
+		pendingReportId = openOracle.createReportInstance{value: ethCost}(reportparams);
 	}
 
 	function openOracleReportPrice(uint256, uint256 reportId, uint256 price, uint256, address, address) public {
-		require(msg.sender == address(OPEN_ORACLE), 'only open oracle can call');
+		require(msg.sender == address(openOracle), 'only open oracle can call');
 		require(reportId == pendingReportId, 'not report created by us');
 		pendingReportId = 0;
 		lastSettlementTimestamp = lastSettlementTimestamp;
@@ -187,6 +188,7 @@ contract SecurityPool {
 	uint256 public securityPoolForkTriggeredTimestamp;
 
 	mapping(address => SecurityVault) public securityVaults;
+	mapping(address => bool) public claimedAuctionProceeds;
 
 	SecurityPool[3] public children;
 	SecurityPool public parent;
@@ -200,6 +202,7 @@ contract SecurityPool {
 	SecurityPoolFactory public securityPoolFactory;
 
 	PriceOracleManagerAndOperatorQueuer public priceOracleManagerAndOperatorQueuer;
+	IOpenOracle public openOracle;
 
 	modifier isOperational {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
@@ -208,17 +211,18 @@ contract SecurityPool {
 		_;
 	}
 
-	constructor(SecurityPoolFactory _securityPoolFactory, SecurityPool _parent, Zoltar _zoltar, uint192 _universeId, uint56 _questionId, uint256 _securityMultiplier, uint256 _startingPerSecondFee, uint256 _startingRepEthPrice, uint256 _ethAmountForCompleteSets) {
+	constructor(SecurityPoolFactory _securityPoolFactory, IOpenOracle _openOracle, SecurityPool _parent, Zoltar _zoltar, uint192 _universeId, uint56 _questionId, uint256 _securityMultiplier, uint256 _startingPerSecondFee, uint256 _startingRepEthPrice, uint256 _ethAmountForCompleteSets) {
 		universeId = _universeId;
-		(repToken,,) = zoltar.universes(universeId);
 		securityPoolFactory = _securityPoolFactory;
 		questionId = _questionId;
 		securityMultiplier = _securityMultiplier;
 		zoltar = _zoltar;
 		parent = _parent;
+		openOracle = _openOracle;
 		currentPerSecondFee = _startingPerSecondFee;
-		priceOracleManagerAndOperatorQueuer = new PriceOracleManagerAndOperatorQueuer(this, _startingRepEthPrice);
+		(repToken,,) = zoltar.universes(universeId);
 		ethAmountForCompleteSets = _ethAmountForCompleteSets;
+		priceOracleManagerAndOperatorQueuer = new PriceOracleManagerAndOperatorQueuer(this, _openOracle, _startingRepEthPrice);
 		if (address(parent) == address(0x0)) { // origin universe never does auction
 			truthAuctionStarted = 1;
 			systemState = SystemState.Operational;
@@ -242,7 +246,7 @@ contract SecurityPool {
 		}
 
 		lastUpdatedFeeAccumulator = block.timestamp;
-		(uint64 endTime,,,) = zoltar.markets(questionId);
+		(uint64 endTime,,,) = zoltar.questions(questionId);
 		if (endTime > block.timestamp) {
 			// this is for question end time, not finalization time, this removes incentive for rep holders to delay the oracle to extract fees
 			currentPerSecondFee = 0;
@@ -283,7 +287,7 @@ contract SecurityPool {
 		require((repToken.balanceOf(address(this)) - amount) * PRICE_PRECISION > securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Global Security Bond Alowance broken');
 
 		securityVaults[vault].repDepositShare -= amount;
-		require(securityVaults[vault].repDepositShare > MIN_REP_DEPOSIT || securityVaults[vault].repDepositShare == 0, 'min deposit requirement');
+		require(securityVaults[vault].repDepositShare > MIN_REP_DEPOSIT * repToken.balanceOf(address(this)) / migratedRep || securityVaults[vault].repDepositShare == 0, 'min deposit requirement');
 		repToken.transfer(address(this), repAmount);
 	}
 
@@ -291,7 +295,7 @@ contract SecurityPool {
 	function depositRep(uint256 amount) public isOperational {
 		uint256 repAmount = amount * repToken.balanceOf(address(this)) / migratedRep;
 		securityVaults[msg.sender].repDepositShare += amount;
-		require(securityVaults[msg.sender].repDepositShare > MIN_REP_DEPOSIT || securityVaults[msg.sender].repDepositShare == 0, 'min deposit requirement');
+		require(securityVaults[msg.sender].repDepositShare > MIN_REP_DEPOSIT * repToken.balanceOf(address(this)) / migratedRep || securityVaults[msg.sender].repDepositShare == 0, 'min deposit requirement');
 		repToken.transferFrom(msg.sender, address(this), repAmount);
 	}
 
@@ -322,7 +326,7 @@ contract SecurityPool {
 		securityVaults[callerVault].securityBondAllowance += debtToMove;
 		securityVaults[callerVault].repDepositShare += repToMove * migratedRep / repToken.balanceOf(address(this));
 
-		require(securityVaults[targetVaultAddress].repDepositShare > MIN_REP_DEPOSIT || securityVaults[targetVaultAddress].repDepositShare == 0, 'min deposit requirement');
+		require(securityVaults[targetVaultAddress].repDepositShare > MIN_REP_DEPOSIT * repToken.balanceOf(address(this)) / migratedRep || securityVaults[targetVaultAddress].repDepositShare == 0, 'min deposit requirement');
 		require(securityVaults[targetVaultAddress].securityBondAllowance > MIN_SECURITY_BOND_DEBT || securityVaults[targetVaultAddress].securityBondAllowance == 0, 'min deposit requirement');
 		require(securityVaults[callerVault].securityBondAllowance > MIN_SECURITY_BOND_DEBT || securityVaults[callerVault].securityBondAllowance == 0, 'min deposit requirement');
 
@@ -401,7 +405,7 @@ contract SecurityPool {
 			// first vault migrater creates new pool and transfers all REP to it
 			uint192  childUniverseId = universeId << 2 + uint192(outcome);
 			// TODO here priceOracleManagerAndOperatorQueuer.lastPrice might be old, do we want to get upto date price for it?
-			children[uint8(outcome)] = securityPoolFactory.deploySecurityPool(this, zoltar, childUniverseId, questionId, securityMultiplier, currentPerSecondFee, priceOracleManagerAndOperatorQueuer.lastPrice(), ethAmountForCompleteSets);
+			children[uint8(outcome)] = securityPoolFactory.deploySecurityPool(this, openOracle, zoltar, childUniverseId, questionId, securityMultiplier, currentPerSecondFee, priceOracleManagerAndOperatorQueuer.lastPrice(), ethAmountForCompleteSets);
 			repToken.transfer(address(children[uint8(outcome)]), repToken.balanceOf(address(this)));
 		}
 		children[uint256(outcome)].migrateRepFromParent(msg.sender);
@@ -456,11 +460,26 @@ contract SecurityPool {
 		}
 		*/
 	}
+
+	// accounts the purchased REP from auction to the vault
+	// we should also move a share of bad debt in the system to this vault
+	function claimAuctionProceeds(address vault) public {
+		require(claimedAuctionProceeds[vault] == false, 'Already Claimed');
+		require(auction.isFinalized(), 'Auction needs to be finalized');
+		claimedAuctionProceeds[vault] = true;
+		uint256 amount = auction.purchasedRep(vault);
+		uint256 repAmount = amount * repToken.balanceOf(address(this)) / migratedRep; // todo, this is wrong
+		securityVaults[msg.sender].repDepositShare += repAmount;
+	}
 }
 
-
 contract SecurityPoolFactory {
-	function deploySecurityPool(SecurityPool parent, Zoltar zoltar, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 startingPerSecondFee, uint256 startingRepEthPrice, uint256 ethAmountForCompleteSets) external returns (SecurityPool) {
-		return new SecurityPool(this, parent, zoltar, universeId, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, ethAmountForCompleteSets);
+	// TODO, we probably want to deploy these using create2 so we can get the address nicer than with this mapping hack
+	mapping(uint256 => SecurityPool) public securityPools;
+	uint256 currentId;
+	function deploySecurityPool(SecurityPool parent, IOpenOracle openOracle, Zoltar zoltar, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 startingPerSecondFee, uint256 startingRepEthPrice, uint256 ethAmountForCompleteSets) external returns (SecurityPool) {
+		currentId++;
+		securityPools[currentId] = new SecurityPool(this, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, ethAmountForCompleteSets);
+		return securityPools[currentId];
 	}
 }
