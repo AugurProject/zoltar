@@ -20,7 +20,7 @@ const deployZoltarAndCreateMarket = async (client: WriteClient, curentTimestamp:
 	await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 	const endTime = curentTimestamp + DAY
 	await createQuestion(client, genesisUniverse, endTime, "test")
-	const marketData = await getQuestionData(client, marketId)
+	return await getQuestionData(client, marketId)
 }
 
 const deployPeripheralsAndGetDeployedSecurityPool = async (client: WriteClient) => {
@@ -59,7 +59,7 @@ describe('Peripherals Contract Test Suite', () => {
 		//depositRep
 	})
 
-	test('anDepositAndWithdrawRep') , async () => {
+	test('anDepositAndWithdrawRep' , async () => {
 		//depositRep
 		//requestPriceIfNeededAndQueueOperation(OperationType operation, address targetVault, uint256 amount)
 		//performWithdrawRep
