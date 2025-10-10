@@ -70,7 +70,7 @@ struct QueuedOperation {
 
 contract PriceOracleManagerAndOperatorQueuer {
 	uint256 public pendingReportId;
-	uint256 public operationQueuedPriceId;
+	uint256 public queuedPendingOperationId;
 	uint256 public lastSettlementTimestamp;
 	uint256 public lastPrice; // (REP * PRICE_PRECISION) / ETH;
 	IERC20 reputationToken;
@@ -78,28 +78,35 @@ contract PriceOracleManagerAndOperatorQueuer {
 	IOpenOracle public openOracle;
 
 	// operation queuing
-	uint256 public queuedOperationId;
+	uint256 public nextQueuedOperationId;
 	mapping(uint256 => QueuedOperation) public queuedOperations;
 
-	constructor(SecurityPool _securityPool, IOpenOracle _openOracle, uint256 _lastPrice) {
-		reputationToken = reputationToken;
+	constructor(IOpenOracle _openOracle, SecurityPool _securityPool, IERC20 _reputationToken, uint256 _lastPrice) {
+		reputationToken = _reputationToken;
 		lastPrice = _lastPrice;
 		securityPool = _securityPool;
 		openOracle = _openOracle;
 	}
 
+	function getRequestPriceEthCost() public view returns (uint256) {// todo, probably something else
+		uint256 gasConsumedOpenOracleReportPrice = 100000; //TODO
+		uint32 gasConsumedSettlement = 100000; //TODO
+		// https://github.com/j0i0m0b0o/openOracleBase/blob/feeTokenChange/src/OpenOracle.sol#L100
+		uint256 ethCost = block.basefee * 4 * (gasConsumedSettlement + gasConsumedOpenOracleReportPrice); // todo, probably something else
+		return ethCost;
+	}
 	function requestPrice() public payable {
 		require(pendingReportId == 0, 'Already pending request');
 		bytes4 callbackSelector = this.openOracleReportPrice.selector;
 		uint256 gasConsumedOpenOracleReportPrice = 100000; //TODO
 		uint32 gasConsumedSettlement = 100000; //TODO
 		// https://github.com/j0i0m0b0o/openOracleBase/blob/feeTokenChange/src/OpenOracle.sol#L100
-		uint256 ethCost = block.basefee * 4 * (gasConsumedSettlement + gasConsumedOpenOracleReportPrice); // todo, probably something else
-		require(msg.value > ethCost, 'not big enough eth bounty');
+		uint256 ethCost = getRequestPriceEthCost();// todo, probably something else
+		require(msg.value >= ethCost, 'not big enough eth bounty');
 
 		// TODO, research more on how to set these params
 		IOpenOracle.CreateReportParams memory reportparams = IOpenOracle.CreateReportParams({
-			exactToken1Report: block.basefee * 200 / lastPrice, // initial oracle liquidity in token1
+			exactToken1Report: 26392439800,//block.basefee * 200 / lastPrice, // initial oracle liquidity in token1
 			escalationHalt: reputationToken.totalSupply() / 100000, // amount of token1 past which escalation stops but disputes can still happen
 			settlerReward: block.basefee * 2 * gasConsumedOpenOracleReportPrice, // eth paid to settler in wei
 			token1Address: address(reputationToken), // address of token1 in the oracle report instance
@@ -128,30 +135,30 @@ contract PriceOracleManagerAndOperatorQueuer {
 		pendingReportId = 0;
 		lastSettlementTimestamp = lastSettlementTimestamp;
 		lastPrice = price;
-		if (operationQueuedPriceId != 0) { // todo we maybe should allow executing couple operations?
-			executeQueuedOperation(operationQueuedPriceId);
-			operationQueuedPriceId = 0;
+		if (queuedPendingOperationId != 0) { // todo we maybe should allow executing couple operations?
+			executeQueuedOperation(queuedPendingOperationId);
+			queuedPendingOperationId = 0;
 		}
 	}
 
 	function isPriceValid() public view returns (bool)  {
-		return lastSettlementTimestamp < block.timestamp + PRICE_VALID_FOR_SECONDS;
+		return lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
 	}
 
 	function requestPriceIfNeededAndQueueOperation(OperationType operation, address targetVault, uint256 amount) public payable {
-		queuedOperations[queuedOperationId] = QueuedOperation({
+		queuedOperations[nextQueuedOperationId] = QueuedOperation({
 			operation: operation,
 			initiatorVault: msg.sender,
 			targetVault: targetVault,
 			amount: amount
 		});
 		if (isPriceValid()) {
-			executeQueuedOperation(queuedOperationId);
-		} else {
-			operationQueuedPriceId = queuedOperationId;
+			executeQueuedOperation(nextQueuedOperationId);
+		} else if (nextQueuedOperationId == 0) {
+			queuedPendingOperationId = nextQueuedOperationId;
 			requestPrice();
 		}
-		queuedOperationId++;
+		nextQueuedOperationId++;
 	}
 
 	function executeQueuedOperation(uint256 operationId) public {
@@ -165,7 +172,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 		} else {
 			securityPool.performSetSecurityBondsAllowance(queuedOperations[operationId].targetVault, queuedOperations[operationId].amount);
 		}
-		queuedOperations[queuedOperationId].amount = 0;
+		queuedOperations[operationId].amount = 0;
 	}
 }
 
@@ -207,7 +214,7 @@ contract SecurityPool {
 	modifier isOperational {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
 		require(forkTime == 0, 'Zoltar has forked');
-		require(systemState == SystemState.OnGoingAFork, 'System is not operational');
+		require(systemState == SystemState.Operational, 'System is not operational');
 		_;
 	}
 
@@ -222,7 +229,7 @@ contract SecurityPool {
 		currentPerSecondFee = _startingPerSecondFee;
 		(repToken,,) = zoltar.universes(universeId);
 		ethAmountForCompleteSets = _ethAmountForCompleteSets;
-		priceOracleManagerAndOperatorQueuer = new PriceOracleManagerAndOperatorQueuer(this, _openOracle, _startingRepEthPrice);
+		priceOracleManagerAndOperatorQueuer = new PriceOracleManagerAndOperatorQueuer(_openOracle, this, repToken, _startingRepEthPrice);
 		if (address(parent) == address(0x0)) { // origin universe never does auction
 			truthAuctionStarted = 1;
 			systemState = SystemState.Operational;
@@ -282,20 +289,20 @@ contract SecurityPool {
 	function performWithdrawRep(address vault, uint256 amount) public isOperational {
 		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'only priceOracleManagerAndOperatorQueuer can call');
 		require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'no valid price');
-		uint256 repAmount = amount * migratedRep / repToken.balanceOf(address(this));
-		require((securityVaults[vault].repDepositShare - amount) * migratedRep / repToken.balanceOf(address(this)) * PRICE_PRECISION > securityVaults[vault].securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Local Security Bond Alowance broken');
-		require((repToken.balanceOf(address(this)) - amount) * PRICE_PRECISION > securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Global Security Bond Alowance broken');
+		uint256 repAmount = amount;
+		require((securityVaults[vault].repDepositShare - amount) * PRICE_PRECISION >= securityVaults[vault].securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Local Security Bond Alowance broken');
+		require((repToken.balanceOf(address(this)) - amount) * PRICE_PRECISION >= securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Global Security Bond Alowance broken');
 
 		securityVaults[vault].repDepositShare -= amount;
-		require(securityVaults[vault].repDepositShare > MIN_REP_DEPOSIT * repToken.balanceOf(address(this)) / migratedRep || securityVaults[vault].repDepositShare == 0, 'min deposit requirement');
+		require(securityVaults[vault].repDepositShare >= MIN_REP_DEPOSIT || securityVaults[vault].repDepositShare == 0, 'min deposit requirement');
 		repToken.transfer(address(this), repAmount);
 	}
 
 	// todo, an owner can save their vault from liquidation if they deposit REP after the liquidation price query is triggered, we probably want to lock the vault from deposits if this has been triggered?
 	function depositRep(uint256 amount) public isOperational {
-		uint256 repAmount = amount * repToken.balanceOf(address(this)) / migratedRep;
+		uint256 repAmount = amount;
 		securityVaults[msg.sender].repDepositShare += amount;
-		require(securityVaults[msg.sender].repDepositShare > MIN_REP_DEPOSIT * repToken.balanceOf(address(this)) / migratedRep || securityVaults[msg.sender].repDepositShare == 0, 'min deposit requirement');
+		require(securityVaults[msg.sender].repDepositShare >= MIN_REP_DEPOSIT || securityVaults[msg.sender].repDepositShare == 0, 'min deposit requirement');
 		repToken.transferFrom(msg.sender, address(this), repAmount);
 	}
 
@@ -356,7 +363,7 @@ contract SecurityPool {
 	////////////////////////////////////////
 	function createCompleteSet() payable public isOperational {
 		require(msg.value > 0, 'need to send eth');
-		require(securityBondAllowance - ethAmountForCompleteSets > msg.value, 'no capacity to create that many sets');
+		require(securityBondAllowance - ethAmountForCompleteSets >= msg.value, 'no capacity to create that many sets');
 		updateFee();
 		uint256 amountToMint = msg.value * address(this).balance / ethAmountForCompleteSets;
 		completeSet.mint(msg.sender, amountToMint);
@@ -405,7 +412,7 @@ contract SecurityPool {
 			// first vault migrater creates new pool and transfers all REP to it
 			uint192  childUniverseId = universeId << 2 + uint192(outcome);
 			// TODO here priceOracleManagerAndOperatorQueuer.lastPrice might be old, do we want to get upto date price for it?
-			children[uint8(outcome)] = securityPoolFactory.deploySecurityPool(this, openOracle, zoltar, childUniverseId, questionId, securityMultiplier, currentPerSecondFee, priceOracleManagerAndOperatorQueuer.lastPrice(), ethAmountForCompleteSets);
+			children[uint8(outcome)] = securityPoolFactory.deploySecurityPool(openOracle, this, zoltar, childUniverseId, questionId, securityMultiplier, currentPerSecondFee, priceOracleManagerAndOperatorQueuer.lastPrice(), ethAmountForCompleteSets);
 			repToken.transfer(address(children[uint8(outcome)]), repToken.balanceOf(address(this)));
 		}
 		children[uint256(outcome)].migrateRepFromParent(msg.sender);
@@ -438,17 +445,18 @@ contract SecurityPool {
 			auction.finalizeAuction();
 		} else {
 			uint256 ethToBuy = parent.ethAmountForCompleteSets() - address(this).balance;
-			repToken.transfer(address(auction), repToken.balanceOf(address(this)));
 			auction.startAuction(ethToBuy);
 		}
 	}
 
 	function finalizeTruthAuction() public {
 		require(truthAuctionStarted + AUCTION_TIME < block.timestamp, 'auction still ongoing');
-		auction.finalizeAuction(); // this sends the rep+eth back to this contract
+		auction.finalizeAuction(); // this sends the eth back
 		systemState = SystemState.Operational;
 
 		//TODO, if auction fails what do we do?
+
+		//TODO, we need to figure out how to update balances correctly as the current rep holders might have lost REP
 
 		/*
 		this code is not needed, just FYI on what can happen after auction:
@@ -477,7 +485,7 @@ contract SecurityPoolFactory {
 	// TODO, we probably want to deploy these using create2 so we can get the address nicer than with this mapping hack
 	mapping(uint256 => SecurityPool) public securityPools;
 	uint256 currentId;
-	function deploySecurityPool(SecurityPool parent, IOpenOracle openOracle, Zoltar zoltar, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 startingPerSecondFee, uint256 startingRepEthPrice, uint256 ethAmountForCompleteSets) external returns (SecurityPool) {
+	function deploySecurityPool(IOpenOracle openOracle, SecurityPool parent, Zoltar zoltar, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 startingPerSecondFee, uint256 startingRepEthPrice, uint256 ethAmountForCompleteSets) external returns (SecurityPool) {
 		currentId++;
 		securityPools[currentId] = new SecurityPool(this, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, ethAmountForCompleteSets);
 		return securityPools[currentId];
