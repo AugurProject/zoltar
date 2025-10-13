@@ -195,7 +195,7 @@ export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
 		abi: contractsArtifact.contracts['contracts/peripherals/openOracle/OpenOracle.sol'].OpenOracle.abi as Abi,
 		functionName: 'settle',
 		address: getOpenOracleAddress(),
-		gas: 1000000n, //needed because of gas() opcode being used
+		gas: 10000000n, //needed because of gas() opcode being used
 		args: [reportId]
 	})
 }

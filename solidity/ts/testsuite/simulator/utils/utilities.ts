@@ -377,3 +377,13 @@ export const getWinningOutcome = async (client: ReadClient, universe: bigint, qu
 		args: [universe, questionId]
 	}) as number)
 }
+
+export const getReportBond = async (client: ReadClient) => {
+	const ZoltarAddress = getZoltarAddress()
+	return BigInt(await client.readContract({
+		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
+		functionName: 'REP_BOND',
+		address: ZoltarAddress,
+		args: []
+	}) as number)
+}

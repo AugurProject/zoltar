@@ -6,6 +6,7 @@ import { Auction } from './Auction.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { IERC20 } from '../IERC20.sol';
 import { CompleteSet } from './CompleteSet.sol';
+import { IWeth9 } from '../IWeth9.sol';
 
 struct SecurityVault {
 	uint256 securityBondAllowance;
@@ -39,11 +40,14 @@ uint256 constant PRICE_PRECISION = 10 ** 18;
 // price oracle
 uint256 constant PRICE_VALID_FOR_SECONDS = 1 hours;
 
-IERC20 constant WETH = IERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+IWeth9 constant WETH = IWeth9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
 // smallest vaults
 uint256 constant MIN_SECURITY_BOND_DEBT = 1 ether; // 1 eth
 uint256 constant MIN_REP_DEPOSIT = 10 ether; // 10 rep
+
+uint256 constant gasConsumedOpenOracleReportPrice = 100000; //TODO
+uint32 constant gasConsumedSettlement = 1000000; //TODO
 
 function rpow(uint256 x, uint256 n, uint256 baseUnit) pure returns (uint256 z) {
 	z = n % 2 != 0 ? x : baseUnit;
@@ -78,10 +82,10 @@ contract PriceOracleManagerAndOperatorQueuer {
 	OpenOracle public openOracle;
 
 	event PriceReported(uint256 reportId, uint256 price);
-	event ExecutetedQueuedOperation(uint256 operatioNid);
+	event ExecutetedQueuedOperation(uint256 operationId, OperationType operation, bool success);
 
 	// operation queuing
-	uint256 public nextQueuedOperationId;
+	uint256 public previousQueuedOperationId;
 	mapping(uint256 => QueuedOperation) public queuedOperations;
 
 	constructor(OpenOracle _openOracle, SecurityPool _securityPool, IERC20 _reputationToken, uint256 _lastPrice) {
@@ -92,17 +96,12 @@ contract PriceOracleManagerAndOperatorQueuer {
 	}
 
 	function getRequestPriceEthCost() public view returns (uint256) {// todo, probably something else
-		uint256 gasConsumedOpenOracleReportPrice = 100000; //TODO
-		uint32 gasConsumedSettlement = 100000; //TODO
 		// https://github.com/j0i0m0b0o/openOracleBase/blob/feeTokenChange/src/OpenOracle.sol#L100
 		uint256 ethCost = block.basefee * 4 * (gasConsumedSettlement + gasConsumedOpenOracleReportPrice); // todo, probably something else
 		return ethCost;
 	}
 	function requestPrice() public payable {
 		require(pendingReportId == 0, 'Already pending request');
-		bytes4 callbackSelector = this.openOracleReportPrice.selector;
-		uint256 gasConsumedOpenOracleReportPrice = 100000; //TODO
-		uint32 gasConsumedSettlement = 1000000; //TODO
 		// https://github.com/j0i0m0b0o/openOracleBase/blob/feeTokenChange/src/OpenOracle.sol#L100
 		uint256 ethCost = getRequestPriceEthCost();// todo, probably something else
 		require(msg.value >= ethCost, 'not big enough eth bounty');
@@ -124,19 +123,18 @@ contract PriceOracleManagerAndOperatorQueuer {
 			trackDisputes: false, // true keeps a readable dispute history for smart contracts
 			keepFee: false, // true means initial reporter keeps the initial reporter reward. if false, it goes to protocolFeeRecipient
 			callbackContract: address(this), // contract address for settle to call back into
-			callbackSelector: callbackSelector, // method in the callbackContract you want called.
+			callbackSelector: this.openOracleReportPrice.selector, // method in the callbackContract you want called.
 			protocolFeeRecipient: address(0x0), // address that receives protocol fees and initial reporter rewards if keepFee set to false
 			feeToken: true //if true, protocol fees + fees paid to previous reporter are in tokenToSwap. if false, in not(tokenToSwap)
 		}); //typically if feeToken true, fees are paid in less valuable token, if false, fees paid in more valuable token
 
 		pendingReportId = openOracle.createReportInstance{value: ethCost}(reportparams);
 	}
-
-	function openOracleReportPrice(uint256, uint256 reportId, uint256 price, uint256, address, address) public {
+	function openOracleReportPrice(uint256 reportId, uint256 price, uint256, address, address) external {
 		require(msg.sender == address(openOracle), 'only open oracle can call');
 		require(reportId == pendingReportId, 'not report created by us');
 		pendingReportId = 0;
-		lastSettlementTimestamp = lastSettlementTimestamp;
+		lastSettlementTimestamp = block.timestamp;
 		lastPrice = price;
 		emit PriceReported(reportId, lastPrice);
 		if (queuedPendingOperationId != 0) { // todo we maybe should allow executing couple operations?
@@ -151,36 +149,43 @@ contract PriceOracleManagerAndOperatorQueuer {
 
 	function requestPriceIfNeededAndQueueOperation(OperationType operation, address targetVault, uint256 amount) public payable {
 		require(amount > 0, 'need to do non zero operation');
-		queuedOperations[nextQueuedOperationId] = QueuedOperation({
+		previousQueuedOperationId++;
+		queuedOperations[previousQueuedOperationId] = QueuedOperation({
 			operation: operation,
 			initiatorVault: msg.sender,
 			targetVault: targetVault,
 			amount: amount
 		});
 		if (isPriceValid()) {
-			executeQueuedOperation(nextQueuedOperationId);
-		} else if (nextQueuedOperationId == 0) {
-			queuedPendingOperationId = nextQueuedOperationId;
+			executeQueuedOperation(previousQueuedOperationId);
+		} else if (queuedPendingOperationId == 0) {
+			queuedPendingOperationId = previousQueuedOperationId;
 			requestPrice();
 		}
-		nextQueuedOperationId++;
 	}
 
 	function executeQueuedOperation(uint256 operationId) public {
 		require(queuedOperations[operationId].amount > 0, 'no such operation or already executed');
 		require(isPriceValid());
-
-		emit ExecutetedQueuedOperation(operationId);
 		// todo, we should allow these operations here to fail, but solidity try catch doesnt work inside the same contract
 		if (queuedOperations[operationId].operation == OperationType.Liquidation) {
 			try securityPool.performLiquidation(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].targetVault, queuedOperations[operationId].amount) {
-			} catch {}
+				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, true);
+			} catch {
+				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, false);
+			}
 		} else if(queuedOperations[operationId].operation == OperationType.WithdrawRep) {
 			try securityPool.performWithdrawRep(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].amount) {
-			} catch {}
+				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, true);
+			} catch {
+				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, false);
+			}
 		} else {
 			try securityPool.performSetSecurityBondsAllowance(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].amount) {
-			} catch {}
+				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, true);
+			} catch {
+				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, false);
+			}
 		}
 		queuedOperations[operationId].amount = 0;
 	}
@@ -193,7 +198,7 @@ contract SecurityPool {
 
 	Zoltar public zoltar;
 	uint256 public securityBondAllowance;
-	uint256 public ethAmountForCompleteSets;
+	uint256 public ethAmountForCompleteSets; // amount of eth that is backing complete sets, `address(this).balance - ethAmountForCompleteSets` are the fees belonging to REP pool holders
 	uint256 public migratedRep;
 	uint256 public repAtFork;
 	uint256 public securityMultiplier;
@@ -221,6 +226,10 @@ contract SecurityPool {
 	PriceOracleManagerAndOperatorQueuer public priceOracleManagerAndOperatorQueuer;
 	OpenOracle public openOracle;
 
+
+	event SecurityBondAllowanceChange(address vault, uint256 from, uint256 to);
+	event PerformWithdrawRep(address vault, uint256 amount);
+
 	modifier isOperational {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
 		require(forkTime == 0, 'Zoltar has forked');
@@ -247,6 +256,7 @@ contract SecurityPool {
 			systemState = SystemState.OnGoingAFork;
 			auction = new Auction(); // create auction instance that can start receive orders right away
 		}
+		completeSet = new CompleteSet(); // todo, we can probably do these smarter so that we don't need migration
 	}
 
 	// todo, this calculates the fee incorrectly if the update is called way after market end time (as it does not check how long ago it ended)
@@ -306,7 +316,8 @@ contract SecurityPool {
 
 		securityVaults[vault].repDepositShare -= amount;
 		require(securityVaults[vault].repDepositShare >= MIN_REP_DEPOSIT || securityVaults[vault].repDepositShare == 0, 'min deposit requirement');
-		repToken.transfer(address(this), repAmount);
+		repToken.transfer(vault, repAmount);
+		emit PerformWithdrawRep(vault, amount);
 	}
 
 	// todo, an owner can save their vault from liquidation if they deposit REP after the liquidation price query is triggered, we probably want to lock the vault from deposits if this has been triggered?
@@ -347,7 +358,6 @@ contract SecurityPool {
 		require(securityVaults[targetVaultAddress].repDepositShare > MIN_REP_DEPOSIT * repToken.balanceOf(address(this)) / migratedRep || securityVaults[targetVaultAddress].repDepositShare == 0, 'min deposit requirement');
 		require(securityVaults[targetVaultAddress].securityBondAllowance > MIN_SECURITY_BOND_DEBT || securityVaults[targetVaultAddress].securityBondAllowance == 0, 'min deposit requirement');
 		require(securityVaults[callerVault].securityBondAllowance > MIN_SECURITY_BOND_DEBT || securityVaults[callerVault].securityBondAllowance == 0, 'min deposit requirement');
-
 	}
 
 	////////////////////////////////////////
@@ -364,9 +374,9 @@ contract SecurityPool {
 		securityBondAllowance += amount;
 		securityBondAllowance -= oldAllowance;
 		//require(securityBondAllowance >= ethAmountForCompleteSets, 'minted too many complete sets to allow this');
-		securityVaults[callerVault].securityBondAllowance += amount;
-		securityVaults[callerVault].securityBondAllowance -= oldAllowance;
+		securityVaults[callerVault].securityBondAllowance = amount;
 		//require(securityVaults[callerVault].securityBondAllowance > MIN_SECURITY_BOND_DEBT || securityVaults[callerVault].securityBondAllowance == 0, 'min deposit requirement');
+		emit SecurityBondAllowanceChange(callerVault, oldAllowance, amount);
 	}
 
 	////////////////////////////////////////
@@ -374,9 +384,9 @@ contract SecurityPool {
 	////////////////////////////////////////
 	function createCompleteSet() payable public isOperational {
 		require(msg.value > 0, 'need to send eth');
-		require(securityBondAllowance - ethAmountForCompleteSets >= msg.value, 'no capacity to create that many sets');
 		updateFee();
-		uint256 amountToMint = msg.value * address(this).balance / ethAmountForCompleteSets;
+		require(securityBondAllowance - ethAmountForCompleteSets >= msg.value, 'no capacity to create that many sets');
+		uint256 amountToMint = completeSet.totalSupply() == ethAmountForCompleteSets ? msg.value : msg.value * completeSet.totalSupply() / ethAmountForCompleteSets;
 		completeSet.mint(msg.sender, amountToMint);
 		ethAmountForCompleteSets += msg.value;
 	}

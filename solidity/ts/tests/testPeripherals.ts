@@ -2,7 +2,7 @@ import { describe, beforeEach, test } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, ReadClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testsuite/simulator/utils/constants.js'
-import { approveToken, createQuestion, ensureZoltarDeployed, getERC20Balance, getETHBalance, getQuestionData, getZoltarAddress, isZoltarDeployed, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+import { approveToken, createQuestion, ensureZoltarDeployed, getERC20Balance, getETHBalance, getQuestionData, getReportBond, getZoltarAddress, isZoltarDeployed, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { addressString } from '../testsuite/simulator/utils/bigint.js'
 import { createCompleteSet, deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, getCompleteSetAddress, getDeployedSecurityPool, getEthAmountForCompleteSets, getLastPrice, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, getSecurityPoolFactoryAddress, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, redeemCompleteSet, requestPriceIfNeededAndQueueOperation, wrapWeth } from '../testsuite/simulator/utils/peripherals.js'
 import assert from 'node:assert'
@@ -16,35 +16,47 @@ const startingRepEthPrice = 1n;
 const ethAmountForCompleteSets = 0n;
 const PRICE_PRECISION = 10n ** 18n;
 
-const printContractLogs = async (client: ReadClient, securityPoolAddress: `0x${ string }`, priceOracleManagerAndOperatorQueuerAddress: `0x${ string }` ) => {
+const printContractLogs = async (client: ReadClient, securityPoolAddress: `0x${ string }`, priceOracleManagerAndOperatorQueuerAddress: `0x${ string }`, completeSetAddress: `0x${ string }` ) => {
 	const deployments: Deployment[] = [{
 		definitionFilename: 'contracts/ReputationToken.sol',
-		name: 'ReputationToken',
+		deploymentName: 'RepV2',
+		contractName: 'ReputationToken',
 		address: addressString(GENESIS_REPUTATION_TOKEN)
 	}, {
 		definitionFilename: 'contracts/Zoltar.sol',
-		name: 'Zoltar',
+		deploymentName: 'Colored Core',
+		contractName: 'Zoltar',
 		address: getZoltarAddress(),
 	}, {
 		definitionFilename: 'contracts/peripherals/SecurityPool.sol',
-		name: 'PriceOracleManagerAndOperatorQueuer',
+		deploymentName: 'PriceOracleManagerAndOperatorQueuer',
+		contractName: 'PriceOracleManagerAndOperatorQueuer',
 		address: priceOracleManagerAndOperatorQueuerAddress
 	}, {
 		definitionFilename: 'contracts/peripherals/SecurityPool.sol',
-		name: 'SecurityPool',
+		deploymentName: 'ETH SecurityPool',
+		contractName: 'SecurityPool',
 		address: securityPoolAddress
 	}, {
 		definitionFilename: 'contracts/peripherals/SecurityPool.sol',
-		name: 'SecurityPoolFactory',
+		deploymentName: 'SecurityPoolFactory',
+		contractName: 'SecurityPoolFactory',
 		address: getSecurityPoolFactoryAddress()
 	}, {
 		definitionFilename: 'contracts/peripherals/openOracle/OpenOracle.sol',
-		name: 'OpenOracle',
+		deploymentName: 'OpenOracle',
+		contractName: 'OpenOracle',
 		address: getOpenOracleAddress()
 	}, {
-		definitionFilename: 'contracts/ERC20.sol',
-		name: 'WETH',
+		definitionFilename: 'contracts/IWeth9.sol',
+		contractName: 'IWeth9',
+		deploymentName: 'WETH',
 		address: WETH_ADDRESS
+	}, {
+		definitionFilename: 'contracts/peripherals/CompleteSet.sol',
+		contractName: 'CompleteSet',
+		deploymentName: 'CompleteSet',
+		address: completeSetAddress
 	}]
 	return printLogs(client, deployments)
 }
@@ -93,6 +105,7 @@ describe('Peripherals Contract Test Suite', () => {
 	let securityPoolAddress: `0x${ string }`
 	let client: WriteClient
 	let startBalance: bigint
+	let reportBond: bigint
 	const repDeposit = 10n * 10n ** 18n
 
 	beforeEach(async () => {
@@ -103,9 +116,10 @@ describe('Peripherals Contract Test Suite', () => {
 		curentTimestamp = BigInt(Math.floor((await mockWindow.getTime()).getTime() / 1000))
 	 	startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		securityPoolAddress = await initAndDepositRep(client, curentTimestamp, repDeposit)
+		reportBond = await getReportBond(client);
 	})
 
-	test('canDepositRepAndWithdrawIt', async () => {
+	test('can deposit rep and withdraw it', async () => {
 		const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		const priceOracleManagerAndOperatorQueuer = await getPriceOracleManagerAndOperatorQueuer(client, securityPoolAddress)
 		await requestPriceIfNeededAndQueueOperation(client, priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
@@ -129,16 +143,16 @@ describe('Peripherals Contract Test Suite', () => {
 		await openOracleSubmitInitialReport(client, pendingReportId, amount1, amount2, stateHash)
 
 		await mockWindow.advanceTime(DAY)
-
+		console.log('balance before settling:', await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address))
 		// settle and execute the operation (withdraw rep)
 		await openOracleSettle(client, pendingReportId)
-		await printContractLogs(client, securityPoolAddress, priceOracleManagerAndOperatorQueuer)
+		await printContractLogs(client, securityPoolAddress, priceOracleManagerAndOperatorQueuer, await getCompleteSetAddress(client, securityPoolAddress))
 		assert.strictEqual(await getLastPrice(client, priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
-		assert.strictEqual(startBalance, startBalance, 'Did not get rep back')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress), 0n, 'Did not empty security pool of rep')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance - reportBond, 'Did not get rep back')
 	})
 
-
-	test('canSetSecurityBondsAllowance' , async () => {
+	test('can set security bonds allowance' , async () => {
 		const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		const securityPoolAllowance = repDeposit / 4n
 		const priceOracleManagerAndOperatorQueuer = await getPriceOracleManagerAndOperatorQueuer(client, securityPoolAddress)
@@ -182,6 +196,18 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(await getERC20Balance(client, completeSetAddress, client.account.address), 0, 'Did not lose complete sets')
 	})
 
-	// add liquidation test
+
+	test('can liquidate', async () => {
+		// add liquidation test
+	})
+
+	test('cannot mint over or withdraw too much rep', async () => {
 	// add complete sets minting test where price has changed so we can no longer mint
+	})
+
+
+	test('can fork the system', async () => {
+
+	})
+
 })

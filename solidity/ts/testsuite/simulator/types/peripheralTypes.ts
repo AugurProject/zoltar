@@ -32,8 +32,8 @@ export const ContractArtifact = funtypes.ReadonlyObject({
 		'contracts/Zoltar.sol': funtypes.ReadonlyObject({
 			Zoltar: ContractDefinition,
 		}),
-		'contracts/ERC20.sol': funtypes.ReadonlyObject({
-			ERC20: ContractDefinition,
+		'contracts/IWeth9.sol': funtypes.ReadonlyObject({
+			IWeth9: ContractDefinition,
 		}),
 	}),
 })

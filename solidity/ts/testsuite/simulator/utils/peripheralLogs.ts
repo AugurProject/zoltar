@@ -17,18 +17,20 @@ const extractContractInfoFromArtifact = (contractArtifact: { contracts: Record<s
 
 export type Deployment = {
 	definitionFilename: string
-	name: string
+	deploymentName: string
+	contractName: string
 	address: `0x${ string }`
 }
 
 function extractContractsFromArtifact(deployments: Deployment[]) {
 	const contractDefs = extractContractInfoFromArtifact(contractsArtifact)
 	return deployments.map((deployment) => {
-		const definition = contractDefs.find((def) => deployment.definitionFilename === def.filename)
+		const definition = contractDefs.find((def) => deployment.definitionFilename === def.filename && deployment.contractName === def.name)
 		if (definition === undefined) throw new Error(`defintion not found for the deployment: ${ deployment.definitionFilename }`)
 		return {
 			definitionFilename: deployment.definitionFilename,
-			name: deployment.name,
+			contractName: deployment.contractName,
+			deploymentName: deployment.deploymentName,
 			address: deployment.address,
 			abi: definition.contractDefinition.abi
 		}
@@ -57,44 +59,34 @@ export const printLogs = async (client: ReadClient, deployments: Deployment[]) =
 
 	for (const log of rawLogs) {
 		const contract = contracts.find((c) => c.address.toLowerCase() === log.address.toLowerCase())
-		if (!contract) continue
+		if (!contract) throw new Error(`contract not found: ${ log.address.toLowerCase() }`)
 
-		let decodedEvent: any = null
-		for (const abiItem of contract.abi as Abi) {
-			try {
-				const decoded = decodeEventLog({ abi: [abiItem], data: log.data, topics: log.topics })
-				decodedEvent = decoded
-				break
-			} catch {
-				continue
-			}
+		try {
+			const decoded: any = decodeEventLog({ abi: contract.abi as Abi[], data: log.data, topics: log.topics })
+			decodedLogs.push({
+				blockNumber: log.blockNumber,
+				logIndex: log.logIndex,
+				contractName: contract.deploymentName,
+				eventName: decoded.eventName,
+				args: decoded.args
+			})
+		} catch {
+			throw new Error(`Failed to decode log from contract address ${ log.address.toLowerCase() }: ${ log.data }, ${ log.topics }`)
 		}
-
-		if (!decodedEvent) continue
-
-		decodedLogs.push({
-			blockNumber: log.blockNumber,
-			logIndex: log.logIndex,
-			contractName: contract.name,
-			eventName: decodedEvent.eventName,
-			args: decodedEvent.args
-		})
 	}
 
 	// Sort logs chronologically
 	decodedLogs.sort((a, b) => {
-		if (a.blockNumber === b.blockNumber) {
-			return a.logIndex - b.logIndex
-		}
+		if (a.blockNumber === b.blockNumber) return a.logIndex - b.logIndex
 		return a.blockNumber < b.blockNumber ? -1 : 1
 	})
 
 	// Print all logs
 	for (const log of decodedLogs) {
-		console.log(`\n[Block ${log.blockNumber}] ${log.contractName} - ${log.eventName}`)
+		console.log(`\n[Block ${ log.blockNumber }] ${ log.contractName } - ${ log.eventName }`)
 		console.log('Parameters:')
 		for (const [paramName, paramValue] of Object.entries(log.args)) {
-			console.log(`  - ${paramName}: ${paramValue}`)
+			console.log(`  - ${ paramName }: ${ paramValue }`)
 		}
 	}
 }
