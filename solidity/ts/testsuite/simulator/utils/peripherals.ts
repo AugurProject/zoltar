@@ -1,41 +1,11 @@
 import 'viem/window'
 import { Abi, getContractAddress, numberToBytes, ReadContractReturnType } from 'viem'
-import { promises as fs } from 'fs'
 import { ReadClient, WriteClient } from './viem.js'
 import { PROXY_DEPLOYER_ADDRESS, WETH_ADDRESS } from './constants.js'
 import { addressString } from './bigint.js'
-import * as funtypes from 'funtypes'
 import { getZoltarAddress } from './utilities.js'
 import { mainnet } from 'viem/chains'
-
-const ContractDefinition = funtypes.ReadonlyObject({
-	abi: funtypes.Unknown,
-	evm: funtypes.ReadonlyObject({
-		bytecode: funtypes.ReadonlyObject({
-			object: funtypes.String
-		}),
-		deployedBytecode: funtypes.ReadonlyObject({
-			object: funtypes.String
-		})
-	})
-})
-
-type ContractArtifact = funtypes.Static<typeof ContractArtifact>
-const ContractArtifact = funtypes.ReadonlyObject({
-	contracts: funtypes.ReadonlyObject({
-		'contracts/peripherals/openOracle/OpenOracle.sol': funtypes.ReadonlyObject({
-			OpenOracle: ContractDefinition
-		}),
-		'contracts/peripherals/SecurityPool.sol': funtypes.ReadonlyObject({
-			SecurityPoolFactory: ContractDefinition,
-			SecurityPool: ContractDefinition,
-			PriceOracleManagerAndOperatorQueuer: ContractDefinition
-		})
-	}),
-})
-
-const contractLocation = './artifacts/Contracts.json'
-export const contractsArtifact = ContractArtifact.parse(JSON.parse(await fs.readFile(contractLocation, 'utf8')))
+import { contractsArtifact } from '../types/peripheralTypes.js'
 
 export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<void> {
 	const deployerBytecode = await client.getCode({ address: addressString(PROXY_DEPLOYER_ADDRESS)})
@@ -311,4 +281,59 @@ export const getOpenOracleReportMeta = async (client: ReadClient, reportId: bigi
 		multiplier,
 		disputeDelay
 	}
+}
+
+export const createCompleteSet = async (client: WriteClient, securityPoolAddress: `0x${ string }`, completeSetsToCreate: bigint) => {
+	return await client.writeContract({
+		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		functionName: 'createCompleteSet',
+		address: securityPoolAddress,
+		args: [],
+		value: completeSetsToCreate,
+	})
+}
+
+export const getCompleteSetAddress = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		functionName: 'completeSet',
+		address: securityPoolAddress,
+		args: []
+	}) as `0x${ string }`
+}
+
+export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress: `0x${ string }`, completeSetsToRedeem: bigint) => {
+	return await client.writeContract({
+		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		functionName: 'redeemCompleteSet',
+		address: securityPoolAddress,
+		args: [completeSetsToRedeem],
+	})
+}
+
+export const getSecurityBondAllowance = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		functionName: 'securityBondAllowance',
+		address: securityPoolAddress,
+		args: []
+	}) as bigint
+}
+
+export const getEthAmountForCompleteSets = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		functionName: 'ethAmountForCompleteSets',
+		address: securityPoolAddress,
+		args: []
+	}) as bigint
+}
+
+export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
+	return await client.readContract({
+		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].PriceOracleManagerAndOperatorQueuer.abi as Abi,
+		functionName: 'lastPrice',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: []
+	}) as bigint
 }
