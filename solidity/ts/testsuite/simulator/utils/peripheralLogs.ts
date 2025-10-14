@@ -1,7 +1,6 @@
 
-import { Abi, decodeEventLog } from 'viem'
+import { Abi, decodeEventLog, GetLogsReturnType } from 'viem'
 import { ContractInfo, contractsArtifact, ContractDefinition } from '../types/peripheralTypes.js'
-import { ReadClient } from './viem.js'
 
 const extractContractInfoFromArtifact = (contractArtifact: { contracts: Record<string, Record<string, ContractDefinition>> }): ContractInfo[] => {
 	const contractInfoArray: ContractInfo[] = []
@@ -22,7 +21,7 @@ export type Deployment = {
 	address: `0x${ string }`
 }
 
-function extractContractsFromArtifact(deployments: Deployment[]) {
+export function extractContractsFromArtifact(deployments: Deployment[]) {
 	const contractDefs = extractContractInfoFromArtifact(contractsArtifact)
 	return deployments.map((deployment) => {
 		const definition = contractDefs.find((def) => deployment.definitionFilename === def.filename && deployment.contractName === def.name)
@@ -37,18 +36,9 @@ function extractContractsFromArtifact(deployments: Deployment[]) {
 	})
 }
 
-export const printLogs = async (client: ReadClient, deployments: Deployment[]) => {
+export const printLogs = async (rawLogs: GetLogsReturnType, deployments: Deployment[]) => {
 	const contracts = extractContractsFromArtifact(deployments)
-
-	const latestBlockNumber = await client.getBlockNumber()
-	const fromBlock = latestBlockNumber - 10n
-	const toBlock = latestBlockNumber
-	const addresses = contracts.map((contract) => contract.address)
-	const rawLogs = await client.getLogs({ address: addresses, fromBlock, toBlock })
-	if (rawLogs.length === 0) {
-		console.log('No logs found in the last 10 blocks.')
-		return
-	}
+	if (rawLogs.length === 0) return
 	const decodedLogs: {
 		blockNumber: bigint
 		logIndex: number
@@ -60,7 +50,6 @@ export const printLogs = async (client: ReadClient, deployments: Deployment[]) =
 	for (const log of rawLogs) {
 		const contract = contracts.find((c) => c.address.toLowerCase() === log.address.toLowerCase())
 		if (!contract) throw new Error(`contract not found: ${ log.address.toLowerCase() }`)
-
 		try {
 			const decoded: any = decodeEventLog({ abi: contract.abi as Abi[], data: log.data, topics: log.topics })
 			decodedLogs.push({
@@ -83,10 +72,21 @@ export const printLogs = async (client: ReadClient, deployments: Deployment[]) =
 
 	// Print all logs
 	for (const log of decodedLogs) {
-		console.log(`\n[Block ${ log.blockNumber }] ${ log.contractName } - ${ log.eventName }`)
-		console.log('Parameters:')
+		console.log(`${ log.contractName }: ${ log.eventName }(`)
 		for (const [paramName, paramValue] of Object.entries(log.args)) {
-			console.log(`  - ${ paramName }: ${ paramValue }`)
+			let formattedValue = paramValue
+
+			// detect ethereum address
+			if (typeof paramValue === 'string' && /^0x[a-fA-F0-9]{40}$/.test(paramValue)) {
+				const matchingDeployment = deployments.find((deploymentItem) =>
+					deploymentItem.address.toLowerCase() === paramValue.toLowerCase()
+				)
+				if (matchingDeployment) {
+					formattedValue = `${ matchingDeployment.deploymentName } (${ paramValue })`
+				}
+			}
+			console.log(` ${ paramName } = ${ formattedValue }`)
 		}
+		console.log(`)\n`)
 	}
 }

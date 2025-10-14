@@ -30,12 +30,11 @@ uint256 constant MIGRATION_TIME = 8 weeks;
 uint256 constant AUCTION_TIME = 1 weeks;
 
 // fees
-uint256 constant FEE_DIVISOR = 10000;
-uint256 constant MIN_FEE = 200;
-uint256 constant FEE_SLOPE1 = 200;
-uint256 constant FEE_SLOPE2 = 600;
-uint256 constant FEE_DIP = 80;
-uint256 constant PRICE_PRECISION = 10 ** 18;
+uint256 constant PRICE_PRECISION = 1e18;
+
+uint256 constant MAX_RETENTION_RATE = 999_999_996_848_000_000; // ≈90% yearly
+uint256 constant MIN_RETENTION_RATE = 999_999_977_880_000_000; // ≈50% yearly
+uint256 constant RETENTION_RATE_DIP = 80; // 80% utilization
 
 // price oracle
 uint256 constant PRICE_VALID_FOR_SECONDS = 1 hours;
@@ -198,14 +197,14 @@ contract SecurityPool {
 
 	Zoltar public zoltar;
 	uint256 public securityBondAllowance;
-	uint256 public ethAmountForCompleteSets; // amount of eth that is backing complete sets, `address(this).balance - ethAmountForCompleteSets` are the fees belonging to REP pool holders
+	uint256 public completeSetCollateralAmount; // amount of eth that is backing complete sets, `address(this).balance - completeSetCollateralAmount` are the fees belonging to REP pool holders
 	uint256 public migratedRep;
 	uint256 public repAtFork;
 	uint256 public securityMultiplier;
 
-	uint256 public cumulativeFeePerAllowance;
+	uint256 public feesAccrued;
 	uint256 public lastUpdatedFeeAccumulator;
-	uint256 public currentPerSecondFee;
+	uint256 public currentRetentionRate;
 
 	uint256 public securityPoolForkTriggeredTimestamp;
 
@@ -226,9 +225,9 @@ contract SecurityPool {
 	PriceOracleManagerAndOperatorQueuer public priceOracleManagerAndOperatorQueuer;
 	OpenOracle public openOracle;
 
-
 	event SecurityBondAllowanceChange(address vault, uint256 from, uint256 to);
 	event PerformWithdrawRep(address vault, uint256 amount);
+	event PoolRetentionRateChanged(uint256 feesAccrued, uint256 utilization, uint256 retentionRate);
 
 	modifier isOperational {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
@@ -237,7 +236,7 @@ contract SecurityPool {
 		_;
 	}
 
-	constructor(SecurityPoolFactory _securityPoolFactory, OpenOracle _openOracle, SecurityPool _parent, Zoltar _zoltar, uint192 _universeId, uint56 _questionId, uint256 _securityMultiplier, uint256 _startingPerSecondFee, uint256 _startingRepEthPrice, uint256 _ethAmountForCompleteSets) {
+	constructor(SecurityPoolFactory _securityPoolFactory, OpenOracle _openOracle, SecurityPool _parent, Zoltar _zoltar, uint192 _universeId, uint56 _questionId, uint256 _securityMultiplier, uint256 _startingPerSecondFee, uint256 _startingRepEthPrice, uint256 _completeSetCollateralAmount) {
 		universeId = _universeId;
 		securityPoolFactory = _securityPoolFactory;
 		questionId = _questionId;
@@ -245,9 +244,10 @@ contract SecurityPool {
 		zoltar = _zoltar;
 		parent = _parent;
 		openOracle = _openOracle;
-		currentPerSecondFee = _startingPerSecondFee;
+		currentRetentionRate = _startingPerSecondFee;
 		(repToken,,) = zoltar.universes(universeId);
-		ethAmountForCompleteSets = _ethAmountForCompleteSets;
+		completeSetCollateralAmount = _completeSetCollateralAmount;
+		lastUpdatedFeeAccumulator = block.timestamp;
 		priceOracleManagerAndOperatorQueuer = new PriceOracleManagerAndOperatorQueuer(_openOracle, this, repToken, _startingRepEthPrice);
 		if (address(parent) == address(0x0)) { // origin universe never does auction
 			truthAuctionStarted = 1;
@@ -259,40 +259,42 @@ contract SecurityPool {
 		completeSet = new CompleteSet(); // todo, we can probably do these smarter so that we don't need migration
 	}
 
-	// todo, this calculates the fee incorrectly if the update is called way after market end time (as it does not check how long ago it ended)
-	function updateFee() public {
-		uint256 timeDelta = block.timestamp - lastUpdatedFeeAccumulator;
-		if (timeDelta == 0) return;
-		uint256 retentionFactor = rpow(currentPerSecondFee, timeDelta, PRICE_PRECISION);
-		uint256 newEthAmountForCompleteSets = (ethAmountForCompleteSets * retentionFactor) / PRICE_PRECISION;
-
-		uint256 feesAccrued = ethAmountForCompleteSets - newEthAmountForCompleteSets;
-		ethAmountForCompleteSets = newEthAmountForCompleteSets;
-		if (ethAmountForCompleteSets > 0) {
-			cumulativeFeePerAllowance += (feesAccrued * PRICE_PRECISION) / newEthAmountForCompleteSets;
-		}
-
-		lastUpdatedFeeAccumulator = block.timestamp;
+	function updateCollateralAmount() public {
 		(uint64 endTime,,,) = zoltar.questions(questionId);
-		if (endTime > block.timestamp) {
-			// this is for question end time, not finalization time, this removes incentive for rep holders to delay the oracle to extract fees
-			currentPerSecondFee = 0;
+		uint256 clampedCurrentTimestamp = (block.timestamp > endTime ? endTime : block.timestamp);
+		uint256 timeDelta = clampedCurrentTimestamp - lastUpdatedFeeAccumulator;
+		if (timeDelta == 0) return;
+
+		uint256 newCompleteSetCollateralAmount = completeSetCollateralAmount * rpow(currentRetentionRate, timeDelta, PRICE_PRECISION) / PRICE_PRECISION;
+		feesAccrued += completeSetCollateralAmount - newCompleteSetCollateralAmount;
+		completeSetCollateralAmount = newCompleteSetCollateralAmount;
+		lastUpdatedFeeAccumulator = clampedCurrentTimestamp;
+	}
+
+	function updateRetentionRate() public {
+		uint256 utilization = (completeSetCollateralAmount * 100) / securityBondAllowance;
+		if (utilization <= RETENTION_RATE_DIP) {
+			// first slope: 0% → RETENTION_RATE_DIP%
+			uint256 utilizationRatio = (utilization * PRICE_PRECISION) / RETENTION_RATE_DIP;
+			uint256 slopeSpan = MAX_RETENTION_RATE - MIN_RETENTION_RATE;
+			currentRetentionRate = MAX_RETENTION_RATE - (slopeSpan * utilizationRatio) / PRICE_PRECISION;
+		} else if (utilization <= 100) {
+			// second slope: RETENTION_RATE_DIP% → 100%
+			uint256 slopeSpan = MAX_RETENTION_RATE - MIN_RETENTION_RATE;
+			currentRetentionRate = MIN_RETENTION_RATE + (slopeSpan * (100 - utilization) * PRICE_PRECISION / (100 - RETENTION_RATE_DIP)) / PRICE_PRECISION;
 		} else {
-			uint256 utilization = ethAmountForCompleteSets * 100 / securityBondAllowance;
-			if (utilization < FEE_DIP) {
-				currentPerSecondFee = MIN_FEE + utilization * FEE_SLOPE1;
-			} else {
-				currentPerSecondFee = MIN_FEE + FEE_DIP * FEE_SLOPE1 + utilization * FEE_SLOPE2;
-			}
+			// clamp to MIN_RETENTION_RATE if utilization > 100%
+			currentRetentionRate = MIN_RETENTION_RATE;
 		}
+		emit PoolRetentionRateChanged(feesAccrued, utilization, currentRetentionRate);
 	}
 
 	// I wonder if we want to delay the payments and smooth them out to avoid flashloan attacks?
 	function updateVaultFees(address vault) public {
-		updateFee();
-		uint256 accumulatorDiff = cumulativeFeePerAllowance - securityVaults[vault].feeAccumulator;
+		updateCollateralAmount();
+		uint256 accumulatorDiff = feesAccrued - securityVaults[vault].feeAccumulator;
 		uint256 fees = (securityVaults[vault].securityBondAllowance * accumulatorDiff) / PRICE_PRECISION;
-		securityVaults[vault].feeAccumulator = cumulativeFeePerAllowance;
+		securityVaults[vault].feeAccumulator = feesAccrued;
 		securityVaults[vault].unpaidEthFees += fees;
 	}
 
@@ -365,6 +367,7 @@ contract SecurityPool {
 	////////////////////////////////////////
 
 	function performSetSecurityBondsAllowance(address callerVault, uint256 amount) public isOperational {
+		updateCollateralAmount();
 		//require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'only priceOracleManagerAndOperatorQueuer can call');
 		//require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'no valid price');
 		//updateVaultFees(callerVault);
@@ -373,10 +376,11 @@ contract SecurityPool {
 		uint256 oldAllowance = securityVaults[callerVault].securityBondAllowance;
 		securityBondAllowance += amount;
 		securityBondAllowance -= oldAllowance;
-		//require(securityBondAllowance >= ethAmountForCompleteSets, 'minted too many complete sets to allow this');
+		//require(securityBondAllowance >= completeSetCollateralAmount, 'minted too many complete sets to allow this');
 		securityVaults[callerVault].securityBondAllowance = amount;
 		//require(securityVaults[callerVault].securityBondAllowance > MIN_SECURITY_BOND_DEBT || securityVaults[callerVault].securityBondAllowance == 0, 'min deposit requirement');
 		emit SecurityBondAllowanceChange(callerVault, oldAllowance, amount);
+		updateRetentionRate();
 	}
 
 	////////////////////////////////////////
@@ -384,21 +388,23 @@ contract SecurityPool {
 	////////////////////////////////////////
 	function createCompleteSet() payable public isOperational {
 		require(msg.value > 0, 'need to send eth');
-		updateFee();
-		require(securityBondAllowance - ethAmountForCompleteSets >= msg.value, 'no capacity to create that many sets');
-		uint256 amountToMint = completeSet.totalSupply() == ethAmountForCompleteSets ? msg.value : msg.value * completeSet.totalSupply() / ethAmountForCompleteSets;
+		updateCollateralAmount();
+		require(securityBondAllowance - completeSetCollateralAmount >= msg.value, 'no capacity to create that many sets');
+		uint256 amountToMint = completeSet.totalSupply() == completeSetCollateralAmount ? msg.value : msg.value * completeSet.totalSupply() / completeSetCollateralAmount;
 		completeSet.mint(msg.sender, amountToMint);
-		ethAmountForCompleteSets += msg.value;
+		completeSetCollateralAmount += msg.value;
+		updateRetentionRate();
 	}
 
 	function redeemCompleteSet(uint256 amount) public isOperational {
-		updateFee();
+		updateCollateralAmount();
 		// takes in complete set and releases security bond and eth
+		uint256 ethValue = amount * completeSetCollateralAmount / completeSet.totalSupply();
 		completeSet.burn(msg.sender, amount);
-		uint256 ethValue = amount * ethAmountForCompleteSets / address(this).balance;
 		(bool sent, ) = payable(msg.sender).call{value: ethValue}('');
 		require(sent, 'Failed to send Ether');
-		ethAmountForCompleteSets -= ethValue;
+		completeSetCollateralAmount -= ethValue;
+		updateRetentionRate();
 	}
 
 	/*
@@ -411,7 +417,7 @@ contract SecurityPool {
 	////////////////////////////////////////
 	// FORKING (migrate vault (oi+rep), truth auction)
 	////////////////////////////////////////
-	function triggerFork() public {
+	function forkSecurityPool() public {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
 		require(forkTime > 0, 'Zoltar needs to have forked before Security Pool can do so');
 		require(systemState == SystemState.Operational, 'System needs to be operational to trigger fork');
@@ -433,13 +439,13 @@ contract SecurityPool {
 			// first vault migrater creates new pool and transfers all REP to it
 			uint192  childUniverseId = universeId << 2 + uint192(outcome);
 			// TODO here priceOracleManagerAndOperatorQueuer.lastPrice might be old, do we want to get upto date price for it?
-			children[uint8(outcome)] = securityPoolFactory.deploySecurityPool(openOracle, this, zoltar, childUniverseId, questionId, securityMultiplier, currentPerSecondFee, priceOracleManagerAndOperatorQueuer.lastPrice(), ethAmountForCompleteSets);
+			children[uint8(outcome)] = securityPoolFactory.deploySecurityPool(openOracle, this, zoltar, childUniverseId, questionId, securityMultiplier, currentRetentionRate, priceOracleManagerAndOperatorQueuer.lastPrice(), completeSetCollateralAmount);
 			repToken.transfer(address(children[uint8(outcome)]), repToken.balanceOf(address(this)));
 		}
 		children[uint256(outcome)].migrateRepFromParent(msg.sender);
 
 		// migrate open interest
-		(bool sent, ) = payable(msg.sender).call{value: ethAmountForCompleteSets * securityVaults[msg.sender].repDepositShare / repAtFork }('');
+		(bool sent, ) = payable(msg.sender).call{value: completeSetCollateralAmount * securityVaults[msg.sender].repDepositShare / repAtFork }('');
 		require(sent, 'Failed to send Ether');
 
 		securityVaults[msg.sender].repDepositShare = 0;
@@ -460,12 +466,12 @@ contract SecurityPool {
 		require(securityPoolForkTriggeredTimestamp + MIGRATION_TIME > block.timestamp, 'migration time needs to pass first');
 		require(truthAuctionStarted == 0, 'Auction already started');
 		truthAuctionStarted = block.timestamp;
-		if (address(this).balance >= parent.ethAmountForCompleteSets()) {
+		if (address(this).balance >= parent.completeSetCollateralAmount()) {
 			// we have acquired all the ETH already, no need auction
 			systemState = SystemState.Operational;
 			auction.finalizeAuction();
 		} else {
-			uint256 ethToBuy = parent.ethAmountForCompleteSets() - address(this).balance;
+			uint256 ethToBuy = parent.completeSetCollateralAmount() - address(this).balance;
 			auction.startAuction(ethToBuy);
 		}
 	}
@@ -506,9 +512,9 @@ contract SecurityPoolFactory {
 	// TODO, we probably want to deploy these using create2 so we can get the address nicer than with this mapping hack
 	mapping(uint256 => SecurityPool) public securityPools;
 	uint256 currentId;
-	function deploySecurityPool(OpenOracle openOracle, SecurityPool parent, Zoltar zoltar, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 startingPerSecondFee, uint256 startingRepEthPrice, uint256 ethAmountForCompleteSets) external returns (SecurityPool) {
+	function deploySecurityPool(OpenOracle openOracle, SecurityPool parent, Zoltar zoltar, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 startingPerSecondFee, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (SecurityPool) {
 		currentId++;
-		securityPools[currentId] = new SecurityPool(this, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, ethAmountForCompleteSets);
+		securityPools[currentId] = new SecurityPool(this, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, completeSetCollateralAmount);
 		return securityPools[currentId];
 	}
 }

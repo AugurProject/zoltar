@@ -26,6 +26,9 @@ export const ContractArtifact = funtypes.ReadonlyObject({
 			SecurityPool: ContractDefinition,
 			PriceOracleManagerAndOperatorQueuer: ContractDefinition
 		}),
+		'contracts/peripherals/CompleteSet.sol': funtypes.ReadonlyObject({
+			CompleteSet: ContractDefinition,
+		}),
 		'contracts/ReputationToken.sol': funtypes.ReadonlyObject({
 			ReputationToken: ContractDefinition,
 		}),
@@ -34,6 +37,12 @@ export const ContractArtifact = funtypes.ReadonlyObject({
 		}),
 		'contracts/IWeth9.sol': funtypes.ReadonlyObject({
 			IWeth9: ContractDefinition,
+		}),
+		'contracts/IAugur.sol': funtypes.ReadonlyObject({
+			IAugur: ContractDefinition,
+		}),
+		'contracts/IERC20.sol': funtypes.ReadonlyObject({
+			IERC20: ContractDefinition,
 		}),
 	}),
 })

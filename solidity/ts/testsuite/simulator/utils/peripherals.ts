@@ -62,14 +62,14 @@ export const ensureSecurityPoolFactoryDeployed = async (client: WriteClient) => 
 	await client.waitForTransactionReceipt({ hash })
 }
 
-export const deploySecurityPool = async (client: WriteClient, openOracle: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint, startingPerSecondFee: bigint, startingRepEthPrice: bigint, ethAmountForCompleteSets: bigint) => {
+export const deploySecurityPool = async (client: WriteClient, openOracle: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint, startingPerSecondFee: bigint, startingRepEthPrice: bigint, completeSetCollateralAmount: bigint) => {
 	const zoltarAddress = getZoltarAddress()
 	return await client.writeContract({
 		chain: mainnet,
 		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPoolFactory.abi as Abi,
 		functionName: 'deploySecurityPool',
 		address: getSecurityPoolFactoryAddress(),
-		args: [openOracle, addressString(0x0n), zoltarAddress, universeId, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, ethAmountForCompleteSets]
+		args: [openOracle, addressString(0x0n), zoltarAddress, universeId, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, completeSetCollateralAmount]
 	})
 }
 
@@ -320,10 +320,10 @@ export const getSecurityBondAllowance = async (client: ReadClient, securityPoolA
 	}) as bigint
 }
 
-export const getEthAmountForCompleteSets = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getCompleteSetCollateralAmount = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
-		functionName: 'ethAmountForCompleteSets',
+		functionName: 'completeSetCollateralAmount',
 		address: securityPoolAddress,
 		args: []
 	}) as bigint
@@ -336,4 +336,13 @@ export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOper
 		address: priceOracleManagerAndOperatorQueuer,
 		args: []
 	}) as bigint
+}
+
+export const forkSecurityPool = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.writeContract({
+		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		functionName: 'forkSecurityPool',
+		address: securityPoolAddress,
+		args: [],
+	})
 }

@@ -273,117 +273,106 @@ export const ensureZoltarDeployed = async (client: WriteClient) => {
 }
 
 export const getUniverseData = async (client: ReadClient, universeId: bigint) => {
-	const ZoltarAddress = getZoltarAddress()
 	return await client.readContract({
 		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
 		functionName: 'universes',
-		address: ZoltarAddress,
+		address: getZoltarAddress(),
 		args: [universeId]
 	}) as [Address, bigint, bigint, bigint, bigint, boolean, boolean, bigint]
 }
 
-export const createQuestion = async (client: WriteClient, universe: bigint, endTime: bigint ,extraInfo: String) => {
-	const ZoltarAddress = getZoltarAddress()
+export const createQuestion = async (client: WriteClient, universe: bigint, endTime: bigint, extraInfo: String) => {
 	return await client.writeContract({
 		chain: mainnet,
 		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
 		functionName: 'createQuestion',
-		address: ZoltarAddress,
+		address: getZoltarAddress(),
 		args: [universe, endTime, client.account.address, extraInfo]
 	})
 }
 
 export const getQuestionData = async (client: ReadClient, questionId: bigint) => {
-	const ZoltarAddress = getZoltarAddress()
 	return await client.readContract({
 		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
 		functionName: 'questions',
-		address: ZoltarAddress,
+		address: getZoltarAddress(),
 		args: [questionId]
 	}) as [bigint, Address, Address, string]
 }
 
 export const reportOutcome = async (client: WriteClient, universe: bigint, question: bigint, outcome: bigint) => {
-	const ZoltarAddress = getZoltarAddress()
 	return await client.writeContract({
 		chain: mainnet,
 		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
 		functionName: 'reportOutcome',
-		address: ZoltarAddress,
+		address: getZoltarAddress(),
 		args: [universe, question, outcome]
 	})
 }
 
 export const finalizeQuestion = async (client: WriteClient, universe: bigint, question: bigint) => {
-	const ZoltarAddress = getZoltarAddress()
 	return await client.writeContract({
 		chain: mainnet,
 		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
 		functionName: 'finalizeQuestion',
-		address: ZoltarAddress,
+		address: getZoltarAddress(),
 		args: [universe, question]
 	})
 }
 
 export const dispute = async (client: WriteClient, universe: bigint, question: bigint, outcome: bigint) => {
-	const ZoltarAddress = getZoltarAddress()
 	return await client.writeContract({
 		chain: mainnet,
 		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
 		functionName: 'dispute',
-		address: ZoltarAddress,
+		address: getZoltarAddress(),
 		args: [universe, question, outcome]
 	})
 }
 
 export const splitRep = async (client: WriteClient, universe: bigint) => {
-	const ZoltarAddress = getZoltarAddress()
 	return await client.writeContract({
 		chain: mainnet,
 		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
 		functionName: 'splitRep',
-		address: ZoltarAddress,
+		address: getZoltarAddress(),
 		args: [universe]
 	})
 }
 
 export const splitStakedRep = async (client: WriteClient, universe: bigint, question: bigint) => {
-	const ZoltarAddress = getZoltarAddress()
 	return await client.writeContract({
 		chain: mainnet,
 		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
 		functionName: 'splitStakedRep',
-		address: ZoltarAddress,
+		address: getZoltarAddress(),
 		args: [universe, question]
 	})
 }
 
 export const isFinalized = async (client: ReadClient, universe: bigint, questionId: bigint) => {
-	const ZoltarAddress = getZoltarAddress()
 	return await client.readContract({
 		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
 		functionName: 'isFinalized',
-		address: ZoltarAddress,
+		address: getZoltarAddress(),
 		args: [universe, questionId]
 	}) as boolean
 }
 
 export const getWinningOutcome = async (client: ReadClient, universe: bigint, questionId: bigint) => {
-	const ZoltarAddress = getZoltarAddress()
 	return BigInt(await client.readContract({
 		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
 		functionName: 'getWinningOutcome',
-		address: ZoltarAddress,
+		address: getZoltarAddress(),
 		args: [universe, questionId]
 	}) as number)
 }
 
 export const getReportBond = async (client: ReadClient) => {
-	const ZoltarAddress = getZoltarAddress()
 	return BigInt(await client.readContract({
 		abi: contractsArtifact.contracts['contracts/Zoltar.sol'].Zoltar.abi as Abi,
 		functionName: 'REP_BOND',
-		address: ZoltarAddress,
+		address: getZoltarAddress(),
 		args: []
 	}) as number)
 }

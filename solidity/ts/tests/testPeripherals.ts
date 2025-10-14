@@ -1,23 +1,26 @@
 import { describe, beforeEach, test } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
-import { createWriteClient, ReadClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
-import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testsuite/simulator/utils/constants.js'
-import { approveToken, createQuestion, ensureZoltarDeployed, getERC20Balance, getETHBalance, getQuestionData, getReportBond, getZoltarAddress, isZoltarDeployed, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { addressString } from '../testsuite/simulator/utils/bigint.js'
-import { createCompleteSet, deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, getCompleteSetAddress, getDeployedSecurityPool, getEthAmountForCompleteSets, getLastPrice, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, getSecurityPoolFactoryAddress, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, redeemCompleteSet, requestPriceIfNeededAndQueueOperation, wrapWeth } from '../testsuite/simulator/utils/peripherals.js'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
+import { DAY, ETHEREUM_LOGS_LOGGER_ADDRESS, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testsuite/simulator/utils/constants.js'
+import { approveToken, createQuestion, dispute, ensureZoltarDeployed, getERC20Balance, getETHBalance, getQuestionData, getReportBond, getUniverseData, getZoltarAddress, isZoltarDeployed, jsonStringify, reportOutcome, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+import { addressString, bytes32String, dataStringWith0xStart } from '../testsuite/simulator/utils/bigint.js'
+import { createCompleteSet, deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, forkSecurityPool, getCompleteSetAddress, getDeployedSecurityPool, getCompleteSetCollateralAmount, getLastPrice, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, getSecurityPoolFactoryAddress, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, redeemCompleteSet, requestPriceIfNeededAndQueueOperation, wrapWeth } from '../testsuite/simulator/utils/peripherals.js'
 import assert from 'node:assert'
-import { Deployment, printLogs } from '../testsuite/simulator/utils/peripheralLogs.js'
+import { Deployment, extractContractsFromArtifact, printLogs } from '../testsuite/simulator/utils/peripheralLogs.js'
+import { SendTransactionParams } from '../testsuite/simulator/types/jsonRpcTypes.js'
+import { Abi, decodeFunctionData } from 'viem'
+import { SimulatedTransaction } from '../testsuite/simulator/types/visualizerTypes.js'
 
 const genesisUniverse = 0n
-const marketId = 1n
+const questionId = 1n
 const securityMultiplier = 2n;
 const startingPerSecondFee = 1n;
 const startingRepEthPrice = 1n;
-const ethAmountForCompleteSets = 0n;
+const completeSetCollateralAmount = 0n;
 const PRICE_PRECISION = 10n ** 18n;
 
-const printContractLogs = async (client: ReadClient, securityPoolAddress: `0x${ string }`, priceOracleManagerAndOperatorQueuerAddress: `0x${ string }`, completeSetAddress: `0x${ string }` ) => {
-	const deployments: Deployment[] = [{
+const getDeployments = (securityPoolAddress: `0x${ string }`, priceOracleManagerAndOperatorQueuerAddress: `0x${ string }`, completeSetAddress: `0x${ string }`): Deployment[] => {
+	return [{
 		definitionFilename: 'contracts/ReputationToken.sol',
 		deploymentName: 'RepV2',
 		contractName: 'ReputationToken',
@@ -57,17 +60,36 @@ const printContractLogs = async (client: ReadClient, securityPoolAddress: `0x${ 
 		contractName: 'CompleteSet',
 		deploymentName: 'CompleteSet',
 		address: completeSetAddress
+	}, {
+		definitionFilename: 'contracts/IAugur.sol',
+		contractName: 'IAugur',
+		deploymentName: 'Augur',
+		address: '0x23916a8f5c3846e3100e5f587ff14f3098722f5d'
+	}, {
+		definitionFilename: 'contracts/IERC20.sol',
+		contractName: 'IERC20',
+		deploymentName: 'ETH',
+		address: addressString(ETHEREUM_LOGS_LOGGER_ADDRESS)
 	}]
-	return printLogs(client, deployments)
 }
+/*
+const printContractLogs = async (client: ReadClient, deployments: Deployment[]) => {
+	const contracts = extractContractsFromArtifact(deployments)
+	const latestBlockNumber = await client.getBlockNumber()
+	const fromBlock = latestBlockNumber - 10n
+	const toBlock = latestBlockNumber
+	const addresses = contracts.map((contract) => contract.address)
+	const rawLogs = await client.getLogs({ address: addresses, fromBlock, toBlock })
+	return printLogs(rawLogs, deployments)
+}*/
 
 const deployZoltarAndCreateMarket = async (client: WriteClient, curentTimestamp: bigint) => {
 	await ensureZoltarDeployed(client)
 	const zoltar = getZoltarAddress()
 	await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
-	const endTime = curentTimestamp + DAY
+	const endTime = curentTimestamp + DAY / 2n
 	await createQuestion(client, genesisUniverse, endTime, 'test')
-	return await getQuestionData(client, marketId)
+	return await getQuestionData(client, questionId)
 }
 
 const deployPeripheralsAndGetDeployedSecurityPool = async (client: WriteClient) => {
@@ -77,7 +99,7 @@ const deployPeripheralsAndGetDeployedSecurityPool = async (client: WriteClient) 
 	const openOracle = getOpenOracleAddress()
 	await ensureSecurityPoolFactoryDeployed(client);
 	assert.ok(await isSecurityPoolFactoryDeployed(client), 'Security Pool Factory Not Deployed!')
-	await deploySecurityPool(client, openOracle, genesisUniverse, marketId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, ethAmountForCompleteSets)
+	await deploySecurityPool(client, openOracle, genesisUniverse, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, completeSetCollateralAmount)
 	return await getDeployedSecurityPool(client, 1n)
 }
 
@@ -98,8 +120,82 @@ const initAndDepositRep = async (client: WriteClient, curentTimestamp: bigint, r
 	return securityPoolAddress
 }
 
-describe('Peripherals Contract Test Suite', () => {
+const triggerFork = async(mockWindow: MockWindowEthereum, questionId: bigint) => {
+	const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+	await ensureZoltarDeployed(client)
+	const genesisUniverse = 0n
+	await mockWindow.advanceTime(DAY)
+	const initialOutcome = 1n
+	await reportOutcome(client, genesisUniverse, questionId, initialOutcome)
+	const disputeOutcome = 2n
+	await dispute(client, genesisUniverse, questionId, disputeOutcome)
+	const invalidUniverseId = 1n
+	const yesUniverseId = 2n
+	const noUniverseId = 3n
+	return {
+		invalidUniverseData: await getUniverseData(client, invalidUniverseId),
+		yesUniverseData: await getUniverseData(client, yesUniverseId),
+		noUniverseData: await getUniverseData(client, noUniverseId)
+	}
+}
 
+export function printDecodedFunction(contractName: string, data: `0x${string}`, abi: Abi): void {
+	try {
+		const decoded = decodeFunctionData({ abi, data })
+		const functionName = decoded.functionName
+		const functionArgs = decoded.args || []
+
+		const functionAbi = abi.find(
+			(item: any) => item.type === 'function' && item.name === functionName
+		)
+
+		if (!functionAbi || !('inputs' in functionAbi)) {
+			console.log(`${ functionName }(${ functionArgs.join(', ') })`)
+			return
+		}
+
+		const formattedArgs = functionAbi.inputs
+			.map((input: any, index: number) => {
+				const paramName = input.name || `param${ index + 1 }`
+				const paramValue = jsonStringify(functionArgs[index])
+				return `${ paramName } = ${ paramValue }`
+			}).join(', ')
+
+		console.log(`> ${ contractName }.${ functionName }(${ formattedArgs })`)
+	} catch (error) {
+		console.log(data)
+		console.error('Error decoding function data:', error)
+	}
+}
+
+const createTransactionExplainer = (deployments: Deployment[]) => {
+	return (request: SendTransactionParams, result: SimulatedTransaction) => {
+		const contracts = extractContractsFromArtifact(deployments)
+		const contract = contracts.find((x) => BigInt(x.address) === request.params[0].to)
+		if (contract === undefined) { console.log(`UNKNOWN CALL: ${ jsonStringify(request)} `)}
+		else {
+			const data = request.params[0].input === undefined ? request.params[0].data : request.params[0].input
+			printDecodedFunction(contract.deploymentName, data === undefined ? '0x0' : dataStringWith0xStart(data), contract.abi as Abi)
+		}
+		if (result.ethSimulateV1CallResult.status === 'success') {
+			printLogs(result.ethSimulateV1CallResult.logs.map((event, logIndex) => ({
+				removed: false,
+				logIndex: logIndex,
+				transactionIndex: 1,
+				transactionHash: '0x1',
+				blockHash: '0x1',
+				blockNumber: 1n,
+				address: addressString(event.address),
+				data: dataStringWith0xStart(event.data),
+				topics: event.topics.map((x) => bytes32String(x)) as [`0x${ string }`, ...`0x${ string }`[]]
+			})), deployments)
+		} else {
+			console.log('failed')
+		}
+	}
+}
+
+describe('Peripherals Contract Test Suite', () => {
 	let mockWindow: MockWindowEthereum
 	let curentTimestamp: bigint
 	let securityPoolAddress: `0x${ string }`
@@ -107,6 +203,8 @@ describe('Peripherals Contract Test Suite', () => {
 	let startBalance: bigint
 	let reportBond: bigint
 	const repDeposit = 10n * 10n ** 18n
+	let deployments: Deployment[] = []
+	let priceOracleManagerAndOperatorQueuer: `0x${ string }`
 
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
@@ -116,12 +214,14 @@ describe('Peripherals Contract Test Suite', () => {
 		curentTimestamp = BigInt(Math.floor((await mockWindow.getTime()).getTime() / 1000))
 	 	startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		securityPoolAddress = await initAndDepositRep(client, curentTimestamp, repDeposit)
-		reportBond = await getReportBond(client);
+		reportBond = await getReportBond(client)
+		priceOracleManagerAndOperatorQueuer = await getPriceOracleManagerAndOperatorQueuer(client, securityPoolAddress)
+		deployments = getDeployments(securityPoolAddress, priceOracleManagerAndOperatorQueuer, await getCompleteSetAddress(client, securityPoolAddress))
+		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(deployments))
 	})
 
 	test('can deposit rep and withdraw it', async () => {
 		const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		const priceOracleManagerAndOperatorQueuer = await getPriceOracleManagerAndOperatorQueuer(client, securityPoolAddress)
 		await requestPriceIfNeededAndQueueOperation(client, priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
 
 		const pendingReportId = await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)
@@ -143,10 +243,8 @@ describe('Peripherals Contract Test Suite', () => {
 		await openOracleSubmitInitialReport(client, pendingReportId, amount1, amount2, stateHash)
 
 		await mockWindow.advanceTime(DAY)
-		console.log('balance before settling:', await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address))
 		// settle and execute the operation (withdraw rep)
 		await openOracleSettle(client, pendingReportId)
-		await printContractLogs(client, securityPoolAddress, priceOracleManagerAndOperatorQueuer, await getCompleteSetAddress(client, securityPoolAddress))
 		assert.strictEqual(await getLastPrice(client, priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress), 0n, 'Did not empty security pool of rep')
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance - reportBond, 'Did not get rep back')
@@ -155,7 +253,6 @@ describe('Peripherals Contract Test Suite', () => {
 	test('can set security bonds allowance' , async () => {
 		const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		const securityPoolAllowance = repDeposit / 4n
-		const priceOracleManagerAndOperatorQueuer = await getPriceOracleManagerAndOperatorQueuer(client, securityPoolAddress)
 		await requestPriceIfNeededAndQueueOperation(client, priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 
 		const pendingReportId = await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)
@@ -184,18 +281,18 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(await getSecurityBondAllowance(client, securityPoolAddress), securityPoolAllowance, 'Security pool allowance was not set correctly')
 
 		const amountToCreate = 1n * 10n ** 18n
+		const maxGasFees = amountToCreate /4n
 		const ethBalance = await getETHBalance(client, client.account.address)
 		await createCompleteSet(client, securityPoolAddress, amountToCreate)
 		const completeSetAddress = await getCompleteSetAddress(client, securityPoolAddress)
 		const completeSetBalance = await getERC20Balance(client, completeSetAddress, client.account.address)
-		assert.strictEqual(amountToCreate, completeSetBalance, 'Did not create enough')
-		assert.strictEqual(ethBalance, await getETHBalance(client, client.account.address) + amountToCreate, 'Did not lose eth to create complete sets')
-		assert.strictEqual(await getEthAmountForCompleteSets(client, securityPoolAddress), amountToCreate, 'contract did not record the amount correctly')
+		assert.strictEqual(amountToCreate, completeSetBalance, 'Did not create enough complete sets')
+		assert.ok(ethBalance - await getETHBalance(client, client.account.address) > maxGasFees, 'Did not lose eth to create complete sets')
+		assert.strictEqual(await getCompleteSetCollateralAmount(client, securityPoolAddress), amountToCreate, 'contract did not record the amount correctly')
 		await redeemCompleteSet(client, securityPoolAddress, amountToCreate)
-		assert.strictEqual(ethBalance, await getETHBalance(client, client.account.address), 'Did not get ETH back from complete sets')
-		assert.strictEqual(await getERC20Balance(client, completeSetAddress, client.account.address), 0, 'Did not lose complete sets')
+		assert.ok(ethBalance - await getETHBalance(client, client.account.address) < maxGasFees, 'Did not get ETH back from complete sets')
+		assert.strictEqual(await getERC20Balance(client, completeSetAddress, client.account.address), 0n, 'Did not lose complete sets')
 	})
-
 
 	test('can liquidate', async () => {
 		// add liquidation test
@@ -207,7 +304,9 @@ describe('Peripherals Contract Test Suite', () => {
 
 
 	test('can fork the system', async () => {
-
+		const newUniverses = await triggerFork(mockWindow, questionId)
+		console.log(newUniverses)
+		await forkSecurityPool(client, securityPoolAddress)
 	})
 
 })
