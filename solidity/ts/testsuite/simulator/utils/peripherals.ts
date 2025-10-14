@@ -5,7 +5,7 @@ import { PROXY_DEPLOYER_ADDRESS, WETH_ADDRESS } from './constants.js'
 import { addressString } from './bigint.js'
 import { getZoltarAddress } from './utilities.js'
 import { mainnet } from 'viem/chains'
-import { contractsArtifact } from '../types/peripheralTypes.js'
+import { contractsArtifact, QuestionOutcome } from '../types/peripheralTypes.js'
 
 export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<void> {
 	const deployerBytecode = await client.getCode({ address: addressString(PROXY_DEPLOYER_ADDRESS)})
@@ -344,6 +344,33 @@ export const forkSecurityPool = async (client: WriteClient, securityPoolAddress:
 	return await client.writeContract({
 		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
 		functionName: 'forkSecurityPool',
+		address: securityPoolAddress,
+		args: [],
+	})
+}
+
+export const migrateVault = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) => {
+	return await client.writeContract({
+		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		functionName: 'migrateVault',
+		address: securityPoolAddress,
+		args: [outcome],
+	})
+}
+
+export const startTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.writeContract({
+		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		functionName: 'startTruthAuction',
+		address: securityPoolAddress,
+		args: [],
+	})
+}
+
+export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.writeContract({
+		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		functionName: 'finalizeTruthAuction',
 		address: securityPoolAddress,
 		args: [],
 	})

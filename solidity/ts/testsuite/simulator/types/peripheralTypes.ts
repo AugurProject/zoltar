@@ -55,3 +55,10 @@ export type ContractInfo = {
 	name: string
 	contractDefinition: ContractDefinition
 }
+
+export enum QuestionOutcome {
+	Invalid,
+	Yes,
+	No,
+	None
+}

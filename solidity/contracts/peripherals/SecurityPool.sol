@@ -228,6 +228,8 @@ contract SecurityPool {
 	event SecurityBondAllowanceChange(address vault, uint256 from, uint256 to);
 	event PerformWithdrawRep(address vault, uint256 amount);
 	event PoolRetentionRateChanged(uint256 feesAccrued, uint256 utilization, uint256 retentionRate);
+	event ForkSecurityPool(uint256 repAtFork);
+	event MigrateVault(address vault, QuestionOutcome outcome, uint256 repDepositShare, uint256 securityBondAllowance);
 
 	modifier isOperational {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
@@ -425,6 +427,7 @@ contract SecurityPool {
 		systemState = SystemState.OnGoingAFork;
 		securityPoolForkTriggeredTimestamp = block.timestamp;
 		repAtFork = repToken.balanceOf(address(this));
+		emit ForkSecurityPool(repAtFork);
 		repToken.approve(address(zoltar), repAtFork);
 		zoltar.splitRep(universeId); // converts origin rep to rep_true, rep_false and rep_invalid
 		// we could pay the caller basefee*2 out of Open interest we have?
@@ -433,13 +436,13 @@ contract SecurityPool {
 	// migrates vault into outcome universe after fork
 	function migrateVault(QuestionOutcome outcome) public {
 		require(securityPoolForkTriggeredTimestamp > 0, 'fork needs to be triggered');
-		require(securityPoolForkTriggeredTimestamp + MIGRATION_TIME <= block.timestamp, 'migration time passed');
+		require(block.timestamp <= securityPoolForkTriggeredTimestamp + MIGRATION_TIME , 'migration time passed');
 		require(securityVaults[msg.sender].repDepositShare > 0, 'Vault has no rep to migrate');
 		updateVaultFees(msg.sender);
+		emit MigrateVault(msg.sender, outcome, securityVaults[msg.sender].repDepositShare, securityVaults[msg.sender].securityBondAllowance);
 		if (address(children[uint8(outcome)]) == address(0x0)) {
 			// first vault migrater creates new pool and transfers all REP to it
 			uint192  childUniverseId = universeId << 2 + uint192(outcome);
-			// TODO here priceOracleManagerAndOperatorQueuer.lastPrice might be old, do we want to get upto date price for it?
 			children[uint8(outcome)] = securityPoolFactory.deploySecurityPool(openOracle, this, zoltar, childUniverseId, questionId, securityMultiplier, currentRetentionRate, priceOracleManagerAndOperatorQueuer.lastPrice(), completeSetCollateralAmount);
 			repToken.transfer(address(children[uint8(outcome)]), repToken.balanceOf(address(this)));
 		}
@@ -510,11 +513,13 @@ contract SecurityPool {
 }
 
 contract SecurityPoolFactory {
+	event DeploySecurityPool(uint256 poolId, OpenOracle openOracle, SecurityPool parent, Zoltar zoltar, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 startingPerSecondFee, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount);
 	// TODO, we probably want to deploy these using create2 so we can get the address nicer than with this mapping hack
 	mapping(uint256 => SecurityPool) public securityPools;
 	uint256 currentId;
 	function deploySecurityPool(OpenOracle openOracle, SecurityPool parent, Zoltar zoltar, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 startingPerSecondFee, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (SecurityPool) {
 		currentId++;
+		emit DeploySecurityPool(currentId, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, completeSetCollateralAmount);
 		securityPools[currentId] = new SecurityPool(this, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, completeSetCollateralAmount);
 		return securityPools[currentId];
 	}

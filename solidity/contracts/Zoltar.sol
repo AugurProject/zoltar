@@ -2,7 +2,6 @@
 pragma solidity 0.8.30;
 
 import './Constants.sol';
-import './IZoltar.sol';
 import './ReputationToken.sol';
 import './IERC20.sol';
 

@@ -221,6 +221,7 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 			simulationState = await createSimulationState(ethereumClientService, undefined, input)
 		},
 		advanceTime: async (amountInSeconds: EthereumQuantity) => {
+			console.log(`> Advance Time For ${ amountInSeconds }`)
 			const newBlock = { simulatedTransactions: [], signedMessages: [], stateOverrides: {}, timeIncreaseDelta: amountInSeconds }
 			if (simulationState === undefined) {
 				simulationState = {

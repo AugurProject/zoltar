@@ -4,12 +4,13 @@ import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/vie
 import { DAY, ETHEREUM_LOGS_LOGGER_ADDRESS, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testsuite/simulator/utils/constants.js'
 import { approveToken, createQuestion, dispute, ensureZoltarDeployed, getERC20Balance, getETHBalance, getQuestionData, getReportBond, getUniverseData, getZoltarAddress, isZoltarDeployed, jsonStringify, reportOutcome, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { addressString, bytes32String, dataStringWith0xStart } from '../testsuite/simulator/utils/bigint.js'
-import { createCompleteSet, deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, forkSecurityPool, getCompleteSetAddress, getDeployedSecurityPool, getCompleteSetCollateralAmount, getLastPrice, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, getSecurityPoolFactoryAddress, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, redeemCompleteSet, requestPriceIfNeededAndQueueOperation, wrapWeth } from '../testsuite/simulator/utils/peripherals.js'
+import { createCompleteSet, deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, forkSecurityPool, getCompleteSetAddress, getDeployedSecurityPool, getCompleteSetCollateralAmount, getLastPrice, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, getSecurityPoolFactoryAddress, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, redeemCompleteSet, requestPriceIfNeededAndQueueOperation, wrapWeth, migrateVault, startTruthAuction, finalizeTruthAuction } from '../testsuite/simulator/utils/peripherals.js'
 import assert from 'node:assert'
 import { Deployment, extractContractsFromArtifact, printLogs } from '../testsuite/simulator/utils/peripheralLogs.js'
 import { SendTransactionParams } from '../testsuite/simulator/types/jsonRpcTypes.js'
 import { Abi, decodeFunctionData } from 'viem'
 import { SimulatedTransaction } from '../testsuite/simulator/types/visualizerTypes.js'
+import { QuestionOutcome } from '../testsuite/simulator/types/peripheralTypes.js'
 
 const genesisUniverse = 0n
 const questionId = 1n
@@ -300,11 +301,15 @@ describe('Peripherals Contract Test Suite', () => {
 	// add complete sets minting test where price has changed so we can no longer mint
 	})
 
-
 	test('can fork the system', async () => {
 		const newUniverses = await triggerFork(mockWindow, questionId)
 		console.log(newUniverses)
 		await forkSecurityPool(client, securityPoolAddress)
+		await migrateVault(client, securityPoolAddress, QuestionOutcome.Yes)
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, securityPoolAddress)
+		await mockWindow.advanceTime(7n * DAY + DAY)
+		await finalizeTruthAuction(client, securityPoolAddress)
 	})
 
 })
