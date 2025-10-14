@@ -268,6 +268,7 @@ export const deployZoltarTransaction = () => {
 
 export const ensureZoltarDeployed = async (client: WriteClient) => {
 	await ensureProxyDeployerDeployed(client)
+	if (await isZoltarDeployed(client)) return
 	const hash = await client.sendTransaction(deployZoltarTransaction())
 	await client.waitForTransactionReceipt({ hash })
 }

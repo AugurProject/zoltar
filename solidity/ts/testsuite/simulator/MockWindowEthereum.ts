@@ -3,13 +3,14 @@ import { CANNOT_SIMULATE_OFF_LEGACY_BLOCK, DEFAULT_CALL_ADDRESS } from './utils/
 import { EthereumClientService } from './EthereumClientService.js'
 import { EthCallParams, EthereumJsonRpcRequest, EthGetLogsResponse, EthTransactionReceiptResponse, GetBlockReturn, SendTransactionParams } from './types/jsonRpcTypes.js'
 import { appendTransaction, createSimulationState, getInputFieldFromDataOrInput, getPreSimulated, getSimulatedBalance, getSimulatedBlock, getSimulatedBlockNumber, getSimulatedCode, getSimulatedLogs, getSimulatedTransactionByHash, getSimulatedTransactionCountOverStack, getSimulatedTransactionReceipt, mockSignTransaction, simulatedCall, simulateEstimateGas } from './SimulationModeEthereumClientService.js'
-import { SimulationState } from './types/visualizerTypes.js'
+import { SimulatedTransaction, SimulationState } from './types/visualizerTypes.js'
 import { StateOverrides } from './types/ethSimulateTypes.js'
 import { EthereumJSONRpcRequestHandler } from './EthereumJSONRpcRequestHandler.js'
 import { EthereumBytes32, EthereumData, EthereumQuantity, EthereumSignedTransactionWithBlockData } from './types/wire-types.js'
 import { ErrorWithDataAndCode, JsonRpcResponseError, printError } from './utils/errors.js'
 import * as funtypes from 'funtypes'
 import { getConfig } from './utils/config.js'
+import { dataStringWith0xStart } from './utils/bigint.js'
 
 async function singleCallWithFromOverride(ethereumClientService: EthereumClientService, simulationState: SimulationState | undefined, request: EthCallParams, from: bigint) {
 	const callParams = request.params[0]
@@ -85,6 +86,8 @@ export type MockWindowEthereum = EIP1193Provider & {
 	addStateOverrides: (stateOverrides: StateOverrides) => Promise<void>
 	advanceTime: (amountInSeconds: EthereumQuantity) => Promise<void>
 	getTime: () => Promise<Date>
+	getBlock: () => Promise<bigint>
+	setAfterTransactionSendCallBack: (newAfterTransactionSendCallBack: (request: SendTransactionParams, result: SimulatedTransaction) => void) => void
 }
 export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 	const config = getConfig()
@@ -97,8 +100,11 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 	)
 	let simulationState: SimulationState | undefined = undefined
 	const activeAddress = 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045n
-
+	let afterTransactionSendCallBack = (_request: SendTransactionParams, _result: SimulatedTransaction) => {}
 	return {
+		setAfterTransactionSendCallBack: (newAfterTransactionSendCallBack: (_request: SendTransactionParams, _result: SimulatedTransaction) => void) => {
+			afterTransactionSendCallBack = newAfterTransactionSendCallBack
+		},
 		request: async (unknownArgs: unknown): Promise<any> => {
 			const args = EthereumJsonRpcRequest.parse(unknownArgs)
 			switch(args.method) {
@@ -125,17 +131,25 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 				}
 				case 'wallet_sendTransaction':
 				case 'eth_sendTransaction': {
-					//TODO, only one transaction should be included at once
 					const blockDelta = simulationState?.blocks.length || 0 // always create new block to add transactions to
 					const transaction = await formEthSendTransaction(ethereumClientService, undefined, simulationState, blockDelta, activeAddress, args)
-					if (transaction.success === false) throw new Error(transaction.error?.message)
+					if (transaction.success === false) {
+						console.log('THROWING ERROR!! form transaction')
+						console.log(transaction.error)
+						console.log(transaction.error.data)
+						throw new ErrorWithDataAndCode(transaction.error.code, transaction.error.message, transaction.error.data)
+					}
 					const signed = mockSignTransaction(transaction.transaction)
 					simulationState = await appendTransaction(ethereumClientService, undefined, simulationState, [transaction.transaction], blockDelta)
 					const lastTx = simulationState.blocks.at(-1)?.simulatedTransactions.at(-1)
 					if (lastTx === undefined) throw new Error('Failed To append transaction')
 					if (lastTx.ethSimulateV1CallResult.status === 'failure') {
-						throw new ErrorWithDataAndCode(lastTx.ethSimulateV1CallResult.error.code, lastTx.ethSimulateV1CallResult.error.message, lastTx.ethSimulateV1CallResult.returnData)
+						console.log('THROWING ERROR!! append')
+						console.log(lastTx.ethSimulateV1CallResult.error)
+						console.log(dataStringWith0xStart(lastTx.ethSimulateV1CallResult.error.data))
+						throw new ErrorWithDataAndCode(lastTx.ethSimulateV1CallResult.error.code, lastTx.ethSimulateV1CallResult.error.message, dataStringWith0xStart(lastTx.ethSimulateV1CallResult.error.data))
 					}
+					afterTransactionSendCallBack(args, lastTx)
 					return EthereumBytes32.serialize(signed.hash)
 				}
 				case 'eth_blockNumber': {
@@ -234,6 +248,10 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 		getTime: async () => {
 			if (simulationState === undefined) return new Date()
 			return simulationState.blockTimestamp
+		},
+		getBlock: async () => {
+			if (simulationState === undefined) return await ethereumClientService.getBlockNumber(undefined)
+			return simulationState.blockNumber
 		}
 	}
 }

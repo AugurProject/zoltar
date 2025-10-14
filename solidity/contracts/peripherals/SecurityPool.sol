@@ -425,6 +425,7 @@ contract SecurityPool {
 		systemState = SystemState.OnGoingAFork;
 		securityPoolForkTriggeredTimestamp = block.timestamp;
 		repAtFork = repToken.balanceOf(address(this));
+		repToken.approve(address(zoltar), repAtFork);
 		zoltar.splitRep(universeId); // converts origin rep to rep_true, rep_false and rep_invalid
 		// we could pay the caller basefee*2 out of Open interest we have?
 	}

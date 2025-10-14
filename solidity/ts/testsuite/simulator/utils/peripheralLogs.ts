@@ -49,7 +49,19 @@ export const printLogs = async (rawLogs: GetLogsReturnType, deployments: Deploym
 
 	for (const log of rawLogs) {
 		const contract = contracts.find((c) => c.address.toLowerCase() === log.address.toLowerCase())
-		if (!contract) throw new Error(`contract not found: ${ log.address.toLowerCase() }`)
+		if (!contract) {
+			decodedLogs.push({
+				blockNumber: log.blockNumber,
+				logIndex: log.logIndex,
+				contractName: log.address.toLowerCase(),
+				eventName: log.data,
+				args: log.topics.reduce((recordAccumulator, currentValue, currentIndex) => {
+					recordAccumulator[`topic${ currentIndex }`] = currentValue
+					return recordAccumulator
+				}, {} as Record<string, unknown>)
+			})
+			continue
+		}
 		try {
 			const decoded: any = decodeEventLog({ abi: contract.abi as Abi[], data: log.data, topics: log.topics })
 			decodedLogs.push({

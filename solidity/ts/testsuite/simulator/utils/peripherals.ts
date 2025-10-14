@@ -35,6 +35,7 @@ export const deployOpenOracleTransaction = () => {
 
 export const ensureOpenOracleDeployed = async (client: WriteClient) => {
 	await ensureProxyDeployerDeployed(client)
+	if (await isOpenOracleDeployed(client)) return
 	const hash = await client.sendTransaction(deployOpenOracleTransaction())
 	await client.waitForTransactionReceipt({ hash })
 }
@@ -58,6 +59,7 @@ export function getSecurityPoolFactoryAddress() {
 
 export const ensureSecurityPoolFactoryDeployed = async (client: WriteClient) => {
 	await ensureProxyDeployerDeployed(client)
+	if (await isSecurityPoolFactoryDeployed(client)) return
 	const hash = await client.sendTransaction(deploySecurityPoolFactoryTransaction())
 	await client.waitForTransactionReceipt({ hash })
 }

@@ -123,7 +123,6 @@ const initAndDepositRep = async (client: WriteClient, curentTimestamp: bigint, r
 const triggerFork = async(mockWindow: MockWindowEthereum, questionId: bigint) => {
 	const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 	await ensureZoltarDeployed(client)
-	const genesisUniverse = 0n
 	await mockWindow.advanceTime(DAY)
 	const initialOutcome = 1n
 	await reportOutcome(client, genesisUniverse, questionId, initialOutcome)
@@ -203,7 +202,6 @@ describe('Peripherals Contract Test Suite', () => {
 	let startBalance: bigint
 	let reportBond: bigint
 	const repDeposit = 10n * 10n ** 18n
-	let deployments: Deployment[] = []
 	let priceOracleManagerAndOperatorQueuer: `0x${ string }`
 
 	beforeEach(async () => {
@@ -216,7 +214,7 @@ describe('Peripherals Contract Test Suite', () => {
 		securityPoolAddress = await initAndDepositRep(client, curentTimestamp, repDeposit)
 		reportBond = await getReportBond(client)
 		priceOracleManagerAndOperatorQueuer = await getPriceOracleManagerAndOperatorQueuer(client, securityPoolAddress)
-		deployments = getDeployments(securityPoolAddress, priceOracleManagerAndOperatorQueuer, await getCompleteSetAddress(client, securityPoolAddress))
+		const deployments = getDeployments(securityPoolAddress, priceOracleManagerAndOperatorQueuer, await getCompleteSetAddress(client, securityPoolAddress))
 		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(deployments))
 	})
 
