@@ -25,7 +25,7 @@ export function extractContractsFromArtifact(deployments: Deployment[]) {
 	const contractDefs = extractContractInfoFromArtifact(contractsArtifact)
 	return deployments.map((deployment) => {
 		const definition = contractDefs.find((def) => deployment.definitionFilename === def.filename && deployment.contractName === def.name)
-		if (definition === undefined) throw new Error(`defintion not found for the deployment: ${ deployment.definitionFilename }`)
+		if (definition === undefined) throw new Error(`defintion not found for the deployment: ${ deployment.definitionFilename } - ${ deployment.contractName }`)
 		return {
 			definitionFilename: deployment.definitionFilename,
 			contractName: deployment.contractName,

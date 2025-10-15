@@ -7,8 +7,8 @@ contract ReputationToken is ERC20 {
 
 	address public zoltar;
 
-	constructor() ERC20('Reputation', 'REP') {
-		zoltar = msg.sender;
+	constructor(address _zoltar) ERC20('Reputation', 'REP') {
+		zoltar = _zoltar;
 	}
 
 	function mint(address account, uint256 value) external {

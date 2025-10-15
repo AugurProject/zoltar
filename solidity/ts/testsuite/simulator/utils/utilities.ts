@@ -1,14 +1,15 @@
 import 'viem/window'
-import { getContractAddress, numberToBytes, encodeAbiParameters, keccak256, Abi } from 'viem'
+import { getContractAddress, numberToBytes, encodeAbiParameters, keccak256, Abi, encodeDeployData, getCreate2Address } from 'viem'
 import { mainnet } from 'viem/chains'
 import { promises as fs } from 'fs'
 import { ReadClient, WriteClient } from './viem.js'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants.js'
-import { addressString } from './bigint.js'
+import { addressString, bytes32String } from './bigint.js'
 import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
 import * as funtypes from 'funtypes'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
+import { QuestionOutcome } from '../types/peripheralTypes.js'
 
 const ContractDefinition = funtypes.ReadonlyObject({
 	abi: funtypes.Unknown,
@@ -27,7 +28,10 @@ const ContractArtifact = funtypes.ReadonlyObject({
 	contracts: funtypes.ReadonlyObject({
 		'contracts/Zoltar.sol': funtypes.ReadonlyObject({
 			Zoltar: ContractDefinition
-		})
+		}),
+		'contracts/ReputationToken.sol': funtypes.ReadonlyObject({
+			ReputationToken: ContractDefinition
+		}),
 	}),
 })
 
@@ -376,4 +380,18 @@ export const getReportBond = async (client: ReadClient) => {
 		address: getZoltarAddress(),
 		args: []
 	}) as number)
+}
+
+export function getChildUniverseId(parentUniverseId: bigint, outcome: QuestionOutcome): bigint {
+	return (parentUniverseId << 2n) + BigInt(outcome)
+}
+
+export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
+	if (universeId === 0n) return addressString(GENESIS_REPUTATION_TOKEN)
+	const initCode = encodeDeployData({
+		abi: contractsArtifact.contracts['contracts/ReputationToken.sol'].ReputationToken.abi as Abi,
+		bytecode: `0x${ contractsArtifact.contracts['contracts/ReputationToken.sol'].ReputationToken.evm.bytecode.object }`,
+		args: [getZoltarAddress()]
+	})
+	return getCreate2Address({ from: getZoltarAddress(), salt: bytes32String(universeId), bytecodeHash: keccak256(initCode) })
 }

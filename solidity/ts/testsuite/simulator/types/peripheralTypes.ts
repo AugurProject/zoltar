@@ -29,6 +29,9 @@ export const ContractArtifact = funtypes.ReadonlyObject({
 		'contracts/peripherals/CompleteSet.sol': funtypes.ReadonlyObject({
 			CompleteSet: ContractDefinition,
 		}),
+		'contracts/peripherals/Auction.sol': funtypes.ReadonlyObject({
+			Auction: ContractDefinition,
+		}),
 		'contracts/ReputationToken.sol': funtypes.ReadonlyObject({
 			ReputationToken: ContractDefinition,
 		}),

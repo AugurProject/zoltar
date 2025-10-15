@@ -1,16 +1,17 @@
 import { describe, beforeEach, test } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
-import { DAY, ETHEREUM_LOGS_LOGGER_ADDRESS, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testsuite/simulator/utils/constants.js'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testsuite/simulator/utils/constants.js'
 import { approveToken, createQuestion, dispute, ensureZoltarDeployed, getERC20Balance, getETHBalance, getQuestionData, getReportBond, getUniverseData, getZoltarAddress, isZoltarDeployed, jsonStringify, reportOutcome, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { addressString, bytes32String, dataStringWith0xStart } from '../testsuite/simulator/utils/bigint.js'
-import { createCompleteSet, deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, forkSecurityPool, getCompleteSetAddress, getDeployedSecurityPool, getCompleteSetCollateralAmount, getLastPrice, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, getSecurityPoolFactoryAddress, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, redeemCompleteSet, requestPriceIfNeededAndQueueOperation, wrapWeth, migrateVault, startTruthAuction, finalizeTruthAuction } from '../testsuite/simulator/utils/peripherals.js'
+import { createCompleteSet, deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, forkSecurityPool, getCompleteSetAddress, getCompleteSetCollateralAmount, getLastPrice, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, redeemCompleteSet, requestPriceIfNeededAndQueueOperation, wrapWeth, migrateVault, startTruthAuction, finalizeTruthAuction, getSecurityPoolChildren, getTruthAuction, getSecurityPoolAddress } from '../testsuite/simulator/utils/peripherals.js'
 import assert from 'node:assert'
 import { Deployment, extractContractsFromArtifact, printLogs } from '../testsuite/simulator/utils/peripheralLogs.js'
 import { SendTransactionParams } from '../testsuite/simulator/types/jsonRpcTypes.js'
 import { Abi, decodeFunctionData } from 'viem'
 import { SimulatedTransaction } from '../testsuite/simulator/types/visualizerTypes.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/peripheralTypes.js'
+import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
 
 const genesisUniverse = 0n
 const questionId = 1n
@@ -19,70 +20,6 @@ const startingPerSecondFee = 1n;
 const startingRepEthPrice = 1n;
 const completeSetCollateralAmount = 0n;
 const PRICE_PRECISION = 10n ** 18n;
-
-const getDeployments = (securityPoolAddress: `0x${ string }`, priceOracleManagerAndOperatorQueuerAddress: `0x${ string }`, completeSetAddress: `0x${ string }`): Deployment[] => {
-	return [{
-		definitionFilename: 'contracts/ReputationToken.sol',
-		deploymentName: 'RepV2',
-		contractName: 'ReputationToken',
-		address: addressString(GENESIS_REPUTATION_TOKEN)
-	}, {
-		definitionFilename: 'contracts/Zoltar.sol',
-		deploymentName: 'Colored Core',
-		contractName: 'Zoltar',
-		address: getZoltarAddress(),
-	}, {
-		definitionFilename: 'contracts/peripherals/SecurityPool.sol',
-		deploymentName: 'PriceOracleManagerAndOperatorQueuer',
-		contractName: 'PriceOracleManagerAndOperatorQueuer',
-		address: priceOracleManagerAndOperatorQueuerAddress
-	}, {
-		definitionFilename: 'contracts/peripherals/SecurityPool.sol',
-		deploymentName: 'ETH SecurityPool',
-		contractName: 'SecurityPool',
-		address: securityPoolAddress
-	}, {
-		definitionFilename: 'contracts/peripherals/SecurityPool.sol',
-		deploymentName: 'SecurityPoolFactory',
-		contractName: 'SecurityPoolFactory',
-		address: getSecurityPoolFactoryAddress()
-	}, {
-		definitionFilename: 'contracts/peripherals/openOracle/OpenOracle.sol',
-		deploymentName: 'OpenOracle',
-		contractName: 'OpenOracle',
-		address: getOpenOracleAddress()
-	}, {
-		definitionFilename: 'contracts/IWeth9.sol',
-		contractName: 'IWeth9',
-		deploymentName: 'WETH',
-		address: WETH_ADDRESS
-	}, {
-		definitionFilename: 'contracts/peripherals/CompleteSet.sol',
-		contractName: 'CompleteSet',
-		deploymentName: 'CompleteSet',
-		address: completeSetAddress
-	}, {
-		definitionFilename: 'contracts/IAugur.sol',
-		contractName: 'IAugur',
-		deploymentName: 'Augur',
-		address: '0x23916a8f5c3846e3100e5f587ff14f3098722f5d'
-	}, {
-		definitionFilename: 'contracts/IERC20.sol',
-		contractName: 'IERC20',
-		deploymentName: 'ETH',
-		address: addressString(ETHEREUM_LOGS_LOGGER_ADDRESS)
-	}]
-}
-/*
-const printContractLogs = async (client: ReadClient, deployments: Deployment[]) => {
-	const contracts = extractContractsFromArtifact(deployments)
-	const latestBlockNumber = await client.getBlockNumber()
-	const fromBlock = latestBlockNumber - 10n
-	const toBlock = latestBlockNumber
-	const addresses = contracts.map((contract) => contract.address)
-	const rawLogs = await client.getLogs({ address: addresses, fromBlock, toBlock })
-	return printLogs(rawLogs, deployments)
-}*/
 
 const deployZoltarAndCreateMarket = async (client: WriteClient, curentTimestamp: bigint) => {
 	await ensureZoltarDeployed(client)
@@ -101,7 +38,7 @@ const deployPeripheralsAndGetDeployedSecurityPool = async (client: WriteClient) 
 	await ensureSecurityPoolFactoryDeployed(client);
 	assert.ok(await isSecurityPoolFactoryDeployed(client), 'Security Pool Factory Not Deployed!')
 	await deploySecurityPool(client, openOracle, genesisUniverse, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, completeSetCollateralAmount)
-	return await getDeployedSecurityPool(client, 1n)
+	return getSecurityPoolAddress(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
 }
 
 const initAndDepositRep = async (client: WriteClient, curentTimestamp: bigint, repDeposit: bigint) => {
@@ -207,6 +144,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
+		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, questionId, securityMultiplier)))
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		//await mockWindow.setStartBLock(mockWindow.getTime)
 		await setupTestAccounts(mockWindow)
@@ -215,8 +153,6 @@ describe('Peripherals Contract Test Suite', () => {
 		securityPoolAddress = await initAndDepositRep(client, curentTimestamp, repDeposit)
 		reportBond = await getReportBond(client)
 		priceOracleManagerAndOperatorQueuer = await getPriceOracleManagerAndOperatorQueuer(client, securityPoolAddress)
-		const deployments = getDeployments(securityPoolAddress, priceOracleManagerAndOperatorQueuer, await getCompleteSetAddress(client, securityPoolAddress))
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(deployments))
 	})
 
 	test('can deposit rep and withdraw it', async () => {
@@ -283,7 +219,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const maxGasFees = amountToCreate /4n
 		const ethBalance = await getETHBalance(client, client.account.address)
 		await createCompleteSet(client, securityPoolAddress, amountToCreate)
-		const completeSetAddress = await getCompleteSetAddress(client, securityPoolAddress)
+		const completeSetAddress = getCompleteSetAddress(securityPoolAddress)
 		const completeSetBalance = await getERC20Balance(client, completeSetAddress, client.account.address)
 		assert.strictEqual(amountToCreate, completeSetBalance, 'Did not create enough complete sets')
 		assert.ok(ethBalance - await getETHBalance(client, client.account.address) > maxGasFees, 'Did not lose eth to create complete sets')
@@ -306,10 +242,15 @@ describe('Peripherals Contract Test Suite', () => {
 		console.log(newUniverses)
 		await forkSecurityPool(client, securityPoolAddress)
 		await migrateVault(client, securityPoolAddress, QuestionOutcome.Yes)
+
+		assert.equal(BigInt(getTruthAuction(securityPoolAddress)), 0x0n, 'Genesis should not have truth auction');
+		const yesSecurityPool = await getSecurityPoolChildren(client, securityPoolAddress, QuestionOutcome.Yes)
+		assert.ok(BigInt(getTruthAuction(yesSecurityPool)) != 0x0n, 'Yes Universe should not have truth auction');
+		assert.ok(BigInt(yesSecurityPool) != 0n, 'Did not create YES security pool')
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
-		await startTruthAuction(client, securityPoolAddress)
+		await startTruthAuction(client, yesSecurityPool)
 		await mockWindow.advanceTime(7n * DAY + DAY)
-		await finalizeTruthAuction(client, securityPoolAddress)
+		await finalizeTruthAuction(client, yesSecurityPool)
 	})
 
 })

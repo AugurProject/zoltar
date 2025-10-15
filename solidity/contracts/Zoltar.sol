@@ -161,11 +161,7 @@ contract Zoltar {
 
 		for (uint8 i = 1; i < Constants.NUM_OUTCOMES + 1; i++) {
 			uint192 childUniverseId = (_universeId << 2) + i;
-			universes[childUniverseId] = Universe(
-				new ReputationToken(),
-				0,
-				0
-			);
+			universes[childUniverseId] = Universe(new ReputationToken{ salt: bytes32(uint256(childUniverseId)) }(address(this)), 0, 0);
 
 			questionResolutions[childUniverseId][_questionId].reportTime = 1;
 			questionResolutions[childUniverseId][_questionId].outcome = Outcome(i - 1);

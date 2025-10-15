@@ -7,8 +7,8 @@ contract CompleteSet is ERC20 {
 
 	address public securityPool;
 
-	constructor() ERC20('Reputation', 'REP') {
-		securityPool = msg.sender;
+	constructor(address _securityPool) ERC20('CompleteSet', 'CS') {
+		securityPool = _securityPool;
 	}
 
 	function mint(address account, uint256 value) external {

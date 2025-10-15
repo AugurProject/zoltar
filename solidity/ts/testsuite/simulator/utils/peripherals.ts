@@ -1,8 +1,8 @@
 import 'viem/window'
-import { Abi, getContractAddress, numberToBytes, ReadContractReturnType } from 'viem'
+import { Abi, encodeDeployData, getContractAddress, getCreate2Address, keccak256, numberToBytes, ReadContractReturnType } from 'viem'
 import { ReadClient, WriteClient } from './viem.js'
 import { PROXY_DEPLOYER_ADDRESS, WETH_ADDRESS } from './constants.js'
-import { addressString } from './bigint.js'
+import { addressString, bytes32String } from './bigint.js'
 import { getZoltarAddress } from './utilities.js'
 import { mainnet } from 'viem/chains'
 import { contractsArtifact, QuestionOutcome } from '../types/peripheralTypes.js'
@@ -73,15 +73,6 @@ export const deploySecurityPool = async (client: WriteClient, openOracle: `0x${ 
 		address: getSecurityPoolFactoryAddress(),
 		args: [openOracle, addressString(0x0n), zoltarAddress, universeId, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, completeSetCollateralAmount]
 	})
-}
-
-export const getDeployedSecurityPool = async (client: ReadClient, securityPoolId: bigint) => {
-	return await client.readContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPoolFactory.abi as Abi,
-		functionName: 'securityPools',
-		address: getSecurityPoolFactoryAddress(),
-		args: [securityPoolId]
-	}) as `0x${ string }`
 }
 
 export const depositRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, amount: bigint) => {
@@ -295,15 +286,6 @@ export const createCompleteSet = async (client: WriteClient, securityPoolAddress
 	})
 }
 
-export const getCompleteSetAddress = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
-	return await client.readContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
-		functionName: 'completeSet',
-		address: securityPoolAddress,
-		args: []
-	}) as `0x${ string }`
-}
-
 export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress: `0x${ string }`, completeSetsToRedeem: bigint) => {
 	return await client.writeContract({
 		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
@@ -358,6 +340,15 @@ export const migrateVault = async (client: WriteClient, securityPoolAddress: `0x
 	})
 }
 
+export const getSecurityPoolChildren = async (client: ReadClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) => {
+	return await client.readContract({
+		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		functionName: 'children',
+		address: securityPoolAddress,
+		args: [outcome]
+	}) as `0x${ string }`
+}
+
 export const startTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.writeContract({
 		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
@@ -374,4 +365,45 @@ export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddr
 		address: securityPoolAddress,
 		args: [],
 	})
+}
+
+export function getSecurityPoolAddress(
+	parent: `0x${ string }`,
+	universeId: bigint,
+	questionId: bigint,
+	securityMultiplier: bigint,
+) : `0x${ string }` {
+	const initCode = encodeDeployData({
+		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		bytecode: `0x${ contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.evm.bytecode.object }`,
+		args: [getSecurityPoolFactoryAddress(), getOpenOracleAddress(), parent, getZoltarAddress(), universeId, questionId, securityMultiplier]
+	})
+	return getCreate2Address({ from: getSecurityPoolFactoryAddress(), salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
+}
+
+export function getPriceOracleManagerAndOperatorQueuerAddress(securityPool: `0x${ string }`, repToken: `0x${ string }`): `0x${ string }` {
+	const initCode = encodeDeployData({
+		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].PriceOracleManagerAndOperatorQueuer.abi as Abi,
+		bytecode: `0x${ contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].PriceOracleManagerAndOperatorQueuer.evm.bytecode.object }`,
+		args: [getOpenOracleAddress(), securityPool, repToken]
+	})
+	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
+}
+
+export function getCompleteSetAddress(securityPool: `0x${ string }`): `0x${ string }` {
+	const initCode = encodeDeployData({
+		abi: contractsArtifact.contracts['contracts/peripherals/CompleteSet.sol'].CompleteSet.abi as Abi,
+		bytecode: `0x${ contractsArtifact.contracts['contracts/peripherals/CompleteSet.sol'].CompleteSet.evm.bytecode.object }`,
+		args: [securityPool]
+	})
+	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
+}
+
+export function getTruthAuction(securityPool: `0x${ string }`): `0x${ string }` {
+	const initCode = encodeDeployData({
+		abi: contractsArtifact.contracts['contracts/peripherals/Auction.sol'].Auction.abi as Abi,
+		bytecode: `0x${ contractsArtifact.contracts['contracts/peripherals/Auction.sol'].Auction.evm.bytecode.object }`,
+		args: [securityPool]
+	})
+	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
 }
