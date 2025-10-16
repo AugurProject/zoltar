@@ -16,11 +16,13 @@ type CompileResult = funtypes.Static<typeof CompileResult>
 const CompileResult = funtypes.ReadonlyObject({
 	contracts: funtypes.Record(funtypes.String, funtypes.Record(funtypes.String, funtypes.ReadonlyObject({
 		abi: funtypes.ReadonlyArray(funtypes.ReadonlyPartial({
-			inputs: funtypes.ReadonlyArray(funtypes.ReadonlyObject({
+			inputs: funtypes.ReadonlyArray(funtypes.ReadonlyPartial({
+				indexed: funtypes.Boolean,
 				internalType: funtypes.String,
 				name: funtypes.String,
 				type: funtypes.String
 			})),
+			anonymous: funtypes.Boolean,
 			stateMutability: funtypes.String,
 			type: funtypes.String,
 			name: funtypes.String,

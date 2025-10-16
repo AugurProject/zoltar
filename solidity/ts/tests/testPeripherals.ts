@@ -179,8 +179,7 @@ describe('Peripherals Contract Test Suite', () => {
 	//})
 
 	test('can fork the system', async () => {
-		const newUniverses = await triggerFork(mockWindow, questionId)
-		console.log(newUniverses)
+		await triggerFork(mockWindow, questionId)
 		await forkSecurityPool(client, securityPoolAddress)
 		await migrateVault(client, securityPoolAddress, QuestionOutcome.Yes)
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -188,6 +187,9 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.ok(await contractExists(client, yesSecurityPool), 'Did not create YES security pool')
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool)
+
+		await participateAuction(uint256 repToBuy)
+
 		await mockWindow.advanceTime(7n * DAY + DAY)
 		await finalizeTruthAuction(client, yesSecurityPool)
 	})

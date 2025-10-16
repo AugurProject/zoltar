@@ -395,3 +395,13 @@ export function getTruthAuction(securityPool: `0x${ string }`): `0x${ string }` 
 	})
 	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
 }
+
+export const participateAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, repToBuy: bigint, ethToInvest: bigint) => {
+	return await client.writeContract({
+		abi: peripherals_Auction_Auction.abi,
+		functionName: 'participate',
+		address: auctionAddress,
+		args: [repToBuy],
+		value: ethToInvest
+	})
+}

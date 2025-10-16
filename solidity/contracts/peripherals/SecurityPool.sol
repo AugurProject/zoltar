@@ -497,7 +497,7 @@ contract SecurityPool {
 
 	function finalizeTruthAuction() public {
 		require(truthAuctionStarted != 0, 'Auction need to have started');
-		require(block.timestamp < truthAuctionStarted + AUCTION_TIME, 'truthAuction still ongoing');
+		require(block.timestamp > truthAuctionStarted + AUCTION_TIME, 'truthAuction still ongoing');
 		emit TruthAuctionFinalized();
 		truthAuction.finalizeAuction(); // this sends the eth back
 		systemState = SystemState.Operational;
