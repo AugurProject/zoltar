@@ -3,3 +3,4 @@ node_modules/
 /solidity/node_modules
 /solidity/js
 solidity/user-config.json
+solidity/ts/types/contractArtifact.ts

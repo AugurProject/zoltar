@@ -1,11 +1,12 @@
 import 'viem/window'
-import { Abi, encodeDeployData, getContractAddress, getCreate2Address, keccak256, numberToBytes, ReadContractReturnType } from 'viem'
+import { encodeDeployData, getContractAddress, getCreate2Address, keccak256, numberToBytes, ReadContractReturnType } from 'viem'
 import { ReadClient, WriteClient } from './viem.js'
 import { PROXY_DEPLOYER_ADDRESS, WETH_ADDRESS } from './constants.js'
 import { addressString, bytes32String } from './bigint.js'
 import { getZoltarAddress } from './utilities.js'
 import { mainnet } from 'viem/chains'
-import { contractsArtifact, QuestionOutcome } from '../types/peripheralTypes.js'
+import { QuestionOutcome } from '../types/peripheralTypes.js'
+import { peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPool_SecurityPoolFactory } from '../../../types/contractArtifact.js'
 
 export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<void> {
 	const deployerBytecode = await client.getCode({ address: addressString(PROXY_DEPLOYER_ADDRESS)})
@@ -17,19 +18,19 @@ export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<
 }
 
 export function getOpenOracleAddress() {
-	const bytecode: `0x${ string }` = `0x${ contractsArtifact.contracts['contracts/peripherals/openOracle/OpenOracle.sol'].OpenOracle.evm.bytecode.object }`
+	const bytecode: `0x${ string }` = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`
 	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
 }
 
 export const isOpenOracleDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${ string }` = `0x${ contractsArtifact.contracts['contracts/peripherals/openOracle/OpenOracle.sol'].OpenOracle.evm.deployedBytecode.object }`
+	const expectedDeployedBytecode: `0x${ string }` = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.deployedBytecode.object }`
 	const address = getOpenOracleAddress()
 	const deployedBytecode = await client.getCode({ address })
 	return deployedBytecode === expectedDeployedBytecode
 }
 
 export const deployOpenOracleTransaction = () => {
-	const bytecode: `0x${ string }` = `0x${ contractsArtifact.contracts['contracts/peripherals/openOracle/OpenOracle.sol'].OpenOracle.evm.bytecode.object }`
+	const bytecode: `0x${ string }` = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`
 	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
 }
 
@@ -41,19 +42,19 @@ export const ensureOpenOracleDeployed = async (client: WriteClient) => {
 }
 
 export const isSecurityPoolFactoryDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${ string }` = `0x${ contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPoolFactory.evm.deployedBytecode.object }`
+	const expectedDeployedBytecode: `0x${ string }` = `0x${ peripherals_SecurityPool_SecurityPoolFactory.evm.deployedBytecode.object }`
 	const address = getSecurityPoolFactoryAddress()
 	const deployedBytecode = await client.getCode({ address })
 	return deployedBytecode === expectedDeployedBytecode
 }
 
 export const deploySecurityPoolFactoryTransaction = () => {
-	const bytecode: `0x${ string }` = `0x${ contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPoolFactory.evm.bytecode.object }`
+	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPool_SecurityPoolFactory.evm.bytecode.object }`
 	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
 }
 
 export function getSecurityPoolFactoryAddress() {
-	const bytecode: `0x${ string }` = `0x${ contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPoolFactory.evm.bytecode.object }`
+	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPool_SecurityPoolFactory.evm.bytecode.object }`
 	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
 }
 
@@ -68,7 +69,7 @@ export const deploySecurityPool = async (client: WriteClient, openOracle: `0x${ 
 	const zoltarAddress = getZoltarAddress()
 	return await client.writeContract({
 		chain: mainnet,
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPoolFactory.abi as Abi,
+		abi: peripherals_SecurityPool_SecurityPoolFactory.abi,
 		functionName: 'deploySecurityPool',
 		address: getSecurityPoolFactoryAddress(),
 		args: [openOracle, addressString(0x0n), zoltarAddress, universeId, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, completeSetCollateralAmount]
@@ -77,7 +78,7 @@ export const deploySecurityPool = async (client: WriteClient, openOracle: `0x${ 
 
 export const depositRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, amount: bigint) => {
 	return await client.writeContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'depositRep',
 		address: securityPoolAddress,
 		args: [amount]
@@ -86,7 +87,7 @@ export const depositRep = async (client: WriteClient, securityPoolAddress: `0x${
 
 export const getPriceOracleManagerAndOperatorQueuer = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'priceOracleManagerAndOperatorQueuer',
 		address: securityPoolAddress,
 		args: []
@@ -102,7 +103,7 @@ export enum OperationType {
 export const requestPriceIfNeededAndQueueOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`, operation: OperationType, targetVault: `0x${ string }`, amount: bigint) => {
 	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer) * 2n;
 	return await client.writeContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].PriceOracleManagerAndOperatorQueuer.abi as Abi,
+		abi: peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'requestPriceIfNeededAndQueueOperation',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [operation, targetVault, amount],
@@ -112,7 +113,7 @@ export const requestPriceIfNeededAndQueueOperation = async (client: WriteClient,
 
 export const getPendingReportId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
 	return await client.readContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].PriceOracleManagerAndOperatorQueuer.abi as Abi,
+		abi: peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'pendingReportId',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: []
@@ -133,7 +134,7 @@ interface ExtraReportData {
 
 export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bigint): Promise<ExtraReportData> => {
 	const result = await client.readContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/openOracle/OpenOracle.sol'].OpenOracle.abi as Abi,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'extraData',
 		address: getOpenOracleAddress(),
 		args: [extraDataId]
@@ -176,7 +177,7 @@ export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bi
 
 export const openOracleSubmitInitialReport = async (client: WriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: `0x${ string }`) => {
 	return await client.writeContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/openOracle/OpenOracle.sol'].OpenOracle.abi as Abi,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'submitInitialReport',
 		address: getOpenOracleAddress(),
 		args: [reportId, amount1, amount2, stateHash]
@@ -185,7 +186,7 @@ export const openOracleSubmitInitialReport = async (client: WriteClient, reportI
 
 export const openOracleSettle = async (client: WriteClient, reportId: bigint) => {
 	return await client.writeContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/openOracle/OpenOracle.sol'].OpenOracle.abi as Abi,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
 		address: getOpenOracleAddress(),
 		gas: 10000000n, //needed because of gas() opcode being used
@@ -195,7 +196,7 @@ export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
 
 export const getRequestPriceEthCost = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
 	return await client.readContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].PriceOracleManagerAndOperatorQueuer.abi as Abi,
+		abi: peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'getRequestPriceEthCost',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: []
@@ -224,7 +225,7 @@ export interface ReportMeta {
 	fee: bigint
 	settlerReward: bigint
 	token1: `0x${ string }`
-	settlementTime: bigint
+	settlementTime: number
 	token2: `0x${ string }`
 	timeType: boolean
 	feePercentage: number
@@ -235,15 +236,11 @@ export interface ReportMeta {
 
 export const getOpenOracleReportMeta = async (client: ReadClient, reportId: bigint): Promise<ReportMeta> => {
 	const reportMetaData = await client.readContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/openOracle/OpenOracle.sol'].OpenOracle.abi as Abi,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'reportMeta',
 		address: getOpenOracleAddress(),
 		args: [reportId]
-	}) as [
-		bigint, bigint, bigint, bigint,
-		`0x${ string }`, bigint, `0x${ string }`, boolean,
-		number, number, number, number
-	]
+	})
 
 	const [
 		exactToken1Report,
@@ -278,7 +275,7 @@ export const getOpenOracleReportMeta = async (client: ReadClient, reportId: bigi
 
 export const createCompleteSet = async (client: WriteClient, securityPoolAddress: `0x${ string }`, completeSetsToCreate: bigint) => {
 	return await client.writeContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'createCompleteSet',
 		address: securityPoolAddress,
 		args: [],
@@ -288,7 +285,7 @@ export const createCompleteSet = async (client: WriteClient, securityPoolAddress
 
 export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress: `0x${ string }`, completeSetsToRedeem: bigint) => {
 	return await client.writeContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemCompleteSet',
 		address: securityPoolAddress,
 		args: [completeSetsToRedeem],
@@ -297,7 +294,7 @@ export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress
 
 export const getSecurityBondAllowance = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'securityBondAllowance',
 		address: securityPoolAddress,
 		args: []
@@ -306,7 +303,7 @@ export const getSecurityBondAllowance = async (client: ReadClient, securityPoolA
 
 export const getCompleteSetCollateralAmount = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'completeSetCollateralAmount',
 		address: securityPoolAddress,
 		args: []
@@ -315,7 +312,7 @@ export const getCompleteSetCollateralAmount = async (client: ReadClient, securit
 
 export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
 	return await client.readContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].PriceOracleManagerAndOperatorQueuer.abi as Abi,
+		abi: peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'lastPrice',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: []
@@ -324,7 +321,7 @@ export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOper
 
 export const forkSecurityPool = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.writeContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'forkSecurityPool',
 		address: securityPoolAddress,
 		args: [],
@@ -333,25 +330,16 @@ export const forkSecurityPool = async (client: WriteClient, securityPoolAddress:
 
 export const migrateVault = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) => {
 	return await client.writeContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'migrateVault',
 		address: securityPoolAddress,
-		args: [outcome],
+		args: [Number(outcome)],
 	})
-}
-
-export const getSecurityPoolChildren = async (client: ReadClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) => {
-	return await client.readContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
-		functionName: 'children',
-		address: securityPoolAddress,
-		args: [outcome]
-	}) as `0x${ string }`
 }
 
 export const startTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.writeContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'startTruthAuction',
 		address: securityPoolAddress,
 		args: [],
@@ -360,7 +348,7 @@ export const startTruthAuction = async (client: WriteClient, securityPoolAddress
 
 export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.writeContract({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'finalizeTruthAuction',
 		address: securityPoolAddress,
 		args: [],
@@ -374,8 +362,8 @@ export function getSecurityPoolAddress(
 	securityMultiplier: bigint,
 ) : `0x${ string }` {
 	const initCode = encodeDeployData({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.abi as Abi,
-		bytecode: `0x${ contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].SecurityPool.evm.bytecode.object }`,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		bytecode: `0x${ peripherals_SecurityPool_SecurityPool.evm.bytecode.object }`,
 		args: [getSecurityPoolFactoryAddress(), getOpenOracleAddress(), parent, getZoltarAddress(), universeId, questionId, securityMultiplier]
 	})
 	return getCreate2Address({ from: getSecurityPoolFactoryAddress(), salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
@@ -383,8 +371,8 @@ export function getSecurityPoolAddress(
 
 export function getPriceOracleManagerAndOperatorQueuerAddress(securityPool: `0x${ string }`, repToken: `0x${ string }`): `0x${ string }` {
 	const initCode = encodeDeployData({
-		abi: contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].PriceOracleManagerAndOperatorQueuer.abi as Abi,
-		bytecode: `0x${ contractsArtifact.contracts['contracts/peripherals/SecurityPool.sol'].PriceOracleManagerAndOperatorQueuer.evm.bytecode.object }`,
+		abi: peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.abi,
+		bytecode: `0x${ peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.evm.bytecode.object }`,
 		args: [getOpenOracleAddress(), securityPool, repToken]
 	})
 	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
@@ -392,8 +380,8 @@ export function getPriceOracleManagerAndOperatorQueuerAddress(securityPool: `0x$
 
 export function getCompleteSetAddress(securityPool: `0x${ string }`): `0x${ string }` {
 	const initCode = encodeDeployData({
-		abi: contractsArtifact.contracts['contracts/peripherals/CompleteSet.sol'].CompleteSet.abi as Abi,
-		bytecode: `0x${ contractsArtifact.contracts['contracts/peripherals/CompleteSet.sol'].CompleteSet.evm.bytecode.object }`,
+		abi: peripherals_CompleteSet_CompleteSet.abi,
+		bytecode: `0x${ peripherals_CompleteSet_CompleteSet.evm.bytecode.object }`,
 		args: [securityPool]
 	})
 	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
@@ -401,8 +389,8 @@ export function getCompleteSetAddress(securityPool: `0x${ string }`): `0x${ stri
 
 export function getTruthAuction(securityPool: `0x${ string }`): `0x${ string }` {
 	const initCode = encodeDeployData({
-		abi: contractsArtifact.contracts['contracts/peripherals/Auction.sol'].Auction.abi as Abi,
-		bytecode: `0x${ contractsArtifact.contracts['contracts/peripherals/Auction.sol'].Auction.evm.bytecode.object }`,
+		abi: peripherals_Auction_Auction.abi,
+		bytecode: `0x${ peripherals_Auction_Auction.evm.bytecode.object }`,
 		args: [securityPool]
 	})
 	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })

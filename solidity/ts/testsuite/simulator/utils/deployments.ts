@@ -1,3 +1,4 @@
+import { IAugur_IAugur, IERC20_IERC20, IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPool_SecurityPoolFactory, ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/peripheralTypes.js'
 import { addressString } from './bigint.js'
 import { ETHEREUM_LOGS_LOGGER_ADDRESS, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from './constants.js'
@@ -5,34 +6,29 @@ import { Deployment } from './peripheralLogs.js'
 import { getCompleteSetAddress, getOpenOracleAddress, getPriceOracleManagerAndOperatorQueuerAddress, getSecurityPoolAddress, getSecurityPoolFactoryAddress, getTruthAuction } from './peripherals.js'
 import { getChildUniverseId, getRepTokenAddress, getZoltarAddress } from './utilities.js'
 
-const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x${ string }`, repTokenAddress: `0x${ string }`, priceOracleManagerAndOperatorQueuerAddress: `0x${ string }`, completeSetAddress: `0x${ string }`, auction: `0x${ string }`) => [
+const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x${ string }`, repTokenAddress: `0x${ string }`, priceOracleManagerAndOperatorQueuerAddress: `0x${ string }`, completeSetAddress: `0x${ string }`, auction: `0x${ string }`): Deployment[] => [
 	{
-		definitionFilename: 'contracts/ReputationToken.sol',
-		contractName: 'ReputationToken',
+		abi: ReputationToken_ReputationToken.abi,
 		deploymentName: `RepV2-U${ universeId }`,
 		address: repTokenAddress
 	}, {
-		definitionFilename: 'contracts/peripherals/SecurityPool.sol',
-		contractName: `PriceOracleManagerAndOperatorQueuer`,
+		abi: peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.abi,
 		deploymentName: `PriceOracleManagerAndOperatorQueuer U${ universeId }`,
 		address: priceOracleManagerAndOperatorQueuerAddress
 	}, {
-		definitionFilename: 'contracts/peripherals/SecurityPool.sol',
-		contractName: 'SecurityPool',
+		abi: peripherals_SecurityPool_SecurityPool.abi,
 		deploymentName: `ETH SecurityPool U${ universeId }`,
 		address: securityPoolAddress
 	}, {
-		definitionFilename: 'contracts/peripherals/CompleteSet.sol',
-		contractName: 'CompleteSet',
+		abi: peripherals_CompleteSet_CompleteSet.abi,
 		deploymentName: `CompleteSet U${ universeId }`,
 		address: completeSetAddress
 	}, {
-		definitionFilename: 'contracts/peripherals/Auction.sol',
-		contractName: 'Auction',
+		abi: peripherals_Auction_Auction.abi,
 		deploymentName: `Truth Auction U${ universeId }`,
 		address: auction
 	}
-]
+] as const
 
 export const getDeployments = (genesisUniverse: bigint, questionId: bigint, securityMultiplier: bigint): Deployment[] => {
 	// get SecurityPoolFactory
@@ -61,33 +57,27 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 		...getChildAddresses(securityPoolAddress, genesisUniverse), // children
 		...oucomes.flatMap((outcome) => getChildAddresses(getSecurityPoolAddress(securityPoolAddress, genesisUniverse, questionId, securityMultiplier), getChildUniverseId(genesisUniverse, outcome))), // grand children
 		{
-			definitionFilename: 'contracts/Zoltar.sol',
-			deploymentName: 'Colored Core',
-			contractName: 'Zoltar',
+			abi: Zoltar_Zoltar.abi,
+			deploymentName: 'Zoltar',
 			address: getZoltarAddress(),
 		}, {
-			definitionFilename: 'contracts/peripherals/SecurityPool.sol',
+			abi: peripherals_SecurityPool_SecurityPoolFactory.abi,
 			deploymentName: 'SecurityPoolFactory',
-			contractName: 'SecurityPoolFactory',
 			address: getSecurityPoolFactoryAddress()
 		}, {
-			definitionFilename: 'contracts/peripherals/openOracle/OpenOracle.sol',
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			deploymentName: 'OpenOracle',
-			contractName: 'OpenOracle',
 			address: getOpenOracleAddress()
 		}, {
-			definitionFilename: 'contracts/IWeth9.sol',
-			contractName: 'IWeth9',
+			abi: IWeth9_IWeth9.abi,
 			deploymentName: 'WETH',
 			address: WETH_ADDRESS
 		}, {
-			definitionFilename: 'contracts/IAugur.sol',
-			contractName: 'IAugur',
+			abi: IAugur_IAugur.abi,
 			deploymentName: 'Augur',
 			address: '0x23916a8f5c3846e3100e5f587ff14f3098722f5d'
 		}, {
-			definitionFilename: 'contracts/IERC20.sol',
-			contractName: 'IERC20',
+			abi: IERC20_IERC20.abi,
 			deploymentName: 'ETH',
 			address: addressString(ETHEREUM_LOGS_LOGGER_ADDRESS)
 		}

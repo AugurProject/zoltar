@@ -3,12 +3,11 @@ pragma solidity 0.8.30;
 
 import './Constants.sol';
 import './ReputationToken.sol';
-import './IERC20.sol';
 
 contract Zoltar {
 
 	struct Universe {
-		IERC20 reputationToken;
+		ReputationToken reputationToken;
 		uint56 forkingQuestion;
 		uint256 forkTime;
 	}
@@ -51,7 +50,7 @@ contract Zoltar {
 
 	constructor() {
 		universes[0] = Universe(
-			IERC20(Constants.GENESIS_REPUTATION_TOKEN),
+			ReputationToken(Constants.GENESIS_REPUTATION_TOKEN),
 			0,
 			0
 		);

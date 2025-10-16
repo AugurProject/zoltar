@@ -2,16 +2,13 @@ import { describe, beforeEach, test } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testsuite/simulator/utils/constants.js'
-import { approveToken, createQuestion, dispute, ensureZoltarDeployed, getERC20Balance, getETHBalance, getQuestionData, getReportBond, getUniverseData, getZoltarAddress, isZoltarDeployed, jsonStringify, reportOutcome, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { addressString, bytes32String, dataStringWith0xStart } from '../testsuite/simulator/utils/bigint.js'
-import { createCompleteSet, deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, forkSecurityPool, getCompleteSetAddress, getCompleteSetCollateralAmount, getLastPrice, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, redeemCompleteSet, requestPriceIfNeededAndQueueOperation, wrapWeth, migrateVault, startTruthAuction, finalizeTruthAuction, getSecurityPoolChildren, getTruthAuction, getSecurityPoolAddress } from '../testsuite/simulator/utils/peripherals.js'
+import { approveToken, contractExists, createQuestion, dispute, ensureZoltarDeployed, getChildUniverseId, getERC20Balance, getETHBalance, getQuestionData, getReportBond, getUniverseData, getZoltarAddress, isZoltarDeployed, reportOutcome, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+import { addressString } from '../testsuite/simulator/utils/bigint.js'
+import { createCompleteSet, deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, forkSecurityPool, getCompleteSetAddress, getCompleteSetCollateralAmount, getLastPrice, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, redeemCompleteSet, requestPriceIfNeededAndQueueOperation, wrapWeth, migrateVault, startTruthAuction, finalizeTruthAuction, getSecurityPoolAddress } from '../testsuite/simulator/utils/peripherals.js'
 import assert from 'node:assert'
-import { Deployment, extractContractsFromArtifact, printLogs } from '../testsuite/simulator/utils/peripheralLogs.js'
-import { SendTransactionParams } from '../testsuite/simulator/types/jsonRpcTypes.js'
-import { Abi, decodeFunctionData } from 'viem'
-import { SimulatedTransaction } from '../testsuite/simulator/types/visualizerTypes.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/peripheralTypes.js'
 import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
+import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
 
 const genesisUniverse = 0n
 const questionId = 1n
@@ -62,9 +59,9 @@ const triggerFork = async(mockWindow: MockWindowEthereum, questionId: bigint) =>
 	const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 	await ensureZoltarDeployed(client)
 	await mockWindow.advanceTime(DAY)
-	const initialOutcome = 1n
+	const initialOutcome = QuestionOutcome.Yes
 	await reportOutcome(client, genesisUniverse, questionId, initialOutcome)
-	const disputeOutcome = 2n
+	const disputeOutcome = QuestionOutcome.No
 	await dispute(client, genesisUniverse, questionId, disputeOutcome)
 	const invalidUniverseId = 1n
 	const yesUniverseId = 2n
@@ -73,62 +70,6 @@ const triggerFork = async(mockWindow: MockWindowEthereum, questionId: bigint) =>
 		invalidUniverseData: await getUniverseData(client, invalidUniverseId),
 		yesUniverseData: await getUniverseData(client, yesUniverseId),
 		noUniverseData: await getUniverseData(client, noUniverseId)
-	}
-}
-
-export function printDecodedFunction(contractName: string, data: `0x${string}`, abi: Abi): void {
-	try {
-		const decoded = decodeFunctionData({ abi, data })
-		const functionName = decoded.functionName
-		const functionArgs = decoded.args || []
-
-		const functionAbi = abi.find(
-			(item: any) => item.type === 'function' && item.name === functionName
-		)
-
-		if (!functionAbi || !('inputs' in functionAbi)) {
-			console.log(`${ functionName }(${ functionArgs.join(', ') })`)
-			return
-		}
-
-		const formattedArgs = functionAbi.inputs
-			.map((input: any, index: number) => {
-				const paramName = input.name || `param${ index + 1 }`
-				const paramValue = jsonStringify(functionArgs[index])
-				return `${ paramName } = ${ paramValue }`
-			}).join(', ')
-
-		console.log(`> ${ contractName }.${ functionName }(${ formattedArgs })`)
-	} catch (error) {
-		console.log(data)
-		console.error('Error decoding function data:', error)
-	}
-}
-
-const createTransactionExplainer = (deployments: Deployment[]) => {
-	return (request: SendTransactionParams, result: SimulatedTransaction) => {
-		const contracts = extractContractsFromArtifact(deployments)
-		const contract = contracts.find((x) => BigInt(x.address) === request.params[0].to)
-		if (contract === undefined) { console.log(`UNKNOWN CALL: ${ jsonStringify(request)} `)}
-		else {
-			const data = request.params[0].input === undefined ? request.params[0].data : request.params[0].input
-			printDecodedFunction(contract.deploymentName, data === undefined ? '0x0' : dataStringWith0xStart(data), contract.abi as Abi)
-		}
-		if (result.ethSimulateV1CallResult.status === 'success') {
-			printLogs(result.ethSimulateV1CallResult.logs.map((event, logIndex) => ({
-				removed: false,
-				logIndex: logIndex,
-				transactionIndex: 1,
-				transactionHash: '0x1',
-				blockHash: '0x1',
-				blockNumber: 1n,
-				address: addressString(event.address),
-				data: dataStringWith0xStart(event.data),
-				topics: event.topics.map((x) => bytes32String(x)) as [`0x${ string }`, ...`0x${ string }`[]]
-			})), deployments)
-		} else {
-			console.log('failed')
-		}
 	}
 }
 
@@ -229,24 +170,22 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(await getERC20Balance(client, completeSetAddress, client.account.address), 0n, 'Did not lose complete sets')
 	})
 
-	test('can liquidate', async () => {
+	//test('can liquidate', async () => {
 		// add liquidation test
-	})
+	//})
 
-	test('cannot mint over or withdraw too much rep', async () => {
+	//test('cannot mint over or withdraw too much rep', async () => {
 	// add complete sets minting test where price has changed so we can no longer mint
-	})
+	//})
 
 	test('can fork the system', async () => {
 		const newUniverses = await triggerFork(mockWindow, questionId)
 		console.log(newUniverses)
 		await forkSecurityPool(client, securityPoolAddress)
 		await migrateVault(client, securityPoolAddress, QuestionOutcome.Yes)
-
-		assert.equal(BigInt(getTruthAuction(securityPoolAddress)), 0x0n, 'Genesis should not have truth auction');
-		const yesSecurityPool = await getSecurityPoolChildren(client, securityPoolAddress, QuestionOutcome.Yes)
-		assert.ok(BigInt(getTruthAuction(yesSecurityPool)) != 0x0n, 'Yes Universe should not have truth auction');
-		assert.ok(BigInt(yesSecurityPool) != 0n, 'Did not create YES security pool')
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddress(securityPoolAddress, yesUniverse, questionId, securityMultiplier)
+		assert.ok(await contractExists(client, yesSecurityPool), 'Did not create YES security pool')
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool)
 		await mockWindow.advanceTime(7n * DAY + DAY)

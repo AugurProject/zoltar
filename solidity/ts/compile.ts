@@ -2,6 +2,10 @@ import { promises as fs } from 'fs'
 import * as path from 'path'
 import solc from 'solc'
 import * as funtypes from 'funtypes'
+import * as url from 'url'
+
+const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
+const CONTRACT_PATH_APP = path.join(directoryOfThisFile, '..', 'ts', 'types', 'contractArtifact.ts')
 
 const CompileError = funtypes.ReadonlyObject({
 	severity: funtypes.String,
@@ -10,6 +14,28 @@ const CompileError = funtypes.ReadonlyObject({
 
 type CompileResult = funtypes.Static<typeof CompileResult>
 const CompileResult = funtypes.ReadonlyObject({
+	contracts: funtypes.Record(funtypes.String, funtypes.Record(funtypes.String, funtypes.ReadonlyObject({
+		abi: funtypes.ReadonlyArray(funtypes.ReadonlyPartial({
+			inputs: funtypes.ReadonlyArray(funtypes.ReadonlyObject({
+				internalType: funtypes.String,
+				name: funtypes.String,
+				type: funtypes.String
+			})),
+			stateMutability: funtypes.String,
+			type: funtypes.String,
+			name: funtypes.String,
+			outputs: funtypes.ReadonlyArray(funtypes.ReadonlyObject({
+				internalType: funtypes.String,
+				name: funtypes.String,
+				type: funtypes.String
+			}))
+		})),
+		evm: funtypes.ReadonlyObject({
+			bytecode: funtypes.ReadonlyObject({ object: funtypes.String }),
+			deployedBytecode: funtypes.ReadonlyObject({ object: funtypes.String })
+		})
+	}))),
+	sources: funtypes.Unknown,
 	errors: funtypes.Array(CompileError)
 })
 
@@ -34,16 +60,30 @@ async function exists(path: string) {
 const getAllFiles = async (dirPath: string, fileList: string[] = []): Promise<string[]> => {
 	const files = await fs.readdir(dirPath);
 	for (const file of files) {
-	  const filePath = path.join(dirPath, file);
-	  const stat = await fs.stat(filePath);
-	  if (stat.isDirectory()) {
-		await getAllFiles(filePath, fileList);
-	  } else {
-		fileList.push(filePath);
-	  }
+		const filePath = path.join(dirPath, file);
+		const stat = await fs.stat(filePath);
+		if (stat.isDirectory()) {
+			await getAllFiles(filePath, fileList);
+		} else {
+			fileList.push(filePath);
+		}
 	}
 	return fileList;
-  }
+}
+
+const copySolidityContractArtifact = async (contractLocation: string) => {
+	const solidityContract = CompileResult.parse(JSON.parse(await fs.readFile(contractLocation, 'utf8')))
+	const contracts = Object.entries(solidityContract.contracts).flatMap(([filename, contract]) => {
+		if (contract === undefined) throw new Error('missing contract')
+		return Object.entries(contract).map(([contractName, contractData]) => ({ contractName: `${ filename.replace('contracts/', '').replace(/-/g, '').replace(/\//g, '_').replace(/\\/g, '_').replace(/\.sol$/, '') }_${ contractName }`, contractData }))
+	})
+
+	console.log(contracts.map((x) => x.contractName).join(', '))
+	if (new Set(contracts.map((x) => x.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
+
+	const typescriptString = contracts.map((contract) => `export const ${ contract.contractName } = ${ JSON.stringify(contract.contractData, null, 4) } as const`).join('\r\n\r\n')
+	await fs.writeFile(CONTRACT_PATH_APP, typescriptString)
+}
 
 const compileContracts = async () => {
 	const files = await getAllFiles('contracts')
@@ -81,6 +121,7 @@ const compileContracts = async () => {
 	const artifactsDir = path.join(process.cwd(), 'artifacts')
 	if (!await exists(artifactsDir)) await fs.mkdir(artifactsDir, { recursive: false })
 	await fs.writeFile(path.join(artifactsDir, 'Contracts.json'), output)
+	await copySolidityContractArtifact(path.join(artifactsDir, 'Contracts.json'))
 }
 
 compileContracts().catch(error => {

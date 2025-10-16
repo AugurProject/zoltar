@@ -1,43 +1,13 @@
 
 import { Abi, decodeEventLog, GetLogsReturnType } from 'viem'
-import { ContractInfo, contractsArtifact, ContractDefinition } from '../types/peripheralTypes.js'
-
-const extractContractInfoFromArtifact = (contractArtifact: { contracts: Record<string, Record<string, ContractDefinition>> }): ContractInfo[] => {
-	const contractInfoArray: ContractInfo[] = []
-	for (const filename in contractArtifact.contracts) {
-		const contractsInFile = contractArtifact.contracts[filename]
-		for (const contractName in contractsInFile) {
-			const contractDefinition = contractsInFile[contractName]
-			contractInfoArray.push({ filename, name: contractName, contractDefinition })
-		}
-	}
-	return contractInfoArray
-}
 
 export type Deployment = {
-	definitionFilename: string
 	deploymentName: string
-	contractName: string
+	abi: Abi
 	address: `0x${ string }`
 }
 
-export function extractContractsFromArtifact(deployments: Deployment[]) {
-	const contractDefs = extractContractInfoFromArtifact(contractsArtifact)
-	return deployments.map((deployment) => {
-		const definition = contractDefs.find((def) => deployment.definitionFilename === def.filename && deployment.contractName === def.name)
-		if (definition === undefined) throw new Error(`defintion not found for the deployment: ${ deployment.definitionFilename } - ${ deployment.contractName }`)
-		return {
-			definitionFilename: deployment.definitionFilename,
-			contractName: deployment.contractName,
-			deploymentName: deployment.deploymentName,
-			address: deployment.address,
-			abi: definition.contractDefinition.abi
-		}
-	})
-}
-
 export const printLogs = async (rawLogs: GetLogsReturnType, deployments: Deployment[]) => {
-	const contracts = extractContractsFromArtifact(deployments)
 	if (rawLogs.length === 0) return
 	const decodedLogs: {
 		blockNumber: bigint
@@ -48,7 +18,7 @@ export const printLogs = async (rawLogs: GetLogsReturnType, deployments: Deploym
 	}[] = []
 
 	for (const log of rawLogs) {
-		const contract = contracts.find((c) => c.address.toLowerCase() === log.address.toLowerCase())
+		const contract = deployments.find((c) => c.address.toLowerCase() === log.address.toLowerCase())
 		if (!contract) {
 			decodedLogs.push({
 				blockNumber: log.blockNumber,
@@ -63,7 +33,8 @@ export const printLogs = async (rawLogs: GetLogsReturnType, deployments: Deploym
 			continue
 		}
 		try {
-			const decoded: any = decodeEventLog({ abi: contract.abi as Abi[], data: log.data, topics: log.topics })
+			const decoded: any = decodeEventLog({ abi: contract.abi, data: log.data, topics: log.topics })
+			console.log(decoded)
 			decodedLogs.push({
 				blockNumber: log.blockNumber,
 				logIndex: log.logIndex,
@@ -87,12 +58,8 @@ export const printLogs = async (rawLogs: GetLogsReturnType, deployments: Deploym
 		console.log(`${ log.contractName }: ${ log.eventName }(`)
 		for (const [paramName, paramValue] of Object.entries(log.args)) {
 			let formattedValue = paramValue
-
-			// detect ethereum address
 			if (typeof paramValue === 'string' && /^0x[a-fA-F0-9]{40}$/.test(paramValue)) {
-				const matchingDeployment = deployments.find((deploymentItem) =>
-					deploymentItem.address.toLowerCase() === paramValue.toLowerCase()
-				)
+				const matchingDeployment = deployments.find((deploymentItem) => deploymentItem.address.toLowerCase() === paramValue.toLowerCase())
 				if (matchingDeployment) {
 					formattedValue = `${ matchingDeployment.deploymentName } (${ paramValue })`
 				}

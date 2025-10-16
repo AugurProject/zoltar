@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { Auction } from './Auction.sol';
 import { Zoltar } from '../Zoltar.sol';
-import { IERC20 } from '../IERC20.sol';
+import { ReputationToken } from '../ReputationToken.sol';
 import { CompleteSet } from './CompleteSet.sol';
 import { IWeth9 } from '../IWeth9.sol';
 
@@ -76,7 +76,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 	uint256 public queuedPendingOperationId;
 	uint256 public lastSettlementTimestamp;
 	uint256 public lastPrice; // (REP * PRICE_PRECISION) / ETH;
-	IERC20 reputationToken;
+	ReputationToken reputationToken;
 	SecurityPool public securityPool;
 	OpenOracle public openOracle;
 
@@ -87,7 +87,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 	uint256 public previousQueuedOperationId;
 	mapping(uint256 => QueuedOperation) public queuedOperations;
 
-	constructor(OpenOracle _openOracle, SecurityPool _securityPool, IERC20 _reputationToken) {
+	constructor(OpenOracle _openOracle, SecurityPool _securityPool, ReputationToken _reputationToken) {
 		reputationToken = _reputationToken;
 		securityPool = _securityPool;
 		openOracle = _openOracle;
@@ -223,7 +223,7 @@ contract SecurityPool {
 
 	CompleteSet public completeSet;
 	Auction public truthAuction;
-	IERC20 public repToken;
+	ReputationToken public repToken;
 	SecurityPoolFactory public securityPoolFactory;
 
 	PriceOracleManagerAndOperatorQueuer public priceOracleManagerAndOperatorQueuer;
@@ -416,10 +416,10 @@ contract SecurityPool {
 		// takes in complete set and releases security bond and eth
 		uint256 ethValue = amount * completeSetCollateralAmount / completeSet.totalSupply();
 		completeSet.burn(msg.sender, amount);
-		(bool sent, ) = payable(msg.sender).call{value: ethValue}('');
-		require(sent, 'Failed to send Ether');
 		completeSetCollateralAmount -= ethValue;
 		updateRetentionRate();
+		(bool sent, ) = payable(msg.sender).call{value: ethValue}('');
+		require(sent, 'Failed to send Ether');
 	}
 
 	/*
@@ -455,9 +455,10 @@ contract SecurityPool {
 		emit MigrateVault(msg.sender, outcome, securityVaults[msg.sender].repDepositShare, securityVaults[msg.sender].securityBondAllowance);
 		if (address(children[uint8(outcome)]) == address(0x0)) {
 			// first vault migrater creates new pool and transfers all REP to it
-			uint192 childUniverseId = universeId << 2 + uint192(outcome);
+			uint192 childUniverseId = (universeId << 2) + uint192(outcome) + 1;
 			children[uint8(outcome)] = securityPoolFactory.deploySecurityPool(openOracle, this, zoltar, childUniverseId, questionId, securityMultiplier, currentRetentionRate, priceOracleManagerAndOperatorQueuer.lastPrice(), completeSetCollateralAmount);
-			repToken.transfer(address(children[uint8(outcome)]), repToken.balanceOf(address(this)));
+			ReputationToken childReputationToken = children[uint8(outcome)].repToken();
+			childReputationToken.transfer(address(children[uint8(outcome)]), childReputationToken.balanceOf(address(this)));
 		}
 		children[uint256(outcome)].migrateRepFromParent(msg.sender);
 
@@ -495,7 +496,7 @@ contract SecurityPool {
 	}
 
 	function finalizeTruthAuction() public {
-		require(truthAuctionStarted == 0, 'Auction need to have started');
+		require(truthAuctionStarted != 0, 'Auction need to have started');
 		require(block.timestamp < truthAuctionStarted + AUCTION_TIME, 'truthAuction still ongoing');
 		emit TruthAuctionFinalized();
 		truthAuction.finalizeAuction(); // this sends the eth back
@@ -515,6 +516,10 @@ contract SecurityPool {
 		}
 		*/
 	}
+
+	receive() external payable {
+		// needed for Truth Auction to send ETH back
+    }
 
 	// accounts the purchased REP from truthAuction to the vault
 	// we should also move a share of bad debt in the system to this vault

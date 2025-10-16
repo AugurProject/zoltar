@@ -39,6 +39,7 @@ contract Auction {
 	function finalizeAuction() public {
 		require(block.timestamp > auctionStarted + AUCTION_TIME, 'Auction needs to have ended first');
 		require(!finalized, 'Already finalized');
+		require(msg.sender == owner, 'Only owner can finalize');
 		finalized = true;
 		(bool sent, ) = payable(owner).call{value: address(this).balance}('');
 		require(sent, 'Failed to send Ether');
