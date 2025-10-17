@@ -1,14 +1,13 @@
+// SPDX-License-Identifier: UNICENSE
 pragma solidity 0.8.30;
 
 import './Constants.sol';
-import './IZoltar.sol';
 import './ReputationToken.sol';
-import './IERC20.sol';
 
 contract Zoltar {
 
 	struct Universe {
-		IERC20 reputationToken;
+		ReputationToken reputationToken;
 		uint56 forkingQuestion;
 		uint256 forkTime;
 	}
@@ -51,7 +50,7 @@ contract Zoltar {
 
 	constructor() {
 		universes[0] = Universe(
-			IERC20(Constants.GENESIS_REPUTATION_TOKEN),
+			ReputationToken(Constants.GENESIS_REPUTATION_TOKEN),
 			0,
 			0
 		);
@@ -161,11 +160,7 @@ contract Zoltar {
 
 		for (uint8 i = 1; i < Constants.NUM_OUTCOMES + 1; i++) {
 			uint192 childUniverseId = (_universeId << 2) + i;
-			universes[childUniverseId] = Universe(
-				new ReputationToken(),
-				0,
-				0
-			);
+			universes[childUniverseId] = Universe(new ReputationToken{ salt: bytes32(uint256(childUniverseId)) }(address(this)), 0, 0);
 
 			questionResolutions[childUniverseId][_questionId].reportTime = 1;
 			questionResolutions[childUniverseId][_questionId].outcome = Outcome(i - 1);
