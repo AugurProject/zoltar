@@ -5,6 +5,7 @@ import { BURN_ADDRESS, DAY, GENESIS_REPUTATION_TOKEN, REP_BOND, TEST_ADDRESSES }
 import { approveToken, createQuestion, ensureZoltarDeployed, getERC20Balance, getQuestionData, getZoltarAddress, getUniverseData, initialTokenBalance, isZoltarDeployed, setupTestAccounts, reportOutcome, isFinalized, finalizeQuestion, getWinningOutcome, dispute, splitRep, splitStakedRep } from '../testsuite/simulator/utils/utilities.js'
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint.js'
+import { QuestionOutcome } from '../testsuite/simulator/types/peripheralTypes.js'
 
 describe('Contract Test Suite', () => {
 
@@ -24,7 +25,7 @@ describe('Contract Test Suite', () => {
 		assert.ok(isDeployed, `Not Deployed!`)
 
 		const genesisUniverseData = await getUniverseData(client, 0n)
-		assert.strictEqual(genesisUniverseData[0].toLowerCase(), addressString(GENESIS_REPUTATION_TOKEN), 'Genesis universe not recognized or not initialized properly')
+		assert.strictEqual(genesisUniverseData.reputationToken.toLowerCase(), addressString(GENESIS_REPUTATION_TOKEN), 'Genesis universe not recognized or not initialized properly')
 	})
 
 	test('canCreateQuestion', async () => {
@@ -44,10 +45,10 @@ describe('Contract Test Suite', () => {
 		const questionId = 1n
 		const questionData = await getQuestionData(client, questionId)
 
-		assert.strictEqual(questionData[0], endTime, 'Question endTime not as expected')
-		assert.strictEqual(questionData[1], genesisUniverse, 'Question origin universe not as expected')
-		assert.strictEqual(questionData[2].toLowerCase(), client.account.address, 'Question designated reporter not as expected')
-		assert.strictEqual(questionData[3], "test", 'Question extraInfo not as expected')
+		assert.strictEqual(questionData.endTime, endTime, 'Question endTime not as expected')
+		assert.strictEqual(questionData.originUniverse, genesisUniverse, 'Question origin universe not as expected')
+		assert.strictEqual(questionData.designatedReporter.toLowerCase(), client.account.address, 'Question designated reporter not as expected')
+		assert.strictEqual(questionData.extraInfo, "test", 'Question extraInfo not as expected')
 	})
 
 	test('canResolveQuestion', async () => {
@@ -62,7 +63,7 @@ describe('Contract Test Suite', () => {
 		await createQuestion(client, genesisUniverse, endTime, "test")
 
 		const questionId = 1n
-		const winningOutcome = 1n
+		const winningOutcome = QuestionOutcome.Yes
 
 		// We can't report until the question has reached its end time
 		await assert.rejects(reportOutcome(client, genesisUniverse, questionId, winningOutcome))
@@ -77,8 +78,8 @@ describe('Contract Test Suite', () => {
 
 		await mockWindow.advanceTime(DAY + 1n)
 
-		const isFInalizedNow = await isFinalized(client, genesisUniverse, questionId)
-		assert.ok(isFInalizedNow, "Question not recognized as finalized")
+		const isFinalizedNow = await isFinalized(client, genesisUniverse, questionId)
+		assert.ok(isFinalizedNow, "Question not recognized as finalized")
 
 		const repBalanceBeforeReturn = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		await finalizeQuestion(client, genesisUniverse, questionId)
@@ -102,7 +103,7 @@ describe('Contract Test Suite', () => {
 		await createQuestion(client, genesisUniverse, endTime, "test")
 
 		const questionId = 1n
-		const winningOutcome = 1n
+		const winningOutcome = QuestionOutcome.Yes
 
 		await mockWindow.advanceTime(DAY)
 
@@ -120,8 +121,8 @@ describe('Contract Test Suite', () => {
 
 		await mockWindow.advanceTime(DAY + 1n)
 
-		const isFInalizedNow = await isFinalized(client, genesisUniverse, questionId)
-		assert.ok(isFInalizedNow, "Question not recognized as finalized")
+		const isFinalizedNow = await isFinalized(client, genesisUniverse, questionId)
+		assert.ok(isFinalizedNow, "Question not recognized as finalized")
 
 		// The REP bond can now be returned to the initial reporter
 		const repBalanceBeforeReturn = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), otherClient.account.address)
@@ -152,13 +153,13 @@ describe('Contract Test Suite', () => {
 
 		await mockWindow.advanceTime(DAY)
 
-		const initialOutcome = 1n
+		const initialOutcome = QuestionOutcome.Yes
 		await reportOutcome(client, genesisUniverse, questionId, initialOutcome)
 
 		// We'll also report on the second question
 		await reportOutcome(client, genesisUniverse, questionId2, initialOutcome)
 
-		const disputeOutcome = 2n
+		const disputeOutcome = QuestionOutcome.No
 		await dispute(client2, genesisUniverse, questionId, disputeOutcome)
 
 		// Three child universe now exist
@@ -168,13 +169,13 @@ describe('Contract Test Suite', () => {
 		const invalidUniverseData = await getUniverseData(client, invalidUniverseId)
 		const yesUniverseData = await getUniverseData(client, yesUniverseId)
 		const noUniverseData = await getUniverseData(client, noUniverseId)
-		const invalidREPToken = invalidUniverseData[0]
-		const yesREPToken = yesUniverseData[0]
-		const noREPToken = noUniverseData[0]
+		const invalidREPToken = invalidUniverseData.reputationToken
+		const yesREPToken = yesUniverseData.reputationToken
+		const noREPToken = noUniverseData.reputationToken
 
-		assert.notEqual(invalidUniverseData[0], addressString(0n), 'invalid universe not recognized or not initialized properly')
-		assert.notEqual(yesUniverseData[0], addressString(0n), 'yes universe not recognized or not initialized properly')
-		assert.notEqual(noUniverseData[0], addressString(0n), 'no universe not recognized or not initialized properly')
+		assert.notEqual(invalidREPToken, addressString(0n), 'invalid universe not recognized or not initialized properly')
+		assert.notEqual(yesREPToken, addressString(0n), 'yes universe not recognized or not initialized properly')
+		assert.notEqual(noREPToken, addressString(0n), 'no universe not recognized or not initialized properly')
 
 		//The client balances of REP staked in the escalation game have migrated to the respective universe REP
 		const client1YesREPBalance = await getERC20Balance(client, yesREPToken, client.account.address)
@@ -187,9 +188,9 @@ describe('Contract Test Suite', () => {
 		const yesUniverseWinningOutcome = await getWinningOutcome(client, yesUniverseId, questionId)
 		const noUniverseWinningOutcome = await getWinningOutcome(client, noUniverseId, questionId)
 
-		assert.strictEqual(invalidUniverseWinningOutcome, 0n, "Invalid universe forking question outcome not as expected")
-		assert.strictEqual(yesUniverseWinningOutcome, 1n, "Yes universe forking question outcome not as expected")
-		assert.strictEqual(noUniverseWinningOutcome, 2n, "No universe forking question outcome not as expected")
+		assert.strictEqual(invalidUniverseWinningOutcome, QuestionOutcome.Invalid, "Invalid universe forking question outcome not as expected")
+		assert.strictEqual(yesUniverseWinningOutcome, QuestionOutcome.Yes, "Yes universe forking question outcome not as expected")
+		assert.strictEqual(noUniverseWinningOutcome, QuestionOutcome.No, "No universe forking question outcome not as expected")
 
 		const disputeBond = REP_BOND * 2n
 
