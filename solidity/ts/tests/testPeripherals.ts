@@ -2,21 +2,23 @@ import { describe, beforeEach, test } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testsuite/simulator/utils/constants.js'
-import { approveToken, contractExists, createQuestion, dispute, ensureZoltarDeployed, getChildUniverseId, getERC20Balance, getETHBalance, getQuestionData, getReportBond, getUniverseData, getZoltarAddress, isZoltarDeployed, reportOutcome, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+import { approveToken, contractExists, createQuestion, dispute, ensureZoltarDeployed, getChildUniverseId, getERC20Balance, getETHBalance, getQuestionData, getReportBond, getRepTokenAddress, getUniverseData, getZoltarAddress, isZoltarDeployed, reportOutcome, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { addressString } from '../testsuite/simulator/utils/bigint.js'
-import { createCompleteSet, deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, forkSecurityPool, getCompleteSetAddress, getCompleteSetCollateralAmount, getLastPrice, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, redeemCompleteSet, requestPriceIfNeededAndQueueOperation, wrapWeth, migrateVault, startTruthAuction, finalizeTruthAuction, getSecurityPoolAddress } from '../testsuite/simulator/utils/peripherals.js'
+import { createCompleteSet, deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, forkSecurityPool, getCompleteSetAddress, getCompleteSetCollateralAmount, getLastPrice, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, redeemCompleteSet, requestPriceIfNeededAndQueueOperation, wrapWeth, migrateVault, getSecurityPoolAddress, getMigratedRep, getSystemState, startTruthAuction, getCurrentRetentionRate } from '../testsuite/simulator/utils/peripherals.js'
 import assert from 'node:assert'
-import { QuestionOutcome } from '../testsuite/simulator/types/peripheralTypes.js'
+import { QuestionOutcome, SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
 import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
 
 const genesisUniverse = 0n
 const questionId = 1n
 const securityMultiplier = 2n;
-const startingPerSecondFee = 1n;
 const startingRepEthPrice = 1n;
 const completeSetCollateralAmount = 0n;
 const PRICE_PRECISION = 10n ** 18n;
+const MAX_RETENTION_RATE = 999_999_996_848_000_000n; // ≈90% yearly
+//const MIN_RETENTION_RATE = 999_999_977_880_000_000n; // ≈50% yearly
+//const RETENTION_RATE_DIP = 80n; // 80% utilization
 
 const deployZoltarAndCreateMarket = async (client: WriteClient, curentTimestamp: bigint) => {
 	await ensureZoltarDeployed(client)
@@ -34,7 +36,7 @@ const deployPeripheralsAndGetDeployedSecurityPool = async (client: WriteClient) 
 	const openOracle = getOpenOracleAddress()
 	await ensureSecurityPoolFactoryDeployed(client);
 	assert.ok(await isSecurityPoolFactoryDeployed(client), 'Security Pool Factory Not Deployed!')
-	await deploySecurityPool(client, openOracle, genesisUniverse, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, completeSetCollateralAmount)
+	await deploySecurityPool(client, openOracle, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice, completeSetCollateralAmount)
 	return getSecurityPoolAddress(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
 }
 
@@ -126,7 +128,7 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance - reportBond, 'Did not get rep back')
 	})
 
-	test('can set security bonds allowance' , async () => {
+	test('can set security bonds allowance, mint complete sets and fork happily' , async () => {
 		const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		const securityPoolAllowance = repDeposit / 4n
 		await requestPriceIfNeededAndQueueOperation(client, priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
@@ -168,6 +170,25 @@ describe('Peripherals Contract Test Suite', () => {
 		await redeemCompleteSet(client, securityPoolAddress, amountToCreate)
 		assert.ok(ethBalance - await getETHBalance(client, client.account.address) < maxGasFees, 'Did not get ETH back from complete sets')
 		assert.strictEqual(await getERC20Balance(client, completeSetAddress, client.account.address), 0n, 'Did not lose complete sets')
+
+		// forking
+		await createCompleteSet(client, securityPoolAddress, amountToCreate)
+		const repBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddress)
+		await triggerFork(mockWindow, questionId)
+		await forkSecurityPool(client, securityPoolAddress)
+		assert.strictEqual(await getSystemState(client, securityPoolAddress), SystemState.PoolForked, 'Parent is forked')
+		assert.strictEqual(0n, await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddress), 'Parents original rep is gone')
+		await migrateVault(client, securityPoolAddress, QuestionOutcome.Yes)
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddress(securityPoolAddress, yesUniverse, questionId, securityMultiplier)
+		assert.strictEqual(await getSystemState(client, yesSecurityPool), SystemState.ForkMigration, 'Fork Migration need to start')
+		const migratedRep = await getMigratedRep(client, yesSecurityPool)
+		assert.strictEqual(repBalance, migratedRep, 'correct amount rep migrated')
+		assert.ok(await contractExists(client, yesSecurityPool), 'Did not create YES security pool')
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool)
+		assert.strictEqual(await getSystemState(client, yesSecurityPool), SystemState.Operational, 'System should be operational again')
+		assert.strictEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool), amountToCreate, 'child contract did not record the amount correctly')
 	})
 
 	//test('can liquidate', async () => {
@@ -178,20 +199,38 @@ describe('Peripherals Contract Test Suite', () => {
 	// add complete sets minting test where price has changed so we can no longer mint
 	//})
 
-	test('can fork the system', async () => {
+	/*
+	//todo, need two pools for this
+	test('can fork the system path with auction', async () => {
+		const repBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddress)
 		await triggerFork(mockWindow, questionId)
 		await forkSecurityPool(client, securityPoolAddress)
+		assert.strictEqual(await getSystemState(client, securityPoolAddress), SystemState.PoolForked, 'Parent is forked')
+		assert.strictEqual(0n, await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddress), 'Parents original rep is gone')
 		await migrateVault(client, securityPoolAddress, QuestionOutcome.Yes)
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddress(securityPoolAddress, yesUniverse, questionId, securityMultiplier)
+		assert.strictEqual(await getSystemState(client, yesSecurityPool), SystemState.ForkMigration, 'Fork Migration need to start')
+		const migratedRep = await getMigratedRep(client, yesSecurityPool)
+		assert.strictEqual(repBalance, migratedRep, 'correct amount rep migrated')
 		assert.ok(await contractExists(client, yesSecurityPool), 'Did not create YES security pool')
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool)
+		assert.strictEqual(await getSystemState(client, yesSecurityPool), SystemState.Operational, 'System should be operational again')
+		const yesSecurityPoolTruthAuction = getTruthAuction(yesSecurityPool)
+		const repToBuy = 1n * 10n ** 18n
+		const ethToInvest = await getEthAmountToBuy(client, yesSecurityPoolTruthAuction)
+		await participateAuction(client, yesSecurityPoolTruthAuction, repToBuy, ethToInvest)
 
-		await participateAuction(uint256 repToBuy)
+		//await mockWindow.advanceTime(7n * DAY + DAY)
+		//await finalizeTruthAuction(client, yesSecurityPool)
+		//assert.strictEqual(ethToInvest, client.getBalance({ address: yesSecurityPool, blockTag: 'latest' }), 'did not get Eth from auction')
 
-		await mockWindow.advanceTime(7n * DAY + DAY)
-		await finalizeTruthAuction(client, yesSecurityPool)
+		assert.strictEqual(await getSystemState(client, securityPoolAddress), SystemState.PoolForked, 'Parent should be still forked')
+	})*/
+
+	test('fees', async () => {
+		assert.strictEqual(await getCurrentRetentionRate(client, securityPoolAddress), MAX_RETENTION_RATE, 'retention rate was not at max');
 	})
 
 })

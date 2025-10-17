@@ -25,3 +25,10 @@ export enum QuestionOutcome {
 	No,
 	None
 }
+
+export enum SystemState {
+	Operational,
+	PoolForked,
+	ForkMigration,
+	ForkTruthAuction,
+}

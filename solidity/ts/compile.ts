@@ -13,7 +13,7 @@ const CompileError = funtypes.ReadonlyObject({
 })
 
 type CompileResult = funtypes.Static<typeof CompileResult>
-const CompileResult = funtypes.ReadonlyObject({
+const CompileResult = funtypes.ReadonlyPartial({
 	contracts: funtypes.Record(funtypes.String, funtypes.Record(funtypes.String, funtypes.ReadonlyObject({
 		abi: funtypes.ReadonlyArray(funtypes.ReadonlyPartial({
 			inputs: funtypes.ReadonlyArray(funtypes.ReadonlyPartial({
@@ -75,14 +75,12 @@ const getAllFiles = async (dirPath: string, fileList: string[] = []): Promise<st
 
 const copySolidityContractArtifact = async (contractLocation: string) => {
 	const solidityContract = CompileResult.parse(JSON.parse(await fs.readFile(contractLocation, 'utf8')))
+	if (solidityContract.contracts === undefined) throw new Error('contracts object missing')
 	const contracts = Object.entries(solidityContract.contracts).flatMap(([filename, contract]) => {
 		if (contract === undefined) throw new Error('missing contract')
 		return Object.entries(contract).map(([contractName, contractData]) => ({ contractName: `${ filename.replace('contracts/', '').replace(/-/g, '').replace(/\//g, '_').replace(/\\/g, '_').replace(/\.sol$/, '') }_${ contractName }`, contractData }))
 	})
-
-	console.log(contracts.map((x) => x.contractName).join(', '))
 	if (new Set(contracts.map((x) => x.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
-
 	const typescriptString = contracts.map((contract) => `export const ${ contract.contractName } = ${ JSON.stringify(contract.contractData, null, 4) } as const`).join('\r\n\r\n')
 	await fs.writeFile(CONTRACT_PATH_APP, typescriptString)
 }
@@ -120,6 +118,10 @@ const compileContracts = async () => {
 	const result = CompileResult.parse(JSON.parse(output))
 	const errors = (result!.errors || []).filter(x => x.severity === 'error').map(x => x.formattedMessage)
 	if (errors.length) throw new CompilationError(errors)
+
+	const warnings = (result!.errors || []).map(x => x.formattedMessage)
+	if (warnings.length > 0) console.log(JSON.stringify(warnings))
+
 	const artifactsDir = path.join(process.cwd(), 'artifacts')
 	if (!await exists(artifactsDir)) await fs.mkdir(artifactsDir, { recursive: false })
 	await fs.writeFile(path.join(artifactsDir, 'Contracts.json'), output)

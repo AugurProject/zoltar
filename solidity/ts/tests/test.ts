@@ -78,8 +78,8 @@ describe('Contract Test Suite', () => {
 
 		await mockWindow.advanceTime(DAY + 1n)
 
-		const isFInalizedNow = await isFinalized(client, genesisUniverse, questionId)
-		assert.ok(isFInalizedNow, "Question not recognized as finalized")
+		const isFinalizedNow = await isFinalized(client, genesisUniverse, questionId)
+		assert.ok(isFinalizedNow, "Question not recognized as finalized")
 
 		const repBalanceBeforeReturn = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		await finalizeQuestion(client, genesisUniverse, questionId)
@@ -121,8 +121,8 @@ describe('Contract Test Suite', () => {
 
 		await mockWindow.advanceTime(DAY + 1n)
 
-		const isFInalizedNow = await isFinalized(client, genesisUniverse, questionId)
-		assert.ok(isFInalizedNow, "Question not recognized as finalized")
+		const isFinalizedNow = await isFinalized(client, genesisUniverse, questionId)
+		assert.ok(isFinalizedNow, "Question not recognized as finalized")
 
 		// The REP bond can now be returned to the initial reporter
 		const repBalanceBeforeReturn = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), otherClient.account.address)

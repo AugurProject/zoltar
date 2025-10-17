@@ -5,7 +5,7 @@ import { PROXY_DEPLOYER_ADDRESS, WETH_ADDRESS } from './constants.js'
 import { addressString, bytes32String } from './bigint.js'
 import { getZoltarAddress } from './utilities.js'
 import { mainnet } from 'viem/chains'
-import { QuestionOutcome } from '../types/peripheralTypes.js'
+import { QuestionOutcome, SystemState } from '../types/peripheralTypes.js'
 import { peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPool_SecurityPoolFactory } from '../../../types/contractArtifact.js'
 
 export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<void> {
@@ -65,14 +65,14 @@ export const ensureSecurityPoolFactoryDeployed = async (client: WriteClient) => 
 	await client.waitForTransactionReceipt({ hash })
 }
 
-export const deploySecurityPool = async (client: WriteClient, openOracle: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint, startingPerSecondFee: bigint, startingRepEthPrice: bigint, completeSetCollateralAmount: bigint) => {
+export const deploySecurityPool = async (client: WriteClient, openOracle: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint, startingRetentionRate: bigint, startingRepEthPrice: bigint, completeSetCollateralAmount: bigint) => {
 	const zoltarAddress = getZoltarAddress()
 	return await client.writeContract({
 		chain: mainnet,
 		abi: peripherals_SecurityPool_SecurityPoolFactory.abi,
 		functionName: 'deploySecurityPool',
 		address: getSecurityPoolFactoryAddress(),
-		args: [openOracle, addressString(0x0n), zoltarAddress, universeId, questionId, securityMultiplier, startingPerSecondFee, startingRepEthPrice, completeSetCollateralAmount]
+		args: [openOracle, addressString(0x0n), zoltarAddress, universeId, questionId, securityMultiplier, startingRetentionRate, startingRepEthPrice, completeSetCollateralAmount]
 	})
 }
 
@@ -403,5 +403,40 @@ export const participateAuction = async (client: WriteClient, auctionAddress: `0
 		address: auctionAddress,
 		args: [repToBuy],
 		value: ethToInvest
+	})
+}
+export const getEthAmountToBuy = async (client: WriteClient, auctionAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_Auction_Auction.abi,
+		functionName: 'ethAmountToBuy',
+		address: auctionAddress,
+		args: [],
+	})
+}
+
+export const getMigratedRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'migratedRep',
+		address: securityPoolAddress,
+		args: [],
+	})
+}
+
+export const getSystemState = async (client: WriteClient, securityPoolAddress: `0x${ string }`): Promise<SystemState> => {
+	return await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'systemState',
+		address: securityPoolAddress,
+		args: [],
+	})
+}
+
+export const getCurrentRetentionRate = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'currentRetentionRate',
+		address: securityPoolAddress,
+		args: [],
 	})
 }

@@ -23,7 +23,9 @@ enum QuestionOutcome {
 
 enum SystemState {
 	Operational,
-	OnGoingAFork
+	PoolForked,
+	ForkMigration,
+	ForkTruthAuction
 }
 
 uint256 constant MIGRATION_TIME = 8 weeks;
@@ -234,9 +236,10 @@ contract SecurityPool {
 	event PoolRetentionRateChanged(uint256 feesAccrued, uint256 utilization, uint256 retentionRate);
 	event ForkSecurityPool(uint256 repAtFork);
 	event MigrateVault(address vault, QuestionOutcome outcome, uint256 repDepositShare, uint256 securityBondAllowance);
-	event TruthAuctionStarted();
+	event TruthAuctionStarted(uint256 completeSetCollateralAmount, uint256 repMigrated, uint256 repAtFork);
 	event TruthAuctionFinalized();
 	event ClaimAuctionProceeds(address vault, uint256 amount, uint256 repShareAmount);
+	event MigrateRepFromParent(address vault, uint256 parentSecurityBondAllowance, uint256 parentRepDepositShare);
 
 	modifier isOperational {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
@@ -253,13 +256,10 @@ contract SecurityPool {
 		zoltar = _zoltar;
 		parent = _parent;
 		openOracle = _openOracle;
-		lastUpdatedFeeAccumulator = block.timestamp;
-		(repToken,,) = zoltar.universes(universeId);
 		if (address(parent) == address(0x0)) { // origin universe never does truthAuction
-			truthAuctionStarted = 1;
 			systemState = SystemState.Operational;
 		} else {
-			systemState = SystemState.OnGoingAFork;
+			systemState = SystemState.ForkMigration;
 			truthAuction = new Auction{ salt: bytes32(uint256(0x1)) }(address(this));
 		}
 		// todo, we can probably do these smarter so that we don't need migration
@@ -268,33 +268,38 @@ contract SecurityPool {
 
 	function setStartingParams(uint256 _currentRetentionRate, uint256 _repEthPrice, uint256 _completeSetCollateralAmount) public {
 		require(msg.sender == address(securityPoolFactory), 'only callable by securityPoolFactory');
+		lastUpdatedFeeAccumulator = block.timestamp;
 		currentRetentionRate = _currentRetentionRate;
 		completeSetCollateralAmount = _completeSetCollateralAmount;
+		(repToken,,) = zoltar.universes(universeId);
 		priceOracleManagerAndOperatorQueuer = new PriceOracleManagerAndOperatorQueuer{ salt: bytes32(uint256(0x1)) }(openOracle, this, repToken);
 		priceOracleManagerAndOperatorQueuer.setRepEthPrice(_repEthPrice);
 	}
 
 	function updateCollateralAmount() public {
 		(uint64 endTime,,,) = zoltar.questions(questionId);
-		uint256 clampedCurrentTimestamp = (block.timestamp > endTime ? endTime : block.timestamp);
-		uint256 timeDelta = clampedCurrentTimestamp - lastUpdatedFeeAccumulator;
+		uint256 clampedCurrentTimestamp = block.timestamp > endTime ? endTime : block.timestamp;
+		uint256 clampedLastUpdatedFeeAccumulator = lastUpdatedFeeAccumulator > endTime ? endTime : lastUpdatedFeeAccumulator;
+		uint256 timeDelta = clampedCurrentTimestamp - clampedLastUpdatedFeeAccumulator;
 		if (timeDelta == 0) return;
 
 		uint256 newCompleteSetCollateralAmount = completeSetCollateralAmount * rpow(currentRetentionRate, timeDelta, PRICE_PRECISION) / PRICE_PRECISION;
 		feesAccrued += completeSetCollateralAmount - newCompleteSetCollateralAmount;
 		completeSetCollateralAmount = newCompleteSetCollateralAmount;
-		lastUpdatedFeeAccumulator = clampedCurrentTimestamp;
+		lastUpdatedFeeAccumulator = block.timestamp;
 	}
 
 	function updateRetentionRate() public {
+		if (securityBondAllowance == 0) return;
+		if (systemState != SystemState.Operational) return; // if system state is not operational do not change fees
 		uint256 utilization = (completeSetCollateralAmount * 100) / securityBondAllowance;
 		if (utilization <= RETENTION_RATE_DIP) {
-			// first slope: 0% → RETENTION_RATE_DIP%
+			// first slope: 0% -> RETENTION_RATE_DIP%
 			uint256 utilizationRatio = (utilization * PRICE_PRECISION) / RETENTION_RATE_DIP;
 			uint256 slopeSpan = MAX_RETENTION_RATE - MIN_RETENTION_RATE;
 			currentRetentionRate = MAX_RETENTION_RATE - (slopeSpan * utilizationRatio) / PRICE_PRECISION;
 		} else if (utilization <= 100) {
-			// second slope: RETENTION_RATE_DIP% → 100%
+			// second slope: RETENTION_RATE_DIP% -> 100%
 			uint256 slopeSpan = MAX_RETENTION_RATE - MIN_RETENTION_RATE;
 			currentRetentionRate = MIN_RETENTION_RATE + (slopeSpan * (100 - utilization) * PRICE_PRECISION / (100 - RETENTION_RATE_DIP)) / PRICE_PRECISION;
 		} else {
@@ -307,6 +312,7 @@ contract SecurityPool {
 	// I wonder if we want to delay the payments and smooth them out to avoid flashloan attacks?
 	function updateVaultFees(address vault) public {
 		updateCollateralAmount();
+		require(feesAccrued >= securityVaults[vault].feeAccumulator, 'fee accumulator too high? should not happen');
 		uint256 accumulatorDiff = feesAccrued - securityVaults[vault].feeAccumulator;
 		uint256 fees = (securityVaults[vault].securityBondAllowance * accumulatorDiff) / PRICE_PRECISION;
 		securityVaults[vault].feeAccumulator = feesAccrued;
@@ -403,6 +409,7 @@ contract SecurityPool {
 	////////////////////////////////////////
 	function createCompleteSet() payable public isOperational {
 		require(msg.value > 0, 'need to send eth');
+		require(systemState == SystemState.Operational, 'system is not Operational'); //todo, we want to be able to create complete sets in the children right away, figure accounting out
 		updateCollateralAmount();
 		require(securityBondAllowance - completeSetCollateralAmount >= msg.value, 'no capacity to create that many sets');
 		uint256 amountToMint = completeSet.totalSupply() == completeSetCollateralAmount ? msg.value : msg.value * completeSet.totalSupply() / completeSetCollateralAmount;
@@ -412,6 +419,7 @@ contract SecurityPool {
 	}
 
 	function redeemCompleteSet(uint256 amount) public isOperational {
+		require(systemState == SystemState.Operational, 'system is not Operational'); // todo, we want to allow people to exit, but for accounting purposes that is difficult but maybe there's a way?
 		updateCollateralAmount();
 		// takes in complete set and releases security bond and eth
 		uint256 ethValue = amount * completeSetCollateralAmount / completeSet.totalSupply();
@@ -437,18 +445,20 @@ contract SecurityPool {
 		require(forkTime > 0, 'Zoltar needs to have forked before Security Pool can do so');
 		require(systemState == SystemState.Operational, 'System needs to be operational to trigger fork');
 		require(securityPoolForkTriggeredTimestamp == 0, 'fork already triggered');
-		systemState = SystemState.OnGoingAFork;
+		require(!zoltar.isFinalized(universeId, questionId), 'question has been finalized already');
+		systemState = SystemState.PoolForked;
 		securityPoolForkTriggeredTimestamp = block.timestamp;
 		repAtFork = repToken.balanceOf(address(this));
+		// TODO, handle case where parent repAtFork == 0
 		emit ForkSecurityPool(repAtFork);
 		repToken.approve(address(zoltar), repAtFork);
-		zoltar.splitRep(universeId); // converts origin rep to rep_true, rep_false and rep_invalid
+		zoltar.splitRep(universeId);
 		// we could pay the caller basefee*2 out of Open interest we have?
 	}
 
 	// migrates vault into outcome universe after fork
-	function migrateVault(QuestionOutcome outcome) public {
-		require(securityPoolForkTriggeredTimestamp > 0, 'fork needs to be triggered');
+	function migrateVault(QuestionOutcome outcome) public { // called on parent
+		require(systemState == SystemState.PoolForked, 'Pool needs to have forked');
 		require(block.timestamp <= securityPoolForkTriggeredTimestamp + MIGRATION_TIME , 'migration time passed');
 		require(securityVaults[msg.sender].repDepositShare > 0, 'Vault has no rep to migrate');
 		updateVaultFees(msg.sender);
@@ -456,51 +466,71 @@ contract SecurityPool {
 		if (address(children[uint8(outcome)]) == address(0x0)) {
 			// first vault migrater creates new pool and transfers all REP to it
 			uint192 childUniverseId = (universeId << 2) + uint192(outcome) + 1;
-			children[uint8(outcome)] = securityPoolFactory.deploySecurityPool(openOracle, this, zoltar, childUniverseId, questionId, securityMultiplier, currentRetentionRate, priceOracleManagerAndOperatorQueuer.lastPrice(), completeSetCollateralAmount);
+			children[uint8(outcome)] = securityPoolFactory.deploySecurityPool(openOracle, this, zoltar, childUniverseId, questionId, securityMultiplier, currentRetentionRate, priceOracleManagerAndOperatorQueuer.lastPrice(), 0);
 			ReputationToken childReputationToken = children[uint8(outcome)].repToken();
 			childReputationToken.transfer(address(children[uint8(outcome)]), childReputationToken.balanceOf(address(this)));
 		}
 		children[uint256(outcome)].migrateRepFromParent(msg.sender);
 
 		// migrate open interest
-		(bool sent, ) = payable(msg.sender).call{value: completeSetCollateralAmount * securityVaults[msg.sender].repDepositShare / repAtFork }('');
-		require(sent, 'Failed to send Ether');
-
+		if (repAtFork > 0) {
+			(bool sent, ) = payable(msg.sender).call{value: completeSetCollateralAmount * securityVaults[msg.sender].repDepositShare / repAtFork }('');
+			require(sent, 'Failed to send Ether');
+		}
 		securityVaults[msg.sender].repDepositShare = 0;
 		securityVaults[msg.sender].securityBondAllowance = 0;
 	}
 
-	function migrateRepFromParent(address vault) public {
+	function migrateRepFromParent(address vault) public { // called on children
 		require(msg.sender == address(parent), 'only parent can migrate');
+		updateVaultFees(vault);
+		parent.updateCollateralAmount();
 		(uint256 parentSecurityBondAllowance, uint256 parentRepDepositShare,,) = parent.securityVaults(vault);
+		emit MigrateRepFromParent(vault, parentSecurityBondAllowance, parentRepDepositShare);
 		securityVaults[vault].securityBondAllowance = parentSecurityBondAllowance;
 		securityVaults[vault].repDepositShare = parentRepDepositShare;
 		securityBondAllowance += parentSecurityBondAllowance;
 		migratedRep += parentRepDepositShare;
+
+		// migrate completeset collateral amount incrementally as we want this portion to start paying fees right away, but stop paying fees in the parent system
+		// TODO, handle case where parent repAtFork == 0
+		require(parent.repAtFork() > 0, 'parent needs to have rep at fork');
+		completeSetCollateralAmount += parent.completeSetCollateralAmount() * parentRepDepositShare / parent.repAtFork();
+		securityVaults[vault].feeAccumulator = feesAccrued;
 	}
 
 	// starts an truthAuction on children
 	function startTruthAuction() public {
+		require(systemState == SystemState.ForkMigration, 'System needs to be in migration');
 		require(block.timestamp > securityPoolForkTriggeredTimestamp + MIGRATION_TIME, 'migration time needs to pass first');
 		require(truthAuctionStarted == 0, 'Auction already started');
-		emit TruthAuctionStarted();
+		systemState = SystemState.ForkTruthAuction;
 		truthAuctionStarted = block.timestamp;
-		if (address(this).balance >= parent.completeSetCollateralAmount()) {
-			// we have acquired all the ETH already, no need truthAuction
-			systemState = SystemState.Operational;
-			truthAuction.finalizeAuction();
+		parent.updateCollateralAmount();
+		uint256 parentCollateral = parent.completeSetCollateralAmount();
+		completeSetCollateralAmount = parentCollateral; // update to the real one, and not only to migrated amount
+		emit TruthAuctionStarted(completeSetCollateralAmount, migratedRep, parent.repAtFork());
+		if (migratedRep >= parent.repAtFork()) {
+			// we have acquired all the ETH already, no need for truthAuction
+			_finalizeTruthAuction();
 		} else {
-			uint256 ethToBuy = parent.completeSetCollateralAmount() - address(this).balance;
-			truthAuction.startAuction(ethToBuy, repToken.balanceOf(address(this)));
+			// we need to buy all the collateral that is missing (did not migrate)
+			uint256 ethToBuy = parentCollateral - parentCollateral * migratedRep / parent.repAtFork();
+			truthAuction.startAuction(ethToBuy, migratedRep);
 		}
 	}
 
-	function finalizeTruthAuction() public {
-		require(truthAuctionStarted != 0, 'Auction need to have started');
-		require(block.timestamp > truthAuctionStarted + AUCTION_TIME, 'truthAuction still ongoing');
+	function _finalizeTruthAuction() private {
+		require(systemState == SystemState.ForkTruthAuction, 'Auction need to have started');
 		emit TruthAuctionFinalized();
 		truthAuction.finalizeAuction(); // this sends the eth back
 		systemState = SystemState.Operational;
+		updateRetentionRate();
+	}
+
+	function finalizeTruthAuction() public {
+		require(block.timestamp > truthAuctionStarted + AUCTION_TIME, 'truthAuction still ongoing');
+		_finalizeTruthAuction();
 
 		//TODO, if truthAuction fails what do we do?
 
@@ -528,10 +558,13 @@ contract SecurityPool {
 		require(truthAuction.finalized(), 'Auction needs to be finalized');
 		claimedAuctionProceeds[vault] = true;
 		uint256 amount = truthAuction.purchasedRep(vault);
-		uint256 repShareAmount = amount * (migratedRep == 0 ? 1 : migratedRep / repToken.balanceOf(address(this))); //todo, this is wrong
+		uint256 repShareAmount = amount * (migratedRep == 0 ? 1 : migratedRep / repToken.balanceOf(address(this))); // todo, this is wrong
 		securityVaults[msg.sender].repDepositShare += repShareAmount;
 		emit ClaimAuctionProceeds(vault, amount, repShareAmount);
 	}
+
+	// todo, missing feature to get rep back after market finalization
+	// todo, missing redeeming yes/no/invalid shares to eth after finalization
 }
 
 contract SecurityPoolFactory {
