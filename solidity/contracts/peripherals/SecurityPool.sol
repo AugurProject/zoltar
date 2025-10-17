@@ -6,7 +6,7 @@ import { Auction } from './Auction.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { CompleteSet } from './CompleteSet.sol';
-import { IWeth9 } from '../IWeth9.sol';
+import { IWeth9 } from './IWeth9.sol';
 
 struct SecurityVault {
 	uint256 securityBondAllowance;

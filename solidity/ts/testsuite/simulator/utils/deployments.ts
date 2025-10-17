@@ -1,4 +1,4 @@
-import { IAugur_IAugur, IERC20_IERC20, IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPool_SecurityPoolFactory, ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
+import { peripherals_IAugur_IAugur, IERC20_IERC20, peripherals_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPool_SecurityPoolFactory, ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/peripheralTypes.js'
 import { addressString } from './bigint.js'
 import { ETHEREUM_LOGS_LOGGER_ADDRESS, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from './constants.js'
@@ -69,11 +69,11 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 			deploymentName: 'OpenOracle',
 			address: getOpenOracleAddress()
 		}, {
-			abi: IWeth9_IWeth9.abi,
+			abi: peripherals_IWeth9_IWeth9.abi,
 			deploymentName: 'WETH',
 			address: WETH_ADDRESS
 		}, {
-			abi: IAugur_IAugur.abi,
+			abi: peripherals_IAugur_IAugur.abi,
 			deploymentName: 'Augur',
 			address: '0x23916a8f5c3846e3100e5f587ff14f3098722f5d'
 		}, {
