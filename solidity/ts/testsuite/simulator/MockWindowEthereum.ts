@@ -133,22 +133,12 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 				case 'eth_sendTransaction': {
 					const blockDelta = simulationState?.blocks.length || 0 // always create new block to add transactions to
 					const transaction = await formEthSendTransaction(ethereumClientService, undefined, simulationState, blockDelta, activeAddress, args)
-					if (transaction.success === false) {
-						console.log('THROWING ERROR!! form transaction')
-						console.log(transaction.error)
-						console.log(transaction.error.data)
-						throw new ErrorWithDataAndCode(transaction.error.code, transaction.error.message, transaction.error.data)
-					}
+					if (transaction.success === false) throw new ErrorWithDataAndCode(transaction.error.code, transaction.error.message, transaction.error.data)
 					const signed = mockSignTransaction(transaction.transaction)
 					simulationState = await appendTransaction(ethereumClientService, undefined, simulationState, [transaction.transaction], blockDelta)
 					const lastTx = simulationState.blocks.at(-1)?.simulatedTransactions.at(-1)
 					if (lastTx === undefined) throw new Error('Failed To append transaction')
-					if (lastTx.ethSimulateV1CallResult.status === 'failure') {
-						console.log('THROWING ERROR!! append')
-						console.log(lastTx.ethSimulateV1CallResult.error)
-						console.log(dataStringWith0xStart(lastTx.ethSimulateV1CallResult.error.data))
-						throw new ErrorWithDataAndCode(lastTx.ethSimulateV1CallResult.error.code, lastTx.ethSimulateV1CallResult.error.message, dataStringWith0xStart(lastTx.ethSimulateV1CallResult.error.data))
-					}
+					if (lastTx.ethSimulateV1CallResult.status === 'failure') throw new ErrorWithDataAndCode(lastTx.ethSimulateV1CallResult.error.code, lastTx.ethSimulateV1CallResult.error.message, dataStringWith0xStart(lastTx.ethSimulateV1CallResult.error.data))
 					afterTransactionSendCallBack(args, lastTx)
 					return EthereumBytes32.serialize(signed.hash)
 				}

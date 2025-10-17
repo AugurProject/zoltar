@@ -80,9 +80,6 @@ export const simulateEstimateGas = async (ethereumClientService: EthereumClientS
 	} catch (error: unknown) {
 		if (error instanceof JsonRpcResponseError) {
 			const safeParsedData = EthereumData.safeParse(error.data)
-			console.log('error!')
-			console.log(error)
-			console.log(safeParsedData.success)
 			return { error: { code: error.code, message: error.message, data: safeParsedData.success ? dataStringWith0xStart(safeParsedData.value) : '0x' } }
 		}
 		throw error
