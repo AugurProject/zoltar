@@ -6,9 +6,10 @@ import { approveToken, contractExists, createQuestion, dispute, ensureZoltarDepl
 import { addressString } from '../testsuite/simulator/utils/bigint.js'
 import { createCompleteSet, deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, forkSecurityPool, getCompleteSetAddress, getCompleteSetCollateralAmount, getLastPrice, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, redeemCompleteSet, requestPriceIfNeededAndQueueOperation, wrapWeth, migrateVault, getSecurityPoolAddress, getMigratedRep, getSystemState, startTruthAuction, getCurrentRetentionRate } from '../testsuite/simulator/utils/peripherals.js'
 import assert from 'node:assert'
-import { QuestionOutcome, SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
+import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
 import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
+import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
 
 const genesisUniverse = 0n
 const questionId = 1n

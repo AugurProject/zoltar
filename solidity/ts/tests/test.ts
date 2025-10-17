@@ -5,7 +5,7 @@ import { BURN_ADDRESS, DAY, GENESIS_REPUTATION_TOKEN, REP_BOND, TEST_ADDRESSES }
 import { approveToken, createQuestion, ensureZoltarDeployed, getERC20Balance, getQuestionData, getZoltarAddress, getUniverseData, initialTokenBalance, isZoltarDeployed, setupTestAccounts, reportOutcome, isFinalized, finalizeQuestion, getWinningOutcome, dispute, splitRep, splitStakedRep } from '../testsuite/simulator/utils/utilities.js'
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint.js'
-import { QuestionOutcome } from '../testsuite/simulator/types/peripheralTypes.js'
+import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
 
 describe('Contract Test Suite', () => {
 

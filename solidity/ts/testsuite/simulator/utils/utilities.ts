@@ -7,8 +7,8 @@ import { addressString, bytes32String } from './bigint.js'
 import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
-import { QuestionOutcome } from '../types/peripheralTypes.js'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
+import { QuestionOutcome } from '../types/types.js'
 
 export const initialTokenBalance = 1000000n * 10n**18n
 

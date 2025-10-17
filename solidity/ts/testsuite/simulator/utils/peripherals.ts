@@ -5,8 +5,9 @@ import { PROXY_DEPLOYER_ADDRESS, WETH_ADDRESS } from './constants.js'
 import { addressString, bytes32String } from './bigint.js'
 import { getZoltarAddress } from './utilities.js'
 import { mainnet } from 'viem/chains'
-import { QuestionOutcome, SystemState } from '../types/peripheralTypes.js'
+import { SystemState } from '../types/peripheralTypes.js'
 import { peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPool_SecurityPoolFactory } from '../../../types/contractArtifact.js'
+import { QuestionOutcome } from '../types/types.js'
 
 export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<void> {
 	const deployerBytecode = await client.getCode({ address: addressString(PROXY_DEPLOYER_ADDRESS)})
