@@ -11,11 +11,12 @@
 		"funtypes": "5.1.1"
 	},
 	"dependencies": {
-		"viem": "2.23.15"
+		"viem": "2.38.3"
 	},
 	"scripts": {
 		"setup": "npm ci --ignore-scripts && npm run contracts",
 		"contracts": "cd solidity && npm ci --ignore-scripts && npm run compile",
-		"test": "cd solidity && npm run test"
+		"test": "cd solidity && npm run test",
+		"test-peripherals": "cd solidity && npm run test-peripherals"
 	}
 }
