@@ -1,12 +1,12 @@
 import 'viem/window'
-import { encodeDeployData, getContractAddress, getCreate2Address, keccak256, numberToBytes, ReadContractReturnType } from 'viem'
+import { encodeDeployData, getContractAddress, getCreate2Address, keccak256, numberToBytes, ReadContractReturnType, toHex } from 'viem'
 import { ReadClient, WriteClient } from './viem.js'
 import { PROXY_DEPLOYER_ADDRESS, WETH_ADDRESS } from './constants.js'
 import { addressString, bytes32String } from './bigint.js'
 import { getZoltarAddress } from './utilities.js'
 import { mainnet } from 'viem/chains'
 import { SystemState } from '../types/peripheralTypes.js'
-import { peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory } from '../../../types/contractArtifact.js'
+import { peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPoolUtils_SecurityPoolUtils } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
 
 export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<void> {
@@ -35,6 +35,23 @@ export const deployOpenOracleTransaction = () => {
 	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
 }
 
+export function getSecurityPoolUtilsAddress() {
+	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`
+	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
+}
+
+export const isSecurityPoolUtilsDeployed = async (client: ReadClient) => {
+	const expectedDeployedBytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.deployedBytecode.object }`
+	const address = getOpenOracleAddress()
+	const deployedBytecode = await client.getCode({ address })
+	return deployedBytecode === expectedDeployedBytecode
+}
+
+export const deploySecurityPoolUtilsTransaction = () => {
+	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`
+	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
+}
+
 export const ensureOpenOracleDeployed = async (client: WriteClient) => {
 	await ensureProxyDeployerDeployed(client)
 	if (await isOpenOracleDeployed(client)) return
@@ -42,25 +59,40 @@ export const ensureOpenOracleDeployed = async (client: WriteClient) => {
 	await client.waitForTransactionReceipt({ hash })
 }
 
+export const ensureSecurityPoolUtilsDeployed = async (client: WriteClient) => {
+	await ensureProxyDeployerDeployed(client)
+	if (await isSecurityPoolUtilsDeployed(client)) return
+	const hash = await client.sendTransaction(deploySecurityPoolUtilsTransaction())
+	await client.waitForTransactionReceipt({ hash })
+}
+
+export const getSecurityPoolFactoryByteCode = (): `0x${ string }` => {
+	const securityPoolUtils = keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36)
+	return `0x${ peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object.replaceAll(`__$${ securityPoolUtils }$__`, getSecurityPoolUtilsAddress().slice(2).toLocaleLowerCase()) }`
+}
+
+export const getSecurityPoolFactoryDeployedByteCode = (): `0x${ string }` => {
+	const securityPoolUtils = keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36)
+	return `0x${ peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.deployedBytecode.object.replaceAll(`__$${ securityPoolUtils }$__`, getSecurityPoolUtilsAddress().slice(2).toLocaleLowerCase()) }`
+}
+
 export const isSecurityPoolFactoryDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.deployedBytecode.object }`
 	const address = getSecurityPoolFactoryAddress()
 	const deployedBytecode = await client.getCode({ address })
-	return deployedBytecode === expectedDeployedBytecode
+	return deployedBytecode === getSecurityPoolFactoryDeployedByteCode()
 }
 
 export const deploySecurityPoolFactoryTransaction = () => {
-	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object }`
-	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
+	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: getSecurityPoolFactoryByteCode() } as const
 }
 
 export function getSecurityPoolFactoryAddress() {
-	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object }`
-	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
+	return getContractAddress({ bytecode: getSecurityPoolFactoryByteCode(), from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
 }
 
 export const ensureSecurityPoolFactoryDeployed = async (client: WriteClient) => {
 	await ensureProxyDeployerDeployed(client)
+	await ensureSecurityPoolUtilsDeployed(client)
 	if (await isSecurityPoolFactoryDeployed(client)) return
 	const hash = await client.sendTransaction(deploySecurityPoolFactoryTransaction())
 	await client.waitForTransactionReceipt({ hash })
@@ -479,5 +511,23 @@ export const getRepDenominator = async (client: WriteClient, securityPoolAddress
 		functionName: 'repDenominator',
 		address: securityPoolAddress,
 		args: [],
+	})
+}
+
+export const repSharesToRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, repShares: bigint) => {
+	return await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'repSharesToRep',
+		address: securityPoolAddress,
+		args: [repShares],
+	})
+}
+
+export const repShares = async (client: WriteClient, securityPoolAddress: `0x${ string }`, repAmount: bigint) => {
+	return await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'repToRepShares',
+		address: securityPoolAddress,
+		args: [repAmount],
 	})
 }

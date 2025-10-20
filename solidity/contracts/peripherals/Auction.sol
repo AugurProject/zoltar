@@ -23,8 +23,7 @@ contract Auction {
 		require(auctionStarted > 0, 'Auction needs to have started');
 		require(!finalized, 'Already finalized');
 		require(msg.value > 0, 'need to invest with eth!');
-		require(address(this).balance <= ethAmountToBuy, 'already fully funded');
-		require(address(this).balance + msg.value <= ethAmountToBuy, 'attempting to overfund');
+		require(address(this).balance <= ethAmountToBuy, 'attempting to overfund');
 		require(totalRepPurchased + repToBuy <= repAvailable, 'attempt to buy too much rep');
 		purchasedRep[msg.sender] = repToBuy; // todo, currently anyone can buy with any price
 		totalRepPurchased += repToBuy;

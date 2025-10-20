@@ -63,11 +63,7 @@ interface ISecurityPool {
 	function repToRepShares(uint256 repAmount) external view returns (uint256);
 
 	// -------- Mutative Functions --------
-	function setStartingParams(
-		uint256 _currentRetentionRate,
-		uint256 _repEthPrice,
-		uint256 _completeSetCollateralAmount
-	) external;
+	function setStartingParams(uint256 _currentRetentionRate, uint256 _repEthPrice, uint256 _completeSetCollateralAmount) external;
 
 	function updateCollateralAmount() external;
 	function updateRetentionRate() external;

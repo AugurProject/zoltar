@@ -4,7 +4,7 @@ import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/vie
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
 import { contractExists, getChildUniverseId, getERC20Balance, getETHBalance, getReportBond, getRepTokenAddress, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { addressString } from '../testsuite/simulator/utils/bigint.js'
-import { createCompleteSet, forkSecurityPool, getCompleteSetAddress, getCompleteSetCollateralAmount, getLastPrice, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, OperationType, redeemCompleteSet, migrateVault, getSecurityPoolAddress, getMigratedRep, getSystemState, startTruthAuction, getCurrentRetentionRate, getTruthAuction, getEthAmountToBuy, participateAuction, finalizeTruthAuction, claimAuctionProceeds, getRepDenominator } from '../testsuite/simulator/utils/peripherals.js'
+import { createCompleteSet, forkSecurityPool, getCompleteSetAddress, getCompleteSetCollateralAmount, getLastPrice, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, OperationType, redeemCompleteSet, migrateVault, getSecurityPoolAddress, getMigratedRep, getSystemState, startTruthAuction, getCurrentRetentionRate, getTruthAuction, getEthAmountToBuy, participateAuction, finalizeTruthAuction, claimAuctionProceeds, getRepDenominator, getSecurityVault, repSharesToRep } from '../testsuite/simulator/utils/peripherals.js'
 import assert from 'node:assert'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
 import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
@@ -160,7 +160,24 @@ describe('Peripherals Contract Test Suite', () => {
 		await claimAuctionProceeds(client, yesSecurityPool, yesAuctionParticipant.account.address)
 		await claimAuctionProceeds(client, noSecurityPool, noAuctionParticipant.account.address)
 
-		//await getSecurit
+		// yes status
+		const yesAuctionParticipantVault = await getSecurityVault(client, yesSecurityPool, yesAuctionParticipant.account.address)
+		console.log(yesAuctionParticipantVault)
+		const yesAuctionParticipantRep = await repSharesToRep(client, yesSecurityPool, yesAuctionParticipantVault.repDepositShare)
+		assert.strictEqual(yesAuctionParticipantRep, repBalanceInGenesisPool / 4n, 'yes auction participant did not get ownership of rep they bought')
+
+		const originalYesVault = await getSecurityVault(client, yesSecurityPool, client.account.address)
+		const originalYesVaultRep = await repSharesToRep(client, yesSecurityPool, originalYesVault.repDepositShare)
+		assert.strictEqual(originalYesVaultRep, repBalanceInGenesisPool * 3n / 4n, 'original vault holder should hold rest 3/4 of rep')
+
+		// no status
+		const noAuctionParticipantVault = await getSecurityVault(client, yesSecurityPool, noAuctionParticipant.account.address)
+		const noAuctionParticipantRep = await repSharesToRep(client, yesSecurityPool, noAuctionParticipantVault.repDepositShare)
+
+		assert.strictEqual(noAuctionParticipantRep, repBalanceInGenesisPool * 3n / 4n, 'no auction participant did not get ownership of rep they bought')
+		const originalNoVault = await getSecurityVault(client, noSecurityPool, attackerClient.account.address)
+		const originalNoVaultRep = await repSharesToRep(client, noSecurityPool, originalNoVault.repDepositShare)
+		assert.strictEqual(originalYesVaultRep, originalNoVaultRep * 1n / 4n, 'original vault holder should hold rest 1/4 of rep')
 
 	})
 

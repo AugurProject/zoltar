@@ -41,9 +41,8 @@ export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigi
 	await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
 	await depositRep(client, securityPoolAddress, repDeposit)
 
-	const newBalace = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-	assert.strictEqual(startBalance, newBalace + repDeposit, 'Did not deposit rep')
-	return securityPoolAddress
+	const newBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+	assert.strictEqual(newBalance, startBalance + repDeposit, 'Did not deposit rep')
 }
 
 export const triggerFork = async(client: WriteClient, mockWindow: MockWindowEthereum, questionId: bigint) => {

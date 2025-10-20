@@ -9,30 +9,7 @@ import { PriceOracleManagerAndOperatorQueuer } from './PriceOracleManagerAndOper
 import { ISecurityPool, SecurityVault, SystemState, QuestionOutcome } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolFactory } from './interfaces/ISecurityPoolFactory.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
-
-uint256 constant MIGRATION_TIME = 8 weeks;
-uint256 constant AUCTION_TIME = 1 weeks;
-
-// fees
-uint256 constant PRICE_PRECISION = 1e18;
-
-uint256 constant MAX_RETENTION_RATE = 999_999_996_848_000_000; // ≈90% yearly
-uint256 constant MIN_RETENTION_RATE = 999_999_977_880_000_000; // ≈50% yearly
-uint256 constant RETENTION_RATE_DIP = 80; // 80% utilization
-
-// smallest vaults
-uint256 constant MIN_SECURITY_BOND_DEBT = 1 ether; // 1 eth
-uint256 constant MIN_REP_DEPOSIT = 10 ether; // 10 rep
-
-function rpow(uint256 x, uint256 n, uint256 baseUnit) pure returns (uint256 z) {
-	z = n % 2 != 0 ? x : baseUnit;
-	for (n /= 2; n != 0; n /= 2) {
-		x = (x * x) / baseUnit;
-		if (n % 2 != 0) {
-			z = (z * x) / baseUnit;
-		}
-	}
-}
+import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 
 // Security pool for one question, one universe, one denomination (ETH)
 contract SecurityPool is ISecurityPool {
@@ -123,7 +100,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 timeDelta = clampedCurrentTimestamp - clampedLastUpdatedFeeAccumulator;
 		if (timeDelta == 0) return;
 
-		uint256 newCompleteSetCollateralAmount = completeSetCollateralAmount * rpow(currentRetentionRate, timeDelta, PRICE_PRECISION) / PRICE_PRECISION;
+		uint256 newCompleteSetCollateralAmount = completeSetCollateralAmount * SecurityPoolUtils.rpow(currentRetentionRate, timeDelta, SecurityPoolUtils.PRICE_PRECISION) / SecurityPoolUtils.PRICE_PRECISION;
 		feesAccrued += completeSetCollateralAmount - newCompleteSetCollateralAmount;
 		completeSetCollateralAmount = newCompleteSetCollateralAmount;
 		lastUpdatedFeeAccumulator = block.timestamp;
@@ -133,18 +110,18 @@ contract SecurityPool is ISecurityPool {
 		if (securityBondAllowance == 0) return;
 		if (systemState != SystemState.Operational) return; // if system state is not operational do not change fees
 		uint256 utilization = (completeSetCollateralAmount * 100) / securityBondAllowance;
-		if (utilization <= RETENTION_RATE_DIP) {
+		if (utilization <= SecurityPoolUtils.RETENTION_RATE_DIP) {
 			// first slope: 0% -> RETENTION_RATE_DIP%
-			uint256 utilizationRatio = (utilization * PRICE_PRECISION) / RETENTION_RATE_DIP;
-			uint256 slopeSpan = MAX_RETENTION_RATE - MIN_RETENTION_RATE;
-			currentRetentionRate = MAX_RETENTION_RATE - (slopeSpan * utilizationRatio) / PRICE_PRECISION;
+			uint256 utilizationRatio = (utilization * SecurityPoolUtils.PRICE_PRECISION) / SecurityPoolUtils.RETENTION_RATE_DIP;
+			uint256 slopeSpan = SecurityPoolUtils.MAX_RETENTION_RATE - SecurityPoolUtils.MIN_RETENTION_RATE;
+			currentRetentionRate = SecurityPoolUtils.MAX_RETENTION_RATE - (slopeSpan * utilizationRatio) / SecurityPoolUtils.PRICE_PRECISION;
 		} else if (utilization <= 100) {
 			// second slope: RETENTION_RATE_DIP% -> 100%
-			uint256 slopeSpan = MAX_RETENTION_RATE - MIN_RETENTION_RATE;
-			currentRetentionRate = MIN_RETENTION_RATE + (slopeSpan * (100 - utilization) * PRICE_PRECISION / (100 - RETENTION_RATE_DIP)) / PRICE_PRECISION;
+			uint256 slopeSpan = SecurityPoolUtils.MAX_RETENTION_RATE - SecurityPoolUtils.MIN_RETENTION_RATE;
+			currentRetentionRate = SecurityPoolUtils.MIN_RETENTION_RATE + (slopeSpan * (100 - utilization) * SecurityPoolUtils.PRICE_PRECISION / (100 - SecurityPoolUtils.RETENTION_RATE_DIP)) / SecurityPoolUtils.PRICE_PRECISION;
 		} else {
 			// clamp to MIN_RETENTION_RATE if utilization > 100%
-			currentRetentionRate = MIN_RETENTION_RATE;
+			currentRetentionRate = SecurityPoolUtils.MIN_RETENTION_RATE;
 		}
 		emit PoolRetentionRateChanged(feesAccrued, utilization, currentRetentionRate);
 	}
@@ -154,7 +131,7 @@ contract SecurityPool is ISecurityPool {
 		updateCollateralAmount();
 		require(feesAccrued >= securityVaults[vault].feeAccumulator, 'fee accumulator too high? should not happen');
 		uint256 accumulatorDiff = feesAccrued - securityVaults[vault].feeAccumulator;
-		uint256 fees = (securityVaults[vault].securityBondAllowance * accumulatorDiff) / PRICE_PRECISION;
+		uint256 fees = (securityVaults[vault].securityBondAllowance * accumulatorDiff) / SecurityPoolUtils.PRICE_PRECISION;
 		securityVaults[vault].feeAccumulator = feesAccrued;
 		securityVaults[vault].unpaidEthFees += fees;
 	}
@@ -175,13 +152,13 @@ contract SecurityPool is ISecurityPool {
 		require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'no valid price');
 		uint256 newShares = securityVaults[vault].repDepositShare + repToRepShares(repAmount);
 		uint256 oldRep = repSharesToRep(securityVaults[vault].repDepositShare);
-		require((oldRep - repAmount) * PRICE_PRECISION >= securityVaults[vault].securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Local Security Bond Alowance broken');
-		require((repToken.balanceOf(address(this)) - repAmount) * PRICE_PRECISION >= securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Global Security Bond Alowance broken');
+		require((oldRep - repAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityVaults[vault].securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Local Security Bond Alowance broken');
+		require((repToken.balanceOf(address(this)) - repAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Global Security Bond Alowance broken');
 
 		securityVaults[vault].repDepositShare = newShares;
 		repToken.transfer(vault, repAmount);
 		repDenominator -= repAmount;
-		require(repSharesToRep(securityVaults[vault].repDepositShare) >= MIN_REP_DEPOSIT || securityVaults[vault].repDepositShare == 0, 'min deposit requirement');
+		require(repSharesToRep(securityVaults[vault].repDepositShare) >= SecurityPoolUtils.MIN_REP_DEPOSIT || securityVaults[vault].repDepositShare == 0, 'min deposit requirement');
 		emit PerformWithdrawRep(vault, repAmount);
 	}
 
@@ -200,7 +177,7 @@ contract SecurityPool is ISecurityPool {
 		repDenominator += repAmount;
 		repToken.transferFrom(msg.sender, address(this), repAmount);
 		securityVaults[msg.sender].repDepositShare += repToRepShares(repAmount);
-		require(repSharesToRep(securityVaults[msg.sender].repDepositShare) >= MIN_REP_DEPOSIT, 'min deposit requirement');
+		require(repSharesToRep(securityVaults[msg.sender].repDepositShare) >= SecurityPoolUtils.MIN_REP_DEPOSIT, 'min deposit requirement');
 		emit DepositRep(msg.sender, repAmount, securityVaults[msg.sender].repDepositShare);
 	}
 
@@ -312,7 +289,7 @@ contract SecurityPool is ISecurityPool {
 	// migrates vault into outcome universe after fork
 	function migrateVault(QuestionOutcome outcome) public { // called on parent
 		require(systemState == SystemState.PoolForked, 'Pool needs to have forked');
-		require(block.timestamp <= securityPoolForkTriggeredTimestamp + MIGRATION_TIME , 'migration time passed');
+		require(block.timestamp <= securityPoolForkTriggeredTimestamp + SecurityPoolUtils.MIGRATION_TIME , 'migration time passed');
 		require(securityVaults[msg.sender].repDepositShare > 0, 'Vault has no rep to migrate');
 		updateVaultFees(msg.sender);
 		emit MigrateVault(msg.sender, outcome, securityVaults[msg.sender].repDepositShare, securityVaults[msg.sender].securityBondAllowance);
@@ -356,7 +333,7 @@ contract SecurityPool is ISecurityPool {
 	// starts an truthAuction on children
 	function startTruthAuction() public {
 		require(systemState == SystemState.ForkMigration, 'System needs to be in migration');
-		require(block.timestamp > securityPoolForkTriggeredTimestamp + MIGRATION_TIME, 'migration time needs to pass first');
+		require(block.timestamp > securityPoolForkTriggeredTimestamp + SecurityPoolUtils.MIGRATION_TIME, 'migration time needs to pass first');
 		require(truthAuctionStarted == 0, 'Auction already started');
 		systemState = SystemState.ForkTruthAuction;
 		truthAuctionStarted = block.timestamp;
@@ -379,13 +356,13 @@ contract SecurityPool is ISecurityPool {
 		emit TruthAuctionFinalized();
 		truthAuction.finalizeAuction(); // this sends the eth back
 		systemState = SystemState.Operational;
+		repDenominator = repToken.balanceOf(address(this)) * truthAuction.totalRepPurchased() / truthAuction.repAvailable();
 		updateRetentionRate();
 	}
 
 	function finalizeTruthAuction() public {
-		require(block.timestamp > truthAuctionStarted + AUCTION_TIME, 'truthAuction still ongoing');
+		require(block.timestamp > truthAuctionStarted + SecurityPoolUtils.AUCTION_TIME, 'truthAuction still ongoing');
 		_finalizeTruthAuction();
-		repDenominator = migratedRep * truthAuction.totalRepPurchased() / (parent.repAtFork() * truthAuction.repAvailable());
 	}
 
 	receive() external payable {
@@ -399,9 +376,10 @@ contract SecurityPool is ISecurityPool {
 		require(truthAuction.finalized(), 'Auction needs to be finalized');
 		claimedAuctionProceeds[vault] = true;
 		uint256 amount = truthAuction.purchasedRep(vault);
-		uint256 repShareAmount = amount * (repDenominator == 0 ? 1 : repDenominator / repToken.balanceOf(address(this))); // todo, this is wrong
-		securityVaults[msg.sender].repDepositShare += repShareAmount;
+		uint256 repShareAmount = repToRepShares(amount);
+		securityVaults[vault].repDepositShare += repShareAmount;
 		emit ClaimAuctionProceeds(vault, amount, repShareAmount);
+		//todo, we should give the auction buyers the securitbond debt of attackers?
 	}
 
 	// todo, missing feature to get rep back after market finalization
