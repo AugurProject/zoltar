@@ -1,4 +1,4 @@
-import { peripherals_IAugur_IAugur, IERC20_IERC20, peripherals_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPool_SecurityPoolFactory, ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
+import { peripherals_IAugur_IAugur, IERC20_IERC20, peripherals_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory, ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
 import { addressString } from './bigint.js'
 import { ETHEREUM_LOGS_LOGGER_ADDRESS, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from './constants.js'
@@ -12,7 +12,7 @@ const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x$
 		deploymentName: `RepV2-U${ universeId }`,
 		address: repTokenAddress
 	}, {
-		abi: peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.abi,
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		deploymentName: `PriceOracleManagerAndOperatorQueuer U${ universeId }`,
 		address: priceOracleManagerAndOperatorQueuerAddress
 	}, {
@@ -61,7 +61,7 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 			deploymentName: 'Zoltar',
 			address: getZoltarAddress(),
 		}, {
-			abi: peripherals_SecurityPool_SecurityPoolFactory.abi,
+			abi: peripherals_SecurityPoolFactory_SecurityPoolFactory.abi,
 			deploymentName: 'SecurityPoolFactory',
 			address: getSecurityPoolFactoryAddress()
 		}, {

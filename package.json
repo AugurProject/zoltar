@@ -15,7 +15,8 @@
 	},
 	"scripts": {
 		"setup": "npm ci --ignore-scripts && npm run contracts",
-		"contracts": "cd solidity && npm ci --ignore-scripts && npm run compile",
+		"contracts": "cd solidity && npm run contracts",
+		"compile": "cd solidity && npm run compile",
 		"test": "cd solidity && npm run test",
 		"test-peripherals": "cd solidity && npm run test-peripherals"
 	}

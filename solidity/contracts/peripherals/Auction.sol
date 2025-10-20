@@ -18,17 +18,19 @@ contract Auction {
 	constructor(address _owner) {
 		owner = _owner;
 	}
+
 	function participate(uint256 repToBuy) public payable {
 		require(auctionStarted > 0, 'Auction needs to have started');
 		require(!finalized, 'Already finalized');
 		require(msg.value > 0, 'need to invest with eth!');
 		require(address(this).balance <= ethAmountToBuy, 'already fully funded');
 		require(address(this).balance + msg.value <= ethAmountToBuy, 'attempting to overfund');
-		require(totalRepPurchased+repToBuy <= repAvailable, 'attempt to buy too much rep');
+		require(totalRepPurchased + repToBuy <= repAvailable, 'attempt to buy too much rep');
 		purchasedRep[msg.sender] = repToBuy; // todo, currently anyone can buy with any price
 		totalRepPurchased += repToBuy;
 		emit Participated(msg.sender, repToBuy, msg.value, totalRepPurchased);
 	}
+
 	function startAuction(uint256 _ethAmountToBuy, uint256 _repAvailable) public {
 		require(auctionStarted == 0, 'Already started!');
 		auctionStarted = block.timestamp;
@@ -36,6 +38,7 @@ contract Auction {
 		repAvailable = _repAvailable;
 		emit AuctionStarted(ethAmountToBuy, repAvailable);
 	}
+
 	function finalizeAuction() public {
 		//require(block.timestamp > auctionStarted + AUCTION_TIME, 'Auction needs to have ended first'); // caller checks
 		require(msg.sender == owner, 'Only owner can finalize');

@@ -6,7 +6,7 @@ import { addressString, bytes32String } from './bigint.js'
 import { getZoltarAddress } from './utilities.js'
 import { mainnet } from 'viem/chains'
 import { SystemState } from '../types/peripheralTypes.js'
-import { peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPool_SecurityPoolFactory } from '../../../types/contractArtifact.js'
+import { peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
 
 export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<void> {
@@ -43,19 +43,19 @@ export const ensureOpenOracleDeployed = async (client: WriteClient) => {
 }
 
 export const isSecurityPoolFactoryDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${ string }` = `0x${ peripherals_SecurityPool_SecurityPoolFactory.evm.deployedBytecode.object }`
+	const expectedDeployedBytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.deployedBytecode.object }`
 	const address = getSecurityPoolFactoryAddress()
 	const deployedBytecode = await client.getCode({ address })
 	return deployedBytecode === expectedDeployedBytecode
 }
 
 export const deploySecurityPoolFactoryTransaction = () => {
-	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPool_SecurityPoolFactory.evm.bytecode.object }`
+	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object }`
 	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
 }
 
 export function getSecurityPoolFactoryAddress() {
-	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPool_SecurityPoolFactory.evm.bytecode.object }`
+	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object }`
 	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
 }
 
@@ -70,7 +70,7 @@ export const deploySecurityPool = async (client: WriteClient, openOracle: `0x${ 
 	const zoltarAddress = getZoltarAddress()
 	return await client.writeContract({
 		chain: mainnet,
-		abi: peripherals_SecurityPool_SecurityPoolFactory.abi,
+		abi: peripherals_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deploySecurityPool',
 		address: getSecurityPoolFactoryAddress(),
 		args: [openOracle, addressString(0x0n), zoltarAddress, universeId, questionId, securityMultiplier, startingRetentionRate, startingRepEthPrice, completeSetCollateralAmount]
@@ -104,7 +104,7 @@ export enum OperationType {
 export const requestPriceIfNeededAndQueueOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`, operation: OperationType, targetVault: `0x${ string }`, amount: bigint) => {
 	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer) * 2n;
 	return await client.writeContract({
-		abi: peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.abi,
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'requestPriceIfNeededAndQueueOperation',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [operation, targetVault, amount],
@@ -114,7 +114,7 @@ export const requestPriceIfNeededAndQueueOperation = async (client: WriteClient,
 
 export const getPendingReportId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
 	return await client.readContract({
-		abi: peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.abi,
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'pendingReportId',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: []
@@ -197,7 +197,7 @@ export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
 
 export const getRequestPriceEthCost = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
 	return await client.readContract({
-		abi: peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.abi,
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'getRequestPriceEthCost',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: []
@@ -313,7 +313,7 @@ export const getCompleteSetCollateralAmount = async (client: ReadClient, securit
 
 export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
 	return await client.readContract({
-		abi: peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.abi,
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'lastPrice',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: []
@@ -356,6 +356,15 @@ export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddr
 	})
 }
 
+export const claimAuctionProceeds = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) => {
+	return await client.writeContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'claimAuctionProceeds',
+		address: securityPoolAddress,
+		args: [vault],
+	})
+}
+
 export function getSecurityPoolAddress(
 	parent: `0x${ string }`,
 	universeId: bigint,
@@ -372,8 +381,8 @@ export function getSecurityPoolAddress(
 
 export function getPriceOracleManagerAndOperatorQueuerAddress(securityPool: `0x${ string }`, repToken: `0x${ string }`): `0x${ string }` {
 	const initCode = encodeDeployData({
-		abi: peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.abi,
-		bytecode: `0x${ peripherals_SecurityPool_PriceOracleManagerAndOperatorQueuer.evm.bytecode.object }`,
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+		bytecode: `0x${ peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.evm.bytecode.object }`,
 		args: [getOpenOracleAddress(), securityPool, repToken]
 	})
 	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
@@ -437,6 +446,37 @@ export const getCurrentRetentionRate = async (client: WriteClient, securityPoolA
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'currentRetentionRate',
+		address: securityPoolAddress,
+		args: [],
+	})
+}
+
+export const getSecurityVault = async (client: WriteClient, securityPoolAddress: `0x${ string }`, securityVault: `0x${ string }`) => {
+	const vault = await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'securityVaults',
+		address: securityPoolAddress,
+		args: [securityVault],
+	})
+	const [
+		repDepositShare,
+		securityBondAllowance,
+		unpaidEthFees,
+		feeAccumulator,
+	] = vault
+
+	return {
+		repDepositShare,
+		securityBondAllowance,
+		unpaidEthFees,
+		feeAccumulator,
+	}
+}
+
+export const getRepDenominator = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'repDenominator',
 		address: securityPoolAddress,
 		args: [],
 	})
