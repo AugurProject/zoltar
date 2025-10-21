@@ -120,7 +120,7 @@ const compileContracts = async () => {
 	if (errors.length) throw new CompilationError(errors)
 
 	const warnings = (result!.errors || []).map(x => x.formattedMessage)
-	if (warnings.length > 0) console.log(JSON.stringify(warnings))
+	if (warnings.length > 0) warnings.forEach((warning) => console.warn(warning))
 
 	const artifactsDir = path.join(process.cwd(), 'artifacts')
 	if (!await exists(artifactsDir)) await fs.mkdir(artifactsDir, { recursive: false })
