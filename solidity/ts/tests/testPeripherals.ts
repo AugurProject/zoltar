@@ -168,18 +168,18 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const originalYesVault = await getSecurityVault(client, yesSecurityPool, client.account.address)
 		const originalYesVaultRep = await repSharesToRep(client, yesSecurityPool, originalYesVault.repDepositShare)
-		console.log(`originalYesVault.repDepositShare: ${originalYesVault.repDepositShare}`)
 		approximatelyEqual(originalYesVaultRep, repBalanceInGenesisPool * 3n / 4n, 1000n, 'original yes vault holder should hold rest 3/4 of rep')
+		assert.strictEqual((await getSecurityVault(client, yesSecurityPool, attackerClient.account.address)).repDepositShare, 0n, 'attacker should have zero as they did not migrate to yes')
 
 		// no status
 		const noAuctionParticipantVault = await getSecurityVault(client, noSecurityPool, noAuctionParticipant.account.address)
 		const noAuctionParticipantRep = await repSharesToRep(client, noSecurityPool, noAuctionParticipantVault.repDepositShare)
-
 		approximatelyEqual(noAuctionParticipantRep, repBalanceInGenesisPool * 3n / 4n, 1000n, 'no auction participant did not get ownership of rep they bought')
+
 		const originalNoVault = await getSecurityVault(client, noSecurityPool, attackerClient.account.address)
 		const originalNoVaultRep = await repSharesToRep(client, noSecurityPool, originalNoVault.repDepositShare)
-		approximatelyEqual(originalYesVaultRep, originalNoVaultRep * 1n / 4n, 1000n, 'original no vault holder should hold rest 1/4 of rep')
-
+		approximatelyEqual(originalNoVaultRep, repBalanceInGenesisPool * 1n / 4n, 1000n, 'original no vault holder should hold rest 1/4 of rep')
+		assert.strictEqual((await getSecurityVault(client, noSecurityPool, client.account.address)).repDepositShare, 0n, 'client should have zero as they did not migrate to no')
 	})
 
 	//test('can liquidate', async () => {
