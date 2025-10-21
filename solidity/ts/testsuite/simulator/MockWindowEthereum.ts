@@ -107,7 +107,6 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 		},
 		request: async (unknownArgs: unknown): Promise<any> => {
 			const args = EthereumJsonRpcRequest.parse(unknownArgs)
-			console.log(args.method)
 			switch(args.method) {
 				case 'eth_getBalance': {
 					const result = await getSimulatedBalance(ethereumClientService, undefined, simulationState, args.params[0], args.params[1])
@@ -115,7 +114,10 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 				}
 				case 'eth_call': {
 					const result = await call(ethereumClientService, simulationState, args)
-					if (result.error !== undefined) throw { code: result.error.code, message: result.error.message, data: result.error.data }
+					if (result.error !== undefined) {
+						console.error(result.error)
+						throw new ErrorWithDataAndCode(result.error.code, result.error.message, result.error.data)
+					}
 					return EthereumData.serialize(result.result)
 				}
 				case 'eth_getLogs': {
@@ -136,7 +138,7 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 					const transaction = await formEthSendTransaction(ethereumClientService, undefined, simulationState, blockDelta, activeAddress, args)
 					if (transaction.success === false) {
 						console.error(transaction.error)
-						throw { code: transaction.error.code, message: transaction.error.message, data: transaction.error.data }
+						throw new ErrorWithDataAndCode(transaction.error.code, transaction.error.message, transaction.error.data)
 					}
 					const signed = mockSignTransaction(transaction.transaction)
 					simulationState = await appendTransaction(ethereumClientService, undefined, simulationState, [transaction.transaction], blockDelta)
@@ -144,7 +146,7 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 					if (lastTx === undefined) throw new Error('Failed To append transaction')
 					if (lastTx.ethSimulateV1CallResult.status === 'failure') {
 						console.error(transaction.error)
-						throw { code: lastTx.ethSimulateV1CallResult.error.code, message: lastTx.ethSimulateV1CallResult.error.message, data: dataStringWith0xStart(lastTx.ethSimulateV1CallResult.error.data) }
+						throw new ErrorWithDataAndCode(lastTx.ethSimulateV1CallResult.error.code, lastTx.ethSimulateV1CallResult.error.message, dataStringWith0xStart(lastTx.ethSimulateV1CallResult.error.data))
 					}
 					afterTransactionSendCallBack(args, lastTx)
 					return EthereumBytes32.serialize(signed.hash)
@@ -163,7 +165,10 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 				}
 				case 'eth_estimateGas': {
 					const estimatedGas = await simulateEstimateGas(ethereumClientService, undefined, simulationState, args.params[0], simulationState?.blocks.length || 0)
-					if ('error' in estimatedGas) throw { code: estimatedGas.error.code, message: estimatedGas.error.message, data: estimatedGas.error.data }
+					if ('error' in estimatedGas) {
+						console.error(transaction.error)
+						throw new ErrorWithDataAndCode(estimatedGas.error.code, estimatedGas.error.message, estimatedGas.error.data)
+					}
 					return EthereumQuantity.serialize(estimatedGas.gas)
 				}
 				case 'eth_getTransactionCount': {
