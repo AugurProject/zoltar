@@ -31,8 +31,6 @@ const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x$
 ] as const
 
 export const getDeployments = (genesisUniverse: bigint, questionId: bigint, securityMultiplier: bigint): Deployment[] => {
-	// get SecurityPoolFactory
-	// get origin security pool
 	const securityPoolAddress = getSecurityPoolAddress(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
 	const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 	const priceOracleManagerAndOperatorQueuerAddress = getPriceOracleManagerAndOperatorQueuerAddress(securityPoolAddress, repToken)
