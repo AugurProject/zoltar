@@ -2,7 +2,7 @@ import { peripherals_IAugur_IAugur, IERC20_IERC20, peripherals_IWeth9_IWeth9, pe
 import { QuestionOutcome } from '../types/types.js'
 import { addressString } from './bigint.js'
 import { ETHEREUM_LOGS_LOGGER_ADDRESS, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from './constants.js'
-import { Deployment } from './peripheralLogs.js'
+import { Deployment } from './logExplaining.js'
 import { getCompleteSetAddress, getOpenOracleAddress, getPriceOracleManagerAndOperatorQueuerAddress, getSecurityPoolAddress, getSecurityPoolFactoryAddress, getSecurityPoolUtilsAddress, getTruthAuction } from './peripherals.js'
 import { getChildUniverseId, getRepTokenAddress, getZoltarAddress } from './utilities.js'
 
