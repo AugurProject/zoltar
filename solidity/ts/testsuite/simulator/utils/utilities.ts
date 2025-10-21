@@ -3,12 +3,13 @@ import { getContractAddress, numberToBytes, encodeAbiParameters, keccak256, enco
 import { mainnet } from 'viem/chains'
 import { ReadClient, WriteClient } from './viem.js'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants.js'
-import { addressString, bytes32String } from './bigint.js'
+import { abs, addressString, bytes32String } from './bigint.js'
 import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
+import assert from 'node:assert'
 
 export const initialTokenBalance = 1000000n * 10n**18n
 
@@ -379,3 +380,9 @@ export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
 }
 
 export const contractExists = async (client: ReadClient, contract: `0x${ string }`) => await client.getCode({ address: contract }) !== undefined
+
+export const approximatelyEqual = (actual: bigint, expected: bigint, errorDelta: bigint, message?: string | Error | undefined) => {
+	if (abs(actual - expected) > errorDelta) assert.strictEqual(actual, expected, message)
+}
+
+export const isUnknownAnAddress = (maybeAddress: unknown): maybeAddress is `0x${ string }` => typeof maybeAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(maybeAddress)
