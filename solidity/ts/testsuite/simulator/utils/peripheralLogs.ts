@@ -1,9 +1,10 @@
 
 import { Abi, decodeEventLog, GetLogsReturnType } from 'viem'
+import { isUnknownAnAddress } from './utilities.js'
 
 export type Deployment = {
 	deploymentName: string
-	abi: Abi
+	abi: Abi | undefined
 	address: `0x${ string }`
 }
 
@@ -22,8 +23,9 @@ function safeDecodeEventLog(parameters: { abi: Abi; data: `0x${string}`; topics:
 	}
 }
 
-export const printLogs = async (rawLogs: GetLogsReturnType, deployments: Deployment[]) => {
+export const printLogs = (rawLogs: GetLogsReturnType, deployments: Deployment[]) => {
 	if (rawLogs.length === 0) return
+	const padding = '  '
 	const decodedLogs = []
 
 	for (const log of rawLogs) {
@@ -41,9 +43,13 @@ export const printLogs = async (rawLogs: GetLogsReturnType, deployments: Deploym
 			})
 			continue
 		}
+		if (contract.abi === undefined) {
+			console.log(`${ padding }Failed to decode log from contract address ${ log.address.toLowerCase() }: ${ log.data }, ${ log.topics } (no ABI)`)
+			continue
+		}
 		const decoded = safeDecodeEventLog({ abi: contract.abi, data: log.data, topics: log.topics })
 		if (decoded === undefined) {
-			console.log(`Failed to decode log from contract address ${ log.address.toLowerCase() }: ${ log.data }, ${ log.topics }`)
+			console.log(`${ padding }Failed to decode log from contract address ${ log.address.toLowerCase() }: ${ log.data }, ${ log.topics }`)
 			continue
 		}
 		decodedLogs.push({ blockNumber: log.blockNumber, logIndex: log.logIndex, contractName: contract.deploymentName, eventName: decoded.eventName, args: decoded.args })
@@ -59,21 +65,21 @@ export const printLogs = async (rawLogs: GetLogsReturnType, deployments: Deploym
 	for (const log of decodedLogs) {
 		const head = `${ log.contractName }: ${ log.eventName }`
 		if (log.args === undefined) {
-			console.log(`${ head }()\n`)
+			console.log(`${ padding }${ head }()`)
 			continue
 		} else {
-			console.log(`${ head }(`)
+			console.log(`${ padding }${ head }(`)
 			for (const [paramName, paramValue] of Object.entries(log.args)) {
 				let formattedValue = paramValue
-				if (typeof paramValue === 'string' && /^0x[a-fA-F0-9]{40}$/.test(paramValue)) {
+				if (isUnknownAnAddress(paramValue)) {
 					const matchingDeployment = deployments.find((deploymentItem) => deploymentItem.address.toLowerCase() === paramValue.toLowerCase())
 					if (matchingDeployment) {
 						formattedValue = `${ matchingDeployment.deploymentName } (${ paramValue })`
 					}
 				}
-				console.log(` ${ paramName } = ${ formattedValue }`)
+				console.log(`${ padding } ${ paramName } = ${ formattedValue }`)
 			}
-			console.log(`)\n`)
+			console.log(`${ padding })`)
 		}
 	}
 }

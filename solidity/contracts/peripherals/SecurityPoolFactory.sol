@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: UNICENSE
 pragma solidity 0.8.30;
 import { SecurityPool } from './SecurityPool.sol';
-import { ISecurityPoolFactory } from './interfaces/ISecurityPoolFactory.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { Zoltar } from '../Zoltar.sol';
 

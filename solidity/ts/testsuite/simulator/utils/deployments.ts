@@ -1,9 +1,9 @@
-import { peripherals_IAugur_IAugur, IERC20_IERC20, peripherals_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory, ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
+import { peripherals_IAugur_IAugur, IERC20_IERC20, peripherals_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory, ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoolUtils_SecurityPoolUtils } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
 import { addressString } from './bigint.js'
-import { ETHEREUM_LOGS_LOGGER_ADDRESS, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from './constants.js'
+import { ETHEREUM_LOGS_LOGGER_ADDRESS, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from './constants.js'
 import { Deployment } from './peripheralLogs.js'
-import { getCompleteSetAddress, getOpenOracleAddress, getPriceOracleManagerAndOperatorQueuerAddress, getSecurityPoolAddress, getSecurityPoolFactoryAddress, getTruthAuction } from './peripherals.js'
+import { getCompleteSetAddress, getOpenOracleAddress, getPriceOracleManagerAndOperatorQueuerAddress, getSecurityPoolAddress, getSecurityPoolFactoryAddress, getSecurityPoolUtilsAddress, getTruthAuction } from './peripherals.js'
 import { getChildUniverseId, getRepTokenAddress, getZoltarAddress } from './utilities.js'
 
 const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x${ string }`, repTokenAddress: `0x${ string }`, priceOracleManagerAndOperatorQueuerAddress: `0x${ string }`, completeSetAddress: `0x${ string }`, auction: `0x${ string }`): Deployment[] => [
@@ -80,7 +80,23 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 			abi: IERC20_IERC20.abi,
 			deploymentName: 'ETH',
 			address: addressString(ETHEREUM_LOGS_LOGGER_ADDRESS)
-		}
-	]
+		}, {
+			abi: undefined,
+			deploymentName: 'Micah Deployer',
+			address: `0x7a0d94f55792c434d74a40883c6ed8545e406d12`
+		}, {
+			abi: peripherals_SecurityPoolUtils_SecurityPoolUtils.abi,
+			deploymentName: 'Security Pool Utils',
+			address: getSecurityPoolUtilsAddress()
+		}, {
+			abi: undefined,
+			deploymentName: 'Augur V2 Genesis',
+			address: '0x49244BD018Ca9fd1f06ecC07B9E9De773246e5AA'
+		},
+		...TEST_ADDRESSES.map((testAddress, index) => ({
+			abi: undefined,
+			deploymentName: `Test EOA(${ index + 1 })`,
+			address: addressString(testAddress)
+		} as const))
+	] as const
 }
-

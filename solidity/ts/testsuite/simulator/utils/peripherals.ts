@@ -30,11 +30,6 @@ export const isOpenOracleDeployed = async (client: ReadClient) => {
 	return deployedBytecode === expectedDeployedBytecode
 }
 
-export const deployOpenOracleTransaction = () => {
-	const bytecode: `0x${ string }` = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`
-	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
-}
-
 export function getSecurityPoolUtilsAddress() {
 	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`
 	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
@@ -47,65 +42,51 @@ export const isSecurityPoolUtilsDeployed = async (client: ReadClient) => {
 	return deployedBytecode === expectedDeployedBytecode
 }
 
-export const deploySecurityPoolUtilsTransaction = () => {
-	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`
-	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
-}
-
 export const ensureOpenOracleDeployed = async (client: WriteClient) => {
 	await ensureProxyDeployerDeployed(client)
 	if (await isOpenOracleDeployed(client)) return
-	const hash = await client.sendTransaction(deployOpenOracleTransaction())
+	const bytecode: `0x${ string }` = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`
+	const hash = await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const)
 	await client.waitForTransactionReceipt({ hash })
 }
 
 export const ensureSecurityPoolUtilsDeployed = async (client: WriteClient) => {
 	await ensureProxyDeployerDeployed(client)
 	if (await isSecurityPoolUtilsDeployed(client)) return
-	const hash = await client.sendTransaction(deploySecurityPoolUtilsTransaction())
+	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`
+	const hash = await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const)
 	await client.waitForTransactionReceipt({ hash })
 }
 
-export const getSecurityPoolFactoryByteCode = (): `0x${ string }` => {
+export const applyLibraries = (bytecode: string): `0x${ string }` => {
 	const securityPoolUtils = keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36)
-	return `0x${ peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object.replaceAll(`__$${ securityPoolUtils }$__`, getSecurityPoolUtilsAddress().slice(2).toLocaleLowerCase()) }`
-}
-
-export const getSecurityPoolFactoryDeployedByteCode = (): `0x${ string }` => {
-	const securityPoolUtils = keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36)
-	return `0x${ peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.deployedBytecode.object.replaceAll(`__$${ securityPoolUtils }$__`, getSecurityPoolUtilsAddress().slice(2).toLocaleLowerCase()) }`
+	return `0x${ bytecode.replaceAll(`__$${ securityPoolUtils }$__`, getSecurityPoolUtilsAddress().slice(2).toLocaleLowerCase()) }`
 }
 
 export const isSecurityPoolFactoryDeployed = async (client: ReadClient) => {
 	const address = getSecurityPoolFactoryAddress()
-	const deployedBytecode = await client.getCode({ address })
-	return deployedBytecode === getSecurityPoolFactoryDeployedByteCode()
-}
-
-export const deploySecurityPoolFactoryTransaction = () => {
-	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: getSecurityPoolFactoryByteCode() } as const
+	return await client.getCode({ address }) === applyLibraries(peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.deployedBytecode.object)
 }
 
 export function getSecurityPoolFactoryAddress() {
-	return getContractAddress({ bytecode: getSecurityPoolFactoryByteCode(), from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
+	return getContractAddress({ bytecode: applyLibraries(peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object), from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
 }
 
 export const ensureSecurityPoolFactoryDeployed = async (client: WriteClient) => {
 	await ensureProxyDeployerDeployed(client)
 	await ensureSecurityPoolUtilsDeployed(client)
 	if (await isSecurityPoolFactoryDeployed(client)) return
-	const hash = await client.sendTransaction(deploySecurityPoolFactoryTransaction())
+	const hash = await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: applyLibraries(peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object) } as const)
 	await client.waitForTransactionReceipt({ hash })
 }
 
 export const deploySecurityPool = async (client: WriteClient, openOracle: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint, startingRetentionRate: bigint, startingRepEthPrice: bigint, completeSetCollateralAmount: bigint) => {
-	const zoltarAddress = getZoltarAddress()
 	return await client.writeContract({
 		chain: mainnet,
 		abi: peripherals_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deploySecurityPool',
 		address: getSecurityPoolFactoryAddress(),
-		args: [openOracle, addressString(0x0n), zoltarAddress, universeId, questionId, securityMultiplier, startingRetentionRate, startingRepEthPrice, completeSetCollateralAmount]
+		args: [openOracle, addressString(0x0n), getZoltarAddress(), universeId, questionId, securityMultiplier, startingRetentionRate, startingRepEthPrice, completeSetCollateralAmount]
 	})
 }
 
@@ -405,7 +386,7 @@ export function getSecurityPoolAddress(
 ) : `0x${ string }` {
 	const initCode = encodeDeployData({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		bytecode: `0x${ peripherals_SecurityPool_SecurityPool.evm.bytecode.object }`,
+		bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
 		args: [getSecurityPoolFactoryAddress(), getOpenOracleAddress(), parent, getZoltarAddress(), universeId, questionId, securityMultiplier]
 	})
 	return getCreate2Address({ from: getSecurityPoolFactoryAddress(), salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })

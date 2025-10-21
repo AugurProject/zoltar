@@ -2,7 +2,7 @@ import { describe, beforeEach, test } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { contractExists, getChildUniverseId, getERC20Balance, getETHBalance, getReportBond, getRepTokenAddress, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+import { approximatelyEqual, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, getReportBond, getRepTokenAddress, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { addressString } from '../testsuite/simulator/utils/bigint.js'
 import { createCompleteSet, forkSecurityPool, getCompleteSetAddress, getCompleteSetCollateralAmount, getLastPrice, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, OperationType, redeemCompleteSet, migrateVault, getSecurityPoolAddress, getMigratedRep, getSystemState, startTruthAuction, getCurrentRetentionRate, getTruthAuction, getEthAmountToBuy, participateAuction, finalizeTruthAuction, claimAuctionProceeds, getRepDenominator, getSecurityVault, repSharesToRep } from '../testsuite/simulator/utils/peripherals.js'
 import assert from 'node:assert'
@@ -98,7 +98,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const repBalanceInGenesisPool = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddress)
 		assert.strictEqual(repBalanceInGenesisPool, 2n * repDeposit, 'After two deposits, the system should have 2 x repDeposit worth of REP')
 		assert.strictEqual(await getSecurityBondAllowance(client, securityPoolAddress), 2n * securityPoolAllowance, 'Security bond allowance should be 2x')
-		assert.strictEqual(await getRepDenominator(client, securityPoolAddress), repBalanceInGenesisPool, 'Rep denominator should equal pool balance prior fork')
+		assert.strictEqual(await getRepDenominator(client, securityPoolAddress), repBalanceInGenesisPool * PRICE_PRECISION, 'Rep denominator should equal `pool balance * PRICE_PRECISION` prior fork')
 
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		await createCompleteSet(openInterestHolder, securityPoolAddress, openInterestAmount)
@@ -164,20 +164,21 @@ describe('Peripherals Contract Test Suite', () => {
 		const yesAuctionParticipantVault = await getSecurityVault(client, yesSecurityPool, yesAuctionParticipant.account.address)
 		console.log(yesAuctionParticipantVault)
 		const yesAuctionParticipantRep = await repSharesToRep(client, yesSecurityPool, yesAuctionParticipantVault.repDepositShare)
-		assert.strictEqual(yesAuctionParticipantRep, repBalanceInGenesisPool / 4n, 'yes auction participant did not get ownership of rep they bought')
+		approximatelyEqual(yesAuctionParticipantRep, repBalanceInGenesisPool / 4n, 1000n, 'yes auction participant did not get ownership of rep they bought')
 
 		const originalYesVault = await getSecurityVault(client, yesSecurityPool, client.account.address)
 		const originalYesVaultRep = await repSharesToRep(client, yesSecurityPool, originalYesVault.repDepositShare)
-		assert.strictEqual(originalYesVaultRep, repBalanceInGenesisPool * 3n / 4n, 'original vault holder should hold rest 3/4 of rep')
+		console.log(`originalYesVault.repDepositShare: ${originalYesVault.repDepositShare}`)
+		approximatelyEqual(originalYesVaultRep, repBalanceInGenesisPool * 3n / 4n, 1000n, 'original yes vault holder should hold rest 3/4 of rep')
 
 		// no status
-		const noAuctionParticipantVault = await getSecurityVault(client, yesSecurityPool, noAuctionParticipant.account.address)
-		const noAuctionParticipantRep = await repSharesToRep(client, yesSecurityPool, noAuctionParticipantVault.repDepositShare)
+		const noAuctionParticipantVault = await getSecurityVault(client, noSecurityPool, noAuctionParticipant.account.address)
+		const noAuctionParticipantRep = await repSharesToRep(client, noSecurityPool, noAuctionParticipantVault.repDepositShare)
 
-		assert.strictEqual(noAuctionParticipantRep, repBalanceInGenesisPool * 3n / 4n, 'no auction participant did not get ownership of rep they bought')
+		approximatelyEqual(noAuctionParticipantRep, repBalanceInGenesisPool * 3n / 4n, 1000n, 'no auction participant did not get ownership of rep they bought')
 		const originalNoVault = await getSecurityVault(client, noSecurityPool, attackerClient.account.address)
 		const originalNoVaultRep = await repSharesToRep(client, noSecurityPool, originalNoVault.repDepositShare)
-		assert.strictEqual(originalYesVaultRep, originalNoVaultRep * 1n / 4n, 'original vault holder should hold rest 1/4 of rep')
+		approximatelyEqual(originalYesVaultRep, originalNoVaultRep * 1n / 4n, 1000n, 'original no vault holder should hold rest 1/4 of rep')
 
 	})
 

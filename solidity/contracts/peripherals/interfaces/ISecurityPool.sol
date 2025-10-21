@@ -2,13 +2,11 @@
 pragma solidity 0.8.30;
 
 import { Zoltar } from '../../Zoltar.sol';
-import { ISecurityPoolFactory } from "./ISecurityPoolFactory.sol";
 import { OpenOracle } from "../openOracle/OpenOracle.sol";
 import { Auction } from "../Auction.sol";
 import { CompleteSet } from "../CompleteSet.sol";
 import { ReputationToken } from "../../ReputationToken.sol";
 import { PriceOracleManagerAndOperatorQueuer } from "../PriceOracleManagerAndOperatorQueuer.sol";
-
 
 struct SecurityVault {
 	uint256 repDepositShare;
@@ -63,7 +61,7 @@ interface ISecurityPool {
 	function repToRepShares(uint256 repAmount) external view returns (uint256);
 
 	// -------- Mutative Functions --------
-	function setStartingParams(uint256 _currentRetentionRate, uint256 _repEthPrice, uint256 _completeSetCollateralAmount) external;
+	function setStartingParams(uint256 currentRetentionRate, uint256 repEthPrice, uint256 completeSetCollateralAmount) external;
 
 	function updateCollateralAmount() external;
 	function updateRetentionRate() external;
@@ -86,4 +84,8 @@ interface ISecurityPool {
 	function claimAuctionProceeds(address vault) external;
 
 	receive() external payable;
+}
+
+interface ISecurityPoolFactory {
+	function deploySecurityPool(OpenOracle openOracle, ISecurityPool parent, Zoltar zoltar, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPoolAddress);
 }

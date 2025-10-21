@@ -25,4 +25,24 @@ library SecurityPoolUtils {
 			}
 		}
 	}
+
+	function calculateRetentionRate(uint256 completeSetCollateralAmount, uint256 securityBondAllowance) external pure returns (uint256 z) {
+		uint256 utilization = (completeSetCollateralAmount * 100) / securityBondAllowance;
+		if (utilization <= RETENTION_RATE_DIP) {
+			// first slope: 0% -> RETENTION_RATE_DIP%
+			uint256 utilizationRatio = (utilization * PRICE_PRECISION) / RETENTION_RATE_DIP;
+			uint256 slopeSpan = MAX_RETENTION_RATE - MIN_RETENTION_RATE;
+			return MAX_RETENTION_RATE - (slopeSpan * utilizationRatio) / PRICE_PRECISION;
+		} else if (utilization <= 100) {
+			// second slope: RETENTION_RATE_DIP% -> 100%
+			uint256 slopeSpan = MAX_RETENTION_RATE - MIN_RETENTION_RATE;
+			return MIN_RETENTION_RATE + (slopeSpan * (100 - utilization) * PRICE_PRECISION / (100 - RETENTION_RATE_DIP)) / PRICE_PRECISION;
+		} else {
+			// clamp to MIN_RETENTION_RATE if utilization > 100%
+			return MIN_RETENTION_RATE;
+		}
+	}
+
+	// auction
+	uint256 constant MAX_AUCTION_VAULT_HAIRCUT_DIVISOR = 1_000_000;
 }

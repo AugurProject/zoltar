@@ -3,7 +3,7 @@ import { QuestionOutcome } from '../types/types.js'
 import { addressString } from './bigint.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from './constants.js'
 import { deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getSecurityPoolAddress, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPriceIfNeededAndQueueOperation, wrapWeth } from './peripherals.js'
-import { approveToken, createQuestion, dispute, ensureZoltarDeployed, getERC20Balance, getQuestionData, getUniverseData, getZoltarAddress, isZoltarDeployed, reportOutcome } from './utilities.js'
+import { approveToken, contractExists, createQuestion, dispute, ensureZoltarDeployed, getERC20Balance, getQuestionData, getUniverseData, getZoltarAddress, isZoltarDeployed, reportOutcome } from './utilities.js'
 import { WriteClient } from './viem.js'
 import assert from 'node:assert'
 
@@ -32,16 +32,18 @@ export const deployPeripherals = async (client: WriteClient) => {
 	await ensureSecurityPoolFactoryDeployed(client)
 	assert.ok(await isSecurityPoolFactoryDeployed(client), 'Security Pool Factory Not Deployed!')
 	await deploySecurityPool(client, openOracle, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice, completeSetCollateralAmount)
+	assert.ok(await contractExists(client, getSecurityPoolAddress(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)), 'security pool not deployed')
 }
 
 export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigint) => {
 	const securityPoolAddress = getSecurityPoolAddress(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
+	assert.ok(await contractExists(client, securityPoolAddress), 'security pool not deployed')
 
-	const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+	const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
 	await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
 	await depositRep(client, securityPoolAddress, repDeposit)
 
-	const newBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+	const newBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
 	assert.strictEqual(newBalance, startBalance + repDeposit, 'Did not deposit rep')
 }
 
