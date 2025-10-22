@@ -9,7 +9,7 @@ import { ReputationToken } from "../../ReputationToken.sol";
 import { PriceOracleManagerAndOperatorQueuer } from "../PriceOracleManagerAndOperatorQueuer.sol";
 
 struct SecurityVault {
-	uint256 repDepositShare;
+	uint256 poolOwnership;
 	uint256 securityBondAllowance;
 	uint256 unpaidEthFees;
 	uint256 feeAccumulator;
@@ -36,7 +36,7 @@ interface ISecurityPool {
 	function zoltar() external view returns (Zoltar);
 	function securityBondAllowance() external view returns (uint256);
 	function completeSetCollateralAmount() external view returns (uint256);
-	function repDenominator() external view returns (uint256);
+	function poolOwnershipDenominator() external view returns (uint256);
 	function repAtFork() external view returns (uint256);
 	function migratedRep() external view returns (uint256);
 	function securityMultiplier() external view returns (uint256);
@@ -44,7 +44,7 @@ interface ISecurityPool {
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
 	function securityPoolForkTriggeredTimestamp() external view returns (uint256);
-	function securityVaults(address vault) external view returns (uint256 repDepositShare, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeAccumulator);
+	function securityVaults(address vault) external view returns (uint256 poolOwnership, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeAccumulator);
 	function claimedAuctionProceeds(address vault) external view returns (bool);
 	function children(uint256 index) external view returns (ISecurityPool);
 	function parent() external view returns (ISecurityPool);
@@ -57,8 +57,8 @@ interface ISecurityPool {
 	function priceOracleManagerAndOperatorQueuer() external view returns (PriceOracleManagerAndOperatorQueuer);
 	function openOracle() external view returns (OpenOracle);
 
-	function repSharesToRep(uint256 repShares) external view returns (uint256);
-	function repToRepShares(uint256 repAmount) external view returns (uint256);
+	function repToPoolOwnership(uint256 repAmount) external view returns (uint256);
+	function poolOwnershipToRep(uint256 poolOwnership) external view returns (uint256);
 
 	// -------- Mutative Functions --------
 	function setStartingParams(uint256 currentRetentionRate, uint256 repEthPrice, uint256 completeSetCollateralAmount) external;
