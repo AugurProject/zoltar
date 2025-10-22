@@ -1,12 +1,12 @@
 import { peripherals_interfaces_IAugur_IAugur, IERC20_IERC20, peripherals_interfaces_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory, ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoolUtils_SecurityPoolUtils } from '../../../types/contractArtifact.js'
-import { QuestionOutcome } from '../types/types.js'
+import { EthereumAddressString, QuestionOutcome } from '../types/types.js'
 import { addressString } from './bigint.js'
 import { ETHEREUM_LOGS_LOGGER_ADDRESS, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from './constants.js'
 import { Deployment } from './logExplaining.js'
 import { getCompleteSetAddress, getOpenOracleAddress, getPriceOracleManagerAndOperatorQueuerAddress, getSecurityPoolAddress, getSecurityPoolFactoryAddress, getSecurityPoolUtilsAddress, getTruthAuction } from './peripherals.js'
 import { getChildUniverseId, getRepTokenAddress, getZoltarAddress } from './utilities.js'
 
-const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x${ string }`, repTokenAddress: `0x${ string }`, priceOracleManagerAndOperatorQueuerAddress: `0x${ string }`, completeSetAddress: `0x${ string }`, auction: `0x${ string }`): Deployment[] => [
+const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: EthereumAddressString, repTokenAddress: EthereumAddressString, priceOracleManagerAndOperatorQueuerAddress: EthereumAddressString, completeSetAddress: EthereumAddressString, auction: EthereumAddressString): Deployment[] => [
 	{
 		abi: ReputationToken_ReputationToken.abi,
 		deploymentName: `RepV2-U${ universeId }`,
@@ -39,7 +39,7 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 
 	const oucomes = [QuestionOutcome.Invalid, QuestionOutcome.No, QuestionOutcome.Yes]
 
-	const getChildAddresses = (parentSecurityPoolAddress: `0x${ string }`, parentUniverseId: bigint): Deployment[] => {
+	const getChildAddresses = (parentSecurityPoolAddress: EthereumAddressString, parentUniverseId: bigint): Deployment[] => {
 		return oucomes.flatMap((outcome) => {
 			const universeId = getChildUniverseId(parentUniverseId, outcome)
 			const securityPoolAddress = getSecurityPoolAddress(parentSecurityPoolAddress, universeId, questionId, securityMultiplier)

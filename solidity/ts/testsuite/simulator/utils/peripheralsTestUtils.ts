@@ -64,7 +64,7 @@ export const triggerFork = async(client: WriteClient, mockWindow: MockWindowEthe
 	}
 }
 
-export const requestPrice = async(client: WriteClient, mockWindow: MockWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, operation: OperationType, targetVault: `0x${ string }`, amount: bigint) => {
+export const requestPrice = async(client: WriteClient, mockWindow: MockWindowEthereum, priceOracleManagerAndOperatorQueuer: EthereumAddressString, operation: OperationType, targetVault: EthereumAddressString, amount: bigint) => {
 	await requestPriceIfNeededAndQueueOperation(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount)
 
 	const pendingReportId = await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)

@@ -1,11 +1,12 @@
 
 import { Abi, decodeEventLog, GetLogsReturnType } from 'viem'
 import { isUnknownAnAddress } from './utilities.js'
+import { EthereumAddressString } from '../types/types.js'
 
 export type Deployment = {
 	deploymentName: string
 	abi: Abi | undefined
-	address: `0x${ string }`
+	address: EthereumAddressString
 }
 
 interface DecodedLog {
@@ -13,7 +14,7 @@ interface DecodedLog {
 	args: Record<string, unknown> | undefined
 }
 
-function safeDecodeEventLog(parameters: { abi: Abi; data: `0x${string}`; topics: [`0x${string}`, ...`0x${string}`[]] | [] }): DecodedLog | undefined {
+function safeDecodeEventLog(parameters: { abi: Abi; data: EthereumAddressString; topics: [EthereumAddressString, ...EthereumAddressString[]] | [] }): DecodedLog | undefined {
 	try {
 		const result = decodeEventLog(parameters) as unknown
 		if (typeof result === 'object' && result !== null && 'eventName' in result && 'args' in result) return result as DecodedLog

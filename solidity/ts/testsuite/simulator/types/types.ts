@@ -1,4 +1,4 @@
-export type AccountAddress = `0x${ string }`
+export type EthereumAddressString = `0x${ string }`
 
 export enum QuestionOutcome {
 	Invalid,

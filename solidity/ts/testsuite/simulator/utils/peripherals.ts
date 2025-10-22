@@ -7,7 +7,7 @@ import { getZoltarAddress } from './utilities.js'
 import { mainnet } from 'viem/chains'
 import { SystemState } from '../types/peripheralTypes.js'
 import { peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPoolUtils_SecurityPoolUtils } from '../../../types/contractArtifact.js'
-import { QuestionOutcome } from '../types/types.js'
+import { EthereumAddressString, QuestionOutcome } from '../types/types.js'
 
 export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<void> {
 	const deployerBytecode = await client.getCode({ address: addressString(PROXY_DEPLOYER_ADDRESS)})
@@ -19,24 +19,24 @@ export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<
 }
 
 export function getOpenOracleAddress() {
-	const bytecode: `0x${ string }` = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`
+	const bytecode: EthereumAddressString = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`
 	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
 }
 
 export const isOpenOracleDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${ string }` = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.deployedBytecode.object }`
+	const expectedDeployedBytecode: EthereumAddressString = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.deployedBytecode.object }`
 	const address = getOpenOracleAddress()
 	const deployedBytecode = await client.getCode({ address })
 	return deployedBytecode === expectedDeployedBytecode
 }
 
 export function getSecurityPoolUtilsAddress() {
-	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`
+	const bytecode: EthereumAddressString = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`
 	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
 }
 
 export const isSecurityPoolUtilsDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.deployedBytecode.object }`
+	const expectedDeployedBytecode: EthereumAddressString = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.deployedBytecode.object }`
 	const address = getOpenOracleAddress()
 	const deployedBytecode = await client.getCode({ address })
 	return deployedBytecode === expectedDeployedBytecode
@@ -45,7 +45,7 @@ export const isSecurityPoolUtilsDeployed = async (client: ReadClient) => {
 export const ensureOpenOracleDeployed = async (client: WriteClient) => {
 	await ensureProxyDeployerDeployed(client)
 	if (await isOpenOracleDeployed(client)) return
-	const bytecode: `0x${ string }` = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`
+	const bytecode: EthereumAddressString = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`
 	const hash = await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const)
 	await client.waitForTransactionReceipt({ hash })
 }
@@ -53,12 +53,12 @@ export const ensureOpenOracleDeployed = async (client: WriteClient) => {
 export const ensureSecurityPoolUtilsDeployed = async (client: WriteClient) => {
 	await ensureProxyDeployerDeployed(client)
 	if (await isSecurityPoolUtilsDeployed(client)) return
-	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`
+	const bytecode: EthereumAddressString = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`
 	const hash = await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const)
 	await client.waitForTransactionReceipt({ hash })
 }
 
-export const applyLibraries = (bytecode: string): `0x${ string }` => {
+export const applyLibraries = (bytecode: string): EthereumAddressString => {
 	const securityPoolUtils = keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36)
 	return `0x${ bytecode.replaceAll(`__$${ securityPoolUtils }$__`, getSecurityPoolUtilsAddress().slice(2).toLocaleLowerCase()) }`
 }
@@ -80,7 +80,7 @@ export const ensureSecurityPoolFactoryDeployed = async (client: WriteClient) => 
 	await client.waitForTransactionReceipt({ hash })
 }
 
-export const deploySecurityPool = async (client: WriteClient, openOracle: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint, startingRetentionRate: bigint, startingRepEthPrice: bigint, completeSetCollateralAmount: bigint) => {
+export const deploySecurityPool = async (client: WriteClient, openOracle: EthereumAddressString, universeId: bigint, questionId: bigint, securityMultiplier: bigint, startingRetentionRate: bigint, startingRepEthPrice: bigint, completeSetCollateralAmount: bigint) => {
 	return await client.writeContract({
 		chain: mainnet,
 		abi: peripherals_SecurityPoolFactory_SecurityPoolFactory.abi,
@@ -90,7 +90,7 @@ export const deploySecurityPool = async (client: WriteClient, openOracle: `0x${ 
 	})
 }
 
-export const depositRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, amount: bigint) => {
+export const depositRep = async (client: WriteClient, securityPoolAddress: EthereumAddressString, amount: bigint) => {
 	return await client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'depositRep',
@@ -99,13 +99,13 @@ export const depositRep = async (client: WriteClient, securityPoolAddress: `0x${
 	})
 }
 
-export const getPriceOracleManagerAndOperatorQueuer = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getPriceOracleManagerAndOperatorQueuer = async (client: ReadClient, securityPoolAddress: EthereumAddressString) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'priceOracleManagerAndOperatorQueuer',
 		address: securityPoolAddress,
 		args: []
-	}) as `0x${ string }`
+	}) as EthereumAddressString
 }
 
 export enum OperationType {
@@ -114,7 +114,7 @@ export enum OperationType {
 	SetSecurityBondsAllowance = 2
 }
 
-export const requestPriceIfNeededAndQueueOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`, operation: OperationType, targetVault: `0x${ string }`, amount: bigint) => {
+export const requestPriceIfNeededAndQueueOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: EthereumAddressString, operation: OperationType, targetVault: EthereumAddressString, amount: bigint) => {
 	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer) * 2n;
 	return await client.writeContract({
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
@@ -125,7 +125,7 @@ export const requestPriceIfNeededAndQueueOperation = async (client: WriteClient,
 	})
 }
 
-export const getPendingReportId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
+export const getPendingReportId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: EthereumAddressString) => {
 	return await client.readContract({
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'pendingReportId',
@@ -135,12 +135,12 @@ export const getPendingReportId = async (client: ReadClient, priceOracleManagerA
 }
 
 interface ExtraReportData {
-	stateHash: `0x${ string }`
-	callbackContract: `0x${ string }`
+	stateHash: EthereumAddressString
+	callbackContract: EthereumAddressString
 	numReports: number
 	callbackGasLimit: number
-	callbackSelector: `0x${ string }`
-	protocolFeeRecipient: `0x${ string }`
+	callbackSelector: EthereumAddressString
+	protocolFeeRecipient: EthereumAddressString
 	trackDisputes: boolean
 	keepFee: boolean
 	feeToken: boolean
@@ -165,12 +165,12 @@ export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bi
 		keepFee,
 		feeToken
 	] = result as [
-		`0x${string}`,
-		`0x${string}`,
+		EthereumAddressString,
+		EthereumAddressString,
 		bigint,
 		bigint,
-		`0x${string}`,
-		`0x${string}`,
+		EthereumAddressString,
+		EthereumAddressString,
 		boolean,
 		boolean,
 		boolean
@@ -189,7 +189,7 @@ export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bi
 	}
 }
 
-export const openOracleSubmitInitialReport = async (client: WriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: `0x${ string }`) => {
+export const openOracleSubmitInitialReport = async (client: WriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: EthereumAddressString) => {
 	return await client.writeContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'submitInitialReport',
@@ -208,7 +208,7 @@ export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
 	})
 }
 
-export const getRequestPriceEthCost = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
+export const getRequestPriceEthCost = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: EthereumAddressString) => {
 	return await client.readContract({
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'getRequestPriceEthCost',
@@ -238,9 +238,9 @@ export interface ReportMeta {
 	escalationHalt: bigint
 	fee: bigint
 	settlerReward: bigint
-	token1: `0x${ string }`
+	token1: EthereumAddressString
 	settlementTime: number
-	token2: `0x${ string }`
+	token2: EthereumAddressString
 	timeType: boolean
 	feePercentage: number
 	protocolFee: number
@@ -287,7 +287,7 @@ export const getOpenOracleReportMeta = async (client: ReadClient, reportId: bigi
 	}
 }
 
-export const createCompleteSet = async (client: WriteClient, securityPoolAddress: `0x${ string }`, completeSetsToCreate: bigint) => {
+export const createCompleteSet = async (client: WriteClient, securityPoolAddress: EthereumAddressString, completeSetsToCreate: bigint) => {
 	return await client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'createCompleteSet',
@@ -297,7 +297,7 @@ export const createCompleteSet = async (client: WriteClient, securityPoolAddress
 	})
 }
 
-export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress: `0x${ string }`, completeSetsToRedeem: bigint) => {
+export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress: EthereumAddressString, completeSetsToRedeem: bigint) => {
 	return await client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemCompleteSet',
@@ -306,7 +306,7 @@ export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress
 	})
 }
 
-export const getSecurityBondAllowance = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getSecurityBondAllowance = async (client: ReadClient, securityPoolAddress: EthereumAddressString) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'securityBondAllowance',
@@ -315,7 +315,7 @@ export const getSecurityBondAllowance = async (client: ReadClient, securityPoolA
 	}) as bigint
 }
 
-export const getCompleteSetCollateralAmount = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getCompleteSetCollateralAmount = async (client: ReadClient, securityPoolAddress: EthereumAddressString) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'completeSetCollateralAmount',
@@ -324,7 +324,7 @@ export const getCompleteSetCollateralAmount = async (client: ReadClient, securit
 	}) as bigint
 }
 
-export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
+export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: EthereumAddressString) => {
 	return await client.readContract({
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'lastPrice',
@@ -333,7 +333,7 @@ export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOper
 	}) as bigint
 }
 
-export const forkSecurityPool = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const forkSecurityPool = async (client: WriteClient, securityPoolAddress: EthereumAddressString) => {
 	return await client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'forkSecurityPool',
@@ -342,7 +342,7 @@ export const forkSecurityPool = async (client: WriteClient, securityPoolAddress:
 	})
 }
 
-export const migrateVault = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) => {
+export const migrateVault = async (client: WriteClient, securityPoolAddress: EthereumAddressString, outcome: QuestionOutcome) => {
 	return await client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'migrateVault',
@@ -351,7 +351,7 @@ export const migrateVault = async (client: WriteClient, securityPoolAddress: `0x
 	})
 }
 
-export const startTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const startTruthAuction = async (client: WriteClient, securityPoolAddress: EthereumAddressString) => {
 	return await client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'startTruthAuction',
@@ -360,7 +360,7 @@ export const startTruthAuction = async (client: WriteClient, securityPoolAddress
 	})
 }
 
-export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddress: EthereumAddressString) => {
 	return await client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'finalizeTruthAuction',
@@ -369,7 +369,7 @@ export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddr
 	})
 }
 
-export const claimAuctionProceeds = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) => {
+export const claimAuctionProceeds = async (client: WriteClient, securityPoolAddress: EthereumAddressString, vault: EthereumAddressString) => {
 	return await client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'claimAuctionProceeds',
@@ -379,11 +379,11 @@ export const claimAuctionProceeds = async (client: WriteClient, securityPoolAddr
 }
 
 export function getSecurityPoolAddress(
-	parent: `0x${ string }`,
+	parent: EthereumAddressString,
 	universeId: bigint,
 	questionId: bigint,
 	securityMultiplier: bigint,
-) : `0x${ string }` {
+) : EthereumAddressString {
 	const initCode = encodeDeployData({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
@@ -392,7 +392,7 @@ export function getSecurityPoolAddress(
 	return getCreate2Address({ from: getSecurityPoolFactoryAddress(), salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
 }
 
-export function getPriceOracleManagerAndOperatorQueuerAddress(securityPool: `0x${ string }`, repToken: `0x${ string }`): `0x${ string }` {
+export function getPriceOracleManagerAndOperatorQueuerAddress(securityPool: EthereumAddressString, repToken: EthereumAddressString): EthereumAddressString {
 	const initCode = encodeDeployData({
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		bytecode: `0x${ peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.evm.bytecode.object }`,
@@ -401,7 +401,7 @@ export function getPriceOracleManagerAndOperatorQueuerAddress(securityPool: `0x$
 	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
 }
 
-export function getCompleteSetAddress(securityPool: `0x${ string }`): `0x${ string }` {
+export function getCompleteSetAddress(securityPool: EthereumAddressString): EthereumAddressString {
 	const initCode = encodeDeployData({
 		abi: peripherals_CompleteSet_CompleteSet.abi,
 		bytecode: `0x${ peripherals_CompleteSet_CompleteSet.evm.bytecode.object }`,
@@ -410,7 +410,7 @@ export function getCompleteSetAddress(securityPool: `0x${ string }`): `0x${ stri
 	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
 }
 
-export function getTruthAuction(securityPool: `0x${ string }`): `0x${ string }` {
+export function getTruthAuction(securityPool: EthereumAddressString): EthereumAddressString {
 	const initCode = encodeDeployData({
 		abi: peripherals_Auction_Auction.abi,
 		bytecode: `0x${ peripherals_Auction_Auction.evm.bytecode.object }`,
@@ -419,7 +419,7 @@ export function getTruthAuction(securityPool: `0x${ string }`): `0x${ string }` 
 	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
 }
 
-export const participateAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, repToBuy: bigint, ethToInvest: bigint) => {
+export const participateAuction = async (client: WriteClient, auctionAddress: EthereumAddressString, repToBuy: bigint, ethToInvest: bigint) => {
 	return await client.writeContract({
 		abi: peripherals_Auction_Auction.abi,
 		functionName: 'participate',
@@ -428,7 +428,7 @@ export const participateAuction = async (client: WriteClient, auctionAddress: `0
 		value: ethToInvest
 	})
 }
-export const getEthAmountToBuy = async (client: WriteClient, auctionAddress: `0x${ string }`) => {
+export const getEthAmountToBuy = async (client: WriteClient, auctionAddress: EthereumAddressString) => {
 	return await client.readContract({
 		abi: peripherals_Auction_Auction.abi,
 		functionName: 'ethAmountToBuy',
@@ -437,7 +437,7 @@ export const getEthAmountToBuy = async (client: WriteClient, auctionAddress: `0x
 	})
 }
 
-export const getMigratedRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const getMigratedRep = async (client: WriteClient, securityPoolAddress: EthereumAddressString) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'migratedRep',
@@ -446,7 +446,7 @@ export const getMigratedRep = async (client: WriteClient, securityPoolAddress: `
 	})
 }
 
-export const getSystemState = async (client: WriteClient, securityPoolAddress: `0x${ string }`): Promise<SystemState> => {
+export const getSystemState = async (client: WriteClient, securityPoolAddress: EthereumAddressString): Promise<SystemState> => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'systemState',
@@ -455,7 +455,7 @@ export const getSystemState = async (client: WriteClient, securityPoolAddress: `
 	})
 }
 
-export const getCurrentRetentionRate = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const getCurrentRetentionRate = async (client: WriteClient, securityPoolAddress: EthereumAddressString) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'currentRetentionRate',
@@ -464,7 +464,7 @@ export const getCurrentRetentionRate = async (client: WriteClient, securityPoolA
 	})
 }
 
-export const getSecurityVault = async (client: WriteClient, securityPoolAddress: `0x${ string }`, securityVault: `0x${ string }`) => {
+export const getSecurityVault = async (client: WriteClient, securityPoolAddress: EthereumAddressString, securityVault: EthereumAddressString) => {
 	const vault = await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'securityVaults',
@@ -486,7 +486,7 @@ export const getSecurityVault = async (client: WriteClient, securityPoolAddress:
 	}
 }
 
-export const getPoolOwnershipDenominator = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const getPoolOwnershipDenominator = async (client: WriteClient, securityPoolAddress: EthereumAddressString) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'poolOwnershipDenominator',
@@ -495,7 +495,7 @@ export const getPoolOwnershipDenominator = async (client: WriteClient, securityP
 	})
 }
 
-export const poolOwnershipToRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, poolOwnership: bigint) => {
+export const poolOwnershipToRep = async (client: WriteClient, securityPoolAddress: EthereumAddressString, poolOwnership: bigint) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'poolOwnershipToRep',
@@ -504,7 +504,7 @@ export const poolOwnershipToRep = async (client: WriteClient, securityPoolAddres
 	})
 }
 
-export const repToPoolOwnership = async (client: WriteClient, securityPoolAddress: `0x${ string }`, repAmount: bigint) => {
+export const repToPoolOwnership = async (client: WriteClient, securityPoolAddress: EthereumAddressString, repAmount: bigint) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'repToPoolOwnership',

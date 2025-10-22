@@ -9,17 +9,17 @@ import assert from 'node:assert'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
 import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
+import { EthereumAddressString, QuestionOutcome } from '../testsuite/simulator/types/types.js'
 import { approveAndDepositRep, deployPeripherals, deployZoltarAndCreateMarket, genesisUniverse, MAX_RETENTION_RATE, PRICE_PRECISION, questionId, requestPrice, securityMultiplier, triggerFork } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
 
 describe('Peripherals Contract Test Suite', () => {
 	let mockWindow: MockWindowEthereum
-	let securityPoolAddress: `0x${ string }`
+	let securityPoolAddress: EthereumAddressString
 	let client: WriteClient
 	let startBalance: bigint
 	let reportBond: bigint
 	const repDeposit = 100n * 10n ** 18n
-	let priceOracleManagerAndOperatorQueuer: `0x${ string }`
+	let priceOracleManagerAndOperatorQueuer: EthereumAddressString
 
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
