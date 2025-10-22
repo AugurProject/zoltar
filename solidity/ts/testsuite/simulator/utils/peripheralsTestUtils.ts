@@ -1,5 +1,5 @@
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
-import { QuestionOutcome } from '../types/types.js'
+import { EthereumAddressString, QuestionOutcome } from '../types/types.js'
 import { addressString } from './bigint.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from './constants.js'
 import { deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getSecurityPoolAddress, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPriceIfNeededAndQueueOperation, wrapWeth } from './peripherals.js'
