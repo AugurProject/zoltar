@@ -12,10 +12,10 @@ import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 
 // Security pool for one question, one universe, one denomination (ETH)
 contract SecurityPool is ISecurityPool {
-	uint56 public questionId;
-	uint192 public universeId;
+	uint56 public immutable questionId;
+	uint192 public immutable universeId;
 
-	Zoltar public zoltar;
+	Zoltar public immutable zoltar;
 	uint256 public securityBondAllowance;
 	uint256 public completeSetCollateralAmount; // amount of eth that is backing complete sets, `address(this).balance - completeSetCollateralAmount` are the fees belonging to REP pool holders
 	uint256 public poolOwnershipDenominator;
@@ -33,15 +33,15 @@ contract SecurityPool is ISecurityPool {
 	mapping(address => bool) public claimedAuctionProceeds;
 
 	ISecurityPool[3] public children;
-	ISecurityPool public parent;
+	ISecurityPool immutable public parent;
 
 	uint256 public truthAuctionStarted;
 	SystemState public systemState;
 
-	CompleteSet public completeSet;
-	Auction public truthAuction;
+	CompleteSet public immutable completeSet;
+	Auction public immutable truthAuction;
 	ReputationToken public repToken;
-	ISecurityPoolFactory public securityPoolFactory;
+	ISecurityPoolFactory public immutable securityPoolFactory;
 
 	PriceOracleManagerAndOperatorQueuer public priceOracleManagerAndOperatorQueuer;
 	OpenOracle public openOracle;

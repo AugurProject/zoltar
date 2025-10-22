@@ -5,7 +5,7 @@ import '../ERC20.sol';
 
 contract CompleteSet is ERC20 {
 
-	address public securityPool;
+	address public immutable securityPool;
 
 	constructor(address _securityPool) ERC20('CompleteSet', 'CS') {
 		securityPool = _securityPool;

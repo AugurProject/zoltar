@@ -5,7 +5,7 @@ import './ERC20.sol';
 
 contract ReputationToken is ERC20 {
 
-	address public zoltar;
+	address public immutable zoltar;
 
 	constructor(address _zoltar) ERC20('Reputation', 'REP') {
 		zoltar = _zoltar;
