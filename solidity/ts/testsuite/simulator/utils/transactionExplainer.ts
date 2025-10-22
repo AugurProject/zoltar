@@ -1,6 +1,6 @@
 import { Abi, decodeFunctionData, decodeFunctionResult, isAddress } from 'viem'
 import { jsonStringify } from './utilities.js'
-import { Deployment, printLogs } from './logExplaining.js
+import { Deployment, printLogs } from './logExplaining.js'
 import { SimulatedTransaction } from '../types/visualizerTypes.js'
 import { SendTransactionParams } from '../types/jsonRpcTypes.js'
 import { addressString, bytes32String, dataStringWith0xStart } from './bigint.js'
