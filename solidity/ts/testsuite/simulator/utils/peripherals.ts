@@ -380,29 +380,29 @@ export const repToPoolOwnership = async (client: ReadClient, securityPoolAddress
 	})
 }
 
-export const totalSupplyForQuestion = async (client: ReadClient, shareTokenAddress: `0x${ string }`, universeId: bigint,  questionId: bigint) => {
+export const totalSupplyForUniverse = async (client: ReadClient, shareTokenAddress: `0x${ string }`, universeId: bigint) => {
 	return await client.readContract({
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
-		functionName: 'totalSupplyForQuestion',
+		functionName: 'totalSupplyForUniverse',
 		address: shareTokenAddress,
-		args: [universeId, questionId],
+		args: [universeId],
 	})
 }
 
-export const balanceOfQuestionOutcome = async (client: ReadClient, shareTokenAddress: `0x${ string }`, universeId: bigint, questionId: bigint, outcome: QuestionOutcome, account: `0x${ string }`) => {
+export const balanceOfOutcome = async (client: ReadClient, shareTokenAddress: `0x${ string }`, universeId: bigint, outcome: QuestionOutcome, account: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
-		functionName: 'balanceOfQuestionOutcome',
+		functionName: 'balanceOfOutcome',
 		address: shareTokenAddress,
-		args: [universeId, questionId, outcome, account],
+		args: [universeId, outcome, account],
 	})
 }
 
-export const balanceOfQuestionShares = async (client: ReadClient, shareTokenAddress: `0x${ string }`,  universeId: bigint, questionId: bigint, account: `0x${ string }`) => {
+export const balanceOfShares = async (client: ReadClient, shareTokenAddress: `0x${ string }`,  universeId: bigint, account: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
-		functionName: 'balanceOfQuestionShares',
+		functionName: 'balanceOfShares',
 		address: shareTokenAddress,
-		args: [universeId, questionId, account],
+		args: [universeId, account],
 	})
 }

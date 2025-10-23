@@ -38,12 +38,12 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 		Auction truthAuction = auctionFactory.deployAuction(securityPoolSalt);
 
-		securityPool = new SecurityPool{ salt: bytes32(uint256(0x1)) }(this, truthAuction, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier);
+		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(this, truthAuction, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier);
+
+		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
 		securityPool.setStartingParams(currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
 
 		truthAuction.setOwner(address(securityPool));
-
-		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
 		emit DeploySecurityPool(securityPool, truthAuction, priceOracleManagerAndOperatorQueuer, shareToken, parent, universeId, questionId, securityMultiplier, currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
 	}
 
@@ -56,12 +56,13 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		bytes32 shareTokenSalt = keccak256(abi.encodePacked(securityMultiplier));
 		IShareToken shareToken = shareTokenFactory.deployShareToken(questionId, shareTokenSalt);
 
-		securityPool = new SecurityPool{ salt: bytes32(uint256(0x1)) }(this, Auction(address(0x0)), priceOracleManagerAndOperatorQueuer, shareToken, openOracle, ISecurityPool(payable(0x0)), zoltar, universeId, questionId, securityMultiplier);
+		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(this, Auction(address(0x0)), priceOracleManagerAndOperatorQueuer, shareToken, openOracle, ISecurityPool(payable(0x0)), zoltar, universeId, questionId, securityMultiplier);
+
+		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
 		securityPool.setStartingParams(currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
 
 		shareToken.authorize(securityPool);
 
-		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
 		emit DeploySecurityPool(securityPool, Auction(address(0x0)), priceOracleManagerAndOperatorQueuer, shareToken, ISecurityPool(payable(0x0)), universeId, questionId, securityMultiplier, currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
 	}
 }

@@ -13,6 +13,6 @@ contract ShareTokenFactory {
 	}
 
 	function deployShareToken(uint56 questionId, bytes32 salt) external returns (IShareToken shareToken) {
-		return new ShareToken{ salt: keccak256(abi.encodePacked(msg.sender, salt)) }(zoltar, questionId);
+		return new ShareToken{ salt: salt }(msg.sender, zoltar, questionId);
 	}
 }

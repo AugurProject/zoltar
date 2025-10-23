@@ -45,7 +45,7 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 		})
 	}
 
-	return [
+	return ([
 		...getDeploymentsForUniverse(genesisUniverse, originAddresses.securityPool, getRepTokenAddress(genesisUniverse), originAddresses.priceOracleManagerAndOperatorQueuer, originAddresses.shareToken, originAddresses.truthAuction),
 		...getChildAddresses(originAddresses.securityPool, genesisUniverse), // children
 		...oucomes.flatMap((outcome) => getChildAddresses(getSecurityPoolAddresses(originAddresses.securityPool, genesisUniverse, questionId, securityMultiplier).securityPool, getChildUniverseId(genesisUniverse, outcome))), // grand children
@@ -103,5 +103,5 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 			deploymentName: `Test EOA(${ index + 1 })`,
 			address: addressString(testAddress)
 		} as const))
-	] as const
+	] as const).filter((entry) => BigInt(entry.address) !== 0n)
 }

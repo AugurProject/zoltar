@@ -24,10 +24,10 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		return forkTime > 0;
 	}
 
-	constructor(Zoltar _zoltar, uint56 _questionId) {
+	constructor(address owner, Zoltar _zoltar, uint56 _questionId) {
 		zoltar = _zoltar;
 		questionId = _questionId;
-		authorized[msg.sender] = true;
+		authorized[owner] = true;
 	}
 
 	function authorize(ISecurityPool _securityPoolCandidate) external {
@@ -94,10 +94,12 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		return totalSupply(_tokenId);
 	}
 
-	function totalSupply(uint192 _universeId) public returns (uint256) {
-		Zoltar.Outcome _outcome = zoltar.finalizeQuestion(_universeId, questionId);
-		uint256 _tokenId = getTokenId(_universeId, _outcome == Zoltar.Outcome.None ? Zoltar.Outcome.Yes : _outcome);
-		return totalSupply(_tokenId);
+	function totalSupplyForUniverse(uint192 _universeId) public view returns (uint256) {
+		// todo, here we might want the getWinningOutcome to just return none if not finalized?
+		if (zoltar.isFinalized(_universeId, questionId)) {
+			return totalSupply(getTokenId(_universeId, zoltar.getWinningOutcome(_universeId, questionId)));
+		}
+		return totalSupply(getTokenId(_universeId, Zoltar.Outcome.Yes));
 	}
 
 	function balanceOfOutcome(uint192 _universeId, Zoltar.Outcome _outcome, address _account) public view returns (uint256) {

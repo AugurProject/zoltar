@@ -10,7 +10,7 @@ import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
 import { approveAndDepositRep, deployPeripherals, deployZoltarAndCreateMarket, genesisUniverse, MAX_RETENTION_RATE, PRICE_PRECISION, questionId, requestPrice, securityMultiplier, triggerFork } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
 import { getSecurityPoolAddresses } from '../testsuite/simulator/utils/deployPeripherals.js'
-import { balanceOfQuestionShares, claimAuctionProceeds, createCompleteSet, finalizeTruthAuction, forkSecurityPool, getCompleteSetCollateralAmount, getCurrentRetentionRate, getEthAmountToBuy, getLastPrice, getMigratedRep, getPoolOwnershipDenominator, getSecurityBondAllowance, getSecurityVault, getSystemState, migrateVault, OperationType, participateAuction, poolOwnershipToRep, redeemCompleteSet, startTruthAuction } from '../testsuite/simulator/utils/peripherals.js'
+import { balanceOfShares, claimAuctionProceeds, createCompleteSet, finalizeTruthAuction, forkSecurityPool, getCompleteSetCollateralAmount, getCurrentRetentionRate, getEthAmountToBuy, getLastPrice, getMigratedRep, getPoolOwnershipDenominator, getSecurityBondAllowance, getSecurityVault, getSystemState, migrateVault, OperationType, participateAuction, poolOwnershipToRep, redeemCompleteSet, startTruthAuction } from '../testsuite/simulator/utils/peripherals.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
 
 describe('Peripherals Contract Test Suite', () => {
@@ -60,7 +60,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const ethBalance = await getETHBalance(client, client.account.address)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 		assert.ok(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool) < MAX_RETENTION_RATE, 'retention rate did not decrease after minting complete sets');
-		const completeSetBalances = await balanceOfQuestionShares(client, securityPoolAddresses.shareToken, genesisUniverse, questionId,client.account.address)
+		const completeSetBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, client.account.address)
 		assert.strictEqual(completeSetBalances[0], completeSetBalances[1], 'yes no and invalid share counts need to match')
 		assert.strictEqual(completeSetBalances[1], completeSetBalances[2], 'yes no and invalid share counts need to match')
 		assert.strictEqual(openInterestAmount, completeSetBalances[0], 'Did not create enough complete sets')
@@ -68,7 +68,7 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), openInterestAmount, 'contract did not record the amount correctly')
 		await redeemCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 		assert.ok(ethBalance - await getETHBalance(client, client.account.address) < maxGasFees, 'Did not get ETH back from complete sets')
-		const newBalanes = await balanceOfQuestionShares(client, securityPoolAddresses.shareToken, genesisUniverse, questionId,client.account.address)
+		const newBalanes = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, client.account.address)
 		assert.strictEqual(newBalanes[0], 0n, 'Did not lose complete sets')
 		assert.strictEqual(newBalanes[1], 0n, 'Did not lose complete sets')
 		assert.strictEqual(newBalanes[2], 0n, 'Did not lose complete sets')
@@ -110,7 +110,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
-		const completeSetBalance = await balanceOfQuestionShares(client, securityPoolAddresses.shareToken, genesisUniverse, questionId, addressString(TEST_ADDRESSES[2]))
+		const completeSetBalance = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2]))
 		assert.strictEqual(completeSetBalance[0], openInterestAmount, 'Did not create enough complete sets')
 		assert.strictEqual(completeSetBalance[1], openInterestAmount, 'Did not create enough complete sets')
 		assert.strictEqual(completeSetBalance[2], openInterestAmount, 'Did not create enough complete sets')
@@ -156,8 +156,8 @@ describe('Peripherals Contract Test Suite', () => {
 
 		await mockWindow.advanceTime(7n * DAY + DAY)
 
-		await finalizeTruthAuction(client, yesSecurityPool.truthAuction)
-		await finalizeTruthAuction(client, noSecurityPool.truthAuction)
+		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+		await finalizeTruthAuction(client, noSecurityPool.securityPool)
 
 		assert.strictEqual(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'Yes System should be operational again')
 		assert.strictEqual(await getSystemState(client, noSecurityPool.securityPool), SystemState.Operational, 'No System should be operational again')
