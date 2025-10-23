@@ -87,6 +87,6 @@ interface ISecurityPool {
 }
 
 interface ISecurityPoolFactory {
-	function deployChildSecurityPool(IShareToken shareToken, ISecurityPool parent, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool);
+	function deployChildSecurityPool(IShareToken shareToken, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool);
 	function deployOriginSecurityPool(uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool);
 }

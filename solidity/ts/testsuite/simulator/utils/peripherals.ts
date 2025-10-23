@@ -9,87 +9,6 @@ import { SystemState } from '../types/peripheralTypes.js'
 import { peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPoolUtils_SecurityPoolUtils } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
 
-export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<void> {
-	const deployerBytecode = await client.getCode({ address: addressString(PROXY_DEPLOYER_ADDRESS)})
-	if (deployerBytecode === '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3') return
-	const ethSendHash = await client.sendTransaction({ to: '0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1', amount: 10000000000000000n })
-	await client.waitForTransactionReceipt({ hash: ethSendHash })
-	const deployHash = await client.sendRawTransaction({ serializedTransaction: '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' })
-	await client.waitForTransactionReceipt({ hash: deployHash })
-}
-
-export function getOpenOracleAddress() {
-	const bytecode: `0x${ string }` = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`
-	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
-}
-
-export const isOpenOracleDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${ string }` = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.deployedBytecode.object }`
-	const address = getOpenOracleAddress()
-	const deployedBytecode = await client.getCode({ address })
-	return deployedBytecode === expectedDeployedBytecode
-}
-
-export function getSecurityPoolUtilsAddress() {
-	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`
-	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
-}
-
-export const isSecurityPoolUtilsDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.deployedBytecode.object }`
-	const address = getOpenOracleAddress()
-	const deployedBytecode = await client.getCode({ address })
-	return deployedBytecode === expectedDeployedBytecode
-}
-
-export const ensureOpenOracleDeployed = async (client: WriteClient) => {
-	await ensureProxyDeployerDeployed(client)
-	if (await isOpenOracleDeployed(client)) return
-	const bytecode: `0x${ string }` = `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`
-	const hash = await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const)
-	await client.waitForTransactionReceipt({ hash })
-}
-
-export const ensureSecurityPoolUtilsDeployed = async (client: WriteClient) => {
-	await ensureProxyDeployerDeployed(client)
-	if (await isSecurityPoolUtilsDeployed(client)) return
-	const bytecode: `0x${ string }` = `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`
-	const hash = await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const)
-	await client.waitForTransactionReceipt({ hash })
-}
-
-export const applyLibraries = (bytecode: string): `0x${ string }` => {
-	const securityPoolUtils = keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36)
-	return `0x${ bytecode.replaceAll(`__$${ securityPoolUtils }$__`, getSecurityPoolUtilsAddress().slice(2).toLocaleLowerCase()) }`
-}
-
-export const isSecurityPoolFactoryDeployed = async (client: ReadClient) => {
-	const address = getSecurityPoolFactoryAddress()
-	return await client.getCode({ address }) === applyLibraries(peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.deployedBytecode.object)
-}
-
-export function getSecurityPoolFactoryAddress() {
-	return getContractAddress({ bytecode: applyLibraries(peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object), from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
-}
-
-export const ensureSecurityPoolFactoryDeployed = async (client: WriteClient) => {
-	await ensureProxyDeployerDeployed(client)
-	await ensureSecurityPoolUtilsDeployed(client)
-	if (await isSecurityPoolFactoryDeployed(client)) return
-	const hash = await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: applyLibraries(peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object) } as const)
-	await client.waitForTransactionReceipt({ hash })
-}
-
-export const deploySecurityPool = async (client: WriteClient, openOracle: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint, startingRetentionRate: bigint, startingRepEthPrice: bigint, completeSetCollateralAmount: bigint) => {
-	return await client.writeContract({
-		chain: mainnet,
-		abi: peripherals_SecurityPoolFactory_SecurityPoolFactory.abi,
-		functionName: 'deploySecurityPool',
-		address: getSecurityPoolFactoryAddress(),
-		args: [openOracle, addressString(0x0n), getZoltarAddress(), universeId, questionId, securityMultiplier, startingRetentionRate, startingRepEthPrice, completeSetCollateralAmount]
-	})
-}
-
 export const depositRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, amount: bigint) => {
 	return await client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -97,15 +16,6 @@ export const depositRep = async (client: WriteClient, securityPoolAddress: `0x${
 		address: securityPoolAddress,
 		args: [amount]
 	})
-}
-
-export const getPriceOracleManagerAndOperatorQueuer = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
-	return await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'priceOracleManagerAndOperatorQueuer',
-		address: securityPoolAddress,
-		args: []
-	}) as `0x${ string }`
 }
 
 export enum OperationType {

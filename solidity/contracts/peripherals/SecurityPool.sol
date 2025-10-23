@@ -290,7 +290,7 @@ contract SecurityPool is ISecurityPool {
 		if (address(children[uint8(outcome)]) == address(0x0)) {
 			// first vault migrater creates new pool and transfers all REP to it
 			uint192 childUniverseId = (universeId << 2) + uint192(outcome) + 1;
-			children[uint8(outcome)] = securityPoolFactory.deployChildSecurityPool(shareToken, this, childUniverseId, questionId, securityMultiplier, currentRetentionRate, priceOracleManagerAndOperatorQueuer.lastPrice(), 0);
+			children[uint8(outcome)] = securityPoolFactory.deployChildSecurityPool(shareToken, childUniverseId, questionId, securityMultiplier, currentRetentionRate, priceOracleManagerAndOperatorQueuer.lastPrice(), 0);
 			shareToken.authorize(children[uint8(outcome)]);
 			ReputationToken childReputationToken = children[uint8(outcome)].repToken();
 			childReputationToken.transfer(address(children[uint8(outcome)]), childReputationToken.balanceOf(address(this)));

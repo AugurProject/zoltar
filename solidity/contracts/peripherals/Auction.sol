@@ -15,9 +15,6 @@ contract Auction {
 	event FinalizedAuction(address user, uint256 repAmount, uint256 ethAmount);
 	event AuctionStarted(uint256 ethAmountToBuy, uint256 repAvailable);
 
-	constructor() {
-	}
-
 	function setOwner(address _owner) external {
 		require(owner == address(0x0), 'owner already set!');
 		owner = _owner;

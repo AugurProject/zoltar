@@ -4,7 +4,7 @@ import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/vie
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
 import { approximatelyEqual, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, getReportBond, getRepTokenAddress, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { addressString } from '../testsuite/simulator/utils/bigint.js'
-import { createCompleteSet, forkSecurityPool, getCompleteSetAddress, getCompleteSetCollateralAmount, getLastPrice, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, OperationType, redeemCompleteSet, migrateVault, getSecurityPoolAddress, getMigratedRep, getSystemState, startTruthAuction, getCurrentRetentionRate, getTruthAuction, getEthAmountToBuy, participateAuction, finalizeTruthAuction, claimAuctionProceeds, getSecurityVault, getPoolOwnershipDenominator, poolOwnershipToRep } from '../testsuite/simulator/utils/peripherals.js'
+import { createCompleteSet, forkSecurityPool, getCompleteSetAddress, getCompleteSetCollateralAmount, getLastPrice, getPriceOracleManagerAndOperatorQueuer, getSecurityBondAllowance, OperationType, redeemCompleteSet, migrateVault, getSecurityPoolAddress, getMigratedRep, getSystemState, startTruthAuction, getCurrentRetentionRate, getTruthAuction, getEthAmountToBuy, participateAuction, finalizeTruthAuction, claimAuctionProceeds, getSecurityVault, getPoolOwnershipDenominator, poolOwnershipToRep } from '../testsuite/simulator/utils/deployPeripherals.js'
 import assert from 'node:assert'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
 import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
