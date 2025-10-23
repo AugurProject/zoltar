@@ -44,10 +44,14 @@ contract PriceOracleManagerAndOperatorQueuer {
 	uint256 public previousQueuedOperationId;
 	mapping(uint256 => QueuedOperation) public queuedOperations;
 
-	constructor(OpenOracle _openOracle, ISecurityPool _securityPool, ReputationToken _reputationToken) {
+	constructor(OpenOracle _openOracle, ReputationToken _reputationToken) {
 		reputationToken = _reputationToken;
-		securityPool = _securityPool;
 		openOracle = _openOracle;
+	}
+
+	function setSecurityPool(ISecurityPool _securityPool) public {
+		require (address(securityPool) == address(0x0), 'already set!');
+		securityPool = _securityPool;
 	}
 
 	function setRepEthPrice(uint256 _lastPrice) public {

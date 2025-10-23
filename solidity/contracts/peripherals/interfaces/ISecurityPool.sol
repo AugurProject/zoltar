@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import { Zoltar } from '../../Zoltar.sol';
 import { OpenOracle } from "../openOracle/OpenOracle.sol";
 import { Auction } from "../Auction.sol";
-import { CompleteSet } from "../CompleteSet.sol";
+import { IShareToken } from "./IShareToken.sol";
 import { ReputationToken } from "../../ReputationToken.sol";
 import { PriceOracleManagerAndOperatorQueuer } from "../PriceOracleManagerAndOperatorQueuer.sol";
 
@@ -50,7 +50,7 @@ interface ISecurityPool {
 	function parent() external view returns (ISecurityPool);
 	function truthAuctionStarted() external view returns (uint256);
 	function systemState() external view returns (SystemState);
-	function completeSet() external view returns (CompleteSet);
+	function shareToken() external view returns (IShareToken);
 	function truthAuction() external view returns (Auction);
 	function repToken() external view returns (ReputationToken);
 	function securityPoolFactory() external view returns (ISecurityPoolFactory);
@@ -87,5 +87,6 @@ interface ISecurityPool {
 }
 
 interface ISecurityPoolFactory {
-	function deploySecurityPool(OpenOracle openOracle, ISecurityPool parent, Zoltar zoltar, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPoolAddress);
+	function deployChildSecurityPool(IShareToken shareToken, ISecurityPool parent, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool);
+	function deployOriginSecurityPool(uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool);
 }
