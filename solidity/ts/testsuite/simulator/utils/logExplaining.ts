@@ -13,7 +13,7 @@ interface DecodedLog {
 	args: Record<string, unknown> | undefined
 }
 
-function safeDecodeEventLog(parameters: { abi: Abi; data: `0x${string}`; topics: [`0x${string}`, ...`0x${string}`[]] | [] }): DecodedLog | undefined {
+function safeDecodeEventLog(parameters: { abi: Abi; data: `0x${ string }`; topics: [`0x${ string }`, ...`0x${ string }`[]] | [] }): DecodedLog | undefined {
 	try {
 		const result = decodeEventLog(parameters) as unknown
 		if (typeof result === 'object' && result !== null && 'eventName' in result && 'args' in result) return result as DecodedLog

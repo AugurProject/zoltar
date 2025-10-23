@@ -14,8 +14,10 @@
 		"viem": "2.38.3"
 	},
 	"scripts": {
-		"setup": "npm ci --ignore-scripts && npm run contracts",
-		"contracts": "cd solidity && npm ci --ignore-scripts && npm run compile",
-		"test": "cd solidity && npm run test"
+		"setup": "npm ci --ignore-scripts && npm run setup-contracts",
+		"setup-contracts": "cd solidity && npm run setup",
+		"compile-contracts": "cd solidity && npm run compile-contracts",
+		"test": "cd solidity && npm run test",
+		"test-peripherals": "cd solidity && npm run compile-contracts && npm run test-peripherals"
 	}
 }
