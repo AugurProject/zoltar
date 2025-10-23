@@ -486,28 +486,28 @@ export const getSecurityVault = async (client: WriteClient, securityPoolAddress:
 	}
 }
 
-export const getRepDenominator = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const getPoolOwnershipDenominator = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'repDenominator',
+		functionName: 'poolOwnershipDenominator',
 		address: securityPoolAddress,
 		args: [],
 	})
 }
 
-export const repSharesToRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, repShares: bigint) => {
+export const poolOwnershipToRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, poolOwnership: bigint) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'repSharesToRep',
+		functionName: 'poolOwnershipToRep',
 		address: securityPoolAddress,
-		args: [repShares],
+		args: [poolOwnership],
 	})
 }
 
-export const repShares = async (client: WriteClient, securityPoolAddress: `0x${ string }`, repAmount: bigint) => {
+export const repToPoolOwnership = async (client: WriteClient, securityPoolAddress: `0x${ string }`, repAmount: bigint) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'repToRepShares',
+		functionName: 'repToPoolOwnership',
 		address: securityPoolAddress,
 		args: [repAmount],
 	})
