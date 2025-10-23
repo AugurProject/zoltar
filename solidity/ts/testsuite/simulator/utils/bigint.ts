@@ -1,4 +1,3 @@
-import { EthereumAddressString } from "../types/types.js"
 
 export function bigintToDecimalString(value: bigint, power: bigint): string {
 	if (value >= 0n) {
@@ -14,10 +13,10 @@ export function bigintToDecimalString(value: bigint, power: bigint): string {
 }
 
 export const nanoString = (value: bigint) => bigintToDecimalString(value, 9n)
-export const addressString = (address: bigint): EthereumAddressString => `0x${ address.toString(16).padStart(40, '0') }`
+export const addressString = (address: bigint): `0x${ string }` => `0x${ address.toString(16).padStart(40, '0') }`
 export const addressStringWithout0x = (address: bigint) => address.toString(16).padStart(40, '0')
 
-export const bytes32String = (bytes32: bigint): EthereumAddressString => `0x${ bytes32.toString(16).padStart(64, '0') }`
+export const bytes32String = (bytes32: bigint): `0x${ string }` => `0x${ bytes32.toString(16).padStart(64, '0') }`
 
 export function stringToUint8Array(data: string) {
 	const dataLength = (data.length - 2) / 2
@@ -30,7 +29,7 @@ export function dataString(data: Uint8Array | null) {
 	return Array.from(data).map(x => x.toString(16).padStart(2, '0')).join('')
 }
 
-export function dataStringWith0xStart(data: Uint8Array | null): EthereumAddressString {
+export function dataStringWith0xStart(data: Uint8Array | null): `0x${ string }` {
 	return `0x${ dataString(data) }`
 }
 
@@ -102,7 +101,7 @@ export const bigintToNumber = (value: bigint): number => {
 	return Number(value)
 }
 
-export const stringAsHexString = (value: string): EthereumAddressString => {
-	if (value.startsWith('0x')) return value as unknown as EthereumAddressString
+export const stringAsHexString = (value: string): `0x${ string }` => {
+	if (value.startsWith('0x')) return value as unknown as `0x${ string }`
 	throw new Error(`String "${ value }" does not start with "0x"`)
 }

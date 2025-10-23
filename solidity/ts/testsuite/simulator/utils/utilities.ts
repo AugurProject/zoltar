@@ -8,7 +8,7 @@ import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
-import { EthereumAddressString, QuestionOutcome } from '../types/types.js'
+import { QuestionOutcome } from '../types/types.js'
 import assert from 'node:assert'
 
 export const initialTokenBalance = 1000000n * 10n**18n
@@ -56,7 +56,7 @@ export function dataString(data: Uint8Array | null) {
 	return Array.from(data).map(x => x.toString(16).padStart(2, '0')).join('')
 }
 
-export function dataStringWith0xStart(data: Uint8Array | null): EthereumAddressString {
+export function dataStringWith0xStart(data: Uint8Array | null): `0x${ string }` {
 	if (data === null) return '0x'
 	return `0x${ dataString(data) }`
 }
@@ -83,7 +83,7 @@ export function assertNever(value: never): never {
 	throw new Error(`Unhandled discriminated union member: ${JSON.stringify(value)}`)
 }
 
-export function isSameAddress(address1: EthereumAddressString | undefined, address2: EthereumAddressString | undefined) {
+export function isSameAddress(address1: `0x${ string }` | undefined, address2: `0x${ string }` | undefined) {
 	if (address1 === undefined && address2 === undefined) return true
 	if (address1 === undefined || address2 === undefined) return false
 	return address1.toLowerCase() === address2.toLowerCase()
@@ -227,19 +227,19 @@ export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<
 }
 
 export function getZoltarAddress() {
-	const bytecode: EthereumAddressString = `0x${ Zoltar_Zoltar.evm.bytecode.object }`
+	const bytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.bytecode.object }`
 	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
 }
 
 export const isZoltarDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: EthereumAddressString = `0x${ Zoltar_Zoltar.evm.deployedBytecode.object }`
+	const expectedDeployedBytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.deployedBytecode.object }`
 	const address = getZoltarAddress()
 	const deployedBytecode = await client.getCode({ address })
 	return deployedBytecode === expectedDeployedBytecode
 }
 
 export const deployZoltarTransaction = () => {
-	const bytecode: EthereumAddressString = `0x${ Zoltar_Zoltar.evm.bytecode.object }`
+	const bytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.bytecode.object }`
 	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
 }
 
@@ -369,7 +369,7 @@ export function getChildUniverseId(parentUniverseId: bigint, outcome: QuestionOu
 	return (parentUniverseId << 2n) + BigInt(outcome) + 1n
 }
 
-export function getRepTokenAddress(universeId: bigint): EthereumAddressString {
+export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
 	if (universeId === 0n) return addressString(GENESIS_REPUTATION_TOKEN)
 	const initCode = encodeDeployData({
 		abi: ReputationToken_ReputationToken.abi,
@@ -379,10 +379,10 @@ export function getRepTokenAddress(universeId: bigint): EthereumAddressString {
 	return getCreate2Address({ from: getZoltarAddress(), salt: bytes32String(universeId), bytecodeHash: keccak256(initCode) })
 }
 
-export const contractExists = async (client: ReadClient, contract: EthereumAddressString) => await client.getCode({ address: contract }) !== undefined
+export const contractExists = async (client: ReadClient, contract: `0x${ string }`) => await client.getCode({ address: contract }) !== undefined
 
 export const approximatelyEqual = (actual: bigint, expected: bigint, errorDelta: bigint, message?: string | Error | undefined) => {
 	if (abs(actual - expected) > errorDelta) assert.strictEqual(actual, expected, message)
 }
 
-export const isUnknownAnAddress = (maybeAddress: unknown): maybeAddress is EthereumAddressString => typeof maybeAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(maybeAddress)
+export const isUnknownAnAddress = (maybeAddress: unknown): maybeAddress is `0x${ string }` => typeof maybeAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(maybeAddress)

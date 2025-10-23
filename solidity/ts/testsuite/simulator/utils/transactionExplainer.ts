@@ -4,7 +4,6 @@ import { Deployment, printLogs } from './logExplaining.js'
 import { SimulatedTransaction } from '../types/visualizerTypes.js'
 import { SendTransactionParams } from '../types/jsonRpcTypes.js'
 import { addressString, bytes32String, dataStringWith0xStart } from './bigint.js'
-import { EthereumAddressString } from '../types/types.js'
 
 export function decodeOutput(abi: Abi, returnData: Uint8Array<ArrayBufferLike>, functionName: string, deployments: Deployment[]) {
 	const output = jsonStringify(decodeFunctionResult({ abi, functionName: functionName, data: dataStringWith0xStart(returnData) }))
@@ -24,7 +23,7 @@ export function decodeUnknownFunctionOutput(returnData: Uint8Array<ArrayBufferLi
 	return output
 }
 
-export function printDecodedFunction(contractName: string, data: EthereumAddressString, abi: Abi, returnData: Uint8Array<ArrayBufferLike>, deployments: Deployment[]): void {
+export function printDecodedFunction(contractName: string, data: `0x${ string }`, abi: Abi, returnData: Uint8Array<ArrayBufferLike>, deployments: Deployment[]): void {
 	try {
 		const decoded = decodeFunctionData({ abi, data })
 		const functionName = decoded.functionName
@@ -73,7 +72,7 @@ export const createTransactionExplainer = (deployments: Deployment[]) => {
 				blockNumber: 1n,
 				address: addressString(event.address),
 				data: dataStringWith0xStart(event.data),
-				topics: event.topics.map((x) => bytes32String(x)) as [EthereumAddressString, ...EthereumAddressString[]]
+				topics: event.topics.map((x) => bytes32String(x)) as [`0x${ string }`, ...`0x${ string }`[]]
 			})), deployments)
 		} else {
 			console.log(`  Failed to error: ${ result.ethSimulateV1CallResult.error.message }`)
