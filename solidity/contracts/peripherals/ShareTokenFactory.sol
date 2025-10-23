@@ -12,7 +12,7 @@ contract ShareTokenFactory {
 		zoltar = _zoltar;
 	}
 
-	function deployShareToken(bytes32 salt) external returns (IShareToken shareToken) {
-		return new ShareToken{ salt: keccak256(abi.encodePacked(msg.sender, salt)) }(zoltar);
+	function deployShareToken(uint56 questionId, bytes32 salt) external returns (IShareToken shareToken) {
+		return new ShareToken{ salt: keccak256(abi.encodePacked(msg.sender, salt)) }(zoltar, questionId);
 	}
 }

@@ -121,7 +121,7 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 	const shareTokenSaltWithMsgSender = keccak256(encodePacked(['address', 'bytes32'] as const, [infraContracts.securityPoolFactory, computeShareTokenSalt(questionId, securityMultiplier)]))
 
 	const contracts = {
-		priceOracleManagerAndOperatorQueuerFactory: getContractAddress({
+		priceOracleManagerAndOperatorQueuer: getContractAddress({
 			bytecode: encodeDeployData({
 				abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 				bytecode: `0x${ peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.evm.bytecode }`,
@@ -146,7 +146,7 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 		bytecode: encodeDeployData({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			bytecode: `0x${ peripherals_tokens_ShareToken_ShareToken.evm.bytecode }`,
-			args: [ infraContracts.securityPoolFactory, contracts.truthAuction, contracts.priceOracleManagerAndOperatorQueuerFactory, contracts.shareToken, infraContracts.openOracle, parent, infraContracts.zoltar, universeId, questionId, securityMultiplier] as const
+			args: [ infraContracts.securityPoolFactory, contracts.truthAuction, contracts.priceOracleManagerAndOperatorQueuer, contracts.shareToken, infraContracts.openOracle, parent, infraContracts.zoltar, universeId, questionId, securityMultiplier] as const
 		}),
 		from: infraContracts.securityPoolFactory, opcode: 'CREATE2', salt: numberToBytes(1)
 	})

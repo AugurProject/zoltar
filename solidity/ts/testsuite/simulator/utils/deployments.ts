@@ -41,12 +41,12 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 		return oucomes.flatMap((outcome) => {
 			const universeId = getChildUniverseId(parentUniverseId, outcome)
 			const childAddresses = getSecurityPoolAddresses(parentSecurityPoolAddress, universeId, questionId, securityMultiplier)
-			return getDeploymentsForUniverse(universeId, childAddresses.securityPool, getRepTokenAddress(universeId), childAddresses.priceOracleManagerAndOperatorQueuerFactory, childAddresses.shareToken, childAddresses.truthAuction)
+			return getDeploymentsForUniverse(universeId, childAddresses.securityPool, getRepTokenAddress(universeId), childAddresses.priceOracleManagerAndOperatorQueuer, childAddresses.shareToken, childAddresses.truthAuction)
 		})
 	}
 
 	return [
-		...getDeploymentsForUniverse(genesisUniverse, originAddresses.securityPool, getRepTokenAddress(genesisUniverse), originAddresses.priceOracleManagerAndOperatorQueuerFactory, originAddresses.shareToken, originAddresses.truthAuction),
+		...getDeploymentsForUniverse(genesisUniverse, originAddresses.securityPool, getRepTokenAddress(genesisUniverse), originAddresses.priceOracleManagerAndOperatorQueuer, originAddresses.shareToken, originAddresses.truthAuction),
 		...getChildAddresses(originAddresses.securityPool, genesisUniverse), // children
 		...oucomes.flatMap((outcome) => getChildAddresses(getSecurityPoolAddresses(originAddresses.securityPool, genesisUniverse, questionId, securityMultiplier).securityPool, getChildUniverseId(genesisUniverse, outcome))), // grand children
 		{

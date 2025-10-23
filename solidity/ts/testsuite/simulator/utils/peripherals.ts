@@ -1,13 +1,11 @@
 import 'viem/window'
-import { encodeDeployData, getContractAddress, getCreate2Address, keccak256, numberToBytes, ReadContractReturnType, toHex } from 'viem'
+import { ReadContractReturnType } from 'viem'
 import { ReadClient, WriteClient } from './viem.js'
-import { PROXY_DEPLOYER_ADDRESS, WETH_ADDRESS } from './constants.js'
-import { addressString, bytes32String } from './bigint.js'
-import { getZoltarAddress } from './utilities.js'
-import { mainnet } from 'viem/chains'
+import { WETH_ADDRESS } from './constants.js'
 import { SystemState } from '../types/peripheralTypes.js'
-import { peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPoolUtils_SecurityPoolUtils } from '../../../types/contractArtifact.js'
+import { peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
+import { getInfraContractAddresses } from './deployPeripherals.js'
 
 export const depositRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, amount: bigint) => {
 	return await client.writeContract({
@@ -60,7 +58,7 @@ export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bi
 	const result = await client.readContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'extraData',
-		address: getOpenOracleAddress(),
+		address: getInfraContractAddresses().openOracle,
 		args: [extraDataId]
 	}) as ReadContractReturnType
 
@@ -103,7 +101,7 @@ export const openOracleSubmitInitialReport = async (client: WriteClient, reportI
 	return await client.writeContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'submitInitialReport',
-		address: getOpenOracleAddress(),
+		address: getInfraContractAddresses().openOracle,
 		args: [reportId, amount1, amount2, stateHash]
 	})
 }
@@ -112,7 +110,7 @@ export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
 	return await client.writeContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
-		address: getOpenOracleAddress(),
+		address: getInfraContractAddresses().openOracle,
 		gas: 10000000n, //needed because of gas() opcode being used
 		args: [reportId]
 	})
@@ -162,7 +160,7 @@ export const getOpenOracleReportMeta = async (client: ReadClient, reportId: bigi
 	const reportMetaData = await client.readContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'reportMeta',
-		address: getOpenOracleAddress(),
+		address: getInfraContractAddresses().openOracle,
 		args: [reportId]
 	})
 
@@ -288,47 +286,6 @@ export const claimAuctionProceeds = async (client: WriteClient, securityPoolAddr
 	})
 }
 
-export function getSecurityPoolAddress(
-	parent: `0x${ string }`,
-	universeId: bigint,
-	questionId: bigint,
-	securityMultiplier: bigint,
-) : `0x${ string }` {
-	const initCode = encodeDeployData({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
-		args: [getSecurityPoolFactoryAddress(), getOpenOracleAddress(), parent, getZoltarAddress(), universeId, questionId, securityMultiplier]
-	})
-	return getCreate2Address({ from: getSecurityPoolFactoryAddress(), salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
-}
-
-export function getPriceOracleManagerAndOperatorQueuerAddress(securityPool: `0x${ string }`, repToken: `0x${ string }`): `0x${ string }` {
-	const initCode = encodeDeployData({
-		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-		bytecode: `0x${ peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.evm.bytecode.object }`,
-		args: [getOpenOracleAddress(), securityPool, repToken]
-	})
-	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
-}
-
-export function getCompleteSetAddress(securityPool: `0x${ string }`): `0x${ string }` {
-	const initCode = encodeDeployData({
-		abi: peripherals_CompleteSet_CompleteSet.abi,
-		bytecode: `0x${ peripherals_CompleteSet_CompleteSet.evm.bytecode.object }`,
-		args: [securityPool]
-	})
-	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
-}
-
-export function getTruthAuction(securityPool: `0x${ string }`): `0x${ string }` {
-	const initCode = encodeDeployData({
-		abi: peripherals_Auction_Auction.abi,
-		bytecode: `0x${ peripherals_Auction_Auction.evm.bytecode.object }`,
-		args: [securityPool]
-	})
-	return getCreate2Address({ from: securityPool, salt: bytes32String(1n), bytecodeHash: keccak256(initCode) })
-}
-
 export const participateAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, repToBuy: bigint, ethToInvest: bigint) => {
 	return await client.writeContract({
 		abi: peripherals_Auction_Auction.abi,
@@ -338,7 +295,7 @@ export const participateAuction = async (client: WriteClient, auctionAddress: `0
 		value: ethToInvest
 	})
 }
-export const getEthAmountToBuy = async (client: WriteClient, auctionAddress: `0x${ string }`) => {
+export const getEthAmountToBuy = async (client: ReadClient, auctionAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_Auction_Auction.abi,
 		functionName: 'ethAmountToBuy',
@@ -347,7 +304,7 @@ export const getEthAmountToBuy = async (client: WriteClient, auctionAddress: `0x
 	})
 }
 
-export const getMigratedRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const getMigratedRep = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'migratedRep',
@@ -356,7 +313,7 @@ export const getMigratedRep = async (client: WriteClient, securityPoolAddress: `
 	})
 }
 
-export const getSystemState = async (client: WriteClient, securityPoolAddress: `0x${ string }`): Promise<SystemState> => {
+export const getSystemState = async (client: ReadClient, securityPoolAddress: `0x${ string }`): Promise<SystemState> => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'systemState',
@@ -365,7 +322,7 @@ export const getSystemState = async (client: WriteClient, securityPoolAddress: `
 	})
 }
 
-export const getCurrentRetentionRate = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const getCurrentRetentionRate = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'currentRetentionRate',
@@ -374,7 +331,7 @@ export const getCurrentRetentionRate = async (client: WriteClient, securityPoolA
 	})
 }
 
-export const getSecurityVault = async (client: WriteClient, securityPoolAddress: `0x${ string }`, securityVault: `0x${ string }`) => {
+export const getSecurityVault = async (client: ReadClient, securityPoolAddress: `0x${ string }`, securityVault: `0x${ string }`) => {
 	const vault = await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'securityVaults',
@@ -396,7 +353,7 @@ export const getSecurityVault = async (client: WriteClient, securityPoolAddress:
 	}
 }
 
-export const getPoolOwnershipDenominator = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const getPoolOwnershipDenominator = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'poolOwnershipDenominator',
@@ -405,7 +362,7 @@ export const getPoolOwnershipDenominator = async (client: WriteClient, securityP
 	})
 }
 
-export const poolOwnershipToRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, poolOwnership: bigint) => {
+export const poolOwnershipToRep = async (client: ReadClient, securityPoolAddress: `0x${ string }`, poolOwnership: bigint) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'poolOwnershipToRep',
@@ -414,11 +371,38 @@ export const poolOwnershipToRep = async (client: WriteClient, securityPoolAddres
 	})
 }
 
-export const repToPoolOwnership = async (client: WriteClient, securityPoolAddress: `0x${ string }`, repAmount: bigint) => {
+export const repToPoolOwnership = async (client: ReadClient, securityPoolAddress: `0x${ string }`, repAmount: bigint) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'repToPoolOwnership',
 		address: securityPoolAddress,
 		args: [repAmount],
+	})
+}
+
+export const totalSupplyForQuestion = async (client: ReadClient, shareTokenAddress: `0x${ string }`, universeId: bigint,  questionId: bigint) => {
+	return await client.readContract({
+		abi: peripherals_tokens_ShareToken_ShareToken.abi,
+		functionName: 'totalSupplyForQuestion',
+		address: shareTokenAddress,
+		args: [universeId, questionId],
+	})
+}
+
+export const balanceOfQuestionOutcome = async (client: ReadClient, shareTokenAddress: `0x${ string }`, universeId: bigint, questionId: bigint, outcome: QuestionOutcome, account: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_tokens_ShareToken_ShareToken.abi,
+		functionName: 'balanceOfQuestionOutcome',
+		address: shareTokenAddress,
+		args: [universeId, questionId, outcome, account],
+	})
+}
+
+export const balanceOfQuestionShares = async (client: ReadClient, shareTokenAddress: `0x${ string }`,  universeId: bigint, questionId: bigint, account: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_tokens_ShareToken_ShareToken.abi,
+		functionName: 'balanceOfQuestionShares',
+		address: shareTokenAddress,
+		args: [universeId, questionId, account],
 	})
 }

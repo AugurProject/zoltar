@@ -231,9 +231,9 @@ contract SecurityPool is ISecurityPool {
 		require(systemState == SystemState.Operational, 'system is not Operational'); //todo, we want to be able to create complete sets in the children right away, figure accounting out
 		updateCollateralAmount();
 		require(securityBondAllowance - completeSetCollateralAmount >= msg.value, 'no capacity to create that many sets');
-		uint256 totalSupply = shareToken.totalSupplyForQuestion(universeId, questionId);
+		uint256 totalSupply = shareToken.totalSupply(universeId);
 		uint256 amountToMint = totalSupply == completeSetCollateralAmount ? msg.value : msg.value * totalSupply / completeSetCollateralAmount; // todo this is wrong
-		shareToken.mintCompleteSets(universeId, questionId, msg.sender, amountToMint);
+		shareToken.mintCompleteSets(universeId, msg.sender, amountToMint);
 		completeSetCollateralAmount += msg.value;
 		updateRetentionRate();
 	}
@@ -242,9 +242,9 @@ contract SecurityPool is ISecurityPool {
 		require(systemState == SystemState.Operational, 'system is not Operational'); // todo, we want to allow people to exit, but for accounting purposes that is difficult but maybe there's a way?
 		updateCollateralAmount();
 		// takes in complete set and releases security bond and eth
-		uint256 totalSupply = shareToken.totalSupplyForQuestion(universeId, questionId);
+		uint256 totalSupply = shareToken.totalSupply(universeId);
 		uint256 ethValue = amount * completeSetCollateralAmount / totalSupply; // this is wrong
-		shareToken.burnCompleteSets(universeId, questionId, msg.sender, amount);
+		shareToken.burnCompleteSets(universeId, msg.sender, amount);
 		completeSetCollateralAmount -= ethValue;
 		updateRetentionRate();
 		(bool sent, ) = payable(msg.sender).call{ value: ethValue }('');
@@ -254,9 +254,9 @@ contract SecurityPool is ISecurityPool {
 	function redeemShares() isOperational external {
 		Zoltar.Outcome outcome = zoltar.finalizeQuestion(universeId, questionId);
 		require(outcome != Zoltar.Outcome.None, 'Question has not finalized!');
-		uint256 tokenId = shareToken.getTokenId(universeId, questionId, outcome);
+		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
 		uint256 amount = shareToken.burnTokenId(tokenId, msg.sender);
-		uint256 totalSupply = shareToken.totalSupplyForQuestion(universeId, questionId);
+		uint256 totalSupply = shareToken.totalSupply(universeId);
 		uint256 ethValue = amount * completeSetCollateralAmount / totalSupply; // this is wrong
 		(bool sent, ) = payable(msg.sender).call{ value: ethValue }('');
 		require(sent, 'Failed to send Ether');

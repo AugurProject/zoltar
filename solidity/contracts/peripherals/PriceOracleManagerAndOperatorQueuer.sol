@@ -34,7 +34,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 	uint256 public lastSettlementTimestamp;
 	uint256 public lastPrice; // (REP * PRICE_PRECISION) / ETH;
 	ReputationToken immutable reputationToken;
-	ISecurityPool public immutable securityPool;
+	ISecurityPool public securityPool;
 	OpenOracle public immutable openOracle;
 
 	event PriceReported(uint256 reportId, uint256 price);

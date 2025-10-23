@@ -19,23 +19,22 @@ interface IShareToken {
 	function authorize(ISecurityPool _securityPoolCandidate) external;
 
 	// Question operations
-	function mintCompleteSets(uint192 _universeId, uint56 _questionId, address _account, uint256 _cashAmount) external payable;
-	function burnCompleteSets(uint192 _universeId, uint56 _questionId, address _owner, uint256 _amount) external;
+	function mintCompleteSets(uint192 _universeId, address _account, uint256 _cashAmount) external payable;
+	function burnCompleteSets(uint192 _universeId, address _owner, uint256 _amount) external;
 	function burnTokenId(uint256 _tokenId, address _owner) external returns (uint256);
 
 	// TokenId information helpers
 	function getUniverse(uint256 _tokenId) external pure returns (uint256);
-	function getQuestion(uint256 _tokenId) external pure returns (uint256);
 	function getOutcome(uint256 _tokenId) external pure returns (Zoltar.Outcome);
 
 	// Balance and supply queries
-	function totalSupplyForQuestionOutcome(uint192 _universeId, uint56 _questionId, Zoltar.Outcome _outcome) external view returns (uint256);
-	function totalSupplyForQuestion(uint192 _universeId, uint56 _questionId) external returns (uint256) ;
-	function balanceOfQuestionOutcome(uint192 _universeId, uint56 _questionId, Zoltar.Outcome _outcome, address _account) external view returns (uint256);
-	function balanceOfQuestionShares(uint192 _universeId, uint56 _questionId, address _account) external view returns (uint256[3] memory balances);
+	function totalSupplyForOutcome(uint192 _universeId, Zoltar.Outcome _outcome) external view returns (uint256);
+	function totalSupply(uint192 _universeId) external returns (uint256);
+	function balanceOfOutcome(uint192 _universeId, Zoltar.Outcome _outcome, address _account) external view returns (uint256);
+	function balanceOfShares(uint192 _universeId, address _account) external view returns (uint256[3] memory balances);
 
 	// Token ID encoding/decoding
-	function getTokenId(uint192 _universeId, uint56 _questionId, Zoltar.Outcome _outcome) external pure returns (uint256 _tokenId);
-	function getTokenIds(uint192 _universeId, uint56 _questionId, Zoltar.Outcome[] memory _outcomes) external pure returns (uint256[] memory _tokenIds);
-	function unpackTokenId(uint256 _tokenId) external pure returns (uint256 _universe, uint256 _questionId, Zoltar.Outcome _outcome);
+	function getTokenId(uint192 _universeId, Zoltar.Outcome _outcome) external pure returns (uint256 _tokenId);
+	function getTokenIds(uint192 _universeId, Zoltar.Outcome[] memory _outcomes) external pure returns (uint256[] memory _tokenIds);
+	function unpackTokenId(uint256 _tokenId) external pure returns (uint256 _universe, Zoltar.Outcome _outcome);
 }

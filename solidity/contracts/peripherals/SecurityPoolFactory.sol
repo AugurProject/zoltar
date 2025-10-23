@@ -53,8 +53,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
 
 		// sharetoken has different salt as sharetoken address does not change in forks
-		bytes32 shareTokenSalt = keccak256(abi.encodePacked(questionId, securityMultiplier));
-		IShareToken shareToken = shareTokenFactory.deployShareToken(shareTokenSalt);
+		bytes32 shareTokenSalt = keccak256(abi.encodePacked(securityMultiplier));
+		IShareToken shareToken = shareTokenFactory.deployShareToken(questionId, shareTokenSalt);
 
 		securityPool = new SecurityPool{ salt: bytes32(uint256(0x1)) }(this, Auction(address(0x0)), priceOracleManagerAndOperatorQueuer, shareToken, openOracle, ISecurityPool(payable(0x0)), zoltar, universeId, questionId, securityMultiplier);
 		securityPool.setStartingParams(currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
