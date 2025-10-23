@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import { Auction } from './Auction.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { ReputationToken } from '../ReputationToken.sol';
-import { CompleteSet } from './CompleteSet.sol';
+import { IShareToken } from './interfaces/IShareToken.sol';
 import { PriceOracleManagerAndOperatorQueuer } from './PriceOracleManagerAndOperatorQueuer.sol';
 import { ISecurityPool, SecurityVault, SystemState, QuestionOutcome, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
@@ -38,8 +38,9 @@ contract SecurityPool is ISecurityPool {
 	uint256 public truthAuctionStarted;
 	SystemState public systemState;
 
-	CompleteSet public immutable completeSet;
+	IShareToken public immutable shareToken;
 	Auction public immutable truthAuction;
+
 	ReputationToken public repToken;
 	ISecurityPoolFactory public immutable securityPoolFactory;
 
@@ -64,7 +65,7 @@ contract SecurityPool is ISecurityPool {
 		_;
 	}
 
-	constructor(ISecurityPoolFactory _securityPoolFactory, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint192 _universeId, uint56 _questionId, uint256 _securityMultiplier) {
+	constructor(ISecurityPoolFactory _securityPoolFactory, Auction _truthAuction, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint192 _universeId, uint56 _questionId, uint256 _securityMultiplier) {
 		universeId = _universeId;
 		securityPoolFactory = _securityPoolFactory;
 		questionId = _questionId;
@@ -72,14 +73,14 @@ contract SecurityPool is ISecurityPool {
 		zoltar = _zoltar;
 		parent = _parent;
 		openOracle = _openOracle;
+		truthAuction = _truthAuction;
+		priceOracleManagerAndOperatorQueuer = _priceOracleManagerAndOperatorQueuer;
 		if (address(parent) == address(0x0)) { // origin universe never does truthAuction
 			systemState = SystemState.Operational;
 		} else {
 			systemState = SystemState.ForkMigration;
-			truthAuction = new Auction{ salt: bytes32(uint256(0x1)) }(address(this));
 		}
-		// todo, we can probably do these smarter so that we don't need migration
-		completeSet = new CompleteSet{ salt: bytes32(uint256(0x1)) }(address(this));
+		shareToken = _shareToken;
 	}
 
 	function setStartingParams(uint256 _currentRetentionRate, uint256 _repEthPrice, uint256 _completeSetCollateralAmount) public {
@@ -88,7 +89,6 @@ contract SecurityPool is ISecurityPool {
 		currentRetentionRate = _currentRetentionRate;
 		completeSetCollateralAmount = _completeSetCollateralAmount;
 		(repToken,,) = zoltar.universes(universeId);
-		priceOracleManagerAndOperatorQueuer = new PriceOracleManagerAndOperatorQueuer{ salt: bytes32(uint256(0x1)) }(openOracle, this, repToken);
 		priceOracleManagerAndOperatorQueuer.setRepEthPrice(_repEthPrice);
 	}
 
@@ -231,8 +231,9 @@ contract SecurityPool is ISecurityPool {
 		require(systemState == SystemState.Operational, 'system is not Operational'); //todo, we want to be able to create complete sets in the children right away, figure accounting out
 		updateCollateralAmount();
 		require(securityBondAllowance - completeSetCollateralAmount >= msg.value, 'no capacity to create that many sets');
-		uint256 amountToMint = completeSet.totalSupply() == completeSetCollateralAmount ? msg.value : msg.value * completeSet.totalSupply() / completeSetCollateralAmount;
-		completeSet.mint(msg.sender, amountToMint);
+		uint256 totalSupply = shareToken.totalSupplyForUniverse(universeId);
+		uint256 amountToMint = totalSupply == completeSetCollateralAmount ? msg.value : msg.value * totalSupply / completeSetCollateralAmount; // todo this is wrong
+		shareToken.mintCompleteSets(universeId, msg.sender, amountToMint);
 		completeSetCollateralAmount += msg.value;
 		updateRetentionRate();
 	}
@@ -241,20 +242,25 @@ contract SecurityPool is ISecurityPool {
 		require(systemState == SystemState.Operational, 'system is not Operational'); // todo, we want to allow people to exit, but for accounting purposes that is difficult but maybe there's a way?
 		updateCollateralAmount();
 		// takes in complete set and releases security bond and eth
-		uint256 ethValue = amount * completeSetCollateralAmount / completeSet.totalSupply();
-		completeSet.burn(msg.sender, amount);
+		uint256 totalSupply = shareToken.totalSupplyForUniverse(universeId);
+		uint256 ethValue = amount * completeSetCollateralAmount / totalSupply; // this is wrong
+		shareToken.burnCompleteSets(universeId, msg.sender, amount);
 		completeSetCollateralAmount -= ethValue;
 		updateRetentionRate();
-		(bool sent, ) = payable(msg.sender).call{value: ethValue}('');
+		(bool sent, ) = payable(msg.sender).call{ value: ethValue }('');
 		require(sent, 'Failed to send Ether');
 	}
 
-	/*
-	function redeemShare() isOperational public {
-		require(zoltar.isFinalized(universeId, questionId), 'Question has not finalized!');
-		//convertes yes,no or invalid share to 1 eth each, depending on market outcome
+	function redeemShares() isOperational external {
+		Zoltar.Outcome outcome = zoltar.finalizeQuestion(universeId, questionId);
+		require(outcome != Zoltar.Outcome.None, 'Question has not finalized!');
+		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
+		uint256 amount = shareToken.burnTokenId(tokenId, msg.sender);
+		uint256 totalSupply = shareToken.totalSupplyForUniverse(universeId);
+		uint256 ethValue = amount * completeSetCollateralAmount / totalSupply; // this is wrong
+		(bool sent, ) = payable(msg.sender).call{ value: ethValue }('');
+		require(sent, 'Failed to send Ether');
 	}
-	*/
 
 	////////////////////////////////////////
 	// FORKING (migrate vault (oi+rep), truth truthAuction)
@@ -263,7 +269,6 @@ contract SecurityPool is ISecurityPool {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
 		require(forkTime > 0, 'Zoltar needs to have forked before Security Pool can do so');
 		require(systemState == SystemState.Operational, 'System needs to be operational to trigger fork');
-		require(securityPoolForkTriggeredTimestamp == 0, 'fork already triggered');
 		require(!zoltar.isFinalized(universeId, questionId), 'question has been finalized already');
 		systemState = SystemState.PoolForked;
 		securityPoolForkTriggeredTimestamp = block.timestamp;
@@ -285,7 +290,8 @@ contract SecurityPool is ISecurityPool {
 		if (address(children[uint8(outcome)]) == address(0x0)) {
 			// first vault migrater creates new pool and transfers all REP to it
 			uint192 childUniverseId = (universeId << 2) + uint192(outcome) + 1;
-			children[uint8(outcome)] = securityPoolFactory.deploySecurityPool(openOracle, this, zoltar, childUniverseId, questionId, securityMultiplier, currentRetentionRate, priceOracleManagerAndOperatorQueuer.lastPrice(), 0);
+			children[uint8(outcome)] = securityPoolFactory.deployChildSecurityPool(shareToken, childUniverseId, questionId, securityMultiplier, currentRetentionRate, priceOracleManagerAndOperatorQueuer.lastPrice(), 0);
+			shareToken.authorize(children[uint8(outcome)]);
 			ReputationToken childReputationToken = children[uint8(outcome)].repToken();
 			childReputationToken.transfer(address(children[uint8(outcome)]), childReputationToken.balanceOf(address(this)));
 		}
@@ -321,7 +327,6 @@ contract SecurityPool is ISecurityPool {
 	function startTruthAuction() public {
 		require(systemState == SystemState.ForkMigration, 'System needs to be in migration');
 		require(block.timestamp > securityPoolForkTriggeredTimestamp + SecurityPoolUtils.MIGRATION_TIME, 'migration time needs to pass first');
-		require(truthAuctionStarted == 0, 'Auction already started');
 		systemState = SystemState.ForkTruthAuction;
 		truthAuctionStarted = block.timestamp;
 		parent.updateCollateralAmount();

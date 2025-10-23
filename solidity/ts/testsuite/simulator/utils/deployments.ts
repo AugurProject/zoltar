@@ -1,12 +1,13 @@
-import { peripherals_interfaces_IAugur_IAugur, IERC20_IERC20, peripherals_interfaces_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_CompleteSet_CompleteSet, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory, ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoolUtils_SecurityPoolUtils } from '../../../types/contractArtifact.js'
+import { peripherals_interfaces_IAugur_IAugur, IERC20_IERC20, peripherals_interfaces_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory, ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, peripherals_AuctionFactory_AuctionFactory, peripherals_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_ShareTokenFactory_ShareTokenFactory } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
 import { addressString } from './bigint.js'
-import { ETHEREUM_LOGS_LOGGER_ADDRESS, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from './constants.js'
+import { ETHEREUM_LOGS_LOGGER_ADDRESS, TEST_ADDRESSES, WETH_ADDRESS } from './constants.js'
 import { Deployment } from './logExplaining.js'
-import { getCompleteSetAddress, getOpenOracleAddress, getPriceOracleManagerAndOperatorQueuerAddress, getSecurityPoolAddress, getSecurityPoolFactoryAddress, getSecurityPoolUtilsAddress, getTruthAuction } from './peripherals.js'
-import { getChildUniverseId, getRepTokenAddress, getZoltarAddress } from './utilities.js'
+import { getInfraContractAddresses, getSecurityPoolAddresses } from './deployPeripherals.js'
+import { getChildUniverseId, getRepTokenAddress } from './utilities.js'
+import { zeroAddress } from 'viem'
 
-const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x${ string }`, repTokenAddress: `0x${ string }`, priceOracleManagerAndOperatorQueuerAddress: `0x${ string }`, completeSetAddress: `0x${ string }`, auction: `0x${ string }`): Deployment[] => [
+const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x${ string }`, repTokenAddress: `0x${ string }`, priceOracleManagerAndOperatorQueuerAddress: `0x${ string }`, shareTokenAddress: `0x${ string }`, auction: `0x${ string }`): Deployment[] => [
 	{
 		abi: ReputationToken_ReputationToken.abi,
 		deploymentName: `RepV2-U${ universeId }`,
@@ -20,9 +21,9 @@ const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x$
 		deploymentName: `ETH SecurityPool U${ universeId }`,
 		address: securityPoolAddress
 	}, {
-		abi: peripherals_CompleteSet_CompleteSet.abi,
+		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		deploymentName: `CompleteSet U${ universeId }`,
-		address: completeSetAddress
+		address: shareTokenAddress
 	}, {
 		abi: peripherals_Auction_Auction.abi,
 		deploymentName: `Truth Auction U${ universeId }`,
@@ -31,41 +32,47 @@ const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x$
 ] as const
 
 export const getDeployments = (genesisUniverse: bigint, questionId: bigint, securityMultiplier: bigint): Deployment[] => {
-	const securityPoolAddress = getSecurityPoolAddress(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
-	const repToken = addressString(GENESIS_REPUTATION_TOKEN)
-	const priceOracleManagerAndOperatorQueuerAddress = getPriceOracleManagerAndOperatorQueuerAddress(securityPoolAddress, repToken)
-	const completeSetAddress = getCompleteSetAddress(securityPoolAddress)
-	const truthAuction = getTruthAuction(securityPoolAddress)
+	const infraAddresses = getInfraContractAddresses()
+	const originAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier)
 
 	const oucomes = [QuestionOutcome.Invalid, QuestionOutcome.No, QuestionOutcome.Yes]
 
 	const getChildAddresses = (parentSecurityPoolAddress: `0x${ string }`, parentUniverseId: bigint): Deployment[] => {
 		return oucomes.flatMap((outcome) => {
 			const universeId = getChildUniverseId(parentUniverseId, outcome)
-			const securityPoolAddress = getSecurityPoolAddress(parentSecurityPoolAddress, universeId, questionId, securityMultiplier)
-			const priceOracleManagerAndOperatorQueuerAddress = getPriceOracleManagerAndOperatorQueuerAddress(securityPoolAddress, getRepTokenAddress(universeId))
-			const completeSetAddress = getCompleteSetAddress(securityPoolAddress)
-			const truthAuction = getTruthAuction(securityPoolAddress)
-			return getDeploymentsForUniverse(universeId, securityPoolAddress, getRepTokenAddress(universeId), priceOracleManagerAndOperatorQueuerAddress, completeSetAddress, truthAuction)
+			const childAddresses = getSecurityPoolAddresses(parentSecurityPoolAddress, universeId, questionId, securityMultiplier)
+			return getDeploymentsForUniverse(universeId, childAddresses.securityPool, getRepTokenAddress(universeId), childAddresses.priceOracleManagerAndOperatorQueuer, childAddresses.shareToken, childAddresses.truthAuction)
 		})
 	}
 
-	return [
-		...getDeploymentsForUniverse(genesisUniverse, securityPoolAddress, getRepTokenAddress(genesisUniverse), priceOracleManagerAndOperatorQueuerAddress, completeSetAddress, truthAuction),
-		...getChildAddresses(securityPoolAddress, genesisUniverse), // children
-		...oucomes.flatMap((outcome) => getChildAddresses(getSecurityPoolAddress(securityPoolAddress, genesisUniverse, questionId, securityMultiplier), getChildUniverseId(genesisUniverse, outcome))), // grand children
+	return ([
+		...getDeploymentsForUniverse(genesisUniverse, originAddresses.securityPool, getRepTokenAddress(genesisUniverse), originAddresses.priceOracleManagerAndOperatorQueuer, originAddresses.shareToken, originAddresses.truthAuction),
+		...getChildAddresses(originAddresses.securityPool, genesisUniverse), // children
+		...oucomes.flatMap((outcome) => getChildAddresses(getSecurityPoolAddresses(originAddresses.securityPool, genesisUniverse, questionId, securityMultiplier).securityPool, getChildUniverseId(genesisUniverse, outcome))), // grand children
 		{
 			abi: Zoltar_Zoltar.abi,
 			deploymentName: 'Zoltar',
-			address: getZoltarAddress(),
+			address: infraAddresses.zoltar,
 		}, {
 			abi: peripherals_SecurityPoolFactory_SecurityPoolFactory.abi,
-			deploymentName: 'SecurityPoolFactory',
-			address: getSecurityPoolFactoryAddress()
+			deploymentName: 'Security Pool Factory',
+			address: infraAddresses.securityPoolFactory
+		}, {
+			abi: peripherals_AuctionFactory_AuctionFactory.abi,
+			deploymentName: 'Auction Factory',
+			address: infraAddresses.auctionFactory
+		}, {
+			abi: peripherals_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
+			deploymentName: 'Price Oracle Manager And Operator Queuer Factory',
+			address: infraAddresses.priceOracleManagerAndOperatorQueuerFactory
+		}, {
+			abi: peripherals_ShareTokenFactory_ShareTokenFactory.abi,
+			deploymentName: 'Share Token Factory',
+			address: infraAddresses.shareTokenFactory
 		}, {
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-			deploymentName: 'OpenOracle',
-			address: getOpenOracleAddress()
+			deploymentName: 'Open Oracle',
+			address: infraAddresses.openOracle
 		}, {
 			abi: peripherals_interfaces_IWeth9_IWeth9.abi,
 			deploymentName: 'WETH',
@@ -85,7 +92,7 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 		}, {
 			abi: peripherals_SecurityPoolUtils_SecurityPoolUtils.abi,
 			deploymentName: 'Security Pool Utils',
-			address: getSecurityPoolUtilsAddress()
+			address: infraAddresses.securityPoolUtils
 		}, {
 			abi: undefined,
 			deploymentName: 'Augur V2 Genesis',
@@ -96,5 +103,5 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 			deploymentName: `Test EOA(${ index + 1 })`,
 			address: addressString(testAddress)
 		} as const))
-	] as const
+	] as const).filter((entry) => BigInt(entry.address) !== 0n)
 }
