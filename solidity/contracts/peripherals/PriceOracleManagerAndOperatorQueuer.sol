@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNICENSE
 pragma solidity 0.8.30;
 
-import { IWeth9 } from './interfaces/IWeth9.sol';
+import { IWeth9 } from './IWeth9.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
