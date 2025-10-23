@@ -9,7 +9,7 @@ contract Auction {
 	uint256 public auctionStarted;
 	uint256 public ethAmountToBuy;
 	bool public finalized;
-	address owner;
+	address immutable owner;
 
 	event Participated(address user, uint256 repAmount, uint256 ethAmount, uint256 totalRepPurchased);
 	event FinalizedAuction(address user, uint256 repAmount, uint256 ethAmount);

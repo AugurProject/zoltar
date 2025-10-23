@@ -165,12 +165,12 @@ export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bi
 		keepFee,
 		feeToken
 	] = result as [
-		`0x${string}`,
-		`0x${string}`,
+		`0x${ string }`,
+		`0x${ string }`,
 		bigint,
 		bigint,
-		`0x${string}`,
-		`0x${string}`,
+		`0x${ string }`,
+		`0x${ string }`,
 		boolean,
 		boolean,
 		boolean
