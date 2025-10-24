@@ -16,6 +16,14 @@ contract SecurityPool is ISecurityPool {
 	uint192 public immutable universeId;
 
 	Zoltar public immutable zoltar;
+	ISecurityPool immutable public parent;
+	IShareToken public immutable shareToken;
+	Auction public immutable truthAuction;
+	ISecurityPoolFactory public immutable securityPoolFactory;
+	ReputationToken public immutable repToken;
+	PriceOracleManagerAndOperatorQueuer public immutable priceOracleManagerAndOperatorQueuer;
+	OpenOracle public immutable openOracle;
+
 	uint256 public securityBondAllowance;
 	uint256 public completeSetCollateralAmount; // amount of eth that is backing complete sets, `address(this).balance - completeSetCollateralAmount` are the fees belonging to REP pool holders
 	uint256 public poolOwnershipDenominator;
@@ -27,25 +35,13 @@ contract SecurityPool is ISecurityPool {
 	uint256 public lastUpdatedFeeAccumulator;
 	uint256 public currentRetentionRate;
 
-	uint256 public securityPoolForkTriggeredTimestamp;
-
 	mapping(address => SecurityVault) public securityVaults;
 	mapping(address => bool) public claimedAuctionProceeds;
 
 	ISecurityPool[3] public children;
-	ISecurityPool immutable public parent;
 
 	uint256 public truthAuctionStarted;
 	SystemState public systemState;
-
-	IShareToken public immutable shareToken;
-	Auction public immutable truthAuction;
-
-	ReputationToken public repToken;
-	ISecurityPoolFactory public immutable securityPoolFactory;
-
-	PriceOracleManagerAndOperatorQueuer public priceOracleManagerAndOperatorQueuer;
-	OpenOracle public openOracle;
 
 	event SecurityBondAllowanceChange(address vault, uint256 from, uint256 to);
 	event PerformWithdrawRep(address vault, uint256 amount);
@@ -81,6 +77,7 @@ contract SecurityPool is ISecurityPool {
 			systemState = SystemState.ForkMigration;
 		}
 		shareToken = _shareToken;
+		(repToken, , ) = zoltar.universes(universeId);
 	}
 
 	function setStartingParams(uint256 _currentRetentionRate, uint256 _repEthPrice, uint256 _completeSetCollateralAmount) public {
@@ -88,7 +85,6 @@ contract SecurityPool is ISecurityPool {
 		lastUpdatedFeeAccumulator = block.timestamp;
 		currentRetentionRate = _currentRetentionRate;
 		completeSetCollateralAmount = _completeSetCollateralAmount;
-		(repToken,,) = zoltar.universes(universeId);
 		priceOracleManagerAndOperatorQueuer.setRepEthPrice(_repEthPrice);
 	}
 
@@ -271,7 +267,6 @@ contract SecurityPool is ISecurityPool {
 		require(systemState == SystemState.Operational, 'System needs to be operational to trigger fork');
 		require(!zoltar.isFinalized(universeId, questionId), 'question has been finalized already');
 		systemState = SystemState.PoolForked;
-		securityPoolForkTriggeredTimestamp = block.timestamp;
 		repAtFork = repToken.balanceOf(address(this));
 		// TODO, handle case where parent repAtFork == 0
 		emit ForkSecurityPool(repAtFork);
@@ -282,8 +277,9 @@ contract SecurityPool is ISecurityPool {
 
 	// migrates vault into outcome universe after fork
 	function migrateVault(QuestionOutcome outcome) public { // called on parent
+		(,, uint256 forkTime) = zoltar.universes(universeId);
 		require(systemState == SystemState.PoolForked, 'Pool needs to have forked');
-		require(block.timestamp <= securityPoolForkTriggeredTimestamp + SecurityPoolUtils.MIGRATION_TIME , 'migration time passed');
+		require(block.timestamp <= forkTime + SecurityPoolUtils.MIGRATION_TIME , 'migration time passed');
 		require(securityVaults[msg.sender].poolOwnership > 0, 'Vault has no rep to migrate');
 		updateVaultFees(msg.sender);
 		emit MigrateVault(msg.sender, outcome, securityVaults[msg.sender].poolOwnership, securityVaults[msg.sender].securityBondAllowance);
@@ -325,8 +321,9 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function startTruthAuction() public {
+		(,, uint256 forkTime) = zoltar.universes(universeId);
 		require(systemState == SystemState.ForkMigration, 'System needs to be in migration');
-		require(block.timestamp > securityPoolForkTriggeredTimestamp + SecurityPoolUtils.MIGRATION_TIME, 'migration time needs to pass first');
+		require(block.timestamp > forkTime + SecurityPoolUtils.MIGRATION_TIME, 'migration time needs to pass first');
 		systemState = SystemState.ForkTruthAuction;
 		truthAuctionStarted = block.timestamp;
 		parent.updateCollateralAmount();
