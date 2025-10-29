@@ -55,6 +55,10 @@ interface ISecurityPool {
 	function securityPoolFactory() external view returns (ISecurityPoolFactory);
 	function priceOracleManagerAndOperatorQueuer() external view returns (PriceOracleManagerAndOperatorQueuer);
 	function openOracle() external view returns (OpenOracle);
+	function shareTokenSupply() external view returns (uint256);
+
+	function sharesToCash(uint256 completeSetAmount) external view returns (uint256);
+	function cashToShares(uint256 eth) external view returns (uint256);
 
 	function repToPoolOwnership(uint256 repAmount) external view returns (uint256);
 	function poolOwnershipToRep(uint256 poolOwnership) external view returns (uint256);
@@ -81,6 +85,9 @@ interface ISecurityPool {
 	function startTruthAuction() external;
 	function finalizeTruthAuction() external;
 	function claimAuctionProceeds(address vault) external;
+	function createChildUniverse(QuestionOutcome outcome) external;
+
+	function redeemShares() external;
 
 	receive() external payable;
 }
