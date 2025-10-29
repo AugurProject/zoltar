@@ -10,7 +10,6 @@ import { EthereumBytes32, EthereumData, EthereumQuantity, EthereumSignedTransact
 import { ErrorWithDataAndCode, JsonRpcResponseError, printError } from './utils/errors.js'
 import * as funtypes from 'funtypes'
 import { getConfig } from './utils/config.js'
-import { dataStringWith0xStart } from './utils/bigint.js'
 
 async function singleCallWithFromOverride(ethereumClientService: EthereumClientService, simulationState: SimulationState | undefined, request: EthCallParams, from: bigint) {
 	const callParams = request.params[0]
@@ -146,7 +145,7 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 					if (lastTx === undefined) throw new Error('Failed To append transaction')
 					if (lastTx.ethSimulateV1CallResult.status === 'failure') {
 						console.error(transaction.error)
-						throw new ErrorWithDataAndCode(lastTx.ethSimulateV1CallResult.error.code, lastTx.ethSimulateV1CallResult.error.message, dataStringWith0xStart(lastTx.ethSimulateV1CallResult.error.data))
+						throw new ErrorWithDataAndCode(lastTx.ethSimulateV1CallResult.error.code, lastTx.ethSimulateV1CallResult.error.message, lastTx.ethSimulateV1CallResult.error.data)
 					}
 					afterTransactionSendCallBack(args, lastTx)
 					return EthereumBytes32.serialize(signed.hash)
