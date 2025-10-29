@@ -1,3 +1,4 @@
+import { CodeMessageError } from './rpc.js'
 import { EthereumAccessList, EthereumAddress, EthereumBlockTag, EthereumBytes32, EthereumData, EthereumInput, EthereumQuantity, EthereumQuantitySmall, EthereumTimestamp, LiteralConverterParserFactory } from './wire-types.js'
 import * as funtypes from 'funtypes'
 
@@ -104,14 +105,10 @@ const CallResultLogs = funtypes.ReadonlyArray(CallResultLog)
 
 type EthSimulateCallResultFailure = funtypes.Static<typeof EthSimulateCallResultFailure>
 const EthSimulateCallResultFailure = funtypes.ReadonlyObject({
-	  status: funtypes.Literal('0x0').withParser(LiteralConverterParserFactory('0x0', 'failure' as const)),
-	  returnData: EthereumData,
-	  gasUsed: EthereumQuantitySmall,
-	  error: funtypes.ReadonlyObject({
-		  code: funtypes.Number,
-		  message: funtypes.String,
-		  data: EthereumData
-	  })
+	status: funtypes.Literal('0x0').withParser(LiteralConverterParserFactory('0x0', 'failure' as const)),
+	returnData: EthereumData,
+	gasUsed: EthereumQuantitySmall,
+	error: CodeMessageError
 })
 
 type EthSimulateCallResultSuccess = funtypes.Static<typeof EthSimulateCallResultSuccess>

@@ -8,8 +8,12 @@ export const RpcEntry = funtypes.ReadonlyObject({
 	httpsRpc: funtypes.String,
 })
 
-export type CodeMessageError = funtypes.Static<typeof CodeMessageError>
-export const CodeMessageError = funtypes.ReadonlyObject({
-	code: funtypes.Number,
-	message: funtypes.String,
-})
+export const CodeMessageError = funtypes.Intersect(
+	funtypes.ReadonlyObject({
+		code: funtypes.Number,
+		message: funtypes.String,
+	}),
+	funtypes.ReadonlyPartial({
+		data: funtypes.String
+	})
+)
