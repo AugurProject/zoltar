@@ -6,7 +6,7 @@ import '../../Zoltar.sol';
 library TokenId {
 
 	function getTokenId(uint192 _universeId, Zoltar.Outcome _outcome) internal pure returns (uint256 _tokenId) {
-		bytes memory _tokenIdBytes = abi.encodePacked(_universeId, _outcome);
+		bytes memory _tokenIdBytes = abi.encodePacked(_universeId, uint56(0), _outcome);
 		assembly {
 			_tokenId := mload(add(_tokenIdBytes, add(0x20, 0)))
 		}
