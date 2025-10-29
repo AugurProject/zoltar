@@ -7,26 +7,39 @@ import { getInfraContractAddresses, getSecurityPoolAddresses } from './deployPer
 import { getChildUniverseId, getRepTokenAddress } from './utilities.js'
 import { zeroAddress } from 'viem'
 
+const getUniverseName = (universeId: bigint): string => {
+	const path: string[] = []
+	let currentUniverseId = universeId
+	while (currentUniverseId > 0n) {
+		const branchIndex = Number(currentUniverseId & 0b11n) - 1
+		const outcomeName = QuestionOutcome[branchIndex] as keyof typeof QuestionOutcome
+		path.push(outcomeName)
+		currentUniverseId = currentUniverseId >> 2n
+	}
+	if (path.length === 0) return 'U-Genesis'
+	return `U-Genesis-${ path.join('-') }`
+}
+
 const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x${ string }`, repTokenAddress: `0x${ string }`, priceOracleManagerAndOperatorQueuerAddress: `0x${ string }`, shareTokenAddress: `0x${ string }`, auction: `0x${ string }`): Deployment[] => [
 	{
 		abi: ReputationToken_ReputationToken.abi,
-		deploymentName: `RepV2-U${ universeId }`,
+		deploymentName: `RepV2 ${ getUniverseName(universeId) }`,
 		address: repTokenAddress
 	}, {
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-		deploymentName: `PriceOracleManagerAndOperatorQueuer U${ universeId }`,
+		deploymentName: `PriceOracleManagerAndOperatorQueuer ${ getUniverseName(universeId) }`,
 		address: priceOracleManagerAndOperatorQueuerAddress
 	}, {
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		deploymentName: `ETH SecurityPool U${ universeId }`,
+		deploymentName: `ETH SecurityPool ${ getUniverseName(universeId) }`,
 		address: securityPoolAddress
 	}, {
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
-		deploymentName: `CompleteSet U${ universeId }`,
+		deploymentName: `CompleteSet ${ getUniverseName(universeId) }`,
 		address: shareTokenAddress
 	}, {
 		abi: peripherals_Auction_Auction.abi,
-		deploymentName: `Truth Auction U${ universeId }`,
+		deploymentName: `Truth Auction ${ getUniverseName(universeId) }`,
 		address: auction
 	}
 ] as const
@@ -100,7 +113,7 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 		},
 		...TEST_ADDRESSES.map((testAddress, index) => ({
 			abi: undefined,
-			deploymentName: `Test EOA(${ index + 1 })`,
+			deploymentName: `TEST_ADDRESSES[${ index }]`,
 			address: addressString(testAddress)
 		} as const))
 	] as const).filter((entry) => BigInt(entry.address) !== 0n)
