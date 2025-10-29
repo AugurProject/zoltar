@@ -94,14 +94,6 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		return totalSupply(_tokenId);
 	}
 
-	function totalSupplyForUniverse(uint192 _universeId) public view returns (uint256) {
-		// todo, here we might want the getWinningOutcome to just return none if not finalized?
-		if (zoltar.isFinalized(_universeId, questionId)) {
-			return totalSupply(getTokenId(_universeId, zoltar.getWinningOutcome(_universeId, questionId)));
-		}
-		return totalSupply(getTokenId(_universeId, Zoltar.Outcome.Yes));
-	}
-
 	function balanceOfOutcome(uint192 _universeId, Zoltar.Outcome _outcome, address _account) public view returns (uint256) {
 		uint256 _tokenId = getTokenId(_universeId, _outcome);
 		return balanceOf(_account, _tokenId);

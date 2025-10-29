@@ -6,6 +6,7 @@ import '../../Constants.sol';
 
 abstract contract ForkedERC1155 is ERC1155 {
 
+	event Migrate(address migrator, uint256 fromId, uint256 toId, uint256 fromIdBalance);
 	constructor() {}
 
 	function universeHasForked(uint192 universeId) internal virtual view returns (bool);
@@ -30,6 +31,7 @@ abstract contract ForkedERC1155 is ERC1155 {
 			uint256 toId = getChildId(fromId, childUniverseId);
 			_balances[toId][msg.sender] += fromIdBalance;
 			_supplys[toId] += fromIdBalance;
+			emit Migrate(msg.sender, fromId, toId, fromIdBalance);
 		}
 	}
 }
