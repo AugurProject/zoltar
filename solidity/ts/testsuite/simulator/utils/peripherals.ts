@@ -111,7 +111,7 @@ export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
 		address: getInfraContractAddresses().openOracle,
-		gas: 10000000n, //needed because of gas() opcode being used
+		gas: 5_000_000n, //needed because of gas() opcode being used
 		args: [reportId]
 	})
 }
@@ -380,12 +380,12 @@ export const repToPoolOwnership = async (client: ReadClient, securityPoolAddress
 	})
 }
 
-export const totalSupplyForUniverse = async (client: ReadClient, shareTokenAddress: `0x${ string }`, universeId: bigint) => {
-	return await client.readContract({
-		abi: peripherals_tokens_ShareToken_ShareToken.abi,
-		functionName: 'totalSupplyForUniverse',
-		address: shareTokenAddress,
-		args: [universeId],
+export const redeemShares = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.writeContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'redeemShares',
+		address: securityPoolAddress,
+		args: [],
 	})
 }
 
@@ -398,11 +398,81 @@ export const balanceOfOutcome = async (client: ReadClient, shareTokenAddress: `0
 	})
 }
 
-export const balanceOfShares = async (client: ReadClient, shareTokenAddress: `0x${ string }`,  universeId: bigint, account: `0x${ string }`) => {
+export const balanceOfShares = async (client: ReadClient, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'balanceOfShares',
 		address: shareTokenAddress,
 		args: [universeId, account],
 	})
+}
+export const balanceOfSharesInCash = async (client: ReadClient, seucurityPoolAddress: `0x${ string }`, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`) => {
+	const array = await client.readContract({
+		abi: peripherals_tokens_ShareToken_ShareToken.abi,
+		functionName: 'balanceOfShares',
+		address: shareTokenAddress,
+		args: [universeId, account],
+	})
+	return await shareArrayToCash(client, seucurityPoolAddress, array)
+}
+
+export const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => (universeId << 8n) + BigInt(outcome)
+export const unpackTokenId = (tokenId: bigint): { universe: bigint, outcome: QuestionOutcome } => ({ universe: tokenId >> 8n, outcome: Number(tokenId & 0xFFn) })
+
+export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x${ string }`, universeId: bigint, outcome: QuestionOutcome) => {
+	return await client.writeContract({
+		abi: peripherals_tokens_ShareToken_ShareToken.abi,
+		functionName: 'migrate',
+		address: shareTokenAddress,
+		args: [getTokenId(universeId, outcome)],
+	})
+}
+
+export const createChildUniverse = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) => {
+	return await client.writeContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'createChildUniverse',
+		address: securityPoolAddress,
+		args: [outcome],
+	})
+}
+
+export const getFeesAccrued = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'feesAccrued',
+		address: securityPoolAddress,
+		args: [],
+	})
+}
+
+export const sharesToCash = async (client: ReadClient, securityPoolAddress: `0x${ string }`, completeSetAmount: bigint) => {
+	return await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'sharesToCash',
+		address: securityPoolAddress,
+		args: [completeSetAmount],
+	})
+}
+
+export const cashToShares = async (client: ReadClient, securityPoolAddress: `0x${ string }`, eth: bigint) => {
+	return await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'cashToShares',
+		address: securityPoolAddress,
+		args: [eth],
+	})
+}
+
+export const getShareTokenSupply = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'shareTokenSupply',
+		address: securityPoolAddress,
+		args: [],
+	})
+}
+
+export const shareArrayToCash = async (client: ReadClient, securityPoolAddress: `0x${ string }`, shares: readonly bigint[]) => {
+	return await Promise.all(shares.map((shares) => sharesToCash(client, securityPoolAddress, shares)))
 }

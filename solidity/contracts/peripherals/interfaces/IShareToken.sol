@@ -29,7 +29,6 @@ interface IShareToken {
 
 	// Balance and supply queries
 	function totalSupplyForOutcome(uint192 _universeId, Zoltar.Outcome _outcome) external view returns (uint256);
-	function totalSupplyForUniverse(uint192 _universeId) external view returns (uint256);
 	function balanceOfOutcome(uint192 _universeId, Zoltar.Outcome _outcome, address _account) external view returns (uint256);
 	function balanceOfShares(uint192 _universeId, address _account) external view returns (uint256[3] memory balances);
 

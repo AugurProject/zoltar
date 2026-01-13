@@ -25,11 +25,13 @@ contract SecurityPool is ISecurityPool {
 	OpenOracle public immutable openOracle;
 
 	uint256 public securityBondAllowance;
+	uint256 public auctionedSecurityBondAllowance;
 	uint256 public completeSetCollateralAmount; // amount of eth that is backing complete sets, `address(this).balance - completeSetCollateralAmount` are the fees belonging to REP pool holders
 	uint256 public poolOwnershipDenominator;
 	uint256 public repAtFork;
 	uint256 public migratedRep;
 	uint256 public securityMultiplier;
+	uint256 public shareTokenSupply;
 
 	uint256 public feesAccrued;
 	uint256 public lastUpdatedFeeAccumulator;
@@ -53,6 +55,8 @@ contract SecurityPool is ISecurityPool {
 	event ClaimAuctionProceeds(address vault, uint256 amount, uint256 poolOwnershipAmount, uint256 poolOwnershipDenominator);
 	event MigrateRepFromParent(address vault, uint256 parentSecurityBondAllowance, uint256 parentpoolOwnership);
 	event DepositRep(address vault, uint256 repAmount, uint256 poolOwnership);
+	event RedeemShares(address redeemer, uint256 sharesAmount, uint256 ethValue);
+	event FinalizeAuction(uint256 repAvailable, uint256 migratedRep, uint256 repPurchased, uint256 poolOwnershipDenominator);
 
 	modifier isOperational {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
@@ -132,37 +136,43 @@ contract SecurityPool is ISecurityPool {
 	function performWithdrawRep(address vault, uint256 repAmount) public isOperational {
 		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'only priceOracleManagerAndOperatorQueuer can call');
 		require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'no valid price');
-		uint256 oldRep = poolOwnershipToRep(securityVaults[vault].poolOwnership);
-		require(oldRep >= repAmount, 'cannot withdraw that much');
-		require((oldRep - repAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityVaults[vault].securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Local Security Bond Alowance broken');
-		require((repToken.balanceOf(address(this)) - repAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Global Security Bond Alowance broken');
+		uint256 ownershipToWithdraw = repToPoolOwnership(repAmount);
+		uint256 withdrawOwnership = ownershipToWithdraw + repToPoolOwnership(SecurityPoolUtils.MIN_REP_DEPOSIT) > securityVaults[vault].poolOwnership ? securityVaults[vault].poolOwnership : ownershipToWithdraw;
+		uint256 withdrawRepAmount = poolOwnershipToRep(withdrawOwnership);
 
-		uint256 poolOwnership = repToPoolOwnership(repAmount);
-		securityVaults[vault].poolOwnership -= poolOwnership;
-		repToken.transfer(vault, repAmount);
-		poolOwnershipDenominator -= poolOwnership;
-		require(oldRep - repAmount >= SecurityPoolUtils.MIN_REP_DEPOSIT || oldRep - repAmount == 0, 'min deposit requirement');
-		emit PerformWithdrawRep(vault, repAmount);
+		uint256 oldRep = poolOwnershipToRep(securityVaults[vault].poolOwnership);
+		require((oldRep - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityVaults[vault].securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Local Security Bond Alowance broken');
+		require((repToken.balanceOf(address(this)) - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Global Security Bond Alowance broken');
+
+		securityVaults[vault].poolOwnership -= withdrawOwnership;
+		poolOwnershipDenominator -= withdrawOwnership;
+		repToken.transfer(vault, withdrawRepAmount);
+		emit PerformWithdrawRep(vault, withdrawRepAmount);
 	}
 
 	function repToPoolOwnership(uint256 repAmount) public view returns (uint256) {
-		uint256 totalRep = repToken.balanceOf(address(this));
-		if (poolOwnershipDenominator == 0 || totalRep == 0) return repAmount * SecurityPoolUtils.PRICE_PRECISION;
-		return repAmount * poolOwnershipDenominator / totalRep;
+		if (poolOwnershipDenominator == 0) return repAmount * SecurityPoolUtils.PRICE_PRECISION;
+		return repAmount * poolOwnershipDenominator / repToken.balanceOf(address(this));
 	}
 
 	function poolOwnershipToRep(uint256 poolOwnership) public view returns (uint256) {
-		uint256 totalRep = repToken.balanceOf(address(this));
-		if (poolOwnershipDenominator == 0) return 0;
-		return poolOwnership * totalRep / poolOwnershipDenominator;
+		return poolOwnership * repToken.balanceOf(address(this)) / poolOwnershipDenominator;
+	}
+
+	function sharesToCash(uint256 completeSetAmount) public view returns (uint256) {
+		return completeSetAmount * completeSetCollateralAmount / shareTokenSupply;
+	}
+
+	function cashToShares(uint256 eth) public view returns (uint256) {
+		return completeSetCollateralAmount == 0 ? (eth * SecurityPoolUtils.PRICE_PRECISION) : (eth * shareTokenSupply / completeSetCollateralAmount);
 	}
 
 	// todo, an owner can save their vault from liquidation if they deposit REP after the liquidation price query is triggered, we probably want to lock the vault from deposits if this has been triggered?
 	function depositRep(uint256 repAmount) public isOperational {
 		uint256 poolOwnership = repToPoolOwnership(repAmount);
-		poolOwnershipDenominator += poolOwnership;
 		repToken.transferFrom(msg.sender, address(this), repAmount);
 		securityVaults[msg.sender].poolOwnership += poolOwnership;
+		poolOwnershipDenominator += poolOwnership;
 		require(poolOwnershipToRep(securityVaults[msg.sender].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT, 'min deposit requirement');
 		emit DepositRep(msg.sender, repAmount, securityVaults[msg.sender].poolOwnership);
 	}
@@ -207,14 +217,16 @@ contract SecurityPool is ISecurityPool {
 		updateVaultFees(callerVault);
 		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'only priceOracleManagerAndOperatorQueuer can call');
 		require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'no valid price');
-		require(poolOwnershipToRep(securityVaults[callerVault].poolOwnership) * SecurityPoolUtils.PRICE_PRECISION > amount * priceOracleManagerAndOperatorQueuer.lastPrice());
-		require(repToken.balanceOf(address(this)) * SecurityPoolUtils.PRICE_PRECISION > amount * priceOracleManagerAndOperatorQueuer.lastPrice());
+
 		uint256 oldAllowance = securityVaults[callerVault].securityBondAllowance;
 		securityBondAllowance += amount;
 		securityBondAllowance -= oldAllowance;
-		//require(securityBondAllowance >= completeSetCollateralAmount, 'minted too many complete sets to allow this');
 		securityVaults[callerVault].securityBondAllowance = amount;
-		//require(securityVaults[callerVault].securityBondAllowance > MIN_SECURITY_BOND_DEBT || securityVaults[callerVault].securityBondAllowance == 0, 'min deposit requirement');
+
+		require(poolOwnershipToRep(securityVaults[callerVault].poolOwnership) * SecurityPoolUtils.PRICE_PRECISION > amount * priceOracleManagerAndOperatorQueuer.lastPrice());
+		require(repToken.balanceOf(address(this)) * SecurityPoolUtils.PRICE_PRECISION > securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice());
+		require(securityBondAllowance >= completeSetCollateralAmount, 'minted too many complete sets to allow this');
+		require(securityVaults[callerVault].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT || securityVaults[callerVault].securityBondAllowance == 0, 'min deposit requirement');
 		emit SecurityBondAllowanceChange(callerVault, oldAllowance, amount);
 		updateRetentionRate();
 	}
@@ -226,21 +238,21 @@ contract SecurityPool is ISecurityPool {
 		require(msg.value > 0, 'need to send eth');
 		require(systemState == SystemState.Operational, 'system is not Operational'); //todo, we want to be able to create complete sets in the children right away, figure accounting out
 		updateCollateralAmount();
-		require(securityBondAllowance - completeSetCollateralAmount >= msg.value, 'no capacity to create that many sets');
-		uint256 totalSupply = shareToken.totalSupplyForUniverse(universeId);
-		uint256 amountToMint = totalSupply == completeSetCollateralAmount ? msg.value : msg.value * totalSupply / completeSetCollateralAmount; // todo this is wrong
-		shareToken.mintCompleteSets(universeId, msg.sender, amountToMint);
+		require(securityBondAllowance >= msg.value + completeSetCollateralAmount, 'no capacity to create that many sets');
+		uint256 completeSetsToMint = cashToShares(msg.value);
+		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMint);
+		shareTokenSupply += completeSetsToMint;
 		completeSetCollateralAmount += msg.value;
 		updateRetentionRate();
 	}
 
-	function redeemCompleteSet(uint256 amount) public isOperational {
+	function redeemCompleteSet(uint256 completeSetAmount) public isOperational {
 		require(systemState == SystemState.Operational, 'system is not Operational'); // todo, we want to allow people to exit, but for accounting purposes that is difficult but maybe there's a way?
 		updateCollateralAmount();
 		// takes in complete set and releases security bond and eth
-		uint256 totalSupply = shareToken.totalSupplyForUniverse(universeId);
-		uint256 ethValue = amount * completeSetCollateralAmount / totalSupply; // this is wrong
-		shareToken.burnCompleteSets(universeId, msg.sender, amount);
+		uint256 ethValue = sharesToCash(completeSetAmount);
+		shareToken.burnCompleteSets(universeId, msg.sender, completeSetAmount);
+		shareTokenSupply -= completeSetAmount;
 		completeSetCollateralAmount -= ethValue;
 		updateRetentionRate();
 		(bool sent, ) = payable(msg.sender).call{ value: ethValue }('');
@@ -252,10 +264,10 @@ contract SecurityPool is ISecurityPool {
 		require(outcome != Zoltar.Outcome.None, 'Question has not finalized!');
 		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
 		uint256 amount = shareToken.burnTokenId(tokenId, msg.sender);
-		uint256 totalSupply = shareToken.totalSupplyForUniverse(universeId);
-		uint256 ethValue = amount * completeSetCollateralAmount / totalSupply; // this is wrong
+		uint256 ethValue = sharesToCash(amount);
 		(bool sent, ) = payable(msg.sender).call{ value: ethValue }('');
 		require(sent, 'Failed to send Ether');
+		emit RedeemShares(msg.sender, amount, ethValue);
 	}
 
 	////////////////////////////////////////
@@ -267,12 +279,31 @@ contract SecurityPool is ISecurityPool {
 		require(systemState == SystemState.Operational, 'System needs to be operational to trigger fork');
 		require(!zoltar.isFinalized(universeId, questionId), 'question has been finalized already');
 		systemState = SystemState.PoolForked;
+		updateCollateralAmount();
+		currentRetentionRate = 0;
 		repAtFork = repToken.balanceOf(address(this));
 		// TODO, handle case where parent repAtFork == 0
 		emit ForkSecurityPool(repAtFork);
 		repToken.approve(address(zoltar), repAtFork);
 		zoltar.splitRep(universeId);
 		// we could pay the caller basefee*2 out of Open interest we have?
+	}
+
+	function createChildUniverse(QuestionOutcome outcome) public {
+		(,, uint256 forkTime) = zoltar.universes(universeId);
+		require(systemState == SystemState.PoolForked, 'Pool needs to have forked');
+		require(block.timestamp <= forkTime + SecurityPoolUtils.MIGRATION_TIME, 'migration time passed');
+		_createChildUniverse(outcome);
+	}
+
+	function _createChildUniverse(QuestionOutcome outcome) public {
+		// first vault migrater creates new pool and transfers all REP to it
+		uint192 childUniverseId = (universeId << 2) + uint192(outcome) + 1;
+		uint256 retentionRate = SecurityPoolUtils.calculateRetentionRate(completeSetCollateralAmount, securityBondAllowance);
+		children[uint8(outcome)] = securityPoolFactory.deployChildSecurityPool(shareToken, childUniverseId, questionId, securityMultiplier, retentionRate, priceOracleManagerAndOperatorQueuer.lastPrice(), 0);
+		shareToken.authorize(children[uint8(outcome)]);
+		ReputationToken childReputationToken = children[uint8(outcome)].repToken();
+		childReputationToken.transfer(address(children[uint8(outcome)]), childReputationToken.balanceOf(address(this)));
 	}
 
 	// migrates vault into outcome universe after fork
@@ -284,17 +315,12 @@ contract SecurityPool is ISecurityPool {
 		updateVaultFees(msg.sender);
 		emit MigrateVault(msg.sender, outcome, securityVaults[msg.sender].poolOwnership, securityVaults[msg.sender].securityBondAllowance);
 		if (address(children[uint8(outcome)]) == address(0x0)) {
-			// first vault migrater creates new pool and transfers all REP to it
-			uint192 childUniverseId = (universeId << 2) + uint192(outcome) + 1;
-			children[uint8(outcome)] = securityPoolFactory.deployChildSecurityPool(shareToken, childUniverseId, questionId, securityMultiplier, currentRetentionRate, priceOracleManagerAndOperatorQueuer.lastPrice(), 0);
-			shareToken.authorize(children[uint8(outcome)]);
-			ReputationToken childReputationToken = children[uint8(outcome)].repToken();
-			childReputationToken.transfer(address(children[uint8(outcome)]), childReputationToken.balanceOf(address(this)));
+			_createChildUniverse(outcome);
 		}
 		children[uint256(outcome)].migrateRepFromParent(msg.sender);
 
 		// migrate open interest
-		(bool sent, ) = payable(msg.sender).call{ value: completeSetCollateralAmount * securityVaults[msg.sender].poolOwnership / poolOwnershipDenominator }('');
+		(bool sent, ) = payable(children[uint256(outcome)]).call{ value: completeSetCollateralAmount * securityVaults[msg.sender].poolOwnership / poolOwnershipDenominator }('');
 		require(sent, 'Failed to send Ether');
 
 		securityVaults[msg.sender].poolOwnership = 0;
@@ -305,18 +331,18 @@ contract SecurityPool is ISecurityPool {
 		require(msg.sender == address(parent), 'only parent can migrate');
 		updateVaultFees(vault);
 		parent.updateCollateralAmount();
-		(uint256 parentpoolOwnership, uint256 parentSecurityBondAllowance, , ) = parent.securityVaults(vault);
-		emit MigrateRepFromParent(vault, parentSecurityBondAllowance, parentpoolOwnership);
+		(uint256 parentPoolOwnership, uint256 parentSecurityBondAllowance, , ) = parent.securityVaults(vault);
+		emit MigrateRepFromParent(vault, parentSecurityBondAllowance, parentPoolOwnership);
 		securityVaults[vault].securityBondAllowance = parentSecurityBondAllowance;
 		securityBondAllowance += parentSecurityBondAllowance;
-
-		securityVaults[vault].poolOwnership = parentpoolOwnership * repToken.balanceOf(address(this)) / parent.poolOwnershipDenominator();
-		migratedRep += securityVaults[vault].poolOwnership; // poolOwnership equal to REP amounts at this point
+		poolOwnershipDenominator = parent.repAtFork() * SecurityPoolUtils.PRICE_PRECISION;
+		securityVaults[vault].poolOwnership = repToPoolOwnership(parentPoolOwnership * parent.repAtFork() / parent.poolOwnershipDenominator());
+		migratedRep += poolOwnershipToRep(securityVaults[vault].poolOwnership);
 
 		// migrate completeset collateral amount incrementally as we want this portion to start paying fees right away, but stop paying fees in the parent system
 		// TODO, handle case where parent repAtFork == 0
 		require(parent.repAtFork() > 0, 'parent needs to have rep at fork');
-		completeSetCollateralAmount += parent.completeSetCollateralAmount() * parentpoolOwnership / parent.repAtFork();
+		//completeSetCollateralAmount += parent.completeSetCollateralAmount() * securityVaults[vault].poolOwnership / (SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR * parent.repAtFork());
 		securityVaults[vault].feeAccumulator = feesAccrued;
 	}
 
@@ -328,15 +354,17 @@ contract SecurityPool is ISecurityPool {
 		truthAuctionStarted = block.timestamp;
 		parent.updateCollateralAmount();
 		uint256 parentCollateral = parent.completeSetCollateralAmount();
-		completeSetCollateralAmount = parentCollateral; // update to the real one, and not only to migrated amount
-		emit TruthAuctionStarted(completeSetCollateralAmount, migratedRep, parent.repAtFork());
+		shareTokenSupply = parent.shareTokenSupply();
+		emit TruthAuctionStarted(parentCollateral, migratedRep, parent.repAtFork());
 		if (migratedRep >= parent.repAtFork()) {
 			// we have acquired all the ETH already, no need for truthAuction
 			_finalizeTruthAuction(0);
 		} else {
 			// we need to buy all the collateral that is missing (did not migrate)
 			uint256 ethToBuy = parentCollateral - parentCollateral * migratedRep / parent.repAtFork();
-			truthAuction.startAuction(ethToBuy, parent.repAtFork() - parent.repAtFork() / SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR); // sell all but very small amount of REP for ETH. We cannot sell all for accounting purposes, as `poolOwnershipDenominator` cannot be infinite
+			// sell all but very small amount of REP for ETH. We cannot sell all for accounting purposes, as `poolOwnershipDenominator` cannot be infinite
+			// only migratedRep gets this guarrantee that some of their rep never gets sold
+			truthAuction.startAuction(ethToBuy, parent.repAtFork() - migratedRep / SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR);
 		}
 	}
 
@@ -345,7 +373,14 @@ contract SecurityPool is ISecurityPool {
 		truthAuction.finalizeAuction(); // this sends the eth back
 		systemState = SystemState.Operational;
 		uint256 repAvailable = parent.repAtFork();
-		poolOwnershipDenominator = repAvailable * migratedRep / (repAvailable - repPurchased);
+		completeSetCollateralAmount = address(this).balance - feesAccrued; //todo, we might want to reduce fees if we didn't get fully funded?
+		// TODO, handle case where parent repAtFork == 0
+		require(repAvailable > 0, 'parent needs to have rep at fork');
+		poolOwnershipDenominator = migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / (repAvailable - repPurchased);
+		auctionedSecurityBondAllowance = parent.securityBondAllowance() - securityBondAllowance;
+		securityBondAllowance = parent.securityBondAllowance();
+		if (poolOwnershipDenominator == 0) poolOwnershipDenominator = repAvailable * SecurityPoolUtils.PRICE_PRECISION;
+		emit FinalizeAuction(repAvailable, migratedRep, repPurchased, poolOwnershipDenominator);
 		updateRetentionRate();
 	}
 
@@ -360,17 +395,21 @@ contract SecurityPool is ISecurityPool {
 
 	// accounts the purchased REP from truthAuction to the vault
 	// we should also move a share of bad debt in the system to this vault
+	// anyone can call these so that we can liquidate them if needed
 	function claimAuctionProceeds(address vault) public {
 		require(claimedAuctionProceeds[vault] == false, 'Already Claimed');
 		require(truthAuction.finalized(), 'Auction needs to be finalized');
 		claimedAuctionProceeds[vault] = true;
 		uint256 amount = truthAuction.purchasedRep(vault);
+		require(amount > 0, 'Did not purchase anything'); // not really necessary, but good for testing
 		uint256 poolOwnershipAmount = repToPoolOwnership(amount);
 		securityVaults[vault].poolOwnership += poolOwnershipAmount; // no need to add to poolOwnershipDenominator as its already accounted
 		emit ClaimAuctionProceeds(vault, amount, poolOwnershipAmount, poolOwnershipDenominator);
-		//todo, we should give the auction buyers the securitbond debt of attackers?
+		securityVaults[vault].securityBondAllowance = auctionedSecurityBondAllowance * amount / truthAuction.totalRepPurchased();
 	}
 
 	// todo, missing feature to get rep back after market finalization
 	// todo, missing redeeming yes/no/invalid poolOwnership to eth after finalization
+	// todo, fee calculation doesn't work yet
+	// todo, liquidation system missing
 }
