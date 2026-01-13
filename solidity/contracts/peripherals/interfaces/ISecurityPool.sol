@@ -43,7 +43,6 @@ interface ISecurityPool {
 	function feesAccrued() external view returns (uint256);
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
-	function securityPoolForkTriggeredTimestamp() external view returns (uint256);
 	function securityVaults(address vault) external view returns (uint256 poolOwnership, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeAccumulator);
 	function claimedAuctionProceeds(address vault) external view returns (bool);
 	function children(uint256 index) external view returns (ISecurityPool);
