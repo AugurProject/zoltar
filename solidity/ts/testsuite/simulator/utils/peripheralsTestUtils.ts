@@ -1,11 +1,13 @@
+import { zeroAddress } from 'viem'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
 import { QuestionOutcome } from '../types/types.js'
 import { addressString } from './bigint.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from './constants.js'
-import { deploySecurityPool, depositRep, ensureOpenOracleDeployed, ensureSecurityPoolFactoryDeployed, getOpenOracleAddress, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getSecurityPoolAddress, isOpenOracleDeployed, isSecurityPoolFactoryDeployed, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPriceIfNeededAndQueueOperation, wrapWeth } from './peripherals.js'
+import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './deployPeripherals.js'
 import { approveToken, contractExists, createQuestion, dispute, ensureZoltarDeployed, getERC20Balance, getQuestionData, getUniverseData, getZoltarAddress, isZoltarDeployed, reportOutcome } from './utilities.js'
 import { WriteClient } from './viem.js'
 import assert from 'node:assert'
+import { depositRep, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPriceIfNeededAndQueueOperation, wrapWeth } from './peripherals.js'
 
 export const genesisUniverse = 0n
 export const questionId = 1n
@@ -26,17 +28,14 @@ export const deployZoltarAndCreateMarket = async (client: WriteClient, questionE
 }
 
 export const deployPeripherals = async (client: WriteClient) => {
-	await ensureOpenOracleDeployed(client)
-	assert.ok(await isOpenOracleDeployed(client), 'Open Oracle Not Deployed!')
-	const openOracle = getOpenOracleAddress()
-	await ensureSecurityPoolFactoryDeployed(client)
-	assert.ok(await isSecurityPoolFactoryDeployed(client), 'Security Pool Factory Not Deployed!')
-	await deploySecurityPool(client, openOracle, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice, completeSetCollateralAmount)
-	assert.ok(await contractExists(client, getSecurityPoolAddress(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)), 'security pool not deployed')
+	await ensureInfraDeployed(client);
+	await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice, completeSetCollateralAmount)
+	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).securityPool
+	assert.ok(await contractExists(client, securityPoolAddress), 'security pool not deployed')
 }
 
 export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigint) => {
-	const securityPoolAddress = getSecurityPoolAddress(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
+	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).securityPool
 	assert.ok(await contractExists(client, securityPoolAddress), 'security pool not deployed')
 
 	const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
@@ -80,8 +79,9 @@ export const requestPrice = async(client: WriteClient, mockWindow: MockWindowEth
 	const amount1 = reportMeta.exactToken1Report
 	const amount2 = amount1
 
-	await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getOpenOracleAddress())
-	await approveToken(client, WETH_ADDRESS, getOpenOracleAddress())
+	const openOracle = getInfraContractAddresses().openOracle
+	await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
+	await approveToken(client, WETH_ADDRESS, openOracle)
 	await wrapWeth(client, amount2)
 	const wethBalance = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
 	assert.strictEqual(wethBalance, amount2, 'Did not wrap weth')

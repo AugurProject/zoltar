@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNICENSE
 pragma solidity 0.8.30;
 
-import '../ERC20.sol';
+import '../../ERC20.sol';
 
 contract CompleteSet is ERC20 {
 

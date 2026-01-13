@@ -9,13 +9,14 @@ contract Auction {
 	uint256 public auctionStarted;
 	uint256 public ethAmountToBuy;
 	bool public finalized;
-	address immutable owner;
+	address public owner;
 
 	event Participated(address user, uint256 repAmount, uint256 ethAmount, uint256 totalRepPurchased);
 	event FinalizedAuction(address user, uint256 repAmount, uint256 ethAmount);
 	event AuctionStarted(uint256 ethAmountToBuy, uint256 repAvailable);
 
-	constructor(address _owner) {
+	function setOwner(address _owner) external {
+		require(owner == address(0x0), 'owner already set!');
 		owner = _owner;
 	}
 
