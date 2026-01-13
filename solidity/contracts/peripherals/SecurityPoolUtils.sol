@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNICENSE
-pragma solidity 0.8.30;
+pragma solidity 0.8.33;
 
 library SecurityPoolUtils {
 	uint256 constant MIGRATION_TIME = 8 weeks;

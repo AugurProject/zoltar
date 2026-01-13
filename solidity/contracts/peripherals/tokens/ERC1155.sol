@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNICENSE
-pragma solidity 0.8.30;
+pragma solidity 0.8.33;
 
 import { IERC1155 } from '../interfaces/IERC1155.sol';
 

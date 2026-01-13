@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNICENSE
-pragma solidity 0.8.30;
+pragma solidity 0.8.33;
 
 library Constants {
 	address constant GENESIS_REPUTATION_TOKEN = 0x221657776846890989a759BA2973e427DfF5C9bB;
