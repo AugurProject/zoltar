@@ -26,11 +26,22 @@ const CompileResult = funtypes.ReadonlyPartial({
 			stateMutability: funtypes.String,
 			type: funtypes.String,
 			name: funtypes.String,
-			outputs: funtypes.ReadonlyArray(funtypes.ReadonlyObject({
-				internalType: funtypes.String,
-				name: funtypes.String,
-				type: funtypes.String
-			}))
+			outputs: funtypes.ReadonlyArray(funtypes.Intersect(
+				funtypes.ReadonlyObject({
+					internalType: funtypes.String,
+					name: funtypes.String,
+					type: funtypes.String
+				}),
+				funtypes.ReadonlyPartial({
+					components: funtypes.ReadonlyArray(
+						funtypes.ReadonlyObject({
+							internalType: funtypes.String,
+							name: funtypes.String,
+							type: funtypes.String
+						})
+					)
+				})
+			))
 		})),
 		evm: funtypes.ReadonlyObject({
 			bytecode: funtypes.ReadonlyObject({ object: funtypes.String }),
