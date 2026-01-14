@@ -14,7 +14,7 @@
 	"devDependencies": {
 		"@types/node": "22.13.10",
 		"typescript": "5.8.2",
-		"solc": "0.8.30",
+		"solc": "0.8.33",
 		"viem": "2.38.3",
 		"funtypes": "5.1.1",
 		"tsx": "4.19.3"

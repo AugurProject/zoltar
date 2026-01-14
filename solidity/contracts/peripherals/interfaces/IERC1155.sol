@@ -17,7 +17,7 @@ limitations under the License.
 
 */
 
-pragma solidity 0.8.30;
+pragma solidity 0.8.33;
 
 
 /// @title ERC-1155 Multi Token Standard

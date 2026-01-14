@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNICENSE
-pragma solidity 0.8.30;
+pragma solidity 0.8.33;
 import { IShareToken } from './interfaces/IShareToken.sol';
 import { SecurityPool } from './SecurityPool.sol';
 import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
