@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: UNICENSE
 pragma solidity 0.8.33;
-import { IShareToken } from './interfaces/IShareToken.sol';
-import { SecurityPool } from './SecurityPool.sol';
-import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
-import { OpenOracle } from './openOracle/OpenOracle.sol';
-import { Zoltar } from '../Zoltar.sol';
+import { IShareToken } from '../interfaces/IShareToken.sol';
+import { SecurityPool } from '../SecurityPool.sol';
+import { ISecurityPool, ISecurityPoolFactory } from '../interfaces/ISecurityPool.sol';
+import { OpenOracle } from '../openOracle/OpenOracle.sol';
+import { Zoltar } from '../../Zoltar.sol';
 import { ShareTokenFactory } from './ShareTokenFactory.sol';
 import { AuctionFactory } from './AuctionFactory.sol';
-import { Auction } from './Auction.sol';
-import { ShareToken } from './tokens/ShareToken.sol';
+import { Auction } from '../Auction.sol';
+import { ShareToken } from '../tokens/ShareToken.sol';
 import { PriceOracleManagerAndOperatorQueuerFactory } from './PriceOracleManagerAndOperatorQueuerFactory.sol';
-import { PriceOracleManagerAndOperatorQueuer } from './PriceOracleManagerAndOperatorQueuer.sol';
-import { ReputationToken } from '../ReputationToken.sol';
+import { PriceOracleManagerAndOperatorQueuer } from '../PriceOracleManagerAndOperatorQueuer.sol';
+import { ReputationToken } from '../../ReputationToken.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory shareTokenFactory;
