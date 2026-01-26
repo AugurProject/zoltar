@@ -26,7 +26,8 @@ contract SecurityPool is ISecurityPool {
 
 	uint256 public securityBondAllowance;
 	uint256 public auctionedSecurityBondAllowance;
-	uint256 public completeSetCollateralAmount; // amount of eth that is backing complete sets, `address(this).balance - completeSetCollateralAmount` are the fees belonging to REP pool holders
+	// amount of eth that is backing complete sets, `address(this).balance - completeSetCollateralAmount` are the fees belonging to REP pool holders
+	uint256 public completeSetCollateralAmount;
 	uint256 public poolOwnershipDenominator;
 	uint256 public repAtFork;
 	uint256 public migratedRep;
@@ -75,7 +76,8 @@ contract SecurityPool is ISecurityPool {
 		openOracle = _openOracle;
 		truthAuction = _truthAuction;
 		priceOracleManagerAndOperatorQueuer = _priceOracleManagerAndOperatorQueuer;
-		if (address(parent) == address(0x0)) { // origin universe never does truthAuction
+		if (address(parent) == address(0x0)) {
+			// origin universe never does truthAuction
 			systemState = SystemState.Operational;
 		} else {
 			systemState = SystemState.ForkMigration;
@@ -107,7 +109,8 @@ contract SecurityPool is ISecurityPool {
 
 	function updateRetentionRate() public {
 		if (securityBondAllowance == 0) return;
-		if (systemState != SystemState.Operational) return; // if system state is not operational do not change fees
+		// if system state is not operational do not change fees
+		if (systemState != SystemState.Operational) return;
 		currentRetentionRate = SecurityPoolUtils.calculateRetentionRate(completeSetCollateralAmount, securityBondAllowance);
 		emit PoolRetentionRateChanged(currentRetentionRate);
 	}
@@ -236,7 +239,8 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 	function createCompleteSet() payable public isOperational {
 		require(msg.value > 0, 'need to send eth');
-		require(systemState == SystemState.Operational, 'system is not Operational'); //todo, we want to be able to create complete sets in the children right away, figure accounting out
+		// todo, we want to be able to create complete sets in the children right away, figure accounting out
+		require(systemState == SystemState.Operational, 'system is not Operational');
 		updateCollateralAmount();
 		require(securityBondAllowance >= msg.value + completeSetCollateralAmount, 'no capacity to create that many sets');
 		uint256 completeSetsToMint = cashToShares(msg.value);
@@ -247,7 +251,8 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function redeemCompleteSet(uint256 completeSetAmount) public isOperational {
-		require(systemState == SystemState.Operational, 'system is not Operational'); // todo, we want to allow people to exit, but for accounting purposes that is difficult but maybe there's a way?
+		// todo, we want to allow people to exit, but for accounting purposes that is difficult but maybe there's a way?
+		require(systemState == SystemState.Operational, 'system is not Operational');
 		updateCollateralAmount();
 		// takes in complete set and releases security bond and eth
 		uint256 ethValue = sharesToCash(completeSetAmount);
@@ -307,7 +312,8 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	// migrates vault into outcome universe after fork
-	function migrateVault(QuestionOutcome outcome) public { // called on parent
+	// called on parent
+	function migrateVault(QuestionOutcome outcome) public {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
 		require(systemState == SystemState.PoolForked, 'Pool needs to have forked');
 		require(block.timestamp <= forkTime + SecurityPoolUtils.MIGRATION_TIME , 'migration time passed');
@@ -327,7 +333,8 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[msg.sender].securityBondAllowance = 0;
 	}
 
-	function migrateRepFromParent(address vault) public { // called on children
+	// called on children
+	function migrateRepFromParent(address vault) public {
 		require(msg.sender == address(parent), 'only parent can migrate');
 		updateVaultFees(vault);
 		parent.updateCollateralAmount();
@@ -401,9 +408,11 @@ contract SecurityPool is ISecurityPool {
 		require(truthAuction.finalized(), 'Auction needs to be finalized');
 		claimedAuctionProceeds[vault] = true;
 		uint256 amount = truthAuction.purchasedRep(vault);
-		require(amount > 0, 'Did not purchase anything'); // not really necessary, but good for testing
+		// not really necessary, but good for testing
+		require(amount > 0, 'Did not purchase anything');
 		uint256 poolOwnershipAmount = repToPoolOwnership(amount);
-		securityVaults[vault].poolOwnership += poolOwnershipAmount; // no need to add to poolOwnershipDenominator as its already accounted
+		// no need to add to poolOwnershipDenominator as its already accounted
+		securityVaults[vault].poolOwnership += poolOwnershipAmount;
 		emit ClaimAuctionProceeds(vault, amount, poolOwnershipAmount, poolOwnershipDenominator);
 		securityVaults[vault].securityBondAllowance = auctionedSecurityBondAllowance * amount / truthAuction.totalRepPurchased();
 	}
