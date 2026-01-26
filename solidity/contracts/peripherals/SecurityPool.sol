@@ -141,8 +141,8 @@ contract SecurityPool is ISecurityPool {
 		uint256 withdrawRepAmount = poolOwnershipToRep(withdrawOwnership);
 
 		uint256 oldRep = poolOwnershipToRep(securityVaults[vault].poolOwnership);
-		require((oldRep - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityVaults[vault].securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Local Security Bond Alowance broken');
-		require((repToken.balanceOf(address(this)) - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Global Security Bond Alowance broken');
+		require((oldRep - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityVaults[vault].securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Local Security Bond Allowance broken');
+		require((repToken.balanceOf(address(this)) - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Global Security Bond Allowance broken');
 
 		securityVaults[vault].poolOwnership -= withdrawOwnership;
 		poolOwnershipDenominator -= withdrawOwnership;
