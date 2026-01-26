@@ -5,7 +5,7 @@ import { PROXY_DEPLOYER_ADDRESS } from './constants.js'
 import { addressString } from './bigint.js'
 import { contractExists, getRepTokenAddress, getZoltarAddress } from './utilities.js'
 import { mainnet } from 'viem/chains'
-import { peripherals_Auction_Auction, peripherals_AuctionFactory_AuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_ShareTokenFactory_ShareTokenFactory, peripherals_tokens_ShareToken_ShareToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
+import { peripherals_Auction_Auction, peripherals_factories_AuctionFactory_AuctionFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
 
 export function getSecurityPoolUtilsAddress() {
 	return getCreate2Address({ bytecode: `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
@@ -18,8 +18,8 @@ export const applyLibraries = (bytecode: string): `0x${ string }` => {
 
 export const getSecurityPoolFactoryByteCode = (openOracle: `0x${ string }`, zoltar: `0x${ string }`, shareTokenFactory: `0x${ string }`, auctionFactory: `0x${ string }`, priceOracleManagerAndOperatorQueuerFactory: `0x${ string }`) => {
 	return encodeDeployData({
-		abi: peripherals_SecurityPoolFactory_SecurityPoolFactory.abi,
-		bytecode: applyLibraries(peripherals_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
+		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+		bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
 		args: [ openOracle, zoltar, shareTokenFactory, auctionFactory, priceOracleManagerAndOperatorQueuerFactory ]
 	})
 }
@@ -34,8 +34,8 @@ export const getSecurityPoolFactoryAddress = (openOracle: `0x${ string }`, zolta
 
 export const getShareTokenFactoryByteCode = (zoltar: `0x${ string }`) => {
 	return encodeDeployData({
-		abi: peripherals_ShareTokenFactory_ShareTokenFactory.abi,
-		bytecode: `0x${ peripherals_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object }`,
+		abi: peripherals_factories_ShareTokenFactory_ShareTokenFactory.abi,
+		bytecode: `0x${ peripherals_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object }`,
 		args: [ zoltar ]
 	})
 }
@@ -46,8 +46,8 @@ export function getInfraContractAddresses() {
 		openOracle: getCreate2Address({ bytecode: `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) }),
 		zoltar: getZoltarAddress(),
 		shareTokenFactory: getCreate2Address({ bytecode: getShareTokenFactoryByteCode(getZoltarAddress()), from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) }),
-		auctionFactory: getCreate2Address({ bytecode: `0x${ peripherals_AuctionFactory_AuctionFactory.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) }),
-		priceOracleManagerAndOperatorQueuerFactory: getCreate2Address({ bytecode: `0x${ peripherals_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) }),
+		auctionFactory: getCreate2Address({ bytecode: `0x${ peripherals_factories_AuctionFactory_AuctionFactory.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) }),
+		priceOracleManagerAndOperatorQueuerFactory: getCreate2Address({ bytecode: `0x${ peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) }),
 	}
 	const securityPoolFactory = getSecurityPoolFactoryAddress(contracts.openOracle, contracts.zoltar, contracts.shareTokenFactory, contracts.auctionFactory, contracts.priceOracleManagerAndOperatorQueuerFactory)
 	return { ...contracts, securityPoolFactory }
@@ -93,11 +93,11 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 		if (!(await contractExists(client, contractAddresses.shareTokenFactory))) throw new Error('Share Token Factory does not exist eventhought we deployed it')
 	}
 	if (!existence.auctionFactory) {
-		await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: `0x${ peripherals_AuctionFactory_AuctionFactory.evm.bytecode.object }` } as const)
+		await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: `0x${ peripherals_factories_AuctionFactory_AuctionFactory.evm.bytecode.object }` } as const)
 		if (!(await contractExists(client, contractAddresses.auctionFactory))) throw new Error('auctionFactory does not exist eventhought we deployed it')
 	}
 	if (!existence.priceOracleManagerAndOperatorQueuerFactory) {
-		await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: `0x${ peripherals_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object }` } as const)
+		await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: `0x${ peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object }` } as const)
 		if (!(await contractExists(client, contractAddresses.priceOracleManagerAndOperatorQueuerFactory))) throw new Error('priceOracleManagerAndOperatorQueuerFactory does not exist eventhought we deployed it')
 	}
 	if (!existence.securityPoolFactory) {
@@ -164,7 +164,7 @@ export const deployOriginSecurityPool = async (client: WriteClient, universeId: 
 	const infraAddresses = getInfraContractAddresses()
 	return await client.writeContract({
 		chain: mainnet,
-		abi: peripherals_SecurityPoolFactory_SecurityPoolFactory.abi,
+		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deployOriginSecurityPool',
 		address: infraAddresses.securityPoolFactory,
 		args: [universeId, questionId, securityMultiplier, startingRetentionRate, startingRepEthPrice, completeSetCollateralAmount]
