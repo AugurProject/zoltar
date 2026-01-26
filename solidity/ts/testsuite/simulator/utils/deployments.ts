@@ -35,7 +35,7 @@ const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x$
 		address: securityPoolAddress
 	}, {
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
-		deploymentName: `CompleteSet ${ getUniverseName(universeId) }`,
+		deploymentName: `ShareToken ${ getUniverseName(universeId) }`,
 		address: shareTokenAddress
 	}, {
 		abi: peripherals_Auction_Auction.abi,
