@@ -25,8 +25,8 @@ contract SecurityPool is ISecurityPool {
 	OpenOracle public immutable openOracle;
 
 	uint256 public securityBondAllowance;
-	uint256 public auctionedSecurityBondAllowance; // amount of eth that is backing complete sets, `address(this).balance - completeSetCollateralAmount` are the fees belonging to REP pool holders
-	uint256 public completeSetCollateralAmount;
+	uint256 public auctionedSecurityBondAllowance;
+	uint256 public completeSetCollateralAmount; // amount of eth that is backing complete sets, `address(this).balance - completeSetCollateralAmount` are the fees belonging to REP pool holders
 	uint256 public poolOwnershipDenominator;
 	uint256 public repAtFork;
 	uint256 public migratedRep;
