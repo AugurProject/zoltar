@@ -141,8 +141,8 @@ contract SecurityPool is ISecurityPool {
 		uint256 withdrawRepAmount = poolOwnershipToRep(withdrawOwnership);
 
 		uint256 oldRep = poolOwnershipToRep(securityVaults[vault].poolOwnership);
-		require((oldRep - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityVaults[vault].securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Local Security Bond Alowance broken');
-		require((repToken.balanceOf(address(this)) - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Global Security Bond Alowance broken');
+		require((oldRep - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityVaults[vault].securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Local Security Bond Allowance broken');
+		require((repToken.balanceOf(address(this)) - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Global Security Bond Allowance broken');
 
 		securityVaults[vault].poolOwnership -= withdrawOwnership;
 		poolOwnershipDenominator -= withdrawOwnership;
@@ -236,7 +236,7 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 	function createCompleteSet() payable public isOperational {
 		require(msg.value > 0, 'need to send eth');
-		require(systemState == SystemState.Operational, 'system is not Operational'); //todo, we want to be able to create complete sets in the children right away, figure accounting out
+		require(systemState == SystemState.Operational, 'system is not Operational'); // todo, we want to be able to create complete sets in the children right away, figure accounting out
 		updateCollateralAmount();
 		require(securityBondAllowance >= msg.value + completeSetCollateralAmount, 'no capacity to create that many sets');
 		uint256 completeSetsToMint = cashToShares(msg.value);

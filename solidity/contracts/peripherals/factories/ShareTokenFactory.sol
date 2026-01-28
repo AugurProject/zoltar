@@ -6,7 +6,7 @@ import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { Zoltar } from '../../Zoltar.sol';
 
 contract ShareTokenFactory {
-	Zoltar zoltar;
+	Zoltar immutable zoltar;
 
 	constructor(Zoltar _zoltar) {
 		zoltar = _zoltar;

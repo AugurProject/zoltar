@@ -1,4 +1,4 @@
-import { peripherals_interfaces_IAugur_IAugur, IERC20_IERC20, peripherals_interfaces_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolFactory_SecurityPoolFactory, ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, peripherals_AuctionFactory_AuctionFactory, peripherals_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_ShareTokenFactory_ShareTokenFactory } from '../../../types/contractArtifact.js'
+import { peripherals_interfaces_IAugur_IAugur, IERC20_IERC20, peripherals_interfaces_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_factories_AuctionFactory_AuctionFactory, ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
 import { addressString } from './bigint.js'
 import { ETHEREUM_LOGS_LOGGER_ADDRESS, TEST_ADDRESSES, WETH_ADDRESS } from './constants.js'
@@ -35,7 +35,7 @@ const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x$
 		address: securityPoolAddress
 	}, {
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
-		deploymentName: `CompleteSet ${ getUniverseName(universeId) }`,
+		deploymentName: `ShareToken ${ getUniverseName(universeId) }`,
 		address: shareTokenAddress
 	}, {
 		abi: peripherals_Auction_Auction.abi,
@@ -67,19 +67,19 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 			deploymentName: 'Zoltar',
 			address: infraAddresses.zoltar,
 		}, {
-			abi: peripherals_SecurityPoolFactory_SecurityPoolFactory.abi,
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			deploymentName: 'Security Pool Factory',
 			address: infraAddresses.securityPoolFactory
 		}, {
-			abi: peripherals_AuctionFactory_AuctionFactory.abi,
+			abi: peripherals_factories_AuctionFactory_AuctionFactory.abi,
 			deploymentName: 'Auction Factory',
 			address: infraAddresses.auctionFactory
 		}, {
-			abi: peripherals_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
+			abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
 			deploymentName: 'Price Oracle Manager And Operator Queuer Factory',
 			address: infraAddresses.priceOracleManagerAndOperatorQueuerFactory
 		}, {
-			abi: peripherals_ShareTokenFactory_ShareTokenFactory.abi,
+			abi: peripherals_factories_ShareTokenFactory_ShareTokenFactory.abi,
 			deploymentName: 'Share Token Factory',
 			address: infraAddresses.shareTokenFactory
 		}, {
