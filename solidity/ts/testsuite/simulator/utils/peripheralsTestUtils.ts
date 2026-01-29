@@ -7,7 +7,7 @@ import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresse
 import { approveToken, contractExists, createQuestion, dispute, ensureZoltarDeployed, getERC20Balance, getQuestionData, getUniverseData, getZoltarAddress, isZoltarDeployed, reportOutcome } from './utilities.js'
 import { WriteClient } from './viem.js'
 import assert from 'node:assert'
-import { depositRep, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPriceIfNeededAndQueueOperation, wrapWeth } from './peripherals.js'
+import { depositRep, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndQueueOperation, wrapWeth } from './peripherals.js'
 
 export const genesisUniverse = 0n
 export const questionId = 1n
@@ -63,9 +63,7 @@ export const triggerFork = async(client: WriteClient, mockWindow: MockWindowEthe
 	}
 }
 
-export const requestPrice = async(client: WriteClient, mockWindow: MockWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, operation: OperationType, targetVault: `0x${ string }`, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
-	await requestPriceIfNeededAndQueueOperation(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount)
-
+export const handleOracleReporting = async(client: WriteClient, mockWindow: MockWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, forceRepEthPriceTo: bigint) => {
 	const pendingReportId = await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)
 	if (pendingReportId === 0n) {
 		// operation already executed
@@ -92,6 +90,16 @@ export const requestPrice = async(client: WriteClient, mockWindow: MockWindowEth
 	await mockWindow.advanceTime(DAY)
 
 	await openOracleSettle(client, pendingReportId)
+}
+
+export const manipulatePriceOracleAndPerformOperation = async(client: WriteClient, mockWindow: MockWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, operation: OperationType, targetVault: `0x${ string }`, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
+	await requestPriceIfNeededAndQueueOperation(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount)
+	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
+}
+
+export const manipulatePriceOracle = async(client: WriteClient, mockWindow: MockWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
+	await requestPrice(client, priceOracleManagerAndOperatorQueuer)
+	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 }
 
 export const canLiquidate = (lastPrice: bigint, securityBondAllowance: bigint, stakedRep: bigint, securityMultiplier: bigint) => securityBondAllowance * lastPrice * securityMultiplier > stakedRep * PRICE_PRECISION

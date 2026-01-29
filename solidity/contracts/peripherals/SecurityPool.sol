@@ -63,6 +63,7 @@ contract SecurityPool is ISecurityPool {
 	event UpdateCollateralAmount(uint256 totalFeesOvedToVaults, uint256 completeSetCollateralAmount);
 	event CreateCompleteSet(uint256 shareTokenSupply, uint256 completeSetsToMint, uint256 completeSetCollateralAmount);
 	event PerformLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount, uint256 debtToMove, uint256 repToMove);
+	event RedeemRep(address caller, address vault, uint256 repAmount);
 
 	modifier isOperational {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
@@ -288,6 +289,16 @@ contract SecurityPool is ISecurityPool {
 		emit RedeemShares(msg.sender, amount, ethValue);
 	}
 
+	function redeemRep(address vault) public {
+		Zoltar.Outcome outcome = zoltar.finalizeQuestion(universeId, questionId);
+		require(outcome != Zoltar.Outcome.None, 'Question has not finalized!');
+		updateVaultFees(vault);
+		uint256 repAmount = poolOwnershipToRep(securityVaults[vault].poolOwnership);
+		securityVaults[vault].poolOwnership = 0;
+		repToken.transfer(vault, repAmount);
+		emit RedeemRep(msg.sender, vault, repAmount);
+	}
+
 	////////////////////////////////////////
 	// FORKING (migrate vault (oi+rep), truth truthAuction)
 	////////////////////////////////////////
@@ -426,8 +437,5 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[vault].securityBondAllowance = auctionedSecurityBondAllowance * amount / truthAuction.totalRepPurchased();
 	}
 
-	// todo, missing feature to get rep back after market finalization
-	// todo, missing redeeming yes/no/invalid poolOwnership to eth after finalization
-	// todo, fee calculation doesn't work yet
-	// todo, liquidation system missing
+	// todo, fee calculation doesn't work yet accross forks
 }
