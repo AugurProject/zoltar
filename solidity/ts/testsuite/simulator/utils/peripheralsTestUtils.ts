@@ -63,7 +63,7 @@ export const triggerFork = async(client: WriteClient, mockWindow: MockWindowEthe
 	}
 }
 
-export const requestPrice = async(client: WriteClient, mockWindow: MockWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, operation: OperationType, targetVault: `0x${ string }`, amount: bigint) => {
+export const requestPrice = async(client: WriteClient, mockWindow: MockWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, operation: OperationType, targetVault: `0x${ string }`, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
 	await requestPriceIfNeededAndQueueOperation(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount)
 
 	const pendingReportId = await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)
@@ -77,7 +77,7 @@ export const requestPrice = async(client: WriteClient, mockWindow: MockWindowEth
 
 	// initial report
 	const amount1 = reportMeta.exactToken1Report
-	const amount2 = amount1
+	const amount2 = amount1 * PRICE_PRECISION / forceRepEthPriceTo
 
 	const openOracle = getInfraContractAddresses().openOracle
 	await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
@@ -93,4 +93,6 @@ export const requestPrice = async(client: WriteClient, mockWindow: MockWindowEth
 
 	await openOracleSettle(client, pendingReportId)
 }
+
+export const canLiquidate = (lastPrice: bigint, securityBondAllowance: bigint, stakedRep: bigint, securityMultiplier: bigint) => securityBondAllowance * lastPrice * securityMultiplier > stakedRep * PRICE_PRECISION
 

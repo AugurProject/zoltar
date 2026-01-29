@@ -62,6 +62,7 @@ contract SecurityPool is ISecurityPool {
 	event RedeemFees(address vault, uint256 fees);
 	event UpdateCollateralAmount(uint256 totalFeesOvedToVaults, uint256 completeSetCollateralAmount);
 	event CreateCompleteSet(uint256 shareTokenSupply, uint256 completeSetsToMint, uint256 completeSetCollateralAmount);
+	event PerformLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount, uint256 debtToMove, uint256 repToMove);
 
 	modifier isOperational {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
@@ -197,28 +198,33 @@ contract SecurityPool is ISecurityPool {
 	// liquidation moves share of debt and rep to another pool which need to remain non-liquidable
 	// this is currently very harsh, as we steal all the rep and debt from the pool
 	function performLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount) public isOperational {
-	/*	require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'only priceOracleManagerAndOperatorQueuer can call');
+		require(msg.sender == address(priceOracleManagerAndOperatorQueuer), 'only priceOracleManagerAndOperatorQueuer can call');
 		require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'no valid price');
 		updateVaultFees(targetVaultAddress);
 		updateVaultFees(callerVault);
 		uint256 vaultsSecurityBondAllowance = securityVaults[targetVaultAddress].securityBondAllowance;
-		uint256 vaultsRepDeposit = securityVaults[targetVaultAddress].poolOwnership * repToken.balanceOf(address(this)) / poolOwnershipDenominator;
-		require(vaultsSecurityBondAllowance * securityMultiplier * priceOracleManagerAndOperatorQueuer.lastPrice() > vaultsRepDeposit * PRICE_PRECISION, 'vault need to be liquidable');
+		uint256 vaultsRepDeposit = poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership);
+		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
+		require(vaultsSecurityBondAllowance * securityMultiplier * repEthPrice > vaultsRepDeposit * SecurityPoolUtils.PRICE_PRECISION, 'vault need to be liquidable');
 
-		uint256 debtToMove = debtAmount > securityVaults[callerVault].securityBondAllowance ? securityVaults[callerVault].securityBondAllowance : debtAmount;
+		uint256 debtToMove = debtAmount > securityVaults[targetVaultAddress].securityBondAllowance ? securityVaults[targetVaultAddress].securityBondAllowance : debtAmount;
 		require(debtToMove > 0, 'no debt to move');
-		uint256 repToMove = securityVaults[callerVault].poolOwnership * repToken.balanceOf(address(this)) / poolOwnershipDenominator * debtToMove / securityVaults[callerVault].securityBondAllowance;
-		require((securityVaults[callerVault].securityBondAllowance+debtToMove) * securityMultiplier * priceOracleManagerAndOperatorQueuer.lastPrice() <= (securityVaults[callerVault].poolOwnership + repToMove) * PRICE_PRECISION, 'New pool would be liquidable!');
+		uint256 repToMove = debtToMove * vaultsRepDeposit / securityVaults[targetVaultAddress].securityBondAllowance;
+		uint256 ownershipToMove = repToPoolOwnership(repToMove);
+		require((securityVaults[callerVault].securityBondAllowance + debtToMove) * securityMultiplier * repEthPrice <= (poolOwnershipToRep(securityVaults[callerVault].poolOwnership) + repToMove) * SecurityPoolUtils.PRICE_PRECISION, 'New pool would be liquidable!');
 		securityVaults[targetVaultAddress].securityBondAllowance -= debtToMove;
-		securityVaults[targetVaultAddress].poolOwnership -= repToMove * poolOwnershipDenominator / repToken.balanceOf(address(this));
-
+		securityVaults[targetVaultAddress].poolOwnership -= ownershipToMove;
 		securityVaults[callerVault].securityBondAllowance += debtToMove;
-		securityVaults[callerVault].poolOwnership += repToMove * poolOwnershipDenominator / repToken.balanceOf(address(this));
+		securityVaults[callerVault].poolOwnership += ownershipToMove;
 
-		require(securityVaults[targetVaultAddress].poolOwnership > MIN_REP_DEPOSIT * repToken.balanceOf(address(this)) / poolOwnershipDenominator || securityVaults[targetVaultAddress].poolOwnership == 0, 'min deposit requirement');
-		require(securityVaults[targetVaultAddress].securityBondAllowance > MIN_SECURITY_BOND_DEBT || securityVaults[targetVaultAddress].securityBondAllowance == 0, 'min deposit requirement');
-		require(securityVaults[callerVault].securityBondAllowance > MIN_SECURITY_BOND_DEBT || securityVaults[callerVault].securityBondAllowance == 0, 'min deposit requirement');
-	*/}
+		// target vault needs to be above tresholds after liquidation
+		require(poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT || securityVaults[targetVaultAddress].poolOwnership == 0, 'target min deposit requirement');
+		require(securityVaults[targetVaultAddress].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT || securityVaults[targetVaultAddress].securityBondAllowance == 0, 'target min deposit requirement');
+		require(poolOwnershipToRep(securityVaults[callerVault].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT, 'caller min deposit requirement');
+		require(securityVaults[callerVault].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT, 'caller min deposit requirement');
+
+		emit PerformLiquidation(callerVault, targetVaultAddress, debtAmount, debtToMove, repToMove);
+	}
 
 	////////////////////////////////////////
 	// set security bond allowance
