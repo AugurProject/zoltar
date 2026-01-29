@@ -8,7 +8,7 @@ import assert from 'node:assert'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
 import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { approveAndDepositRep, deployPeripherals, deployZoltarAndCreateMarket, genesisUniverse, MAX_RETENTION_RATE, questionId, requestPrice, securityMultiplier, triggerFork } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
+import { approveAndDepositRep, canLiquidate, deployPeripherals, deployZoltarAndCreateMarket, genesisUniverse, MAX_RETENTION_RATE, questionId, requestPrice, securityMultiplier, triggerFork } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
 import { getSecurityPoolAddresses } from '../testsuite/simulator/utils/deployPeripherals.js'
 import { balanceOfShares, balanceOfSharesInCash, claimAuctionProceeds, createChildUniverse, createCompleteSet, finalizeTruthAuction, forkSecurityPool, getCompleteSetCollateralAmount, getCurrentRetentionRate, getEthAmountToBuy, getTotalFeesOvedToVaults, getLastPrice, getMigratedRep, getPoolOwnershipDenominator, getSecurityBondAllowance, getSecurityVault, getSystemState, migrateShares, migrateVault, OperationType, participateAuction, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, startTruthAuction, updateVaultFees } from '../testsuite/simulator/utils/peripherals.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
@@ -48,6 +48,42 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance - reportBond, 100n, 'Did not get rep back')
+	})
+
+
+	test('Can Liquidate', async () => {
+		const questionData = await getQuestionData(client, questionId)
+		await mockWindow.setTime(questionData.endTime + 10000n)
+		const securityPoolAllowance = repDeposit / 4n
+		assert.strictEqual(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max');
+		await requestPrice(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		const initialPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		assert.strictEqual(initialPrice, 1n * PRICE_PRECISION, 'Price was not set!')
+		assert.strictEqual(await getSecurityBondAllowance(client, securityPoolAddresses.securityPool), securityPoolAllowance, 'Security pool allowance was not set correctly')
+
+		const openInterestAmount = 100n * 10n ** 18n
+		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+		await mockWindow.advanceTime(100000n)
+
+		const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(liquidatorClient, repDeposit * 10n)
+
+		assert.strictEqual(canLiquidate(initialPrice, securityPoolAllowance, repDeposit, 2n), false, 'Should not be able to liquidate yet')
+		// REP/ETH increases to 10x, 10 REP = 1 ETH (rep drops in value)
+		await requestPrice(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance, PRICE_PRECISION * 10n)
+
+		const currentPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		assert.strictEqual(currentPrice, PRICE_PRECISION * 10n, 'Price did not increase!')
+
+		assert.strictEqual(canLiquidate(currentPrice, securityPoolAllowance, repDeposit, 2n), true, 'Should be able to liquidate now')
+
+		// liquidator should have all the assets now
+		const originalVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const liquidatorVault = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+		assert.strictEqual(originalVault.securityBondAllowance, 0n, 'original vault should not have any security bonds')
+		assert.strictEqual(originalVault.repDepositShare, 0n, 'original vault should not have any rep')
+		assert.strictEqual(liquidatorVault.securityBondAllowance, securityPoolAllowance, 'liquidator doesnt have all the security pool allowances')
+		assert.strictEqual(liquidatorVault.repDepositShare / PRICE_PRECISION, repDeposit+(repDeposit * 10n), 'liquidator should have all the rep in the pool')
 	})
 
 	test('Open Interest Fees', async () => {
