@@ -104,3 +104,22 @@ export const stringAsHexString = (value: string): `0x${ string }` => {
 	if (value.startsWith('0x')) return value as unknown as `0x${ string }`
 	throw new Error(`String "${ value }" does not start with "0x"`)
 }
+
+export const dateToBigintSeconds = (date: Date) => BigInt(date.getTime()) / 1000n
+
+export const bigintSecondsToDate = (seconds: bigint) => {
+	if (seconds > 8640000000000n) throw new Error(`Too big seconds value: ${ seconds }`)
+	if (seconds < 0) throw new Error(`Got negative seconds: ${ seconds }`)
+	return new Date(Number(seconds) * 1000)
+}
+
+export const rpow = (x: bigint, exponent: bigint, baseUnit: bigint) => {
+	let result = exponent % 2n !== 0n ? x : baseUnit
+	for (exponent = exponent / 2n; exponent !== 0n; exponent = exponent / 2n) {
+		x = (x * x) / baseUnit
+		if (exponent % 2n !== 0n) {
+			result = (result * x) / baseUnit
+		}
+	}
+	return result
+}

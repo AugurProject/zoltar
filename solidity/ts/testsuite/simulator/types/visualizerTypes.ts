@@ -26,12 +26,24 @@ export const SignedMessageTransaction = funtypes.ReadonlyObject({
 	messageIdentifier: EthereumQuantity,
 })
 
+export type BlockTimeManipulation = funtypes.Static<typeof BlockTimeManipulation>
+export const BlockTimeManipulation = funtypes.Union(
+	funtypes.ReadonlyObject({
+		type: funtypes.Literal('AddToTimestamp'),
+		deltaToAdd: EthereumQuantity,
+	}),
+	funtypes.ReadonlyObject({
+		type: funtypes.Literal('SetTimetamp'),
+		timeToSet: EthereumQuantity,
+	}),
+)
+
 export type SimulationStateInputBlock = funtypes.Static<typeof SimulationStateInputBlock>
 export const SimulationStateInputBlock = funtypes.ReadonlyObject({
 	stateOverrides: StateOverrides,
 	transactions: funtypes.ReadonlyArray(EthereumSendableSignedTransaction),
 	signedMessages: funtypes.ReadonlyArray(SignedMessageTransaction),
-	timeIncreaseDelta: EthereumQuantity,
+	blockTimeManipulation: BlockTimeManipulation,
 })
 
 export type SimulationStateInput = funtypes.Static<typeof SimulationStateInput>
@@ -44,7 +56,8 @@ export const SimulationStateBlock = funtypes.ReadonlyObject({
 	stateOverrides: StateOverrides,
 	simulatedTransactions: funtypes.ReadonlyArray(SimulatedTransaction),
 	signedMessages: funtypes.ReadonlyArray(SignedMessageTransaction),
-	timeIncreaseDelta: EthereumQuantity
+	blockTimeManipulation: BlockTimeManipulation,
+	blockTimestamp: EthereumTimestamp,
 })
 
 export type SimulationState = funtypes.Static<typeof SimulationState>
