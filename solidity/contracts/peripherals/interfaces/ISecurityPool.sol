@@ -73,6 +73,7 @@ interface ISecurityPool {
 
 	function performWithdrawRep(address vault, uint256 repAmount) external;
 	function depositRep(uint256 repAmount) external;
+	function redeemRep(address vault) external;
 	function performLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount) external;
 	function performSetSecurityBondsAllowance(address callerVault, uint256 amount) external;
 
