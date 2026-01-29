@@ -1,6 +1,6 @@
 import { EthereumClientService } from './EthereumClientService.js'
 import { EthereumUnsignedTransaction, EthereumSignedTransactionWithBlockData, EthereumBlockTag, EthereumAddress, EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes, EthereumData, EthereumQuantity, EthereumBytes32, EthereumSendableSignedTransaction, EthereumBlockHeaderTransaction } from './types/wire-types.js'
-import { addressString, bigintToUint8Array, bytes32String, calculateWeightedPercentile, dataString, dataStringWith0xStart, max, min, stringToUint8Array } from './utils/bigint.js'
+import { addressString, bigintSecondsToDate, bigintToUint8Array, bytes32String, calculateWeightedPercentile, dataString, dataStringWith0xStart, dateToBigintSeconds, max, min, stringToUint8Array } from './utils/bigint.js'
 import { CANNOT_SIMULATE_OFF_LEGACY_BLOCK, ERROR_INTERCEPTOR_GAS_ESTIMATION_FAILED, ETHEREUM_EIP1559_BASEFEECHANGEDENOMINATOR, ETHEREUM_EIP1559_ELASTICITY_MULTIPLIER, MOCK_ADDRESS, DEFAULT_CALL_ADDRESS, GAS_PER_BLOB } from './utils/constants.js'
 import { SimulatedTransaction, SimulationState, EstimateGasError, SimulationStateInput } from './types/visualizerTypes.js'
 import { EthereumUnsignedTransactionToUnsignedTransaction, IUnsignedTransaction1559, rlpEncode, serializeSignedTransactionToBytes } from './types/ethereum.js'
@@ -20,7 +20,7 @@ const ADDRESS_FOR_PRIVATE_KEY_ONE = 0x7E5F4552091A69125d5DfCb7b8C2659029395Bdfn
 const TEMP_CONTRACT_ADDRESS = 0x1ce438391307f908756fefe0fe220c0f0d51508an
 
 export const copySimulationState = (simulationState: SimulationState): SimulationState => {
-	return { ...simulationState, blocks: simulationState.blocks.map((block) => ({ stateOverrides: { ...block.stateOverrides }, signedMessages: [ ...block.signedMessages ], simulatedTransactions: [ ...block.simulatedTransactions ], timeIncreaseDelta: block.timeIncreaseDelta })) }
+	return { ...simulationState, blocks: simulationState.blocks.map((block) => ({ stateOverrides: { ...block.stateOverrides }, signedMessages: [ ...block.signedMessages ], simulatedTransactions: [ ...block.simulatedTransactions ], blockTimeManipulation: block.blockTimeManipulation, blockTimestamp: block.blockTimestamp })) }
 }
 
 const transactionQueueTotalGasLimit = (simulatedTransactions: readonly SimulatedTransaction[]) => {
@@ -141,9 +141,10 @@ export const createSimulationState = async (ethereumClientService: EthereumClien
 					preSimulationTransaction: signedTx,
 				}
 			}),
+			blockTimestamp: bigintSecondsToDate(callResult.timestamp),
 			signedMessages: simulationStateInput.blocks[blockIndex]?.signedMessages || [],
 			stateOverrides: simulationStateInput.blocks[blockIndex]?.stateOverrides || {},
-			timeIncreaseDelta: simulationStateInput.blocks[blockIndex]?.timeIncreaseDelta || 12n
+			blockTimeManipulation: simulationStateInput.blocks[blockIndex]?.blockTimeManipulation || { type: 'AddToTimestamp', deltaToAdd: 12n }
 		})),
 		blockNumber: parentBlock.number,
 		blockTimestamp: parentBlock.timestamp,
@@ -163,14 +164,14 @@ export const appendTransaction = async (ethereumClientService: EthereumClientSer
 	const getNewSimulationStateInput = () => {
 		const newTransactions = transactions.map((transaction) => mockSignTransaction(transaction))
 		if (simulationState === undefined) {
-			return { blocks: [{ stateOverrides, transactions: newTransactions, signedMessages: [], timeIncreaseDelta: 12n }] } as const
+			return { blocks: [{ stateOverrides, transactions: newTransactions, signedMessages: [], blockTimeManipulation: { type: 'AddToTimestamp' as const, deltaToAdd: 12n } }] } as const
 		}
 		if (simulationState.blocks[blockDelta] !== undefined) {
 			return { blocks: simulationState.blocks.map((block, index) => ({
 				stateOverrides: mergeStateSets(block.stateOverrides, stateOverrides),
 				transactions: index === blockDelta ? [...getPreSimulated(block.simulatedTransactions), ...newTransactions] : getPreSimulated(block.simulatedTransactions),
 				signedMessages: block.signedMessages,
-				timeIncreaseDelta: block.timeIncreaseDelta,
+				blockTimeManipulation: block.blockTimeManipulation
 			})) } as const
 		}
 		return { blocks: [
@@ -178,9 +179,9 @@ export const appendTransaction = async (ethereumClientService: EthereumClientSer
 				stateOverrides: mergeStateSets(block.stateOverrides, stateOverrides),
 				transactions: getPreSimulated(block.simulatedTransactions),
 				signedMessages: block.signedMessages,
-				timeIncreaseDelta: block.timeIncreaseDelta,
+				blockTimeManipulation: block.blockTimeManipulation
 			})),
-			{ stateOverrides: {}, transactions: newTransactions, signedMessages: [], timeIncreaseDelta: 12n }
+			{ stateOverrides: {}, transactions: newTransactions, signedMessages: [], blockTimeManipulation: { type: 'AddToTimestamp' as const, deltaToAdd: 12n } }
 		] } as const
 	}
 	const simulationStateInput = getNewSimulationStateInput()
@@ -467,7 +468,7 @@ async function getSimulatedMockBlock(ethereumClientService: EthereumClientServic
 		receiptsRoot: parentBlock.receiptsRoot, // TODO: this is wrong
 		sha3Uncles: parentBlock.sha3Uncles, // TODO: this is wrong
 		stateRoot: parentBlock.stateRoot, // TODO: this is wrong
-		timestamp: new Date((simulationState.blockTimestamp.getUTCSeconds() + Number(simulationState.blocks.filter((_, index) => index <= blockDelta).map((x) => x.timeIncreaseDelta).reduce((a, b) => a + b, 0n))) * 1000), // estimate that the next block is after 12 secs
+		timestamp: simulationState.blocks[blockDelta].blockTimestamp || bigintSecondsToDate((dateToBigintSeconds(simulationState.blockTimestamp) + 12n)),
 		size: parentBlock.size, // TODO: this is wrong
 		totalDifficulty: (parentBlock.totalDifficulty ?? 0n) + parentBlock.difficulty, // The difficulty increases about the same amount as previously
 		uncles: [],

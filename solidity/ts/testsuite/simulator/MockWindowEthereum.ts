@@ -3,13 +3,14 @@ import { CANNOT_SIMULATE_OFF_LEGACY_BLOCK, DEFAULT_CALL_ADDRESS } from './utils/
 import { EthereumClientService } from './EthereumClientService.js'
 import { EthCallParams, EthereumJsonRpcRequest, EthGetLogsResponse, EthTransactionReceiptResponse, GetBlockReturn, SendTransactionParams } from './types/jsonRpcTypes.js'
 import { appendTransaction, createSimulationState, getInputFieldFromDataOrInput, getPreSimulated, getSimulatedBalance, getSimulatedBlock, getSimulatedBlockNumber, getSimulatedCode, getSimulatedLogs, getSimulatedTransactionByHash, getSimulatedTransactionCountOverStack, getSimulatedTransactionReceipt, mockSignTransaction, simulatedCall, simulateEstimateGas } from './SimulationModeEthereumClientService.js'
-import { SimulatedTransaction, SimulationState } from './types/visualizerTypes.js'
+import { BlockTimeManipulation, SimulatedTransaction, SimulationState } from './types/visualizerTypes.js'
 import { StateOverrides } from './types/ethSimulateTypes.js'
 import { EthereumJSONRpcRequestHandler } from './EthereumJSONRpcRequestHandler.js'
-import { EthereumBytes32, EthereumData, EthereumQuantity, EthereumSignedTransactionWithBlockData } from './types/wire-types.js'
+import { EthereumBlockHeader, EthereumBytes32, EthereumData, EthereumQuantity, EthereumSignedTransactionWithBlockData } from './types/wire-types.js'
 import { ErrorWithDataAndCode, JsonRpcResponseError, printError } from './utils/errors.js'
 import * as funtypes from 'funtypes'
 import { getConfig } from './utils/config.js'
+import { bigintSecondsToDate, dateToBigintSeconds } from './utils/bigint.js'
 
 async function singleCallWithFromOverride(ethereumClientService: EthereumClientService, simulationState: SimulationState | undefined, request: EthCallParams, from: bigint) {
 	const callParams = request.params[0]
@@ -40,7 +41,7 @@ export async function call(ethereumClientService: EthereumClientService, simulat
 	return { type: 'result' as const, method: request.method, ...callResult }
 }
 
-export const formEthSendTransaction = async (ethereumClientService: EthereumClientService, requestAbortController: AbortController | undefined, simulationState: SimulationState | undefined, blockDelta: number, activeAddress: bigint | undefined, sendTransactionParams: SendTransactionParams) => {
+export const formEthSendTransaction = async (ethereumClientService: EthereumClientService, requestAbortController: AbortController | undefined, simulationState: SimulationState | undefined, blockDelta: number, activeAddress: bigint | undefined, sendTransactionParams: SendTransactionParams, zeroGasPrice: boolean) => {
 	const parentBlockPromise = ethereumClientService.getBlock(requestAbortController) // we are getting the real block here, as we are not interested in the current block where this is going to be included, but the parent
 	const transactionDetails = sendTransactionParams.params[0]
 	if (activeAddress === undefined) throw new Error('Access to active address is denied')
@@ -55,8 +56,8 @@ export const formEthSendTransaction = async (ethereumClientService: EthereumClie
 		from,
 		chainId: ethereumClientService.getChainId(),
 		nonce: await transactionCountPromise,
-		maxFeePerGas: transactionDetails.maxFeePerGas !== undefined && transactionDetails.maxFeePerGas !== null ? transactionDetails.maxFeePerGas : parentBlock.baseFeePerGas * 2n + maxPriorityFeePerGas,
-		maxPriorityFeePerGas,
+		maxFeePerGas: zeroGasPrice ? 0n : (transactionDetails.maxFeePerGas !== undefined && transactionDetails.maxFeePerGas !== null ? transactionDetails.maxFeePerGas : parentBlock.baseFeePerGas * 2n + maxPriorityFeePerGas),
+		maxPriorityFeePerGas: zeroGasPrice ? 0n : maxPriorityFeePerGas,
 		to: transactionDetails.to === undefined ? null : transactionDetails.to,
 		value: transactionDetails.value !== undefined  ? transactionDetails.value : 0n,
 		input: getInputFieldFromDataOrInput(transactionDetails),
@@ -83,12 +84,14 @@ export const formEthSendTransaction = async (ethereumClientService: EthereumClie
 
 export type MockWindowEthereum = EIP1193Provider & {
 	addStateOverrides: (stateOverrides: StateOverrides) => Promise<void>
-	advanceTime: (amountInSeconds: EthereumQuantity) => Promise<void>
-	getTime: () => Promise<Date>
-	getBlock: () => Promise<bigint>
+	manipulateTime: (blockTimeManipulation: BlockTimeManipulation) => Promise<void>
+	advanceTime: (amountInSeconds: bigint) => Promise<void>
+	setTime: (date: bigint) => Promise<void>
+	getTime: () => Promise<bigint>
+	getBlock: () => Promise<EthereumBlockHeader>
 	setAfterTransactionSendCallBack: (newAfterTransactionSendCallBack: (request: SendTransactionParams, result: SimulatedTransaction) => void) => void
 }
-export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
+export const getMockedEthSimulateWindowEthereum = (zeroGasPrice: boolean = true): MockWindowEthereum => {
 	const config = getConfig()
 	const httpsRpc = config.testRPCEndpoint
 	const ethereumClientService = new EthereumClientService(
@@ -100,7 +103,7 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 	let simulationState: SimulationState | undefined = undefined
 	const activeAddress = 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045n
 	let afterTransactionSendCallBack = (_request: SendTransactionParams, _result: SimulatedTransaction) => {}
-	return {
+	const mock = {
 		setAfterTransactionSendCallBack: (newAfterTransactionSendCallBack: (_request: SendTransactionParams, _result: SimulatedTransaction) => void) => {
 			afterTransactionSendCallBack = newAfterTransactionSendCallBack
 		},
@@ -134,7 +137,7 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 				case 'wallet_sendTransaction':
 				case 'eth_sendTransaction': {
 					const blockDelta = simulationState?.blocks.length || 0 // always create new block to add transactions to
-					const transaction = await formEthSendTransaction(ethereumClientService, undefined, simulationState, blockDelta, activeAddress, args)
+					const transaction = await formEthSendTransaction(ethereumClientService, undefined, simulationState, blockDelta, activeAddress, args, zeroGasPrice)
 					if (transaction.success === false) {
 						console.error(transaction.error)
 						throw new ErrorWithDataAndCode(transaction.error.code, transaction.error.message, transaction.error.data)
@@ -197,63 +200,53 @@ export const getMockedEthSimulateWindowEthereum = (): MockWindowEthereum => {
 			console.log('removeListener')
 		},
 		addStateOverrides: async (stateOverrides: StateOverrides) => {
-			const newBlock = { simulatedTransactions: [], signedMessages: [], stateOverrides, timeIncreaseDelta: 12n }
-			if (simulationState === undefined) {
-				simulationState = {
-					blocks: [newBlock],
-					blockNumber: await ethereumClientService.getBlockNumber(undefined),
-					blockTimestamp: new Date(),
-					simulationConductedTimestamp: new Date(),
-					baseFeePerGas: 0n,
-				}
-			} else {
-				simulationState = { ...simulationState, blocks: [...simulationState.blocks, newBlock] }
-			}
+			const newBlock = { simulatedTransactions: [], signedMessages: [], stateOverrides, blockTimeManipulation: { type: 'AddToTimestamp' as const, deltaToAdd: 12n } }
+			const prevBlocks = simulationState?.blocks || []
 			const input = {
 				blocks: [
-					...simulationState.blocks.map((block) => ({
+					...[...prevBlocks, newBlock].map((block) => ({
 						stateOverrides: block.stateOverrides,
 						transactions: getPreSimulated(block.simulatedTransactions),
 						signedMessages: block.signedMessages,
-						timeIncreaseDelta: block.timeIncreaseDelta,
+						blockTimeManipulation: block.blockTimeManipulation,
 					}))
 				]
 			}
 			simulationState = await createSimulationState(ethereumClientService, undefined, input)
 		},
-		advanceTime: async (amountInSeconds: EthereumQuantity) => {
-			console.log(`> Advance Time For ${ amountInSeconds }`)
-			const newBlock = { simulatedTransactions: [], signedMessages: [], stateOverrides: {}, timeIncreaseDelta: amountInSeconds }
-			if (simulationState === undefined) {
-				simulationState = {
-					blocks: [newBlock],
-					blockNumber: await ethereumClientService.getBlockNumber(undefined),
-					blockTimestamp: new Date(),
-					simulationConductedTimestamp: new Date(),
-					baseFeePerGas: 0n,
-				}
-			} else {
-				simulationState = { ...simulationState, blocks: [...simulationState.blocks, newBlock] }
+		manipulateTime: async (blockTimeManipulation: BlockTimeManipulation) => {
+			if (blockTimeManipulation.type === 'AddToTimestamp') console.log(`> Advance Time For ${ blockTimeManipulation.deltaToAdd } seconds`)
+			else {
+				console.log(`> Set Time to ${ bigintSecondsToDate(blockTimeManipulation.timeToSet).toISOString() }`)
 			}
+			const newBlock = { simulatedTransactions: [], signedMessages: [], stateOverrides: {}, blockTimeManipulation }
+			const prevBlocks = simulationState?.blocks || []
 			const input = {
 				blocks: [
-					...simulationState.blocks.map((block) => ({
+					...[...prevBlocks, newBlock].map((block) => ({
 						stateOverrides: block.stateOverrides,
 						transactions: getPreSimulated(block.simulatedTransactions),
 						signedMessages: block.signedMessages,
-						timeIncreaseDelta: block.timeIncreaseDelta,
+						blockTimeManipulation: block.blockTimeManipulation,
 					}))
 				]
 			}
 			simulationState = await createSimulationState(ethereumClientService, undefined, input)
 		},
 		getTime: async () => {
-			if (simulationState === undefined) return new Date()
-			return simulationState.blockTimestamp
+			const block = await getSimulatedBlock(ethereumClientService, undefined, simulationState)
+			if (block === undefined || block === null) throw new Error('could not get block')
+			return dateToBigintSeconds(block.timestamp)
 		},
 		getBlock: async () => {
-			if (simulationState === undefined) return await ethereumClientService.getBlockNumber(undefined)
-			return simulationState.blockNumber
-		}
+			const block = await getSimulatedBlock(ethereumClientService, undefined, simulationState)
+			if (block === undefined || block === null) throw new Error('could not get block')
+			return block
+		},
+		advanceTime: async (_amountInSeconds: bigint) => {},
+		setTime: async (_date: bigint) => {},
 	}
+	mock.advanceTime = async (amountInSeconds: bigint) => await mock.manipulateTime({ type: 'AddToTimestamp', deltaToAdd: amountInSeconds })
+	mock.setTime = async (date: bigint) => await mock.manipulateTime({ type: 'SetTimetamp', timeToSet: date })
+	return mock
 }
