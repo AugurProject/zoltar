@@ -12,7 +12,7 @@ struct SecurityVault {
 	uint256 poolOwnership;
 	uint256 securityBondAllowance;
 	uint256 unpaidEthFees;
-	uint256 feeAccumulator;
+	uint256 feeIndex;
 }
 
 enum SystemState {
@@ -40,10 +40,10 @@ interface ISecurityPool {
 	function repAtFork() external view returns (uint256);
 	function migratedRep() external view returns (uint256);
 	function securityMultiplier() external view returns (uint256);
-	function feesAccrued() external view returns (uint256);
+	function totalFeesOvedToVaults() external view returns (uint256);
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
-	function securityVaults(address vault) external view returns (uint256 poolOwnership, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeAccumulator);
+	function securityVaults(address vault) external view returns (uint256 poolOwnership, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeIndex);
 	function claimedAuctionProceeds(address vault) external view returns (bool);
 	function children(uint256 index) external view returns (ISecurityPool);
 	function parent() external view returns (ISecurityPool);

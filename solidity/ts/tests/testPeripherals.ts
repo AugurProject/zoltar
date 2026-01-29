@@ -2,23 +2,26 @@ import { describe, beforeEach, test } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { approximatelyEqual, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, getReportBond, getRepTokenAddress, getWinningOutcome, isFinalized, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { addressString } from '../testsuite/simulator/utils/bigint.js'
+import { approximatelyEqual, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, getQuestionData, getReportBond, getRepTokenAddress, getWinningOutcome, isFinalized, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+import { addressString, dateToBigintSeconds, rpow } from '../testsuite/simulator/utils/bigint.js'
 import assert from 'node:assert'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
 import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { approveAndDepositRep, deployPeripherals, deployZoltarAndCreateMarket, genesisUniverse, MAX_RETENTION_RATE, PRICE_PRECISION, questionId, requestPrice, securityMultiplier, triggerFork } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
+import { approveAndDepositRep, deployPeripherals, deployZoltarAndCreateMarket, genesisUniverse, MAX_RETENTION_RATE, questionId, requestPrice, securityMultiplier, triggerFork } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
 import { getSecurityPoolAddresses } from '../testsuite/simulator/utils/deployPeripherals.js'
-import { balanceOfShares, balanceOfSharesInCash, claimAuctionProceeds, createChildUniverse, createCompleteSet, finalizeTruthAuction, forkSecurityPool, getCompleteSetCollateralAmount, getCurrentRetentionRate, getEthAmountToBuy, getFeesAccrued, getLastPrice, getMigratedRep, getPoolOwnershipDenominator, getSecurityBondAllowance, getSecurityVault, getSystemState, migrateShares, migrateVault, OperationType, participateAuction, poolOwnershipToRep, redeemCompleteSet, redeemShares, sharesToCash, startTruthAuction } from '../testsuite/simulator/utils/peripherals.js'
+import { balanceOfShares, balanceOfSharesInCash, claimAuctionProceeds, createChildUniverse, createCompleteSet, finalizeTruthAuction, forkSecurityPool, getCompleteSetCollateralAmount, getCurrentRetentionRate, getEthAmountToBuy, getTotalFeesOvedToVaults, getLastPrice, getMigratedRep, getPoolOwnershipDenominator, getSecurityBondAllowance, getSecurityVault, getSystemState, migrateShares, migrateVault, OperationType, participateAuction, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, startTruthAuction, updateVaultFees } from '../testsuite/simulator/utils/peripherals.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
 
 describe('Peripherals Contract Test Suite', () => {
 	let mockWindow: MockWindowEthereum
+
 	let client: WriteClient
 	let startBalance: bigint
 	let reportBond: bigint
+	const PRICE_PRECISION = 1n * 10n ** 18n
 	const repDeposit = 1000n * 10n ** 18n
+	const currentTimestamp = dateToBigintSeconds(new Date())
 	let securityPoolAddresses: {
 		securityPool: `0x${ string }`,
 		priceOracleManagerAndOperatorQueuer: `0x${ string }`,
@@ -33,8 +36,7 @@ describe('Peripherals Contract Test Suite', () => {
 		//await mockWindow.setStartBLock(mockWindow.getTime)
 		await setupTestAccounts(mockWindow)
 	 	startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		const currentTimestamp = BigInt(Math.floor((await mockWindow.getTime()).getTime() / 1000))
-		await deployZoltarAndCreateMarket(client, currentTimestamp + DAY / 2n)
+		await deployZoltarAndCreateMarket(client, currentTimestamp + 365n * DAY)
 		await deployPeripherals(client)
 		await approveAndDepositRep(client, repDeposit)
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
@@ -48,7 +50,47 @@ describe('Peripherals Contract Test Suite', () => {
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance - reportBond, 100n, 'Did not get rep back')
 	})
 
+	test('Open Interest Fees', async () => {
+		const questionData = await getQuestionData(client, questionId)
+		assert.strictEqual(questionData.endTime > dateToBigintSeconds(new Date), true, 'market has already ended')
+		const securityPoolAllowance = repDeposit / 4n
+		const aMonthFromNow = currentTimestamp + 2628000n
+		assert.strictEqual(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max')
+		await requestPrice(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		assert.strictEqual(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
+		assert.strictEqual(await getSecurityBondAllowance(client, securityPoolAddresses.securityPool), securityPoolAllowance, 'Security pool allowance was not set correctly')
+
+		const openInterestAmount = 100n * 10n ** 18n
+		await mockWindow.setTime(aMonthFromNow)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+		const retentionRate = await getCurrentRetentionRate(client, securityPoolAddresses.securityPool)
+
+		await mockWindow.setTime(questionData.endTime + 10000n)
+
+		await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
+		const feesAccrued = await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool)
+		const ethBalanceBefore = await getETHBalance(client, client.account.address)
+		const securityVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		await redeemFees(client, securityPoolAddresses.securityPool, client.account.address)
+		assert.strictEqual(securityVault.securityBondAllowance, securityPoolAllowance, 'securityPoolAllowance is all ours')
+		const ethBalanceAfter = await getETHBalance(client, client.account.address)
+		assert.strictEqual(ethBalanceAfter - ethBalanceBefore, securityVault.unpaidEthFees, 'eth gained should be fees accrued')
+		assert.strictEqual(feesAccrued / 1000n, securityVault.unpaidEthFees / 1000n, 'eth gained should be fees accrued (minus rounding issues')
+		const completeSetCollateralAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		assert.strictEqual(feesAccrued + completeSetCollateralAmount, openInterestAmount, 'no eth lost')
+		const timePassed = questionData.endTime - aMonthFromNow
+		assert.strictEqual(timePassed / 8640n, 3345n, 'not enough time passed')
+		assert.strictEqual(retentionRate, 999999987364000000n, 'retention rate did not match')
+		const completeSetCollateralAmountPercentage = Number(completeSetCollateralAmount * 1000n / openInterestAmount) / 10
+		const expected = Number(1000n * rpow(retentionRate, timePassed, PRICE_PRECISION) / PRICE_PRECISION) / 10
+		assert.strictEqual(completeSetCollateralAmountPercentage, expected, 'return amount did not match')
+		const contractBalance = await getETHBalance(client, securityPoolAddresses.securityPool)
+		assert.strictEqual(contractBalance + ethBalanceAfter - ethBalanceBefore, openInterestAmount, 'contract balance+ fees should equal initial open interest')
+	})
+
 	test('can set security bonds allowance, mint complete sets and fork happily' , async () => {
+		const questionData = await getQuestionData(client, questionId)
+		await mockWindow.setTime(questionData.endTime + 10000n)
 		const securityPoolAllowance = repDeposit / 4n
 		assert.strictEqual(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max');
 		await requestPrice(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
@@ -95,6 +137,8 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), openInterestAmount, 'child contract did not record the amount correctly')
 	})
 	test('two security pools with disagreement', async () => {
+		const questionData = await getQuestionData(client, questionId)
+		await mockWindow.setTime(questionData.endTime + 10000n)
 		const openInterestAmount = 10n * 10n ** 18n
 		const openInterestArray = [openInterestAmount, openInterestAmount, openInterestAmount]
 		const securityPoolAllowance = repDeposit / 4n
@@ -195,7 +239,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const balancePriorYesRedeemal = await getETHBalance(client, addressString(TEST_ADDRESSES[2]))
 		await redeemShares(openInterestHolder, yesSecurityPool.securityPool)
 		assert.deepStrictEqual(await balanceOfSharesInCash(client, yesSecurityPool.securityPool, securityPoolAddresses.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2])), [openInterestAmount, 0n, openInterestAmount], 'Not enough shares')
-		const fees = await getFeesAccrued(client, securityPoolAddresses.securityPool) + await getFeesAccrued(client, yesSecurityPool.securityPool)
+		const fees = await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool) + await getTotalFeesOvedToVaults(client, yesSecurityPool.securityPool)
 		approximatelyEqual(await getETHBalance(client, addressString(TEST_ADDRESSES[2])), balancePriorYesRedeemal + openInterestAmount - fees, 10n ** 15n, 'did not gain eth after redeeming yes shares')
 
 		// no status: auction fully funds, 3/4 of rep balance is sold for eth

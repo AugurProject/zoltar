@@ -15,7 +15,7 @@ describe('Contract Test Suite', () => {
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
 		await setupTestAccounts(mockWindow)
-		curentTimestamp = BigInt(Math.floor((await mockWindow.getTime()).getTime() / 1000))
+		curentTimestamp = await mockWindow.getTime()
 	})
 
 	test('canDeployContract', async () => {
