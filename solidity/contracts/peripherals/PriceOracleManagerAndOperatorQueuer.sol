@@ -20,7 +20,6 @@ uint32 constant gasConsumedSettlement = 1000000; //TODO
 
 IWeth9 constant WETH = IWeth9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
-
 struct QueuedOperation {
 	OperationType operation;
 	address initiatorVault;

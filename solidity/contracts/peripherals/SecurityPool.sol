@@ -33,8 +33,9 @@ contract SecurityPool is ISecurityPool {
 	uint256 public securityMultiplier;
 	uint256 public shareTokenSupply;
 
-	uint256 public feesAccrued;
+	uint256 public totalFeesOvedToVaults;
 	uint256 public lastUpdatedFeeAccumulator;
+	uint256 public feeIndex;
 	uint256 public currentRetentionRate;
 
 	mapping(address => SecurityVault) public securityVaults;
@@ -57,6 +58,10 @@ contract SecurityPool is ISecurityPool {
 	event DepositRep(address vault, uint256 repAmount, uint256 poolOwnership);
 	event RedeemShares(address redeemer, uint256 sharesAmount, uint256 ethValue);
 	event FinalizeAuction(uint256 repAvailable, uint256 migratedRep, uint256 repPurchased, uint256 poolOwnershipDenominator);
+	event UpdateVaultFees(address vault, uint256 feeIndex, uint256 unpaidEthFees);
+	event RedeemFees(address vault, uint256 fees);
+	event UpdateCollateralAmount(uint256 totalFeesOvedToVaults, uint256 completeSetCollateralAmount);
+	event CreateCompleteSet(uint256 shareTokenSupply, uint256 completeSetsToMint, uint256 completeSetCollateralAmount);
 
 	modifier isOperational {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
@@ -93,6 +98,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function updateCollateralAmount() public {
+		if (securityBondAllowance == 0) return;
 		(uint64 endTime,,,) = zoltar.questions(questionId);
 		uint256 clampedCurrentTimestamp = block.timestamp > endTime ? endTime : block.timestamp;
 		uint256 clampedLastUpdatedFeeAccumulator = lastUpdatedFeeAccumulator > endTime ? endTime : lastUpdatedFeeAccumulator;
@@ -100,9 +106,13 @@ contract SecurityPool is ISecurityPool {
 		if (timeDelta == 0) return;
 
 		uint256 newCompleteSetCollateralAmount = completeSetCollateralAmount * SecurityPoolUtils.rpow(currentRetentionRate, timeDelta, SecurityPoolUtils.PRICE_PRECISION) / SecurityPoolUtils.PRICE_PRECISION;
-		feesAccrued += completeSetCollateralAmount - newCompleteSetCollateralAmount;
+		uint256 delta = completeSetCollateralAmount - newCompleteSetCollateralAmount;
+		totalFeesOvedToVaults += delta;
+		feeIndex += delta * SecurityPoolUtils.PRICE_PRECISION / securityBondAllowance;
 		completeSetCollateralAmount = newCompleteSetCollateralAmount;
 		lastUpdatedFeeAccumulator = block.timestamp;
+
+		emit UpdateCollateralAmount(totalFeesOvedToVaults, completeSetCollateralAmount);
 	}
 
 	function updateRetentionRate() public {
@@ -115,18 +125,19 @@ contract SecurityPool is ISecurityPool {
 	// I wonder if we want to delay the payments and smooth them out to avoid flashloan attacks?
 	function updateVaultFees(address vault) public {
 		updateCollateralAmount();
-		require(feesAccrued >= securityVaults[vault].feeAccumulator, 'fee accumulator too high? should not happen');
-		uint256 accumulatorDiff = feesAccrued - securityVaults[vault].feeAccumulator;
-		uint256 fees = (securityVaults[vault].securityBondAllowance * accumulatorDiff) / SecurityPoolUtils.PRICE_PRECISION;
-		securityVaults[vault].feeAccumulator = feesAccrued;
+		uint256 fees = securityVaults[vault].securityBondAllowance * (feeIndex - securityVaults[vault].feeIndex) / SecurityPoolUtils.PRICE_PRECISION;
+		securityVaults[vault].feeIndex = feeIndex;
 		securityVaults[vault].unpaidEthFees += fees;
+		emit UpdateVaultFees(vault, securityVaults[vault].feeIndex, securityVaults[vault].unpaidEthFees);
 	}
 
 	function redeemFees(address vault) public {
 		uint256 fees = securityVaults[vault].unpaidEthFees;
 		securityVaults[vault].unpaidEthFees = 0;
+		totalFeesOvedToVaults -= fees;
 		(bool sent, ) = payable(vault).call{ value: fees }('');
 		require(sent, 'Failed to send Ether');
+		emit RedeemFees(vault, fees);
 	}
 
 	////////////////////////////////////////
@@ -243,6 +254,7 @@ contract SecurityPool is ISecurityPool {
 		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMint);
 		shareTokenSupply += completeSetsToMint;
 		completeSetCollateralAmount += msg.value;
+		emit CreateCompleteSet(shareTokenSupply, completeSetsToMint, completeSetCollateralAmount);
 		updateRetentionRate();
 	}
 
@@ -343,7 +355,7 @@ contract SecurityPool is ISecurityPool {
 		// TODO, handle case where parent repAtFork == 0
 		require(parent.repAtFork() > 0, 'parent needs to have rep at fork');
 		//completeSetCollateralAmount += parent.completeSetCollateralAmount() * securityVaults[vault].poolOwnership / (SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR * parent.repAtFork());
-		securityVaults[vault].feeAccumulator = feesAccrued;
+		securityVaults[vault].feeIndex = feeIndex;
 	}
 
 	function startTruthAuction() public {
@@ -373,7 +385,7 @@ contract SecurityPool is ISecurityPool {
 		truthAuction.finalizeAuction(); // this sends the eth back
 		systemState = SystemState.Operational;
 		uint256 repAvailable = parent.repAtFork();
-		completeSetCollateralAmount = address(this).balance - feesAccrued; //todo, we might want to reduce fees if we didn't get fully funded?
+		completeSetCollateralAmount = address(this).balance - totalFeesOvedToVaults; //todo, we might want to reduce fees if we didn't get fully funded?
 		// TODO, handle case where parent repAtFork == 0
 		require(repAvailable > 0, 'parent needs to have rep at fork');
 		poolOwnershipDenominator = migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / (repAvailable - repPurchased);

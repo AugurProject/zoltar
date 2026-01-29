@@ -338,19 +338,8 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 		address: securityPoolAddress,
 		args: [securityVault],
 	})
-	const [
-		repDepositShare,
-		securityBondAllowance,
-		unpaidEthFees,
-		feeAccumulator,
-	] = vault
-
-	return {
-		repDepositShare,
-		securityBondAllowance,
-		unpaidEthFees,
-		feeAccumulator,
-	}
+	const [repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex ] = vault
+	return { repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex }
 }
 
 export const getPoolOwnershipDenominator = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
@@ -437,10 +426,10 @@ export const createChildUniverse = async (client: WriteClient, securityPoolAddre
 	})
 }
 
-export const getFeesAccrued = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getTotalFeesOvedToVaults = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'feesAccrued',
+		functionName: 'totalFeesOvedToVaults',
 		address: securityPoolAddress,
 		args: [],
 	})
@@ -475,4 +464,22 @@ export const getShareTokenSupply = async (client: ReadClient, securityPoolAddres
 
 export const shareArrayToCash = async (client: ReadClient, securityPoolAddress: `0x${ string }`, shares: readonly bigint[]) => {
 	return await Promise.all(shares.map((shares) => sharesToCash(client, securityPoolAddress, shares)))
+}
+
+export const updateVaultFees = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) => {
+	return await client.writeContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'updateVaultFees',
+		address: securityPoolAddress,
+		args: [vault],
+	})
+}
+
+export const redeemFees = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) => {
+	return await client.writeContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'redeemFees',
+		address: securityPoolAddress,
+		args: [vault],
+	})
 }
