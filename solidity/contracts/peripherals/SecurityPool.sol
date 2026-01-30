@@ -114,7 +114,6 @@ contract SecurityPool is ISecurityPool {
 		totalFeesOvedToVaults += delta;
 		feeIndex += delta * SecurityPoolUtils.PRICE_PRECISION / securityBondAllowance;
 		completeSetCollateralAmount = newCompleteSetCollateralAmount;
-		lastUpdatedFeeAccumulator = block.timestamp;
 		lastUpdatedFeeAccumulator = block.timestamp > feeEndDate ? feeEndDate : block.timestamp;
 
 		emit UpdateCollateralAmount(totalFeesOvedToVaults, completeSetCollateralAmount);
