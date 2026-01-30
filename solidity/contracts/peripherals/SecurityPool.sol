@@ -400,9 +400,7 @@ contract SecurityPool is ISecurityPool {
 		systemState = SystemState.Operational;
 		uint256 repAvailable = parent.repAtFork();
 		completeSetCollateralAmount = address(this).balance - totalFeesOvedToVaults; //todo, we might want to reduce fees if we didn't get fully funded?
-		// TODO, handle case where parent repAtFork == 0
-		require(repAvailable > 0, 'parent needs to have rep at fork');
-		poolOwnershipDenominator = migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / (repAvailable - repPurchased);
+		if (repAvailable > 0) poolOwnershipDenominator = migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / (repAvailable - repPurchased);
 		auctionedSecurityBondAllowance = parent.securityBondAllowance() - securityBondAllowance;
 		securityBondAllowance = parent.securityBondAllowance();
 		if (poolOwnershipDenominator == 0) poolOwnershipDenominator = repAvailable * SecurityPoolUtils.PRICE_PRECISION;
