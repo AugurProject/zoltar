@@ -84,7 +84,6 @@ describe('Peripherals Contract Test Suite', () => {
 
 		assert.strictEqual(canLiquidate(initialPrice, securityPoolAllowance, repDeposit, 2n), false, 'Should not be able to liquidate yet')
 		// REP/ETH increases to 10x, 10 REP = 1 ETH (rep drops in value)
-		await manipulatePriceOracleAndPerformOperation(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance, PRICE_PRECISION * 10n)
 		const forcedPrice = PRICE_PRECISION * 10n
 		await requestPriceIfNeededAndQueueOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
 		assert.rejects(depositRep(client, securityPoolAddresses.securityPool, repDeposit * 10n), 'operation pending')
@@ -191,6 +190,7 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'yes System should be operational right away')
 		assert.strictEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), openInterestAmount, 'child contract did not record the amount correctly')
 	})
+
 	test('two security pools with disagreement', async () => {
 		const questionData = await getQuestionData(client, questionId)
 		await mockWindow.setTime(questionData.endTime + 10000n)
