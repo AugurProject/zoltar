@@ -124,7 +124,6 @@ contract SecurityPool is ISecurityPool {
 		emit PoolRetentionRateChanged(currentRetentionRate);
 	}
 
-	// I wonder if we want to delay the payments and smooth them out to avoid flashloan attacks?
 	function updateVaultFees(address vault) public {
 		updateCollateralAmount();
 		uint256 fees = securityVaults[vault].securityBondAllowance * (feeIndex - securityVaults[vault].feeIndex) / SecurityPoolUtils.PRICE_PRECISION;
@@ -312,11 +311,10 @@ contract SecurityPool is ISecurityPool {
 		updateCollateralAmount();
 		currentRetentionRate = 0;
 		repAtFork = repToken.balanceOf(address(this));
-		// TODO, handle case where parent repAtFork == 0
 		emit ForkSecurityPool(repAtFork);
 		repToken.approve(address(zoltar), repAtFork);
 		zoltar.splitRep(universeId);
-		// we could pay the caller basefee*2 out of Open interest we have?
+		// TODO: we could pay the caller basefee*2 out of Open interest we have to reward caller
 	}
 
 	function createChildUniverse(QuestionOutcome outcome) public {
@@ -326,7 +324,7 @@ contract SecurityPool is ISecurityPool {
 		_createChildUniverse(outcome);
 	}
 
-	function _createChildUniverse(QuestionOutcome outcome) public {
+	function _createChildUniverse(QuestionOutcome outcome) private {
 		// first vault migrater creates new pool and transfers all REP to it
 		uint192 childUniverseId = (universeId << 2) + uint192(outcome) + 1;
 		uint256 retentionRate = SecurityPoolUtils.calculateRetentionRate(completeSetCollateralAmount, securityBondAllowance);
@@ -341,7 +339,6 @@ contract SecurityPool is ISecurityPool {
 		(,, uint256 forkTime) = zoltar.universes(universeId);
 		require(systemState == SystemState.PoolForked, 'Pool needs to have forked');
 		require(block.timestamp <= forkTime + SecurityPoolUtils.MIGRATION_TIME , 'migration time passed');
-		require(securityVaults[msg.sender].poolOwnership > 0, 'Vault has no rep to migrate');
 		updateVaultFees(msg.sender);
 		emit MigrateVault(msg.sender, outcome, securityVaults[msg.sender].poolOwnership, securityVaults[msg.sender].securityBondAllowance);
 		if (address(children[uint8(outcome)]) == address(0x0)) {
@@ -350,9 +347,10 @@ contract SecurityPool is ISecurityPool {
 		children[uint256(outcome)].migrateRepFromParent(msg.sender);
 
 		// migrate open interest
-		(bool sent, ) = payable(children[uint256(outcome)]).call{ value: completeSetCollateralAmount * securityVaults[msg.sender].poolOwnership / poolOwnershipDenominator }('');
-		require(sent, 'Failed to send Ether');
-
+		if (poolOwnershipDenominator > 0 && securityVaults[msg.sender].poolOwnership > 0) {
+			(bool sent, ) = payable(children[uint256(outcome)]).call{ value: completeSetCollateralAmount * securityVaults[msg.sender].poolOwnership / poolOwnershipDenominator }('');
+			require(sent, 'Failed to send Ether');
+		}
 		securityVaults[msg.sender].poolOwnership = 0;
 		securityVaults[msg.sender].securityBondAllowance = 0;
 	}
@@ -366,14 +364,12 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[vault].securityBondAllowance = parentSecurityBondAllowance;
 		securityBondAllowance += parentSecurityBondAllowance;
 		poolOwnershipDenominator = parent.repAtFork() * SecurityPoolUtils.PRICE_PRECISION;
+		if (parent.poolOwnershipDenominator() == 0 || repToken.balanceOf(address(this)) == 0) return;
+
 		securityVaults[vault].poolOwnership = repToPoolOwnership(parentPoolOwnership * parent.repAtFork() / parent.poolOwnershipDenominator());
 		migratedRep += poolOwnershipToRep(securityVaults[vault].poolOwnership);
-
-		// migrate completeset collateral amount incrementally as we want this portion to start paying fees right away, but stop paying fees in the parent system
-		// TODO, handle case where parent repAtFork == 0
-		require(parent.repAtFork() > 0, 'parent needs to have rep at fork');
-		//completeSetCollateralAmount += parent.completeSetCollateralAmount() * securityVaults[vault].poolOwnership / (SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR * parent.repAtFork());
 		securityVaults[vault].feeIndex = feeIndex;
+		// migrate completeset collateral amount incrementally as we want this portion to start paying fees right away, but stop paying fees in the parent system
 	}
 
 	function startTruthAuction() public {
@@ -404,9 +400,7 @@ contract SecurityPool is ISecurityPool {
 		systemState = SystemState.Operational;
 		uint256 repAvailable = parent.repAtFork();
 		completeSetCollateralAmount = address(this).balance - totalFeesOvedToVaults; //todo, we might want to reduce fees if we didn't get fully funded?
-		// TODO, handle case where parent repAtFork == 0
-		require(repAvailable > 0, 'parent needs to have rep at fork');
-		poolOwnershipDenominator = migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / (repAvailable - repPurchased);
+		if (repAvailable > 0) poolOwnershipDenominator = migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / (repAvailable - repPurchased);
 		auctionedSecurityBondAllowance = parent.securityBondAllowance() - securityBondAllowance;
 		securityBondAllowance = parent.securityBondAllowance();
 		if (poolOwnershipDenominator == 0) poolOwnershipDenominator = repAvailable * SecurityPoolUtils.PRICE_PRECISION;
