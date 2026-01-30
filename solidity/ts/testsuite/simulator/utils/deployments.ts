@@ -1,4 +1,4 @@
-import { peripherals_interfaces_IAugur_IAugur, IERC20_IERC20, peripherals_interfaces_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_factories_AuctionFactory_AuctionFactory, ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory } from '../../../types/contractArtifact.js'
+import { peripherals_interfaces_IAugur_IAugur, IERC20_IERC20, peripherals_interfaces_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_factories_AuctionFactory_AuctionFactory, ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_IsonzoFront_IsonzoFront } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
 import { addressString } from './bigint.js'
 import { ETHEREUM_LOGS_LOGGER_ADDRESS, TEST_ADDRESSES, WETH_ADDRESS } from './constants.js'
@@ -106,6 +106,10 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 			abi: peripherals_SecurityPoolUtils_SecurityPoolUtils.abi,
 			deploymentName: 'Security Pool Utils',
 			address: infraAddresses.securityPoolUtils
+		}, {
+			abi: peripherals_IsonzoFront_IsonzoFront.abi,
+			deploymentName: 'IsonzoFront',
+			address: infraAddresses.isonzoFront
 		}, {
 			abi: undefined,
 			deploymentName: 'Augur V2 Genesis',

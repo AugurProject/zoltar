@@ -28,7 +28,7 @@ export const deployZoltarAndCreateMarket = async (client: WriteClient, questionE
 }
 
 export const deployPeripherals = async (client: WriteClient) => {
-	await ensureInfraDeployed(client);
+	await ensureInfraDeployed(client)
 	await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice, completeSetCollateralAmount)
 	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).securityPool
 	assert.ok(await contractExists(client, securityPoolAddress), 'security pool not deployed')
