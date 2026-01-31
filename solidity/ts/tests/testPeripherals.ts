@@ -8,9 +8,9 @@ import assert from 'node:assert'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
 import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { approveAndDepositRep, canLiquidate, deployPeripherals, deployZoltarAndCreateMarket, genesisUniverse, MAX_RETENTION_RATE, questionId, manipulatePriceOracleAndPerformOperation, securityMultiplier, triggerFork, manipulatePriceOracle } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
+import { approveAndDepositRep, canLiquidate, deployPeripherals, deployZoltarAndCreateMarket, genesisUniverse, MAX_RETENTION_RATE, questionId, manipulatePriceOracleAndPerformOperation, securityMultiplier, triggerFork, manipulatePriceOracle, handleOracleReporting } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
 import { getSecurityPoolAddresses } from '../testsuite/simulator/utils/deployPeripherals.js'
-import { balanceOfShares, balanceOfSharesInCash, claimAuctionProceeds, createChildUniverse, createCompleteSet, finalizeTruthAuction, forkSecurityPool, getCompleteSetCollateralAmount, getCurrentRetentionRate, getEthAmountToBuy, getTotalFeesOvedToVaults, getLastPrice, getMigratedRep, getPoolOwnershipDenominator, getSecurityBondAllowance, getSecurityVault, getSystemState, migrateShares, migrateVault, OperationType, participateAuction, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, startTruthAuction, updateVaultFees, redeemRep } from '../testsuite/simulator/utils/peripherals.js'
+import { balanceOfShares, balanceOfSharesInCash, claimAuctionProceeds, createChildUniverse, createCompleteSet, finalizeTruthAuction, forkSecurityPool, getCompleteSetCollateralAmount, getCurrentRetentionRate, getEthAmountToBuy, getTotalFeesOvedToVaults, getLastPrice, getMigratedRep, getPoolOwnershipDenominator, getSecurityBondAllowance, getSecurityVault, getSystemState, migrateShares, migrateVault, OperationType, participateAuction, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, startTruthAuction, updateVaultFees, redeemRep, requestPriceIfNeededAndQueueOperation, depositRep } from '../testsuite/simulator/utils/peripherals.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
 
 describe('Peripherals Contract Test Suite', () => {
@@ -81,11 +81,14 @@ describe('Peripherals Contract Test Suite', () => {
 		await mockWindow.advanceTime(100000n)
 
 		const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await approveAndDepositRep(liquidatorClient, repDeposit * 10n)
 
 		assert.strictEqual(canLiquidate(initialPrice, securityPoolAllowance, repDeposit, 2n), false, 'Should not be able to liquidate yet')
 		// REP/ETH increases to 10x, 10 REP = 1 ETH (rep drops in value)
-		await manipulatePriceOracleAndPerformOperation(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance, PRICE_PRECISION * 10n)
+		const forcedPrice = PRICE_PRECISION * 10n
+		await requestPriceIfNeededAndQueueOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
+		assert.rejects(depositRep(client, securityPoolAddresses.securityPool, repDeposit * 10n), 'operation pending')
+
+		await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
 
 		const currentPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		assert.strictEqual(currentPrice, PRICE_PRECISION * 10n, 'Price did not increase!')
@@ -187,6 +190,7 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'yes System should be operational right away')
 		assert.strictEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), openInterestAmount, 'child contract did not record the amount correctly')
 	})
+
 	test('two security pools with disagreement', async () => {
 		const questionData = await getQuestionData(client, questionId)
 		await mockWindow.setTime(questionData.endTime + 10000n)
