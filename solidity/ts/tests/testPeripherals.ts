@@ -104,7 +104,7 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(liquidatorVault.repDepositShare / PRICE_PRECISION, repDeposit+(repDeposit * 10n), 'liquidator should have all the rep in the pool')
 	})
 
-	test('Open Interest Fees', async () => {
+	test('Open Interest Fees (non forking)', async () => {
 		const questionData = await getQuestionData(client, questionId)
 		assert.strictEqual(questionData.endTime > dateToBigintSeconds(new Date), true, 'market has already ended')
 		const securityPoolAllowance = repDeposit / 4n
@@ -169,12 +169,13 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(newCompleteSetBalances[1], 0n, 'Did not lose complete sets')
 		assert.strictEqual(newCompleteSetBalances[2], 0n, 'Did not lose complete sets')
 		assert.strictEqual(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max after zero complete sets');
-
 		// forking
 		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 		const repBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
+
 		await triggerFork(client, mockWindow, questionId)
 		await forkSecurityPool(client, securityPoolAddresses.securityPool)
+		const totalFeesOvedToVaultsRightAfterFork = await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool)
 		assert.strictEqual(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
 		assert.strictEqual(0n, await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool), 'Parents original rep is gone')
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -189,6 +190,9 @@ describe('Peripherals Contract Test Suite', () => {
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		assert.strictEqual(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'yes System should be operational right away')
 		assert.strictEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), openInterestAmount, 'child contract did not record the amount correctly')
+
+		const totalFeesOvedToVaultsAfterFork = await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool)
+		assert.strictEqual(totalFeesOvedToVaultsRightAfterFork, totalFeesOvedToVaultsAfterFork, 'parents fees should be frozen')
 	})
 
 	test('two security pools with disagreement', async () => {
@@ -367,4 +371,6 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'yes System should be operational right away')
 		assert.strictEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'child contract did not record the amount correctly')
 	})
+
+	// - todo test that users can claim their stuff (shares+rep) even if zoltar forks after market ends
 })
