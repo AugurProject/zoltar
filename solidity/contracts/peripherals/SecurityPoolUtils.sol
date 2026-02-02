@@ -29,6 +29,7 @@ library SecurityPoolUtils {
 	// starts from MAX_RETENTION_RATE, decrases linearly until RETENTION_RATE_DIP% utilization is hit and then caps to MIN_RETENTION_RATE
 	// TODO: research more on how this should work
 	function calculateRetentionRate(uint256 completeSetCollateralAmount, uint256 securityBondAllowance) external pure returns (uint256 z) {
+		if (securityBondAllowance == 0) return MAX_RETENTION_RATE;
 		uint256 utilization = (completeSetCollateralAmount * 100) / securityBondAllowance;
 		if (utilization <= RETENTION_RATE_DIP) {
 			uint256 utilizationRatio = (utilization * PRICE_PRECISION) / RETENTION_RATE_DIP;
