@@ -33,6 +33,17 @@ export const requestPriceIfNeededAndQueueOperation = async (client: WriteClient,
 	})
 }
 
+export const requestPrice = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
+	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer) * 2n;
+	return await client.writeContract({
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+		functionName: 'requestPrice',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+		value: ethCost,
+	})
+}
+
 export const getPendingReportId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
@@ -479,6 +490,15 @@ export const redeemFees = async (client: WriteClient, securityPoolAddress: `0x${
 	return await client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemFees',
+		address: securityPoolAddress,
+		args: [vault],
+	})
+}
+
+export const redeemRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) => {
+	return await client.writeContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'redeemRep',
 		address: securityPoolAddress,
 		args: [vault],
 	})

@@ -2,15 +2,15 @@ import { describe, beforeEach, test } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { approximatelyEqual, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, getQuestionData, getReportBond, getRepTokenAddress, getWinningOutcome, isFinalized, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+import { approximatelyEqual, contractExists, finalizeQuestion, getChildUniverseId, getERC20Balance, getETHBalance, getQuestionData, getReportBond, getRepTokenAddress, getWinningOutcome, isFinalized, reportOutcome, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { addressString, dateToBigintSeconds, rpow } from '../testsuite/simulator/utils/bigint.js'
 import assert from 'node:assert'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
 import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { approveAndDepositRep, canLiquidate, deployPeripherals, deployZoltarAndCreateMarket, genesisUniverse, MAX_RETENTION_RATE, questionId, requestPrice, securityMultiplier, triggerFork } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
+import { approveAndDepositRep, canLiquidate, deployPeripherals, deployZoltarAndCreateMarket, genesisUniverse, MAX_RETENTION_RATE, questionId, manipulatePriceOracleAndPerformOperation, securityMultiplier, triggerFork, manipulatePriceOracle } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
 import { getSecurityPoolAddresses } from '../testsuite/simulator/utils/deployPeripherals.js'
-import { balanceOfShares, balanceOfSharesInCash, claimAuctionProceeds, createChildUniverse, createCompleteSet, finalizeTruthAuction, forkSecurityPool, getCompleteSetCollateralAmount, getCurrentRetentionRate, getEthAmountToBuy, getTotalFeesOvedToVaults, getLastPrice, getMigratedRep, getPoolOwnershipDenominator, getSecurityBondAllowance, getSecurityVault, getSystemState, migrateShares, migrateVault, OperationType, participateAuction, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, startTruthAuction, updateVaultFees } from '../testsuite/simulator/utils/peripherals.js'
+import { balanceOfShares, balanceOfSharesInCash, claimAuctionProceeds, createChildUniverse, createCompleteSet, finalizeTruthAuction, forkSecurityPool, getCompleteSetCollateralAmount, getCurrentRetentionRate, getEthAmountToBuy, getTotalFeesOvedToVaults, getLastPrice, getMigratedRep, getPoolOwnershipDenominator, getSecurityBondAllowance, getSecurityVault, getSystemState, migrateShares, migrateVault, OperationType, participateAuction, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, startTruthAuction, updateVaultFees, redeemRep } from '../testsuite/simulator/utils/peripherals.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
 
 describe('Peripherals Contract Test Suite', () => {
@@ -44,19 +44,34 @@ describe('Peripherals Contract Test Suite', () => {
 	})
 
 	test('can deposit rep and withdraw it', async () => {
-		await requestPrice(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
 		assert.strictEqual(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance - reportBond, 100n, 'Did not get rep back')
 	})
 
+	test('can deposit rep and redeem it back after market has ended', async () => {
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		assert.strictEqual(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
+
+		const questionData = await getQuestionData(client, questionId)
+		await mockWindow.setTime(questionData.endTime + 10000n)
+		await reportOutcome(client, genesisUniverse, questionId, QuestionOutcome.Yes)
+		await mockWindow.advanceTime(2n * DAY)
+		await finalizeQuestion(client, genesisUniverse, questionId)
+		const repBefore = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		await redeemRep(client, securityPoolAddresses.securityPool, client.account.address)
+		const repAfter = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		assert.strictEqual(repAfter-repBefore, repDeposit, 'did not get rep back')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 'Did not empty security pool of rep')
+	})
 
 	test('Can Liquidate', async () => {
 		const questionData = await getQuestionData(client, questionId)
 		await mockWindow.setTime(questionData.endTime + 10000n)
 		const securityPoolAllowance = repDeposit / 4n
 		assert.strictEqual(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max');
-		await requestPrice(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 		const initialPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		assert.strictEqual(initialPrice, 1n * PRICE_PRECISION, 'Price was not set!')
 		assert.strictEqual(await getSecurityBondAllowance(client, securityPoolAddresses.securityPool), securityPoolAllowance, 'Security pool allowance was not set correctly')
@@ -70,7 +85,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		assert.strictEqual(canLiquidate(initialPrice, securityPoolAllowance, repDeposit, 2n), false, 'Should not be able to liquidate yet')
 		// REP/ETH increases to 10x, 10 REP = 1 ETH (rep drops in value)
-		await requestPrice(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance, PRICE_PRECISION * 10n)
+		await manipulatePriceOracleAndPerformOperation(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance, PRICE_PRECISION * 10n)
 
 		const currentPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		assert.strictEqual(currentPrice, PRICE_PRECISION * 10n, 'Price did not increase!')
@@ -92,7 +107,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const securityPoolAllowance = repDeposit / 4n
 		const aMonthFromNow = currentTimestamp + 2628000n
 		assert.strictEqual(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max')
-		await requestPrice(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 		assert.strictEqual(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
 		assert.strictEqual(await getSecurityBondAllowance(client, securityPoolAddresses.securityPool), securityPoolAllowance, 'Security pool allowance was not set correctly')
 
@@ -129,7 +144,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await mockWindow.setTime(questionData.endTime + 10000n)
 		const securityPoolAllowance = repDeposit / 4n
 		assert.strictEqual(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max');
-		await requestPrice(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 		assert.strictEqual(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
 		assert.strictEqual(await getSecurityBondAllowance(client, securityPoolAddresses.securityPool), securityPoolAllowance, 'Security pool allowance was not set correctly')
 
@@ -178,10 +193,10 @@ describe('Peripherals Contract Test Suite', () => {
 		const openInterestAmount = 10n * 10n ** 18n
 		const openInterestArray = [openInterestAmount, openInterestAmount, openInterestAmount]
 		const securityPoolAllowance = repDeposit / 4n
-		await requestPrice(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRep(attackerClient, repDeposit)
-		await requestPrice(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 
 		const repBalanceInGenesisPool = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 		assert.strictEqual(repBalanceInGenesisPool, 2n * repDeposit, 'After two deposits, the system should have 2 x repDeposit worth of REP')
