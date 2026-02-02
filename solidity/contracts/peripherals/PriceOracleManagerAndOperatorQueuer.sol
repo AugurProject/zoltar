@@ -152,4 +152,8 @@ contract PriceOracleManagerAndOperatorQueuer {
 		}
 		queuedOperations[operationId].amount = 0;
 	}
+
+	function getQueuedOperation() public view returns (QueuedOperation memory) {
+		return queuedOperations[queuedPendingOperationId];
+	}
 }

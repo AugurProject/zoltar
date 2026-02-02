@@ -5,7 +5,7 @@ import { Auction } from './Auction.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
-import { PriceOracleManagerAndOperatorQueuer } from './PriceOracleManagerAndOperatorQueuer.sol';
+import { PriceOracleManagerAndOperatorQueuer, QueuedOperation } from './PriceOracleManagerAndOperatorQueuer.sol';
 import { ISecurityPool, SecurityVault, SystemState, QuestionOutcome, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
@@ -180,8 +180,9 @@ contract SecurityPool is ISecurityPool {
 		return completeSetCollateralAmount == 0 ? (eth * SecurityPoolUtils.PRICE_PRECISION) : (eth * shareTokenSupply / completeSetCollateralAmount);
 	}
 
-	// todo, an owner can save their vault from liquidation if they deposit REP after the liquidation price query is triggered, we probably want to lock the vault from deposits if this has been triggered?
 	function depositRep(uint256 repAmount) public isOperational {
+		QueuedOperation memory queuedOperation = priceOracleManagerAndOperatorQueuer.getQueuedOperation();
+		require(queuedOperation.amount == 0 || queuedOperation.targetVault != msg.sender, 'operation pending'); // prevents owner from saving their vault when liquidation is pending
 		uint256 poolOwnership = repToPoolOwnership(repAmount);
 		repToken.transferFrom(msg.sender, address(this), repAmount);
 		securityVaults[msg.sender].poolOwnership += poolOwnership;
