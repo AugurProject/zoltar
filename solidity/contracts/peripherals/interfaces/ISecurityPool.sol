@@ -7,12 +7,14 @@ import { Auction } from "../Auction.sol";
 import { IShareToken } from "./IShareToken.sol";
 import { ReputationToken } from "../../ReputationToken.sol";
 import { PriceOracleManagerAndOperatorQueuer } from "../PriceOracleManagerAndOperatorQueuer.sol";
+import { EscalationGame } from '../EscalationGame.sol';
 
 struct SecurityVault {
 	uint256 poolOwnership;
 	uint256 securityBondAllowance;
 	uint256 unpaidEthFees;
 	uint256 feeIndex;
+	uint256 lockedRepInEscalationGame;
 }
 
 enum SystemState {
@@ -31,26 +33,21 @@ enum QuestionOutcome {
 interface ISecurityPool {
 
 	// -------- View Functions --------
-	function questionId() external view returns (uint56);
-	function universeId() external view returns (uint192);
+	function marketId() external view returns (uint256);
+	function universeId() external view returns (uint248);
 	function zoltar() external view returns (Zoltar);
-	function securityBondAllowance() external view returns (uint256);
+	function totalSecurityBondAllowance() external view returns (uint256);
 	function completeSetCollateralAmount() external view returns (uint256);
 	function poolOwnershipDenominator() external view returns (uint256);
-	function repAtFork() external view returns (uint256);
-	function migratedRep() external view returns (uint256);
 	function securityMultiplier() external view returns (uint256);
 	function totalFeesOvedToVaults() external view returns (uint256);
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
-	function securityVaults(address vault) external view returns (uint256 poolOwnership, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeIndex);
+	function securityVaults(address vault) external view returns (uint256 poolOwnership, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeIndex, uint256 lockedRepInEscalationGame);
 	function claimedAuctionProceeds(address vault) external view returns (bool);
-	function children(uint256 index) external view returns (ISecurityPool);
 	function parent() external view returns (ISecurityPool);
-	function truthAuctionStarted() external view returns (uint256);
 	function systemState() external view returns (SystemState);
 	function shareToken() external view returns (IShareToken);
-	function truthAuction() external view returns (Auction);
 	function repToken() external view returns (ReputationToken);
 	function securityPoolFactory() external view returns (ISecurityPoolFactory);
 	function priceOracleManagerAndOperatorQueuer() external view returns (PriceOracleManagerAndOperatorQueuer);
@@ -80,20 +77,25 @@ interface ISecurityPool {
 	function createCompleteSet() external payable;
 	function redeemCompleteSet(uint256 amount) external;
 
-	function forkSecurityPool() external;
-	function migrateVault(QuestionOutcome outcome) external;
-	function migrateRepFromParent(address vault) external;
-	function startTruthAuction() external;
-	function finalizeTruthAuction() external;
-	function claimAuctionProceeds(address vault) external;
-	function createChildUniverse(QuestionOutcome outcome) external;
+	function escalationGame() external returns (EscalationGame);
+	function setRetentionRate(uint256 newRetention) external;
+	function setSystemState(SystemState newState) external;
+	function setVaultOwnership(address vault, uint256 _poolOwnership, uint256 _securityBondAllowance) external;
 
-	function redeemShares() external;
+	function setVaultSecurityBondAllowance(address vault, uint256 _securityBondAllowance) external;
+	function addToTotalSecurityBondAllowance(uint256 securityBondAllowanceDelta) external;
+	function setPoolOwnershipDenominator(uint256 _poolOwnershipDenominator) external;
+	function setVaultPoolOwnership(address vault, uint256 poolOwnership) external;
+	function setVaultFeeIndex(address vault, uint256 newFeeIndex) external;
+	function feeIndex() external view returns (uint256);
+	function setShareTokenSupply(uint256 newShareTokenSupply) external;
+	function setCompleteSetCollateralAmount(uint256 newCompleteSetCollateralAmount) external;
+	function setTotalSecurityBondAllowance(uint256 newTotalSecurityBondAllowance) external;
 
 	receive() external payable;
 }
 
 interface ISecurityPoolFactory {
-	function deployChildSecurityPool(IShareToken shareToken, uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool);
-	function deployOriginSecurityPool(uint192 universeId, uint56 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool);
+	function deployChildSecurityPool(IShareToken shareToken, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool);
+	function deployOriginSecurityPool(uint248 universeId, string memory extraInfo, uint256 marketEndDate, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool);
 }
