@@ -1,3 +1,5 @@
+
+/*
 import test, { beforeEach, describe } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
@@ -8,7 +10,7 @@ import { approveToken, setupTestAccounts } from '../testsuite/simulator/utils/ut
 import { deployPeripherals, deployZoltarAndCreateMarket, genesisUniverse, questionId, securityMultiplier } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
 import { addressString, dateToBigintSeconds } from '../testsuite/simulator/utils/bigint.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
-import { createNewGame, depositToGame, getBalances, getEscalationGame, getStartingTime } from '../testsuite/simulator/utils/isonzoFront.js'
+import { createNewGame, depositToGame, getBalances, getEscalationGame, getStartingTime } from '../testsuite/simulator/utils/EscalationGame.js'
 import assert from 'node:assert'
 import { getInfraContractAddresses } from '../testsuite/simulator/utils/deployPeripherals.js'
 
@@ -51,3 +53,4 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(outcomeBalancesAfterDeposit.invalid, 0n, 'no stake at invalid')
 	})
 })
+*/

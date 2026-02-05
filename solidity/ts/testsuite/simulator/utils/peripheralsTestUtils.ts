@@ -1,10 +1,9 @@
 import { zeroAddress } from 'viem'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
-import { QuestionOutcome } from '../types/types.js'
 import { addressString } from './bigint.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from './constants.js'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './deployPeripherals.js'
-import { approveToken, contractExists, createQuestion, dispute, ensureZoltarDeployed, getERC20Balance, getQuestionData, getUniverseData, getZoltarAddress, isZoltarDeployed, reportOutcome } from './utilities.js'
+import { approveToken, contractExists, getERC20Balance } from './utilities.js'
 import { WriteClient } from './viem.js'
 import assert from 'node:assert'
 import { depositRep, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndQueueOperation, wrapWeth } from './peripherals.js'
@@ -17,6 +16,7 @@ export const completeSetCollateralAmount = 0n
 export const PRICE_PRECISION = 10n ** 18n
 export const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
 
+/*
 export const deployZoltarAndCreateMarket = async (client: WriteClient, questionEndTime: bigint) => {
 	await ensureZoltarDeployed(client)
 	const isDeployed = await isZoltarDeployed(client)
@@ -25,7 +25,7 @@ export const deployZoltarAndCreateMarket = async (client: WriteClient, questionE
 	await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 	await createQuestion(client, genesisUniverse, questionEndTime, 'test')
 	return await getQuestionData(client, questionId)
-}
+}*/
 
 export const deployPeripherals = async (client: WriteClient) => {
 	await ensureInfraDeployed(client)
@@ -45,7 +45,7 @@ export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigi
 	const newBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
 	assert.strictEqual(newBalance, startBalance + repDeposit, 'Did not deposit rep')
 }
-
+/*
 export const triggerFork = async(client: WriteClient, mockWindow: MockWindowEthereum, questionId: bigint) => {
 	await ensureZoltarDeployed(client)
 	await mockWindow.advanceTime(DAY)
@@ -61,7 +61,7 @@ export const triggerFork = async(client: WriteClient, mockWindow: MockWindowEthe
 		yesUniverseData: await getUniverseData(client, yesUniverseId),
 		noUniverseData: await getUniverseData(client, noUniverseId)
 	}
-}
+}*/
 
 export const handleOracleReporting = async(client: WriteClient, mockWindow: MockWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, forceRepEthPriceTo: bigint) => {
 	const pendingReportId = await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)

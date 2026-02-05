@@ -3,7 +3,7 @@ import { ReadContractReturnType } from 'viem'
 import { ReadClient, WriteClient } from './viem.js'
 import { WETH_ADDRESS } from './constants.js'
 import { SystemState } from '../types/peripheralTypes.js'
-import { peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../../types/contractArtifact.js'
+import { peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_tokens_ShareToken_ShareToken } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
 import { getInfraContractAddresses } from './deployPeripherals.js'
 
@@ -225,10 +225,10 @@ export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress
 	})
 }
 
-export const getSecurityBondAllowance = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getTotalSecurityBondAllowance = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'securityBondAllowance',
+		functionName: 'totalSecurityBondAllowance',
 		address: securityPoolAddress,
 		args: []
 	}) as bigint
@@ -252,48 +252,48 @@ export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOper
 	}) as bigint
 }
 
-export const forkSecurityPool = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const forkSecurityPool = async (client: WriteClient, securityPoolForker: `0x${ string }`, securityPoolAddress: `0x${ string }`) => {
 	return await client.writeContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'forkSecurityPool',
-		address: securityPoolAddress,
-		args: [],
+		address: securityPoolForker,
+		args: [securityPoolAddress],
 	})
 }
 
-export const migrateVault = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) => {
+export const migrateVault = async (client: WriteClient, securityPoolForker: `0x${ string }`, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) => {
 	return await client.writeContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'migrateVault',
-		address: securityPoolAddress,
-		args: [Number(outcome)],
+		address: securityPoolForker,
+		args: [securityPoolAddress, Number(outcome)],
 	})
 }
 
-export const startTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const startTruthAuction = async (client: WriteClient, securityPoolForker: `0x${ string }`, securityPoolAddress: `0x${ string }`) => {
 	return await client.writeContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'startTruthAuction',
-		address: securityPoolAddress,
-		args: [],
+		address: securityPoolForker,
+		args: [securityPoolAddress],
 	})
 }
 
-export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const finalizeTruthAuction = async (client: WriteClient, securityPoolForker: `0x${ string }`, securityPoolAddress: `0x${ string }`) => {
 	return await client.writeContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'finalizeTruthAuction',
-		address: securityPoolAddress,
-		args: [],
+		address: securityPoolForker,
+		args: [securityPoolAddress],
 	})
 }
 
-export const claimAuctionProceeds = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) => {
+export const claimAuctionProceeds = async (client: WriteClient, securityPoolForker: `0x${ string }`, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) => {
 	return await client.writeContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'claimAuctionProceeds',
-		address: securityPoolAddress,
-		args: [vault],
+		address: securityPoolForker,
+		args: [securityPoolAddress, vault],
 	})
 }
 
@@ -315,12 +315,12 @@ export const getEthAmountToBuy = async (client: ReadClient, auctionAddress: `0x$
 	})
 }
 
-export const getMigratedRep = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getMigratedRep = async (client: ReadClient, securityPoolForker: `0x${ string }`, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'migratedRep',
-		address: securityPoolAddress,
-		args: [],
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'getMigratedRep',
+		address: securityPoolForker,
+		args: [securityPoolAddress],
 	})
 }
 
@@ -428,12 +428,12 @@ export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x$
 	})
 }
 
-export const createChildUniverse = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) => {
+export const createChildUniverse = async (client: WriteClient, securityPoolForker: `0x${ string }`, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) => {
 	return await client.writeContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'createChildUniverse',
-		address: securityPoolAddress,
-		args: [outcome],
+		address: securityPoolForker,
+		args: [securityPoolAddress, Number(outcome)],
 	})
 }
 

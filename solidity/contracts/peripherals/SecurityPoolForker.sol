@@ -23,9 +23,9 @@ struct ForkData {
 
 contract SecurityPoolForker is ISecurityPoolForker {
 	Zoltar public immutable zoltar;
-	ISecurityPoolFactory public immutable securityPoolFactory;
-	mapping(ISecurityPool => ForkData) public forkData;
 	YesNoMarkets public yesNoMarkets;
+
+	mapping(ISecurityPool => ForkData) public forkData;
 
 	event ForkSecurityPool(uint256 repAtFork);
 	event MigrateVault(address vault, uint8 outcome, uint256 poolOwnership, uint256 securityBondAllowance);
@@ -43,19 +43,12 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	function poolOwnershipToRep(ISecurityPool securityPool, uint256 poolOwnership) public view returns (uint256) {
 		return poolOwnership * securityPool.repToken().balanceOf(address(this)) / securityPool.poolOwnershipDenominator();
 	}
-
-	function sharesToCash(ISecurityPool securityPool, uint256 completeSetAmount) public view returns (uint256) {
-		return completeSetAmount * securityPool.completeSetCollateralAmount() / securityPool.shareTokenSupply();
+	function getMigratedRep(ISecurityPool securityPool) public view returns (uint256) {
+		return forkData[securityPool].migratedRep;
 	}
 
-	function cashToShares(ISecurityPool securityPool, uint256 eth) public view returns (uint256) {
-		return securityPool.completeSetCollateralAmount() == 0 ? (eth * SecurityPoolUtils.PRICE_PRECISION) : (eth * securityPool.shareTokenSupply() / securityPool.completeSetCollateralAmount());
-	}
-
-	constructor(Zoltar _zoltar, ISecurityPoolFactory _securityPoolFactory, YesNoMarkets _yesNoMarkets) {
+	constructor(Zoltar _zoltar) {
 		zoltar = _zoltar;
-		securityPoolFactory = _securityPoolFactory;
-		yesNoMarkets = _yesNoMarkets;
 	}
 
 	function forkSecurityPool(ISecurityPool securityPool) public {
@@ -68,7 +61,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		forkData[securityPool].repAtFork = securityPool.repToken().balanceOf(address(this));
 		emit ForkSecurityPool(forkData[securityPool].repAtFork);
 
-		string[] memory categories = zoltar.getQuestionCategories(securityPool.universeId());
+		string[8] memory categories = zoltar.getForkingQuestionCategories(securityPool.universeId());
 
 		uint8[] memory outcomeIndices = new uint8[](categories.length + 1);
 		for (uint8 index = 0; index < outcomeIndices.length; index++) {
@@ -78,23 +71,23 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
 	}
 
-	function ensureChildUniverse(ISecurityPool securityPool, uint8 outcomeIndex) public {
+	function createChildUniverse(ISecurityPool securityPool, uint8 outcomeIndex) public {
 		if (address(forkData[securityPool].children[outcomeIndex]) != address(0x0)) return
 		require(securityPool.systemState() == SystemState.PoolForked, 'Pool needs to have forked');
 		require(block.timestamp <= zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME , 'migration time passed');
 		// first vault migrater creates new pool and transfers all REP to it
 		uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(securityPool.universeId(), outcomeIndex))));
 		uint256 retentionRate = SecurityPoolUtils.calculateRetentionRate(securityPool.completeSetCollateralAmount(), securityPool.totalSecurityBondAllowance());
-		forkData[securityPool].children[outcomeIndex] = securityPoolFactory.deployChildSecurityPool(securityPool.shareToken(), childUniverseId, securityPool.marketId(), securityPool.securityMultiplier(), retentionRate, securityPool.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
+		forkData[securityPool].children[outcomeIndex] = securityPool.securityPoolFactory().deployChildSecurityPool(securityPool.shareToken(), childUniverseId, securityPool.marketId(), securityPool.securityMultiplier(), retentionRate, securityPool.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
 		securityPool.shareToken().authorize(forkData[securityPool].children[outcomeIndex]); //TODO, need to grant acess
 		ReputationToken childReputationToken = forkData[securityPool].children[outcomeIndex].repToken();
 		childReputationToken.transfer(address(forkData[securityPool].children[outcomeIndex]), childReputationToken.balanceOf(address(this)));
 	}
 
 	// migrates vault into outcome universe after fork
-	function migrateVault(ISecurityPool securityPool, uint8 outcomeIndex) public { // called on parent
+	function migrateVault(ISecurityPool securityPool, uint8 outcomeIndex) public {
 		securityPool.updateVaultFees(msg.sender);
-		ensureChildUniverse(securityPool, outcomeIndex);
+		if (address(forkData[securityPool].children[outcomeIndex]) == address(0x0)) createChildUniverse(securityPool, outcomeIndex);
 		ISecurityPool child = forkData[securityPool].children[outcomeIndex];
 		{
 			child.updateVaultFees(msg.sender);
@@ -172,12 +165,8 @@ contract SecurityPoolForker is ISecurityPoolForker {
 
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) public {
 		require(!securityPool.escalationGame().hasForked(), 'escalation game has not triggered fork');
-		(string memory extraInfo, string[] memory outcomes) = yesNoMarkets.getForkingData(securityPool.marketId());
+		(string memory extraInfo, string[8] memory outcomes) = securityPool.yesNoMarkets().getForkingData(securityPool.marketId());
 		zoltar.forkUniverse(securityPool.universeId(), extraInfo, outcomes);
-	}
-
-	receive() external payable {
-		// needed for Truth Auction to send ETH back
 	}
 
 	// accounts the purchased REP from truthAuction to the vault

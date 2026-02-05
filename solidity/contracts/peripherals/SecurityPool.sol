@@ -13,6 +13,7 @@ import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { YesNoMarkets } from './YesNoMarkets.sol';
 import { SecurityPoolForker } from './SecurityPoolForker.sol';
+import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
 uint256 constant TODO_INITIAL_ESCALATION_GAME_DEPOSIT = 1 ether; // todo, how to get this value?
 
@@ -30,7 +31,7 @@ contract SecurityPool is ISecurityPool {
 	EscalationGameFactory public immutable escalationGameFactory;
 	EscalationGame public escalationGame;
 	YesNoMarkets public yesNoMarkets;
-	SecurityPoolForker public securityPoolForker;
+	ISecurityPoolForker public securityPoolForker;
 	ISecurityPoolFactory public securityPoolFactory;
 
 	uint256 public totalSecurityBondAllowance;
@@ -79,7 +80,7 @@ contract SecurityPool is ISecurityPool {
 		_;
 	}
 
-	constructor(SecurityPoolForker _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, YesNoMarkets _yesNoMarkets, EscalationGameFactory _escalationGameFactory, Auction _truthAuction, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _marketId, uint256 _securityMultiplier) {
+	constructor(ISecurityPoolForker _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, YesNoMarkets _yesNoMarkets, EscalationGameFactory _escalationGameFactory, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _marketId, uint256 _securityMultiplier) {
 		universeId = _universeId;
 		securityPoolFactory = _securityPoolFactory;
 		marketId = _marketId;

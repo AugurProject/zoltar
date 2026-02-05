@@ -9,54 +9,50 @@ uint256 constant FORK_BURN_DIVISOR = 5; // TODO, revisit, 20% of fork treshold
 
 contract Zoltar {
 	struct Universe {
-		uint248 parentUniverseId;
-		uint256 outcomeIndex;
+		uint256 forkTime;
 		ReputationToken reputationToken;
-
-		address forkedBy;
-		string forkingQuestionExtraInfo; // not needed internaly, but very useful externally
-		string[] questionCategories;
-		uint256 forkTime; // not needed internaly, but very useful externally
-
-		uint256 forkerRepDeposit;
+		uint248 parentUniverseId;
+		uint8 forkingOutcomeIndex;
 	}
-	uint256 immutable genesisRepSupply;
 
 	mapping(uint248 => Universe) public universes;
+
+	struct UniverseForkData {
+		string forkingQuestionExtraInfo;
+		address forkedBy;
+		uint256 forkerRepDeposit;
+		string[8] forkingQuestionCategories;
+	}
+
+	mapping(uint248 => UniverseForkData) public universeForkData;
 
 	function getForkTime(uint248 universeId) external view returns (uint256) {
 		Universe memory universe = universes[universeId];
 		return universe.forkTime;
-
 	}
+
+	function getForkingQuestionCategories(uint248 universeId) external view returns (string[8] memory) {
+		return universeForkData[universeId].forkingQuestionCategories;
+	}
+
 	function getRepToken(uint248 universeId) external view returns (ReputationToken) {
 		Universe memory universe = universes[universeId];
 		return universe.reputationToken;
 	}
-	function getQuestionCategories(uint248 universeId) external view returns (string[] memory) {
-		Universe memory universe = universes[universeId];
-		return universe.questionCategories;
-	}
 
 	constructor() {
-		string[] memory categories;
-		genesisRepSupply = ReputationToken(Constants.GENESIS_REPUTATION_TOKEN).totalSupply();
-		universes[0] = Universe(0, 0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), address(0), '', categories, 0, 0);
+		universes[0] = Universe(0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0, 0);
 	}
 
-	function forkUniverse(uint248 universeId, string memory _extraInfo, string[] memory _questionCategories) public {
+	function forkUniverse(uint248 universeId, string memory _extraInfo, string[8] memory _questionCategories) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime == 0, 'Universe has forked already');
 		require(_questionCategories.length >= 1, 'need atleast one category on top of invalid');
-
-		universe.forkingQuestionExtraInfo = _extraInfo;
-		universe.forkTime = block.timestamp;
-		universe.questionCategories = _questionCategories;
-		universe.forkedBy = msg.sender;
+		universes[universeId].forkTime = block.timestamp;
 		uint256 forkTreshold = universe.reputationToken.maxTheoreticalSupply() / FORK_TRESHOLD_DIVISOR;
+		universeForkData[universeId] = UniverseForkData(_extraInfo, msg.sender, forkTreshold - forkTreshold / 5, _questionCategories);
 		universes[universeId].reputationToken.transferFrom(msg.sender, address(this), forkTreshold);
 		burnRep(universes[universeId].reputationToken, address(this), forkTreshold / 5); // burn 20%
-		universe.forkerRepDeposit = forkTreshold - forkTreshold / 5;
 	}
 
 	function splitRep(uint248 universeId, uint8[] memory outcomeIndexes) public {
@@ -80,24 +76,22 @@ contract Zoltar {
 	function getOutcomeName(uint248 universeId) external view returns (string memory) {
 		if (universeId == 0) return 'Genesis';
 		Universe memory universe = universes[universeId];
-		Universe memory parentUniverse = universes[universe.parentUniverseId];
-		if (universe.outcomeIndex == 0) return 'Invalid';
-		return parentUniverse.questionCategories[universe.outcomeIndex - 1];
+		if (universe.forkingOutcomeIndex == 0) return 'Invalid';
+		return universeForkData[universe.parentUniverseId].forkingQuestionCategories[universe.forkingOutcomeIndex - 1];
 	}
 
-	function deployChild(uint248 universeId, uint256 outcomeIndex) public {
+	function deployChild(uint248 universeId, uint8 outcomeIndex) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked');
 		uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
-		string[] memory categories;
-		// each fork, 1/FORK_BURN_DIVISOR * 1/FORK_TRESHOLD_DIVISOR gets burnt, so fork treshold need to decrease
-		universes[childUniverseId] = Universe(universeId, outcomeIndex, new ReputationToken{ salt: bytes32(uint256(childUniverseId)) }(address(this), universe.reputationToken.getTotalTheoreticalSupply()), address(0), '', categories, 0, 0);
+		universes[childUniverseId] = Universe(0, new ReputationToken{ salt: bytes32(uint256(childUniverseId)) }(address(this), universe.reputationToken.getTotalTheoreticalSupply()), universeId, outcomeIndex);
 	}
 
 	function forkerClaimRep(uint248 universeId, uint8[] memory outcomeIndices) public {
-		Universe memory universe = universes[universeId];
-		require(universe.forkedBy == msg.sender, 'only forker can claim');
-		splitRepInternal(universeId, universe.forkerRepDeposit, address(this), universe.forkedBy, outcomeIndices);
+		UniverseForkData memory data = universeForkData[universeId];
+		require(data.forkedBy == msg.sender, 'only forker can claim');
+		universeForkData[universeId].forkerRepDeposit = 0;
+		splitRepInternal(universeId, data.forkerRepDeposit, address(this), data.forkedBy, outcomeIndices);
 	}
 
 	function splitRepInternal(uint248 universeId, uint256 amount, address migrator, address recipient, uint8[] memory outcomeIndices) private {
@@ -106,7 +100,7 @@ contract Zoltar {
 		burnRep(universe.reputationToken, migrator, amount);
 		for (uint8 i = 0; i < outcomeIndices.length; i++) {
 			require(i == 0 || outcomeIndices[i] > outcomeIndices[i-1], 'outcomes are not sorted'); // force sorting to avoid duplicate indices
-			require(outcomeIndices[i] < universe.questionCategories.length + 1, 'outcome index overflow');
+			require(outcomeIndices[i] < universeForkData[universeId].forkingQuestionCategories.length + 1, 'outcome index overflow');
 			uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(universeId, outcomeIndices[i]))));
 			Universe memory childUniverse = universes[childUniverseId];
 			if (address(childUniverse.reputationToken) == address(0x0)) {

@@ -13,7 +13,7 @@ import { PriceOracleManagerAndOperatorQueuer } from '../PriceOracleManagerAndOpe
 import { ReputationToken } from '../../ReputationToken.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { YesNoMarkets } from '../YesNoMarkets.sol';
-import { ISecurityPoolForker } from '../ISecurityPoolForker.sol';
+import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory shareTokenFactory;
@@ -46,7 +46,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 		Auction truthAuction = auctionFactory.deployAuction(securityPoolSalt);
 
-		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(securityPoolForker, this, yesNoMarkets, escalationGameFactory, truthAuction, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, marketId, securityMultiplier);
+		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(securityPoolForker, this, yesNoMarkets, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, marketId, securityMultiplier);
 
 		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
 		securityPool.setStartingParams(currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
@@ -65,7 +65,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		bytes32 shareTokenSalt = keccak256(abi.encodePacked(securityMultiplier));
 		IShareToken shareToken = shareTokenFactory.deployShareToken(shareTokenSalt);
 
-		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(securityPoolForker, this, yesNoMarkets, escalationGameFactory, Auction(address(0x0)), priceOracleManagerAndOperatorQueuer, shareToken, openOracle, ISecurityPool(payable(0x0)), zoltar, universeId, marketId, securityMultiplier);
+		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(securityPoolForker, this, yesNoMarkets, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, ISecurityPool(payable(0x0)), zoltar, universeId, marketId, securityMultiplier);
 
 		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
 		securityPool.setStartingParams(currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);

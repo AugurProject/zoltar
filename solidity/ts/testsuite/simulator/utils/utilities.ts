@@ -1,14 +1,13 @@
 import 'viem/window'
-import { getContractAddress, numberToBytes, encodeAbiParameters, keccak256, encodeDeployData, getCreate2Address } from 'viem'
+import { getContractAddress, numberToBytes, encodeAbiParameters, keccak256 } from 'viem'
 import { mainnet } from 'viem/chains'
 import { ReadClient, WriteClient } from './viem.js'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants.js'
-import { abs, addressString, bytes32String } from './bigint.js'
+import { abs, addressString } from './bigint.js'
 import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
-import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
-import { QuestionOutcome } from '../types/types.js'
+import { Zoltar_Zoltar } from '../../../types/contractArtifact.js'
 import assert from 'node:assert'
 
 export const initialTokenBalance = 1000000n * 10n**18n
@@ -257,126 +256,63 @@ export const getUniverseData = async (client: ReadClient, universeId: bigint) =>
 		address: getZoltarAddress(),
 		args: [universeId]
 	})
-	const [reputationToken, forkingQuestion, forkTime] = universeData
-	return { reputationToken, forkingQuestion, forkTime }
+	const [forkTime, reputationToken, parentUniverseId, forkingOutcomeIndex] = universeData
+	return { forkTime, reputationToken, parentUniverseId, forkingOutcomeIndex }
 }
 
-export const createQuestion = async (client: WriteClient, universe: bigint, endTime: bigint, extraInfo: string) => {
+export const getUniverseForkData = async (client: ReadClient, universeId: bigint) => {
+	const universeForkData = await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'universeForkData',
+		address: getZoltarAddress(),
+		args: [universeId]
+	})
+	const categories = await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'getForkingQuestionCategories',
+		address: getZoltarAddress(),
+		args: [universeId]
+	})
+	const [forkingQuestionExtraInfo, forkedBy, forkerRepDeposit] = universeForkData
+	return { forkingQuestionExtraInfo, forkedBy, forkerRepDeposit, categories }
+}
+
+export const forkUniverse = async (client: WriteClient, universeId: bigint, extraInfo: string, questionCategories: readonly [string, string, string, string, string, string, string, string]) => {
 	return await client.writeContract({
 		chain: mainnet,
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'createQuestion',
+		functionName: 'forkUniverse',
 		address: getZoltarAddress(),
-		args: [universe, endTime, client.account.address, extraInfo]
+		args: [universeId, extraInfo, questionCategories]
 	})
 }
 
-export const getQuestionData = async (client: ReadClient, questionId: bigint) => {
-	const questionData =  await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'questions',
-		address: getZoltarAddress(),
-		args: [questionId]
-	})
-	const [endTime, originUniverse, designatedReporter, extraInfo] = questionData
-
-	return {
-		endTime,
-		originUniverse,
-		designatedReporter,
-		extraInfo
-	}
-}
-
-export const reportOutcome = async (client: WriteClient, universe: bigint, question: bigint, outcome: QuestionOutcome) => {
+export const splitRep = async (client: WriteClient, universeId: bigint, outcomeIndexes: bigint[]) => {
 	return await client.writeContract({
-		chain: mainnet,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'reportOutcome',
-		address: getZoltarAddress(),
-		args: [universe, question, Number(outcome)]
-	})
-}
-
-export const finalizeQuestion = async (client: WriteClient, universe: bigint, question: bigint) => {
-	return await client.writeContract({
-		chain: mainnet,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'finalizeQuestion',
-		address: getZoltarAddress(),
-		args: [universe, question]
-	})
-}
-
-export const dispute = async (client: WriteClient, universe: bigint, question: bigint, outcome: QuestionOutcome) => {
-	return await client.writeContract({
-		chain: mainnet,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'dispute',
-		address: getZoltarAddress(),
-		args: [universe, question, Number(outcome)]
-	})
-}
-
-export const splitRep = async (client: WriteClient, universe: bigint) => {
-	return await client.writeContract({
-		chain: mainnet,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'splitRep',
 		address: getZoltarAddress(),
-		args: [universe]
+		args: [universeId, outcomeIndexes.map((index) => Number(index))]
 	})
 }
 
-export const splitStakedRep = async (client: WriteClient, universe: bigint, question: bigint) => {
+export const deployChild = async (client: WriteClient, universeId: bigint, outcomeIndex: bigint) => {
 	return await client.writeContract({
 		chain: mainnet,
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'splitStakedRep',
+		functionName: 'deployChild',
 		address: getZoltarAddress(),
-		args: [universe, question]
+		args: [universeId, Number(outcomeIndex)]
 	})
 }
 
-export const isFinalized = async (client: ReadClient, universe: bigint, questionId: bigint) => {
+export const getOutcomeName = async (client: ReadClient, universeId: bigint) => {
 	return await client.readContract({
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'isFinalized',
+		functionName: 'getOutcomeName',
 		address: getZoltarAddress(),
-		args: [universe, questionId]
+		args: [universeId]
 	})
-}
-
-export const getWinningOutcome = async (client: ReadClient, universe: bigint, questionId: bigint): Promise<QuestionOutcome> => {
-	return await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'getWinningOutcome',
-		address: getZoltarAddress(),
-		args: [universe, questionId]
-	})
-}
-
-export const getReportBond = async (client: ReadClient) => {
-	return await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'REP_BOND',
-		address: getZoltarAddress(),
-		args: []
-	})
-}
-
-export function getChildUniverseId(parentUniverseId: bigint, outcome: QuestionOutcome): bigint {
-	return (parentUniverseId << 2n) + BigInt(outcome) + 1n
-}
-
-export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
-	if (universeId === 0n) return addressString(GENESIS_REPUTATION_TOKEN)
-	const initCode = encodeDeployData({
-		abi: ReputationToken_ReputationToken.abi,
-		bytecode: `0x${ ReputationToken_ReputationToken.evm.bytecode.object }`,
-		args: [getZoltarAddress()]
-	})
-	return getCreate2Address({ from: getZoltarAddress(), salt: bytes32String(universeId), bytecodeHash: keccak256(initCode) })
 }
 
 export const contractExists = async (client: ReadClient, contract: `0x${ string }`) => await client.getCode({ address: contract }) !== undefined
