@@ -17,13 +17,20 @@ uint256 constant maxTime = 8 weeks;
 contract EscalationGame {
 	uint256 public startingTime;
 	uint256[3] public balances; // outcome -> amount
-	mapping(uint256 => Deposit[]) public deposits;
+	mapping(uint8 => Deposit[]) public deposits;
 	ISecurityPool public securityPool;
 	uint256 public forkTreshold;
+	address owner;
 
-	constructor(ISecurityPool _securityPool, uint256 _forkTreshold) {
-		startingTime = block.timestamp + 3 days;
+	constructor(ISecurityPool _securityPool) {
 		securityPool = _securityPool;
+		owner = msg.sender;
+	}
+
+	function start(uint256 _forkTreshold) public {
+		require(owner == msg.sender, 'only owner can start');
+		require(startingTime == 0, 'already started');
+		startingTime = block.timestamp + 3 days;
 		forkTreshold = _forkTreshold;
 	}
 
@@ -44,8 +51,8 @@ contract EscalationGame {
 	}
 
 	function totalCost() public view returns (uint256) {
+		if (startingTime >= block.timestamp) return 0;
 		uint256 timeFromStart = block.timestamp - startingTime;
-		if (timeFromStart <= 0) return 0;
 		if (timeFromStart >= 4233600) return forkTreshold;
 		/*
 		// approximates e^(ln(FORK_THRESHOLD) / duration) scaled by SCALE
@@ -80,7 +87,7 @@ contract EscalationGame {
 		uint8 invalidOver = balances[0] >= currentTotalCost ? 1 : 0;
 		uint8 yesOver = balances[1] >= currentTotalCost ? 1 : 0;
 		uint8 noOver = balances[2] >= currentTotalCost ? 1 : 0;
-		if (invalidOver + yesOver + noOver >= 2) return YesNoMarkets.Outcome.None; // if two or more outcomes aer over the total cost, the game is still going
+		if (invalidOver + yesOver + noOver >= 2) return YesNoMarkets.Outcome.None; // if two or more outcomes are over the total cost, the game is still going
 		// the game has ended to timeout
 		if (balances[0] > balances[1] && balances[0] > balances[2]) return YesNoMarkets.Outcome.Invalid;
 		if (balances[1] > balances[0] && balances[1] > balances[2]) return YesNoMarkets.Outcome.Yes;
@@ -91,21 +98,20 @@ contract EscalationGame {
 	function depositOnOutcome(address depositor, YesNoMarkets.Outcome outcome, uint256 amount) public returns (uint256 depositAmount) {
 		require(!hasForked(), 'System has already forked');
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
-		require(getMarketResolution() != YesNoMarkets.Outcome.None, 'System has already timeouted');
-		require(balances[uint256(outcome)] >= forkTreshold, 'Already full');
+		require(getMarketResolution() == YesNoMarkets.Outcome.None, 'System has already timeouted');
+		require(balances[uint256(outcome)] < forkTreshold, 'Already full');
 		Deposit memory deposit;
-			deposit.depositor = depositor;
-			deposit.amount = amount;
-			deposit.cumulativeAmount = balances[uint256(outcome)];
+		deposit.depositor = depositor;
 		balances[uint256(outcome)] += amount;
 		if (balances[uint256(outcome)] > forkTreshold) {
-			deposit.amount -= balances[uint256(outcome)] - forkTreshold;
-			depositAmount = deposit.amount;
+			depositAmount = amount - (balances[uint256(outcome)] - forkTreshold);
 			balances[uint256(outcome)] = forkTreshold;
 		} else {
 			depositAmount = amount;
 		}
-		deposits[uint256(outcome)].push(deposit);
+		deposit.amount = depositAmount;
+		deposit.cumulativeAmount = balances[uint256(outcome)];
+		deposits[uint8(outcome)].push(deposit);
 	}
 
 	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw) {
@@ -113,8 +119,8 @@ contract EscalationGame {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		YesNoMarkets.Outcome winner = getMarketResolution();
 		require(winner != YesNoMarkets.Outcome.None, 'System has already timeouted');
-		Deposit memory deposit = deposits[uint256(winner)][depositIndex];
-		deposits[uint256(winner)][depositIndex].amount = 0;
+		Deposit memory deposit = deposits[uint8(winner)][depositIndex];
+		deposits[uint8(winner)][depositIndex].amount = 0;
 		depositor = deposit.depositor;
 		uint256 maxWithdrawableBalance = getBindingCapital();
 		if (deposit.cumulativeAmount > maxWithdrawableBalance) {
@@ -124,6 +130,13 @@ contract EscalationGame {
 			amountToWithdraw = (deposit.amount - excess) * 2 + excess;
 		} else {
 			amountToWithdraw = deposit.amount * 2;
+		}
+	}
+
+	function getDepositsByOutcome(YesNoMarkets.Outcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (Deposit[] memory returnDeposits) {
+		returnDeposits = new Deposit[](numberOfEntries);
+		for (uint256 i = 0; i < numberOfEntries; i++) {
+			returnDeposits[i] = deposits[uint8(outcome)][startIndex + i];
 		}
 	}
 }

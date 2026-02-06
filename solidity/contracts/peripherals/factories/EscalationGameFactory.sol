@@ -6,6 +6,8 @@ import { EscalationGame } from '../EscalationGame.sol';
 
 contract EscalationGameFactory {
 	function deployEscalationGame(ISecurityPool securityPool, uint256 forkTreshold) external returns (EscalationGame) {
-		return new EscalationGame{ salt: keccak256(abi.encodePacked(msg.sender)) }(securityPool, forkTreshold);
+		EscalationGame game = new EscalationGame{ salt: keccak256(abi.encodePacked(msg.sender)) }(securityPool);
+		game.start(forkTreshold);
+		return game;
 	}
 }

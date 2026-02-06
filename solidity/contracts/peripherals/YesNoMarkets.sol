@@ -18,7 +18,7 @@ contract YesNoMarkets {
 	mapping(uint256 => MarketData) markets;
 
 	function createMarket(string memory extraInfo, uint256 marketEndDate, bytes32 salt) external returns (uint256) {
-		uint256 marketId = uint256(keccak256(abi.encode(msg.sender, salt)));
+		uint256 marketId = uint256(keccak256(abi.encodePacked(msg.sender, extraInfo, marketEndDate, salt)));
 		markets[marketId].extraInfo = extraInfo;
 		markets[marketId].marketCreated = block.timestamp;
 		markets[marketId].marketEndDate = marketEndDate;

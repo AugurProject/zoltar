@@ -3,7 +3,7 @@ import { ReadContractReturnType } from 'viem'
 import { ReadClient, WriteClient } from './viem.js'
 import { WETH_ADDRESS } from './constants.js'
 import { SystemState } from '../types/peripheralTypes.js'
-import { peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_tokens_ShareToken_ShareToken } from '../../../types/contractArtifact.js'
+import { peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_tokens_ShareToken_ShareToken, peripherals_YesNoMarkets_YesNoMarkets } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
 import { getInfraContractAddresses } from './deployPeripherals.js'
 
@@ -501,5 +501,14 @@ export const redeemRep = async (client: WriteClient, securityPoolAddress: `0x${ 
 		functionName: 'redeemRep',
 		address: securityPoolAddress,
 		args: [vault],
+	})
+}
+
+export const getMarketEndDate = async(client: ReadClient, marketId: bigint) => {
+	return await client.readContract({
+		abi: peripherals_YesNoMarkets_YesNoMarkets.abi,
+		functionName: 'getMarketEndDate',
+		address: getInfraContractAddresses().yesNoMarkets,
+		args: [marketId],
 	})
 }

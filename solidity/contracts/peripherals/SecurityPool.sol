@@ -308,14 +308,14 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 
 	function depositToEscalationGame(YesNoMarkets.Outcome outcome, uint256 amount) external isOperational {
+		require(amount >= TODO_INITIAL_ESCALATION_GAME_DEPOSIT, 'min deposit required');
 		if (address(escalationGame) == address(0x0)) {
 			uint256 endTime = yesNoMarkets.getMarketEndDate(marketId);
 			require(block.timestamp > endTime, 'market has not ended');
-			require(amount >= TODO_INITIAL_ESCALATION_GAME_DEPOSIT, 'min deposit required');
 			escalationGame = escalationGameFactory.deployEscalationGame(this, repToken.getTotalTheoreticalSupply() / FORK_TRESHOLD_DIVISOR);
 		}
 		securityVaults[msg.sender].lockedRepInEscalationGame += escalationGame.depositOnOutcome(msg.sender, outcome, amount);
-		require(poolOwnershipToRep(securityVaults[msg.sender].poolOwnership) > securityVaults[msg.sender].lockedRepInEscalationGame, 'Not enough REP');
+		require(poolOwnershipToRep(securityVaults[msg.sender].poolOwnership) >= securityVaults[msg.sender].lockedRepInEscalationGame, 'Not enough REP');
 	}
 
 	function withdrawFromEscalationGame(uint256[] memory depositIndexes) external isOperational {
@@ -326,6 +326,7 @@ contract SecurityPool is ISecurityPool {
 		}
 	}
 
+	// todo, cleanup these only forker functions by minimizing amount and adding checks
 	function setSystemState(SystemState newState) external onlyForker {
 		systemState = newState;
 	}

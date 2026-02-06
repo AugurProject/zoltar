@@ -5,7 +5,7 @@ import { PROXY_DEPLOYER_ADDRESS } from './constants.js'
 import { addressString } from './bigint.js'
 import { contractExists, getRepTokenAddress, getZoltarAddress } from './utilities.js'
 import { mainnet } from 'viem/chains'
-import { peripherals_Auction_Auction, peripherals_factories_AuctionFactory_AuctionFactory, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, peripherals_YesNoMarkets_YesNoMarkets, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
+import { peripherals_Auction_Auction, peripherals_EscalationGame_EscalationGame, peripherals_factories_AuctionFactory_AuctionFactory, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, peripherals_YesNoMarkets_YesNoMarkets, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
 
 export function getSecurityPoolUtilsAddress() {
 	return getCreate2Address({ bytecode: `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
@@ -19,7 +19,7 @@ export const applyLibraries = (bytecode: string): `0x${ string }` => {
 export const getSecurityPoolForkerByteCode = (zoltar: `0x${ string }`) => {
 	return encodeDeployData({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		bytecode: `0x${ peripherals_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object }`,
+		bytecode: applyLibraries(peripherals_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),
 		args: [ zoltar ]
 	})
 }
@@ -147,9 +147,9 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	}
 }
 
-const computeSecurityPoolSalt = (parent: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint) => {
-	const types = ['address', 'uint248', 'uint56', 'uint256'] as const
-	const values = [parent, universeId, questionId, securityMultiplier] as const
+const computeSecurityPoolSalt = (parent: `0x${ string }`, universeId: bigint, marketId: bigint, securityMultiplier: bigint) => {
+	const types = ['address', 'uint248', 'uint256', 'uint256'] as const
+	const values = [parent, universeId, marketId, securityMultiplier] as const
 	return keccak256(encodePacked(types, values))
 }
 
@@ -157,6 +157,12 @@ const computeShareTokenSalt = (securityMultiplier: bigint, marketId: bigint) => 
 	const types = ['uint256', 'uint256'] as const
 	const values = [securityMultiplier, marketId] as const
 	return keccak256(encodePacked(types, values))
+}
+
+export const getMarketId = (universeId: bigint, securityMultiplier: bigint, extraInfo: string, marketEndDate: bigint) => {
+	const securityPoolfactory = getInfraContractAddresses().securityPoolFactory
+	const salt = keccak256(encodePacked(['address', 'uint248', 'uint256', 'string', 'uint256'], [securityPoolfactory, universeId, securityMultiplier, extraInfo, marketEndDate]))
+	return BigInt(keccak256(encodePacked(['address', 'string', 'uint256', 'bytes32'], [securityPoolfactory, extraInfo, marketEndDate, salt])));
 }
 
 export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bigint, marketId: bigint, securityMultiplier: bigint) => {
@@ -198,7 +204,16 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 		from: infraContracts.securityPoolFactory,
 		salt: numberToBytes(0)
 	})
-	return { ...contracts, securityPool }
+	const escalationGame = getCreate2Address({
+		bytecode: encodeDeployData({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			bytecode: `0x${ peripherals_EscalationGame_EscalationGame.evm.bytecode.object }`,
+			args: [ securityPool ]
+		}),
+		from: infraContracts.auctionFactory,
+		salt: securityPoolSaltWithMsgSender
+	})
+	return { ...contracts, securityPool, escalationGame }
 }
 
 export const deployOriginSecurityPool = async (client: WriteClient, universeId: bigint, extraInfo: string, marketEndDate: bigint, securityMultiplier: bigint, startingRetentionRate: bigint, startingRepEthPrice: bigint) => {

@@ -2,14 +2,13 @@ import { zeroAddress } from 'viem'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
 import { addressString } from './bigint.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from './constants.js'
-import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './deployPeripherals.js'
+import { getInfraContractAddresses, getSecurityPoolAddresses } from './deployPeripherals.js'
 import { approveToken, contractExists, getERC20Balance } from './utilities.js'
 import { WriteClient } from './viem.js'
 import assert from 'node:assert'
 import { depositRep, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndQueueOperation, wrapWeth } from './peripherals.js'
 
 export const genesisUniverse = 0n
-export const questionId = 1n
 export const securityMultiplier = 2n
 export const startingRepEthPrice = 1n
 export const completeSetCollateralAmount = 0n
@@ -17,26 +16,8 @@ export const PRICE_PRECISION = 10n ** 18n
 export const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
 export const EXTRA_INFO = 'test market!'
 
-/*
-export const deployZoltarAndCreateMarket = async (client: WriteClient, questionEndTime: bigint) => {
-	await ensureZoltarDeployed(client)
-	const isDeployed = await isZoltarDeployed(client)
-	assert.ok(isDeployed, `Zoltar Not Deployed!`)
-	const zoltar = getZoltarAddress()
-	await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
-	await createQuestion(client, genesisUniverse, questionEndTime, 'test')
-	return await getQuestionData(client, questionId)
-}*/
-
-export const deployPeripherals = async (client: WriteClient, marketEndDate: bigint) => {
-	await ensureInfraDeployed(client)
-	await deployOriginSecurityPool(client, genesisUniverse, EXTRA_INFO, marketEndDate, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
-	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).securityPool
-	assert.ok(await contractExists(client, securityPoolAddress), 'security pool not deployed')
-}
-
-export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigint) => {
-	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).securityPool
+export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigint, marketId: bigint) => {
+	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, marketId, securityMultiplier).securityPool
 	assert.ok(await contractExists(client, securityPoolAddress), 'security pool not deployed')
 
 	const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)

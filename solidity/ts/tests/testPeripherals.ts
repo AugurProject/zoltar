@@ -1,16 +1,15 @@
-/*import { describe, beforeEach, test } from 'node:test'
+import test, { describe, beforeEach } from 'node:test'
+import assert from 'node:assert'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { approximatelyEqual, contractExists, finalizeQuestion, getChildUniverseId, getERC20Balance, getETHBalance, getQuestionData, getReportBond, getRepTokenAddress, getWinningOutcome, isFinalized, reportOutcome, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { addressString, dateToBigintSeconds, rpow } from '../testsuite/simulator/utils/bigint.js'
-import assert from 'node:assert'
-import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
+import { approximatelyEqual, ensureZoltarDeployed, getERC20Balance, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+import { addressString, dateToBigintSeconds } from '../testsuite/simulator/utils/bigint.js'
 import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { approveAndDepositRep, canLiquidate, deployPeripherals, deployZoltarAndCreateMarket, genesisUniverse, MAX_RETENTION_RATE, questionId, manipulatePriceOracleAndPerformOperation, securityMultiplier, triggerFork, manipulatePriceOracle, handleOracleReporting } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
-import { getSecurityPoolAddresses } from '../testsuite/simulator/utils/deployPeripherals.js'
-import { balanceOfShares, balanceOfSharesInCash, claimAuctionProceeds, createChildUniverse, createCompleteSet, finalizeTruthAuction, forkSecurityPool, getCompleteSetCollateralAmount, getCurrentRetentionRate, getEthAmountToBuy, getTotalFeesOvedToVaults, getLastPrice, getMigratedRep, getPoolOwnershipDenominator, getSecurityBondAllowance, getSecurityVault, getSystemState, migrateShares, migrateVault, OperationType, participateAuction, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, startTruthAuction, updateVaultFees, redeemRep, requestPriceIfNeededAndQueueOperation, depositRep } from '../testsuite/simulator/utils/peripherals.js'
+import { approveAndDepositRep, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
+import { deployOriginSecurityPool, ensureInfraDeployed, getMarketId, getSecurityPoolAddresses } from '../testsuite/simulator/utils/deployPeripherals.js'
+import { depositToEscalationGame, getLastPrice, getMarketEndDate, getPoolOwnershipDenominator, OperationType, redeemRep, withdrawFromEscalationGame } from '../testsuite/simulator/utils/peripherals.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
 
 describe('Peripherals Contract Test Suite', () => {
@@ -18,54 +17,68 @@ describe('Peripherals Contract Test Suite', () => {
 
 	let client: WriteClient
 	let startBalance: bigint
-	let reportBond: bigint
+	const reportBond = 1n * 10n ** 18n
 	const PRICE_PRECISION = 1n * 10n ** 18n
 	const repDeposit = 1000n * 10n ** 18n
 	const currentTimestamp = dateToBigintSeconds(new Date())
+	const marketEndDate = currentTimestamp + 365n * DAY
 	let securityPoolAddresses: {
 		securityPool: `0x${ string }`,
 		priceOracleManagerAndOperatorQueuer: `0x${ string }`,
 		shareToken: `0x${ string }`,
-		truthAuction: `0x${ string }`
+		truthAuction: `0x${ string }`,
+		escalationGame: `0x${ string }`,
 	}
+	const genesisUniverse = 0n
+	const securityMultiplier = 2n
+	const startingRepEthPrice = 10n
+	const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
+	const EXTRA_INFO = 'test market!'
+	const marketId = getMarketId(genesisUniverse, securityMultiplier, EXTRA_INFO, marketEndDate)
 
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, questionId, securityMultiplier)))
+		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		//await mockWindow.setStartBLock(mockWindow.getTime)
 		await setupTestAccounts(mockWindow)
 	 	startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		await deployZoltarAndCreateMarket(client, currentTimestamp + 365n * DAY)
-		await deployPeripherals(client)
-		await approveAndDepositRep(client, repDeposit)
-		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
-		reportBond = await getReportBond(client)
+		await ensureZoltarDeployed(client)
+		await ensureInfraDeployed(client)
+		await deployOriginSecurityPool(client, genesisUniverse, EXTRA_INFO, marketEndDate, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+
+		await approveAndDepositRep(client, repDeposit, marketId)
+		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, marketId, securityMultiplier)
 	})
 
 	test('can deposit rep and withdraw it', async () => {
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
 		assert.strictEqual(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
-		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance - reportBond, 100n, 'Did not get rep back')
+		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance, 100n, 'Did not get rep back')
 	})
 
 	test('can deposit rep and redeem it back after market has ended', async () => {
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		assert.strictEqual(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
+		const poolOwnershipDenominator = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
+		console.log(poolOwnershipDenominator)
+		assert.ok(poolOwnershipDenominator > 0n, 'poolOwnershipDenominator was zero')
+		const endTime = await getMarketEndDate(client, marketId)
+		await mockWindow.setTime(endTime + 10000n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		await mockWindow.advanceTime(10n * DAY)
 
-		const questionData = await getQuestionData(client, questionId)
-		await mockWindow.setTime(questionData.endTime + 10000n)
-		await reportOutcome(client, genesisUniverse, questionId, QuestionOutcome.Yes)
-		await mockWindow.advanceTime(2n * DAY)
-		await finalizeQuestion(client, genesisUniverse, questionId)
+		const ourDeposit= scanDepositsForOutcome(YesNoMarkets.Outcome outcome, uint256 startIndex, uint256 numberOfEntries)
+		await withdrawFromEscalationGame
+
 		const repBefore = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		await redeemRep(client, securityPoolAddresses.securityPool, client.account.address)
 		const repAfter = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		assert.strictEqual(repAfter-repBefore, repDeposit, 'did not get rep back')
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 'Did not empty security pool of rep')
 	})
-
+	/*
 	test('Can Liquidate', async () => {
 		const questionData = await getQuestionData(client, questionId)
 		await mockWindow.setTime(questionData.endTime + 10000n)
@@ -371,7 +384,7 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.strictEqual(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'yes System should be operational right away')
 		assert.strictEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'child contract did not record the amount correctly')
 	})
-
+	*/
 	// - todo test that users can claim their stuff (shares+rep) even if zoltar forks after market ends
 })
-*/
+
