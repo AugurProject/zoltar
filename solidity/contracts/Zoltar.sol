@@ -80,11 +80,17 @@ contract Zoltar {
 		return universeForkData[universe.parentUniverseId].forkingQuestionCategories[universe.forkingOutcomeIndex - 1];
 	}
 
+	function getChildUniverseId(uint248 universeId, uint8 outcomeIndex) public pure returns (uint248) {
+		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
+	}
+
 	function deployChild(uint248 universeId, uint8 outcomeIndex) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked');
-		uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
-		universes[childUniverseId] = Universe(0, new ReputationToken{ salt: bytes32(uint256(childUniverseId)) }(address(this), universe.reputationToken.getTotalTheoreticalSupply()), universeId, outcomeIndex);
+		uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndex);
+		ReputationToken childReputationToken = new ReputationToken{ salt: bytes32(uint256(childUniverseId)) }(address(this));
+		childReputationToken.setMaxTheoreticalSupply(universe.reputationToken.getTotalTheoreticalSupply());
+		universes[childUniverseId] = Universe(0, childReputationToken, universeId, outcomeIndex);
 	}
 
 	function forkerClaimRep(uint248 universeId, uint8[] memory outcomeIndices) public {
@@ -101,7 +107,7 @@ contract Zoltar {
 		for (uint8 i = 0; i < outcomeIndices.length; i++) {
 			require(i == 0 || outcomeIndices[i] > outcomeIndices[i-1], 'outcomes are not sorted'); // force sorting to avoid duplicate indices
 			require(outcomeIndices[i] < universeForkData[universeId].forkingQuestionCategories.length + 1, 'outcome index overflow');
-			uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(universeId, outcomeIndices[i]))));
+			uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndices[i]);
 			Universe memory childUniverse = universes[childUniverseId];
 			if (address(childUniverse.reputationToken) == address(0x0)) {
 				deployChild(universeId, outcomeIndices[i]);

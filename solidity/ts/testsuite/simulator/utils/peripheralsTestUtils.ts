@@ -15,6 +15,7 @@ export const startingRepEthPrice = 1n
 export const completeSetCollateralAmount = 0n
 export const PRICE_PRECISION = 10n ** 18n
 export const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
+export const EXTRA_INFO = 'test market!'
 
 /*
 export const deployZoltarAndCreateMarket = async (client: WriteClient, questionEndTime: bigint) => {
@@ -27,9 +28,9 @@ export const deployZoltarAndCreateMarket = async (client: WriteClient, questionE
 	return await getQuestionData(client, questionId)
 }*/
 
-export const deployPeripherals = async (client: WriteClient) => {
+export const deployPeripherals = async (client: WriteClient, marketEndDate: bigint) => {
 	await ensureInfraDeployed(client)
-	await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice, completeSetCollateralAmount)
+	await deployOriginSecurityPool(client, genesisUniverse, EXTRA_INFO, marketEndDate, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
 	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).securityPool
 	assert.ok(await contractExists(client, securityPoolAddress), 'security pool not deployed')
 }

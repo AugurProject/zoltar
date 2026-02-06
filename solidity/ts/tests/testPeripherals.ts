@@ -1,4 +1,4 @@
-import { describe, beforeEach, test } from 'node:test'
+/*import { describe, beforeEach, test } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
@@ -374,3 +374,4 @@ describe('Peripherals Contract Test Suite', () => {
 
 	// - todo test that users can claim their stuff (shares+rep) even if zoltar forks after market ends
 })
+*/

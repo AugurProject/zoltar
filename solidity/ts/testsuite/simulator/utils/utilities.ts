@@ -1,14 +1,15 @@
 import 'viem/window'
-import { getContractAddress, numberToBytes, encodeAbiParameters, keccak256 } from 'viem'
+import { getContractAddress, numberToBytes, encodeAbiParameters, keccak256, encodeDeployData, getCreate2Address } from 'viem'
 import { mainnet } from 'viem/chains'
 import { ReadClient, WriteClient } from './viem.js'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants.js'
-import { abs, addressString } from './bigint.js'
+import { abs, addressString, bytes32String } from './bigint.js'
 import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
-import { Zoltar_Zoltar } from '../../../types/contractArtifact.js'
+import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
 import assert from 'node:assert'
+import { QuestionOutcome } from '../types/types.js'
 
 export const initialTokenBalance = 1000000n * 10n**18n
 
@@ -322,3 +323,17 @@ export const approximatelyEqual = (actual: bigint, expected: bigint, errorDelta:
 }
 
 export const isUnknownAnAddress = (maybeAddress: unknown): maybeAddress is `0x${ string }` => typeof maybeAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(maybeAddress)
+
+export function getChildUniverseId(parentUniverseId: bigint, outcome: QuestionOutcome): bigint {
+	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint8' }], [parentUniverseId, outcome])))
+}
+
+export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
+	if (universeId === 0n) return addressString(GENESIS_REPUTATION_TOKEN)
+	const initCode = encodeDeployData({
+		abi: ReputationToken_ReputationToken.abi,
+		bytecode: `0x${ ReputationToken_ReputationToken.evm.bytecode.object }`,
+		args: [getZoltarAddress()]
+	})
+	return getCreate2Address({ from: getZoltarAddress(), salt: bytes32String(universeId), bytecodeHash: keccak256(initCode) })
+}

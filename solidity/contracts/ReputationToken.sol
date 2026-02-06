@@ -7,8 +7,12 @@ contract ReputationToken is ERC20 {
 	uint256 public maxTheoreticalSupply;
 	address public immutable zoltar;
 
-	constructor(address _zoltar, uint256 _maxTheoreticalSupply) ERC20('Reputation', 'REP') {
+	constructor(address _zoltar) ERC20('Reputation', 'REP') {
 		zoltar = _zoltar;
+	}
+
+	function setMaxTheoreticalSupply(uint256 _maxTheoreticalSupply) external {
+		require(msg.sender == zoltar, "Not zoltar");
 		maxTheoreticalSupply = _maxTheoreticalSupply;
 	}
 
