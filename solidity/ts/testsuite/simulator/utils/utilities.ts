@@ -1,5 +1,5 @@
 import 'viem/window'
-import { getContractAddress, numberToBytes, encodeAbiParameters, keccak256, encodeDeployData, getCreate2Address } from 'viem'
+import { getContractAddress, numberToBytes, encodeAbiParameters, keccak256, encodeDeployData, getCreate2Address, getAddress } from 'viem'
 import { mainnet } from 'viem/chains'
 import { ReadClient, WriteClient } from './viem.js'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants.js'
@@ -9,7 +9,6 @@ import { ABIS } from '../../../abi/abis.js'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
 import assert from 'node:assert'
-import { QuestionOutcome } from '../types/types.js'
 
 export const initialTokenBalance = 1000000n * 10n**18n
 
@@ -258,7 +257,7 @@ export const getUniverseData = async (client: ReadClient, universeId: bigint) =>
 		args: [universeId]
 	})
 	const [forkTime, reputationToken, parentUniverseId, forkingOutcomeIndex] = universeData
-	return { forkTime, reputationToken, parentUniverseId, forkingOutcomeIndex }
+	return { forkTime, reputationToken, parentUniverseId, forkingOutcomeIndex: BigInt(forkingOutcomeIndex) }
 }
 
 export const getUniverseForkData = async (client: ReadClient, universeId: bigint) => {
@@ -316,6 +315,25 @@ export const getOutcomeName = async (client: ReadClient, universeId: bigint) => 
 	})
 }
 
+export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0x${ string }`) {
+	return await client.readContract({
+		abi: ReputationToken_ReputationToken.abi,
+		functionName: 'getTotalTheoreticalSupply',
+		address: repToken,
+		args: []
+	})
+}
+
+export const forkerClaimRep = async (client: WriteClient, universeId: bigint, outcomeIndices: bigint[]) => {
+	return await client.writeContract({
+		chain: mainnet,
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'forkerClaimRep',
+		address: getZoltarAddress(),
+		args: [universeId, outcomeIndices.map((x) => Number(x))]
+	})
+}
+
 export const contractExists = async (client: ReadClient, contract: `0x${ string }`) => await client.getCode({ address: contract }) !== undefined
 
 export const approximatelyEqual = (actual: bigint, expected: bigint, errorDelta: bigint, message?: string | Error | undefined) => {
@@ -324,12 +342,13 @@ export const approximatelyEqual = (actual: bigint, expected: bigint, errorDelta:
 
 export const isUnknownAnAddress = (maybeAddress: unknown): maybeAddress is `0x${ string }` => typeof maybeAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(maybeAddress)
 
-export function getChildUniverseId(parentUniverseId: bigint, outcome: QuestionOutcome): bigint {
-	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint8' }], [parentUniverseId, outcome])))
+const uint248BitMask = (1n << 248n) - 1n
+export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint): bigint {
+	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint8' }], [parentUniverseId, Number(outcome)]))) & uint248BitMask
 }
 
 export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
-	if (universeId === 0n) return addressString(GENESIS_REPUTATION_TOKEN)
+	if (universeId === 0n) return getAddress(addressString(GENESIS_REPUTATION_TOKEN))
 	const initCode = encodeDeployData({
 		abi: ReputationToken_ReputationToken.abi,
 		bytecode: `0x${ ReputationToken_ReputationToken.evm.bytecode.object }`,
@@ -337,3 +356,4 @@ export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
 	})
 	return getCreate2Address({ from: getZoltarAddress(), salt: bytes32String(universeId), bytecodeHash: keccak256(initCode) })
 }
+

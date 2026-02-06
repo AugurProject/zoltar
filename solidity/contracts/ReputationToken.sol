@@ -4,16 +4,16 @@ pragma solidity 0.8.33;
 import './ERC20.sol';
 
 contract ReputationToken is ERC20 {
-	uint256 public maxTheoreticalSupply;
+	uint256 private totalTheoreticalSupply;
 	address public immutable zoltar;
 
 	constructor(address _zoltar) ERC20('Reputation', 'REP') {
 		zoltar = _zoltar;
 	}
 
-	function setMaxTheoreticalSupply(uint256 _maxTheoreticalSupply) external {
+	function setMaxTheoreticalSupply(uint256 _totalTheoreticalSupply) external {
 		require(msg.sender == zoltar, "Not zoltar");
-		maxTheoreticalSupply = _maxTheoreticalSupply;
+		totalTheoreticalSupply = _totalTheoreticalSupply;
 	}
 
 	function mint(address account, uint256 value) external {
@@ -24,10 +24,10 @@ contract ReputationToken is ERC20 {
 	function burn(address account, uint256 value) external {
 		require(msg.sender == zoltar, "Not zoltar");
 		_burn(account, value);
-		maxTheoreticalSupply -= value;
+		totalTheoreticalSupply -= value;
 	}
 
     function getTotalTheoreticalSupply() external view returns (uint256) {
-		return maxTheoreticalSupply;
+		return totalTheoreticalSupply;
 	}
 }

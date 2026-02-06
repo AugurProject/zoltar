@@ -8,6 +8,9 @@ import { zeroAddress } from 'viem'
 import { getChildUniverseId, getRepTokenAddress } from './utilities.js'
 
 const getUniverseName = (universeId: bigint): string => {
+	if (universeId === 0n) return 'Genesis'
+	return `Universe-${ universeId }`
+	/*
 	const path: string[] = []
 	let currentUniverseId = universeId
 	while (currentUniverseId > 0n) {
@@ -18,6 +21,7 @@ const getUniverseName = (universeId: bigint): string => {
 	}
 	if (path.length === 0) return 'U-Genesis'
 	return `U-Genesis-${ path.join('-') }`
+	*/
 }
 
 const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x${ string }`, repTokenAddress: `0x${ string }`, priceOracleManagerAndOperatorQueuerAddress: `0x${ string }`, shareTokenAddress: `0x${ string }`, auction: `0x${ string }`): Deployment[] => [
@@ -52,7 +56,7 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 
 	const getChildAddresses = (parentSecurityPoolAddress: `0x${ string }`, parentUniverseId: bigint): Deployment[] => {
 		return oucomes.flatMap((outcome) => {
-			const universeId = getChildUniverseId(parentUniverseId, outcome)
+			const universeId = getChildUniverseId(parentUniverseId, BigInt(outcome))
 			const childAddresses = getSecurityPoolAddresses(parentSecurityPoolAddress, universeId, questionId, securityMultiplier)
 			return getDeploymentsForUniverse(universeId, childAddresses.securityPool, getRepTokenAddress(universeId), childAddresses.priceOracleManagerAndOperatorQueuer, childAddresses.shareToken, childAddresses.truthAuction)
 		})
@@ -61,7 +65,7 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 	return ([
 		...getDeploymentsForUniverse(genesisUniverse, originAddresses.securityPool, getRepTokenAddress(genesisUniverse), originAddresses.priceOracleManagerAndOperatorQueuer, originAddresses.shareToken, originAddresses.truthAuction),
 		...getChildAddresses(originAddresses.securityPool, genesisUniverse), // children
-		...oucomes.flatMap((outcome) => getChildAddresses(getSecurityPoolAddresses(originAddresses.securityPool, genesisUniverse, questionId, securityMultiplier).securityPool, getChildUniverseId(genesisUniverse, outcome))), // grand children
+		...oucomes.flatMap((outcome) => getChildAddresses(getSecurityPoolAddresses(originAddresses.securityPool, genesisUniverse, questionId, securityMultiplier).securityPool, getChildUniverseId(genesisUniverse, BigInt(outcome)))), // grand children
 		{
 			abi: Zoltar_Zoltar.abi,
 			deploymentName: 'Zoltar',

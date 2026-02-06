@@ -148,7 +148,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 }
 
 const computeSecurityPoolSalt = (parent: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint) => {
-	const types = ['address', 'uint192', 'uint56', 'uint256'] as const
+	const types = ['address', 'uint248', 'uint56', 'uint256'] as const
 	const values = [parent, universeId, questionId, securityMultiplier] as const
 	return keccak256(encodePacked(types, values))
 }

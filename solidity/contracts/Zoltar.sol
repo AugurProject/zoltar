@@ -26,6 +26,10 @@ contract Zoltar {
 
 	mapping(uint248 => UniverseForkData) public universeForkData;
 
+	event UniverseForked(address forker, uint248 universeId, string extraInfo, string[8] questionCategories);
+	event DeployChild(address deployer, uint248 universeId, uint8 outcomeIndex, uint248 childUniverseId, ReputationToken childReputationToken);
+	event SplitRep(uint248 universeId, uint256 amount, address migrator, address recipient, uint8[] outcomeIndices);
+
 	function getForkTime(uint248 universeId) external view returns (uint256) {
 		Universe memory universe = universes[universeId];
 		return universe.forkTime;
@@ -49,10 +53,11 @@ contract Zoltar {
 		require(universe.forkTime == 0, 'Universe has forked already');
 		require(_questionCategories.length >= 1, 'need atleast one category on top of invalid');
 		universes[universeId].forkTime = block.timestamp;
-		uint256 forkTreshold = universe.reputationToken.maxTheoreticalSupply() / FORK_TRESHOLD_DIVISOR;
+		uint256 forkTreshold = universe.reputationToken.getTotalTheoreticalSupply() / FORK_TRESHOLD_DIVISOR;
 		universeForkData[universeId] = UniverseForkData(_extraInfo, msg.sender, forkTreshold - forkTreshold / 5, _questionCategories);
 		universes[universeId].reputationToken.transferFrom(msg.sender, address(this), forkTreshold);
 		burnRep(universes[universeId].reputationToken, address(this), forkTreshold / 5); // burn 20%
+		emit UniverseForked(msg.sender, universeId, _extraInfo, _questionCategories);
 	}
 
 	function splitRep(uint248 universeId, uint8[] memory outcomeIndexes) public {
@@ -91,6 +96,7 @@ contract Zoltar {
 		ReputationToken childReputationToken = new ReputationToken{ salt: bytes32(uint256(childUniverseId)) }(address(this));
 		childReputationToken.setMaxTheoreticalSupply(universe.reputationToken.getTotalTheoreticalSupply());
 		universes[childUniverseId] = Universe(0, childReputationToken, universeId, outcomeIndex);
+		emit DeployChild(msg.sender, universeId, outcomeIndex, childUniverseId, childReputationToken);
 	}
 
 	function forkerClaimRep(uint248 universeId, uint8[] memory outcomeIndices) public {
@@ -103,16 +109,16 @@ contract Zoltar {
 	function splitRepInternal(uint248 universeId, uint256 amount, address migrator, address recipient, uint8[] memory outcomeIndices) private {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked');
+		emit SplitRep(universeId, amount, migrator, recipient, outcomeIndices);
 		burnRep(universe.reputationToken, migrator, amount);
 		for (uint8 i = 0; i < outcomeIndices.length; i++) {
-			require(i == 0 || outcomeIndices[i] > outcomeIndices[i-1], 'outcomes are not sorted'); // force sorting to avoid duplicate indices
+			require(i == 0 || outcomeIndices[i] > outcomeIndices[i - 1], 'outcomes are not sorted'); // force sorting to avoid duplicate indices
 			require(outcomeIndices[i] < universeForkData[universeId].forkingQuestionCategories.length + 1, 'outcome index overflow');
 			uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndices[i]);
-			Universe memory childUniverse = universes[childUniverseId];
-			if (address(childUniverse.reputationToken) == address(0x0)) {
+			if (address(universes[childUniverseId].reputationToken) == address(0x0)) {
 				deployChild(universeId, outcomeIndices[i]);
 			}
-			ReputationToken(address(childUniverse.reputationToken)).mint(recipient, amount);
+			universes[childUniverseId].reputationToken.mint(recipient, amount);
 		}
 	}
 }
