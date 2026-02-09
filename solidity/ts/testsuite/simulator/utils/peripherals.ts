@@ -252,51 +252,6 @@ export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOper
 	}) as bigint
 }
 
-export const forkSecurityPool = async (client: WriteClient, securityPoolForker: `0x${ string }`, securityPoolAddress: `0x${ string }`) => {
-	return await client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'forkSecurityPool',
-		address: securityPoolForker,
-		args: [securityPoolAddress],
-	})
-}
-
-export const migrateVault = async (client: WriteClient, securityPoolForker: `0x${ string }`, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) => {
-	return await client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'migrateVault',
-		address: securityPoolForker,
-		args: [securityPoolAddress, Number(outcome)],
-	})
-}
-
-export const startTruthAuction = async (client: WriteClient, securityPoolForker: `0x${ string }`, securityPoolAddress: `0x${ string }`) => {
-	return await client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'startTruthAuction',
-		address: securityPoolForker,
-		args: [securityPoolAddress],
-	})
-}
-
-export const finalizeTruthAuction = async (client: WriteClient, securityPoolForker: `0x${ string }`, securityPoolAddress: `0x${ string }`) => {
-	return await client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'finalizeTruthAuction',
-		address: securityPoolForker,
-		args: [securityPoolAddress],
-	})
-}
-
-export const claimAuctionProceeds = async (client: WriteClient, securityPoolForker: `0x${ string }`, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) => {
-	return await client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'claimAuctionProceeds',
-		address: securityPoolForker,
-		args: [securityPoolAddress, vault],
-	})
-}
-
 export const participateAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, repToBuy: bigint, ethToInvest: bigint) => {
 	return await client.writeContract({
 		abi: peripherals_Auction_Auction.abi,
@@ -312,15 +267,6 @@ export const getEthAmountToBuy = async (client: ReadClient, auctionAddress: `0x$
 		functionName: 'ethAmountToBuy',
 		address: auctionAddress,
 		args: [],
-	})
-}
-
-export const getMigratedRep = async (client: ReadClient, securityPoolForker: `0x${ string }`, securityPoolAddress: `0x${ string }`) => {
-	return await client.readContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'getMigratedRep',
-		address: securityPoolForker,
-		args: [securityPoolAddress],
 	})
 }
 
@@ -351,6 +297,15 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 	})
 	const [repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex ] = vault
 	return { repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex }
+}
+
+export const getSecurityPoolsEscalationGame = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'escalationGame',
+		address: securityPoolAddress,
+		args: [],
+	})
 }
 
 export const getPoolOwnershipDenominator = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
@@ -510,5 +465,14 @@ export const getMarketEndDate = async(client: ReadClient, marketId: bigint) => {
 		functionName: 'getMarketEndDate',
 		address: getInfraContractAddresses().yesNoMarkets,
 		args: [marketId],
+	})
+}
+
+export const getRepToken = async(client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'repToken',
+		address: securityPoolAddress,
+		args: [],
 	})
 }

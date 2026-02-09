@@ -41,7 +41,7 @@ contract ShareToken is ForkedERC1155, IShareToken {
 
 	function getChildId(uint256 originalId, uint248 newUniverse) internal override pure returns (uint256 newId) {
 		assembly {
-			newId := or(shr(248, shl(248, originalId)), shl(8, newUniverse))
+			newId := or(and(originalId, 0xFF), shl(8, and(newUniverse, 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)))
 		}
 	}
 

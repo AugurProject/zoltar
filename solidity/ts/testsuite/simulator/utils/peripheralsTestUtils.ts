@@ -3,10 +3,13 @@ import { MockWindowEthereum } from '../MockWindowEthereum.js'
 import { addressString } from './bigint.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from './constants.js'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from './deployPeripherals.js'
-import { approveToken, contractExists, getERC20Balance } from './utilities.js'
+import { approveToken, contractExists, getERC20Balance, getTotalTheoreticalSupply } from './utilities.js'
 import { WriteClient } from './viem.js'
 import assert from 'node:assert'
-import { depositRep, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndQueueOperation, wrapWeth } from './peripherals.js'
+import { depositRep, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getRepToken, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndQueueOperation, wrapWeth } from './peripherals.js'
+import { QuestionOutcome } from '../types/types.js'
+import { depositToEscalationGame } from './escalationGame.js'
+import { forkZoltarWithOwnEscalationGame } from './securityPoolForker.js'
 
 export const genesisUniverse = 0n
 export const securityMultiplier = 2n
@@ -27,23 +30,13 @@ export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigi
 	const newBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
 	assert.strictEqual(newBalance, startBalance + repDeposit, 'Did not deposit rep')
 }
-/*
-export const triggerFork = async(client: WriteClient, mockWindow: MockWindowEthereum, questionId: bigint) => {
-	await ensureZoltarDeployed(client)
-	await mockWindow.advanceTime(DAY)
-	const initialOutcome = QuestionOutcome.Yes
-	await reportOutcome(client, genesisUniverse, questionId, initialOutcome)
-	const disputeOutcome = QuestionOutcome.No
-	await dispute(client, genesisUniverse, questionId, disputeOutcome)
-	const invalidUniverseId = 1n
-	const yesUniverseId = 2n
-	const noUniverseId = 3n
-	return {
-		invalidUniverseData: await getUniverseData(client, invalidUniverseId),
-		yesUniverseData: await getUniverseData(client, yesUniverseId),
-		noUniverseData: await getUniverseData(client, noUniverseId)
-	}
-}*/
+
+export const triggerOwnGameFork = async(client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+	const forkTreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddress))) / 20n
+	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.Yes, forkTreshold)
+	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.No, forkTreshold)
+	await forkZoltarWithOwnEscalationGame(client, securityPoolAddress)
+}
 
 export const handleOracleReporting = async(client: WriteClient, mockWindow: MockWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, forceRepEthPriceTo: bigint) => {
 	const pendingReportId = await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)

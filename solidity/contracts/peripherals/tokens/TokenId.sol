@@ -7,9 +7,8 @@ import { YesNoMarkets } from '../YesNoMarkets.sol';
 library TokenId {
 
 	function getTokenId(uint248 _universeId, YesNoMarkets.Outcome _outcome) internal pure returns (uint256 _tokenId) {
-		bytes memory _tokenIdBytes = abi.encodePacked(_universeId, uint56(0), _outcome);
 		assembly {
-			_tokenId := mload(add(_tokenIdBytes, add(0x20, 0)))
+			_tokenId := or(shl(8, and(_universeId, 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)), and(_outcome, 0xFF))
 		}
 	}
 

@@ -5,9 +5,10 @@ import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 
 contract EscalationGameFactory {
-	function deployEscalationGame(ISecurityPool securityPool, uint256 forkTreshold) external returns (EscalationGame) {
-		EscalationGame game = new EscalationGame{ salt: keccak256(abi.encodePacked(msg.sender)) }(securityPool);
-		game.start(forkTreshold);
+	function deployEscalationGame(uint256 startBond, uint256 forkTreshold) external returns (EscalationGame) {
+		ISecurityPool securityPool = ISecurityPool(payable(msg.sender));
+		EscalationGame game = new EscalationGame{ salt: bytes32(uint256(1)) }(securityPool);
+		game.start(startBond, forkTreshold);
 		return game;
 	}
 }

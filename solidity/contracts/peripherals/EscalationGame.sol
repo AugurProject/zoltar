@@ -12,74 +12,74 @@ struct Deposit {
 	uint256 cumulativeAmount;
 }
 
-uint256 constant maxTime = 8 weeks;
-
+uint256 constant escalationTimeLength = 4233600; // 7 weeks
+uint256 constant SCALE = 1e6;
 contract EscalationGame {
 	uint256 public startingTime;
 	uint256[3] public balances; // outcome -> amount
-	mapping(uint8 => Deposit[]) public deposits;
+	mapping(uint8 => Deposit[]) public deposits; // make a fixed array with dynamic
 	ISecurityPool public securityPool;
 	uint256 public forkTreshold;
+	uint256 public startBond;
 	address owner;
+	event GameStarted(uint256 startingTime, uint256 startBond, uint256 forkTreshold);
+	event DepositOnOutcome(address depositor, YesNoMarkets.Outcome outcome, uint256 amount, uint256 depositIndex, uint256 cumulativeAmount);
+	event WithdrawDeposit(address depositor, YesNoMarkets.Outcome winner, uint256 amountToWithdraw, uint256 depositIndex);
 
 	constructor(ISecurityPool _securityPool) {
 		securityPool = _securityPool;
 		owner = msg.sender;
 	}
 
-	function start(uint256 _forkTreshold) public {
+	function start(uint256 _startBond, uint256 _forkTreshold) public {
 		require(owner == msg.sender, 'only owner can start');
 		require(startingTime == 0, 'already started');
 		startingTime = block.timestamp + 3 days;
 		forkTreshold = _forkTreshold;
+		startBond = _startBond;
+		emit GameStarted(startingTime, forkTreshold, startBond);
 	}
 
 	function getBalances() public view returns (uint256[3] memory) {
 		return [balances[0], balances[1], balances[2]];
 	}
 
-	function pow(uint256 base, uint256 exp, uint256 scale) internal pure returns (uint256) {
-		uint256 result = scale;
-		while (exp > 0) {
-			if (exp % 2 == 1) {
-				result = (result * base) / scale;
-			}
-			base = (base * base) / scale;
-			exp /= 2;
-		}
-		return result;
+	// TODO, verify that this is never bigger than forkThreshold and is always increasing or constant in terms of timeSinceStart
+	// approx for: attrition cost = start deposit * (fork treshold / start deposit) ^ (time since start / time limit)
+	function compute5TermTaylorSeriesAttritionCostApproximation(uint256 startDeposit, uint256 forkThreshold, uint256 timeSinceStart, uint256 timeLimit) public pure returns (uint256) {
+		require(timeSinceStart <= timeLimit, 'Invalid time');
+		uint256 ratio = forkThreshold * SCALE / startDeposit;
+		require(ratio > SCALE, 'ratio must be > 1'); // since startDeposit < forkThreshold
+		uint256 z = (ratio - SCALE) * SCALE / (ratio + SCALE);
+		uint256 z2 = z * z / SCALE;
+		uint256 lnRatio = 2 * (z + z2 * z / (3 * SCALE) + z2 * z2 * z / (5 * SCALE));
+
+		uint256 tLnX = timeSinceStart * lnRatio / timeLimit;
+		// Compute series: 1 + t*ln(x) + (t*ln(x))^2/2! + ... + (t*ln(x))^5/5!
+		uint256 series = SCALE;
+		uint256 term = tLnX;
+		// 1
+		series += term;
+		// 2
+		term = term * tLnX / (2 * SCALE);
+		series += term;
+		// 3
+		term = term * tLnX / (3 * SCALE);
+		series += term;
+		// 4
+		term = term * tLnX / (4 * SCALE);
+		series += term;
+		// 5
+		term = term * tLnX / (5 * SCALE);
+		series += term;
+		return startDeposit * series / SCALE;
 	}
 
 	function totalCost() public view returns (uint256) {
 		if (startingTime >= block.timestamp) return 0;
 		uint256 timeFromStart = block.timestamp - startingTime;
-		if (timeFromStart >= 4233600) return forkTreshold;
-		/*
-		// approximates e^(ln(FORK_THRESHOLD) / duration) scaled by SCALE
-		const duration = 4233600; // 7 weeks
-		const FORK_THRESHOLD = 100000000;
-		const base = FORK_THRESHOLD ** (1 / duration) // fractional exponent off-chain
-		*/
-		uint256 base = 1000000000547; // scaled by 1e12
-		uint256 scale = 1e12;
-		return pow(base, timeFromStart, scale);
-	}
-
-	function getBindingCapital() public view returns (uint256) {
-		if ((balances[0] >= balances[1] && balances[0] <= balances[2]) || (balances[0] >= balances[2] && balances[0] <= balances[1])) {
-			return balances[0];
-		} else if ((balances[1] >= balances[0] && balances[1] <= balances[2]) || (balances[1] >= balances[2] && balances[1] <= balances[0])) {
-			return balances[1];
-		}
-		return balances[2];
-	}
-
-	function hasForked() public view returns (bool) {
-		uint8 invalidOver = balances[0] >= forkTreshold ? 1 : 0;
-		uint8 yesOver = balances[1] >= forkTreshold ? 1 : 0;
-		uint8 noOver = balances[2] >= forkTreshold ? 1 : 0;
-		if (invalidOver + yesOver + noOver >= 2) return true;
-		return false;
+		if (timeFromStart >= escalationTimeLength) return forkTreshold;
+		return compute5TermTaylorSeriesAttritionCostApproximation(startBond, forkTreshold, timeFromStart, escalationTimeLength);
 	}
 
 	function getMarketResolution() public view returns (YesNoMarkets.Outcome outcome){
@@ -94,12 +94,30 @@ contract EscalationGame {
 		return YesNoMarkets.Outcome.No;
 	}
 
+	function hasForked() public view returns (bool) {
+		uint8 invalidOver = balances[0] >= forkTreshold ? 1 : 0;
+		uint8 yesOver = balances[1] >= forkTreshold ? 1 : 0;
+		uint8 noOver = balances[2] >= forkTreshold ? 1 : 0;
+		if (invalidOver + yesOver + noOver >= 2) return true;
+		return false;
+	}
+
+	function getBindingCapital() public view returns (uint256) {
+		if ((balances[0] >= balances[1] && balances[0] <= balances[2]) || (balances[0] >= balances[2] && balances[0] <= balances[1])) {
+			return balances[0];
+		} else if ((balances[1] >= balances[0] && balances[1] <= balances[2]) || (balances[1] >= balances[2] && balances[1] <= balances[0])) {
+			return balances[1];
+		}
+		return balances[2];
+	}
+
 	// deposits on market outcome, returns value how much the user should be refunded for
 	function depositOnOutcome(address depositor, YesNoMarkets.Outcome outcome, uint256 amount) public returns (uint256 depositAmount) {
 		require(!hasForked(), 'System has already forked');
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
 		require(getMarketResolution() == YesNoMarkets.Outcome.None, 'System has already timeouted');
 		require(balances[uint256(outcome)] < forkTreshold, 'Already full');
+		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit'); // checks that we get start bond and spam protection
 		Deposit memory deposit;
 		deposit.depositor = depositor;
 		balances[uint256(outcome)] += amount;
@@ -112,13 +130,15 @@ contract EscalationGame {
 		deposit.amount = depositAmount;
 		deposit.cumulativeAmount = balances[uint256(outcome)];
 		deposits[uint8(outcome)].push(deposit);
+		emit DepositOnOutcome(depositor, outcome, deposit.amount, deposits[uint8(outcome)].length - 1, deposit.cumulativeAmount);
 	}
 
+	// todo, allow withdrawing after own fork as well
 	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw) {
 		require(!hasForked(), 'System has forked');
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		YesNoMarkets.Outcome winner = getMarketResolution();
-		require(winner != YesNoMarkets.Outcome.None, 'System has already timeouted');
+		require(winner != YesNoMarkets.Outcome.None, 'Escalation game has not ended');
 		Deposit memory deposit = deposits[uint8(winner)][depositIndex];
 		deposits[uint8(winner)][depositIndex].amount = 0;
 		depositor = deposit.depositor;
@@ -131,12 +151,15 @@ contract EscalationGame {
 		} else {
 			amountToWithdraw = deposit.amount * 2;
 		}
+		emit WithdrawDeposit(depositor, winner, amountToWithdraw, depositIndex);
 	}
 
+	// todo, for the UI, we probably want to retrive multiple outcomes at once
 	function getDepositsByOutcome(YesNoMarkets.Outcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (Deposit[] memory returnDeposits) {
 		returnDeposits = new Deposit[](numberOfEntries);
-		for (uint256 i = 0; i < numberOfEntries; i++) {
-			returnDeposits[i] = deposits[uint8(outcome)][startIndex + i];
+		uint256 iterateUntil = startIndex + numberOfEntries > deposits[uint8(outcome)].length ? deposits[uint8(outcome)].length : startIndex + numberOfEntries;
+		for (uint256 i = startIndex; i < iterateUntil; i++) {
+			returnDeposits[i] = deposits[uint8(outcome)][i];
 		}
 	}
 }

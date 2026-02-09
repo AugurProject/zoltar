@@ -220,7 +220,7 @@ contract SecurityPool is ISecurityPool {
 		require(debtToMove > 0, 'no debt to move');
 		uint256 repToMove = debtToMove * vaultsRepDeposit / securityVaults[targetVaultAddress].securityBondAllowance;
 		uint256 ownershipToMove = repToPoolOwnership(repToMove);
-		require((securityVaults[callerVault].securityBondAllowance + debtToMove) * securityMultiplier * repEthPrice <= (poolOwnershipToRep(securityVaults[callerVault].poolOwnership) + repToMove) * SecurityPoolUtils.PRICE_PRECISION, 'New pool would be liquidable!');
+		require((securityVaults[callerVault].securityBondAllowance + debtToMove) * securityMultiplier * repEthPrice <= poolOwnershipToRep(securityVaults[callerVault].poolOwnership + ownershipToMove) * SecurityPoolUtils.PRICE_PRECISION, 'New pool would be liquidable!');
 		securityVaults[targetVaultAddress].securityBondAllowance -= debtToMove;
 		securityVaults[targetVaultAddress].poolOwnership -= ownershipToMove;
 		securityVaults[callerVault].securityBondAllowance += debtToMove;
@@ -308,11 +308,10 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 
 	function depositToEscalationGame(YesNoMarkets.Outcome outcome, uint256 amount) external isOperational {
-		require(amount >= TODO_INITIAL_ESCALATION_GAME_DEPOSIT, 'min deposit required');
 		if (address(escalationGame) == address(0x0)) {
 			uint256 endTime = yesNoMarkets.getMarketEndDate(marketId);
 			require(block.timestamp > endTime, 'market has not ended');
-			escalationGame = escalationGameFactory.deployEscalationGame(this, repToken.getTotalTheoreticalSupply() / FORK_TRESHOLD_DIVISOR);
+			escalationGame = escalationGameFactory.deployEscalationGame(TODO_INITIAL_ESCALATION_GAME_DEPOSIT, repToken.getTotalTheoreticalSupply() / FORK_TRESHOLD_DIVISOR);
 		}
 		securityVaults[msg.sender].lockedRepInEscalationGame += escalationGame.depositOnOutcome(msg.sender, outcome, amount);
 		require(poolOwnershipToRep(securityVaults[msg.sender].poolOwnership) >= securityVaults[msg.sender].lockedRepInEscalationGame, 'Not enough REP');

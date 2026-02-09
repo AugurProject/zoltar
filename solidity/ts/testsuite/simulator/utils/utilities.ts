@@ -3,12 +3,12 @@ import { getContractAddress, numberToBytes, encodeAbiParameters, keccak256, enco
 import { mainnet } from 'viem/chains'
 import { ReadClient, WriteClient } from './viem.js'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants.js'
-import { abs, addressString, bytes32String } from './bigint.js'
+import { addressString, bytes32String } from './bigint.js'
 import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
-import assert from 'node:assert'
+import { QuestionOutcome } from '../types/types.js'
 
 export const initialTokenBalance = 1000000n * 10n**18n
 
@@ -336,14 +336,10 @@ export const forkerClaimRep = async (client: WriteClient, universeId: bigint, ou
 
 export const contractExists = async (client: ReadClient, contract: `0x${ string }`) => await client.getCode({ address: contract }) !== undefined
 
-export const approximatelyEqual = (actual: bigint, expected: bigint, errorDelta: bigint, message?: string | Error | undefined) => {
-	if (abs(actual - expected) > errorDelta) assert.strictEqual(actual, expected, message)
-}
-
 export const isUnknownAnAddress = (maybeAddress: unknown): maybeAddress is `0x${ string }` => typeof maybeAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(maybeAddress)
 
 const uint248BitMask = (1n << 248n) - 1n
-export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint): bigint {
+export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint | QuestionOutcome): bigint {
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint8' }], [parentUniverseId, Number(outcome)]))) & uint248BitMask
 }
 
