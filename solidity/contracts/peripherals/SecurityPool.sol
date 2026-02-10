@@ -278,6 +278,7 @@ contract SecurityPool is ISecurityPool {
 		require(sent, 'Failed to send Ether');
 	}
 
+	// todo add way to redeem from forked version as well
 	function redeemShares() isOperational external {
 		YesNoMarkets.Outcome outcome = escalationGame.getMarketResolution();
 		require(outcome != YesNoMarkets.Outcome.None, 'Market has not finalized!');
@@ -369,6 +370,14 @@ contract SecurityPool is ISecurityPool {
 
 	function stealAllRep() external onlyForker() {
 		repToken.transfer(msg.sender, repToken.balanceOf(address(this)));
+	}
+
+	function migrateEth(address payable receiver, uint256 amount) external onlyForker() {
+		(bool sent, ) = receiver.call{ value: amount }('');
+		require(sent, 'Failed to steal ETH');
+	}
+	function authorize(ISecurityPool pool) external onlyForker() {
+		shareToken.authorize(pool);
 	}
 
 	receive() external payable {

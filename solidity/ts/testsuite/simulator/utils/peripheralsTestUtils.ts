@@ -35,10 +35,7 @@ export const triggerOwnGameFork = async(client: WriteClient, securityPoolAddress
 	const repToken = await getRepToken(client, securityPoolAddress)
 	const forkTreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
-	console.log(vault)
 	const repAmount = await poolOwnershipToRep(client, securityPoolAddress, vault.repDepositShare)
-	console.log(repAmount)
-	console.log(forkTreshold)
 	assert.ok(repAmount >= 2n * forkTreshold, 'not enough rep in vault to fork')
 	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.Yes, forkTreshold)
 	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.No, forkTreshold)

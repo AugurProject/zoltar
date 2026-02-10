@@ -61,7 +61,8 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		securityPool.setSystemState(SystemState.PoolForked);
 		securityPool.updateCollateralAmount();
 		securityPool.setRetentionRate(0);
-		forkData[securityPool].repAtFork = securityPool.repToken().balanceOf(address(this));
+		ReputationToken rep = securityPool.repToken();
+		forkData[securityPool].repAtFork = rep.balanceOf(address(this));
 		emit ForkSecurityPool(forkData[securityPool].repAtFork);
 
 		string[8] memory categories = zoltar.getForkingQuestionCategories(securityPool.universeId());
@@ -70,6 +71,8 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		for (uint8 index = 0; index < outcomeIndices.length; index++) {
 			outcomeIndices[index] = index;
 		}
+		securityPool.stealAllRep();
+		rep.approve(address(zoltar), type(uint256).max);
 		zoltar.splitRep(securityPool.universeId(), outcomeIndices);
 		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
 	}
@@ -82,8 +85,8 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(securityPool.universeId(), outcomeIndex))));
 		uint256 retentionRate = SecurityPoolUtils.calculateRetentionRate(securityPool.completeSetCollateralAmount(), securityPool.totalSecurityBondAllowance());
 		forkData[securityPool].outcomeIndex = outcomeIndex;
-		forkData[securityPool].children[outcomeIndex] = securityPool.securityPoolFactory().deployChildSecurityPool(securityPool.shareToken(), childUniverseId, securityPool.marketId(), securityPool.securityMultiplier(), retentionRate, securityPool.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
-		securityPool.shareToken().authorize(forkData[securityPool].children[outcomeIndex]); //TODO, need to grant acess
+		forkData[securityPool].children[outcomeIndex] = securityPool.securityPoolFactory().deployChildSecurityPool(securityPool, securityPool.shareToken(), childUniverseId, securityPool.marketId(), securityPool.securityMultiplier(), retentionRate, securityPool.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
+		securityPool.authorize(forkData[securityPool].children[outcomeIndex]);
 		ReputationToken childReputationToken = forkData[securityPool].children[outcomeIndex].repToken();
 		childReputationToken.transfer(address(forkData[securityPool].children[outcomeIndex]), childReputationToken.balanceOf(address(this)));
 	}
@@ -102,7 +105,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 			child.addToTotalSecurityBondAllowance(parentSecurityBondAllowance);
 			child.setPoolOwnershipDenominator(forkData[securityPool].repAtFork * SecurityPoolUtils.PRICE_PRECISION);
 
-			if (!(securityPool.poolOwnershipDenominator() == 0 && child.repToken().balanceOf(address(this)) == 0)) {
+			if (securityPool.poolOwnershipDenominator() != 0 && child.repToken().balanceOf(address(child)) != 0) {
 				uint256 ownership = repToPoolOwnership(child, parentPoolOwnership * forkData[securityPool].repAtFork / securityPool.poolOwnershipDenominator());
 				child.setVaultPoolOwnership(msg.sender, ownership);
 				forkData[child].migratedRep += poolOwnershipToRep(child, ownership);
@@ -114,8 +117,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		emit MigrateVault(msg.sender, outcomeIndex, poolOwnership, securityBondAllowance);
 		// migrate open interest
 		if (securityPool.poolOwnershipDenominator() > 0 && poolOwnership > 0) {
-			(bool sent, ) = payable(child).call{ value: securityPool.completeSetCollateralAmount() * poolOwnership / securityPool.poolOwnershipDenominator() }('');
-			require(sent, 'Failed to send Ether');
+			securityPool.migrateEth(payable(child), securityPool.completeSetCollateralAmount() * poolOwnership / securityPool.poolOwnershipDenominator());
 		}
 		securityPool.setVaultOwnership(msg.sender, 0,0);
 	}

@@ -91,14 +91,15 @@ interface ISecurityPool {
 	function setShareTokenSupply(uint256 newShareTokenSupply) external;
 	function setCompleteSetCollateralAmount(uint256 newCompleteSetCollateralAmount) external;
 	function setTotalSecurityBondAllowance(uint256 newTotalSecurityBondAllowance) external;
-
+	function authorize(ISecurityPool pool) external;
 	function yesNoMarkets() external view returns (YesNoMarkets);
 	function stealAllRep() external;
+	function migrateEth(address payable child, uint256 amount) external;
 
 	receive() external payable;
 }
 
 interface ISecurityPoolFactory {
-	function deployChildSecurityPool(IShareToken shareToken, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool);
+	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool);
 	function deployOriginSecurityPool(uint248 universeId, string memory extraInfo, uint256 marketEndDate, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice) external returns (ISecurityPool securityPool);
 }
