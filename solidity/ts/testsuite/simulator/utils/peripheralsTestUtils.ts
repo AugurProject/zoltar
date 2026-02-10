@@ -6,7 +6,7 @@ import { getInfraContractAddresses, getSecurityPoolAddresses } from './deployPer
 import { approveToken, contractExists, getERC20Balance, getTotalTheoreticalSupply } from './utilities.js'
 import { WriteClient } from './viem.js'
 import assert from 'node:assert'
-import { depositRep, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getRepToken, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndQueueOperation, wrapWeth } from './peripherals.js'
+import { depositRep, getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, getRepToken, getSecurityVault, openOracleSettle, openOracleSubmitInitialReport, OperationType, poolOwnershipToRep, requestPrice, requestPriceIfNeededAndQueueOperation, wrapWeth } from './peripherals.js'
 import { QuestionOutcome } from '../types/types.js'
 import { depositToEscalationGame } from './escalationGame.js'
 import { forkZoltarWithOwnEscalationGame } from './securityPoolForker.js'
@@ -32,7 +32,14 @@ export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigi
 }
 
 export const triggerOwnGameFork = async(client: WriteClient, securityPoolAddress: `0x${ string }`) => {
-	const forkTreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddress))) / 20n
+	const repToken = await getRepToken(client, securityPoolAddress)
+	const forkTreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n
+	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
+	console.log(vault)
+	const repAmount = await poolOwnershipToRep(client, securityPoolAddress, vault.repDepositShare)
+	console.log(repAmount)
+	console.log(forkTreshold)
+	assert.ok(repAmount >= 2n * forkTreshold, 'not enough rep in vault to fork')
 	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.Yes, forkTreshold)
 	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.No, forkTreshold)
 	await forkZoltarWithOwnEscalationGame(client, securityPoolAddress)

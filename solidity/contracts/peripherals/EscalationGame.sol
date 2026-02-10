@@ -21,7 +21,9 @@ contract EscalationGame {
 	ISecurityPool public securityPool;
 	uint256 public forkTreshold;
 	uint256 public startBond;
-	address owner;
+	address public owner;
+	uint256 public forkedTimestamp;
+
 	event GameStarted(uint256 startingTime, uint256 startBond, uint256 forkTreshold);
 	event DepositOnOutcome(address depositor, YesNoMarkets.Outcome outcome, uint256 amount, uint256 depositIndex, uint256 cumulativeAmount);
 	event WithdrawDeposit(address depositor, YesNoMarkets.Outcome winner, uint256 amountToWithdraw, uint256 depositIndex);
@@ -46,15 +48,15 @@ contract EscalationGame {
 
 	// TODO, verify that this is never bigger than forkThreshold and is always increasing or constant in terms of timeSinceStart
 	// approx for: attrition cost = start deposit * (fork treshold / start deposit) ^ (time since start / time limit)
-	function compute5TermTaylorSeriesAttritionCostApproximation(uint256 startDeposit, uint256 forkThreshold, uint256 timeSinceStart, uint256 timeLimit) public pure returns (uint256) {
-		require(timeSinceStart <= timeLimit, 'Invalid time');
+	function compute5TermTaylorSeriesAttritionCostApproximation(uint256 startDeposit, uint256 forkThreshold, uint256 timeSinceStart) public pure returns (uint256) {
+		require(timeSinceStart <= escalationTimeLength, 'Invalid time');
 		uint256 ratio = forkThreshold * SCALE / startDeposit;
 		require(ratio > SCALE, 'ratio must be > 1'); // since startDeposit < forkThreshold
 		uint256 z = (ratio - SCALE) * SCALE / (ratio + SCALE);
 		uint256 z2 = z * z / SCALE;
 		uint256 lnRatio = 2 * (z + z2 * z / (3 * SCALE) + z2 * z2 * z / (5 * SCALE));
 
-		uint256 tLnX = timeSinceStart * lnRatio / timeLimit;
+		uint256 tLnX = timeSinceStart * lnRatio / escalationTimeLength;
 		// Compute series: 1 + t*ln(x) + (t*ln(x))^2/2! + ... + (t*ln(x))^5/5!
 		uint256 series = SCALE;
 		uint256 term = tLnX;
@@ -75,11 +77,41 @@ contract EscalationGame {
 		return startDeposit * series / SCALE;
 	}
 
+	// todo investigate this function more for errors. This can result in weird errors where you fork just before/after escalation game end
+	function computeTimeSinceStartFromAttritionCost(uint256 startDeposit, uint256 forkThreshold, uint256 attritionCost) public view returns (uint256) {
+		uint256 low = 0;
+		uint256 high = forkTreshold;
+		if (attritionCost <= startDeposit) return 0;
+		uint256 maxCost = forkTreshold;
+		if (attritionCost >= maxCost) return forkTreshold;
+
+		// binary search
+		for (uint256 iteration = 0; iteration < 64; iteration++) {
+			uint256 midTime = (low + high) / 2;
+
+			uint256 midCost = compute5TermTaylorSeriesAttritionCostApproximation(startDeposit, forkThreshold, midTime);
+
+			if (midCost == attritionCost) return midTime;
+			if (midCost < attritionCost) {
+				low = midTime + 1;
+			} else {
+				high = midTime - 1;
+			}
+		}
+		return (low + high) / 2;
+	}
+
+	function getEscalationGameEndDate() public view returns (uint256 endTime) {
+		if (startingTime <= block.timestamp) return 0;
+		if (forkedTimestamp > 0) return forkedTimestamp;
+		return startingTime + computeTimeSinceStartFromAttritionCost(startBond, forkTreshold, getBindingCapital());
+	}
+
 	function totalCost() public view returns (uint256) {
 		if (startingTime >= block.timestamp) return 0;
 		uint256 timeFromStart = block.timestamp - startingTime;
 		if (timeFromStart >= escalationTimeLength) return forkTreshold;
-		return compute5TermTaylorSeriesAttritionCostApproximation(startBond, forkTreshold, timeFromStart, escalationTimeLength);
+		return compute5TermTaylorSeriesAttritionCostApproximation(startBond, forkTreshold, timeFromStart);
 	}
 
 	function getMarketResolution() public view returns (YesNoMarkets.Outcome outcome){
@@ -94,7 +126,7 @@ contract EscalationGame {
 		return YesNoMarkets.Outcome.No;
 	}
 
-	function hasForked() public view returns (bool) {
+	function hasForked() internal view returns (bool) {
 		uint8 invalidOver = balances[0] >= forkTreshold ? 1 : 0;
 		uint8 yesOver = balances[1] >= forkTreshold ? 1 : 0;
 		uint8 noOver = balances[2] >= forkTreshold ? 1 : 0;
@@ -113,7 +145,7 @@ contract EscalationGame {
 
 	// deposits on market outcome, returns value how much the user should be refunded for
 	function depositOnOutcome(address depositor, YesNoMarkets.Outcome outcome, uint256 amount) public returns (uint256 depositAmount) {
-		require(!hasForked(), 'System has already forked');
+		require(forkedTimestamp == 0, 'System has already forked');
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
 		require(getMarketResolution() == YesNoMarkets.Outcome.None, 'System has already timeouted');
 		require(balances[uint256(outcome)] < forkTreshold, 'Already full');
@@ -131,11 +163,14 @@ contract EscalationGame {
 		deposit.cumulativeAmount = balances[uint256(outcome)];
 		deposits[uint8(outcome)].push(deposit);
 		emit DepositOnOutcome(depositor, outcome, deposit.amount, deposits[uint8(outcome)].length - 1, deposit.cumulativeAmount);
+		if (hasForked()) {
+			forkedTimestamp = block.timestamp;
+		}
 	}
 
 	// todo, allow withdrawing after own fork as well
 	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw) {
-		require(!hasForked(), 'System has forked');
+		require(forkedTimestamp == 0, 'System has forked');
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		YesNoMarkets.Outcome winner = getMarketResolution();
 		require(winner != YesNoMarkets.Outcome.None, 'Escalation game has not ended');

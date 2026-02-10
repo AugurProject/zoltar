@@ -66,3 +66,39 @@ export const getMigratedRep = async (client: ReadClient, securityPoolAddress: `0
 	})
 }
 
+export const getMarketOutcome = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: [{
+			"inputs": [
+				{
+					"internalType": "contract ISecurityPool",
+					"name": "securityPool",
+					"type": "address"
+				}
+			],
+			"stateMutability": "nonpayable",
+			"type": "function",
+			"name": "getMarketOutcome",
+			"outputs": [
+				{
+					"internalType": "enum YesNoMarkets.Outcome",
+					"name": "outcome",
+					"type": "uint8"
+				}
+			]
+		}] as const, // typescript limitation on types...
+		functionName: 'getMarketOutcome',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress],
+	})
+}
+
+export const createChildUniverse = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) => {
+	return await client.writeContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'createChildUniverse',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress, Number(outcome)],
+	})
+}
+

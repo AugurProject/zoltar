@@ -45,7 +45,6 @@ interface ISecurityPool {
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
 	function securityVaults(address vault) external view returns (uint256 poolOwnership, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeIndex, uint256 lockedRepInEscalationGame);
-	function claimedAuctionProceeds(address vault) external view returns (bool);
 	function parent() external view returns (ISecurityPool);
 	function systemState() external view returns (SystemState);
 	function shareToken() external view returns (IShareToken);
@@ -94,6 +93,7 @@ interface ISecurityPool {
 	function setTotalSecurityBondAllowance(uint256 newTotalSecurityBondAllowance) external;
 
 	function yesNoMarkets() external view returns (YesNoMarkets);
+	function stealAllRep() external;
 
 	receive() external payable;
 }

@@ -46,9 +46,7 @@ contract SecurityPool is ISecurityPool {
 	uint256 public currentRetentionRate;
 
 	mapping(address => SecurityVault) public securityVaults;
-	mapping(address => bool) public claimedAuctionProceeds;
 
-	uint256 public truthAuctionStarted;
 	SystemState public systemState;
 
 	event SecurityBondAllowanceChange(address vault, uint256 from, uint256 to);
@@ -63,7 +61,7 @@ contract SecurityPool is ISecurityPool {
 	event PerformLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount, uint256 debtToMove, uint256 repToMove);
 	event RedeemRep(address caller, address vault, uint256 repAmount);
 
-	modifier isOperational {
+	modifier isOperational { // todo, system can be operational if the fork has happened after this market has finalized
 		require(zoltar.getForkTime(universeId) == 0, 'Zoltar has forked');
 		require(systemState == SystemState.Operational, 'System is not operational');
 		_;
@@ -190,8 +188,6 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function depositRep(uint256 repAmount) public isOperational {
-		QueuedOperation memory queuedOperation = priceOracleManagerAndOperatorQueuer.getQueuedOperation();
-		require(queuedOperation.amount == 0 || queuedOperation.targetVault != msg.sender, 'operation pending'); // prevents owner from saving their vault when liquidation is pending
 		uint256 poolOwnership = repToPoolOwnership(repAmount);
 		repToken.transferFrom(msg.sender, address(this), repAmount);
 		securityVaults[msg.sender].poolOwnership += poolOwnership;
@@ -203,7 +199,7 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 	// liquidating vault
 	////////////////////////////////////////
-
+	// TODO, currently liquidator can be blocked by someone by depositing rep to vault while the deposit is pending. We dont want to block depositReps for this duration thought as we want to allow people to participate escalation game using external rep. I feel after liquidation is triggered we should store a snapshot rep balance of the vault that is then used for liquidation calculations
 	//price = (amount1 * PRICE_PRECISION) / amount2;
 	// price = REP * PRICE_PRECISION / ETH
 	// liquidation moves share of debt and rep to another pool which need to remain non-liquidable
@@ -369,6 +365,10 @@ contract SecurityPool is ISecurityPool {
 
 	function setTotalSecurityBondAllowance(uint256 newTotalSecurityBondAllowance) external onlyForker {
 		totalSecurityBondAllowance = newTotalSecurityBondAllowance;
+	}
+
+	function stealAllRep() external onlyForker() {
+		repToken.transfer(msg.sender, repToken.balanceOf(address(this)));
 	}
 
 	receive() external payable {

@@ -19,6 +19,9 @@ struct ForkData {
 	uint256 truthAuctionStarted;
 	uint256 migratedRep;
 	uint256 auctionedSecurityBondAllowance;
+
+	bool ownFork;
+	uint8 outcomeIndex;
 }
 
 contract SecurityPoolForker is ISecurityPoolForker {
@@ -54,7 +57,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	function forkSecurityPool(ISecurityPool securityPool) public {
 		require(zoltar.getForkTime(securityPool.universeId()) > 0, 'Zoltar needs to have forked before Security Pool can do so');
 		require(securityPool.systemState() == SystemState.Operational, 'System is not operational');
-		require(securityPool.escalationGame().getMarketResolution() != YesNoMarkets.Outcome.None, 'question has been finalized already');
+		require(securityPool.escalationGame().getMarketResolution() == YesNoMarkets.Outcome.None, 'question has been finalized already');
 		securityPool.setSystemState(SystemState.PoolForked);
 		securityPool.updateCollateralAmount();
 		securityPool.setRetentionRate(0);
@@ -78,6 +81,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		// first vault migrater creates new pool and transfers all REP to it
 		uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(securityPool.universeId(), outcomeIndex))));
 		uint256 retentionRate = SecurityPoolUtils.calculateRetentionRate(securityPool.completeSetCollateralAmount(), securityPool.totalSecurityBondAllowance());
+		forkData[securityPool].outcomeIndex = outcomeIndex;
 		forkData[securityPool].children[outcomeIndex] = securityPool.securityPoolFactory().deployChildSecurityPool(securityPool.shareToken(), childUniverseId, securityPool.marketId(), securityPool.securityMultiplier(), retentionRate, securityPool.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
 		securityPool.shareToken().authorize(forkData[securityPool].children[outcomeIndex]); //TODO, need to grant acess
 		ReputationToken childReputationToken = forkData[securityPool].children[outcomeIndex].repToken();
@@ -164,8 +168,11 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	}
 
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) public {
-		require(!securityPool.escalationGame().hasForked(), 'escalation game has not triggered fork');
+		EscalationGame escalationGame = securityPool.escalationGame();
+		require(address(escalationGame) != address(0x0) && escalationGame.forkedTimestamp() > 0, 'escalation game has not triggered fork');
 		(string memory extraInfo, string[8] memory outcomes) = securityPool.yesNoMarkets().getForkingData(securityPool.marketId());
+		securityPool.stealAllRep();
+		securityPool.repToken().approve(address(zoltar), type(uint256).max);
 		zoltar.forkUniverse(securityPool.universeId(), extraInfo, outcomes);
 	}
 
@@ -182,5 +189,23 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		(uint256 poolOwnership,,,,) = securityPool.securityVaults(vault);
 		securityPool.setVaultOwnership(vault, poolOwnership + poolOwnershipAmount, forkData[securityPool].auctionedSecurityBondAllowance * amount / forkData[securityPool].truthAuction.totalRepPurchased());
 		emit ClaimAuctionProceeds(vault, amount, poolOwnershipAmount, securityPool.poolOwnershipDenominator());
+	}
+
+	function getMarketOutcome(ISecurityPool securityPool) external returns (YesNoMarkets.Outcome outcome){
+		SystemState systemState = securityPool.systemState();
+		if (systemState == SystemState.PoolForked) return YesNoMarkets.Outcome.None;
+		ISecurityPool parent = securityPool.parent();
+		if (address(parent) != address(0x0)) {
+			if (forkData[parent].ownFork) return YesNoMarkets.Outcome(forkData[securityPool].outcomeIndex);
+		}
+		if (systemState == SystemState.Operational) {
+			EscalationGame escalationGame = securityPool.escalationGame();
+			uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
+			if (address(escalationGame) != address(0x0)) {
+				uint256 escalationEndDate = escalationGame.getEscalationGameEndDate();
+				if (block.timestamp > escalationEndDate && (forkTime == 0 || escalationEndDate < forkTime)) return escalationGame.getMarketResolution();
+			}
+		}
+		return YesNoMarkets.Outcome.None;
 	}
 }

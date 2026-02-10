@@ -10,7 +10,7 @@ import { MockWindowEthereum } from '../MockWindowEthereum.js'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
 
-export const initialTokenBalance = 1000000n * 10n**18n
+export const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
 
 export async function sleep(milliseconds: number) {
 	await new Promise(resolve => setTimeout(resolve, milliseconds))
@@ -209,9 +209,7 @@ export const getETHBalance = async (client: ReadClient, address: Address) => {
 }
 
 export const setupTestAccounts = async (mockWindowEthereum: MockWindowEthereum) => {
-	const accountValues = TEST_ADDRESSES.map((address) => {
-		return { address: addressString(address), amount: initialTokenBalance}
-	})
+	const accountValues = TEST_ADDRESSES.map((address) => ({ address: addressString(address), amount: TOKEN_AMOUNT_TO_MINT}))
 	await mintETH(mockWindowEthereum, accountValues)
 	await mintERC20(mockWindowEthereum, addressString(GENESIS_REPUTATION_TOKEN), accountValues, 1n)
 }
