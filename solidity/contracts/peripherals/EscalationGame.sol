@@ -19,7 +19,7 @@ contract EscalationGame {
 	uint256[3] public balances; // outcome -> amount
 	mapping(uint8 => Deposit[]) public deposits; // make a fixed array with dynamic
 	ISecurityPool public securityPool;
-	uint256 public forkTreshold;
+	uint256 public nonDecisionTreshold;
 	uint256 public startBond;
 	address public owner;
 	uint256 public forkedTimestamp;
@@ -27,19 +27,20 @@ contract EscalationGame {
 	event GameStarted(uint256 startingTime, uint256 startBond, uint256 forkTreshold);
 	event DepositOnOutcome(address depositor, YesNoMarkets.Outcome outcome, uint256 amount, uint256 depositIndex, uint256 cumulativeAmount);
 	event WithdrawDeposit(address depositor, YesNoMarkets.Outcome winner, uint256 amountToWithdraw, uint256 depositIndex);
+	event ClaimDeposit(uint256 amountToWithdraw, uint256 burnAmount);
 
 	constructor(ISecurityPool _securityPool) {
 		securityPool = _securityPool;
 		owner = msg.sender;
 	}
 
-	function start(uint256 _startBond, uint256 _forkTreshold) public {
+	function start(uint256 _startBond, uint256 _nonDecisionTreshold) public {
 		require(owner == msg.sender, 'only owner can start');
 		require(startingTime == 0, 'already started');
 		startingTime = block.timestamp + 3 days;
-		forkTreshold = _forkTreshold;
+		nonDecisionTreshold = _nonDecisionTreshold;
 		startBond = _startBond;
-		emit GameStarted(startingTime, forkTreshold, startBond);
+		emit GameStarted(startingTime, nonDecisionTreshold, startBond);
 	}
 
 	function getBalances() public view returns (uint256[3] memory) {
@@ -80,10 +81,10 @@ contract EscalationGame {
 	// todo investigate this function more for errors. This can result in weird errors where you fork just before/after escalation game end
 	function computeTimeSinceStartFromAttritionCost(uint256 startDeposit, uint256 forkThreshold, uint256 attritionCost) public view returns (uint256) {
 		uint256 low = 0;
-		uint256 high = forkTreshold;
+		uint256 high = nonDecisionTreshold;
 		if (attritionCost <= startDeposit) return 0;
-		uint256 maxCost = forkTreshold;
-		if (attritionCost >= maxCost) return forkTreshold;
+		uint256 maxCost = nonDecisionTreshold;
+		if (attritionCost >= maxCost) return nonDecisionTreshold;
 
 		// binary search
 		for (uint256 iteration = 0; iteration < 64; iteration++) {
@@ -102,16 +103,15 @@ contract EscalationGame {
 	}
 
 	function getEscalationGameEndDate() public view returns (uint256 endTime) {
-		if (startingTime <= block.timestamp) return 0;
 		if (forkedTimestamp > 0) return forkedTimestamp;
-		return startingTime + computeTimeSinceStartFromAttritionCost(startBond, forkTreshold, getBindingCapital());
+		return startingTime + computeTimeSinceStartFromAttritionCost(startBond, nonDecisionTreshold, getBindingCapital());
 	}
 
 	function totalCost() public view returns (uint256) {
 		if (startingTime >= block.timestamp) return 0;
 		uint256 timeFromStart = block.timestamp - startingTime;
-		if (timeFromStart >= escalationTimeLength) return forkTreshold;
-		return compute5TermTaylorSeriesAttritionCostApproximation(startBond, forkTreshold, timeFromStart);
+		if (timeFromStart >= escalationTimeLength) return nonDecisionTreshold;
+		return compute5TermTaylorSeriesAttritionCostApproximation(startBond, nonDecisionTreshold, timeFromStart);
 	}
 
 	function getMarketResolution() public view returns (YesNoMarkets.Outcome outcome){
@@ -127,9 +127,9 @@ contract EscalationGame {
 	}
 
 	function hasForked() internal view returns (bool) {
-		uint8 invalidOver = balances[0] >= forkTreshold ? 1 : 0;
-		uint8 yesOver = balances[1] >= forkTreshold ? 1 : 0;
-		uint8 noOver = balances[2] >= forkTreshold ? 1 : 0;
+		uint8 invalidOver = balances[0] >= nonDecisionTreshold ? 1 : 0;
+		uint8 yesOver = balances[1] >= nonDecisionTreshold ? 1 : 0;
+		uint8 noOver = balances[2] >= nonDecisionTreshold ? 1 : 0;
 		if (invalidOver + yesOver + noOver >= 2) return true;
 		return false;
 	}
@@ -148,14 +148,14 @@ contract EscalationGame {
 		require(forkedTimestamp == 0, 'System has already forked');
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
 		require(getMarketResolution() == YesNoMarkets.Outcome.None, 'System has already timeouted');
-		require(balances[uint256(outcome)] < forkTreshold, 'Already full');
+		require(balances[uint256(outcome)] < nonDecisionTreshold, 'Already full');
 		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit'); // checks that we get start bond and spam protection
 		Deposit memory deposit;
 		deposit.depositor = depositor;
 		balances[uint256(outcome)] += amount;
-		if (balances[uint256(outcome)] > forkTreshold) {
-			depositAmount = amount - (balances[uint256(outcome)] - forkTreshold);
-			balances[uint256(outcome)] = forkTreshold;
+		if (balances[uint256(outcome)] > nonDecisionTreshold) {
+			depositAmount = amount - (balances[uint256(outcome)] - nonDecisionTreshold);
+			balances[uint256(outcome)] = nonDecisionTreshold;
 		} else {
 			depositAmount = amount;
 		}
@@ -168,25 +168,35 @@ contract EscalationGame {
 		}
 	}
 
-	// todo, allow withdrawing after own fork as well
-	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw) {
-		require(forkedTimestamp == 0, 'System has forked');
-		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
-		YesNoMarkets.Outcome winner = getMarketResolution();
-		require(winner != YesNoMarkets.Outcome.None, 'Escalation game has not ended');
-		Deposit memory deposit = deposits[uint8(winner)][depositIndex];
-		deposits[uint8(winner)][depositIndex].amount = 0;
+	function claimDepositForWinning(uint256 depositIndex, YesNoMarkets.Outcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
+		require(msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()), 'Only Security Pool can withdraw');
+		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
+		deposits[uint8(outcome)][depositIndex].amount = 0;
 		depositor = deposit.depositor;
 		uint256 maxWithdrawableBalance = getBindingCapital();
 		if (deposit.cumulativeAmount > maxWithdrawableBalance) {
 			amountToWithdraw = deposit.amount;
+			emit ClaimDeposit(amountToWithdraw, 0);
 		} else if (deposit.cumulativeAmount + deposit.amount > maxWithdrawableBalance) {
 			uint256 excess = (deposit.cumulativeAmount + deposit.amount - maxWithdrawableBalance);
-			amountToWithdraw = (deposit.amount - excess) * 2 + excess;
+			uint256 burnAmount = excess * 2 / 5;
+			amountToWithdraw = (deposit.amount - excess) + excess * 2 - burnAmount;
+			emit ClaimDeposit(amountToWithdraw, burnAmount);
 		} else {
-			amountToWithdraw = deposit.amount * 2;
+			uint256 burnAmount = (deposit.amount * 2) / 5;
+			amountToWithdraw = deposit.amount * 2 - burnAmount;
+			emit ClaimDeposit(amountToWithdraw, burnAmount);
 		}
-		emit WithdrawDeposit(depositor, winner, amountToWithdraw, depositIndex);
+	}
+
+	// todo, allow withdrawing after someones elses fork as well (game is canceled)
+	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw) {
+		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
+		require(forkedTimestamp == 0, 'System has forked');
+		// if system hasnt forked, check outcome is winning
+		YesNoMarkets.Outcome markeResolution = getMarketResolution();
+		claimDepositForWinning(depositIndex, markeResolution);
+		emit WithdrawDeposit(depositor, markeResolution, amountToWithdraw, depositIndex);
 	}
 
 	// todo, for the UI, we probably want to retrive multiple outcomes at once

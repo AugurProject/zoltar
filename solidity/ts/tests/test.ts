@@ -35,7 +35,7 @@ describe('Contract Test Suite', () => {
 		await ensureZoltarDeployed(client)
 		const zoltar = getZoltarAddress()
 		const marketText = 'test market'
-		const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4', 'Outcome 5', 'Outcome 6', 'Outcome 7', 'Outcome 8'] as const
+		const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'] as const
 
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)

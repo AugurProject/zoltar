@@ -38,19 +38,19 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		yesNoMarkets = _yesNoMarkets;
 	}
 
-	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool) {
+	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, Auction truthAuction) {
 		bytes32 securityPoolSalt = keccak256(abi.encodePacked(parent, universeId, marketId, securityMultiplier));
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
 
-		Auction truthAuction = auctionFactory.deployAuction(securityPoolSalt);
+		truthAuction = auctionFactory.deployAuction(securityPoolSalt);
 
-		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(securityPoolForker, this, yesNoMarkets, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, marketId, securityMultiplier);
+		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(address(securityPoolForker), this, yesNoMarkets, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, marketId, securityMultiplier);
 
 		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
 		securityPool.setStartingParams(currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
 
-		truthAuction.setOwner(address(securityPool));
+		truthAuction.setOwner(address(securityPoolForker));
 		emit DeploySecurityPool(securityPool, truthAuction, priceOracleManagerAndOperatorQueuer, shareToken, parent, universeId, marketId, securityMultiplier, currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
 	}
 
@@ -64,7 +64,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		bytes32 shareTokenSalt = keccak256(abi.encodePacked(securityMultiplier, marketId));
 		IShareToken shareToken = shareTokenFactory.deployShareToken(shareTokenSalt);
 
-		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(securityPoolForker, this, yesNoMarkets, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, ISecurityPool(payable(0x0)), zoltar, universeId, marketId, securityMultiplier);
+		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(address(securityPoolForker), this, yesNoMarkets, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, ISecurityPool(payable(0x0)), zoltar, universeId, marketId, securityMultiplier);
 
 		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
 		securityPool.setStartingParams(currentRetentionRate, startingRepEthPrice, 0);

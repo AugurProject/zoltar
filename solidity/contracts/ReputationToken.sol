@@ -6,6 +6,8 @@ import './ERC20.sol';
 contract ReputationToken is ERC20 {
 	uint256 private totalTheoreticalSupply;
 	address public immutable zoltar;
+	event Mint(address account, uint256 value);
+	event Burn(address account, uint256 value);
 
 	constructor(address _zoltar) ERC20('Reputation', 'REP') {
 		zoltar = _zoltar;
@@ -19,12 +21,14 @@ contract ReputationToken is ERC20 {
 	function mint(address account, uint256 value) external {
 		require(msg.sender == zoltar, "Not zoltar");
 		_mint(account, value);
+		emit Mint(account, value);
 	}
 
 	function burn(address account, uint256 value) external {
 		require(msg.sender == zoltar, "Not zoltar");
 		_burn(account, value);
 		totalTheoreticalSupply -= value;
+		emit Burn(account, value);
 	}
 
     function getTotalTheoreticalSupply() external view returns (uint256) {

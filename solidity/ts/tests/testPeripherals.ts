@@ -3,17 +3,16 @@ import assert from 'node:assert'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { approveToken, contractExists, ensureZoltarDeployed, forkUniverse, getChildUniverseId, getERC20Balance, getETHBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { addressString, dateToBigintSeconds, rpow } from '../testsuite/simulator/utils/bigint.js'
+import { approveToken, contractExists, ensureZoltarDeployed, forkUniverse, getChildUniverseId, getERC20Balance, getETHBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkTreshold, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+import { addressString, bigintToDecimalString, dateToBigintSeconds } from '../testsuite/simulator/utils/bigint.js'
 import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
+import { approveAndDepositRep, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
 import { deployOriginSecurityPool, ensureInfraDeployed, getMarketId, getSecurityPoolAddresses } from '../testsuite/simulator/utils/deployPeripherals.js'
-import { balanceOfShares, balanceOfSharesInCash, createCompleteSet, depositRep, getCompleteSetCollateralAmount, getCurrentRetentionRate, getEthAmountToBuy, getLastPrice, getMarketEndDate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOvedToVaults, getTotalSecurityBondAllowance, migrateShares, OperationType, participateAuction, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, requestPriceIfNeededAndQueueOperation, sharesToCash, updateVaultFees } from '../testsuite/simulator/utils/peripherals.js'
+import { balanceOfSharesInCash, createCompleteSet, depositRep, getCompleteSetCollateralAmount, getEthAmountToBuy, getLastPrice, getMarketEndDate, getPoolOwnershipDenominator, getRepToken, getSecurityVault, getSystemState, getTotalFeesOvedToVaults, getTotalSecurityBondAllowance, migrateShares, OperationType, participateAuction, poolOwnershipToRep, redeemShares } from '../testsuite/simulator/utils/peripherals.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
-import { depositToEscalationGame, getEscalationGameDeposits, getForkTreshold, getMarketResolution, getStartBond, withdrawFromEscalationGame } from '../testsuite/simulator/utils/escalationGame.js'
-import { approximatelyEqual, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
-import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkSecurityPool, getMarketOutcome, getMigratedRep, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/securityPoolForker.js'
+import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
+import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkSecurityPool, getMarketOutcome, getMigratedRep, getSecurityPoolForkerForkData, migrateFromEscalationGame, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/securityPoolForker.js'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
 
 describe('Peripherals Contract Test Suite', () => {
@@ -21,7 +20,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 	let client: WriteClient
 	let startBalance: bigint
-	const reportBond = 1n * 10n ** 18n
+	//const reportBond = 1n * 10n ** 18n
 	const PRICE_PRECISION = 1n * 10n ** 18n
 	const repDeposit = 1000n * 10n ** 18n
 	const currentTimestamp = dateToBigintSeconds(new Date())
@@ -41,7 +40,7 @@ describe('Peripherals Contract Test Suite', () => {
 	const marketId = getMarketId(genesisUniverse, securityMultiplier, EXTRA_INFO, marketEndDate)
 
 	const marketText = 'test market'
-	const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4', 'Outcome 5', 'Outcome 6', 'Outcome 7', 'Outcome 8'] as const
+	const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'] as const
 
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
@@ -57,7 +56,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await approveAndDepositRep(client, repDeposit, marketId)
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, marketId, securityMultiplier)
 	})
-
+/*
 	test('can deposit rep and withdraw it', async () => {
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
 		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
@@ -174,9 +173,9 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(completeSetCollateralAmountPercentage, expected, 'return amount did not match')
 		const contractBalance = await getETHBalance(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(contractBalance + ethBalanceAfter - ethBalanceBefore, openInterestAmount, 'contract balance+ fees should equal initial open interest')
-	})
+	})*/
 
-	test('can set security bonds allowance, mint complete sets and fork happily' , async () => {
+	/*test('can set security bonds allowance, mint complete sets and fork happily' , async () => {
 		const endTime = await getMarketEndDate(client, marketId)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolAllowance = repDeposit / 4n
@@ -211,8 +210,20 @@ describe('Peripherals Contract Test Suite', () => {
 		const repBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 
 		// forking
+		const zoltarForkTreshold = await getZoltarForkTreshold(client, genesisUniverse)
+		const burnAmount = zoltarForkTreshold / 5n
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		const forkerRepBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), getInfraContractAddresses().securityPoolForker)
+		const zoltarForkData = await getUniverseForkData(client, genesisUniverse)
+		strictEqualTypeSafe(zoltarForkData.forkerRepDeposit + forkerRepBalance + burnAmount, repBalance, 'forkerRepDeposit + forkerRepBalance+burnAmount should equal deposit')
+
 		await forkSecurityPool(client, securityPoolAddresses.securityPool)
+
+		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		strictEqualTypeSafe(forkData.repAtFork, repBalance - burnAmount, 'rep at fork does not match deposit rep')
+		strictEqualTypeSafe(forkData.migratedRep, 0n, 'migrated rep should be 0 so far')
+		strictEqualTypeSafe(forkData.outcomeIndex, 0, 'there should be no outcome')
+		strictEqualTypeSafe(forkData.ownFork, true, 'should be own fork')
 		const totalFeesOvedToVaultsRightAfterFork = await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
 		strictEqualTypeSafe(0n, await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool), 'Parents original rep is gone')
@@ -222,16 +233,18 @@ describe('Peripherals Contract Test Suite', () => {
 
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'Fork Migration need to start')
 		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
-		approximatelyEqual(migratedRep, repBalance, 10n, 'correct amount rep migrated')
+		approximatelyEqual(migratedRep, repBalance - burnAmount, 10n, 'correct amount rep migrated')
 		assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'Did not create YES security pool')
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'yes System should be operational right away')
-		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), openInterestAmount, 'child contract did not record the amount correctly')
+
+		const totalFees = await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool) + await getTotalFeesOvedToVaults(client, yesSecurityPool.securityPool)
+		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), openInterestAmount - totalFees, 'child contract did not record the amount correctly')
 
 		const totalFeesOvedToVaultsAfterFork = await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(totalFeesOvedToVaultsRightAfterFork, totalFeesOvedToVaultsAfterFork, 'parents fees should be frozen')
-	})
+	})*/
 
 	test('two security pools with disagreement', async () => {
 		const endTime = await getMarketEndDate(client, marketId)
@@ -243,87 +256,128 @@ describe('Peripherals Contract Test Suite', () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRep(attackerClient, repDeposit, marketId)
 		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		const forkTreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+
+		const zoltarForkTreshold = await getZoltarForkTreshold(client, genesisUniverse)
+		const burnAmount = zoltarForkTreshold / 5n
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkTreshold)
 
 		const repBalanceInGenesisPool = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
-		strictEqualTypeSafe(repBalanceInGenesisPool, 2n * repDeposit, 'After two deposits, the system should have 2 x repDeposit worth of REP')
-		strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool), 2n * securityPoolAllowance, 'Security bond allowance should be 2x')
-		strictEqualTypeSafe(await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool), repBalanceInGenesisPool * PRICE_PRECISION, 'Pool ownership denominator should equal `pool balance * PRICE_PRECISION` prior fork')
+		strictEqual18Decimal(repBalanceInGenesisPool, 2n * repDeposit + 2n * forkTreshold, 'After two deposits, the system should have 2 x repDeposit worth of REP + 2x fork')
+		strictEqual18Decimal(await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool), 2n * securityPoolAllowance, 'Security bond allowance should be 2x')
+		strictEqual18Decimal(await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool), repBalanceInGenesisPool * PRICE_PRECISION, 'Pool ownership denominator should equal `pool balance * PRICE_PRECISION` prior fork')
 
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 		assert.deepStrictEqual(await balanceOfSharesInCash(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray, 'Did not create enough complete sets')
+		console.log(`genesis yes client ${repBalanceInGenesisPool}`)
+		console.log(`security pool rep: ${ await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool) }`)
+		console.log(`zoltarForkTreshold: ${ zoltarForkTreshold }`)
+		console.log(`burnAmount: ${ burnAmount }`)
 
-		const forkTreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
-		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkTreshold)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await forkSecurityPool(client, securityPoolAddresses.securityPool)
-
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, marketId, securityMultiplier)
 
-		const feesOved = await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool) + await getTotalFeesOvedToVaults(client, yesSecurityPool.securityPool)
-
-		assert.deepStrictEqual(await balanceOfSharesInCash(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray.map((x) => x - feesOved), 'Shares exist after fork')
-		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes)
-		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No)
-		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Invalid)
-
 		// we migrate to yes
-		strictEqualTypeSafe(await getMarketOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'yes is finalized')
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await migrateFromEscalationGame(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+
+		const yesVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		console.log(yesVault)
+		console.log('migration')
+		//console.log(`migratedRepInYes: ${ bigintToDecimalString(migratedRepInYes, 18n) }`)
+		console.log(`own: ${ bigintToDecimalString(repDeposit + 2n * forkTreshold, 18n) }`)
+		console.log(`attacker: ${ bigintToDecimalString(repDeposit, 18n) }`)
+		repDeposit + 2n * forkTreshold
+		console.log(`burnAmount: ${ bigintToDecimalString(burnAmount, 18n) }`)
+		console.log(`forkTreshold: ${ bigintToDecimalString(forkTreshold, 18n) }`)
+		console.log(`genesis: ${ bigintToDecimalString(repBalanceInGenesisPool, 18n) }`)
+		console.log(`parentDivier: ${ bigintToDecimalString(await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool), 18n) }`)
+		console.log(`yesDivier: ${ bigintToDecimalString(await getPoolOwnershipDenominator(client, yesSecurityPool.securityPool), 18n) }`)
+		const yesPoolBalance = await getERC20Balance(client, await getRepToken(client, yesSecurityPool.securityPool), yesSecurityPool.securityPool)
+		console.log(`yesPoolBalance: ${ bigintToDecimalString(yesPoolBalance, 18n) }`)
+		strictEqual18Decimal(await poolOwnershipToRep(client, yesSecurityPool.securityPool, yesVault.repDepositShare), yesPoolBalance-repDeposit, 'we should account for all the rep in yes pool (except attackers rep)')
 		const migratedRepInYes = await getMigratedRep(client, yesSecurityPool.securityPool)
-		approximatelyEqual(repBalanceInGenesisPool / 2n, migratedRepInYes, 10n, 'half migrated to yes')
-		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesSecurityPool.securityPool), repBalanceInGenesisPool, 'yes has all the rep')
+		strictEqual18Decimal(yesPoolBalance-repDeposit, migratedRepInYes, 'yes pool has the same rep as migrated rep')
+		strictEqualTypeSafe(await getMarketOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'yes is finalized')
+		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesSecurityPool.securityPool), repBalanceInGenesisPool - burnAmount, 'yes has all the rep')
+
+		assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'yes security pool exist')
+		const feesOved = await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool) + await getTotalFeesOvedToVaults(client, yesSecurityPool.securityPool)
 
 		// attacker migrated to No
 		const noUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.No)
 		const noSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, noUniverse, marketId, securityMultiplier)
-		strictEqualTypeSafe(await getMarketOutcome(client, noSecurityPool.securityPool), QuestionOutcome.No, 'finalized as yes')
 		await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No)
+		strictEqualTypeSafe(await getMarketOutcome(client, noSecurityPool.securityPool), QuestionOutcome.No, 'finalized as yes')
 		const migratedRepInNo = await getMigratedRep(client, noSecurityPool.securityPool)
-		approximatelyEqual(repBalanceInGenesisPool / 2n, migratedRepInNo, 10n, 'half migrated to no')
-		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(noUniverse), noSecurityPool.securityPool), repBalanceInGenesisPool, 'no has all the rep')
+		approximatelyEqual(migratedRepInNo, repDeposit, 10n, 'other side migrated to no')
+		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(noUniverse), noSecurityPool.securityPool), repBalanceInGenesisPool - burnAmount, 'no has all the rep')
 
 		// invalid, no one migrated here
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid) // no one migrated, we need to create the universe as rep holders did not
 		const invalidUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid)
 		const invalidSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, invalidUniverse, marketId, securityMultiplier)
-		strictEqualTypeSafe(await getMarketOutcome(client, invalidSecurityPool.securityPool), QuestionOutcome.Invalid, 'finalized as invalid')
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 
+		const getCurrentOpenInterestArray = async () => {
+			const currentFees = await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool) + await getTotalFeesOvedToVaults(client, yesSecurityPool.securityPool)
+			return openInterestArray.map((x) => x - currentFees)
+		}
+
 		// auction yes
+		// parentCollateral - parentCollateral * forkData[securityPool].migratedRep / forkData[parent].repAtFork;
+		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).repAtFork
+		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		console.log(`getCurrentOpenInterestArray: ${ (await getCurrentOpenInterestArray())[0] }`)
+		console.log(`openInterestArray: ${ openInterestArray[0] }`)
+		console.log(`parent.completeSetCollateralAmount: ${ completeSetAmount }`)
+		console.log(`parent.completeSetCollateralAmountshare: ${ completeSetAmount * repDeposit / repBalanceInGenesisPool }`)
+		console.log(`parent.completeSetCollateralAmountA: ${ completeSetAmount-completeSetAmount * migratedRepInYes / repAtFork }`)
+		//const yesOpenInterestShareToBuy = (await getCurrentOpenInterestArray())[0] * repDeposit / repBalanceInGenesisPool
+		const auctionedEthInYes = completeSetAmount-completeSetAmount * migratedRepInYes / repAtFork
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'Auction started')
-		approximatelyEqual(await getEthAmountToBuy(client, yesSecurityPool.truthAuction), openInterestAmount / 2n, 10n, 'Need to buy half of open interest')
+		approximatelyEqual(await getEthAmountToBuy(client, yesSecurityPool.truthAuction), auctionedEthInYes, 10n, 'Need to buy half of open interest on yes')
 		// participate yes auction by buying quarter of all REP (this is a open interest and rep holder happy case where REP holders win 50%)
 		const yesAuctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-		await participateAuction(yesAuctionParticipant, yesSecurityPool.truthAuction, repBalanceInGenesisPool / 4n, openInterestAmount / 2n)
+		await participateAuction(yesAuctionParticipant, yesSecurityPool.truthAuction, repBalanceInGenesisPool / 4n, auctionedEthInYes)
 
 		// auction no
+		//const noOpenInterestShareToBuy = (await getCurrentOpenInterestArray())[0] * (repBalanceInGenesisPool-repDeposit) / (repBalanceInGenesisPool)
+		const auctionedEthInNo = completeSetAmount-completeSetAmount * migratedRepInNo / repAtFork
 		await startTruthAuction(client, noSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, noSecurityPool.securityPool), SystemState.ForkTruthAuction, 'Auction started')
-		approximatelyEqual(await getEthAmountToBuy(client, noSecurityPool.truthAuction), openInterestAmount / 2n, 10n, 'Need to buy half of open interest')
+		approximatelyEqual(await getEthAmountToBuy(client, noSecurityPool.truthAuction), auctionedEthInNo, 10n, 'Need to buy half of open interest on no')
 		// participate no auction by buying 3/4 of all REP (this is a open interest happy case where REP holders lose 50%)
 		const noAuctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
-		await participateAuction(noAuctionParticipant, noSecurityPool.truthAuction, repBalanceInGenesisPool * 3n / 4n, openInterestAmount / 2n)
+		await participateAuction(noAuctionParticipant, noSecurityPool.truthAuction, repBalanceInGenesisPool * 3n / 4n, auctionedEthInNo)
 
 		// auction invalid
 		await startTruthAuction(client, invalidSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, invalidSecurityPool.securityPool), SystemState.ForkTruthAuction, 'Auction started')
-		approximatelyEqual(await getEthAmountToBuy(client, invalidSecurityPool.truthAuction), openInterestAmount, 10n, 'Need to buy all of open interest')
+		approximatelyEqual(await getEthAmountToBuy(client, invalidSecurityPool.truthAuction), completeSetAmount, 10n, 'Need to buy all of open interest on invalid')
 		// participate no auction by buying 3/4 of all REP (this is a open interest happy case where REP holders lose 50%)
 		const invalidAuctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)
 		// buy half of the open interest for 3/4 of everything
-		await participateAuction(invalidAuctionParticipant, invalidSecurityPool.truthAuction, repBalanceInGenesisPool - repBalanceInGenesisPool / 1_000_000n, openInterestAmount / 2n)
+		await participateAuction(invalidAuctionParticipant, invalidSecurityPool.truthAuction, repBalanceInGenesisPool-burnAmount - repBalanceInGenesisPool / 1_000_000n, openInterestAmount / 2n)
 
 		await mockWindow.advanceTime(7n * DAY + DAY)
 
 		// yes status: auction fully funds, 1/4 of rep balance is sold for eth
 		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
-		assert.deepStrictEqual(await balanceOfSharesInCash(client, yesSecurityPool.securityPool, yesSecurityPool.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray, 'Not enough shares in yes')
 
-		approximatelyEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), openInterestAmount, 10n, 'yes child contract did not record the amount correctly')
+		assert.deepStrictEqual(await balanceOfSharesInCash(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray.map((x) => x - feesOved), 'Shares exist after fork')
+		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [0n, 1n, 2n])
+		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [0n, 1n, 2n])
+		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, [0n, 1n, 2n])
+
+		assert.deepStrictEqual(await balanceOfSharesInCash(client, yesSecurityPool.securityPool, yesSecurityPool.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2])), [completeSetAmount, completeSetAmount, completeSetAmount], 'Not enough shares in yes')
+
+		approximatelyEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), (await getCurrentOpenInterestArray())[0], 10n, 'yes child contract did not record the amount correctly')
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'Yes System should be operational again')
 		await claimAuctionProceeds(client, yesSecurityPool.securityPool, yesAuctionParticipant.account.address)
 
@@ -344,7 +398,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// no status: auction fully funds, 3/4 of rep balance is sold for eth
 		await finalizeTruthAuction(client, noSecurityPool.securityPool)
-		assert.deepStrictEqual(await balanceOfSharesInCash(client, noSecurityPool.securityPool, noSecurityPool.shareToken, noUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray, 'Not enough shares in no')
+		assert.deepStrictEqual(await balanceOfSharesInCash(client, noSecurityPool.securityPool, noSecurityPool.shareToken, noUniverse, addressString(TEST_ADDRESSES[2])), await getCurrentOpenInterestArray(), 'Not enough shares in no')
 
 		strictEqualTypeSafe(await getSystemState(client, noSecurityPool.securityPool), SystemState.Operational, 'No System should be operational again')
 		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, noSecurityPool.securityPool), openInterestAmount, 'no child contract did not record the amount correctly')

@@ -1,6 +1,7 @@
-import { peripherals_SecurityPoolForker_SecurityPoolForker } from '../../../types/contractArtifact.js'
+import { peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
 import { getInfraContractAddresses } from './deployPeripherals.js'
+import { contractExists } from './utilities.js'
 import { ReadClient, WriteClient } from './viem.js'
 
 export const forkSecurityPool = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
@@ -67,6 +68,7 @@ export const getMigratedRep = async (client: ReadClient, securityPoolAddress: `0
 }
 
 export const getMarketOutcome = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+	if(!(await contractExists(client, securityPoolAddress))) return QuestionOutcome.None
 	return await client.readContract({
 		abi: [{
 			"inputs": [
@@ -102,3 +104,31 @@ export const createChildUniverse = async (client: WriteClient, securityPoolAddre
 	})
 }
 
+export const getSecurityPoolForkerForkData = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+	const data = await client.readContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'forkData',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress],
+	})
+	const [ repAtFork, truthAuction, truthAuctionStarted, migratedRep, auctionedSecurityBondAllowance, ownFork, outcomeIndex] = data
+	return { repAtFork, truthAuction, truthAuctionStarted, migratedRep, auctionedSecurityBondAllowance, ownFork, outcomeIndex }
+}
+
+export const migrateFromEscalationGame = async (client: WriteClient, parentSecurityPool: `0x${ string }`, vault: `0x${ string }`, outcomeIndex: QuestionOutcome, depositIndexes: bigint[]) => {
+	return await client.writeContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'migrateFromEscalationGame',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [parentSecurityPool, vault, outcomeIndex, depositIndexes.map((x) => Number(x))],
+	})
+}
+
+export const getCompleteSetCollateralAmount = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'completeSetCollateralAmount',
+		address: securityPoolAddress,
+		args: [],
+	})
+}

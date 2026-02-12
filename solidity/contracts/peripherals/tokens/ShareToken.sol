@@ -71,10 +71,18 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		_burnBatch(_owner, _tokenIds, _values);
 	}
 
+	function isChildOf(uint248 childUniverse, uint248 parentUniverse) internal override view returns (bool) {
+		return zoltar.isChildOf(childUniverse, parentUniverse);
+	}
+
 	function burnTokenId(uint256 _tokenId, address _owner) external returns (uint256 balance) {
 		require(authorized[msg.sender] == true, 'not authorized');
 		balance = balanceOf(_owner, _tokenId);
 		_burn(_owner, _tokenId, balance);
+	}
+
+	function getChildUniverseId(uint248 universeId, uint8 outcomeIndex) public override pure returns (uint248) {
+		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
 	}
 
 	function getUniverse(uint256 _tokenId) external pure returns(uint256) {

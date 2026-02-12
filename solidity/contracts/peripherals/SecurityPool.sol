@@ -31,7 +31,7 @@ contract SecurityPool is ISecurityPool {
 	EscalationGameFactory public immutable escalationGameFactory;
 	EscalationGame public escalationGame;
 	YesNoMarkets public yesNoMarkets;
-	ISecurityPoolForker public securityPoolForker;
+	address public securityPoolForker;
 	ISecurityPoolFactory public securityPoolFactory;
 
 	uint256 public totalSecurityBondAllowance;
@@ -74,11 +74,11 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	modifier onlyForker {
-		require(msg.sender == address(securityPoolForker), 'Only Forker');
+		require(msg.sender == securityPoolForker, 'Only Forker');
 		_;
 	}
 
-	constructor(ISecurityPoolForker _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, YesNoMarkets _yesNoMarkets, EscalationGameFactory _escalationGameFactory, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _marketId, uint256 _securityMultiplier) {
+	constructor(address _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, YesNoMarkets _yesNoMarkets, EscalationGameFactory _escalationGameFactory, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _marketId, uint256 _securityMultiplier) {
 		universeId = _universeId;
 		securityPoolFactory = _securityPoolFactory;
 		marketId = _marketId;
@@ -304,13 +304,13 @@ contract SecurityPool is ISecurityPool {
 	// Escalation Game (migrate vault (oi+rep), truth truthAuction)
 	////////////////////////////////////////
 
-	function depositToEscalationGame(YesNoMarkets.Outcome outcome, uint256 amount) external isOperational {
+	function depositToEscalationGame(YesNoMarkets.Outcome outcome, uint256 maxAmount) external isOperational {
 		if (address(escalationGame) == address(0x0)) {
 			uint256 endTime = yesNoMarkets.getMarketEndDate(marketId);
 			require(block.timestamp > endTime, 'market has not ended');
-			escalationGame = escalationGameFactory.deployEscalationGame(TODO_INITIAL_ESCALATION_GAME_DEPOSIT, repToken.getTotalTheoreticalSupply() / FORK_TRESHOLD_DIVISOR);
+			escalationGame = escalationGameFactory.deployEscalationGame(TODO_INITIAL_ESCALATION_GAME_DEPOSIT, repToken.getTotalTheoreticalSupply() / (FORK_TRESHOLD_DIVISOR * 2));
 		}
-		securityVaults[msg.sender].lockedRepInEscalationGame += escalationGame.depositOnOutcome(msg.sender, outcome, amount);
+		securityVaults[msg.sender].lockedRepInEscalationGame += escalationGame.depositOnOutcome(msg.sender, outcome, maxAmount);
 		require(poolOwnershipToRep(securityVaults[msg.sender].poolOwnership) >= securityVaults[msg.sender].lockedRepInEscalationGame, 'Not enough REP');
 	}
 

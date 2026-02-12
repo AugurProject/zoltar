@@ -29,7 +29,7 @@ contract YesNoMarkets {
 		return markets[marketId].marketEndDate;
 	}
 
-	function getForkingData(uint256 marketId) external view returns (string memory extraInfo, string[8] memory outcomes) {
+	function getForkingData(uint256 marketId) external view returns (string memory extraInfo, string[4] memory outcomes) {
 		extraInfo = markets[marketId].extraInfo;
 		outcomes[0] = 'Yes';
 		outcomes[1] = 'No';

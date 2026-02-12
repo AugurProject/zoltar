@@ -20,10 +20,10 @@ export const withdrawFromEscalationGame = async (client: WriteClient, securityPo
 	})
 }
 
-export const getForkTreshold = async (client: ReadClient, escalationGame: `0x${ string }`) => {
+export const getNonDecisionTreshold = async (client: ReadClient, escalationGame: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_EscalationGame_EscalationGame.abi,
-		functionName: 'forkTreshold',
+		functionName: 'nonDecisionTreshold',
 		address: escalationGame,
 		args: [],
 	})

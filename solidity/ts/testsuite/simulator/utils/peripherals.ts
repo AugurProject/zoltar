@@ -372,15 +372,18 @@ export const balanceOfSharesInCash = async (client: ReadClient, seucurityPoolAdd
 	return await shareArrayToCash(client, seucurityPoolAddress, array)
 }
 
-export const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => (universeId << 8n) + BigInt(outcome)
+export const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => {
+	const universeMask = (1n << 248n) - 1n
+	return ((universeId & universeMask) << 8n) | (BigInt(outcome) & 255n)
+}
 export const unpackTokenId = (tokenId: bigint): { universe: bigint, outcome: QuestionOutcome } => ({ universe: tokenId >> 8n, outcome: Number(tokenId & 0xFFn) })
 
-export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x${ string }`, universeId: bigint, outcome: QuestionOutcome) => {
+export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x${ string }`, fromUniverseId: bigint, outcome: QuestionOutcome, outcomes: bigint[]) => {
 	return await client.writeContract({
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'migrate',
 		address: shareTokenAddress,
-		args: [getTokenId(universeId, outcome)],
+		args: [getTokenId(fromUniverseId, outcome), outcomes.map((x) => Number(x))],
 	})
 }
 

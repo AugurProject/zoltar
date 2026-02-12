@@ -275,7 +275,7 @@ export const getUniverseForkData = async (client: ReadClient, universeId: bigint
 	return { forkingQuestionExtraInfo, forkedBy, forkerRepDeposit, categories }
 }
 
-export const forkUniverse = async (client: WriteClient, universeId: bigint, extraInfo: string, questionCategories: readonly [string, string, string, string, string, string, string, string]) => {
+export const forkUniverse = async (client: WriteClient, universeId: bigint, extraInfo: string, questionCategories: readonly [string, string, string, string]) => {
 	return await client.writeContract({
 		chain: mainnet,
 		abi: Zoltar_Zoltar.abi,
@@ -329,6 +329,15 @@ export const forkerClaimRep = async (client: WriteClient, universeId: bigint, ou
 		functionName: 'forkerClaimRep',
 		address: getZoltarAddress(),
 		args: [universeId, outcomeIndices.map((x) => Number(x))]
+	})
+}
+
+export const getZoltarForkTreshold = async (client: ReadClient, universeId: bigint) => {
+	return await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'getForkTreshold',
+		address: getZoltarAddress(),
+		args: [universeId]
 	})
 }
 
