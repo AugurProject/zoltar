@@ -168,7 +168,7 @@ contract EscalationGame {
 		}
 	}
 
-	function claimDepositForWinning(uint256 depositIndex, YesNoMarkets.Outcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
+	function claimDepositForWinning(uint256 depositIndex, YesNoMarkets.Outcome outcome) public returns (address depositor, uint256 burnAmount, uint256 amountToWithdraw) {
 		require(msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()), 'Only Security Pool can withdraw');
 		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
 		deposits[uint8(outcome)][depositIndex].amount = 0;
@@ -179,11 +179,11 @@ contract EscalationGame {
 			emit ClaimDeposit(amountToWithdraw, 0);
 		} else if (deposit.cumulativeAmount + deposit.amount > maxWithdrawableBalance) {
 			uint256 excess = (deposit.cumulativeAmount + deposit.amount - maxWithdrawableBalance);
-			uint256 burnAmount = excess * 2 / 5;
+			burnAmount = excess * 2 / 5;
 			amountToWithdraw = (deposit.amount - excess) + excess * 2 - burnAmount;
 			emit ClaimDeposit(amountToWithdraw, burnAmount);
 		} else {
-			uint256 burnAmount = (deposit.amount * 2) / 5;
+			burnAmount = (deposit.amount * 2) / 5;
 			amountToWithdraw = deposit.amount * 2 - burnAmount;
 			emit ClaimDeposit(amountToWithdraw, burnAmount);
 		}

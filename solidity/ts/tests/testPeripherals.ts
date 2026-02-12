@@ -9,7 +9,7 @@ import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
 import { approveAndDepositRep, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
 import { deployOriginSecurityPool, ensureInfraDeployed, getMarketId, getSecurityPoolAddresses } from '../testsuite/simulator/utils/deployPeripherals.js'
-import { balanceOfSharesInCash, createCompleteSet, depositRep, getCompleteSetCollateralAmount, getEthAmountToBuy, getLastPrice, getMarketEndDate, getPoolOwnershipDenominator, getRepToken, getSecurityVault, getSystemState, getTotalFeesOvedToVaults, getTotalSecurityBondAllowance, migrateShares, OperationType, participateAuction, poolOwnershipToRep, redeemShares } from '../testsuite/simulator/utils/peripherals.js'
+import { balanceOfSharesInCash, createCompleteSet, depositRep, getCompleteSetCollateralAmount, getEthAmountToBuy, getLastPrice, getMarketEndDate, getPoolOwnershipDenominator, getRepToken, getSecurityVault, getShareTokenSupply, getSystemState, getTotalFeesOvedToVaults, getTotalSecurityBondAllowance, migrateShares, OperationType, participateAuction, poolOwnershipToRep, redeemShares } from '../testsuite/simulator/utils/peripherals.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
 import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkSecurityPool, getMarketOutcome, getMigratedRep, getSecurityPoolForkerForkData, migrateFromEscalationGame, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/securityPoolForker.js'
@@ -283,7 +283,6 @@ describe('Peripherals Contract Test Suite', () => {
 		// we migrate to yes
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await migrateFromEscalationGame(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
-
 		const yesVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		console.log(yesVault)
 		console.log('migration')
@@ -315,6 +314,8 @@ describe('Peripherals Contract Test Suite', () => {
 		const migratedRepInNo = await getMigratedRep(client, noSecurityPool.securityPool)
 		approximatelyEqual(migratedRepInNo, repDeposit, 10n, 'other side migrated to no')
 		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(noUniverse), noSecurityPool.securityPool), repBalanceInGenesisPool - burnAmount, 'no has all the rep')
+
+		approximatelyEqual(await getETHBalance(client, securityPoolAddresses.securityPool), await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool), 10n, 'there should be only fees left in old security pool')
 
 		// invalid, no one migrated here
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid) // no one migrated, we need to create the universe as rep holders did not
@@ -375,6 +376,14 @@ describe('Peripherals Contract Test Suite', () => {
 		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [0n, 1n, 2n])
 		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, [0n, 1n, 2n])
 
+		console.log('original')
+		console.log(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool))
+		console.log(await getShareTokenSupply(client, securityPoolAddresses.securityPool))
+		console.log(await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool))
+		console.log('end')
+		console.log(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool))
+		console.log(await getShareTokenSupply(client, yesSecurityPool.securityPool))
+		console.log(await getTotalFeesOvedToVaults(client, yesSecurityPool.securityPool))
 		assert.deepStrictEqual(await balanceOfSharesInCash(client, yesSecurityPool.securityPool, yesSecurityPool.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2])), [completeSetAmount, completeSetAmount, completeSetAmount], 'Not enough shares in yes')
 
 		approximatelyEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), (await getCurrentOpenInterestArray())[0], 10n, 'yes child contract did not record the amount correctly')
@@ -387,12 +396,13 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const originalYesVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		const originalYesVaultRep = await poolOwnershipToRep(client, yesSecurityPool.securityPool, originalYesVault.repDepositShare)
-		approximatelyEqual(originalYesVaultRep, repBalanceInGenesisPool * 3n / 4n, 10000n, 'original yes vault holder should hold rest 3/4 of rep')
+		approximatelyEqual(originalYesVaultRep, repBalanceInGenesisPool * 3n / 4n-burnAmount, 10000n, 'original yes vault holder should hold rest 3/4 of rep')
 		strictEqualTypeSafe((await getSecurityVault(client, yesSecurityPool.securityPool, attackerClient.account.address)).repDepositShare, 0n, 'attacker should have zero as they did not migrate to yes')
 
 		const balancePriorYesRedeemal = await getETHBalance(client, addressString(TEST_ADDRESSES[2]))
 		await redeemShares(openInterestHolder, yesSecurityPool.securityPool)
-		assert.deepStrictEqual(await balanceOfSharesInCash(client, yesSecurityPool.securityPool, securityPoolAddresses.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2])), [openInterestAmount, 0n, openInterestAmount], 'Not enough shares')
+		const currentShares = await getCurrentOpenInterestArray()
+		assert.deepStrictEqual(await balanceOfSharesInCash(client, yesSecurityPool.securityPool, securityPoolAddresses.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2])), [currentShares[0], 0n, currentShares[2]], 'Not enough shares 1')
 		const fees = await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool) + await getTotalFeesOvedToVaults(client, yesSecurityPool.securityPool)
 		approximatelyEqual(await getETHBalance(client, addressString(TEST_ADDRESSES[2])), balancePriorYesRedeemal + openInterestAmount - fees, 10n ** 15n, 'did not gain eth after redeeming yes shares')
 
@@ -401,7 +411,7 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.deepStrictEqual(await balanceOfSharesInCash(client, noSecurityPool.securityPool, noSecurityPool.shareToken, noUniverse, addressString(TEST_ADDRESSES[2])), await getCurrentOpenInterestArray(), 'Not enough shares in no')
 
 		strictEqualTypeSafe(await getSystemState(client, noSecurityPool.securityPool), SystemState.Operational, 'No System should be operational again')
-		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, noSecurityPool.securityPool), openInterestAmount, 'no child contract did not record the amount correctly')
+		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, noSecurityPool.securityPool), currentShares[0], 'no child contract did not record the amount correctly')
 		await claimAuctionProceeds(client, noSecurityPool.securityPool, noAuctionParticipant.account.address)
 
 		const noAuctionParticipantVault = await getSecurityVault(client, noSecurityPool.securityPool, noAuctionParticipant.account.address)
@@ -410,18 +420,18 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const originalNoVault = await getSecurityVault(client, noSecurityPool.securityPool, attackerClient.account.address)
 		const originalNoVaultRep = await poolOwnershipToRep(client, noSecurityPool.securityPool, originalNoVault.repDepositShare)
-		approximatelyEqual(originalNoVaultRep, repBalanceInGenesisPool * 1n / 4n, 10000n, 'original no vault holder should hold rest 1/4 of rep')
+		approximatelyEqual(originalNoVaultRep, repBalanceInGenesisPool * 1n / 4n - burnAmount, 10000n, 'original no vault holder should hold rest 1/4 of rep')
 		strictEqualTypeSafe((await getSecurityVault(client, noSecurityPool.securityPool, client.account.address)).repDepositShare, 0n, 'client should have zero as they did not migrate to no')
 		const balancePriorNoRedeemal = await getETHBalance(client, addressString(TEST_ADDRESSES[2]))
 		await redeemShares(openInterestHolder, noSecurityPool.securityPool)
-		assert.deepStrictEqual(await balanceOfSharesInCash(client, noSecurityPool.securityPool, securityPoolAddresses.shareToken, noUniverse, addressString(TEST_ADDRESSES[2])), [openInterestAmount, openInterestAmount, 0n], 'Not enough shares')
+		assert.deepStrictEqual(await balanceOfSharesInCash(client, noSecurityPool.securityPool, securityPoolAddresses.shareToken, noUniverse, addressString(TEST_ADDRESSES[2])), [currentShares[0], currentShares[1], 0n], 'Not enough shares 2')
 		approximatelyEqual(await getETHBalance(client, addressString(TEST_ADDRESSES[2])), balancePriorNoRedeemal + openInterestAmount-fees, 10n ** 15n, 'did not gain eth after redeeming no shares')
 
 		// invalid status: auction 3/4 funds for all REP (minus 1/100 000). Open interest holders lose 50%
 		await finalizeTruthAuction(client, invalidSecurityPool.securityPool)
-		assert.deepStrictEqual(await balanceOfSharesInCash(client, invalidSecurityPool.securityPool, securityPoolAddresses.shareToken, invalidUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray.map((x) => x / 2n), 'Not enough shares in invalid')
+		assert.deepStrictEqual(await balanceOfSharesInCash(client, invalidSecurityPool.securityPool, securityPoolAddresses.shareToken, invalidUniverse, addressString(TEST_ADDRESSES[2])), currentShares.map((x) => x / 2n), 'Not enough shares in invalid')
 		strictEqualTypeSafe(await getSystemState(client, invalidSecurityPool.securityPool), SystemState.Operational, 'Invalid System should be operational again')
-		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, invalidSecurityPool.securityPool), openInterestAmount / 2n, 'Invalid child contract did not record the amount correctly')
+		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, invalidSecurityPool.securityPool), currentShares[0] / 2n, 'Invalid child contract did not record the amount correctly')
 		await claimAuctionProceeds(client, invalidSecurityPool.securityPool, invalidAuctionParticipant.account.address)
 
 		const invalidAuctionParticipantVault = await getSecurityVault(client, invalidSecurityPool.securityPool, invalidAuctionParticipant.account.address)
@@ -429,17 +439,17 @@ describe('Peripherals Contract Test Suite', () => {
 		approximatelyEqual(invalidAuctionParticipantRep, repBalanceInGenesisPool - repBalanceInGenesisPool / 1_000_000n, 10000n, 'Invalid auction participant did not get ownership of rep they bought')
 
 		const openInterestHolder2 = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
-		await createCompleteSet(openInterestHolder2, invalidSecurityPool.securityPool, openInterestAmount)
+		await createCompleteSet(openInterestHolder2, invalidSecurityPool.securityPool, currentShares[0])
 
 		const balancePriorInvalidRedeemal = await getETHBalance(client, addressString(TEST_ADDRESSES[2]))
 		await redeemShares(openInterestHolder, invalidSecurityPool.securityPool)
-		assert.deepStrictEqual(await balanceOfSharesInCash(client, invalidSecurityPool.securityPool, invalidSecurityPool.shareToken, invalidUniverse, addressString(TEST_ADDRESSES[2])), [0n, openInterestAmount, openInterestAmount].map((x) => x / 2n), 'Not enough shares after redeeming invalid 1')
+		assert.deepStrictEqual(await balanceOfSharesInCash(client, invalidSecurityPool.securityPool, invalidSecurityPool.shareToken, invalidUniverse, addressString(TEST_ADDRESSES[2])), [0n, currentShares[1], currentShares[2]].map((x) => x / 2n), 'Not enough shares after redeeming invalid 1')
 		approximatelyEqual(await getETHBalance(client, addressString(TEST_ADDRESSES[2])), balancePriorInvalidRedeemal + (openInterestAmount - fees) / 2n, 10n ** 15n, 'did not gain eth after redeeming invalid shares')
 
 		const balancePriorInvalidRedeemal2 = await getETHBalance(client, addressString(TEST_ADDRESSES[4]))
 		await redeemShares(openInterestHolder2, invalidSecurityPool.securityPool)
-		assert.deepStrictEqual(await balanceOfSharesInCash(client, invalidSecurityPool.securityPool, invalidSecurityPool.shareToken, invalidUniverse, addressString(TEST_ADDRESSES[4])), [0n, openInterestAmount, openInterestAmount], 'Not enough shares after redeeming invalid 2')
-		approximatelyEqual(await getETHBalance(client, addressString(TEST_ADDRESSES[4])), balancePriorInvalidRedeemal2 + openInterestAmount, 10n ** 15n, 'did not gain eth after redeeming invalid shares')
+		assert.deepStrictEqual(await balanceOfSharesInCash(client, invalidSecurityPool.securityPool, invalidSecurityPool.shareToken, invalidUniverse, addressString(TEST_ADDRESSES[4])), [0n, currentShares[1], currentShares[2]], 'Not enough shares after redeeming invalid 2')
+		approximatelyEqual(await getETHBalance(client, addressString(TEST_ADDRESSES[4])), balancePriorInvalidRedeemal2 + currentShares[0], 10n ** 15n, 'did not gain eth after redeeming invalid shares')
 	})
 
 	test('can fork zero rep pools', async () => {

@@ -111,17 +111,25 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		if (address(forkData[parent].children[uint8(outcomeIndex)]) == address(0x0)) createChildUniverse(parent, uint8(outcomeIndex));
 		ISecurityPool child = forkData[parent].children[uint8(outcomeIndex)];
 		require(address(escalationGame) != address(0x0), 'escalation game needs to be deployed');
-		uint256 totalRep = 0;
+		uint256 repMigratedFromEscalationGame = 0;
+		//uint256 totalBurnAmount = 0;
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
-			(address depositor, uint256 amountToWithdraw) = escalationGame.claimDepositForWinning(depositIndexes[index], outcomeIndex);
+			(address depositor, /*uint256 burnAmount*/, uint256 amountToWithdraw) = escalationGame.claimDepositForWinning(depositIndexes[index], outcomeIndex);
 			require(depositor == vault, 'deposit was not for this vault');
-			totalRep += amountToWithdraw;
+			repMigratedFromEscalationGame += amountToWithdraw;
+			//totalBurnAmount += burnAmount;
 		}
 		(uint256 poolOwnership, , , , ) = child.securityVaults(vault);
-		uint256 newOwnership = repToPoolOwnership(child, totalRep);
-		child.setVaultPoolOwnership(msg.sender, poolOwnership + newOwnership);
-		forkData[child].migratedRep += totalRep;
-		emit MigrateFromEscalationGame(parent, vault, outcomeIndex, depositIndexes, totalRep, newOwnership);
+		uint256 ownershipDelta = repToPoolOwnership(child, repMigratedFromEscalationGame);
+		child.setVaultPoolOwnership(msg.sender, poolOwnership + ownershipDelta);
+		forkData[child].migratedRep += repMigratedFromEscalationGame;
+		emit MigrateFromEscalationGame(parent, vault, outcomeIndex, depositIndexes, repMigratedFromEscalationGame, ownershipDelta);
+		// migrate open interest
+		// TODO, currently the fork migrator migrates the burn amount of open interest. I feel this share should be distributed among all rep holders instead
+		//uint256 parentOwnershipDelta = (repMigratedFromEscalationGame) * parent.poolOwnershipDenominator() / forkData[parent].repAtFork;
+		//parent.migrateEth(payable(child), parent.completeSetCollateralAmount() * parentOwnershipDelta / parent.poolOwnershipDenominator());
+		parent.migrateEth(payable(child), parent.completeSetCollateralAmount() * repMigratedFromEscalationGame / forkData[parent].repAtFork);
+
 	}
 
 	// migrates vault into outcome universe after fork
@@ -140,16 +148,18 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		if (parent.poolOwnershipDenominator() != 0 && child.repToken().balanceOf(address(child)) != 0) {
 			uint256 ownership = parentPoolOwnership - repToPoolOwnership(child, parentLockedRepInEscalationGame);
 			child.setVaultPoolOwnership(msg.sender, ownership);
-			forkData[child].migratedRep += poolOwnershipToRep(child, ownership);
+			uint256 migratedRep = poolOwnershipToRep(child, ownership);
+			forkData[child].migratedRep += migratedRep;
 			child.setVaultFeeIndex(msg.sender, child.feeIndex());
+			// migrate open interest
+			if (ownership > 0) {
+				//parent.migrateEth(payable(child), parent.completeSetCollateralAmount() * parentPoolOwnership / parent.poolOwnershipDenominator());
+				parent.migrateEth(payable(child), parent.completeSetCollateralAmount() * migratedRep / forkData[parent].repAtFork);
+			}
 		}
 
 		(uint256 poolOwnership, uint256 securityBondAllowance,,,) = parent.securityVaults(msg.sender);
 		emit MigrateVault(msg.sender, outcomeIndex, poolOwnership, securityBondAllowance, parentLockedRepInEscalationGame);
-		// migrate open interest
-		if (parent.poolOwnershipDenominator() > 0 && poolOwnership > 0) {
-			parent.migrateEth(payable(child), parent.completeSetCollateralAmount() * poolOwnership / parent.poolOwnershipDenominator());
-		}
 		parent.setVaultOwnership(msg.sender, 0, 0);
 	}
 

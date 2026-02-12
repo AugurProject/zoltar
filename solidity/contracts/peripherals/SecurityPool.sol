@@ -278,9 +278,8 @@ contract SecurityPool is ISecurityPool {
 		require(sent, 'Failed to send Ether');
 	}
 
-	// todo add way to redeem from forked version as well
 	function redeemShares() isOperational external {
-		YesNoMarkets.Outcome outcome = escalationGame.getMarketResolution();
+		YesNoMarkets.Outcome outcome = ISecurityPoolForker(securityPoolForker).getMarketOutcome(this);
 		require(outcome != YesNoMarkets.Outcome.None, 'Market has not finalized!');
 		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
 		uint256 amount = shareToken.burnTokenId(tokenId, msg.sender);
@@ -291,7 +290,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function redeemRep(address vault) public {
-		YesNoMarkets.Outcome outcome = escalationGame.getMarketResolution();
+		YesNoMarkets.Outcome outcome = ISecurityPoolForker(securityPoolForker).getMarketOutcome(this);
 		require(outcome != YesNoMarkets.Outcome.None, 'Market has not finalized!');
 		updateVaultFees(vault);
 		uint256 repAmount = poolOwnershipToRep(securityVaults[vault].poolOwnership) - securityVaults[vault].lockedRepInEscalationGame;
