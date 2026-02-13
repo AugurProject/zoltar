@@ -97,7 +97,6 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		ReputationToken childReputationToken = child.repToken();
 		childReputationToken.transfer(address(child), childReputationToken.balanceOf(address(this)));
 
-		//child.setPoolOwnershipDenominator(forkData[parent].repAtFork * SecurityPoolUtils.PRICE_PRECISION);
 		if (forkData[parent].ownFork) {
 			child.setPoolOwnershipDenominator(parent.poolOwnershipDenominator() * forkData[parent].repAtFork / (forkData[parent].repAtFork + parent.escalationGame().nonDecisionTreshold()*2/5) );
 		} else {
@@ -105,7 +104,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		}
 	}
 
-	//todo, atm this needs to be called after migratevault
+	// todo, atm this needs to be called after migratevault
 	function migrateFromEscalationGame(ISecurityPool parent, address vault, YesNoMarkets.Outcome outcomeIndex, uint8[] memory depositIndexes) public {
 		EscalationGame escalationGame = parent.escalationGame();
 		if (address(forkData[parent].children[uint8(outcomeIndex)]) == address(0x0)) createChildUniverse(parent, uint8(outcomeIndex));

@@ -113,10 +113,6 @@ contract Zoltar {
 		emit DeployChild(msg.sender, universeId, outcomeIndex, childUniverseId, childReputationToken);
 	}
 
-	function isChildOf(uint248 childUniverseId, uint248 parentUniverseId) public view returns (bool) {
-		return universes[childUniverseId].parentUniverseId == parentUniverseId;
-	}
-
 	function forkerClaimRep(uint248 universeId, uint8[] memory outcomeIndices) public {
 		UniverseForkData memory data = universeForkData[universeId];
 		require(data.forkedBy == msg.sender, 'only forker can claim');

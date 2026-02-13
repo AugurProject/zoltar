@@ -1,24 +1,6 @@
-import { peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_SecurityPool } from '../../../types/contractArtifact.js'
-import { AccountAddress, QuestionOutcome } from '../types/types.js'
-import { ReadClient, WriteClient } from './viem.js'
-
-export const depositToEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome, amount: bigint) => {
-	return await client.writeContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'depositToEscalationGame',
-		address: securityPoolAddress,
-		args: [outcome, amount],
-	})
-}
-
-export const withdrawFromEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`, depositIndexes: bigint[]) => {
-	return await client.writeContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'withdrawFromEscalationGame',
-		address: securityPoolAddress,
-		args: [depositIndexes],
-	})
-}
+import { peripherals_EscalationGame_EscalationGame } from '../../../../types/contractArtifact.js'
+import { AccountAddress, QuestionOutcome } from '../../types/types.js'
+import { ReadClient } from '../viem.js'
 
 export const getNonDecisionTreshold = async (client: ReadClient, escalationGame: `0x${ string }`) => {
 	return await client.readContract({

@@ -1,8 +1,8 @@
-import { peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker } from '../../../types/contractArtifact.js'
-import { QuestionOutcome } from '../types/types.js'
+import { peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker } from '../../../../types/contractArtifact.js'
+import { QuestionOutcome } from '../../types/types.js'
 import { getInfraContractAddresses } from './deployPeripherals.js'
-import { contractExists } from './utilities.js'
-import { ReadClient, WriteClient } from './viem.js'
+import { contractExists } from '../utilities.js'
+import { ReadClient, WriteClient } from '../viem.js'
 
 export const forkSecurityPool = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.writeContract({

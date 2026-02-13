@@ -1,13 +1,12 @@
 import 'viem/window'
-import { getContractAddress, numberToBytes, encodeAbiParameters, keccak256, encodeDeployData, getCreate2Address, getAddress } from 'viem'
+import { encodeAbiParameters, keccak256 } from 'viem'
 import { mainnet } from 'viem/chains'
 import { ReadClient, WriteClient } from './viem.js'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants.js'
-import { addressString, bytes32String } from './bigint.js'
+import { addressString } from './bigint.js'
 import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
-import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
 
 export const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
@@ -223,124 +222,6 @@ export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<
 	await client.waitForTransactionReceipt({ hash: deployHash })
 }
 
-export function getZoltarAddress() {
-	const bytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.bytecode.object }`
-	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
-}
-
-export const isZoltarDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.deployedBytecode.object }`
-	const address = getZoltarAddress()
-	const deployedBytecode = await client.getCode({ address })
-	return deployedBytecode === expectedDeployedBytecode
-}
-
-export const deployZoltarTransaction = () => {
-	const bytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.bytecode.object }`
-	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
-}
-
-export const ensureZoltarDeployed = async (client: WriteClient) => {
-	await ensureProxyDeployerDeployed(client)
-	if (await isZoltarDeployed(client)) return
-	const hash = await client.sendTransaction(deployZoltarTransaction())
-	await client.waitForTransactionReceipt({ hash })
-}
-
-export const getUniverseData = async (client: ReadClient, universeId: bigint) => {
-	const universeData = await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'universes',
-		address: getZoltarAddress(),
-		args: [universeId]
-	})
-	const [forkTime, reputationToken, parentUniverseId, forkingOutcomeIndex] = universeData
-	return { forkTime, reputationToken, parentUniverseId, forkingOutcomeIndex: BigInt(forkingOutcomeIndex) }
-}
-
-export const getUniverseForkData = async (client: ReadClient, universeId: bigint) => {
-	const universeForkData = await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'universeForkData',
-		address: getZoltarAddress(),
-		args: [universeId]
-	})
-	const categories = await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'getForkingQuestionCategories',
-		address: getZoltarAddress(),
-		args: [universeId]
-	})
-	const [forkingQuestionExtraInfo, forkedBy, forkerRepDeposit] = universeForkData
-	return { forkingQuestionExtraInfo, forkedBy, forkerRepDeposit, categories }
-}
-
-export const forkUniverse = async (client: WriteClient, universeId: bigint, extraInfo: string, questionCategories: readonly [string, string, string, string]) => {
-	return await client.writeContract({
-		chain: mainnet,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'forkUniverse',
-		address: getZoltarAddress(),
-		args: [universeId, extraInfo, questionCategories]
-	})
-}
-
-export const splitRep = async (client: WriteClient, universeId: bigint, outcomeIndexes: bigint[]) => {
-	return await client.writeContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'splitRep',
-		address: getZoltarAddress(),
-		args: [universeId, outcomeIndexes.map((index) => Number(index))]
-	})
-}
-
-export const deployChild = async (client: WriteClient, universeId: bigint, outcomeIndex: bigint) => {
-	return await client.writeContract({
-		chain: mainnet,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'deployChild',
-		address: getZoltarAddress(),
-		args: [universeId, Number(outcomeIndex)]
-	})
-}
-
-export const getOutcomeName = async (client: ReadClient, universeId: bigint) => {
-	return await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'getOutcomeName',
-		address: getZoltarAddress(),
-		args: [universeId]
-	})
-}
-
-export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0x${ string }`) {
-	return await client.readContract({
-		abi: ReputationToken_ReputationToken.abi,
-		functionName: 'getTotalTheoreticalSupply',
-		address: repToken,
-		args: []
-	})
-}
-
-export const forkerClaimRep = async (client: WriteClient, universeId: bigint, outcomeIndices: bigint[]) => {
-	return await client.writeContract({
-		chain: mainnet,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'forkerClaimRep',
-		address: getZoltarAddress(),
-		args: [universeId, outcomeIndices.map((x) => Number(x))]
-	})
-}
-
-export const getZoltarForkTreshold = async (client: ReadClient, universeId: bigint) => {
-	return await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'getForkTreshold',
-		address: getZoltarAddress(),
-		args: [universeId]
-	})
-}
-
 export const contractExists = async (client: ReadClient, contract: `0x${ string }`) => await client.getCode({ address: contract }) !== undefined
 
 export const isUnknownAnAddress = (maybeAddress: unknown): maybeAddress is `0x${ string }` => typeof maybeAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(maybeAddress)
@@ -349,14 +230,3 @@ const uint248BitMask = (1n << 248n) - 1n
 export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint | QuestionOutcome): bigint {
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint8' }], [parentUniverseId, Number(outcome)]))) & uint248BitMask
 }
-
-export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
-	if (universeId === 0n) return getAddress(addressString(GENESIS_REPUTATION_TOKEN))
-	const initCode = encodeDeployData({
-		abi: ReputationToken_ReputationToken.abi,
-		bytecode: `0x${ ReputationToken_ReputationToken.evm.bytecode.object }`,
-		args: [getZoltarAddress()]
-	})
-	return getCreate2Address({ from: getZoltarAddress(), salt: bytes32String(universeId), bytecodeHash: keccak256(initCode) })
-}
-

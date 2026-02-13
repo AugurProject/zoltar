@@ -2,12 +2,13 @@ import { describe, beforeEach, test } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient } from '../testsuite/simulator/utils/viem.js'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { approveToken, ensureZoltarDeployed, getZoltarAddress, getUniverseData, isZoltarDeployed, setupTestAccounts, forkUniverse, getUniverseForkData, getRepTokenAddress, getTotalTheoreticalSupply, forkerClaimRep, getERC20Balance, getChildUniverseId, splitRep, contractExists } from '../testsuite/simulator/utils/utilities.js'
+import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists } from '../testsuite/simulator/utils/utilities.js'
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint.js'
 import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
+import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
+import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
 
 describe('Contract Test Suite', () => {
 	let mockWindow: MockWindowEthereum

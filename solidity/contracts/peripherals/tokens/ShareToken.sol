@@ -14,6 +14,7 @@ import '../interfaces/IShareToken.sol';
 */
 contract ShareToken is ForkedERC1155, IShareToken {
 
+	// TODO, rename based on the market they represent
 	string constant public name = 'Shares';
 	string constant public symbol = 'SHARE';
 	Zoltar public immutable zoltar;
@@ -69,10 +70,6 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		}
 
 		_burnBatch(_owner, _tokenIds, _values);
-	}
-
-	function isChildOf(uint248 childUniverse, uint248 parentUniverse) internal override view returns (bool) {
-		return zoltar.isChildOf(childUniverse, parentUniverse);
 	}
 
 	function burnTokenId(uint256 _tokenId, address _owner) external returns (uint256 balance) {
