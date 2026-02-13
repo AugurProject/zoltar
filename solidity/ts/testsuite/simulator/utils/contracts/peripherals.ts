@@ -267,7 +267,7 @@ export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x$
 	})
 }
 
-export const getMarketEndDate = async(client: ReadClient, marketId: bigint) => {
+export const getMarketEndDate = async (client: ReadClient, marketId: bigint) => {
 	return await client.readContract({
 		abi: peripherals_YesNoMarkets_YesNoMarkets.abi,
 		functionName: 'getMarketEndDate',

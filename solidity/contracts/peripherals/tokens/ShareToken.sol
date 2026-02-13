@@ -7,6 +7,7 @@ import './TokenId.sol';
 import '../../Zoltar.sol';
 import '../interfaces/ISecurityPool.sol';
 import '../interfaces/IShareToken.sol';
+import '../YesNoMarkets.sol';
 
 /**
 * @title Share Token
@@ -19,6 +20,7 @@ contract ShareToken is ForkedERC1155, IShareToken {
 	string constant public symbol = 'SHARE';
 	Zoltar public immutable zoltar;
 	mapping(address => bool) authorized;
+	event Authorized(address indexed securityPool);
 
 	function universeHasForked(uint248 universeId) internal override view returns (bool) {
 		return zoltar.getForkTime(universeId) > 0;
@@ -32,6 +34,7 @@ contract ShareToken is ForkedERC1155, IShareToken {
 	function authorize(ISecurityPool _securityPoolCandidate) external {
 		require(authorized[msg.sender], 'not authorized');
 		authorized[address(_securityPoolCandidate)] = true;
+		emit Authorized(address(_securityPoolCandidate));
 	}
 
 	function getUniverseId(uint256 id) internal override pure returns (uint248 universeId) {

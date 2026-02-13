@@ -349,7 +349,7 @@ describe('Peripherals Contract Test Suite', () => {
 		// yes status: auction fully funds, 1/4 of rep balance is sold for eth
 		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 
-		assert.deepStrictEqual(await balanceOfSharesInCash(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray.map((x) => x - feesOved), 'Shares exist after fork')
+		assert.deepStrictEqual(await balanceOfSharesInCash(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray.map((x) => x - feesOwed), 'Shares exist after fork')
 		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [0n, 1n, 2n])
 		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [0n, 1n, 2n])
 		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, [0n, 1n, 2n])

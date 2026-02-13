@@ -4,7 +4,7 @@ pragma solidity 0.8.33;
 import '../../Zoltar.sol';
 import '../interfaces/ISecurityPool.sol';
 import '../tokens/TokenId.sol';
-import '../../YesNoMarkets.sol';
+import '../YesNoMarkets.sol';
 
 interface IShareToken {
 	function authorize(ISecurityPool _securityPoolCandidate) external;

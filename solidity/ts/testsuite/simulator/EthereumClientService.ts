@@ -163,7 +163,7 @@ export class EthereumClientService {
 		return EthereumQuantity.parse(response)
 	}
 
-	public readonly getGasPrice = async(requestAbortController: AbortController | undefined) => {
+	public readonly getGasPrice = async (requestAbortController: AbortController | undefined) => {
 		const response = await this.requestHandler.jsonRpcRequest({ method: 'eth_gasPrice' }, requestAbortController)
 		return EthereumQuantity.parse(response)
 	}

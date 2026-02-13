@@ -86,13 +86,12 @@ export const getCurrentRetentionRate = async (client: ReadClient, securityPoolAd
 }
 
 export const getSecurityVault = async (client: ReadClient, securityPoolAddress: `0x${ string }`, securityVault: `0x${ string }`) => {
-	const vault = await client.readContract({
+	const [repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex] = await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'securityVaults',
 		address: securityPoolAddress,
 		args: [securityVault],
 	})
-	const [repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex ] = vault
 	return { repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex }
 }
 
@@ -209,7 +208,7 @@ export const redeemRep = async (client: WriteClient, securityPoolAddress: `0x${ 
 	})
 }
 
-export const getRepToken = async(client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getRepToken = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'repToken',

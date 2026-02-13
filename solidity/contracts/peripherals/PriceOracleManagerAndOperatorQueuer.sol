@@ -133,9 +133,11 @@ contract PriceOracleManagerAndOperatorQueuer {
 	function executeQueuedOperation(uint256 operationId) public {
 		require(queuedOperations[operationId].amount > 0, 'no such operation or already executed');
 		require(isPriceValid(), 'price is not valid to execute');
+		uint256 amount = queuedOperations[operationId].amount;
+		queuedOperations[operationId].amount = 0;
 		// todo, we should allow these operations here to fail, but solidity try catch doesnt work inside the same contract
 		if (queuedOperations[operationId].operation == OperationType.Liquidation) {
-			try securityPool.performLiquidation(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].targetVault, queuedOperations[operationId].amount) {
+			try securityPool.performLiquidation(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].targetVault, amount) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
@@ -143,7 +145,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		} else if(queuedOperations[operationId].operation == OperationType.WithdrawRep) {
-			try securityPool.performWithdrawRep(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].amount) {
+			try securityPool.performWithdrawRep(queuedOperations[operationId].initiatorVault, amount) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
@@ -151,7 +153,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		} else {
-			try securityPool.performSetSecurityBondsAllowance(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].amount) {
+			try securityPool.performSetSecurityBondsAllowance(queuedOperations[operationId].initiatorVault, amount) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
@@ -159,7 +161,6 @@ contract PriceOracleManagerAndOperatorQueuer {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		}
-		queuedOperations[operationId].amount = 0;
 	}
 
 	function getQueuedOperation() public view returns (QueuedOperation memory) {
