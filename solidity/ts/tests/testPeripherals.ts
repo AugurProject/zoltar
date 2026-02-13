@@ -4,12 +4,12 @@ import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../tests
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
 import { approveToken, contractExists, ensureZoltarDeployed, forkUniverse, getChildUniverseId, getERC20Balance, getETHBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseForkData, getZoltarAddress, getZoltarForkTreshold, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { addressString, bigintToDecimalString, dateToBigintSeconds, rpow } from '../testsuite/simulator/utils/bigint.js'
+import { addressString, dateToBigintSeconds, rpow } from '../testsuite/simulator/utils/bigint.js'
 import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
 import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getMarketId, getSecurityPoolAddresses } from '../testsuite/simulator/utils/deployPeripherals.js'
-import { balanceOfShares, balanceOfSharesInCash, createCompleteSet, depositRep, getCompleteSetCollateralAmount, getCurrentRetentionRate, getEthAmountToBuy, getLastPrice, getMarketEndDate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getShareTokenSupply, getSystemState, getTotalFeesOvedToVaults, getTotalSecurityBondAllowance, migrateShares, OperationType, participateAuction, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, requestPriceIfNeededAndQueueOperation, sharesToCash, updateVaultFees } from '../testsuite/simulator/utils/peripherals.js'
+import { balanceOfShares, balanceOfSharesInCash, createCompleteSet, depositRep, getCompleteSetCollateralAmount, getCurrentRetentionRate, getEthAmountToBuy, getLastPrice, getMarketEndDate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOvedToVaults, getTotalSecurityBondAllowance, migrateShares, OperationType, participateAuction, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, requestPriceIfNeededAndQueueOperation, sharesToCash, updateVaultFees } from '../testsuite/simulator/utils/peripherals.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
 import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkSecurityPool, getMarketOutcome, getMigratedRep, getSecurityPoolForkerForkData, migrateFromEscalationGame, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/securityPoolForker.js'
@@ -272,11 +272,6 @@ describe('Peripherals Contract Test Suite', () => {
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 		assert.deepStrictEqual(await balanceOfSharesInCash(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray, 'Did not create enough complete sets')
-		console.log(`genesis yes client ${repBalanceInGenesisPool}`)
-		console.log(`security pool rep: ${ await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool) }`)
-		console.log(`zoltarForkTreshold: ${ zoltarForkTreshold }`)
-		console.log(`burnAmount: ${ burnAmount }`)
-
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await forkSecurityPool(client, securityPoolAddresses.securityPool)
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -286,19 +281,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await migrateFromEscalationGame(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 		const yesVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-		console.log(yesVault)
-		console.log('migration')
-		//console.log(`migratedRepInYes: ${ bigintToDecimalString(migratedRepInYes, 18n) }`)
-		console.log(`own: ${ bigintToDecimalString(repDeposit + 2n * forkTreshold, 18n) }`)
-		console.log(`attacker: ${ bigintToDecimalString(repDeposit, 18n) }`)
-		repDeposit + 2n * forkTreshold
-		console.log(`burnAmount: ${ bigintToDecimalString(burnAmount, 18n) }`)
-		console.log(`forkTreshold: ${ bigintToDecimalString(forkTreshold, 18n) }`)
-		console.log(`genesis: ${ bigintToDecimalString(repBalanceInGenesisPool, 18n) }`)
-		console.log(`parentDivier: ${ bigintToDecimalString(await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool), 18n) }`)
-		console.log(`yesDivier: ${ bigintToDecimalString(await getPoolOwnershipDenominator(client, yesSecurityPool.securityPool), 18n) }`)
 		const yesPoolBalance = await getERC20Balance(client, await getRepToken(client, yesSecurityPool.securityPool), yesSecurityPool.securityPool)
-		console.log(`yesPoolBalance: ${ bigintToDecimalString(yesPoolBalance, 18n) }`)
 		strictEqual18Decimal(await poolOwnershipToRep(client, yesSecurityPool.securityPool, yesVault.repDepositShare), yesPoolBalance-repDeposit, 'we should account for all the rep in yes pool (except attackers rep)')
 		const migratedRepInYes = await getMigratedRep(client, yesSecurityPool.securityPool)
 		strictEqual18Decimal(yesPoolBalance-repDeposit, migratedRepInYes, 'yes pool has the same rep as migrated rep')
@@ -332,15 +315,8 @@ describe('Peripherals Contract Test Suite', () => {
 		}
 
 		// auction yes
-		// parentCollateral - parentCollateral * forkData[securityPool].migratedRep / forkData[parent].repAtFork;
 		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).repAtFork
 		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
-		console.log(`getCurrentOpenInterestArray: ${ (await getCurrentOpenInterestArray())[0] }`)
-		console.log(`openInterestArray: ${ openInterestArray[0] }`)
-		console.log(`parent.completeSetCollateralAmount: ${ completeSetAmount }`)
-		console.log(`parent.completeSetCollateralAmountshare: ${ completeSetAmount * repDeposit / repBalanceInGenesisPool }`)
-		console.log(`parent.completeSetCollateralAmountA: ${ completeSetAmount-completeSetAmount * migratedRepInYes / repAtFork }`)
-		//const yesOpenInterestShareToBuy = (await getCurrentOpenInterestArray())[0] * repDeposit / repBalanceInGenesisPool
 		const auctionedEthInYes = completeSetAmount-completeSetAmount * migratedRepInYes / repAtFork
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'Auction started')
@@ -350,7 +326,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await participateAuction(yesAuctionParticipant, yesSecurityPool.truthAuction, repBalanceInGenesisPool / 4n, auctionedEthInYes)
 
 		// auction no
-		//const noOpenInterestShareToBuy = (await getCurrentOpenInterestArray())[0] * (repBalanceInGenesisPool-repDeposit) / (repBalanceInGenesisPool)
 		const auctionedEthInNo = completeSetAmount-completeSetAmount * migratedRepInNo / repAtFork
 		await startTruthAuction(client, noSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, noSecurityPool.securityPool), SystemState.ForkTruthAuction, 'Auction started')
@@ -377,14 +352,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [0n, 1n, 2n])
 		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, [0n, 1n, 2n])
 
-		console.log('original')
-		console.log(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool))
-		console.log(await getShareTokenSupply(client, securityPoolAddresses.securityPool))
-		console.log(await getTotalFeesOvedToVaults(client, securityPoolAddresses.securityPool))
-		console.log('end')
-		console.log(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool))
-		console.log(await getShareTokenSupply(client, yesSecurityPool.securityPool))
-		console.log(await getTotalFeesOvedToVaults(client, yesSecurityPool.securityPool))
 		assert.deepStrictEqual(await balanceOfSharesInCash(client, yesSecurityPool.securityPool, yesSecurityPool.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2])), [completeSetAmount, completeSetAmount, completeSetAmount], 'Not enough shares in yes')
 
 		approximatelyEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), (await getCurrentOpenInterestArray())[0], 10n, 'yes child contract did not record the amount correctly')
