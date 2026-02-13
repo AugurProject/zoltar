@@ -35,4 +35,4 @@ export function modifyObject<T extends object>(original: T, subObject: NoInfer<S
 	return {...original, ...subObject }
 }
 
-export const objectEntries = <T extends object>(obj: T) => Object.entries(obj) as { [K in keyof T]-?: [K, T[K]] }[keyof T][]
+export const objectEntries = <T extends object>(obj: T) => Object.entries(obj) as [string, T[keyof T & string]][]
