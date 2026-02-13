@@ -4,10 +4,10 @@ import { AccountAddress, QuestionOutcome } from '../../types/types.js'
 import { ReadClient, WriteClient } from '../viem.js'
 import { getInfraContractAddresses } from './deployPeripherals.js'
 
-export const getNonDecisionTreshold = async (client: ReadClient, escalationGame: `0x${ string }`) => {
+export const getNonDecisionThreshold = async (client: ReadClient, escalationGame: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_EscalationGame_EscalationGame.abi,
-		functionName: 'nonDecisionTreshold',
+		functionName: 'nonDecisionThreshold',
 		address: escalationGame,
 		args: [],
 	})
@@ -49,12 +49,12 @@ export const getEscalationGameDeposits = async (readClient: ReadClient, escalati
 	return pages
 }
 
-export const deployEscalationGame = async (writeClient: WriteClient, startBond: bigint, nonDecisionTreshold: bigint) => {
+export const deployEscalationGame = async (writeClient: WriteClient, startBond: bigint, nonDecisionThreshold: bigint) => {
 	await writeClient.writeContract({
 		abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
 		functionName: 'deployEscalationGame',
 		address: getInfraContractAddresses().escalationGameFactory,
-		args: [startBond, nonDecisionTreshold],
+		args: [startBond, nonDecisionThreshold],
 	})
 	return getCreate2Address({
 		bytecode: encodeDeployData({

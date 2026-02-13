@@ -19,7 +19,7 @@ contract EscalationGame {
 	uint256[3] public balances; // outcome -> amount
 	mapping(uint8 => Deposit[]) public deposits; // make a fixed array with dynamic
 	ISecurityPool public securityPool;
-	uint256 public nonDecisionTreshold;
+	uint256 public nonDecisionThreshold;
 	uint256 public startBond;
 	address public owner;
 	uint256 public nonDecisionTimestamp;
@@ -34,13 +34,13 @@ contract EscalationGame {
 		owner = msg.sender;
 	}
 
-	function start(uint256 _startBond, uint256 _nonDecisionTreshold) public {
+	function start(uint256 _startBond, uint256 _nonDecisionThreshold) public {
 		require(owner == msg.sender, 'only owner can start');
 		require(startingTime == 0, 'already started');
 		startingTime = block.timestamp + 3 days;
-		nonDecisionTreshold = _nonDecisionTreshold;
+		nonDecisionThreshold = _nonDecisionThreshold;
 		startBond = _startBond;
-		emit GameStarted(startingTime, nonDecisionTreshold, startBond);
+		emit GameStarted(startingTime, startBond, nonDecisionThreshold);
 	}
 
 	function getBalances() public view returns (uint256[3] memory) {
@@ -81,10 +81,10 @@ contract EscalationGame {
 	// todo investigate this function more for errors. This can result in weird errors where you fork just before/after escalation game end
 	function computeTimeSinceStartFromAttritionCost(uint256 startDeposit, uint256 forkThreshold, uint256 attritionCost) public view returns (uint256) {
 		uint256 low = 0;
-		uint256 high = nonDecisionTreshold;
+		uint256 high = escalationTimeLength;
 		if (attritionCost <= startDeposit) return 0;
-		uint256 maxCost = nonDecisionTreshold;
-		if (attritionCost >= maxCost) return nonDecisionTreshold;
+		uint256 maxCost = nonDecisionThreshold;
+		if (attritionCost >= maxCost) return escalationTimeLength;
 
 		// binary search
 		for (uint256 iteration = 0; iteration < 64; iteration++) {
@@ -104,14 +104,14 @@ contract EscalationGame {
 
 	function getEscalationGameEndDate() public view returns (uint256 endTime) {
 		if (nonDecisionTimestamp > 0) return nonDecisionTimestamp;
-		return startingTime + computeTimeSinceStartFromAttritionCost(startBond, nonDecisionTreshold, getBindingCapital());
+		return startingTime + computeTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, getBindingCapital());
 	}
 
 	function totalCost() public view returns (uint256) {
 		if (startingTime >= block.timestamp) return 0;
 		uint256 timeFromStart = block.timestamp - startingTime;
-		if (timeFromStart >= escalationTimeLength) return nonDecisionTreshold;
-		return compute5TermTaylorSeriesAttritionCostApproximation(startBond, nonDecisionTreshold, timeFromStart);
+		if (timeFromStart >= escalationTimeLength) return nonDecisionThreshold;
+		return compute5TermTaylorSeriesAttritionCostApproximation(startBond, nonDecisionThreshold, timeFromStart);
 	}
 
 	function getMarketResolution() public view returns (YesNoMarkets.Outcome outcome){
@@ -120,16 +120,16 @@ contract EscalationGame {
 		uint8 yesOver = balances[1] >= currentTotalCost ? 1 : 0;
 		uint8 noOver = balances[2] >= currentTotalCost ? 1 : 0;
 		if (invalidOver + yesOver + noOver >= 2) return YesNoMarkets.Outcome.None; // if two or more outcomes are over the total cost, the game is still going
-		// the game has ended to timeout
+		// the game has ended due to timeout
 		if (balances[0] > balances[1] && balances[0] > balances[2]) return YesNoMarkets.Outcome.Invalid;
 		if (balances[1] > balances[0] && balances[1] > balances[2]) return YesNoMarkets.Outcome.Yes;
 		return YesNoMarkets.Outcome.No;
 	}
 
 	function hasReachedNonDecision() public view returns (bool) {
-		uint8 invalidOver = balances[0] >= nonDecisionTreshold ? 1 : 0;
-		uint8 yesOver = balances[1] >= nonDecisionTreshold ? 1 : 0;
-		uint8 noOver = balances[2] >= nonDecisionTreshold ? 1 : 0;
+		uint8 invalidOver = balances[0] >= nonDecisionThreshold ? 1 : 0;
+		uint8 yesOver = balances[1] >= nonDecisionThreshold ? 1 : 0;
+		uint8 noOver = balances[2] >= nonDecisionThreshold ? 1 : 0;
 		if (invalidOver + yesOver + noOver >= 2) return true;
 		return false;
 	}
@@ -148,14 +148,14 @@ contract EscalationGame {
 		require(nonDecisionTimestamp == 0, 'System has already reached a non-decision');
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
 		require(getMarketResolution() == YesNoMarkets.Outcome.None, 'System has already timeouted');
-		require(balances[uint256(outcome)] < nonDecisionTreshold, 'Already full');
+		require(balances[uint256(outcome)] < nonDecisionThreshold, 'Already full');
 		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit'); // checks that we get start bond and spam protection
 		Deposit memory deposit;
 		deposit.depositor = depositor;
 		balances[uint256(outcome)] += amount;
-		if (balances[uint256(outcome)] > nonDecisionTreshold) {
-			depositAmount = amount - (balances[uint256(outcome)] - nonDecisionTreshold);
-			balances[uint256(outcome)] = nonDecisionTreshold;
+		if (balances[uint256(outcome)] > nonDecisionThreshold) {
+			depositAmount = amount - (balances[uint256(outcome)] - nonDecisionThreshold);
+			balances[uint256(outcome)] = nonDecisionThreshold;
 		} else {
 			depositAmount = amount;
 		}
@@ -205,7 +205,7 @@ contract EscalationGame {
 		returnDeposits = new Deposit[](numberOfEntries);
 		uint256 iterateUntil = startIndex + numberOfEntries > deposits[uint8(outcome)].length ? deposits[uint8(outcome)].length : startIndex + numberOfEntries;
 		for (uint256 i = startIndex; i < iterateUntil; i++) {
-			returnDeposits[i] = deposits[uint8(outcome)][i];
+			returnDeposits[i - startIndex] = deposits[uint8(outcome)][i];
 		}
 	}
 }

@@ -14,7 +14,7 @@ describe('Escalation Game Test Suite', () => {
 
 	let client: WriteClient
 	const reportBond = 1n * 10n ** 18n
-	const nonDecisionTreshold = 1000n * 10n ** 18n
+	const nonDecisionThreshold = 1000n * 10n ** 18n
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
@@ -24,7 +24,7 @@ describe('Escalation Game Test Suite', () => {
 	})
 
 	test('can start a game', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionTreshold)
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
 		assert.ok(await contractExists(client, escalationGame), 'game was deployed')
 		const outcomeBalances = await getBalances(client, escalationGame)
 		assert.strictEqual(outcomeBalances.yes, 0n, 'yes stake')
