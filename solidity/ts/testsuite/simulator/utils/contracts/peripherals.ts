@@ -242,14 +242,14 @@ export const balanceOfShares = async (client: ReadClient, shareTokenAddress: `0x
 	})
 }
 
-export const balanceOfSharesInCash = async (client: ReadClient, securityPoolAddress: `0x${ string }`, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`) => {
+export const balanceOfSharesInCash = async (client: ReadClient, seucurityPoolAddress: `0x${ string }`, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`) => {
 	const array = await client.readContract({
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'balanceOfShares',
 		address: shareTokenAddress,
 		args: [universeId, account],
 	})
-	return await shareArrayToCash(client, securityPoolAddress, array)
+	return await shareArrayToCash(client, seucurityPoolAddress, array)
 }
 
 export const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => {
@@ -267,7 +267,7 @@ export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x$
 	})
 }
 
-export const getMarketEndDate = async (client: ReadClient, marketId: bigint) => {
+export const getMarketEndDate = async(client: ReadClient, marketId: bigint) => {
 	return await client.readContract({
 		abi: peripherals_YesNoMarkets_YesNoMarkets.abi,
 		functionName: 'getMarketEndDate',
