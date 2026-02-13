@@ -41,7 +41,7 @@ interface ISecurityPool {
 	function completeSetCollateralAmount() external view returns (uint256);
 	function poolOwnershipDenominator() external view returns (uint256);
 	function securityMultiplier() external view returns (uint256);
-	function totalFeesOvedToVaults() external view returns (uint256);
+	function totalFeesOwedToVaults() external view returns (uint256);
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
 	function securityVaults(address vault) external view returns (uint256 poolOwnership, uint256 securityBondAllowance, uint256 unpaidEthFees, uint256 feeIndex, uint256 lockedRepInEscalationGame);
@@ -77,7 +77,7 @@ interface ISecurityPool {
 	function createCompleteSet() external payable;
 	function redeemCompleteSet(uint256 amount) external;
 
-	function escalationGame() external returns (EscalationGame);
+	function escalationGame() external view returns (EscalationGame);
 	function setRetentionRate(uint256 newRetention) external;
 	function setSystemState(SystemState newState) external;
 	function setVaultOwnership(address vault, uint256 _poolOwnership, uint256 _securityBondAllowance) external;
@@ -96,7 +96,7 @@ interface ISecurityPool {
 	function stealAllRep() external;
 	function migrateEth(address payable child, uint256 amount) external;
 
-	function securityPoolForker() external returns (address);
+	function securityPoolForker() external view returns (address);
 
 	receive() external payable;
 }

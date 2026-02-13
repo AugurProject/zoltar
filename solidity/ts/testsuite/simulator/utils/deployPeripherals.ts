@@ -1,5 +1,5 @@
 import 'viem/window'
-import { encodeDeployData, getCreate2Address, keccak256, numberToBytes, toHex, encodePacked, zeroAddress } from 'viem'
+import { encodeDeployData, getCreate2Address, keccak256, numberToBytes, toHex, zeroAddress, encodeAbiParameters } from 'viem'
 import { WriteClient } from './viem.js'
 import { PROXY_DEPLOYER_ADDRESS } from './constants.js'
 import { addressString } from './bigint.js'
@@ -107,21 +107,23 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 }
 
 const computeSecurityPoolSalt = (parent: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint) => {
-	const types = ['address', 'uint192', 'uint56', 'uint256'] as const
 	const values = [parent, universeId, questionId, securityMultiplier] as const
-	return keccak256(encodePacked(types, values))
+	return keccak256(encodeAbiParameters([
+		{ name: 'parent', type: 'address' },
+		{ name: 'universeId', type: 'uint192' },
+		{ name: 'questionId', type: 'uint56' },
+		{ name: 'securityMultiplier', type: 'uint256' },
+	], values))
 }
 
 const computeShareTokenSalt = (securityMultiplier: bigint) => {
-	const types = ['uint256'] as const
-	const values = [securityMultiplier] as const
-	return keccak256(encodePacked(types, values))
+	return keccak256(encodeAbiParameters([{ name: 'securityMultiplier', type: 'uint256' }], [securityMultiplier]))
 }
 
 export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint) => {
 	const securityPoolSalt = computeSecurityPoolSalt(parent, universeId, questionId, securityMultiplier)
 	const infraContracts = getInfraContractAddresses()
-	const securityPoolSaltWithMsgSender = keccak256(encodePacked(['address', 'bytes32'] as const, [infraContracts.securityPoolFactory, securityPoolSalt]))
+	const securityPoolSaltWithMsgSender = keccak256(encodeAbiParameters([{ name: 'securityPoolFactory', type:'address' }, { name: 'securityPoolSalt', type: 'bytes32' }] as const, [infraContracts.securityPoolFactory, securityPoolSalt]))
 
 	const contracts = {
 		priceOracleManagerAndOperatorQueuer: getCreate2Address({

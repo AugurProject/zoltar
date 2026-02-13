@@ -39,7 +39,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, Auction truthAuction) {
-		bytes32 securityPoolSalt = keccak256(abi.encodePacked(parent, universeId, marketId, securityMultiplier));
+		require(msg.sender === address(securityPoolForker), 'only securityPoolForker')
+		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, marketId, securityMultiplier));
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
 
@@ -55,13 +56,13 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	function deployOriginSecurityPool(uint248 universeId, string memory extraInfo, uint256 marketEndDate, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice) external returns (ISecurityPool securityPool) {
-		uint256 marketId = yesNoMarkets.createMarket(extraInfo, marketEndDate, keccak256(abi.encodePacked(address(this), universeId, securityMultiplier, extraInfo, marketEndDate)));
+		uint256 marketId = yesNoMarkets.createMarket(extraInfo, marketEndDate, keccak256(abi.encode(address(this), universeId, securityMultiplier, extraInfo, marketEndDate)));
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
-		bytes32 securityPoolSalt = keccak256(abi.encodePacked(address(0x0), universeId, marketId, securityMultiplier));
+		bytes32 securityPoolSalt = keccak256(abi.encode(address(0x0), universeId, marketId, securityMultiplier));
 		PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
 
 		// sharetoken has different salt as sharetoken address does not change in forks
-		bytes32 shareTokenSalt = keccak256(abi.encodePacked(securityMultiplier, marketId));
+		bytes32 shareTokenSalt = keccak256(abi.encode(securityMultiplier, marketId));
 		IShareToken shareToken = shareTokenFactory.deployShareToken(shareTokenSalt);
 
 		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(address(securityPoolForker), this, yesNoMarkets, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, ISecurityPool(payable(0x0)), zoltar, universeId, marketId, securityMultiplier);

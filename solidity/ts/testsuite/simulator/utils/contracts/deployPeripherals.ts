@@ -1,5 +1,5 @@
 import 'viem/window'
-import { encodeDeployData, getCreate2Address, keccak256, numberToBytes, toHex, encodePacked, zeroAddress } from 'viem'
+import { encodeDeployData, getCreate2Address, keccak256, numberToBytes, toHex, zeroAddress, encodeAbiParameters } from 'viem'
 import { WriteClient } from '../viem.js'
 import { PROXY_DEPLOYER_ADDRESS } from '../constants.js'
 import { addressString } from '../bigint.js'
@@ -123,27 +123,50 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 }
 
 const computeSecurityPoolSalt = (parent: `0x${ string }`, universeId: bigint, marketId: bigint, securityMultiplier: bigint) => {
-	const types = ['address', 'uint248', 'uint256', 'uint256'] as const
 	const values = [parent, universeId, marketId, securityMultiplier] as const
-	return keccak256(encodePacked(types, values))
+	return keccak256(encodeAbiParameters([
+		{ name: 'parent', type: 'address' },
+		{ name: 'universeId', type: 'uint248' },
+		{ name: 'marketId', type: 'uint256' },
+		{ name: 'securityMultiplier', type: 'uint256' },
+	], values))
 }
 
 const computeShareTokenSalt = (securityMultiplier: bigint, marketId: bigint) => {
-	const types = ['uint256', 'uint256'] as const
 	const values = [securityMultiplier, marketId] as const
-	return keccak256(encodePacked(types, values))
+	return keccak256(encodeAbiParameters([
+		{ name: 'securityMultiplier', type: 'uint256' },
+		{ name: 'marketId', type: 'uint256' },
+	], values))
 }
 
 export const getMarketId = (universeId: bigint, securityMultiplier: bigint, extraInfo: string, marketEndDate: bigint) => {
 	const securityPoolfactory = getInfraContractAddresses().securityPoolFactory
-	const salt = keccak256(encodePacked(['address', 'uint248', 'uint256', 'string', 'uint256'], [securityPoolfactory, universeId, securityMultiplier, extraInfo, marketEndDate]))
-	return BigInt(keccak256(encodePacked(['address', 'string', 'uint256', 'bytes32'], [securityPoolfactory, extraInfo, marketEndDate, salt])));
+	const marketCreationTypes = [
+		{ name: 'securityPoolfactory', type: 'uint256' },
+		{ name: 'universeId', type: 'uint248' },
+		{ name: 'securityMultiplier', type: 'uint256' },
+		{ name: 'extraInfo', type: 'string' },
+		{ name: 'marketEndDate', type: 'uint256' },
+	]
+	const salt = keccak256(encodeAbiParameters(marketCreationTypes, [securityPoolfactory, universeId, securityMultiplier, extraInfo, marketEndDate]))
+	const saltTypes = [
+		{ name: 'securityPoolfactory', type: 'address' },
+		{ name: 'extraInfo', type: 'string' },
+		{ name: 'marketEndDate', type: 'uint256' },
+		{ name: 'salt', type: 'bytes32' },
+	]
+	return BigInt(keccak256(encodeAbiParameters(saltTypes, [securityPoolfactory, extraInfo, marketEndDate, salt])));
 }
 
 export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bigint, marketId: bigint, securityMultiplier: bigint) => {
 	const securityPoolSalt = computeSecurityPoolSalt(parent, universeId, marketId, securityMultiplier)
 	const infraContracts = getInfraContractAddresses()
-	const securityPoolSaltWithMsgSender = keccak256(encodePacked(['address', 'bytes32'] as const, [infraContracts.securityPoolFactory, securityPoolSalt]))
+	const securityPoolTypes = [
+		{ name: 'securityPoolfactory', type: 'address' },
+		{ name: 'securityPoolSalt', type: 'bytes32' },
+	]
+	const securityPoolSaltWithMsgSender = keccak256(encodeAbiParameters(securityPoolTypes, [infraContracts.securityPoolFactory, securityPoolSalt]))
 
 	const contracts = {
 		priceOracleManagerAndOperatorQueuer: getCreate2Address({

@@ -437,10 +437,10 @@ export const createChildUniverse = async (client: WriteClient, securityPoolAddre
 	})
 }
 
-export const getTotalFeesOvedToVaults = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const gettotalFeesOwedToVaults = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'totalFeesOvedToVaults',
+		functionName: 'totalFeesOwedToVaults',
 		address: securityPoolAddress,
 		args: [],
 	})

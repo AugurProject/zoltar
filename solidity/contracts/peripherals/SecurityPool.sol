@@ -40,7 +40,7 @@ contract SecurityPool is ISecurityPool {
 	uint256 public securityMultiplier;
 	uint256 public shareTokenSupply;
 
-	uint256 public totalFeesOvedToVaults;
+	uint256 public totalFeesOwedToVaults;
 	uint256 public lastUpdatedFeeAccumulator;
 	uint256 public feeIndex;
 	uint256 public currentRetentionRate;
@@ -56,7 +56,7 @@ contract SecurityPool is ISecurityPool {
 	event RedeemShares(address redeemer, uint256 sharesAmount, uint256 ethValue);
 	event UpdateVaultFees(address vault, uint256 feeIndex, uint256 unpaidEthFees);
 	event RedeemFees(address vault, uint256 fees);
-	event UpdateCollateralAmount(uint256 totalFeesOvedToVaults, uint256 completeSetCollateralAmount);
+	event UpdateCollateralAmount(uint256 totalFeesOwedToVaults, uint256 completeSetCollateralAmount);
 	event CreateCompleteSet(uint256 shareTokenSupply, uint256 completeSetsToMint, uint256 completeSetCollateralAmount);
 	event PerformLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount, uint256 debtToMove, uint256 repToMove);
 	event RedeemRep(address caller, address vault, uint256 repAmount);
@@ -120,12 +120,12 @@ contract SecurityPool is ISecurityPool {
 
 		uint256 newCompleteSetCollateralAmount = completeSetCollateralAmount * SecurityPoolUtils.rpow(currentRetentionRate, timeDelta, SecurityPoolUtils.PRICE_PRECISION) / SecurityPoolUtils.PRICE_PRECISION;
 		uint256 delta = completeSetCollateralAmount - newCompleteSetCollateralAmount;
-		totalFeesOvedToVaults += delta;
+		totalFeesOwedToVaults += delta;
 		feeIndex += delta * SecurityPoolUtils.PRICE_PRECISION / totalSecurityBondAllowance;
 		completeSetCollateralAmount = newCompleteSetCollateralAmount;
 		lastUpdatedFeeAccumulator = feeEndDate < block.timestamp ? feeEndDate : block.timestamp;
 
-		emit UpdateCollateralAmount(totalFeesOvedToVaults, completeSetCollateralAmount);
+		emit UpdateCollateralAmount(totalFeesOwedToVaults, completeSetCollateralAmount);
 	}
 
 	function updateRetentionRate() public {
@@ -146,7 +146,7 @@ contract SecurityPool is ISecurityPool {
 	function redeemFees(address vault) public {
 		uint256 fees = securityVaults[vault].unpaidEthFees;
 		securityVaults[vault].unpaidEthFees = 0;
-		totalFeesOvedToVaults -= fees;
+		totalFeesOwedToVaults -= fees;
 		(bool sent, ) = payable(vault).call{ value: fees }('');
 		require(sent, 'Failed to send Ether');
 		emit RedeemFees(vault, fees);

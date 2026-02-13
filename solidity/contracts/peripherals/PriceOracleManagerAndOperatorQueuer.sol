@@ -37,7 +37,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 	OpenOracle public immutable openOracle;
 
 	event PriceReported(uint256 reportId, uint256 price);
-	event ExecutetedQueuedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
+	event ExecutedQueuedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
 
 	// operation queuing
 	uint256 public previousQueuedOperationId;
@@ -133,21 +133,21 @@ contract PriceOracleManagerAndOperatorQueuer {
 		// todo, we should allow these operations here to fail, but solidity try catch doesnt work inside the same contract
 		if (queuedOperations[operationId].operation == OperationType.Liquidation) {
 			try securityPool.performLiquidation(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].targetVault, queuedOperations[operationId].amount) {
-				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
-				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
 			}
 		} else if(queuedOperations[operationId].operation == OperationType.WithdrawRep) {
 			try securityPool.performWithdrawRep(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].amount) {
-				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
-				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
 			}
 		} else {
 			try securityPool.performSetSecurityBondsAllowance(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].amount) {
-				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
-				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
 			}
 		}
 		queuedOperations[operationId].amount = 0;

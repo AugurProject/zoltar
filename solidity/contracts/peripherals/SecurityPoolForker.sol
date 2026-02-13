@@ -98,7 +98,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		childReputationToken.transfer(address(child), childReputationToken.balanceOf(address(this)));
 
 		if (forkData[parent].ownFork) {
-			child.setPoolOwnershipDenominator(parent.poolOwnershipDenominator() * forkData[parent].repAtFork / (forkData[parent].repAtFork + parent.escalationGame().nonDecisionTreshold()*2/5) );
+			child.setPoolOwnershipDenominator(parent.poolOwnershipDenominator() * forkData[parent].repAtFork / (forkData[parent].repAtFork + parent.escalationGame().nonDecisionThreshold()*2/5) );
 		} else {
 			child.setPoolOwnershipDenominator(parent.poolOwnershipDenominator());
 		}
@@ -118,7 +118,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		}
 		(uint256 poolOwnership, , , , ) = child.securityVaults(vault);
 		uint256 ownershipDelta = repToPoolOwnership(child, repMigratedFromEscalationGame);
-		child.setVaultPoolOwnership(msg.sender, poolOwnership + ownershipDelta);
+		child.setVaultPoolOwnership(vault, poolOwnership + ownershipDelta);
 		forkData[child].migratedRep += repMigratedFromEscalationGame;
 		emit MigrateFromEscalationGame(parent, vault, outcomeIndex, depositIndexes, repMigratedFromEscalationGame, ownershipDelta);
 		// migrate open interest
@@ -184,7 +184,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		securityPool.setSystemState(SystemState.Operational);
 		ISecurityPool parent = securityPool.parent();
 		uint256 repAvailable = forkData[parent].repAtFork;
-		securityPool.setCompleteSetCollateralAmount(address(securityPool).balance - securityPool.totalFeesOvedToVaults()); //todo, we might want to reduce fees if we didn't get fully funded?
+		securityPool.setCompleteSetCollateralAmount(address(securityPool).balance - securityPool.totalFeesOwedToVaults()); //todo, we might want to reduce fees if we didn't get fully funded?
 		uint256 parentTotalSecurityBondAllowance = parent.totalSecurityBondAllowance();
 		forkData[securityPool].auctionedSecurityBondAllowance = parentTotalSecurityBondAllowance - securityPool.totalSecurityBondAllowance();
 		securityPool.setTotalSecurityBondAllowance(parentTotalSecurityBondAllowance);

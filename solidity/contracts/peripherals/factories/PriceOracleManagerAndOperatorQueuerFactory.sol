@@ -9,6 +9,6 @@ import { PriceOracleManagerAndOperatorQueuer } from '../PriceOracleManagerAndOpe
 
 contract PriceOracleManagerAndOperatorQueuerFactory {
 	function deployPriceOracleManagerAndOperatorQueuer(OpenOracle _openOracle, ReputationToken _reputationToken, bytes32 salt) external returns (PriceOracleManagerAndOperatorQueuer) {
-		return new PriceOracleManagerAndOperatorQueuer{ salt: keccak256(abi.encodePacked(msg.sender, salt)) }(_openOracle, _reputationToken);
+		return new PriceOracleManagerAndOperatorQueuer{ salt: keccak256(abi.encode(msg.sender, salt)) }(_openOracle, _reputationToken);
 	}
 }

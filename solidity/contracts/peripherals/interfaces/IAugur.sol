@@ -17,7 +17,7 @@ interface IAugur {
 	function createChildUniverse(bytes32 _parentPayoutDistributionHash, uint256[] memory _parentPayoutNumerators) external returns (address);
 	function isKnownUniverse(address _universe) external view returns (bool);
 	function trustedCashTransfer(address _from, address _to, uint256 _amount) external returns (bool);
-	function isTrustedSender(address _address) external returns (bool);
+	function isTrustedSender(address _address) external view returns (bool);
 	function onCategoricalMarketCreated(uint256 _endTime, string memory _extraInfo, address _market, address _marketCreator, address _designatedReporter, uint256 _feePerCashInAttoCash, bytes32[] memory _outcomes) external returns (bool);
 	function onYesNoMarketCreated(uint256 _endTime, string memory _extraInfo, address _market, address _marketCreator, address _designatedReporter, uint256 _feePerCashInAttoCash) external returns (bool);
 	function onScalarMarketCreated(uint256 _endTime, string memory _extraInfo, address _market, address _marketCreator, address _designatedReporter, uint256 _feePerCashInAttoCash, int256[] memory _prices, uint256 _numTicks)  external returns (bool);
@@ -56,7 +56,7 @@ interface IAugur {
 	function isKnownFeeSender(address _feeSender) external view returns (bool);
 	function lookup(bytes32 _key) external view returns (address);
 	function getTimestamp() external view returns (uint256);
-	function getMaximumMarketEndDate() external returns (uint256);
+	function getMaximumMarketEndDate() external view returns (uint256);
 	function isKnownMarket(address _market) external view returns (bool);
 	function derivePayoutDistributionHash(uint256[] memory _payoutNumerators, uint256 _numTicks, uint256 numOutcomes) external view returns (bytes32);
 	function logValidityBondChanged(uint256 _validityBond) external returns (bool);
