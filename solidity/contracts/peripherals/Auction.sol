@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNICENSE
+// SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 uint256 constant AUCTION_TIME = 1 weeks;
 
@@ -39,12 +39,12 @@ contract Auction {
 		emit AuctionStarted(ethAmountToBuy, repAvailable);
 	}
 
-	function finalizeAuction() public {
+	function finalizeAuction(address receiver) public {
 		//require(block.timestamp > auctionStarted + AUCTION_TIME, 'Auction needs to have ended first'); // caller checks
 		require(msg.sender == owner, 'Only owner can finalize');
 		require(!finalized, 'Already finalized');
 		finalized = true;
-		(bool sent, ) = payable(owner).call{value: address(this).balance}('');
+		(bool sent, ) = payable(receiver).call{value: address(this).balance}('');
 		require(sent, 'Failed to send Ether');
 	}
 }
