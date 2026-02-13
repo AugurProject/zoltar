@@ -142,10 +142,10 @@ export const redeemShares = async (client: WriteClient, securityPoolAddress: `0x
 }
 
 
-export const getTotalFeesOvedToVaults = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getTotalFeesOwedToVaults = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'totalFeesOvedToVaults',
+		functionName: 'totalFeesOwedToVaults',
 		address: securityPoolAddress,
 		args: [],
 	})
@@ -210,15 +210,6 @@ export const redeemRep = async (client: WriteClient, securityPoolAddress: `0x${ 
 }
 
 export const getRepToken = async(client: ReadClient, securityPoolAddress: `0x${ string }`) => {
-	return await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'repToken',
-		address: securityPoolAddress,
-		args: [],
-	})
-}
-
-export const isFinalized = async(client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'repToken',

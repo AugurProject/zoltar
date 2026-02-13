@@ -165,7 +165,6 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 export const deployOriginSecurityPool = async (client: WriteClient, universeId: bigint, questionId: bigint, securityMultiplier: bigint, startingRetentionRate: bigint, startingRepEthPrice: bigint, completeSetCollateralAmount: bigint) => {
 	const infraAddresses = getInfraContractAddresses()
 	return await client.writeContract({
-		chain: mainnet,
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deployOriginSecurityPool',
 		address: infraAddresses.securityPoolFactory,

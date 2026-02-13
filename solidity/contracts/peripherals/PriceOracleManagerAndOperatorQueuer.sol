@@ -125,6 +125,9 @@ contract PriceOracleManagerAndOperatorQueuer {
 			queuedPendingOperationId = previousQueuedOperationId;
 			requestPrice();
 		}
+		// send rest of the eth back
+		(bool sent, ) = payable(msg.sendder).call{ value: address(this).balance }('');
+		require(sent, 'Failed to return ethH');
 	}
 
 	function executeQueuedOperation(uint256 operationId) public {
@@ -136,18 +139,24 @@ contract PriceOracleManagerAndOperatorQueuer {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+			} catch (bytes memory lowLevelData) {
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		} else if(queuedOperations[operationId].operation == OperationType.WithdrawRep) {
 			try securityPool.performWithdrawRep(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].amount) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+			} catch (bytes memory lowLevelData) {
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		} else {
 			try securityPool.performSetSecurityBondsAllowance(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].amount) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+			} catch (bytes memory lowLevelData) {
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		}
 		queuedOperations[operationId].amount = 0;

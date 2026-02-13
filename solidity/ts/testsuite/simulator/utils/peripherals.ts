@@ -406,14 +406,14 @@ export const balanceOfShares = async (client: ReadClient, shareTokenAddress: `0x
 		args: [universeId, account],
 	})
 }
-export const balanceOfSharesInCash = async (client: ReadClient, seucurityPoolAddress: `0x${ string }`, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`) => {
+export const balanceOfSharesInCash = async (client: ReadClient, securityPoolAddress: `0x${ string }`, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`) => {
 	const array = await client.readContract({
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'balanceOfShares',
 		address: shareTokenAddress,
 		args: [universeId, account],
 	})
-	return await shareArrayToCash(client, seucurityPoolAddress, array)
+	return await shareArrayToCash(client, securityPoolAddress, array)
 }
 
 export const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => (universeId << 8n) + BigInt(outcome)
@@ -437,7 +437,7 @@ export const createChildUniverse = async (client: WriteClient, securityPoolAddre
 	})
 }
 
-export const gettotalFeesOwedToVaults = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getTotalFeesOwedToVaults = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'totalFeesOwedToVaults',

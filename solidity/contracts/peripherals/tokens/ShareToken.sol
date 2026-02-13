@@ -82,7 +82,7 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
 	}
 
-	function getUniverse(uint256 _tokenId) external pure returns(uint256) {
+	function getUniverse(uint256 _tokenId) external pure returns(uint248) {
 		(uint248 _universe, ) = TokenId.unpackTokenId(_tokenId);
 		return _universe;
 	}
@@ -116,7 +116,7 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		return TokenId.getTokenIds(_universeId, _outcomes);
 	}
 
-	function unpackTokenId(uint248 _tokenId) public pure returns (uint248 _universe, YesNoMarkets.Outcome _outcome) {
+	function unpackTokenId(uint256 _tokenId) public override  pure returns (uint248 _universe, YesNoMarkets.Outcome _outcome) {
 		return TokenId.unpackTokenId(_tokenId);
 	}
 }

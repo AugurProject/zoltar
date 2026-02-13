@@ -34,7 +34,7 @@ export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigi
 
 export const triggerOwnGameFork = async(client: WriteClient, securityPoolAddress: `0x${ string }`) => {
 	const repToken = await getRepToken(client, securityPoolAddress)
-	const forkTreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n /2n
+	const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n /2n
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
 	const repAmount = await poolOwnershipToRep(client, securityPoolAddress, vault.repDepositShare)
 	assert.ok(repAmount >= 2n * forkTreshold, 'not enough rep in vault to fork')

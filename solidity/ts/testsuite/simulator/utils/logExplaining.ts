@@ -1,6 +1,6 @@
 
 import { Abi, decodeEventLog, GetLogsReturnType } from 'viem'
-import { isUnknownAnAddress } from './utilities.js'
+import { isUnknownAddress} from './utilities.js'
 
 export type Deployment = {
 	deploymentName: string

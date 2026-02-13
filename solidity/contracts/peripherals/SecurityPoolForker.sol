@@ -173,7 +173,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 			// we need to buy all the collateral that is missing (did not migrate)
 			uint256 ethToBuy = parentCollateral - parentCollateral * forkData[securityPool].migratedRep / forkData[parent].repAtFork;
 			// sell all but very small amount of REP for ETH. We cannot sell all for accounting purposes, as `poolOwnershipDenominator` cannot be infinite
-			// only migratedRep gets this guarrantee that some of their rep never gets sold
+			// only migratedRep gets this guarantee that some of their rep never gets sold
 			forkData[securityPool].truthAuction.startAuction(ethToBuy, forkData[parent].repAtFork - forkData[securityPool].migratedRep / SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR);
 		}
 	}

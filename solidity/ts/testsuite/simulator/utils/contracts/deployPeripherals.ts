@@ -118,7 +118,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence.securityPoolForker) await deployBytecode(getSecurityPoolForkerByteCode(contractAddresses.zoltar))
 
 	for (const [name, contractAddress] of objectEntries(contractAddresses)) {
-		if (!(await contractExists(client, contractAddress))) throw new Error(`${ name } does not exist eventhought we deployed it`)
+		if (!(await contractExists(client, contractAddress))) throw new Error(`${ name } does not exist even thought we deployed it`)
 	}
 }
 
@@ -217,7 +217,6 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 export const deployOriginSecurityPool = async (client: WriteClient, universeId: bigint, extraInfo: string, marketEndDate: bigint, securityMultiplier: bigint, startingRetentionRate: bigint, startingRepEthPrice: bigint) => {
 	const infraAddresses = getInfraContractAddresses()
 	return await client.writeContract({
-		chain: mainnet,
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deployOriginSecurityPool',
 		address: infraAddresses.securityPoolFactory,
