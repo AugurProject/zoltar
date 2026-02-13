@@ -1,56 +1,42 @@
-
-/*
 import test, { beforeEach, describe } from 'node:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
-import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { getDeployments } from '../testsuite/simulator/utils/deployments.js'
-import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { approveToken, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { deployPeripherals, deployZoltarAndCreateMarket, genesisUniverse, questionId, securityMultiplier } from '../testsuite/simulator/utils/peripheralsTestUtils.js'
-import { addressString, dateToBigintSeconds } from '../testsuite/simulator/utils/bigint.js'
+import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
+import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
-import { createNewGame, depositToGame, getBalances, getEscalationGame, getStartingTime } from '../testsuite/simulator/utils/EscalationGame.js'
 import assert from 'node:assert'
-import { getInfraContractAddresses } from '../testsuite/simulator/utils/deployPeripherals.js'
+import { deployEscalationGame, depositOnOutcome, getBalances, getStartingTime } from '../testsuite/simulator/utils/contracts/escalationGame.js'
+import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
+import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
 
-describe('Peripherals Contract Test Suite', () => {
+describe('Escalation Game Test Suite', () => {
 	let mockWindow: MockWindowEthereum
 
 	let client: WriteClient
-	const currentTimestamp = dateToBigintSeconds(new Date())
-	const testMarket = addressString(0x1n)
-	const designatedReporter = addressString(0x2n)
-	const startingStake = 1n * 10n ** 18n
-
+	const reportBond = 1n * 10n ** 18n
+	const nonDecisionTreshold = 1000n * 10n ** 18n
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, questionId, securityMultiplier)))
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		//await mockWindow.setStartBLock(mockWindow.getTime)
 		await setupTestAccounts(mockWindow)
-		await deployZoltarAndCreateMarket(client, currentTimestamp + 365n * DAY)
-		await deployPeripherals(client)
-		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getInfraContractAddresses().isonzoFront)
+		await ensureZoltarDeployed(client)
+		await ensureInfraDeployed(client)
 	})
 
 	test('can start a game', async () => {
-		await createNewGame(client, testMarket, designatedReporter, QuestionOutcome.Yes, startingStake)
-		const escalationGame = await getEscalationGame(client, testMarket)
-		console.log(escalationGame)
-		assert.strictEqual(BigInt(escalationGame) !== 0n, true, 'escalation game deployed')
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionTreshold)
+		assert.ok(await contractExists(client, escalationGame), 'game was deployed')
 		const outcomeBalances = await getBalances(client, escalationGame)
-		assert.strictEqual(outcomeBalances.yes, startingStake, 'starting stake was set')
-		assert.strictEqual(outcomeBalances.no, 0n, 'no stake at no')
-		assert.strictEqual(outcomeBalances.invalid, 0n, 'no stake at invalid')
+		assert.strictEqual(outcomeBalances.yes, 0n, 'yes stake')
+		assert.strictEqual(outcomeBalances.no, 0n, 'no stake')
+		assert.strictEqual(outcomeBalances.invalid, 0n, 'invalid stake')
 
 		const startingTime = await getStartingTime(client, escalationGame)
 		assert.strictEqual(startingTime !== 0n, true, 'game was started')
-		await depositToGame(client, testMarket, QuestionOutcome.No, 2n * startingStake)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, reportBond)
 		const outcomeBalancesAfterDeposit = await getBalances(client, escalationGame)
-		assert.strictEqual(outcomeBalancesAfterDeposit.yes, startingStake, 'starting stake was set')
-		assert.strictEqual(outcomeBalancesAfterDeposit.no, 2n * startingStake, 'no stake at no')
-		assert.strictEqual(outcomeBalancesAfterDeposit.invalid, 0n, 'no stake at invalid')
+		assert.strictEqual(outcomeBalancesAfterDeposit.yes, 0n, 'yes stake')
+		assert.strictEqual(outcomeBalancesAfterDeposit.no, reportBond, 'no stake')
+		assert.strictEqual(outcomeBalancesAfterDeposit.invalid, 0n, 'invalid stake')
 	})
 })
-*/

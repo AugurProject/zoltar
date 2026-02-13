@@ -186,7 +186,7 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 			args: [ securityPool ]
 		}),
 		from: infraContracts.escalationGameFactory,
-		salt: numberToBytes(1)
+		salt: numberToBytes(0)
 	})
 	return { ...contracts, securityPool, escalationGame }
 }

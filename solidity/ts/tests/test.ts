@@ -8,7 +8,7 @@ import { addressString } from '../testsuite/simulator/utils/bigint.js'
 import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
 import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
-import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
+import { ensureZoltarDeployed, forkerClaimRep, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed, splitRep } from '../testsuite/simulator/utils/contracts/zoltar.js'
 
 describe('Contract Test Suite', () => {
 	let mockWindow: MockWindowEthereum

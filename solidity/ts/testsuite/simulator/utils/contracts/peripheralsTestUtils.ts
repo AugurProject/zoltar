@@ -10,7 +10,7 @@ import { getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, op
 import { QuestionOutcome } from '../../types/types.js'
 import { forkZoltarWithOwnEscalationGame } from './securityPoolForker.js'
 import { getTotalTheoreticalSupply } from './zoltar.js'
-import { depositRep, depositToEscalationGame, getSecurityVault, poolOwnershipToRep } from './securityPool.js'
+import { depositRep, depositToEscalationGame, getRepToken, getSecurityVault, poolOwnershipToRep } from './securityPool.js'
 
 export const genesisUniverse = 0n
 export const securityMultiplier = 2n

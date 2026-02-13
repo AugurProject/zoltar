@@ -1,6 +1,8 @@
-import { peripherals_EscalationGame_EscalationGame } from '../../../../types/contractArtifact.js'
+import { encodeDeployData, getCreate2Address, numberToBytes } from 'viem'
+import { peripherals_EscalationGame_EscalationGame, peripherals_factories_EscalationGameFactory_EscalationGameFactory } from '../../../../types/contractArtifact.js'
 import { AccountAddress, QuestionOutcome } from '../../types/types.js'
-import { ReadClient } from '../viem.js'
+import { ReadClient, WriteClient } from '../viem.js'
+import { getInfraContractAddresses } from './deployPeripherals.js'
 
 export const getNonDecisionTreshold = async (client: ReadClient, escalationGame: `0x${ string }`) => {
 	return await client.readContract({
@@ -45,4 +47,50 @@ export const getEscalationGameDeposits = async (readClient: ReadClient, escalati
 		currentIndex += numberOfEntries
 	} while(true)
 	return pages
+}
+
+export const deployEscalationGame = async (writeClient: WriteClient, startBond: bigint, nonDecisionTreshold: bigint) => {
+	await writeClient.writeContract({
+		abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
+		functionName: 'deployEscalationGame',
+		address: getInfraContractAddresses().escalationGameFactory,
+		args: [startBond, nonDecisionTreshold],
+	})
+	return getCreate2Address({
+		bytecode: encodeDeployData({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			bytecode: `0x${ peripherals_EscalationGame_EscalationGame.evm.bytecode.object }`,
+			args: [ writeClient.account.address ]
+		}),
+		from: getInfraContractAddresses().escalationGameFactory,
+		salt: numberToBytes(0)
+	})
+}
+
+export const getBalances = async (client: ReadClient, escalationGame: `0x${ string }`) => {
+	const [invalid, yes, no] = await client.readContract({
+		abi: peripherals_EscalationGame_EscalationGame.abi,
+		functionName: 'getBalances',
+		address: escalationGame,
+		args: [],
+	})
+	return { invalid, yes, no }
+}
+
+export const getStartingTime = async (client: ReadClient, escalationGame: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_EscalationGame_EscalationGame.abi,
+		functionName: 'startingTime',
+		address: escalationGame,
+		args: [],
+	})
+}
+
+export const depositOnOutcome = async (writeClient: WriteClient, escalationGame: `0x${ string }`, depositor: `0x${ string }`, outcome: QuestionOutcome, amount: bigint) => {
+	await writeClient.writeContract({
+		abi: peripherals_EscalationGame_EscalationGame.abi,
+		functionName: 'depositOnOutcome',
+		address: escalationGame,
+		args: [depositor, outcome, amount],
+	})
 }

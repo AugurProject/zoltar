@@ -291,8 +291,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function redeemRep(address vault) public {
-		YesNoMarkets.Outcome outcome = ISecurityPoolForker(securityPoolForker).getMarketOutcome(this);
-		require(outcome != YesNoMarkets.Outcome.None, 'Market has not finalized!');
+		require(ISecurityPoolForker(securityPoolForker).getMarketOutcome(this) != YesNoMarkets.Outcome.None, 'Market has not finalized!');
 		updateVaultFees(vault);
 		uint256 repAmount = poolOwnershipToRep(securityVaults[vault].poolOwnership) - securityVaults[vault].lockedRepInEscalationGame;
 		securityVaults[vault].poolOwnership = 0;
