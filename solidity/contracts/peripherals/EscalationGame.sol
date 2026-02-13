@@ -51,7 +51,7 @@ contract EscalationGame {
 
 	// TODO, verify that this is never bigger than nonDecisionThreshold and is always increasing or constant in terms of timeSinceStart
 	// approx for: attrition cost = start deposit * (nonDecisionThreshold / start deposit) ^ (time since start / time limit)
-	function compute5TermTaylorSeriesAttritionCostApproximation(uint256 timeSinceStart) public pure returns (uint256) {
+	function compute5TermTaylorSeriesAttritionCostApproximation(uint256 timeSinceStart) public view returns (uint256) {
 		require(timeSinceStart <= escalationTimeLength, 'Invalid time');
 		uint256 ratio = nonDecisionThreshold * SCALE / startBond;
 		require(ratio > SCALE, 'ratio must be > 1'); // since startBond < nonDecisionThreshold
@@ -92,7 +92,7 @@ contract EscalationGame {
 		for (uint256 iteration = 0; iteration < 64; iteration++) {
 			uint256 midTime = (low + high) / 2;
 
-			uint256 midCost = compute5TermTaylorSeriesAttritionCostApproximation(startBond, midTime);
+			uint256 midCost = compute5TermTaylorSeriesAttritionCostApproximation(midTime);
 
 			if (midCost == attritionCost) return midTime;
 			if (midCost < attritionCost) {
@@ -106,14 +106,14 @@ contract EscalationGame {
 
 	function getEscalationGameEndDate() public view returns (uint256 endTime) {
 		if (nonDecisionTimestamp > 0) return nonDecisionTimestamp;
-		return startingTime + computeTimeSinceStartFromAttritionCost(startBond, getBindingCapital());
+		return startingTime + computeTimeSinceStartFromAttritionCost(getBindingCapital());
 	}
 
 	function totalCost() public view returns (uint256) {
 		if (startingTime >= block.timestamp) return 0;
 		uint256 timeFromStart = block.timestamp - startingTime;
 		if (timeFromStart >= escalationTimeLength) return nonDecisionThreshold;
-		return compute5TermTaylorSeriesAttritionCostApproximation(startBond, timeFromStart);
+		return compute5TermTaylorSeriesAttritionCostApproximation(timeFromStart);
 	}
 
 	function getMarketResolution() public view returns (YesNoMarkets.Outcome outcome){
