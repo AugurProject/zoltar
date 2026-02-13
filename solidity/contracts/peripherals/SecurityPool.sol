@@ -101,10 +101,12 @@ contract SecurityPool is ISecurityPool {
 
 	function updateCollateralAmount() public {
 		if (securityBondAllowance == 0) return;
+		uint256 forkTime;
+		(,,forkTime) = zoltar.universes(universeId);
 		(uint64 endTime,,,) = zoltar.questions(questionId);
-		uint256 clampedCurrentTimestamp = block.timestamp > endTime ? endTime : block.timestamp;
-		uint256 clampedLastUpdatedFeeAccumulator = lastUpdatedFeeAccumulator > endTime ? endTime : lastUpdatedFeeAccumulator;
-		uint256 timeDelta = clampedCurrentTimestamp - clampedLastUpdatedFeeAccumulator;
+		uint256 feeEndDate = forkTime == 0 ? endTime : forkTime;
+		uint256 clampedCurrentTimestamp = block.timestamp > feeEndDate ? feeEndDate : block.timestamp;
+		uint256 timeDelta = clampedCurrentTimestamp - lastUpdatedFeeAccumulator;
 		if (timeDelta == 0) return;
 
 		uint256 newCompleteSetCollateralAmount = completeSetCollateralAmount * SecurityPoolUtils.rpow(currentRetentionRate, timeDelta, SecurityPoolUtils.PRICE_PRECISION) / SecurityPoolUtils.PRICE_PRECISION;
@@ -112,7 +114,7 @@ contract SecurityPool is ISecurityPool {
 		totalFeesOvedToVaults += delta;
 		feeIndex += delta * SecurityPoolUtils.PRICE_PRECISION / securityBondAllowance;
 		completeSetCollateralAmount = newCompleteSetCollateralAmount;
-		lastUpdatedFeeAccumulator = block.timestamp;
+		lastUpdatedFeeAccumulator = feeEndDate < block.timestamp ? feeEndDate : block.timestamp;
 
 		emit UpdateCollateralAmount(totalFeesOvedToVaults, completeSetCollateralAmount);
 	}
