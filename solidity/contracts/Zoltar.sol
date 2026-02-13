@@ -68,9 +68,9 @@ contract Zoltar {
 		require(_questionCategories.length >= 1, 'need atleast one category on top of invalid');
 		universes[universeId].forkTime = block.timestamp;
 		uint256 forkTreshold = getForkTreshold(universeId);
-		universeForkData[universeId] = UniverseForkData(_extraInfo, msg.sender, forkTreshold - forkTreshold / 5, _questionCategories);
+		universeForkData[universeId] = UniverseForkData(_extraInfo, msg.sender, forkTreshold - forkTreshold / FORK_BURN_DIVISOR, _questionCategories);
 		universes[universeId].reputationToken.transferFrom(msg.sender, address(this), forkTreshold);
-		burnRep(universes[universeId].reputationToken, address(this), forkTreshold / 5); // burn 20%
+		burnRep(universes[universeId].reputationToken, address(this), forkTreshold / FORK_BURN_DIVISOR); // burn 20%
 		emit UniverseForked(msg.sender, universeId, _extraInfo, _questionCategories);
 	}
 

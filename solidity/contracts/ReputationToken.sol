@@ -9,23 +9,25 @@ contract ReputationToken is ERC20 {
 	event Mint(address account, uint256 value);
 	event Burn(address account, uint256 value);
 
+	modifier isZoltar {
+		require(msg.sender == zoltar, 'Not zoltar');
+		_;
+	}
+
 	constructor(address _zoltar) ERC20('Reputation', 'REP') {
 		zoltar = _zoltar;
 	}
 
-	function setMaxTheoreticalSupply(uint256 _totalTheoreticalSupply) external {
-		require(msg.sender == zoltar, "Not zoltar");
+	function setMaxTheoreticalSupply(uint256 _totalTheoreticalSupply) external isZoltar {
 		totalTheoreticalSupply = _totalTheoreticalSupply;
 	}
 
-	function mint(address account, uint256 value) external {
-		require(msg.sender == zoltar, "Not zoltar");
+	function mint(address account, uint256 value) external isZoltar {
 		_mint(account, value);
 		emit Mint(account, value);
 	}
 
-	function burn(address account, uint256 value) external {
-		require(msg.sender == zoltar, "Not zoltar");
+	function burn(address account, uint256 value) external isZoltar {
 		_burn(account, value);
 		totalTheoreticalSupply -= value;
 		emit Burn(account, value);

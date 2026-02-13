@@ -126,7 +126,7 @@ contract EscalationGame {
 		return YesNoMarkets.Outcome.No;
 	}
 
-	function hasReacedNonDecision() public view returns (bool) {
+	function hasReachedNonDecision() public view returns (bool) {
 		uint8 invalidOver = balances[0] >= nonDecisionTreshold ? 1 : 0;
 		uint8 yesOver = balances[1] >= nonDecisionTreshold ? 1 : 0;
 		uint8 noOver = balances[2] >= nonDecisionTreshold ? 1 : 0;
@@ -143,7 +143,7 @@ contract EscalationGame {
 		return balances[2];
 	}
 
-	// deposits on market outcome, returns value how much the user should be refunded for
+	// deposits on market outcome, returns how much user actually ended depositing
 	function depositOnOutcome(address depositor, YesNoMarkets.Outcome outcome, uint256 amount) public returns (uint256 depositAmount) {
 		require(nonDecisionTimestamp == 0, 'System has already reached a non-decision');
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
@@ -163,11 +163,12 @@ contract EscalationGame {
 		deposit.cumulativeAmount = balances[uint256(outcome)];
 		deposits[uint8(outcome)].push(deposit);
 		emit DepositOnOutcome(depositor, outcome, deposit.amount, deposits[uint8(outcome)].length - 1, deposit.cumulativeAmount);
-		if (hasReacedNonDecision()) {
+		if (hasReachedNonDecision()) {
 			nonDecisionTimestamp = block.timestamp;
 		}
 	}
 
+	// todo, this should be calculated against to actual fork treshold, not the one set at the start. The actual can be lower than the games treshold but never above
 	function claimDepositForWinning(uint256 depositIndex, YesNoMarkets.Outcome outcome) public returns (address depositor, uint256 burnAmount, uint256 amountToWithdraw) {
 		require(msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()), 'Only Security Pool can withdraw');
 		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];

@@ -318,7 +318,7 @@ contract SecurityPool is ISecurityPool {
 		require(address(escalationGame) != address(0x0), 'escalation game needs to be deployed');
 		YesNoMarkets.Outcome outcome = ISecurityPoolForker(securityPoolForker).getMarketOutcome(this);
 		require(outcome != YesNoMarkets.Outcome.None, 'Market has not finalized!');
-		require(!escalationGame.hasReacedNonDecision(), 'cannot withdraw, escalation game is undecisive');
+		require(!escalationGame.hasReachedNonDecision(), 'cannot withdraw, escalation game is undecisive');
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
 			(address depositor, uint256 amountToWithdraw) = escalationGame.withdrawDeposit(depositIndexes[index]);
 			securityVaults[depositor].poolOwnership += repToPoolOwnership(amountToWithdraw);
