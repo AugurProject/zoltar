@@ -118,7 +118,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence.securityPoolForker) await deployBytecode(getSecurityPoolForkerByteCode(contractAddresses.zoltar))
 
 	for (const [name, contractAddress] of objectEntries(contractAddresses)) {
-		if (!(await contractExists(client, contractAddress))) throw new Error(`${ name } does not exist even thought we deployed it`)
+		if (!(await contractExists(client, contractAddress))) throw new Error(`${ name } does not exist even though we deployed it`)
 	}
 }
 
