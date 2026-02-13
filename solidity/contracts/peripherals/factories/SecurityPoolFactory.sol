@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNICENSE
+// SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 import { SecurityPool } from '../SecurityPool.sol';
 import { ISecurityPool, ISecurityPoolFactory } from '../interfaces/ISecurityPool.sol';

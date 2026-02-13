@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNICENSE
+// SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 uint256 constant AUCTION_TIME = 1 weeks;
 

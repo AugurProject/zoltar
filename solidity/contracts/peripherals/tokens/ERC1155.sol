@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNICENSE
+// SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
 import { IERC1155 } from '../interfaces/IERC1155.sol';

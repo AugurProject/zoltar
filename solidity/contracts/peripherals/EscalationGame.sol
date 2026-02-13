@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNICENSE
+// SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
 import { ReputationToken } from '../ReputationToken.sol';
@@ -169,7 +169,7 @@ contract EscalationGame {
 	}
 
 	// todo, this should be calculated against to actual fork treshold, not the one set at the start. The actual can be lower than the games treshold but never above
-	function claimDepositForWinning(uint256 depositIndex, YesNoMarkets.Outcome outcome) public returns (address depositor, uint256 burnAmount, uint256 amountToWithdraw) {
+	function claimDepositForWinning(uint256 depositIndex, YesNoMarkets.Outcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
 		require(msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()), 'Only Security Pool can withdraw');
 		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
 		deposits[uint8(outcome)][depositIndex].amount = 0;
@@ -180,11 +180,11 @@ contract EscalationGame {
 			emit ClaimDeposit(amountToWithdraw, 0);
 		} else if (deposit.cumulativeAmount + deposit.amount > maxWithdrawableBalance) {
 			uint256 excess = (deposit.cumulativeAmount + deposit.amount - maxWithdrawableBalance);
-			burnAmount = excess * 2 / 5;
+			uint256 burnAmount = excess * 2 / 5;
 			amountToWithdraw = (deposit.amount - excess) + excess * 2 - burnAmount;
 			emit ClaimDeposit(amountToWithdraw, burnAmount);
 		} else {
-			burnAmount = (deposit.amount * 2) / 5;
+			uint256 burnAmount = (deposit.amount * 2) / 5;
 			amountToWithdraw = deposit.amount * 2 - burnAmount;
 			emit ClaimDeposit(amountToWithdraw, burnAmount);
 		}
@@ -196,7 +196,7 @@ contract EscalationGame {
 		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
 		// if system hasnt forked, check outcome is winning
 		YesNoMarkets.Outcome marketResolution = getMarketResolution();
-		(depositor,,amountToWithdraw) = claimDepositForWinning(depositIndex, marketResolution);
+		(depositor,amountToWithdraw) = claimDepositForWinning(depositIndex, marketResolution);
 		emit WithdrawDeposit(depositor, marketResolution, amountToWithdraw, depositIndex);
 	}
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
 import { ReputationToken } from '../ReputationToken.sol';
@@ -112,12 +112,10 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		ISecurityPool child = forkData[parent].children[uint8(outcomeIndex)];
 		require(address(escalationGame) != address(0x0), 'escalation game needs to be deployed');
 		uint256 repMigratedFromEscalationGame = 0;
-		//uint256 totalBurnAmount = 0;
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
-			(address depositor, /*uint256 burnAmount*/, uint256 amountToWithdraw) = escalationGame.claimDepositForWinning(depositIndexes[index], outcomeIndex);
+			(address depositor, uint256 amountToWithdraw) = escalationGame.claimDepositForWinning(depositIndexes[index], outcomeIndex);
 			require(depositor == vault, 'deposit was not for this vault');
 			repMigratedFromEscalationGame += amountToWithdraw;
-			//totalBurnAmount += burnAmount;
 		}
 		(uint256 poolOwnership, , , , ) = child.securityVaults(vault);
 		uint256 ownershipDelta = repToPoolOwnership(child, repMigratedFromEscalationGame);
@@ -125,9 +123,6 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		forkData[child].migratedRep += repMigratedFromEscalationGame;
 		emit MigrateFromEscalationGame(parent, vault, outcomeIndex, depositIndexes, repMigratedFromEscalationGame, ownershipDelta);
 		// migrate open interest
-		// TODO, currently the fork migrator migrates the burn amount of open interest. I feel this share should be distributed among all rep holders instead
-		//uint256 parentOwnershipDelta = (repMigratedFromEscalationGame) * parent.poolOwnershipDenominator() / forkData[parent].repAtFork;
-		//parent.migrateEth(payable(child), parent.completeSetCollateralAmount() * parentOwnershipDelta / parent.poolOwnershipDenominator());
 		parent.migrateEth(payable(child), parent.completeSetCollateralAmount() * repMigratedFromEscalationGame / forkData[parent].repAtFork);
 
 	}
@@ -153,7 +148,6 @@ contract SecurityPoolForker is ISecurityPoolForker {
 			child.setVaultFeeIndex(msg.sender, child.feeIndex());
 			// migrate open interest
 			if (ownership > 0) {
-				//parent.migrateEth(payable(child), parent.completeSetCollateralAmount() * parentPoolOwnership / parent.poolOwnershipDenominator());
 				parent.migrateEth(payable(child), parent.completeSetCollateralAmount() * migratedRep / forkData[parent].repAtFork);
 			}
 		}
