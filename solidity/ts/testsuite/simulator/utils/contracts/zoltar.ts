@@ -60,7 +60,6 @@ export const getUniverseForkData = async (client: ReadClient, universeId: bigint
 
 export const forkUniverse = async (client: WriteClient, universeId: bigint, extraInfo: string, questionCategories: readonly [string, string, string, string]) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkUniverse',
 		address: getZoltarAddress(),
@@ -79,7 +78,6 @@ export const splitRep = async (client: WriteClient, universeId: bigint, outcomeI
 
 export const deployChild = async (client: WriteClient, universeId: bigint, outcomeIndex: bigint) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'deployChild',
 		address: getZoltarAddress(),
@@ -107,23 +105,12 @@ export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0
 
 export const forkerClaimRep = async (client: WriteClient, universeId: bigint, outcomeIndices: bigint[]) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkerClaimRep',
 		address: getZoltarAddress(),
 		args: [universeId, outcomeIndices.map((x) => Number(x))]
 	})
 }
-
-export const getZoltarForkTreshold = async (client: ReadClient, universeId: bigint) => {
-	return await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'getForkTreshold',
-		address: getZoltarAddress(),
-		args: [universeId]
-	})
-}
-
 
 export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
 	if (universeId === 0n) return getAddress(addressString(GENESIS_REPUTATION_TOKEN))
