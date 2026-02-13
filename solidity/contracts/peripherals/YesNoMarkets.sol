@@ -19,6 +19,7 @@ contract YesNoMarkets {
 
 	function createMarket(string memory extraInfo, uint256 marketEndDate, bytes32 salt) external returns (uint256) {
 		uint256 marketId = uint256(keccak256(abi.encode(msg.sender, extraInfo, marketEndDate, salt)));
+		require(markets[marketId].marketCreated == 0, 'Market already exists');
 		markets[marketId].extraInfo = extraInfo;
 		markets[marketId].marketCreated = block.timestamp;
 		markets[marketId].marketEndDate = marketEndDate;

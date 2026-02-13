@@ -48,10 +48,10 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 	const infraAddresses = getInfraContractAddresses()
 	const originAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier)
 
-	const oucomes = [QuestionOutcome.Invalid, QuestionOutcome.No, QuestionOutcome.Yes]
+	const outcomes = [QuestionOutcome.Invalid, QuestionOutcome.No, QuestionOutcome.Yes]
 
 	const getChildAddresses = (parentSecurityPoolAddress: `0x${ string }`, parentUniverseId: bigint): Deployment[] => {
-		return oucomes.flatMap((outcome) => {
+		return outcomes.flatMap((outcome) => {
 			const universeId = getChildUniverseId(parentUniverseId, outcome)
 			const childAddresses = getSecurityPoolAddresses(parentSecurityPoolAddress, universeId, questionId, securityMultiplier)
 			return getDeploymentsForUniverse(universeId, childAddresses.securityPool, getRepTokenAddress(universeId), childAddresses.priceOracleManagerAndOperatorQueuer, childAddresses.shareToken, childAddresses.truthAuction)
@@ -61,7 +61,7 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 	return ([
 		...getDeploymentsForUniverse(genesisUniverse, originAddresses.securityPool, getRepTokenAddress(genesisUniverse), originAddresses.priceOracleManagerAndOperatorQueuer, originAddresses.shareToken, originAddresses.truthAuction),
 		...getChildAddresses(originAddresses.securityPool, genesisUniverse), // children
-		...oucomes.flatMap((outcome) => getChildAddresses(getSecurityPoolAddresses(originAddresses.securityPool, genesisUniverse, questionId, securityMultiplier).securityPool, getChildUniverseId(genesisUniverse, outcome))), // grand children
+		...outcomes.flatMap((outcome) => getChildAddresses(getSecurityPoolAddresses(originAddresses.securityPool, genesisUniverse, questionId, securityMultiplier).securityPool, getChildUniverseId(genesisUniverse, outcome))), // grand children
 		{
 			abi: Zoltar_Zoltar.abi,
 			deploymentName: 'Zoltar',

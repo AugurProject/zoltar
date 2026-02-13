@@ -126,8 +126,8 @@ contract PriceOracleManagerAndOperatorQueuer {
 			requestPrice();
 		}
 		// send rest of the eth back
-		(bool sent, ) = payable(msg.sendder).call{ value: address(this).balance }('');
-		require(sent, 'Failed to return ethH');
+		(bool sent, ) = payable(msg.sender).call{ value: address(this).balance }('');
+		require(sent, 'Failed to return eth');
 	}
 
 	function executeQueuedOperation(uint256 operationId) public {

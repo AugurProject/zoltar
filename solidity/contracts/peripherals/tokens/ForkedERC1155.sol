@@ -22,14 +22,14 @@ abstract contract ForkedERC1155 is ERC1155 {
 
 		uint256 fromIdBalance = _balances[fromId][msg.sender];
 		_balances[fromId][msg.sender] = 0;
-		_supplys[fromId] -= fromIdBalance;
+		_supplies[fromId] -= fromIdBalance;
 
 		// TODO, check that outcomes are unique
 		// TODO, do we allow people to migrate later to different universes?
 		for (uint8 i = 0; i < outcomes.length; i++) {
 			uint256 toId = getChildId(fromId, getChildUniverseId(universeId, outcomes[i]));
 			_balances[toId][msg.sender] += fromIdBalance;
-			_supplys[toId] += fromIdBalance;
+			_supplies[toId] += fromIdBalance;
 			emit Migrate(msg.sender, fromId, toId, fromIdBalance);
 		}
 	}

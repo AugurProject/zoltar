@@ -39,7 +39,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, Auction truthAuction) {
-		require(msg.sender == address(securityPoolForker), 'only securityPoolForker')
+		require(msg.sender == address(securityPoolForker), 'only securityPoolForker');
 		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, marketId, securityMultiplier));
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);

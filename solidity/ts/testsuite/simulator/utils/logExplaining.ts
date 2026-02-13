@@ -1,6 +1,6 @@
 
 import { Abi, decodeEventLog, GetLogsReturnType } from 'viem'
-import { isUnknownAddress} from './utilities.js'
+import { isUnknownAddress } from './utilities.js'
 
 export type Deployment = {
 	deploymentName: string
@@ -71,7 +71,7 @@ export const printLogs = (rawLogs: GetLogsReturnType, deployments: Deployment[])
 			console.log(`${ padding }${ head }(`)
 			for (const [paramName, paramValue] of Object.entries(log.args)) {
 				let formattedValue = paramValue
-				if (isUnknownAnAddress(paramValue)) {
+				if (isUnknownAddress(paramValue)) {
 					const matchingDeployment = deployments.find((deploymentItem) => deploymentItem.address.toLowerCase() === paramValue.toLowerCase())
 					if (matchingDeployment) {
 						formattedValue = `${ matchingDeployment.deploymentName } (${ paramValue })`

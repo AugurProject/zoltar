@@ -224,7 +224,7 @@ export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<
 
 export const contractExists = async (client: ReadClient, contract: `0x${ string }`) => await client.getCode({ address: contract }) !== undefined
 
-export const isUnknownAddress= (maybeAddress: unknown): maybeAddress is `0x${ string }` => typeof maybeAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(maybeAddress)
+export const isUnknownAddress = (maybeAddress: unknown): maybeAddress is `0x${ string }` => typeof maybeAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(maybeAddress)
 
 const uint248BitMask = (1n << 248n) - 1n
 export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint | QuestionOutcome): bigint {

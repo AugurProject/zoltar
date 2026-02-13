@@ -6,6 +6,7 @@ export const strictEqualTypeSafe = <Type>(actual: Type, expected: Type, errorMes
 export const strictEqual18Decimal = (actual: bigint, expected: bigint, errorMessage?: string | Error | undefined) => assert.strictEqual(bigintToDecimalString(actual, 18n), bigintToDecimalString(expected, 18n), errorMessage)
 
 export const approximatelyEqual = (actual: bigint, expected: bigint, errorDelta: bigint, errorMessage?: string | undefined) => {
+	if (errorDelta < 0n) throw new RangeError('errorDelta must be non-negative')
 	const diff = abs(actual - expected)
 	if (diff > errorDelta) {
 		throw new assert.AssertionError({

@@ -2,7 +2,7 @@
 pragma solidity 0.8.33;
 
 import { Auction } from './Auction.sol';
-import { Zoltar, FORK_TRESHOLD_DIVISOR } from '../Zoltar.sol';
+import { Zoltar, FORK_THRESHOLD_DIVISOR } from '../Zoltar.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
 import { PriceOracleManagerAndOperatorQueuer, QueuedOperation } from './PriceOracleManagerAndOperatorQueuer.sol';
@@ -114,7 +114,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 endTime = yesNoMarkets.getMarketEndDate(marketId);
 		uint256 feeEndDate = forkTime == 0 ? endTime : forkTime;
 		uint256 clampedCurrentTimestamp = block.timestamp > feeEndDate ? feeEndDate : block.timestamp;
-		if (lastUpdatedFeeAccumulator > clampedCurrentTimestamp) return; // todo, this probably souldnt here as we shouldn't be getting any fees?
+		if (lastUpdatedFeeAccumulator > clampedCurrentTimestamp) return;
 		uint256 timeDelta = clampedCurrentTimestamp - lastUpdatedFeeAccumulator;
 		if (timeDelta == 0) return;
 
@@ -307,7 +307,7 @@ contract SecurityPool is ISecurityPool {
 		if (address(escalationGame) == address(0x0)) {
 			uint256 endTime = yesNoMarkets.getMarketEndDate(marketId);
 			require(block.timestamp > endTime, 'market has not ended');
-			escalationGame = escalationGameFactory.deployEscalationGame(TODO_INITIAL_ESCALATION_GAME_DEPOSIT, repToken.getTotalTheoreticalSupply() / (FORK_TRESHOLD_DIVISOR * 2));
+			escalationGame = escalationGameFactory.deployEscalationGame(TODO_INITIAL_ESCALATION_GAME_DEPOSIT, repToken.getTotalTheoreticalSupply() / (FORK_THRESHOLD_DIVISOR * 2));
 		}
 		securityVaults[msg.sender].lockedRepInEscalationGame += escalationGame.depositOnOutcome(msg.sender, outcome, maxAmount);
 		require(poolOwnershipToRep(securityVaults[msg.sender].poolOwnership) >= securityVaults[msg.sender].lockedRepInEscalationGame, 'Not enough REP');
@@ -317,7 +317,7 @@ contract SecurityPool is ISecurityPool {
 		require(address(escalationGame) != address(0x0), 'escalation game needs to be deployed');
 		YesNoMarkets.Outcome outcome = ISecurityPoolForker(securityPoolForker).getMarketOutcome(this);
 		require(outcome != YesNoMarkets.Outcome.None, 'Market has not finalized!');
-		require(!escalationGame.hasReachedNonDecision(), 'cannot withdraw, escalation game is undecisive');
+		require(!escalationGame.hasReachedNonDecision(), 'cannot withdraw, escalation game is indecisive');
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
 			(address depositor, uint256 amountToWithdraw) = escalationGame.withdrawDeposit(depositIndexes[index]);
 			securityVaults[depositor].poolOwnership += repToPoolOwnership(amountToWithdraw);
@@ -384,5 +384,6 @@ contract SecurityPool is ISecurityPool {
 
 	receive() external payable {
 		// needed for Truth Auction to send ETH back
+		// TODO, add check that its truth auction sending
 	}
 }

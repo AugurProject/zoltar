@@ -30,7 +30,7 @@ contract ShareToken is ForkedERC1155, IShareToken {
 	}
 
 	function authorize(ISecurityPool _securityPoolCandidate) external {
-		require(authorized[msg.sender], 'caller is not owner');
+		require(authorized[msg.sender], 'not authorized');
 		authorized[address(_securityPoolCandidate)] = true;
 	}
 
@@ -116,7 +116,7 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		return TokenId.getTokenIds(_universeId, _outcomes);
 	}
 
-	function unpackTokenId(uint256 _tokenId) public override  pure returns (uint248 _universe, YesNoMarkets.Outcome _outcome) {
+	function unpackTokenId(uint256 _tokenId) public override pure returns (uint248 _universe, YesNoMarkets.Outcome _outcome) {
 		return TokenId.unpackTokenId(_tokenId);
 	}
 }

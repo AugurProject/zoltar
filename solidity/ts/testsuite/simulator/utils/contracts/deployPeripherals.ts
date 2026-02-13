@@ -143,7 +143,7 @@ const computeShareTokenSalt = (securityMultiplier: bigint, marketId: bigint) => 
 export const getMarketId = (universeId: bigint, securityMultiplier: bigint, extraInfo: string, marketEndDate: bigint) => {
 	const securityPoolfactory = getInfraContractAddresses().securityPoolFactory
 	const marketCreationTypes = [
-		{ name: 'securityPoolfactory', type: 'uint256' },
+		{ name: 'securityPoolfactory', type: 'address' },
 		{ name: 'universeId', type: 'uint248' },
 		{ name: 'securityMultiplier', type: 'uint256' },
 		{ name: 'extraInfo', type: 'string' },
