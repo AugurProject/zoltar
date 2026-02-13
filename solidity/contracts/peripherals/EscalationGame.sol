@@ -24,7 +24,7 @@ contract EscalationGame {
 	address public owner;
 	uint256 public nonDecisionTimestamp;
 
-	event GameStarted(uint256 startingTime, uint256 startBond, uint256 forkTreshold);
+	event GameStarted(uint256 startingTime, uint256 startBond, uint256 nonDecisionThreshold);
 	event DepositOnOutcome(address depositor, YesNoMarkets.Outcome outcome, uint256 amount, uint256 depositIndex, uint256 cumulativeAmount);
 	event WithdrawDeposit(address depositor, YesNoMarkets.Outcome winner, uint256 amountToWithdraw, uint256 depositIndex);
 	event ClaimDeposit(uint256 amountToWithdraw, uint256 burnAmount);
@@ -37,6 +37,8 @@ contract EscalationGame {
 	function start(uint256 _startBond, uint256 _nonDecisionThreshold) public {
 		require(owner == msg.sender, 'only owner can start');
 		require(startingTime == 0, 'already started');
+		require(_nonDecisionThreshold > _startBond, 'threshold must exceed start bond');
+		require(_startBond > 0, 'start bond must be positive');
 		startingTime = block.timestamp + 3 days;
 		nonDecisionThreshold = _nonDecisionThreshold;
 		startBond = _startBond;
@@ -47,12 +49,12 @@ contract EscalationGame {
 		return [balances[0], balances[1], balances[2]];
 	}
 
-	// TODO, verify that this is never bigger than forkThreshold and is always increasing or constant in terms of timeSinceStart
-	// approx for: attrition cost = start deposit * (fork treshold / start deposit) ^ (time since start / time limit)
-	function compute5TermTaylorSeriesAttritionCostApproximation(uint256 startDeposit, uint256 forkThreshold, uint256 timeSinceStart) public pure returns (uint256) {
+	// TODO, verify that this is never bigger than nonDecisionThreshold and is always increasing or constant in terms of timeSinceStart
+	// approx for: attrition cost = start deposit * (nonDecisionThreshold / start deposit) ^ (time since start / time limit)
+	function compute5TermTaylorSeriesAttritionCostApproximation(uint256 timeSinceStart) public pure returns (uint256) {
 		require(timeSinceStart <= escalationTimeLength, 'Invalid time');
-		uint256 ratio = forkThreshold * SCALE / startDeposit;
-		require(ratio > SCALE, 'ratio must be > 1'); // since startDeposit < forkThreshold
+		uint256 ratio = nonDecisionThreshold * SCALE / startBond;
+		require(ratio > SCALE, 'ratio must be > 1'); // since startBond < nonDecisionThreshold
 		uint256 z = (ratio - SCALE) * SCALE / (ratio + SCALE);
 		uint256 z2 = z * z / SCALE;
 		uint256 lnRatio = 2 * (z + z2 * z / (3 * SCALE) + z2 * z2 * z / (5 * SCALE));
@@ -75,14 +77,14 @@ contract EscalationGame {
 		// 5
 		term = term * tLnX / (5 * SCALE);
 		series += term;
-		return startDeposit * series / SCALE;
+		return startBond * series / SCALE;
 	}
 
 	// todo investigate this function more for errors. This can result in weird errors where you fork just before/after escalation game end
-	function computeTimeSinceStartFromAttritionCost(uint256 startDeposit, uint256 forkThreshold, uint256 attritionCost) public view returns (uint256) {
+	function computeTimeSinceStartFromAttritionCost(uint256 attritionCost) public view returns (uint256) {
 		uint256 low = 0;
 		uint256 high = escalationTimeLength;
-		if (attritionCost <= startDeposit) return 0;
+		if (attritionCost <= startBond) return 0;
 		uint256 maxCost = nonDecisionThreshold;
 		if (attritionCost >= maxCost) return escalationTimeLength;
 
@@ -90,7 +92,7 @@ contract EscalationGame {
 		for (uint256 iteration = 0; iteration < 64; iteration++) {
 			uint256 midTime = (low + high) / 2;
 
-			uint256 midCost = compute5TermTaylorSeriesAttritionCostApproximation(startDeposit, forkThreshold, midTime);
+			uint256 midCost = compute5TermTaylorSeriesAttritionCostApproximation(startBond, midTime);
 
 			if (midCost == attritionCost) return midTime;
 			if (midCost < attritionCost) {
@@ -104,14 +106,14 @@ contract EscalationGame {
 
 	function getEscalationGameEndDate() public view returns (uint256 endTime) {
 		if (nonDecisionTimestamp > 0) return nonDecisionTimestamp;
-		return startingTime + computeTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, getBindingCapital());
+		return startingTime + computeTimeSinceStartFromAttritionCost(startBond, getBindingCapital());
 	}
 
 	function totalCost() public view returns (uint256) {
 		if (startingTime >= block.timestamp) return 0;
 		uint256 timeFromStart = block.timestamp - startingTime;
 		if (timeFromStart >= escalationTimeLength) return nonDecisionThreshold;
-		return compute5TermTaylorSeriesAttritionCostApproximation(startBond, nonDecisionThreshold, timeFromStart);
+		return compute5TermTaylorSeriesAttritionCostApproximation(startBond, timeFromStart);
 	}
 
 	function getMarketResolution() public view returns (YesNoMarkets.Outcome outcome){
@@ -121,6 +123,7 @@ contract EscalationGame {
 		uint8 noOver = balances[2] >= currentTotalCost ? 1 : 0;
 		if (invalidOver + yesOver + noOver >= 2) return YesNoMarkets.Outcome.None; // if two or more outcomes are over the total cost, the game is still going
 		// the game has ended due to timeout
+		// TODO, doesn't handle ties well logically. We could avoid it by checking if tie is happening before deposit and break it there
 		if (balances[0] > balances[1] && balances[0] > balances[2]) return YesNoMarkets.Outcome.Invalid;
 		if (balances[1] > balances[0] && balances[1] > balances[2]) return YesNoMarkets.Outcome.Yes;
 		return YesNoMarkets.Outcome.No;
@@ -147,7 +150,7 @@ contract EscalationGame {
 	function depositOnOutcome(address depositor, YesNoMarkets.Outcome outcome, uint256 amount) public returns (uint256 depositAmount) {
 		require(nonDecisionTimestamp == 0, 'System has already reached a non-decision');
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
-		require(getMarketResolution() == YesNoMarkets.Outcome.None, 'System has already timeouted');
+		require(getMarketResolution() == YesNoMarkets.Outcome.None, 'System has already timed out');
 		require(balances[uint256(outcome)] < nonDecisionThreshold, 'Already full');
 		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit'); // checks that we get start bond and spam protection
 		Deposit memory deposit;
@@ -168,7 +171,7 @@ contract EscalationGame {
 		}
 	}
 
-	// todo, this should be calculated against to actual fork treshold, not the one set at the start. The actual can be lower than the games treshold but never above
+	// todo, this should be calculated against to actual nonDecisionThreshold, not the one set at the start. The actual can be lower than the games treshold but never above
 	function claimDepositForWinning(uint256 depositIndex, YesNoMarkets.Outcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
 		require(msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()), 'Only Security Pool can withdraw');
 		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
@@ -200,7 +203,7 @@ contract EscalationGame {
 		emit WithdrawDeposit(depositor, marketResolution, amountToWithdraw, depositIndex);
 	}
 
-	// todo, for the UI, we probably want to retrive multiple outcomes at once
+	// todo, for the UI, we probably want to retrieve multiple outcomes at once
 	function getDepositsByOutcome(YesNoMarkets.Outcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (Deposit[] memory returnDeposits) {
 		returnDeposits = new Deposit[](numberOfEntries);
 		uint256 iterateUntil = startIndex + numberOfEntries > deposits[uint8(outcome)].length ? deposits[uint8(outcome)].length : startIndex + numberOfEntries;
