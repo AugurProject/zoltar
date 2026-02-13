@@ -105,7 +105,7 @@ contract SecurityPool is ISecurityPool {
 		(,,forkTime) = zoltar.universes(universeId);
 		(uint64 endTime,,,) = zoltar.questions(questionId);
 		uint256 feeEndDate = forkTime == 0 ? endTime : forkTime;
-		uint256 clampedCurrentTimestamp = block.timestamp > feeEndDate ? endTime : block.timestamp;
+		uint256 clampedCurrentTimestamp = block.timestamp > feeEndDate ? feeEndDate : block.timestamp;
 		uint256 timeDelta = clampedCurrentTimestamp - lastUpdatedFeeAccumulator;
 		if (timeDelta == 0) return;
 
