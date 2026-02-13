@@ -114,6 +114,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 endTime = yesNoMarkets.getMarketEndDate(marketId);
 		uint256 feeEndDate = forkTime == 0 ? endTime : forkTime;
 		uint256 clampedCurrentTimestamp = block.timestamp > feeEndDate ? feeEndDate : block.timestamp;
+		if (lastUpdatedFeeAccumulator > clampedCurrentTimestamp) return; // todo, this probably souldnt here as we shouldn't be getting any fees?
 		uint256 timeDelta = clampedCurrentTimestamp - lastUpdatedFeeAccumulator;
 		if (timeDelta == 0) return;
 
@@ -315,6 +316,9 @@ contract SecurityPool is ISecurityPool {
 
 	function withdrawFromEscalationGame(uint256[] memory depositIndexes) external isOperational {
 		require(address(escalationGame) != address(0x0), 'escalation game needs to be deployed');
+		YesNoMarkets.Outcome outcome = ISecurityPoolForker(securityPoolForker).getMarketOutcome(this);
+		require(outcome != YesNoMarkets.Outcome.None, 'Market has not finalized!');
+		require(!escalationGame.hasReacedNonDecision(), 'cannot withdraw, escalation game is undecisive');
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
 			(address depositor, uint256 amountToWithdraw) = escalationGame.withdrawDeposit(depositIndexes[index]);
 			securityVaults[depositor].poolOwnership += repToPoolOwnership(amountToWithdraw);

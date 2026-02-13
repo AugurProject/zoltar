@@ -22,7 +22,7 @@ contract EscalationGame {
 	uint256 public nonDecisionTreshold;
 	uint256 public startBond;
 	address public owner;
-	uint256 public forkedTimestamp;
+	uint256 public nonDecisionTimestamp;
 
 	event GameStarted(uint256 startingTime, uint256 startBond, uint256 forkTreshold);
 	event DepositOnOutcome(address depositor, YesNoMarkets.Outcome outcome, uint256 amount, uint256 depositIndex, uint256 cumulativeAmount);
@@ -103,7 +103,7 @@ contract EscalationGame {
 	}
 
 	function getEscalationGameEndDate() public view returns (uint256 endTime) {
-		if (forkedTimestamp > 0) return forkedTimestamp;
+		if (nonDecisionTimestamp > 0) return nonDecisionTimestamp;
 		return startingTime + computeTimeSinceStartFromAttritionCost(startBond, nonDecisionTreshold, getBindingCapital());
 	}
 
@@ -126,7 +126,7 @@ contract EscalationGame {
 		return YesNoMarkets.Outcome.No;
 	}
 
-	function hasForked() internal view returns (bool) {
+	function hasReacedNonDecision() public view returns (bool) {
 		uint8 invalidOver = balances[0] >= nonDecisionTreshold ? 1 : 0;
 		uint8 yesOver = balances[1] >= nonDecisionTreshold ? 1 : 0;
 		uint8 noOver = balances[2] >= nonDecisionTreshold ? 1 : 0;
@@ -145,7 +145,7 @@ contract EscalationGame {
 
 	// deposits on market outcome, returns value how much the user should be refunded for
 	function depositOnOutcome(address depositor, YesNoMarkets.Outcome outcome, uint256 amount) public returns (uint256 depositAmount) {
-		require(forkedTimestamp == 0, 'System has already forked');
+		require(nonDecisionTimestamp == 0, 'System has already reached a non-decision');
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
 		require(getMarketResolution() == YesNoMarkets.Outcome.None, 'System has already timeouted');
 		require(balances[uint256(outcome)] < nonDecisionTreshold, 'Already full');
@@ -163,8 +163,8 @@ contract EscalationGame {
 		deposit.cumulativeAmount = balances[uint256(outcome)];
 		deposits[uint8(outcome)].push(deposit);
 		emit DepositOnOutcome(depositor, outcome, deposit.amount, deposits[uint8(outcome)].length - 1, deposit.cumulativeAmount);
-		if (hasForked()) {
-			forkedTimestamp = block.timestamp;
+		if (hasReacedNonDecision()) {
+			nonDecisionTimestamp = block.timestamp;
 		}
 	}
 
@@ -192,11 +192,11 @@ contract EscalationGame {
 	// todo, allow withdrawing after someones elses fork as well (game is canceled)
 	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw) {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
-		require(forkedTimestamp == 0, 'System has forked');
+		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
 		// if system hasnt forked, check outcome is winning
-		YesNoMarkets.Outcome markeResolution = getMarketResolution();
-		claimDepositForWinning(depositIndex, markeResolution);
-		emit WithdrawDeposit(depositor, markeResolution, amountToWithdraw, depositIndex);
+		YesNoMarkets.Outcome marketResolution = getMarketResolution();
+		(depositor,,amountToWithdraw) = claimDepositForWinning(depositIndex, marketResolution);
+		emit WithdrawDeposit(depositor, marketResolution, amountToWithdraw, depositIndex);
 	}
 
 	// todo, for the UI, we probably want to retrive multiple outcomes at once

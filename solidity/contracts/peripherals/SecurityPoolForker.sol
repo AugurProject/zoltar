@@ -36,7 +36,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	event TruthAuctionFinalized();
 	event ClaimAuctionProceeds(address vault, uint256 amount, uint256 poolOwnershipAmount, uint256 poolOwnershipDenominator);
 	event MigrateRepFromParent(address vault, uint256 parentSecurityBondAllowance, uint256 parentpoolOwnership);
-	event FinalizeAuction(uint256 repAvailable, uint256 migratedRep, uint256 repPurchased, uint256 poolOwnershipDenominator);
+	event FinalizeAuction(uint256 repAvailable, uint256 migratedRep, uint256 repPurchased, uint256 poolOwnershipDenominator, uint256 completeSetCollateralAmount);
 	event MigrateFromEscalationGame(ISecurityPool parent, address vault, YesNoMarkets.Outcome outcomeIndex, uint8[] depositIndexes, uint256 totalRep, uint256 newOwnership);
 
 	function repToPoolOwnership(ISecurityPool securityPool, uint256 repAmount) public view returns (uint256) {
@@ -192,16 +192,16 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		ISecurityPool parent = securityPool.parent();
 		uint256 repAvailable = forkData[parent].repAtFork;
 		securityPool.setCompleteSetCollateralAmount(address(securityPool).balance - securityPool.totalFeesOvedToVaults()); //todo, we might want to reduce fees if we didn't get fully funded?
-		if (repAvailable > 0) {
-			securityPool.setPoolOwnershipDenominator(forkData[securityPool].migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / (repAvailable - repPurchased));
-		}
 		uint256 parentTotalSecurityBondAllowance = parent.totalSecurityBondAllowance();
 		forkData[securityPool].auctionedSecurityBondAllowance = parentTotalSecurityBondAllowance - securityPool.totalSecurityBondAllowance();
 		securityPool.setTotalSecurityBondAllowance(parentTotalSecurityBondAllowance);
-		if (securityPool.poolOwnershipDenominator() == 0) {
+		if (repAvailable > 0) {
+			securityPool.setPoolOwnershipDenominator(forkData[securityPool].migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / (repAvailable - repPurchased));
+		}
+		if (securityPool.poolOwnershipDenominator() == 0) { // wipe all rep holders in vaults
 			securityPool.setPoolOwnershipDenominator(repAvailable * SecurityPoolUtils.PRICE_PRECISION);
 		}
-		emit FinalizeAuction(repAvailable, forkData[securityPool].migratedRep, repPurchased, securityPool.poolOwnershipDenominator());
+		emit FinalizeAuction(repAvailable, forkData[securityPool].migratedRep, repPurchased, securityPool.poolOwnershipDenominator(), securityPool.completeSetCollateralAmount());
 		securityPool.updateRetentionRate();
 	}
 
@@ -212,7 +212,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) public {
 		EscalationGame escalationGame = securityPool.escalationGame();
-		require(address(escalationGame) != address(0x0) && escalationGame.forkedTimestamp() > 0, 'escalation game has not triggered fork');
+		require(address(escalationGame) != address(0x0) && escalationGame.nonDecisionTimestamp() > 0, 'escalation game has not triggered fork');
 		(string memory extraInfo, string[4] memory outcomes) = securityPool.yesNoMarkets().getForkingData(securityPool.marketId());
 		securityPool.stealAllRep();
 		forkData[securityPool].ownFork = true;
