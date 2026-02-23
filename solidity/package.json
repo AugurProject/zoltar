@@ -6,7 +6,8 @@
 		"setup": "npm ci --ignore-scripts && npm run compile-contracts",
 		"compile-contracts": "tsc --project tsconfig-compile.json && node ./js/compile.js",
 		"test": "npx tsc && node --test",
-		"test-peripherals": "npx tsc && node --test ./js/tests/testPeripherals.js"
+		"test-peripherals": "npx tsc && node --test ./js/tests/testPeripherals.js",
+		"test-escalationGame": "npx tsc && node --test ./js/tests/testEscalationGame.js"
 	},
 	"keywords": [],
 	"author": "",
