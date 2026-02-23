@@ -1,0 +1,50 @@
+name: "Gito: React to Mentions"
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  handle-mentions:
+    if: >
+      github.event.issue.pull_request
+      && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')
+      && github.event.comment.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - name: Determine if PR is from fork
+        id: determine_if_fork_or_branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_HEAD_REPO=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }} --jq '.head.repo.full_name')
+          if [ "$PR_HEAD_REPO" != "${{ github.repository }}" ]; then
+            echo "is_fork=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_fork=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Restore trusted repository files
+        if: "steps.determine_if_fork_or_branch.outputs.is_fork == 'true'"
+        run: git checkout origin/main -- .github/gito-agents .github/requirements.txt .github/scripts/
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install Gito
+        run: pip install -r .github/requirements.txt --require-hashes
+      - name: Handle mentions
+        env:
+          LLM_API_TYPE: openai
+          LLM_API_BASE: https://api.ppq.ai
+          LLM_API_KEY: ${{ secrets.PPQ }}
+          MODEL: stepfun/step-3.5-flash
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          python .github/scripts/handle_mentions.py
