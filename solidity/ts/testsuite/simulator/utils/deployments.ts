@@ -48,7 +48,7 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 	const infraAddresses = getInfraContractAddresses()
 	const originAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier)
 
-	const oucomes = [QuestionOutcome.Invalid, QuestionOutcome.No, QuestionOutcome.Yes]
+	const oucomes = [0n, 1n, 2n]
 
 	const getChildAddresses = (parentSecurityPoolAddress: `0x${ string }`, parentUniverseId: bigint): Deployment[] => {
 		return oucomes.flatMap((outcome) => {

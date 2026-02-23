@@ -365,7 +365,7 @@ export const getReportBond = async (client: ReadClient) => {
 	})
 }
 
-export function getChildUniverseId(parentUniverseId: bigint, outcome: QuestionOutcome): bigint {
+export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint | QuestionOutcome): bigint {
 	return (parentUniverseId << 2n) + BigInt(outcome) + 1n
 }
 
