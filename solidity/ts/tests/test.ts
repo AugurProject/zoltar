@@ -27,7 +27,7 @@ describe('Contract Test Suite', () => {
 		assert.ok(isDeployed, `Not Deployed!`)
 
 		const genesisUniverseData = await getUniverseData(client, 0n)
-		assert.strictEqual(genesisUniverseData.reputationToken.toLowerCase(), addressString(GENESIS_REPUTATION_TOKEN), 'Genesis universe not recognized or not initialized properly')
+		assert.strictEqual(genesisUniverseData.reputationToken, GENESIS_REPUTATION_TOKEN, 'Genesis universe not recognized or not initialized properly')
 	})
 
 	test('canForkQuestion', async () => {
@@ -68,34 +68,34 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), forkerDeposit, 'forkers deposit should be in zoltar')
 
 		// forker claim balance
-		const outcomeIndices = [0n, 1n, 3n]
-		await forkerClaimRep(client, genesisUniverse, outcomeIndices)
+		const outcomeIndexes = [0n, 1n, 3n]
+		await forkerClaimRep(client, genesisUniverse, outcomeIndexes)
 		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), 0n, 'forkers deposit should be burned')
 		const universeForkDataAfterClaim = await getUniverseForkData(client, genesisUniverse)
 		assert.strictEqual(universeForkDataAfterClaim.forkerRepDeposit, 0n, 'deposit is gone')
-		for (const indice of outcomeIndices) {
-			const indiceUniverse = getChildUniverseId(genesisUniverse, indice)
-			const repForIndice = getRepTokenAddress(indiceUniverse)
-			assert.ok(await contractExists(client, repForIndice), `rep token for indice ${ indice } exist`);
-			const ourBalance = await getERC20Balance(client, repForIndice, client.account.address)
+		for (const index of outcomeIndexes) {
+			const indexUniverse = getChildUniverseId(genesisUniverse, index)
+			const repForIndex = getRepTokenAddress(indexUniverse)
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ index } exist`);
+			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, forkerDeposit)
 		}
 
 		// split rest of the rep
-		const splitOutcomeIndices = [0n, 1n, 2n]
-		const priorBalances = await Promise.all(splitOutcomeIndices.map(async (indice) => {
-			const indiceUniverse = getChildUniverseId(genesisUniverse, indice)
-			const repForIndice = getRepTokenAddress(indiceUniverse)
-			return await contractExists(client, repForIndice) ? await getERC20Balance(client, repForIndice, client.account.address) : 0n
+		const splitOutcomeIndexes = [0n, 1n, 2n]
+		const priorBalances = await Promise.all(splitOutcomeIndexes.map(async (index) => {
+			const indiceUniverse = getChildUniverseId(genesisUniverse, index)
+			const repForIndex = getRepTokenAddress(indiceUniverse)
+			return await contractExists(client, repForIndex) ? await getERC20Balance(client, repForIndex, client.account.address) : 0n
 		}))
 		const priorSplitBalance = await getERC20Balance(client, genesisRepToken, client.account.address)
-		await splitRep(client, genesisUniverse, splitOutcomeIndices)
+		await splitRep(client, genesisUniverse, splitOutcomeIndexes)
 		assert.strictEqual(await getERC20Balance(client, genesisRepToken, client.account.address), 0n, 'splitters rep should be gone')
-		for (const [index, indice] of splitOutcomeIndices.entries()) {
-			const indiceUniverse = getChildUniverseId(genesisUniverse, indice)
-			const repForIndice = getRepTokenAddress(indiceUniverse)
-			assert.ok(await contractExists(client, repForIndice), `rep token for indice ${ indice } exist`);
-			const ourBalance = await getERC20Balance(client, repForIndice, client.account.address)
+		for (const [index, outcomeIndex] of splitOutcomeIndexes.entries()) {
+			const indiceUniverse = getChildUniverseId(genesisUniverse, outcomeIndex)
+			const repForIndex = getRepTokenAddress(indiceUniverse)
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ outcomeIndex } exist`);
+			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, priorSplitBalance + priorBalances[index], 'after split balance mismatch')
 		}
 	})

@@ -4,7 +4,6 @@ import { WriteClient } from './viem.js'
 import { PROXY_DEPLOYER_ADDRESS } from './constants.js'
 import { addressString } from './bigint.js'
 import { contractExists, getRepTokenAddress, getZoltarAddress } from './utilities.js'
-import { mainnet } from 'viem/chains'
 import { peripherals_Auction_Auction, peripherals_factories_AuctionFactory_AuctionFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
 
 export function getSecurityPoolUtilsAddress() {
@@ -163,7 +162,6 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 export const deployOriginSecurityPool = async (client: WriteClient, universeId: bigint, questionId: bigint, securityMultiplier: bigint, startingRetentionRate: bigint, startingRepEthPrice: bigint, completeSetCollateralAmount: bigint) => {
 	const infraAddresses = getInfraContractAddresses()
 	return await client.writeContract({
-		chain: mainnet,
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deployOriginSecurityPool',
 		address: infraAddresses.securityPoolFactory,

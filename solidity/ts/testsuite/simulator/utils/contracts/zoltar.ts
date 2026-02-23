@@ -1,4 +1,3 @@
-import { mainnet } from "viem/chains"
 import { ReputationToken_ReputationToken, Zoltar_Zoltar } from "../../../../types/contractArtifact.js"
 import { ReadClient, WriteClient } from "../viem.js"
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from "../constants.js"
@@ -103,12 +102,12 @@ export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0
 	})
 }
 
-export const forkerClaimRep = async (client: WriteClient, universeId: bigint, outcomeIndices: bigint[]) => {
+export const forkerClaimRep = async (client: WriteClient, universeId: bigint, outcomeindexes: bigint[]) => {
 	return await client.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkerClaimRep',
 		address: getZoltarAddress(),
-		args: [universeId, outcomeIndices.map((x) => Number(x))]
+		args: [universeId, outcomeindexes.map((x) => Number(x))]
 	})
 }
 
