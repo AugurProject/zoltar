@@ -8,31 +8,64 @@ on:
         description: "Pull Request number"
         required: true
 jobs:
-  review:
+  multi-review:
     runs-on: ubuntu-latest
-    permissions: { contents: read, pull-requests: write } # required to post review comments
+    # write permission is required to post review comments
+    permissions: { contents: read, pull-requests: write }
+    continue-on-error: false
+    strategy:
+      fail-fast: false
+      matrix:
+        agent: [defender, security, wise, architect, bugs, linter]
     steps:
       - uses: actions/checkout@v6
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/head', github.event.inputs.pr_number) || '' }}
+      - name: Restore trusted repository files
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: git checkout origin/main -- .github/gito-agents .github/requirements.txt .github/scripts/
       - name: Set up Python
         uses: actions/setup-python@v6
         with: { python-version: "3.13" }
       - name: Install AI Code Review tool
-        run: pip install gito.bot~=4.0
-      - name: Run AI code review
+        run: pip install -r .github/requirements.txt --require-hashes
+      - name: Configure agent
+        run: |
+          mkdir -p .gito
+          cp .github/gito-agents/${{ matrix.agent }}.toml .gito/config.toml
+      - name: Run ${{ matrix.agent }} review
+        id: run-review
         env:
           LLM_API_KEY: ${{ secrets.PPQ }}
           LLM_API_TYPE: 'openai'
           LLM_API_BASE: 'https://api.ppq.ai'
-          MODEL: 'moonshotai/kimi-k2.5'
+          MODEL: 'stepfun/step-3.5-flash'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER_FROM_WORKFLOW_DISPATCH: ${{ github.event.inputs.pr_number }}
-        run: |
-          gito --verbose review
-          gito github-comment
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          AGENT_NAME: ${{ matrix.agent }}
+        run: gito --verbose review --out ./review-${{ matrix.agent }}
+      - name: Collapse previous ${{ matrix.agent }} reviews
+        if: steps.run-review.conclusion == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          AGENT_NAME: ${{ matrix.agent }}
+        run: python .github/scripts/collapse_agent_reviews.py
+      - name: Post ${{ matrix.agent }} review
+        if: steps.run-review.conclusion == 'success'
+        env:
+          LLM_API_KEY: ${{ secrets.PPQ }}
+          LLM_API_TYPE: 'openai'
+          LLM_API_BASE: 'https://api.ppq.ai'
+          MODEL: 'stepfun/step-3.5-flash'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+        run: gito github-comment --md-report-file ./review-${{ matrix.agent }}/code-review-report.md
       - uses: actions/upload-artifact@v6
+        if: steps.run-review.conclusion == 'success'
         with:
-          name: gito-code-review-results
+          name: ${{ matrix.agent }}-results
           path: |
-            code-review-report.md
-            code-review-report.json
+            review-${{ matrix.agent }}/code-review-report.md
+            review-${{ matrix.agent }}/code-review-report.json

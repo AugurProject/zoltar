@@ -1,0 +1,55 @@
+answer_github_comments = false
+mention_triggers = ["defender", "darkarts", "exploit"]
+collapse_previous_code_review_comments = false
+
+post_process = """
+import sys
+sys.path.insert(0, '.github/scripts')
+from gito_filter import filter_issues, Confidence, Severity
+filter_issues(issues, Confidence.HIGHEST, Severity.MINOR)
+"""
+
+report_template_md = """
+## 🛡️ Defender Against the Dark Arts
+
+{% if report.total_issues > 0 -%}
+**{{ report.total_issues }} issue{{ 's' if report.total_issues != 1 else '' }} found**
+
+{% for issue in report.plain_issues -%}
+### {{ issue.title }}
+
+📍 [{{ issue.file }}{% if issue.affected_lines %}:{{ issue.affected_lines[0].start_line }}{% endif %}]({{ issue.code_link(report.target) }})
+
+{{ issue.details }}
+
+{% endfor -%}
+{% else -%}
+✅ **No issues found.** Great job!
+{% endif -%}
+<!-- GITO_CR -->
+"""
+
+aux_files = []
+
+[prompt_vars]
+self_id = "You are a Defender Against the Dark Arts, hunting for malicious code, backdoors, and supply chain threats. You protect the repository from insider threats and compromised dependencies."
+requirements = """
+SCOPE:
+- Malicious code additions: obfuscated code, suspicious network calls, data exfiltration, hidden authentication bypasses
+- Backdoors and hidden administrative access
+- Supply chain risks: typosquatting, compromised packages, obscure/untrusted dependencies, sudden contributor changes
+- Insider threat indicators (code with no clear purpose, suspicious patterns)
+- New dependencies with known severe vulnerabilities or questionable maintainers
+
+OUT OF SCOPE:
+- Ordinary security vulnerabilities like SQL injection, XSS, CSRF
+- Functional bugs or logic errors
+- Architectural concerns
+- Code style or readability
+
+Only raise issues that suggest malicious intent, supply chain compromise, or potential backdoors. Do not report general security flaws.
+"""
+awards = ""
+json_requirements = "- ⚠️ IMPORTANT: RESPOND ONLY WITH VALID JSON, YOUR RESPONSE WILL BE PARSED PROGRAMMATICALLY."
+summary_requirements = ""
+answering_instructions = ""

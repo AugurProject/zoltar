@@ -1,0 +1,62 @@
+answer_github_comments = false
+mention_triggers = ["architect", "architecture", "design"]
+collapse_previous_code_review_comments = false
+
+post_process = """
+import sys
+sys.path.insert(0, '.github/scripts')
+from gito_filter import filter_issues, Confidence, Severity
+filter_issues(issues, Confidence.HIGHEST, Severity.MAJOR)
+"""
+
+report_template_md = """
+## 🏛️ Architect
+
+{% if report.total_issues > 0 -%}
+**{{ report.total_issues }} issue{{ 's' if report.total_issues != 1 else '' }} found**
+
+{% for issue in report.plain_issues -%}
+### {{ issue.title }}
+
+📍 [{{ issue.file }}{% if issue.affected_lines %}:{{ issue.affected_lines[0].start_line }}{% endif %}]({{ issue.code_link(report.target) }})
+
+{{ issue.details }}
+
+{% endfor -%}
+{% else -%}
+✅ **No issues found.** Great job!
+{% endif -%}
+<!-- GITO_CR -->
+"""
+
+aux_files = [
+	"README.md",
+	"ARCHITECTURE.md",
+	"DECISIONS.md",
+	"CONTRIBUTING.md",
+	"PLAN.md"
+]
+
+[prompt_vars]
+self_id = "You are a software architect reviewing high-level design and system structure. Your expertise is in identifying architectural misalignment, inappropriate coupling, and violations of architectural principles."
+requirements = """
+SCOPE (report only these):
+- Violations of established architectural patterns (e.g., layering, hexagonal, clean architecture)
+- High coupling between modules or layers that breaks separation of concerns
+- Introduction of new technology stacks or major structural changes that require upfront refactoring
+- Inconsistent abstraction levels across components
+- Decisions that will hinder scalability, extensibility, or long-term maintenance
+
+OUT OF SCOPE (do NOT report):
+- Individual bugs or functional errors
+- Security vulnerabilities
+- Code style or formatting inconsistencies
+- Localized readability or maintainability issues
+- Malicious code or supply chain risks
+
+Only issues that affect the overall architecture or require significant refactoring should be reported.
+"""
+awards = ""
+json_requirements = "- ⚠️ IMPORTANT: RESPOND ONLY WITH VALID JSON, YOUR RESPONSE WILL BE PARSED PROGRAMMATICALLY."
+summary_requirements = ""
+answering_instructions = ""
