@@ -228,7 +228,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		emit ClaimAuctionProceeds(vault, amount, poolOwnershipAmount, securityPool.poolOwnershipDenominator());
 	}
 
-	function getMarketOutcome(ISecurityPool securityPool) external returns (YesNoMarkets.Outcome outcome){
+	function getMarketOutcome(ISecurityPool securityPool) external view returns (YesNoMarkets.Outcome outcome){
 		SystemState systemState = securityPool.systemState();
 		if (systemState == SystemState.PoolForked) return YesNoMarkets.Outcome.None;
 		ISecurityPool parent = securityPool.parent();

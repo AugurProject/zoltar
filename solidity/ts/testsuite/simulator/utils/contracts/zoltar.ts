@@ -4,6 +4,7 @@ import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from "../constants.j
 import { encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes } from "viem"
 import { addressString, bytes32String } from "../bigint.js"
 import { ensureProxyDeployerDeployed } from "../utilities.js"
+import { mainnet } from "viem/chains"
 
 export function getZoltarAddress() {
 	const bytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.bytecode.object }`
@@ -19,7 +20,7 @@ export const isZoltarDeployed = async (client: ReadClient) => {
 
 export const deployZoltarTransaction = () => {
 	const bytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.bytecode.object }`
-	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
+	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode, chain: mainnet, } as const
 }
 
 export const ensureZoltarDeployed = async (client: WriteClient) => {
@@ -59,6 +60,7 @@ export const getUniverseForkData = async (client: ReadClient, universeId: bigint
 
 export const forkUniverse = async (client: WriteClient, universeId: bigint, extraInfo: string, questionCategories: readonly [string, string, string, string]) => {
 	return await client.writeContract({
+		chain: mainnet,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkUniverse',
 		address: getZoltarAddress(),
@@ -68,6 +70,7 @@ export const forkUniverse = async (client: WriteClient, universeId: bigint, extr
 
 export const splitRep = async (client: WriteClient, universeId: bigint, outcomeIndexes: bigint[]) => {
 	return await client.writeContract({
+		chain: mainnet,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'splitRep',
 		address: getZoltarAddress(),
@@ -77,6 +80,7 @@ export const splitRep = async (client: WriteClient, universeId: bigint, outcomeI
 
 export const deployChild = async (client: WriteClient, universeId: bigint, outcomeIndex: bigint) => {
 	return await client.writeContract({
+		chain: mainnet,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'deployChild',
 		address: getZoltarAddress(),
@@ -104,6 +108,7 @@ export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0
 
 export const forkerClaimRep = async (client: WriteClient, universeId: bigint, outcomeindexes: bigint[]) => {
 	return await client.writeContract({
+		chain: mainnet,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkerClaimRep',
 		address: getZoltarAddress(),
@@ -121,3 +126,11 @@ export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
 	return getCreate2Address({ from: getZoltarAddress(), salt: bytes32String(universeId), bytecodeHash: keccak256(initCode) })
 }
 
+export const getZoltarforkThreshold = async (client: ReadClient, universeId: bigint) => {
+	return await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'getForkThreshold',
+		address: getZoltarAddress(),
+		args: [universeId]
+	})
+}

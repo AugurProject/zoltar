@@ -27,7 +27,7 @@ describe('Contract Test Suite', () => {
 		assert.ok(isDeployed, `Not Deployed!`)
 
 		const genesisUniverseData = await getUniverseData(client, 0n)
-		assert.strictEqual(genesisUniverseData.reputationToken, GENESIS_REPUTATION_TOKEN, 'Genesis universe not recognized or not initialized properly')
+		assert.strictEqual(BigInt(genesisUniverseData.reputationToken), GENESIS_REPUTATION_TOKEN, 'Genesis universe not recognized or not initialized properly')
 	})
 
 	test('canForkQuestion', async () => {

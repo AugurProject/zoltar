@@ -141,7 +141,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
-			} catch (bytes memory lowLevelData) {
+			} catch {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		} else if(queuedOperations[operationId].operation == OperationType.WithdrawRep) {
@@ -149,7 +149,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
-			} catch (bytes memory lowLevelData) {
+			} catch {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		} else {
@@ -157,7 +157,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
-			} catch (bytes memory lowLevelData) {
+			} catch {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		}
