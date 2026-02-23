@@ -19,6 +19,8 @@ jobs:
           fetch-depth: 0
       - name: Determine if PR is from fork
         id: determine_if_fork_or_branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_HEAD_REPO=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }} --jq '.head.repo.full_name')
           if [ "$PR_HEAD_REPO" != "${{ github.repository }}" ]; then
