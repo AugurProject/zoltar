@@ -11,6 +11,8 @@ import { YesNoMarkets } from './YesNoMarkets.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
+
+//todo, move mappings outside the struct
 struct ForkData {
 	uint256 repAtFork;
 	mapping(uint8 => ISecurityPool) children; // outcome -> children
@@ -35,7 +37,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	event TruthAuctionStarted(uint256 completeSetCollateralAmount, uint256 repMigrated, uint256 repAtFork);
 	event TruthAuctionFinalized();
 	event ClaimAuctionProceeds(address vault, uint256 amount, uint256 poolOwnershipAmount, uint256 poolOwnershipDenominator);
-	event MigrateRepFromParent(address vault, uint256 parentSecurityBondAllowance, uint256 parentpoolOwnership);
+	event MigrateRepFromParent(address vault, uint256 parentSecurityBondAllowance, uint256 parentPoolOwnership);
 	event FinalizeAuction(uint256 repAvailable, uint256 migratedRep, uint256 repPurchased, uint256 poolOwnershipDenominator, uint256 completeSetCollateralAmount);
 	event MigrateFromEscalationGame(ISecurityPool parent, address vault, YesNoMarkets.Outcome outcomeIndex, uint8[] depositIndexes, uint256 totalRep, uint256 newOwnership);
 
@@ -104,7 +106,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		}
 	}
 
-	// todo, atm this needs to be called after migratevault
+	// TODO, atm this needs to be called after migratevault
 	function migrateFromEscalationGame(ISecurityPool parent, address vault, YesNoMarkets.Outcome outcomeIndex, uint8[] memory depositIndexes) public {
 		EscalationGame escalationGame = parent.escalationGame();
 		if (address(forkData[parent].children[uint8(outcomeIndex)]) == address(0x0)) createChildUniverse(parent, uint8(outcomeIndex));
@@ -228,7 +230,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		emit ClaimAuctionProceeds(vault, amount, poolOwnershipAmount, securityPool.poolOwnershipDenominator());
 	}
 
-	function getMarketOutcome(ISecurityPool securityPool) external returns (YesNoMarkets.Outcome outcome){
+	function getMarketOutcome(ISecurityPool securityPool) external view returns (YesNoMarkets.Outcome outcome){
 		SystemState systemState = securityPool.systemState();
 		if (systemState == SystemState.PoolForked) return YesNoMarkets.Outcome.None;
 		ISecurityPool parent = securityPool.parent();

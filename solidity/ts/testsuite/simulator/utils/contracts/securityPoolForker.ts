@@ -88,7 +88,7 @@ export const getMarketOutcome = async (client: ReadClient, securityPoolAddress: 
 					"type": "uint8"
 				}
 			]
-		}] as const, // typescript limitation on types...
+		}] as const, // Typescript limitation on types...
 		functionName: 'getMarketOutcome',
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress],

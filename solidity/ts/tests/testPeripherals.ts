@@ -14,8 +14,8 @@ import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
 import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkSecurityPool, getMarketOutcome, getMigratedRep, getSecurityPoolForkerForkData, migrateFromEscalationGame, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker.js'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
-import { getEscalationGameDeposits, getMarketResolution, getnonDecisionThreshold, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame.js'
-import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseForkData, getZoltarAddress, getZoltarforkThreshold  } from '../testsuite/simulator/utils/contracts/zoltar.js'
+import { getEscalationGameDeposits, getMarketResolution, getNonDecisionThreshold, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame.js'
+import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseForkData, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar.js'
 import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool.js'
 
 describe('Peripherals Contract Test Suite', () => {
@@ -78,7 +78,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const escalationGameAddress = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(escalationGameAddress, securityPoolAddresses.escalationGame, 'escalation game addresses do not match')
 
-		assert.ok(await getnonDecisionThreshold(client, securityPoolAddresses.escalationGame) > 10n * reportBond, 'fork treshold need to be big enough')
+		assert.ok(await getNonDecisionThreshold(client, securityPoolAddresses.escalationGame) > 10n * reportBond, 'fork treshold need to be big enough')
 		await mockWindow.advanceTime(10n * DAY)
 		const yesDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		strictEqualTypeSafe(yesDeposits.length, 1, 'there should be one deposit')
@@ -136,7 +136,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const liquidatorVault = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 		strictEqualTypeSafe(originalVault.securityBondAllowance, 0n, 'original vault should not have any security bonds')
 		strictEqualTypeSafe(originalVault.repDepositShare, 0n, 'original vault should not have any rep')
-		strictEqualTypeSafe(liquidatorVault.securityBondAllowance, securityPoolAllowance, 'liquidator doesnt have all the security pool allowances')
+		strictEqualTypeSafe(liquidatorVault.securityBondAllowance, securityPoolAllowance, 'liquidator doesn't have all the security pool allowances')
 		strictEqualTypeSafe(liquidatorVault.repDepositShare / PRICE_PRECISION, repDeposit+(repDeposit * 10n), 'liquidator should have all the rep in the pool')
 	})
 
@@ -188,7 +188,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool), securityPoolAllowance, 'Security pool allowance was not set correctly')
 
 		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
-		await depositRep(client, securityPoolAddresses.securityPool, forkThreshold  * 2n)
+		await depositRep(client, securityPoolAddresses.securityPool, forkThreshold * 2n)
 
 		const openInterestAmount = 100n * 10n ** 18n
 		const maxGasFees = openInterestAmount / 4n
@@ -213,8 +213,8 @@ describe('Peripherals Contract Test Suite', () => {
 		const repBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 
 		// forking
-		const zoltarforkThreshold  = await getZoltarforkThreshold (client, genesisUniverse)
-		const burnAmount = zoltarforkThreshold  / 5n
+		const zoltarforkThreshold = await getZoltarForkThreshold (client, genesisUniverse)
+		const burnAmount = zoltarforkThreshold / 5n
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		const forkerRepBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), getInfraContractAddresses().securityPoolForker)
 		const zoltarForkData = await getUniverseForkData(client, genesisUniverse)
@@ -262,8 +262,8 @@ describe('Peripherals Contract Test Suite', () => {
 		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 
-		const zoltarforkThreshold  = await getZoltarforkThreshold (client, genesisUniverse)
-		const burnAmount = zoltarforkThreshold  / 5n
+		const zoltarforkThreshold = await getZoltarForkThreshold (client, genesisUniverse)
+		const burnAmount = zoltarforkThreshold / 5n
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold )
 
 		const repBalanceInGenesisPool = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)

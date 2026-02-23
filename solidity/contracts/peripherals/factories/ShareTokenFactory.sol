@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 import { ShareToken } from '../tokens/ShareToken.sol';
-import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { Zoltar } from '../../Zoltar.sol';
 
 contract ShareTokenFactory {

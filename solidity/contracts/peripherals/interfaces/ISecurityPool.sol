@@ -60,7 +60,6 @@ interface ISecurityPool {
 	function repToPoolOwnership(uint256 repAmount) external view returns (uint256);
 	function poolOwnershipToRep(uint256 poolOwnership) external view returns (uint256);
 
-	// -------- Mutative Functions --------
 	function setStartingParams(uint256 currentRetentionRate, uint256 repEthPrice, uint256 completeSetCollateralAmount) external;
 
 	function updateCollateralAmount() external;

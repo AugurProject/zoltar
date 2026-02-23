@@ -1,6 +1,5 @@
 import 'viem/window'
 import { encodeAbiParameters, keccak256 } from 'viem'
-import { mainnet } from 'viem/chains'
 import { ReadClient, WriteClient } from './viem.js'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants.js'
 import { addressString } from './bigint.js'
@@ -8,7 +7,6 @@ import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
 import { QuestionOutcome } from '../types/types.js'
-
 export const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
 
 export async function sleep(milliseconds: number) {
@@ -147,7 +145,6 @@ export const mintERC20 = async (mockWindowEthereum: MockWindowEthereum, erc20Add
 export const approveToken = async (client: WriteClient, tokenAddress: Address, spenderAddress: Address) => {
 	const amount = 1000000000000000000000000000000n
 	return await client.writeContract({
-		chain: mainnet,
 		abi: ABIS.mainnet.erc20,
 		functionName: 'approve',
 		address: tokenAddress,
@@ -157,7 +154,6 @@ export const approveToken = async (client: WriteClient, tokenAddress: Address, s
 
 export const setERC1155Approval = async (client: WriteClient, tokenAddress: Address, operatorAddress: Address, approved: boolean) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: ABIS.mainnet.erc1155,
 		functionName: 'setApprovalForAll',
 		address: tokenAddress,
@@ -185,7 +181,6 @@ export const getERC20Supply = async (client: ReadClient, tokenAddress: Address) 
 
 export const transferERC20 = async (client: WriteClient, tokenAddress: Address, to: Address, amount: bigint) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: ABIS.mainnet.erc20,
 		functionName: 'transfer',
 		address: tokenAddress,
@@ -195,7 +190,6 @@ export const transferERC20 = async (client: WriteClient, tokenAddress: Address, 
 
 export const transferERC1155 = async (client: WriteClient, tokenAddress: Address, from: Address, to: Address, id: bigint, amount: bigint) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: ABIS.mainnet.erc1155,
 		functionName: 'safeTransferFrom',
 		address: tokenAddress,

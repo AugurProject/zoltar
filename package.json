@@ -18,6 +18,7 @@
 		"setup-contracts": "cd solidity && npm run setup",
 		"compile-contracts": "cd solidity && npm run compile-contracts",
 		"test": "cd solidity && npm run test",
-		"test-peripherals": "cd solidity && npm run compile-contracts && npm run test-peripherals"
+		"test-peripherals": "cd solidity && npm run compile-contracts && npm run test-peripherals",
+		"test-escalationGame": "cd solidity && npm run compile-contracts && npm run test-escalationGame"
 	}
 }

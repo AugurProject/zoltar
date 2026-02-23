@@ -178,7 +178,7 @@ export const getShareTokenSupply = async (client: ReadClient, securityPoolAddres
 }
 
 export const shareArrayToCash = async (client: ReadClient, securityPoolAddress: `0x${ string }`, shares: readonly bigint[]) => {
-	return await Promise.all(shares.map((shares) => sharesToCash(client, securityPoolAddress, shares)))
+	return await Promise.all(shares.map((share) => sharesToCash(client, securityPoolAddress, share)))
 }
 
 export const updateVaultFees = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) => {
