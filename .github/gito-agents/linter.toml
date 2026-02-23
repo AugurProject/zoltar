@@ -1,0 +1,49 @@
+answer_github_comments = false
+mention_triggers = ["linter", "style", "format"]
+collapse_previous_code_review_comments = false
+
+post_process = """
+import sys
+sys.path.insert(0, '.github/scripts')
+from gito_filter import filter_issues, Confidence, Severity
+filter_issues(issues, Confidence.HIGHEST, Severity.MINOR)
+"""
+
+report_template_md = """
+## 🔧 Expensive Linter
+
+{% if report.total_issues > 0 -%}
+**{{ report.total_issues }} issue{{ 's' if report.total_issues != 1 else '' }} found**
+
+{% for issue in report.plain_issues -%}
+### {{ issue.title }}
+
+📍 [{{ issue.file }}{% if issue.affected_lines %}:{{ issue.affected_lines[0].start_line }}{% endif %}]({{ issue.code_link(report.target) }})
+
+{{ issue.details }}
+
+{% endfor -%}
+{% else -%}
+✅ **No issues found.** Great job!
+{% endif -%}
+<!-- GITO_CR -->
+"""
+
+aux_files = []
+
+[prompt_vars]
+self_id = "You are a meticulous code style enforcer. Compare the PR changes against the existing codebase to identify stylistic inconsistencies."
+requirements = """
+SCOPE:
+- Compare naming conventions, code formatting, brace placement, spacing, import ordering, and other style elements in the changed files against the prevailing style in the repository.
+- Warn on any clear deviation from the established style.
+- Focus on objective, mechanical style aspects.
+
+OUT OF SCOPE:
+- Functional bugs, security issues, architectural concerns, or readability improvements.
+- Do not nitpick minor variations; only report clear contradictions to the repository's dominant style.
+"""
+awards = ""
+json_requirements = "- ⚠️ IMPORTANT: RESPOND ONLY WITH VALID JSON, YOUR RESPONSE WILL BE PARSED PROGRAMMATICALLY."
+summary_requirements = ""
+answering_instructions = ""
