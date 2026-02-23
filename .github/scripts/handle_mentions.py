@@ -278,6 +278,10 @@ def main() -> None:
 	agent_configs = load_agent_configs()
 	triggered_agents = find_triggered_agents(comment_body, agent_configs)
 
+	# If no agents triggered but it's a review request, trigger all agents
+	if not triggered_agents and is_review_request(comment_body):
+		triggered_agents = agent_configs
+
 	if not triggered_agents:
 		logger.info("No agents triggered by this comment")
 		sys.exit(0)
