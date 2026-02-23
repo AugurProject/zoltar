@@ -4,8 +4,8 @@ pragma solidity 0.8.33;
 import './Constants.sol';
 import './ReputationToken.sol';
 
-uint256 constant FORK_TRESHOLD_DIVISOR = 20; // TODO, revisit, 5% of total supply atm
-uint256 constant FORK_BURN_DIVISOR = 5; // TODO, revisit, 20% of fork treshold
+uint256 constant FORK_THRESHOLD_DIVISOR = 20; // TODO, revisit, 5% of total supply atm
+uint256 constant FORK_BURN_DIVISOR = 5; // TODO, revisit, 20% of fork threshold
 
 contract Zoltar {
 	struct Universe {
@@ -57,9 +57,9 @@ contract Zoltar {
 		universes[0] = Universe(0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0, 0);
 	}
 
-	function getForkTreshold(uint248 universeId) public view returns (uint256) {
+	function getForkThreshold(uint248 universeId) public view returns (uint256) {
 		Universe memory universe = universes[universeId];
-		return universe.reputationToken.getTotalTheoreticalSupply() / FORK_TRESHOLD_DIVISOR;
+		return universe.reputationToken.getTotalTheoreticalSupply() / FORK_THRESHOLD_DIVISOR;
 	}
 
 	function forkUniverse(uint248 universeId, string memory _extraInfo, string[4] memory _questionCategories) public {
@@ -67,10 +67,10 @@ contract Zoltar {
 		require(universe.forkTime == 0, 'Universe has forked already');
 		require(_questionCategories.length >= 1, 'need atleast one category on top of invalid');
 		universes[universeId].forkTime = block.timestamp;
-		uint256 forkTreshold = getForkTreshold(universeId);
-		universeForkData[universeId] = UniverseForkData(_extraInfo, msg.sender, forkTreshold - forkTreshold / FORK_BURN_DIVISOR, _questionCategories);
-		universes[universeId].reputationToken.transferFrom(msg.sender, address(this), forkTreshold);
-		burnRep(universes[universeId].reputationToken, address(this), forkTreshold / FORK_BURN_DIVISOR); // burn 20%
+		uint256 forkThreshold = getForkThreshold(universeId);
+		universeForkData[universeId] = UniverseForkData(_extraInfo, msg.sender, forkThreshold - forkThreshold / FORK_BURN_DIVISOR, _questionCategories);
+		universes[universeId].reputationToken.transferFrom(msg.sender, address(this), forkThreshold);
+		burnRep(universes[universeId].reputationToken, address(this), forkThreshold / FORK_BURN_DIVISOR); // burn 20%
 		emit UniverseForked(msg.sender, universeId, _extraInfo, _questionCategories);
 	}
 
