@@ -136,7 +136,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const liquidatorVault = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 		strictEqualTypeSafe(originalVault.securityBondAllowance, 0n, 'original vault should not have any security bonds')
 		strictEqualTypeSafe(originalVault.repDepositShare, 0n, 'original vault should not have any rep')
-		strictEqualTypeSafe(liquidatorVault.securityBondAllowance, securityPoolAllowance, 'liquidator doesnt have all the security pool allowances')
+		strictEqualTypeSafe(liquidatorVault.securityBondAllowance, securityPoolAllowance, 'liquidator doesn't have all the security pool allowances')
 		strictEqualTypeSafe(liquidatorVault.repDepositShare / PRICE_PRECISION, repDeposit+(repDeposit * 10n), 'liquidator should have all the rep in the pool')
 	})
 

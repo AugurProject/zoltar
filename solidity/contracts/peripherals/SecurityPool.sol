@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
-import { Auction } from './Auction.sol';
 import { Zoltar, FORK_THRESHOLD_DIVISOR } from '../Zoltar.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
-import { PriceOracleManagerAndOperatorQueuer, QueuedOperation } from './PriceOracleManagerAndOperatorQueuer.sol';
-import { ISecurityPool, SecurityVault, SystemState, QuestionOutcome, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
+import { PriceOracleManagerAndOperatorQueuer } from './PriceOracleManagerAndOperatorQueuer.sol';
+import { ISecurityPool, SecurityVault, SystemState, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
@@ -200,7 +199,7 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 	// liquidating vault
 	////////////////////////////////////////
-	// TODO, currently liquidator can be blocked by someone by depositing rep to vault while the deposit is pending. We don't want to block depositReps for this duration thought as we want to allow people to participate escalation game using external rep. I feel after liquidation is triggered we should store a snapshot rep balance of the vault that is then used for liquidation calculations
+	// TODO, currently liquidator can be blocked by someone by depositing rep to vault while the deposit is pending. We don't want to block depositReps for this duration though as we want to allow people to participate escalation game using external rep. I feel after liquidation is triggered we should store a snapshot rep balance of the vault that is then used for liquidation calculations
 	//price = (amount1 * PRICE_PRECISION) / amount2;
 	// price = REP * PRICE_PRECISION / ETH
 	// liquidation moves share of debt and rep to another pool which need to remain non-liquidable

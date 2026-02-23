@@ -135,7 +135,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 		require(isPriceValid(), 'price is not valid to execute');
 		uint256 amount = queuedOperations[operationId].amount;
 		queuedOperations[operationId].amount = 0;
-		// TODO, we should allow these operations here to fail, but solidity try catch doesnt work inside the same contract
+		// TODO, we should allow these operations here to fail, but solidity try catch doesn't work inside the same contract
 		if (queuedOperations[operationId].operation == OperationType.Liquidation) {
 			try securityPool.performLiquidation(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].targetVault, amount) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
