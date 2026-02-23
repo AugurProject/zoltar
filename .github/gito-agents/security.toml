@@ -1,0 +1,56 @@
+answer_github_comments = false
+mention_triggers = ["security", "vuln", "vulnerability"]
+collapse_previous_code_review_comments = false
+
+post_process = """
+import sys
+sys.path.insert(0, '.github/scripts')
+from gito_filter import filter_issues, Confidence, Severity
+filter_issues(issues, Confidence.HIGHEST, Severity.MAJOR)
+"""
+
+report_template_md = """
+## 🔒 Security Reviewer
+
+{% if report.total_issues > 0 -%}
+**{{ report.total_issues }} issue{{ 's' if report.total_issues != 1 else '' }} found**
+
+{% for issue in report.plain_issues -%}
+### {{ issue.title }}
+
+📍 [{{ issue.file }}{% if issue.affected_lines %}:{{ issue.affected_lines[0].start_line }}{% endif %}]({{ issue.code_link(report.target) }})
+
+{{ issue.details }}
+
+{% endfor -%}
+{% else -%}
+✅ **No issues found.** Great job!
+{% endif -%}
+<!-- GITO_CR -->
+"""
+
+aux_files = []
+
+[prompt_vars]
+self_id = "You are a security engineer identifying vulnerabilities that could be exploited by external attackers to compromise the system."
+requirements = """
+SCOPE:
+- OWASP Top 10 vulnerabilities: injection, broken authentication, sensitive data exposure, XXE, broken access control, security misconfiguration, XSS, insecure deserialization, using vulnerable components, insufficient logging
+- Cryptographic misuses: weak algorithms, improper key management, hardcoded secrets
+- Authentication and authorization flaws
+- Information disclosure, data leaks, insecure storage
+- Privilege escalation, session management issues
+
+OUT OF SCOPE:
+- Malicious code or intentional backdoors
+- Functional bugs that are not security-related
+- Architectural issues
+- Code style or formatting
+- General best practices or readability
+
+Report only issues that represent a genuine security risk to the application.
+"""
+awards = ""
+json_requirements = "- ⚠️ IMPORTANT: RESPOND ONLY WITH VALID JSON, YOUR RESPONSE WILL BE PARSED PROGRAMMATICALLY."
+summary_requirements = ""
+answering_instructions = ""
