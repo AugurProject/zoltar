@@ -11,8 +11,6 @@ interface IShareToken {
 	function mintCompleteSets(uint248 _universeId, address _account, uint256 _cashAmount) external payable;
 	function burnCompleteSets(uint248 _universeId, address _owner, uint256 _amount) external;
 	function burnTokenId(uint256 _tokenId, address _owner) external returns (uint256 balance);
-	function getUniverse(uint256 _tokenId) external pure returns(uint248);
-	function getOutcome(uint256 _tokenId) external pure returns(YesNoMarkets.Outcome);
 	function totalSupplyForOutcome(uint248 _universeId, YesNoMarkets.Outcome _outcome) external view returns (uint256);
 	function balanceOfOutcome(uint248 _universeId, YesNoMarkets.Outcome _outcome, address _account) external view returns (uint256);
 	function balanceOfShares(uint248 _universeId, address _account) external view returns (uint256[3] memory balances);

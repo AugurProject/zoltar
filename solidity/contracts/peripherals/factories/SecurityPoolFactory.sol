@@ -28,7 +28,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	event DeploySecurityPool(ISecurityPool securityPool, Auction truthAuction, PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer, IShareToken shareToken, ISecurityPool parent, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount);
 
 	constructor(ISecurityPoolForker _securityPoolForker, YesNoMarkets _yesNoMarkets, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, AuctionFactory _auctionFactory, PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory) {
-		securityPoolForker  = _securityPoolForker;
+		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
 		auctionFactory = _auctionFactory;
 		priceOracleManagerAndOperatorQueuerFactory = _priceOracleManagerAndOperatorQueuerFactory;

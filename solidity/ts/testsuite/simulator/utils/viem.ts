@@ -12,7 +12,6 @@ export const createReadClient = (ethereum: EIP1193Provider | undefined, cacheTim
 
 export const createWriteClient = (ethereum: EIP1193Provider | undefined, accountAddress: bigint, cacheTime: number = 10_000) => {
 	if (ethereum === undefined) throw new Error('no window.ethereum injected')
-	if (accountAddress === undefined) throw new Error('no accountAddress!')
 	return createWalletClient({ account: addressString(accountAddress), transport: custom(ethereum), cacheTime: cacheTime, chain: mainnet }).extend(publicActions)
 }
 
