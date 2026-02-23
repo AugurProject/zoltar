@@ -52,8 +52,8 @@ describe('Contract Test Suite', () => {
 
 		// do fork
 		await forkUniverse(client, genesisUniverse, marketText, outcomes)
-		const afterforkBalance = await getERC20Balance(client, genesisRepToken, client.account.address)
-		assert.strictEqual(afterforkBalance + totalTheoreticalSupply/20n, priorRepbalance, 'balance mismatch')
+		const afterForkBalance = await getERC20Balance(client, genesisRepToken, client.account.address)
+		assert.strictEqual(afterForkBalance + totalTheoreticalSupply/20n, priorRepbalance, 'balance mismatch')
 		const universeData = await getUniverseData(client, genesisUniverse)
 		assert.ok(universeData.forkTime > 0, 'Universe was supposed to be forked')
 		assert.strictEqual(universeData.parentUniverseId, 0n, 'Universe had parent')
@@ -76,7 +76,7 @@ describe('Contract Test Suite', () => {
 		for (const index of outcomeIndexes) {
 			const indexUniverse = getChildUniverseId(genesisUniverse, index)
 			const repForIndex = getRepTokenAddress(indexUniverse)
-			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ index } exist`);
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ index } exists`);
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, forkerDeposit)
 		}
@@ -84,17 +84,17 @@ describe('Contract Test Suite', () => {
 		// split rest of the rep
 		const splitOutcomeIndexes = [0n, 1n, 2n]
 		const priorBalances = await Promise.all(splitOutcomeIndexes.map(async (index) => {
-			const indiceUniverse = getChildUniverseId(genesisUniverse, index)
-			const repForIndex = getRepTokenAddress(indiceUniverse)
+			const indexUniverse = getChildUniverseId(genesisUniverse, index)
+			const repForIndex = getRepTokenAddress(indexUniverse)
 			return await contractExists(client, repForIndex) ? await getERC20Balance(client, repForIndex, client.account.address) : 0n
 		}))
 		const priorSplitBalance = await getERC20Balance(client, genesisRepToken, client.account.address)
 		await splitRep(client, genesisUniverse, splitOutcomeIndexes)
 		assert.strictEqual(await getERC20Balance(client, genesisRepToken, client.account.address), 0n, 'splitters rep should be gone')
 		for (const [index, outcomeIndex] of splitOutcomeIndexes.entries()) {
-			const indiceUniverse = getChildUniverseId(genesisUniverse, outcomeIndex)
-			const repForIndex = getRepTokenAddress(indiceUniverse)
-			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ outcomeIndex } exist`);
+			const indexUniverse = getChildUniverseId(genesisUniverse, outcomeIndex)
+			const repForIndex = getRepTokenAddress(indexUniverse)
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ outcomeIndex } exists`);
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, priorSplitBalance + priorBalances[index], 'after split balance mismatch')
 		}
