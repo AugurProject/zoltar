@@ -494,7 +494,7 @@ contract OpenOracle is ReentrancyGuard {
         if (reportId >= nextReportId) revert InvalidInput("report id");
         if (amount1 != meta.exactToken1Report) revert InvalidInput("token1 amount");
         if (amount2 == 0) revert InvalidInput("token2 amount");
-        if (extra.stateHash != stateHash) revert InvalidStateHash("state hash"); //TODO; commented as its bit hard for ethsimulate testsuite
+        if (extra.stateHash != stateHash) revert InvalidStateHash("state hash"); //TODO; commented as it's bit hard for ethsimulate testsuite
         if (reporter == address(0)) revert InvalidInput("reporter address");
 
         _transferTokens(meta.token1, msg.sender, address(this), amount1);

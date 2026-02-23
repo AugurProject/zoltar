@@ -15,7 +15,7 @@ import { YesNoMarkets } from './YesNoMarkets.sol';
 import { SecurityPoolForker } from './SecurityPoolForker.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
-uint256 constant TODO_INITIAL_ESCALATION_GAME_DEPOSIT = 1 ether; // todo, how to get this value?
+uint256 constant TODO_INITIAL_ESCALATION_GAME_DEPOSIT = 1 ether; // TODO, how to get this value?
 
 // Security pool for one question, one universe, one denomination (ETH)
 contract SecurityPool is ISecurityPool {
@@ -61,7 +61,7 @@ contract SecurityPool is ISecurityPool {
 	event PerformLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount, uint256 debtToMove, uint256 repToMove);
 	event RedeemRep(address caller, address vault, uint256 repAmount);
 
-	modifier isOperational { // todo, system can be operational if the fork has happened after this market has finalized
+	modifier isOperational { // TODO, system can be operational if the fork has happened after this market has finalized
 		require(zoltar.getForkTime(universeId) == 0, 'Zoltar has forked');
 		require(systemState == SystemState.Operational, 'System is not operational');
 		_;
@@ -148,7 +148,7 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[vault].unpaidEthFees = 0;
 		totalFeesOwedToVaults -= fees;
 		(bool sent, ) = payable(vault).call{ value: fees }('');
-		require(sent, 'Failed to send Ether');
+		require(sent, 'failed to send Ether');
 		emit RedeemFees(vault, fees);
 	}
 
@@ -200,7 +200,7 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 	// liquidating vault
 	////////////////////////////////////////
-	// TODO, currently liquidator can be blocked by someone by depositing rep to vault while the deposit is pending. We dont want to block depositReps for this duration thought as we want to allow people to participate escalation game using external rep. I feel after liquidation is triggered we should store a snapshot rep balance of the vault that is then used for liquidation calculations
+	// TODO, currently liquidator can be blocked by someone by depositing rep to vault while the deposit is pending. We don't want to block depositReps for this duration thought as we want to allow people to participate escalation game using external rep. I feel after liquidation is triggered we should store a snapshot rep balance of the vault that is then used for liquidation calculations
 	//price = (amount1 * PRICE_PRECISION) / amount2;
 	// price = REP * PRICE_PRECISION / ETH
 	// liquidation moves share of debt and rep to another pool which need to remain non-liquidable
@@ -211,7 +211,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 vaultsSecurityBondAllowance = securityVaults[targetVaultAddress].securityBondAllowance;
 		uint256 vaultsRepDeposit = poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership);
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
-		require(vaultsSecurityBondAllowance * securityMultiplier * repEthPrice > vaultsRepDeposit * SecurityPoolUtils.PRICE_PRECISION, 'vault need to be liquidable');
+		require(vaultsSecurityBondAllowance * securityMultiplier * repEthPrice > vaultsRepDeposit * SecurityPoolUtils.PRICE_PRECISION, 'vault needs to be liquidable');
 
 		uint256 debtToMove = debtAmount > securityVaults[targetVaultAddress].securityBondAllowance ? securityVaults[targetVaultAddress].securityBondAllowance : debtAmount;
 		require(debtToMove > 0, 'no debt to move');
@@ -223,7 +223,7 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[callerVault].securityBondAllowance += debtToMove;
 		securityVaults[callerVault].poolOwnership += ownershipToMove;
 
-		// target vault needs to be above tresholds after liquidation
+		// target vault needs to be above thresholds after liquidation
 		require(poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT || securityVaults[targetVaultAddress].poolOwnership == 0, 'target min deposit requirement');
 		require(securityVaults[targetVaultAddress].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT || securityVaults[targetVaultAddress].securityBondAllowance == 0, 'target min deposit requirement');
 		require(poolOwnershipToRep(securityVaults[callerVault].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT, 'caller min deposit requirement');
@@ -255,7 +255,7 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 	// Complete Sets
 	////////////////////////////////////////
-	function createCompleteSet() payable public isOperational { // todo, we want to be able to create complete sets in the children right away, figure accounting out
+	function createCompleteSet() payable public isOperational { // TODO, we want to be able to create complete sets in the children right away, figure accounting out
 		require(msg.value > 0, 'need to send eth');
 		updateCollateralAmount();
 		require(totalSecurityBondAllowance >= msg.value + completeSetCollateralAmount, 'no capacity to create that many sets');
@@ -267,7 +267,7 @@ contract SecurityPool is ISecurityPool {
 		updateRetentionRate();
 	}
 
-	function redeemCompleteSet(uint256 completeSetAmount) public isOperational { // todo, we want to allow people to exit, but for accounting purposes that is difficult but maybe there's a way?
+	function redeemCompleteSet(uint256 completeSetAmount) public isOperational { // TODO, we want to allow people to exit, but for accounting purposes that is difficult but maybe there's a way?
 		updateCollateralAmount();
 		// takes in complete set and releases security bond and eth
 		uint256 ethValue = sharesToCash(completeSetAmount);
@@ -276,7 +276,7 @@ contract SecurityPool is ISecurityPool {
 		completeSetCollateralAmount -= ethValue;
 		updateRetentionRate();
 		(bool sent, ) = payable(msg.sender).call{ value: ethValue }('');
-		require(sent, 'Failed to send Ether');
+		require(sent, 'failed to send Ether');
 	}
 
 	function redeemShares() isOperational external {
@@ -286,7 +286,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 amount = shareToken.burnTokenId(tokenId, msg.sender);
 		uint256 ethValue = sharesToCash(amount);
 		(bool sent, ) = payable(msg.sender).call{ value: ethValue }('');
-		require(sent, 'Failed to send Ether');
+		require(sent, 'failed to send Ether');
 		emit RedeemShares(msg.sender, amount, ethValue);
 	}
 
@@ -324,7 +324,7 @@ contract SecurityPool is ISecurityPool {
 		}
 	}
 
-	// todo, cleanup these only forker functions by minimizing amount and adding checks
+	// TODO, cleanup these only forker functions by minimizing amount and adding checks
 	function setSystemState(SystemState newState) external onlyForker {
 		systemState = newState;
 	}
@@ -370,20 +370,20 @@ contract SecurityPool is ISecurityPool {
 		totalSecurityBondAllowance = newTotalSecurityBondAllowance;
 	}
 
-	function stealAllRep() external onlyForker() {
+	function stealAllRep() external onlyForker {
 		repToken.transfer(msg.sender, repToken.balanceOf(address(this)));
 	}
 
-	function migrateEth(address payable receiver, uint256 amount) external onlyForker() {
+	function migrateEth(address payable receiver, uint256 amount) external onlyForker {
 		(bool sent, ) = receiver.call{ value: amount }('');
-		require(sent, 'Failed to steal ETH');
+		require(sent, 'failed to steal ETH');
 	}
-	function authorize(ISecurityPool pool) external onlyForker() {
+	function authorize(ISecurityPool pool) external onlyForker {
 		shareToken.authorize(pool);
 	}
 
 	receive() external payable {
 		// needed for Truth Auction to send ETH back
-		// TODO, add check that its truth auction sending
+		// TODO, add check that it's truth auction sending
 	}
 }

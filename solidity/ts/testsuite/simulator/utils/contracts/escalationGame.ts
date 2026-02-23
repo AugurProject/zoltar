@@ -3,7 +3,6 @@ import { peripherals_EscalationGame_EscalationGame, peripherals_factories_Escala
 import { AccountAddress, QuestionOutcome } from '../../types/types.js'
 import { ReadClient, WriteClient } from '../viem.js'
 import { getInfraContractAddresses } from './deployPeripherals.js'
-import { mainnet } from 'viem/chains'
 
 export const getNonDecisionThreshold = async (client: ReadClient, escalationGame: `0x${ string }`) => {
 	return await client.readContract({
@@ -52,7 +51,6 @@ export const getEscalationGameDeposits = async (readClient: ReadClient, escalati
 
 export const deployEscalationGame = async (writeClient: WriteClient, startBond: bigint, nonDecisionThreshold: bigint) => {
 	await writeClient.writeContract({
-		chain: mainnet,
 		abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
 		functionName: 'deployEscalationGame',
 		address: getInfraContractAddresses().escalationGameFactory,
@@ -90,7 +88,6 @@ export const getStartingTime = async (client: ReadClient, escalationGame: `0x${ 
 
 export const depositOnOutcome = async (writeClient: WriteClient, escalationGame: `0x${ string }`, depositor: `0x${ string }`, outcome: QuestionOutcome, amount: bigint) => {
 	await writeClient.writeContract({
-		chain: mainnet,
 		abi: peripherals_EscalationGame_EscalationGame.abi,
 		functionName: 'depositOnOutcome',
 		address: escalationGame,

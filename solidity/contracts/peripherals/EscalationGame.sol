@@ -80,7 +80,7 @@ contract EscalationGame {
 		return startBond * series / SCALE;
 	}
 
-	// todo investigate this function more for errors. This can result in weird errors where you fork just before/after escalation game end
+	// TODO investigate this function more for errors. This can result in weird errors where you fork just before/after escalation game end
 	function computeTimeSinceStartFromAttritionCost(uint256 attritionCost) public view returns (uint256) {
 		uint256 low = 0;
 		uint256 high = escalationTimeLength;
@@ -171,7 +171,7 @@ contract EscalationGame {
 		}
 	}
 
-	// todo, this should be calculated against to actual nonDecisionThreshold, not the one set at the start. The actual can be lower than the games treshold but never above
+	// TODO, this should be calculated against to actual nonDecisionThreshold, not the one set at the start. The actual can be lower than the games treshold but never above
 	function claimDepositForWinning(uint256 depositIndex, YesNoMarkets.Outcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
 		require(msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()), 'Only Security Pool can withdraw');
 		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
@@ -193,7 +193,7 @@ contract EscalationGame {
 		}
 	}
 
-	// todo, allow withdrawing after someones elses fork as well (game is canceled)
+	// TODO, allow withdrawing after someones elses fork as well (game is canceled)
 	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw) {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
@@ -203,7 +203,7 @@ contract EscalationGame {
 		emit WithdrawDeposit(depositor, marketResolution, amountToWithdraw, depositIndex);
 	}
 
-	// todo, for the UI, we probably want to retrieve multiple outcomes at once
+	// TODO, for the UI, we probably want to retrieve multiple outcomes at once
 	function getDepositsByOutcome(YesNoMarkets.Outcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (Deposit[] memory returnDeposits) {
 		returnDeposits = new Deposit[](numberOfEntries);
 		uint256 iterateUntil = startIndex + numberOfEntries > deposits[uint8(outcome)].length ? deposits[uint8(outcome)].length : startIndex + numberOfEntries;

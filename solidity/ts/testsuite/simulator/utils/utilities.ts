@@ -7,8 +7,6 @@ import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
 import { QuestionOutcome } from '../types/types.js'
-import { mainnet } from 'viem/chains'
-
 export const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
 
 export async function sleep(milliseconds: number) {
@@ -147,7 +145,6 @@ export const mintERC20 = async (mockWindowEthereum: MockWindowEthereum, erc20Add
 export const approveToken = async (client: WriteClient, tokenAddress: Address, spenderAddress: Address) => {
 	const amount = 1000000000000000000000000000000n
 	return await client.writeContract({
-		chain: mainnet,
 		abi: ABIS.mainnet.erc20,
 		functionName: 'approve',
 		address: tokenAddress,
@@ -157,7 +154,6 @@ export const approveToken = async (client: WriteClient, tokenAddress: Address, s
 
 export const setERC1155Approval = async (client: WriteClient, tokenAddress: Address, operatorAddress: Address, approved: boolean) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: ABIS.mainnet.erc1155,
 		functionName: 'setApprovalForAll',
 		address: tokenAddress,
@@ -185,7 +181,6 @@ export const getERC20Supply = async (client: ReadClient, tokenAddress: Address) 
 
 export const transferERC20 = async (client: WriteClient, tokenAddress: Address, to: Address, amount: bigint) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: ABIS.mainnet.erc20,
 		functionName: 'transfer',
 		address: tokenAddress,
@@ -195,7 +190,6 @@ export const transferERC20 = async (client: WriteClient, tokenAddress: Address, 
 
 export const transferERC1155 = async (client: WriteClient, tokenAddress: Address, from: Address, to: Address, id: bigint, amount: bigint) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: ABIS.mainnet.erc1155,
 		functionName: 'safeTransferFrom',
 		address: tokenAddress,
@@ -216,7 +210,7 @@ export const setupTestAccounts = async (mockWindowEthereum: MockWindowEthereum) 
 export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<void> {
 	const deployerBytecode = await client.getCode({ address: addressString(PROXY_DEPLOYER_ADDRESS)})
 	if (deployerBytecode === '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3') return
-	const ethSendHash = await client.sendTransaction({ to: '0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1', amount: 10000000000000000n, chain: mainnet })
+	const ethSendHash = await client.sendTransaction({ to: '0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1', amount: 10000000000000000n })
 	await client.waitForTransactionReceipt({ hash: ethSendHash })
 	const deployHash = await client.sendRawTransaction({ serializedTransaction: '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' })
 	await client.waitForTransactionReceipt({ hash: deployHash })

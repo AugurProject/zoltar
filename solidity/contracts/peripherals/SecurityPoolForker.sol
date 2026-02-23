@@ -11,6 +11,8 @@ import { YesNoMarkets } from './YesNoMarkets.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
+
+//todo, move mappings outside the struct
 struct ForkData {
 	uint256 repAtFork;
 	mapping(uint8 => ISecurityPool) children; // outcome -> children
@@ -104,7 +106,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		}
 	}
 
-	// todo, atm this needs to be called after migratevault
+	// TODO, atm this needs to be called after migratevault
 	function migrateFromEscalationGame(ISecurityPool parent, address vault, YesNoMarkets.Outcome outcomeIndex, uint8[] memory depositIndexes) public {
 		EscalationGame escalationGame = parent.escalationGame();
 		if (address(forkData[parent].children[uint8(outcomeIndex)]) == address(0x0)) createChildUniverse(parent, uint8(outcomeIndex));

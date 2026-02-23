@@ -26,7 +26,7 @@ contract Auction {
 		require(msg.value > 0, 'need to invest with eth!');
 		require(address(this).balance <= ethAmountToBuy, 'attempting to overfund');
 		require(totalRepPurchased + repToBuy <= repAvailable, 'attempt to buy too much rep');
-		purchasedRep[msg.sender] = repToBuy; // todo, currently anyone can buy with any price
+		purchasedRep[msg.sender] = repToBuy; // TODO, currently anyone can buy with any price
 		totalRepPurchased += repToBuy;
 		emit Participated(msg.sender, repToBuy, msg.value, totalRepPurchased);
 	}
@@ -45,6 +45,6 @@ contract Auction {
 		require(!finalized, 'Already finalized');
 		finalized = true;
 		(bool sent, ) = payable(receiver).call{value: address(this).balance}('');
-		require(sent, 'Failed to send Ether');
+		require(sent, 'failed to send Ether');
 	}
 }

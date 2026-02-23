@@ -1,4 +1,3 @@
-import { mainnet } from 'viem/chains'
 import { peripherals_SecurityPool_SecurityPool } from '../../../../types/contractArtifact.js'
 import { SystemState } from '../../types/peripheralTypes.js'
 import { QuestionOutcome } from '../../types/types.js'
@@ -6,7 +5,6 @@ import { ReadClient, WriteClient } from '../viem.js'
 
 export const depositToEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome, amount: bigint) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'depositToEscalationGame',
 		address: securityPoolAddress,
@@ -16,7 +14,6 @@ export const depositToEscalationGame = async (client: WriteClient, securityPoolA
 
 export const withdrawFromEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`, depositIndexes: bigint[]) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'withdrawFromEscalationGame',
 		address: securityPoolAddress,
@@ -26,7 +23,6 @@ export const withdrawFromEscalationGame = async (client: WriteClient, securityPo
 
 export const depositRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, amount: bigint) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'depositRep',
 		address: securityPoolAddress,
@@ -36,7 +32,6 @@ export const depositRep = async (client: WriteClient, securityPoolAddress: `0x${
 
 export const createCompleteSet = async (client: WriteClient, securityPoolAddress: `0x${ string }`, completeSetsToCreate: bigint) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'createCompleteSet',
 		address: securityPoolAddress,
@@ -47,7 +42,6 @@ export const createCompleteSet = async (client: WriteClient, securityPoolAddress
 
 export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress: `0x${ string }`, completeSetsToRedeem: bigint) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemCompleteSet',
 		address: securityPoolAddress,
@@ -139,7 +133,6 @@ export const repToPoolOwnership = async (client: ReadClient, securityPoolAddress
 
 export const redeemShares = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemShares',
 		address: securityPoolAddress,
@@ -185,12 +178,11 @@ export const getShareTokenSupply = async (client: ReadClient, securityPoolAddres
 }
 
 export const shareArrayToCash = async (client: ReadClient, securityPoolAddress: `0x${ string }`, shares: readonly bigint[]) => {
-	return await Promise.all(shares.map((shares) => sharesToCash(client, securityPoolAddress, shares)))
+	return await Promise.all(shares.map((share) => sharesToCash(client, securityPoolAddress, share)))
 }
 
 export const updateVaultFees = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'updateVaultFees',
 		address: securityPoolAddress,
@@ -200,7 +192,6 @@ export const updateVaultFees = async (client: WriteClient, securityPoolAddress: 
 
 export const redeemFees = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemFees',
 		address: securityPoolAddress,
@@ -210,7 +201,6 @@ export const redeemFees = async (client: WriteClient, securityPoolAddress: `0x${
 
 export const redeemRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemRep',
 		address: securityPoolAddress,

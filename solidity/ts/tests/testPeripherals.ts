@@ -15,7 +15,7 @@ import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '.
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkSecurityPool, getMarketOutcome, getMigratedRep, getSecurityPoolForkerForkData, migrateFromEscalationGame, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker.js'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
 import { getEscalationGameDeposits, getMarketResolution, getNonDecisionThreshold, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame.js'
-import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseForkData, getZoltarAddress, getZoltarforkThreshold  } from '../testsuite/simulator/utils/contracts/zoltar.js'
+import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseForkData, getZoltarAddress, getZoltarForkThreshold  } from '../testsuite/simulator/utils/contracts/zoltar.js'
 import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool.js'
 
 describe('Peripherals Contract Test Suite', () => {
@@ -213,7 +213,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const repBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 
 		// forking
-		const zoltarforkThreshold  = await getZoltarforkThreshold (client, genesisUniverse)
+		const zoltarforkThreshold  = await getZoltarForkThreshold (client, genesisUniverse)
 		const burnAmount = zoltarforkThreshold  / 5n
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		const forkerRepBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), getInfraContractAddresses().securityPoolForker)
@@ -262,7 +262,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 
-		const zoltarforkThreshold  = await getZoltarforkThreshold (client, genesisUniverse)
+		const zoltarforkThreshold  = await getZoltarForkThreshold (client, genesisUniverse)
 		const burnAmount = zoltarforkThreshold  / 5n
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold )
 
