@@ -427,14 +427,27 @@ contract DualCapBatchAuction {
 
 	function _update(uint256 nodeId) internal {
 		Node storage node = nodes[nodeId];
-		uint256 leftRep = node.left == 0 ? 0 : nodes[node.left].subtreeTotalRep;
-		uint256 rightRep = node.right == 0 ? 0 : nodes[node.right].subtreeTotalRep;
-		uint256 leftEth = node.left == 0 ? 0 : nodes[node.left].subtreeTotalEth;
-		uint256 rightEth = node.right == 0 ? 0 : nodes[node.right].subtreeTotalEth;
-		node.subtreeTotalRep = leftRep + rightRep + node.totalRepAtPrice;
-		node.subtreeTotalEth = leftEth + rightEth + node.totalEthAtPrice;
-		uint256 leftHeight = node.left == 0 ? 0 : nodes[node.left].height;
-		uint256 rightHeight = node.right == 0 ? 0 : nodes[node.right].height;
+		uint256 leftSubtreeRep;
+		uint256 leftSubtreeEth;
+		uint256 leftHeight;
+		if (node.left != 0) {
+			Node storage leftNode = nodes[node.left];
+			leftSubtreeRep = leftNode.subtreeTotalRep;
+			leftSubtreeEth = leftNode.subtreeTotalEth;
+			leftHeight = leftNode.height;
+		}
+		uint256 rightSubtreeRep;
+		uint256 rightSubtreeEth;
+		uint256 rightHeight;
+		if (node.right != 0) {
+			Node storage rightNode = nodes[node.right];
+			rightSubtreeRep = rightNode.subtreeTotalRep;
+			rightSubtreeEth = rightNode.subtreeTotalEth;
+			rightHeight = rightNode.height;
+		}
+
+		node.subtreeTotalRep = leftSubtreeRep + rightSubtreeRep + node.totalRepAtPrice;
+		node.subtreeTotalEth = leftSubtreeEth + rightSubtreeEth + node.totalEthAtPrice;
 		node.height = 1 + (leftHeight > rightHeight ? leftHeight : rightHeight);
 	}
 
