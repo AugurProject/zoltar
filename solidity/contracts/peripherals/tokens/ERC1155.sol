@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNICENSE
+// SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
 import { IERC1155 } from '../interfaces/IERC1155.sol';
@@ -16,7 +16,7 @@ contract ERC1155 is IERC1155 {
 	mapping (uint256 => mapping(address => uint256)) public _balances;
 
 	// Mapping from token ID to total supply
-	mapping (uint256 => uint256) public _supplys;
+	mapping (uint256 => uint256) public _supplies;
 
 	// Mapping from account to operator approvals
 	mapping (address => mapping(address => bool)) public _operatorApprovals;
@@ -38,7 +38,7 @@ contract ERC1155 is IERC1155 {
 	}
 
 	function totalSupply(uint256 id) public view returns (uint256) {
-		return _supplys[id];
+		return _supplies[id];
 	}
 
 	/**
@@ -222,7 +222,7 @@ contract ERC1155 is IERC1155 {
 		require(to != address(0), "ERC1155: mint to the zero address");
 
 		_balances[id][to] = _balances[id][to] + value;
-		_supplys[id] = _supplys[id] + value;
+		_supplies[id] = _supplies[id] + value;
 
 		emit TransferSingle(msg.sender, address(0), to, id, value);
 	}
@@ -239,7 +239,7 @@ contract ERC1155 is IERC1155 {
 
 		for (uint i = 0; i < ids.length; i++) {
 			_balances[ids[i]][to] = values[i] + _balances[ids[i]][to];
-			_supplys[ids[i]] = _supplys[ids[i]] + values[i];
+			_supplies[ids[i]] = _supplies[ids[i]] + values[i];
 		}
 
 		emit TransferBatch(msg.sender, address(0), to, ids, values);
@@ -255,7 +255,7 @@ contract ERC1155 is IERC1155 {
 		require(account != address(0), "ERC1155: attempting to burn tokens on zero account");
 
 		_balances[id][account] = _balances[id][account] - value;
-		_supplys[id] = _supplys[id] - value;
+		_supplies[id] = _supplies[id] - value;
 		emit TransferSingle(msg.sender, account, address(0), id, value);
 	}
 
@@ -271,7 +271,7 @@ contract ERC1155 is IERC1155 {
 
 		for (uint i = 0; i < ids.length; i++) {
 			_balances[ids[i]][account] = _balances[ids[i]][account] - values[i];
-			_supplys[ids[i]] = _supplys[ids[i]] - values[i];
+			_supplies[ids[i]] = _supplies[ids[i]] - values[i];
 		}
 
 		emit TransferBatch(msg.sender, account, address(0), ids, values);

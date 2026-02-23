@@ -188,7 +188,7 @@ export const appendTransaction = async (ethereumClientService: EthereumClientSer
 	return await createSimulationState(ethereumClientService, requestAbortController, simulationStateInput)
 }
 
-export const getNonceFixedSimulatedTransactions = async(ethereumClientService: EthereumClientService, requestAbortController: AbortController | undefined, simulatedTransactions: readonly SimulatedTransaction[]) => {
+export const getNonceFixedSimulatedTransactions = async (ethereumClientService: EthereumClientService, requestAbortController: AbortController | undefined, simulatedTransactions: readonly SimulatedTransaction[]) => {
 	const isFixableNonceError = (transaction: SimulatedTransaction) => {
 		return transaction.ethSimulateV1CallResult.status === 'failure'
 		&& transaction.ethSimulateV1CallResult.error.message === 'wrong transaction nonce' //TODO, change to error code

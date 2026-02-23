@@ -1,9 +1,9 @@
-import { ReputationToken_ReputationToken, Zoltar_Zoltar } from "../../../../types/contractArtifact.js"
-import { ReadClient, WriteClient } from "../viem.js"
-import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from "../constants.js"
-import { encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes } from "viem"
-import { addressString, bytes32String } from "../bigint.js"
-import { ensureProxyDeployerDeployed } from "../utilities.js"
+import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../../types/contractArtifact.js'
+import { ReadClient, WriteClient } from '../viem.js'
+import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants.js'
+import { encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes } from 'viem'
+import { addressString, bytes32String } from '../bigint.js'
+import { ensureProxyDeployerDeployed } from '../utilities.js'
 
 export function getZoltarAddress() {
 	const bytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.bytecode.object }`
@@ -121,3 +121,11 @@ export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
 	return getCreate2Address({ from: getZoltarAddress(), salt: bytes32String(universeId), bytecodeHash: keccak256(initCode) })
 }
 
+export const getZoltarForkThreshold = async (client: ReadClient, universeId: bigint) => {
+	return await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'getForkThreshold',
+		address: getZoltarAddress(),
+		args: [universeId]
+	})
+}

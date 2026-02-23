@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNICENSE
+// SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
 library SecurityPoolUtils {
@@ -26,7 +26,7 @@ library SecurityPoolUtils {
 		}
 	}
 
-	// starts from MAX_RETENTION_RATE, decrases linearly until RETENTION_RATE_DIP% utilization is hit and then caps to MIN_RETENTION_RATE
+	// starts from MAX_RETENTION_RATE, decreases linearly until RETENTION_RATE_DIP% utilization is hit and then caps to MIN_RETENTION_RATE
 	// TODO: research more on how this should work
 	function calculateRetentionRate(uint256 completeSetCollateralAmount, uint256 securityBondAllowance) external pure returns (uint256 z) {
 		if (securityBondAllowance == 0) return MAX_RETENTION_RATE;

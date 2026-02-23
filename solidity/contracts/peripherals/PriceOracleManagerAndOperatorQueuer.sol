@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNICENSE
+// SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
 import { IWeth9 } from './interfaces/IWeth9.sol';
@@ -37,7 +37,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 	OpenOracle public immutable openOracle;
 
 	event PriceReported(uint256 reportId, uint256 price);
-	event ExecutetedQueuedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
+	event ExecutedQueuedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
 
 	// operation queuing
 	uint256 public previousQueuedOperationId;
@@ -58,15 +58,15 @@ contract PriceOracleManagerAndOperatorQueuer {
 		lastPrice = _lastPrice;
 	}
 
-	function getRequestPriceEthCost() public view returns (uint256) {// todo, probably something else
+	function getRequestPriceEthCost() public view returns (uint256) {// TODO, probably something else
 		// https://github.com/j0i0m0b0o/openOracleBase/blob/feeTokenChange/src/OpenOracle.sol#L100
-		uint256 ethCost = block.basefee * 4 * (gasConsumedSettlement + gasConsumedOpenOracleReportPrice); // todo, probably something else
+		uint256 ethCost = block.basefee * 4 * (gasConsumedSettlement + gasConsumedOpenOracleReportPrice); // TODO, probably something else
 		return ethCost;
 	}
 	function requestPrice() public payable {
 		require(pendingReportId == 0, 'Already pending request');
 		// https://github.com/j0i0m0b0o/openOracleBase/blob/feeTokenChange/src/OpenOracle.sol#L100
-		uint256 ethCost = getRequestPriceEthCost();// todo, probably something else
+		uint256 ethCost = getRequestPriceEthCost();// TODO, probably something else
 		require(msg.value >= ethCost, 'not big enough eth bounty');
 
 		// TODO, research more on how to set these params
@@ -100,7 +100,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 		lastSettlementTimestamp = block.timestamp;
 		lastPrice = price;
 		emit PriceReported(reportId, lastPrice);
-		if (queuedPendingOperationId != 0) { // todo we maybe should allow executing couple operations?
+		if (queuedPendingOperationId != 0) { // TODO we maybe should allow executing couple operations?
 			executeQueuedOperation(queuedPendingOperationId);
 			queuedPendingOperationId = 0;
 		}
@@ -125,32 +125,42 @@ contract PriceOracleManagerAndOperatorQueuer {
 			queuedPendingOperationId = previousQueuedOperationId;
 			requestPrice();
 		}
+		// send rest of the eth back
+		(bool sent, ) = payable(msg.sender).call{ value: address(this).balance }('');
+		require(sent, 'failed to return eth');
 	}
 
 	function executeQueuedOperation(uint256 operationId) public {
 		require(queuedOperations[operationId].amount > 0, 'no such operation or already executed');
 		require(isPriceValid(), 'price is not valid to execute');
-		// todo, we should allow these operations here to fail, but solidity try catch doesnt work inside the same contract
+		uint256 amount = queuedOperations[operationId].amount;
+		queuedOperations[operationId].amount = 0;
+		// TODO, we should allow these operations here to fail, but solidity try catch doesn't work inside the same contract
 		if (queuedOperations[operationId].operation == OperationType.Liquidation) {
-			try securityPool.performLiquidation(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].targetVault, queuedOperations[operationId].amount) {
-				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
+			try securityPool.performLiquidation(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].targetVault, amount) {
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
-				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+			} catch {
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		} else if(queuedOperations[operationId].operation == OperationType.WithdrawRep) {
-			try securityPool.performWithdrawRep(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].amount) {
-				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
+			try securityPool.performWithdrawRep(queuedOperations[operationId].initiatorVault, amount) {
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
-				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+			} catch {
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		} else {
-			try securityPool.performSetSecurityBondsAllowance(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].amount) {
-				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
+			try securityPool.performSetSecurityBondsAllowance(queuedOperations[operationId].initiatorVault, amount) {
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
-				emit ExecutetedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+			} catch {
+				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		}
-		queuedOperations[operationId].amount = 0;
 	}
 
 	function getQueuedOperation() public view returns (QueuedOperation memory) {

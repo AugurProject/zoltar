@@ -34,3 +34,5 @@ type Split<T> = { [K in keyof T]: { [P in K]: T[P] } }[keyof T] | Record<Propert
 export function modifyObject<T extends object>(original: T, subObject: NoInfer<Split<T>>): T {
 	return {...original, ...subObject }
 }
+
+export const objectEntries = <T extends object>(obj: T) => Object.entries(obj) as [string, T[keyof T & string]][]

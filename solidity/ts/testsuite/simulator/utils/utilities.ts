@@ -1,17 +1,13 @@
 import 'viem/window'
-import { getContractAddress, numberToBytes, encodeAbiParameters, keccak256, encodeDeployData, getCreate2Address } from 'viem'
-import { mainnet } from 'viem/chains'
+import { encodeAbiParameters, keccak256 } from 'viem'
 import { ReadClient, WriteClient } from './viem.js'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants.js'
-import { abs, addressString, bytes32String } from './bigint.js'
+import { addressString } from './bigint.js'
 import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
-import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../types/types.js'
-import assert from 'node:assert'
-
-export const initialTokenBalance = 1000000n * 10n**18n
+export const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
 
 export async function sleep(milliseconds: number) {
 	await new Promise(resolve => setTimeout(resolve, milliseconds))
@@ -149,7 +145,6 @@ export const mintERC20 = async (mockWindowEthereum: MockWindowEthereum, erc20Add
 export const approveToken = async (client: WriteClient, tokenAddress: Address, spenderAddress: Address) => {
 	const amount = 1000000000000000000000000000000n
 	return await client.writeContract({
-		chain: mainnet,
 		abi: ABIS.mainnet.erc20,
 		functionName: 'approve',
 		address: tokenAddress,
@@ -159,7 +154,6 @@ export const approveToken = async (client: WriteClient, tokenAddress: Address, s
 
 export const setERC1155Approval = async (client: WriteClient, tokenAddress: Address, operatorAddress: Address, approved: boolean) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: ABIS.mainnet.erc1155,
 		functionName: 'setApprovalForAll',
 		address: tokenAddress,
@@ -187,7 +181,6 @@ export const getERC20Supply = async (client: ReadClient, tokenAddress: Address) 
 
 export const transferERC20 = async (client: WriteClient, tokenAddress: Address, to: Address, amount: bigint) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: ABIS.mainnet.erc20,
 		functionName: 'transfer',
 		address: tokenAddress,
@@ -197,7 +190,6 @@ export const transferERC20 = async (client: WriteClient, tokenAddress: Address, 
 
 export const transferERC1155 = async (client: WriteClient, tokenAddress: Address, from: Address, to: Address, id: bigint, amount: bigint) => {
 	return await client.writeContract({
-		chain: mainnet,
 		abi: ABIS.mainnet.erc1155,
 		functionName: 'safeTransferFrom',
 		address: tokenAddress,
@@ -210,9 +202,7 @@ export const getETHBalance = async (client: ReadClient, address: Address) => {
 }
 
 export const setupTestAccounts = async (mockWindowEthereum: MockWindowEthereum) => {
-	const accountValues = TEST_ADDRESSES.map((address) => {
-		return { address: addressString(address), amount: initialTokenBalance}
-	})
+	const accountValues = TEST_ADDRESSES.map((address) => ({ address: addressString(address), amount: TOKEN_AMOUNT_TO_MINT}))
 	await mintETH(mockWindowEthereum, accountValues)
 	await mintERC20(mockWindowEthereum, addressString(GENESIS_REPUTATION_TOKEN), accountValues, 1n)
 }
@@ -226,163 +216,11 @@ export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<
 	await client.waitForTransactionReceipt({ hash: deployHash })
 }
 
-export function getZoltarAddress() {
-	const bytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.bytecode.object }`
-	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
-}
-
-export const isZoltarDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.deployedBytecode.object }`
-	const address = getZoltarAddress()
-	const deployedBytecode = await client.getCode({ address })
-	return deployedBytecode === expectedDeployedBytecode
-}
-
-export const deployZoltarTransaction = () => {
-	const bytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.bytecode.object }`
-	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
-}
-
-export const ensureZoltarDeployed = async (client: WriteClient) => {
-	await ensureProxyDeployerDeployed(client)
-	if (await isZoltarDeployed(client)) return
-	const hash = await client.sendTransaction(deployZoltarTransaction())
-	await client.waitForTransactionReceipt({ hash })
-}
-
-export const getUniverseData = async (client: ReadClient, universeId: bigint) => {
-	const universeData = await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'universes',
-		address: getZoltarAddress(),
-		args: [universeId]
-	})
-	const [reputationToken, forkingQuestion, forkTime] = universeData
-	return { reputationToken, forkingQuestion, forkTime }
-}
-
-export const createQuestion = async (client: WriteClient, universe: bigint, endTime: bigint, extraInfo: string) => {
-	return await client.writeContract({
-		chain: mainnet,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'createQuestion',
-		address: getZoltarAddress(),
-		args: [universe, endTime, client.account.address, extraInfo]
-	})
-}
-
-export const getQuestionData = async (client: ReadClient, questionId: bigint) => {
-	const questionData =  await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'questions',
-		address: getZoltarAddress(),
-		args: [questionId]
-	})
-	const [endTime, originUniverse, designatedReporter, extraInfo] = questionData
-
-	return {
-		endTime,
-		originUniverse,
-		designatedReporter,
-		extraInfo
-	}
-}
-
-export const reportOutcome = async (client: WriteClient, universe: bigint, question: bigint, outcome: QuestionOutcome) => {
-	return await client.writeContract({
-		chain: mainnet,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'reportOutcome',
-		address: getZoltarAddress(),
-		args: [universe, question, Number(outcome)]
-	})
-}
-
-export const finalizeQuestion = async (client: WriteClient, universe: bigint, question: bigint) => {
-	return await client.writeContract({
-		chain: mainnet,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'finalizeQuestion',
-		address: getZoltarAddress(),
-		args: [universe, question]
-	})
-}
-
-export const dispute = async (client: WriteClient, universe: bigint, question: bigint, outcome: QuestionOutcome) => {
-	return await client.writeContract({
-		chain: mainnet,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'dispute',
-		address: getZoltarAddress(),
-		args: [universe, question, Number(outcome)]
-	})
-}
-
-export const splitRep = async (client: WriteClient, universe: bigint) => {
-	return await client.writeContract({
-		chain: mainnet,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'splitRep',
-		address: getZoltarAddress(),
-		args: [universe]
-	})
-}
-
-export const splitStakedRep = async (client: WriteClient, universe: bigint, question: bigint) => {
-	return await client.writeContract({
-		chain: mainnet,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'splitStakedRep',
-		address: getZoltarAddress(),
-		args: [universe, question]
-	})
-}
-
-export const isFinalized = async (client: ReadClient, universe: bigint, questionId: bigint) => {
-	return await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'isFinalized',
-		address: getZoltarAddress(),
-		args: [universe, questionId]
-	})
-}
-
-export const getWinningOutcome = async (client: ReadClient, universe: bigint, questionId: bigint): Promise<QuestionOutcome> => {
-	return await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'getWinningOutcome',
-		address: getZoltarAddress(),
-		args: [universe, questionId]
-	})
-}
-
-export const getReportBond = async (client: ReadClient) => {
-	return await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'REP_BOND',
-		address: getZoltarAddress(),
-		args: []
-	})
-}
-
-export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint | QuestionOutcome): bigint {
-	return (parentUniverseId << 2n) + BigInt(outcome) + 1n
-}
-
-export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
-	if (universeId === 0n) return addressString(GENESIS_REPUTATION_TOKEN)
-	const initCode = encodeDeployData({
-		abi: ReputationToken_ReputationToken.abi,
-		bytecode: `0x${ ReputationToken_ReputationToken.evm.bytecode.object }`,
-		args: [getZoltarAddress()]
-	})
-	return getCreate2Address({ from: getZoltarAddress(), salt: bytes32String(universeId), bytecodeHash: keccak256(initCode) })
-}
-
 export const contractExists = async (client: ReadClient, contract: `0x${ string }`) => await client.getCode({ address: contract }) !== undefined
 
-export const approximatelyEqual = (actual: bigint, expected: bigint, errorDelta: bigint, message?: string | Error | undefined) => {
-	if (abs(actual - expected) > errorDelta) assert.strictEqual(actual, expected, message)
-}
+export const isUnknownAddress = (maybeAddress: unknown): maybeAddress is `0x${ string }` => typeof maybeAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(maybeAddress)
 
-export const isUnknownAnAddress = (maybeAddress: unknown): maybeAddress is `0x${ string }` => typeof maybeAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(maybeAddress)
+const uint248BitMask = (1n << 248n) - 1n
+export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint | QuestionOutcome): bigint {
+	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint8' }], [parentUniverseId, Number(outcome)]))) & uint248BitMask
+}
