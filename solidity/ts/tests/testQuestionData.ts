@@ -1,21 +1,12 @@
-import { describe } from 'node:test'
-import { getCreate2Address, keccak256, toHex } from 'viem'
-
-export const getScalarTradingAddress = () => getCreate2Address({ bytecode: `0x${ scalar trading.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
-
-export const applyLibraries = (bytecode: string): `0x${ string }` => {
-	const scalarTrading = keccak256(toHex('contracts/ScalarTrading.sol:ScalarTrading')).slice(2, 36)
-	const replaceLib = (bytecode: string, hash: string, replaceWithAddress: `0x${ string }`) => bytecode.replaceAll(`__$${ hash }$__`, replaceWithAddress.slice(2).toLocaleLowerCase())
-	return `0x${ replaceLib(bytecode, scalarTrading, getScalarTradingAddress()) }`
-}
-
-export const getSecurityPoolForkerByteCode = (zoltar: `0x${ string }`) => {
-	return encodeDeployDate({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		bytecode: applyLibraries(peripherals_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),
-		args: [ zoltar ]
-	})
-}
+import test, { beforeEach, describe } from 'node:test'
+import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
+import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
+import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
+import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
+import { setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
+import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
 
 describe('Question Data', () => {
 	let mockWindow: MockWindowEthereum
@@ -27,6 +18,8 @@ describe('Question Data', () => {
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		//await mockWindow.setStartBLock(mockWindow.getTime)
 		await setupTestAccounts(mockWindow)
+		await ensureZoltarDeployed(client)
+		await ensureInfraDeployed(client)
 	})
 
 	test('can make categorical question', async () => {

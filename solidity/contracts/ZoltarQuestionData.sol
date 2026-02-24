@@ -10,24 +10,25 @@ contract ZoltarQuestionData {
 		uint256 startTime;
 		uint256 endTime;
 		uint256 numTicks;
-		string[] outcomeLabels; // TODO, do we need to cap this somehow?
 		int256 displayValueMin;
 		int256 displayValueMax;
 		string answerUnit;
 	}
 
-	mapping(uint256 => uint256) questionCreatedTimestamp;
-	mapping(uint256 => QuestionData) questions;
+	mapping(uint256 => uint256) public questionCreatedTimestamp;
+	mapping(uint256 => string[]) public outcomeLabels;
+	mapping(uint256 => QuestionData) public questions;
 
 	function getQuestionId(QuestionData memory questionData) public pure returns (uint256) {
 		return uint256(keccak256(abi.encode(questionData)));
 	}
 
-	function createQuestion(QuestionData memory questionData) external returns (uint256) {
+	function createQuestion(QuestionData memory questionData, string [] calldata outcomeOptions) external returns (uint256) {
 		uint256 questionId = getQuestionId(questionData);
 		require(questionCreatedTimestamp[questionId] == 0, 'Market already exists');
 		questions[questionId] = questionData;
 		questionCreatedTimestamp[questionId] = block.timestamp;
+		outcomeLabels[questionId] = outcomeOptions; // TODO, we could check that these are unique (assume sorted) and non empty?
 		return questionId;
 	}
 
@@ -44,8 +45,16 @@ contract ZoltarQuestionData {
 		secondPart = uint120(value & ((1 << 120) - 1));
 	}
 
+	function getOutcomeLabels(uint256 questionId, uint256 startIndex, uint256 numberOfEntries) external view returns (string[] memory returnOutcomeLabels) {
+		returnOutcomeLabels = new string[](numberOfEntries);
+		uint256 iterateUntil = startIndex + numberOfEntries > outcomeLabels[questionId].length ? outcomeLabels[questionId].length : startIndex + numberOfEntries;
+		for (uint256 i = startIndex; i < iterateUntil; i++) {
+			returnOutcomeLabels[i - startIndex] = outcomeLabels[questionId][i];
+		}
+	}
+
 	function isValidAnswerOption(uint256 questionId, uint256 answer) external view returns (bool) {
-		if (questions[questionId].outcomeLabels.length == 0) { // scalar
+		if (outcomeLabels[questionId].length == 0) { // scalar
 			(bool invalid, uint120 firstPart, uint120 secondPart) = splitUint256IntoTwoWithInvalid(answer);
 			if (invalid) {
 				if (firstPart == 0 && secondPart == 0) return true;
@@ -54,14 +63,14 @@ contract ZoltarQuestionData {
 			return firstPart + secondPart == questions[questionId].numTicks;
 		}
 		if (answer == 0) return true;
-		if (answer < questions[questionId].outcomeLabels.length + 1) { // categorical
+		if (answer < outcomeLabels[questionId].length + 1) { // categorical
 			return true;
 		}
 		return false;
 	}
 
 	function getAnswerOptionName(uint256 questionId, uint256 answer) external view returns (string memory) {
-		if (questions[questionId].outcomeLabels.length == 0) { // scalar
+		if (outcomeLabels[questionId].length == 0) { // scalar
 			(bool invalid, uint120 firstPart, uint120 secondPart) = splitUint256IntoTwoWithInvalid(answer);
 			if (invalid) {
 				if (firstPart == 0 && secondPart == 0) return 'Invalid';
@@ -72,8 +81,8 @@ contract ZoltarQuestionData {
 			}
 		}
 		else if (answer == 0) return 'Invalid';
-		else if (answer < questions[questionId].outcomeLabels.length + 1) { // categorical
-			return questions[questionId].outcomeLabels[answer - 1];
+		else if (answer < outcomeLabels[questionId].length + 1) { // categorical
+			return outcomeLabels[questionId][answer - 1];
 		}
 		return 'Malformed';
 	}

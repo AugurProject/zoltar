@@ -54,7 +54,7 @@ contract DualCapBatchAuction {
 	event SubmitBid(address bidder, int256 tick, uint256 amount);
 	event Finalized(uint256 ethToSend, bool priceFound, int256 foundTick, uint256 repAbove, uint256 ethAbove);
 	event WithdrawBids(address withdrawFor, TickIndex[] tickIndice, uint256 totalFilledRep, uint256 totalEthRefund);
-	event RefundLosingBid(address bidder, TickIndex[] tickIndice, uint256 ethAmount);
+	event RefundLosingBids(address bidder, TickIndex[] tickIndice, uint256 ethAmount);
 
 	uint256 internal constant FIXED_POINT_SCALING_FACTOR = 1e18;
 
@@ -342,7 +342,7 @@ contract DualCapBatchAuction {
 	}
 
 	// user can withdraw bid only if the auction is fully funded and they are below clearing
-	function refundLosingBid(TickIndex[] memory tickIndice) external {
+	function refundLosingBids(TickIndex[] memory tickIndice) external {
 		require(!finalized, 'already finalized');
 
 		uint256 ethAmount;
@@ -372,7 +372,7 @@ contract DualCapBatchAuction {
 
 		(bool sent,) = payable(msg.sender).call{value: ethAmount}('');
 		require(sent, 'transfer failed');
-		emit RefundLosingBid(msg.sender, tickIndice, ethAmount);
+		emit RefundLosingBids(msg.sender, tickIndice, ethAmount);
 	}
 
 	function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {

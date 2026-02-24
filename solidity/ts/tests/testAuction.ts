@@ -1,13 +1,16 @@
 import test, { beforeEach, describe } from 'node:test'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
-import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { Address } from 'viem'
-import { computeClearing, finalize, getWithdrawRepAmount, isFinalized, setOwner, startAuction, submitBid, withdrawBids, withdrawEth, withdrawRep } from '../testsuite/simulator/utils/contracts/auction.js'
+import { PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
+import { contractExists, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+import { Address, getCreate2Address, numberToBytes } from 'viem'
+import { computeClearing, finalize, isFinalized, setOwner, startAuction, submitBid, withdrawBids } from '../testsuite/simulator/utils/contracts/auction.js'
 import { strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
 import { priceToClosestTick } from '../testsuite/simulator/utils/tickMath.js'
 import assert from 'assert'
+import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
+import { ensureInfraDeployed, getDualCapBatchAuctionByteCode } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
+import { addressString } from '../testsuite/simulator/utils/bigint.js'
 
 describe('Auction', () => {
 	let mockWindow: MockWindowEthereum
@@ -20,8 +23,12 @@ describe('Auction', () => {
 		//mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
-		auctionAddress = await deployAuction()
-		await setOwner(auctionAddress, TEST_ADDRESSES[0])
+		await ensureZoltarDeployed(client)
+		await ensureInfraDeployed(client)
+		await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: getDualCapBatchAuctionByteCode() })
+		auctionAddress = getCreate2Address({ bytecode: getDualCapBatchAuctionByteCode(), from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
+		assert.ok(await contractExists(client, auctionAddress), 'auction exists')
+		await setOwner(client, auctionAddress, addressString(TEST_ADDRESSES[0]))
 	})
 
 	test('can start auction and make a single bid that finalizes', async () => {
@@ -338,4 +345,63 @@ describe('Auction', () => {
 	// add test where auction is underfunded
 	// add test where the auction is needing to buy only very tiny amounts
 	// add test where rep/eth amounts are in very different scale
+
+	/*
+	// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "forge-std/Test.sol";
+import "../src/DualCapBatchAuction.sol";
+
+contract DualCapBatchAuctionTest is Test {
+	DualCapBatchAuction auction;
+
+	address owner = address(1);
+	address bidderA = address(2);
+	address bidderB = address(3);
+	address tinyLoser = address(4);
+
+	function setUp() public {
+		vm.deal(owner, 100 ether);
+		vm.deal(bidderA, 100 ether);
+		vm.deal(bidderB, 100 ether);
+		vm.deal(tinyLoser, 100 ether);
+
+		vm.prank(owner);
+		auction = new DualCapBatchAuction();
+
+		vm.prank(owner);
+		auction.startAuction(10 ether, 10 ether);
+	}
+
+	function test_TinyLosingBidBreaksClearingEquality() public {
+		// High price bid
+		vm.prank(bidderA);
+		auction.submitBid{ value: 8 ether }(1000);
+
+		// Slightly lower price bid
+		vm.prank(bidderB);
+		auction.submitBid{ value: 2 ether }(900);
+
+		// Now ETH cap exactly reached
+		(bool priceFoundBefore, int256 foundTickBefore,,) = auction.computeClearing();
+		assertTrue(priceFoundBefore);
+
+		// Add tiny losing bid below clearing
+		vm.prank(tinyLoser);
+		auction.submitBid{ value: 1 wei }(800);
+
+		// Ensure it's below clearing
+		assertLt(800, foundTickBefore);
+
+		// Now removing the tiny bid can make clearing disappear
+		// because accumulated totals fall slightly below ETH cap
+
+		vm.prank(tinyLoser);
+
+		vm.expectRevert("clearing changed");
+		auction.refundLosingBid(800, 0);
+	}
+}
+	*/
 })

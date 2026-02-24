@@ -1,9 +1,10 @@
+import { peripherals_DualCapBatchAuction_DualCapBatchAuction } from '../../../../types/contractArtifact.js'
 import { ReadClient, WriteClient } from '../viem.js'
 
 
 export const startAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, ethRaiseCap: bigint, maxRepBeingSold: bigint) => {
 	return await client.writeContract({
-		abi:
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
 		functionName: 'startAuction',
 		address: auctionAddress,
 		args: [ethRaiseCap, maxRepBeingSold],
@@ -12,17 +13,17 @@ export const startAuction = async (client: WriteClient, auctionAddress: `0x${ st
 
 export const submitBid = async (client: WriteClient, auctionAddress: `0x${ string }`, tick: bigint, ethAmount: bigint) => {
 	return await client.writeContract({
-		abi:
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
 		functionName: 'submitBid',
 		address: auctionAddress,
 		args: [tick],
-		amount: ethAmount,
+		value: ethAmount,
 	})
 }
 
 export const finalize = async (client: WriteClient, auctionAddress: `0x${ string }`) => {
 	return await client.writeContract({
-		abi:
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
 		functionName: 'finalize',
 		address: auctionAddress,
 		args: [],
@@ -30,8 +31,8 @@ export const finalize = async (client: WriteClient, auctionAddress: `0x${ string
 }
 
 export const computeClearing = async (client: ReadClient, auctionAddress: `0x${ string }`) => {
-	[priceFound, foundTick, repAbove, ethAbove] = await client.readContract({
-		abi: ,
+	const [priceFound, foundTick, repAbove, ethAbove] = await client.readContract({
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
 		functionName: 'computeClearing',
 		address: auctionAddress,
 		args: [],
@@ -39,36 +40,36 @@ export const computeClearing = async (client: ReadClient, auctionAddress: `0x${ 
 	return { priceFound, foundTick, repAbove, ethAbove }
 }
 
-export const refundLosingBid = async (client: WriteClient, auctionAddress: `0x${ string }`, tick: bigint, index: bigint) => {
+export const refundLosingBids = async (client: WriteClient, auctionAddress: `0x${ string }`, tickIndex: { tick: bigint, index: bigint }[]) => {
 	return await client.writeContract({
-		abi:
-		functionName: 'refundLosingBid',
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+		functionName: 'refundLosingBids',
 		address: auctionAddress,
-		args: [tick, index],
+		args: [tickIndex],
 	})
 }
 
-export const withdrawBids = async (client: WriteClient, auctionAddress: `0x${ string }`, withdrawFor: `0x${ string }`, tick: bigint, bidIndices: bigint[]) => {
+export const withdrawBids = async (client: WriteClient, auctionAddress: `0x${ string }`, withdrawFor: `0x${ string }`, tickIndex: { tick: bigint, index: bigint }[]) => {
 	return await client.writeContract({
-		abi:
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
 		functionName: 'withdrawBids',
 		address: auctionAddress,
-		args: [withdrawFor, tick, bidIndices],
+		args: [withdrawFor, tickIndex],
 	})
 }
 
-export const getWithdrawRepAndEthAmount = async (client: WriteClient, auctionAddress: `0x${ string }`, withdrawFor: `0x${ string }`, tick: bigint, bidIndices: bigint[]) => {
-	return await client.readContract({
-		abi:
+export const getWithdrawRepAndEthAmount = async (client: WriteClient, auctionAddress: `0x${ string }`, withdrawFor: `0x${ string }`, tickIndex: { tick: bigint, index: bigint }[]) => {
+	return await client.simulateContract({
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
 		functionName: 'withdrawBids',
 		address: auctionAddress,
-		args: [withdrawFor, tick, bidIndices],
+		args: [withdrawFor, tickIndex],
 	})
 }
 
-export const isFinalized = async (client: ReadClient, auctionAddress: `0x${ string }`) {
+export const isFinalized = async (client: ReadClient, auctionAddress: `0x${ string }`) => {
 	return await client.readContract({
-		abi: ,
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
 		functionName: 'finalized',
 		address: auctionAddress,
 		args: [],
@@ -77,7 +78,7 @@ export const isFinalized = async (client: ReadClient, auctionAddress: `0x${ stri
 
 export const setOwner = async (client: WriteClient, auctionAddress: `0x${ string }`, owner: `0x${ string }`) => {
 	return await client.writeContract({
-		abi:
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
 		functionName: 'setOwner',
 		address: auctionAddress,
 		args: [owner],
