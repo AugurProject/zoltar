@@ -61,26 +61,26 @@ contract DualCapBatchAuction {
 	uint256 internal constant FIXED_POINT_SCALING_FACTOR = 1e18;
 
 	function powerOf1_0001(uint8 index) internal pure returns (uint256) {
-		if (index == 0) return 1000100000000000000;
-		if (index == 1) return 1000200010000000000;
-		if (index == 2) return 1000400060004000100;
-		if (index == 3) return 1000800280056007000;
-		if (index == 4) return 1001601200560182043;
-		if (index == 5) return 1003204964963598014;
-		if (index == 6) return 1006420201727613920;
-		if (index == 7) return 1012881622445451097;
-		if (index == 8) return 1025929181087729343;
-		if (index == 9) return 1052530684607338948;
-		if (index == 10) return 1107820842039993613;
-		if (index == 11) return 1227267018058200482;
-		if (index == 12) return 1506184333613467388;
-		if (index == 13) return 2268591246822644826;
-		if (index == 14) return 5146506245160322222;
-		if (index == 15) return 26486526531474198664;
-		if (index == 16) return 701536087702486644953;
-		if (index == 17) return 492152882348911033633683;
-		if (index == 18) return 242214459604341065650571799093;
-		if (index == 19) return 58667844441422969901301586347865591163491;
+		if (index == 0) return 1000100000000000000; // 1.0001^1
+		if (index == 1) return 1000200010000000000; // 1.0001^2
+		if (index == 2) return 1000400060004000100; // 1.0001^4
+		if (index == 3) return 1000800280056007000; // 1.0001^8
+		if (index == 4) return 1001601200560182043; // 1.0001^16
+		if (index == 5) return 1003204964963598014; // 1.0001^32
+		if (index == 6) return 1006420201727613920; // 1.0001^64
+		if (index == 7) return 1012881622445451097; // 1.0001^128
+		if (index == 8) return 1025929181087729343; // 1.0001^256
+		if (index == 9) return 1052530684607338948; // 1.0001^512
+		if (index == 10) return 1107820842039993613; // 1.0001^1024
+		if (index == 11) return 1227267018058200482; // 1.0001^2048
+		if (index == 12) return 1506184333613467388; // 1.0001^4096
+		if (index == 13) return 2268591246822644826; // 1.0001^8192
+		if (index == 14) return 5146506245160322222; // 1.0001^16384
+		if (index == 15) return 26486526531474198664; // 1.0001^32768
+		if (index == 16) return 701536087702486644953; // 1.0001^65536
+		if (index == 17) return 492152882348911033633683; // 1.0001^131072
+		if (index == 18) return 242214459604341065650571799093; // 1.0001^262144
+		if (index == 19) return 58667844441422969901301586347865591163491; // 1.0001^524288
 		revert('Index out of bounds');
 	}
 

@@ -8,6 +8,8 @@ import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/depl
 import assert from 'node:assert'
 import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isValidAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData.js'
 import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays.js'
+import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
+import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
 
 describe('Question Data', () => {
 	let mockWindow: MockWindowEthereum
@@ -15,6 +17,7 @@ describe('Question Data', () => {
 
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
+		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(1n, 1n, 2n)))
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		//await mockWindow.setStartBLock(mockWindow.getTime)
 		await setupTestAccounts(mockWindow)

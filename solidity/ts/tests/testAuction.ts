@@ -10,8 +10,9 @@ import { priceToClosestTick, tickToPrice } from '../testsuite/simulator/utils/ti
 import assert from 'assert'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
-import { getDualCapBatchAuctionAddress } from '../testsuite/simulator/utils/contracts/deployments.js'
+import { getDeployments, getDualCapBatchAuctionAddress } from '../testsuite/simulator/utils/contracts/deployments.js'
 import { addressString } from '../testsuite/simulator/utils/bigint.js'
+import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
 
 describe('Auction', () => {
 	let mockWindow: MockWindowEthereum
@@ -21,7 +22,7 @@ describe('Auction', () => {
 
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
-		//mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
+		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(1n, 1n, 2n)))
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
@@ -192,7 +193,7 @@ describe('Auction', () => {
 
 		await finalize(client, auctionAddress)
 		const amounts = await getWithdrawRepAndEthAmount(client, auctionAddress, bob.account.address, [{ tick: price2Tick, bidIndex: 0n }])
-		strictEqualTypeSafe(amounts.totalEthRefund, maxRepBeingSold * PRICE_PRECISION / tickToPrice(clearing.foundTick), 'eth match') //1:1 price
+		strictEqualTypeSafe(amounts.totalEthRefund, ethRaiseCap - maxRepBeingSold * PRICE_PRECISION / tickToPrice(clearing.foundTick), 'eth match') //1:1 price
 		strictEqualTypeSafe(amounts.totalFilledRep, maxRepBeingSold, 'rep match')
 		await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: price2Tick, bidIndex: 0n }])
 	})
