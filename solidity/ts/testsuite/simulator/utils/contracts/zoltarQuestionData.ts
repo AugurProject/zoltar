@@ -50,12 +50,12 @@ export const getQuestionCreatedTimestamp = async (client: ReadClient, questionId
 	})
 }
 
-export const getQuestionId = async (client: ReadClient, questionData: QuestionData) => {
+export const getQuestionId = async (client: ReadClient, questionData: QuestionData, outcomeLabels: string[]) => {
 	return await client.readContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'getQuestionId',
 		address: getInfraContractAddresses().zoltarQuestionData,
-		args: [[questionData.title, questionData.description, questionData.startTime, questionData.endTime, questionData.numTicks, questionData.displayValueMin, questionData.displayValueMax, questionData.answerUnit]],
+		args: [questionData, outcomeLabels],
 	})
 }
 
@@ -64,7 +64,7 @@ export const createQuestion = async (client: WriteClient, questionData: Question
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'createQuestion',
 		address: getInfraContractAddresses().zoltarQuestionData,
-		args: [[questionData.title, questionData.description, questionData.startTime, questionData.endTime, questionData.numTicks, questionData.displayValueMin, questionData.displayValueMax, questionData.answerUnit], outcomeLabels],
+		args: [questionData, outcomeLabels],
 	})
 }
 

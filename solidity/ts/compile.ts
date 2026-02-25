@@ -16,12 +16,24 @@ type CompileResult = funtypes.Static<typeof CompileResult>
 const CompileResult = funtypes.ReadonlyPartial({
 	contracts: funtypes.Record(funtypes.String, funtypes.Record(funtypes.String, funtypes.ReadonlyObject({
 		abi: funtypes.ReadonlyArray(funtypes.ReadonlyPartial({
-			inputs: funtypes.ReadonlyArray(funtypes.ReadonlyPartial({
-				indexed: funtypes.Boolean,
-				internalType: funtypes.String,
-				name: funtypes.String,
-				type: funtypes.String
-			})),
+			inputs: funtypes.ReadonlyArray(funtypes.Intersect(
+				funtypes.ReadonlyPartial({
+					indexed: funtypes.Boolean,
+					internalType: funtypes.String,
+					name: funtypes.String,
+					type: funtypes.String
+				}),
+				funtypes.ReadonlyPartial({
+					components: funtypes.ReadonlyArray(
+						funtypes.ReadonlyPartial({
+							indexed: funtypes.Boolean,
+							internalType: funtypes.String,
+							name: funtypes.String,
+							type: funtypes.String
+						})
+					)
+				})
+			)),
 			anonymous: funtypes.Boolean,
 			stateMutability: funtypes.String,
 			type: funtypes.String,

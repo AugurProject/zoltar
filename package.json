@@ -20,6 +20,7 @@
 		"test": "cd solidity && npm run test",
 		"test-peripherals": "cd solidity && npm run compile-contracts && npm run test-peripherals",
 		"test-escalationGame": "cd solidity && npm run compile-contracts && npm run test-escalationGame",
-		"test-questionData": "cd solidity && npm run compile-contracts && npm run test-questionData"
+		"test-questionData": "cd solidity && npm run compile-contracts && npm run test-questionData",
+		"test-auction": "cd solidity && npm run compile-contracts && npm run test-auction"
 	}
 }

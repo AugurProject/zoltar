@@ -47,6 +47,8 @@ contract DualCapBatchAuction {
 	uint256 public auctionStarted;
 	address public owner;
 
+	uint256 public totalRepAtClearingTick;
+
 	mapping(int256 => Bid[]) private bidsAtTick;
 	mapping(int256 => uint256) private nodeIdByTick;
 
@@ -59,27 +61,26 @@ contract DualCapBatchAuction {
 	uint256 internal constant FIXED_POINT_SCALING_FACTOR = 1e18;
 
 	function powerOf1_0001(uint8 index) internal pure returns (uint256) {
-		if (index == 0) return 1000000000000000100;
-		if (index == 1) return 1000000000000000200;
-		if (index == 2) return 1000000000000000400;
-		if (index == 3) return 1000000000000000800;
-		if (index == 4) return 1000000000000001600;
-		if (index == 5) return 1000000000000003200;
-		if (index == 6) return 1000000000000006400;
-		if (index == 7) return 1000000000000012800;
-		if (index == 8) return 1000000000000025600;
-		if (index == 9) return 1000000000000051200;
-		if (index == 10) return 1000000000000102400;
-		if (index == 11) return 1000000000000204800;
-		if (index == 12) return 1000000000000409600;
-		if (index == 13) return 1000000000000819200;
-		if (index == 14) return 1000000000001638400;
-		if (index == 15) return 1000000000003276800;
-		if (index == 16) return 1000000000006553600;
-		if (index == 17) return 1000000000013107200;
-		if (index == 18) return 1000000000026214400;
-		if (index == 19) return 1000000000052428800;
-		if (index == 20) return 1000000000104857600;
+		if (index == 0) return 1000100000000000000;
+		if (index == 1) return 1000200010000000000;
+		if (index == 2) return 1000400060004000100;
+		if (index == 3) return 1000800280056007000;
+		if (index == 4) return 1001601200560182043;
+		if (index == 5) return 1003204964963598014;
+		if (index == 6) return 1006420201727613920;
+		if (index == 7) return 1012881622445451097;
+		if (index == 8) return 1025929181087729343;
+		if (index == 9) return 1052530684607338948;
+		if (index == 10) return 1107820842039993613;
+		if (index == 11) return 1227267018058200482;
+		if (index == 12) return 1506184333613467388;
+		if (index == 13) return 2268591246822644826;
+		if (index == 14) return 5146506245160322222;
+		if (index == 15) return 26486526531474198664;
+		if (index == 16) return 701536087702486644953;
+		if (index == 17) return 492152882348911033633683;
+		if (index == 18) return 242214459604341065650571799093;
+		if (index == 19) return 58667844441422969901301586347865591163491;
 		revert('Index out of bounds');
 	}
 
@@ -102,12 +103,7 @@ contract DualCapBatchAuction {
 		_;
 	}
 
-	constructor() {
-		owner = msg.sender;
-	}
-
-	function setOwner(address _owner) external {
-		require(owner == msg.sender, 'only owner can change');
+	constructor(address _owner) {
 		owner = _owner;
 	}
 
@@ -136,37 +132,58 @@ contract DualCapBatchAuction {
 		require(!finalized, 'already finalized');
 		require(msg.sender == owner, 'Only owner can finalize');
 
+		// Compute clearing normally
 		(bool priceFound, int256 foundTick, uint256 repAbove, uint256 ethAbove) = computeClearing();
 
 		finalized = true;
 
 		uint256 ethToSend;
+		uint256 clearingPriceLocal;
 
 		if (!priceFound) {
-			// Auction underfunded: no cap binding
-			clearingTick = 0;
-			repFilledAtClearing = 0;
-			ethToSend = ethAbove;
-			if (ethToSend > ethRaiseCap) ethToSend = ethRaiseCap;
+			// Underfunded: uniform price = lowest tick
+			uint256 lowestNodeId = _minNode(root);
+			int256 lowestTick = nodes[lowestNodeId].tick;
+
+			clearingTick = lowestTick;
+			clearingPriceLocal = tickToPrice(clearingTick);
+
+			// Total REP in the entire tree
+			uint256 totalRep = nodes[root].subtreeTotalRep;
+
+			repFilledAtClearing = totalRep;
+			totalRepAtClearingTick = nodes[lowestNodeId].totalRepAtPrice;
+
+			ethToSend = totalRep * clearingPriceLocal / PRICE_PRECISION;
+
 		} else {
-			// Successful sale: uniform price
+			// Caps bind -> normal clearing
 			clearingTick = foundTick;
-			uint256 clearingPrice = tickToPrice(clearingTick);
-			uint256 remainingRep = maxRepBeingSold - repAbove;
-			uint256 remainingEth = ethRaiseCap - ethAbove;
+			clearingPriceLocal = tickToPrice(clearingTick);
 
-			// Limit allocation to what is left
-			if (remainingRep * clearingPrice / PRICE_PRECISION > remainingEth) {
-				remainingRep = remainingEth * PRICE_PRECISION / clearingPrice;
-			}
+			uint256 repNeeded = maxRepBeingSold - repAbove;
 
-			repFilledAtClearing = remainingRep;
-			ethToSend = ethAbove + remainingRep * clearingPrice / PRICE_PRECISION;
+			uint256 nodeId = nodeIdByTick[clearingTick];
+			Node storage clearingNode = nodes[nodeId];
+
+			uint256 nodeRep = clearingNode.totalRepAtPrice;
+			totalRepAtClearingTick = nodeRep;
+
+			uint256 repFilled = repNeeded;
+			if (repFilled > nodeRep) repFilled = nodeRep;
+
+			repFilledAtClearing = repFilled;
+
+			uint256 ethFromClearing = repFilled * clearingPriceLocal / PRICE_PRECISION;
+			ethToSend = ethAbove + ethFromClearing;
 			if (ethToSend > ethRaiseCap) ethToSend = ethRaiseCap;
 		}
-		(bool sent, ) = payable(owner).call{ value: ethToSend }('');
-		emit Finalized(ethToSend, priceFound, foundTick, repAbove, ethAbove);
+
+		// Send ETH to owner
+		(bool sent,) = payable(owner).call{ value: ethToSend }('');
 		require(sent, 'Failed to send Ether');
+
+		emit Finalized(ethToSend, priceFound, clearingTick, repAbove, ethAbove);
 	}
 
 	function computeClearing() public view returns (bool priceFound, int256 foundTick, uint256 repAbove, uint256 ethAbove) {
@@ -198,44 +215,54 @@ contract DualCapBatchAuction {
 	function withdrawBids(address withdrawFor, TickIndex[] memory tickIndice) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
 		require(finalized, 'not finalized');
 		require(msg.sender == owner, 'Only owner can call');
+
+		uint256 clearingPriceLocal = tickToPrice(clearingTick);
+
 		for (uint256 i = 0; i < tickIndice.length; i++) {
 			int256 tick = tickIndice[i].tick;
-
-			Bid[] storage priceBids = bidsAtTick[tick];
-			if (priceBids.length == 0) return (0, 0);
-
-			uint256 clearingPrice = tickToPrice(clearingTick);
 			uint256 index = tickIndice[i].bidIndex;
-			Bid storage bid = priceBids[index];
+
+			Bid storage bid = bidsAtTick[tick][index];
 			require(bid.bidder == withdrawFor, 'not their bid');
 			require(bid.ethAmount > 0, 'already claimed');
 
 			uint256 originalEth = bid.ethAmount;
 			uint256 originalRep = bid.repAmount;
 
-			// Zero out bid
+			// Zero out the bid to prevent double withdrawals
 			bid.ethAmount = 0;
 			bid.repAmount = 0;
 
-			uint256 repAllocated = 0;
-			uint256 ethUsed = 0;
-
-			if (tick >= clearingTick) {
-				// Winner at uniform clearing price
-				repAllocated = originalEth * PRICE_PRECISION / clearingPrice;
-				if (repAllocated > originalRep) repAllocated = originalRep;
-				ethUsed = repAllocated * clearingPrice / PRICE_PRECISION;
-			} else {
+			if (tick < clearingTick) {
 				// Losing bid: refund full ETH
 				totalEthRefund += originalEth;
-			}
+			} else if (tick == clearingTick) {
+				// Bid at clearing tick: partially filled based on cumulativeRep
+				uint256 previousCumulative = bid.cumulativeRep - originalRep;
 
-			totalFilledRep += repAllocated;
-			totalEthRefund += originalEth - ethUsed;
+				uint256 filledRep;
+				uint256 usedEth;
+				if (previousCumulative >= repFilledAtClearing) {
+					filledRep = 0;
+				} else if (bid.cumulativeRep <= repFilledAtClearing) {
+					filledRep = originalRep;
+				} else {
+					filledRep = repFilledAtClearing - previousCumulative;
+				}
+
+				usedEth = filledRep * clearingPriceLocal / PRICE_PRECISION;
+				totalFilledRep += filledRep;
+				if (originalEth > usedEth) {
+					totalEthRefund += originalEth - usedEth;
+				}
+			} else {
+				// Tick above clearing tick: fully winning, convert ETH to REP at clearing price
+				totalFilledRep += originalEth * PRICE_PRECISION / clearingPriceLocal;
+			}
 		}
 
 		if (totalEthRefund > 0) {
-			(bool sent, ) = payable(withdrawFor).call{value: totalEthRefund}('');
+			(bool sent,) = payable(withdrawFor).call{ value: totalEthRefund }('');
 			require(sent, 'eth transfer failed');
 		}
 
@@ -345,34 +372,39 @@ contract DualCapBatchAuction {
 	function refundLosingBids(TickIndex[] memory tickIndice) external {
 		require(!finalized, 'already finalized');
 
-		uint256 ethAmount;
 		(bool priceFound, int256 foundTick,,) = computeClearing();
-		for (uint256 i = 0; i < tickIndice.length; i++) {
-			require(priceFound, 'no clearing yet');
-			require(tickIndice[i].tick < foundTick, 'cannot withdraw binding bid');
+		require(priceFound, 'no clearing yet');
 
-			Bid storage bid = bidsAtTick[tickIndice[i].tick][tickIndice[i].bidIndex];
+		uint256 totalEthToRefund = 0;
+
+		for (uint256 i = 0; i < tickIndice.length; i++) {
+			int256 tick = tickIndice[i].tick;
+			uint256 index = tickIndice[i].bidIndex;
+
+			require(tick < foundTick, 'cannot withdraw binding bid');
+
+			Bid storage bid = bidsAtTick[tick][index];
 			require(bid.bidder == msg.sender, 'not bidder');
 			require(bid.ethAmount > 0, 'already withdrawn');
 
-			ethAmount += bid.ethAmount;
+			uint256 originalEth = bid.ethAmount;
 			uint256 repAmount = bid.repAmount;
 
-			// Zero out bid first
+			// Zero out bid to prevent double withdrawal
 			bid.ethAmount = 0;
 			bid.repAmount = 0;
 
-			// Update tree
-			_decreaseAtPrice(tickIndice[i].tick, repAmount, ethAmount);
+			totalEthToRefund += originalEth;
 
-			// Optional safety: recompute clearing and assert monotonicity
-			(, int256 newTick, , ) = computeClearing();
-			require(newTick == foundTick, 'clearing changed');
+			// Update tree totals to remove this losing bid
+			_decreaseAtPrice(tick, repAmount, originalEth);
 		}
 
-		(bool sent,) = payable(msg.sender).call{value: ethAmount}('');
+		// Send ETH back to user
+		(bool sent,) = payable(msg.sender).call{ value: totalEthToRefund }('');
 		require(sent, 'transfer failed');
-		emit RefundLosingBids(msg.sender, tickIndice, ethAmount);
+
+		emit RefundLosingBids(msg.sender, tickIndice, totalEthToRefund);
 	}
 
 	function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {

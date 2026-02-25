@@ -1,30 +1,27 @@
-import { max, min } from './bigint.js'
-
 const FIXED_POINT_SCALING_FACTOR = 10n ** 18n
 
 const powerOf1_0001 = (index: number): bigint => {
-	if (index === 0) return 1000000000000000100n
-	if (index === 1) return 1000000000000000200n
-	if (index === 2) return 1000000000000000400n
-	if (index === 3) return 1000000000000000800n
-	if (index === 4) return 1000000000000001600n
-	if (index === 5) return 1000000000000003200n
-	if (index === 6) return 1000000000000006400n
-	if (index === 7) return 1000000000000012800n
-	if (index === 8) return 1000000000000025600n
-	if (index === 9) return 1000000000000051200n
-	if (index === 10) return 1000000000000102400n
-	if (index === 11) return 1000000000000204800n
-	if (index === 12) return 1000000000000409600n
-	if (index === 13) return 1000000000000819200n
-	if (index === 14) return 1000000000001638400n
-	if (index === 15) return 1000000000003276800n
-	if (index === 16) return 1000000000006553600n
-	if (index === 17) return 1000000000013107200n
-	if (index === 18) return 1000000000026214400n
-	if (index === 19) return 1000000000052428800n
-	throw new Error('Index out of bounds')
-}
+	if (index === 0) return 1000100000000000000n
+	if (index === 1) return 1000200010000000000n
+	if (index === 2) return 1000400060004000100n
+	if (index === 3) return 1000800280056007000n
+	if (index === 4) return 1001601200560182043n
+	if (index === 5) return 1003204964963598014n
+	if (index === 6) return 1006420201727613920n
+	if (index === 7) return 1012881622445451097n
+	if (index === 8) return 1025929181087729343n
+	if (index === 9) return 1052530684607338948n
+	if (index === 10) return 1107820842039993613n
+	if (index === 11) return 1227267018058200482n
+	if (index === 12) return 1506184333613467388n
+	if (index === 13) return 2268591246822644826n
+	if (index === 14) return 5146506245160322222n
+	if (index === 15) return 26486526531474198664n
+	if (index === 16) return 701536087702486644953n
+	if (index === 17) return 492152882348911033633683n
+	if (index === 18) return 242214459604341065650571799093n
+	if (index === 19) return 58667844441422969901301586347865591163491n
+	throw new Error('Index out of bounds') }
 
 export const tickToPrice = (tick: bigint): bigint => {
 	if (tick < -524288 || tick > 524288) throw new Error('tick out of bounds')
@@ -38,25 +35,36 @@ export const tickToPrice = (tick: bigint): bigint => {
 	return price
 }
 
-export const priceToClosestTick = (targetPrice: bigint): bigint => {
-	if (targetPrice <= 0n) throw new Error('price must be positive')
-	let lowerBoundTick = -524288n
-	let upperBoundTick = 524288n
+export const priceToClosestTick = (price: bigint): bigint => {
+	if (price <= 0n) throw new Error('price must be positive')
+
+	const minimumTick = -524288n
+	const maximumTick = 524288n
+
+	let lowerBoundTick = minimumTick
+	let upperBoundTick = maximumTick
+
 	while (lowerBoundTick <= upperBoundTick) {
 		const middleTick = (lowerBoundTick + upperBoundTick) / 2n
 		const middlePrice = tickToPrice(middleTick)
-		if (middlePrice === targetPrice) return middleTick
-		if (middlePrice < targetPrice) {
+
+		if (middlePrice === price) return middleTick
+
+		if (middlePrice < price) {
 			lowerBoundTick = middleTick + 1n
 		} else {
 			upperBoundTick = middleTick - 1n
 		}
 	}
-	const candidateBelowTick = max(-524288n, upperBoundTick)
-	const candidateAboveTick = min(524288n, lowerBoundTick)
-	const priceBelow = tickToPrice(candidateBelowTick)
-	const priceAbove = tickToPrice(candidateAboveTick)
-	const distanceToBelow = priceBelow > targetPrice ? priceBelow - targetPrice : targetPrice - priceBelow
-	const distanceToAbove = priceAbove > targetPrice ? priceAbove - targetPrice : targetPrice - priceAbove
-	return distanceToBelow <= distanceToAbove ? candidateBelowTick : candidateAboveTick
+
+	// lowerBoundTick is now the first tick whose price is greater than input price
+	if (lowerBoundTick > maximumTick) return maximumTick
+	if (upperBoundTick < minimumTick) return minimumTick
+
+	const priceAtLowerTick = tickToPrice(lowerBoundTick)
+	const priceAtUpperTick = tickToPrice(upperBoundTick)
+
+	const distanceToLowerTick = priceAtLowerTick > price ? priceAtLowerTick - price : price - priceAtLowerTick
+	const distanceToUpperTick = priceAtUpperTick > price ? priceAtUpperTick - price : price - priceAtUpperTick
+	return distanceToLowerTick < distanceToUpperTick ? lowerBoundTick : upperBoundTick
 }

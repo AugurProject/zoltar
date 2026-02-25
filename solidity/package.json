@@ -8,7 +8,8 @@
 		"test": "npx tsc && node --test",
 		"test-peripherals": "npx tsc && node --test ./js/tests/testPeripherals.js",
 		"test-escalationGame": "npx tsc && node --test ./js/tests/testEscalationGame.js",
-		"test-questionData": "npx tsc && node --test ./js/tests/testQuestionData.js"
+		"test-questionData": "npx tsc && node --test ./js/tests/testQuestionData.js",
+		"test-auction": "npx tsc && node --test ./js/tests/testAuction.js"
 	},
 	"keywords": [],
 	"author": "",

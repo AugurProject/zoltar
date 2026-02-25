@@ -19,13 +19,18 @@ contract ZoltarQuestionData {
 	mapping(uint256 => string[]) public outcomeLabels;
 	mapping(uint256 => QuestionData) public questions;
 
-	function getQuestionId(QuestionData memory questionData) public pure returns (uint256) {
-		return uint256(keccak256(abi.encode(questionData)));
+	function getQuestionId(QuestionData memory questionData, string[] calldata outcomeOptions) public pure returns (uint256) {
+		return uint256(keccak256(abi.encode(questionData, outcomeOptions)));
 	}
 
-	function createQuestion(QuestionData memory questionData, string [] calldata outcomeOptions) external returns (uint256) {
-		uint256 questionId = getQuestionId(questionData);
+	function createQuestion(QuestionData memory questionData, string[] calldata outcomeOptions) external returns (uint256) {
+		uint256 questionId = getQuestionId(questionData, outcomeOptions);
 		require(questionCreatedTimestamp[questionId] == 0, 'Market already exists');
+		if (outcomeOptions.length == 0) {
+			// scalar
+			require(questionData.displayValueMax - questionData.displayValueMin > 0, 'max need to be bigger than min and subtraction cannot overflow');
+			require(questionData.numTicks > 0, 'numticks need to be positive');
+		}
 		questions[questionId] = questionData;
 		questionCreatedTimestamp[questionId] = block.timestamp;
 		outcomeLabels[questionId] = outcomeOptions; // TODO, we could check that these are unique (assume sorted) and non empty?
