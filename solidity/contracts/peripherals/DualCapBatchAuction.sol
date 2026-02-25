@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
-uint256 constant AUCTION_TIME = 1 weeks;
 
 contract DualCapBatchAuction {
 	struct Node {
@@ -15,6 +14,9 @@ contract DualCapBatchAuction {
 		uint256 right;
 		uint256 height;
 	}
+	int256 constant MIN_TICK = -524288;
+	int256 constant MAX_TICK = 524288;
+	uint256 constant AUCTION_TIME = 1 weeks;
 	uint256 constant PRICE_PRECISION = 1e18;
 	uint256 constant MAX_NUMBER_BINDING_BIDS = 100_000; // todo, check with gas for worst cases
 	uint256 public minBidSize;
@@ -55,12 +57,10 @@ contract DualCapBatchAuction {
 	event AuctionStarted(uint256 ethRaiseCap, uint256 maxRepBeingSold, uint256 minBidSize);
 	event SubmitBid(address bidder, int256 tick, uint256 amount);
 	event Finalized(uint256 ethToSend, bool priceFound, int256 foundTick, uint256 repAbove, uint256 ethAbove);
-	event WithdrawBids(address withdrawFor, TickIndex[] tickIndice, uint256 totalFilledRep, uint256 totalEthRefund);
-	event RefundLosingBids(address bidder, TickIndex[] tickIndice, uint256 ethAmount);
+	event WithdrawBids(address withdrawFor, TickIndex[] tickIndices, uint256 totalFilledRep, uint256 totalEthRefund);
+	event RefundLosingBids(address bidder, TickIndex[] tickIndices, uint256 ethAmount);
 
-	uint256 internal constant FIXED_POINT_SCALING_FACTOR = 1e18;
-
-	function powerOf1_0001(uint8 index) internal pure returns (uint256) {
+	function powerOf1Point0001(uint8 index) internal pure returns (uint256) {
 		if (index == 0) return 1000100000000000000; // 1.0001^1
 		if (index == 1) return 1000200010000000000; // 1.0001^2
 		if (index == 2) return 1000400060004000100; // 1.0001^4
@@ -86,15 +86,15 @@ contract DualCapBatchAuction {
 
 	// Computes 1.0001 ^ tick in 18-decimal fixed point
 	function tickToPrice(int256 tick) internal pure returns (uint256 price) {
-		require(tick >= -524288 && tick <= 524288, 'tick out of bounds');
+		require(tick >= MIN_TICK && tick <= MAX_TICK, 'tick out of bounds');
 		uint256 absTick = tick < 0 ? uint256(-tick) : uint256(tick);
-		price = FIXED_POINT_SCALING_FACTOR;
+		price = PRICE_PRECISION;
 
 		for (uint8 i = 0; i < 20; i++) {
-			if ((absTick & (1 << i)) != 0) price = price * powerOf1_0001(i) / FIXED_POINT_SCALING_FACTOR;
+			if ((absTick & (1 << i)) != 0) price = price * powerOf1Point0001(i) / PRICE_PRECISION;
 		}
 
-		if (tick < 0) price = FIXED_POINT_SCALING_FACTOR * FIXED_POINT_SCALING_FACTOR / price;
+		if (tick < 0) price = PRICE_PRECISION * PRICE_PRECISION / price;
 	}
 
 	modifier isOperational {
@@ -123,7 +123,7 @@ contract DualCapBatchAuction {
 	function submitBid(int256 tick) external payable isOperational {
 		require(!finalized, 'finalized');
 		require(msg.value >= minBidSize, 'invalid');
-		require(tick >= -524288 && tick <= 524288, 'tick out of bounds');
+		require(tick >= MIN_TICK && tick <= MAX_TICK, 'tick out of bounds');
 		root = _insert(root, tick, msg.sender, msg.value);
 		emit SubmitBid(msg.sender, tick, msg.value);
 	}
@@ -212,15 +212,15 @@ contract DualCapBatchAuction {
 	}
 
 	// doesn't actually withdraw rep, the rep is held in custody of owner. This is why only owner can call so it can do the accounting
-	function withdrawBids(address withdrawFor, TickIndex[] memory tickIndice) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
+	function withdrawBids(address withdrawFor, TickIndex[] memory tickIndices) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
 		require(finalized, 'not finalized');
 		require(msg.sender == owner, 'Only owner can call');
 
 		uint256 clearingPriceLocal = tickToPrice(clearingTick);
 
-		for (uint256 i = 0; i < tickIndice.length; i++) {
-			int256 tick = tickIndice[i].tick;
-			uint256 index = tickIndice[i].bidIndex;
+		for (uint256 i = 0; i < tickIndices.length; i++) {
+			int256 tick = tickIndices[i].tick;
+			uint256 index = tickIndices[i].bidIndex;
 
 			Bid storage bid = bidsAtTick[tick][index];
 			require(bid.bidder == withdrawFor, 'not their bid');
@@ -266,7 +266,7 @@ contract DualCapBatchAuction {
 			require(sent, 'eth transfer failed');
 		}
 
-		emit WithdrawBids(withdrawFor, tickIndice, totalFilledRep, totalEthRefund);
+		emit WithdrawBids(withdrawFor, tickIndices, totalFilledRep, totalEthRefund);
 	}
 
 	function _decrease(uint256 nodeId, int256 tick, uint256 repAmount, uint256 ethAmount) internal returns (uint256) {
@@ -369,7 +369,7 @@ contract DualCapBatchAuction {
 	}
 
 	// user can withdraw bid only if the auction is fully funded and they are below clearing
-	function refundLosingBids(TickIndex[] memory tickIndice) external {
+	function refundLosingBids(TickIndex[] memory tickIndices) external {
 		require(!finalized, 'already finalized');
 
 		(bool priceFound, int256 foundTick,,) = computeClearing();
@@ -377,9 +377,9 @@ contract DualCapBatchAuction {
 
 		uint256 totalEthToRefund = 0;
 
-		for (uint256 i = 0; i < tickIndice.length; i++) {
-			int256 tick = tickIndice[i].tick;
-			uint256 index = tickIndice[i].bidIndex;
+		for (uint256 i = 0; i < tickIndices.length; i++) {
+			int256 tick = tickIndices[i].tick;
+			uint256 index = tickIndices[i].bidIndex;
 
 			require(tick < foundTick, 'cannot withdraw binding bid');
 
@@ -404,7 +404,7 @@ contract DualCapBatchAuction {
 		(bool sent,) = payable(msg.sender).call{ value: totalEthToRefund }('');
 		require(sent, 'transfer failed');
 
-		emit RefundLosingBids(msg.sender, tickIndice, totalEthToRefund);
+		emit RefundLosingBids(msg.sender, tickIndices, totalEthToRefund);
 	}
 
 	function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {
@@ -474,22 +474,15 @@ contract DualCapBatchAuction {
 	function _balance(uint256 nodeId) internal returns (uint256) {
 		uint256 leftChild = nodes[nodeId].left;
 		uint256 rightChild = nodes[nodeId].right;
-
 		int256 balanceFactor = int256(_height(leftChild)) - int256(_height(rightChild));
 		if (balanceFactor > 1) {
-			if (leftChild != 0 && _height(nodes[leftChild].left) < _height(nodes[leftChild].right)) {
-				nodes[nodeId].left = _rotateLeft(leftChild);
-			}
+			if (leftChild != 0 && _height(nodes[leftChild].left) < _height(nodes[leftChild].right)) nodes[nodeId].left = _rotateLeft(leftChild);
 			return _rotateRight(nodeId);
 		}
-
 		if (balanceFactor < -1) {
-			if (rightChild != 0 && _height(nodes[rightChild].right) < _height(nodes[rightChild].left)) {
-				nodes[nodeId].right = _rotateRight(rightChild);
-			}
+			if (rightChild != 0 && _height(nodes[rightChild].right) < _height(nodes[rightChild].left)) nodes[nodeId].right = _rotateRight(rightChild);
 			return _rotateLeft(nodeId);
 		}
-
 		return nodeId;
 	}
 

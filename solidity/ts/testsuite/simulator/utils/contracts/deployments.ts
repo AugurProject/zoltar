@@ -53,7 +53,7 @@ const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x$
 	}
 ] as const
 
-export const getDeployments = (genesisUniverse: bigint, questionId: bigint, securityMultiplier: bigint): Deployment[] => {
+export const getDeployments = (genesisUniverse: bigint = 0n, questionId: bigint = 0n, securityMultiplier: bigint = 2n): Deployment[] => {
 	const infraAddresses = getInfraContractAddresses()
 	const originAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier)
 

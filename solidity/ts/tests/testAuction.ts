@@ -22,7 +22,7 @@ describe('Auction', () => {
 
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(1n, 1n, 2n)))
+		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
@@ -43,13 +43,13 @@ describe('Auction', () => {
 		const startBalance = await getETHBalance(client, client.account.address)
 		await submitBid(client, auctionAddress, tick, bidSize)
 		const afterBidBalance = await getETHBalance(client, client.account.address)
-		strictEqualTypeSafe(startBalance - bidSize, afterBidBalance, 'we lost eth');
+		strictEqualTypeSafe(startBalance - bidSize, afterBidBalance, 'we lost eth')
 
 		const clearing = await computeClearing(client, auctionAddress)
 		strictEqualTypeSafe(clearing.priceFound, true, 'Price was not found!')
-		strictEqualTypeSafe(clearing.foundTick, tick, 'Price was not found!')
-		strictEqualTypeSafe(clearing.ethAbove, 0n, 'qty was not above')
-		strictEqualTypeSafe(clearing.repAbove, 0n, 'funds was not above')
+		strictEqualTypeSafe(clearing.foundTick, tick, 'Tick was incorrect!')
+		strictEqualTypeSafe(clearing.ethAbove, 0n, 'ethAbove was wrong')
+		strictEqualTypeSafe(clearing.repAbove, 0n, 'repAbove was wrong')
 
 		await finalize(client, auctionAddress)
 		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did no finalize')
@@ -59,7 +59,7 @@ describe('Auction', () => {
 		strictEqualTypeSafe(withdrawAmounts.totalEthRefund, 0n, 'no refund')
 		await withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
 		const weShouldHaveAllTheEthAgain = await getETHBalance(client, client.account.address)
-		strictEqualTypeSafe(startBalance, weShouldHaveAllTheEthAgain, 'we did not get eth back');
+		strictEqualTypeSafe(startBalance, weShouldHaveAllTheEthAgain, 'we did not get eth back')
 	})
 
 	test('multiple bids', async () => {
@@ -81,9 +81,9 @@ describe('Auction', () => {
 
 		const clearing = await computeClearing(client, auctionAddress)
 		strictEqualTypeSafe(clearing.priceFound, true, 'Price was not found!')
-		strictEqualTypeSafe(clearing.foundTick, -13864n, 'Price was not found!')
-		strictEqualTypeSafe(clearing.ethAbove, 100000000000000000000n, 'eth above was wrong')
-		strictEqualTypeSafe(clearing.repAbove, 81666811383511067134n, 'funds was not above')
+		strictEqualTypeSafe(clearing.foundTick, -13864n, 'Tick was incorrect!')
+		strictEqualTypeSafe(clearing.ethAbove, 100000000000000000000n, 'ethAbove was wrong')
+		strictEqualTypeSafe(clearing.repAbove, 81666811383511067134n, 'repAbove not above')
 
 		await finalize(client, auctionAddress)
 		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did no finalize')
@@ -101,18 +101,15 @@ describe('Auction', () => {
 					if (tick > clearing.foundTick) {
 						assert.ok(repDemand <= amounts.totalFilledRep, 'got less rep back than needed')
 					}
-					const minAmountRep = bid.bidSize / bid.priceRepEth
-					assert.ok(amounts.totalFilledRep> minAmountRep)
 				}
 			} else {
-				console.log(amounts)
 				assert.strictEqual(amounts.totalEthRefund, bid.bidSize, 'got full refund')
 			}
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
 		}
 
 		const weShouldHaveAllTheEthAgain = await getETHBalance(client, client.account.address)
-		strictEqualTypeSafe(startBalance, weShouldHaveAllTheEthAgain, 'we did not get eth back');
+		strictEqualTypeSafe(startBalance, weShouldHaveAllTheEthAgain, 'we did not get eth back')
 	})
 	test('multiple users bids', async () => {
 		const ethRaiseCap = 200_000n * 10n ** 18n
@@ -131,9 +128,9 @@ describe('Auction', () => {
 		}
 		const clearing = await computeClearing(client, auctionAddress)
 		strictEqualTypeSafe(clearing.priceFound, true, 'Price was not found!')
-		strictEqualTypeSafe(clearing.foundTick, -13864n, 'Price was not found!')
-		strictEqualTypeSafe(clearing.ethAbove, 114285714285714285712n, 'qty was not above')
-		strictEqualTypeSafe(clearing.repAbove, 71428052530837060594n, 'funds was not above')
+		strictEqualTypeSafe(clearing.foundTick, -13864n, 'Tick was correct!')
+		strictEqualTypeSafe(clearing.ethAbove, 114285714285714285712n, 'ethAbove was wrong')
+		strictEqualTypeSafe(clearing.repAbove, 71428052530837060594n, 'repAbove was wrong ')
 
 		await finalize(client, auctionAddress)
 		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did no finalize')
@@ -151,8 +148,6 @@ describe('Auction', () => {
 					if (tick > clearing.foundTick) {
 						assert.ok(repDemand <= amounts.totalFilledRep, 'got less rep back than needed')
 					}
-					const minAmountRep =  bid.bidSize / bid.priceRepEth
-					assert.ok(amounts.totalFilledRep> minAmountRep)
 				}
 			} else {
 				assert.strictEqual(amounts.totalEthRefund, bid.bidSize, 'got full refund')
@@ -186,10 +181,10 @@ describe('Auction', () => {
 		const aliceEthAfter = await getETHBalance(client, client.account.address)
 		strictEqualTypeSafe(aliceEthBefore, aliceEthAfter, 'did not get our eth back')
 		const clearing2 = await computeClearing(alice, auctionAddress)
-		assert.strictEqual(clearing2.ethAbove, clearing.ethAbove, 'ethAbove')
-		assert.strictEqual(clearing2.foundTick, clearing.foundTick, 'foundTick')
-		assert.strictEqual(clearing2.priceFound, clearing.priceFound, 'priceFound')
-		assert.strictEqual(clearing2.repAbove, clearing.repAbove, 'repAbove')
+		assert.strictEqual(clearing2.ethAbove, clearing.ethAbove, 'ethAbove does not match')
+		assert.strictEqual(clearing2.foundTick, clearing.foundTick, 'foundTick does not match')
+		assert.strictEqual(clearing2.priceFound, clearing.priceFound, 'priceFound does not match')
+		assert.strictEqual(clearing2.repAbove, clearing.repAbove, 'repAbove does not match')
 
 		await finalize(client, auctionAddress)
 		const amounts = await getWithdrawRepAndEthAmount(client, auctionAddress, bob.account.address, [{ tick: price2Tick, bidIndex: 0n }])

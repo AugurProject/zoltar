@@ -19,7 +19,7 @@ describe('Escalation Game Test Suite', () => {
 	const nonDecisionThreshold = 1000n * 10n ** 18n
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(1n, 1n, 2n)))
+		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)

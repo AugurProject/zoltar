@@ -10,13 +10,19 @@ import { getRepTokenAddress, getZoltarAddress } from './zoltar.js'
 
 export const getSecurityPoolUtilsAddress = () => getCreate2Address({ bytecode: `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
 
-export const getScalarTradingUtilsAddress = () => getCreate2Address({ bytecode: `0x${ ScalarTrading_ScalarTrading.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
+export const getScalarTradingAddress = () => getCreate2Address({ bytecode: `0x${ ScalarTrading_ScalarTrading.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
 
 export const applyLibraries = (bytecode: string): `0x${ string }` => {
-	const scalarTradingUtils = keccak256(toHex('contracts/ScalarTrading.sol:ScalarTrading')).slice(2, 36)
-	const securityPoolUtils = keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36)
-	const replaceLib = (bytecode: string, hash: string, replaceWithAddress: `0x${ string }`) => bytecode.replaceAll(`__$${ hash }$__`, replaceWithAddress.slice(2).toLocaleLowerCase())
-	return `0x${ replaceLib(replaceLib(bytecode, securityPoolUtils, getSecurityPoolUtilsAddress()), scalarTradingUtils, getScalarTradingUtilsAddress()) }`
+	type LibraryReplacement = { hash: string, address: `0x${ string }`}
+	const librariesToReplace: LibraryReplacement[] = [
+		{ hash: keccak256(toHex('contracts/ScalarTrading.sol:ScalarTrading')).slice(2, 36), address: getScalarTradingAddress() },
+		{ hash: keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36), address: getSecurityPoolUtilsAddress() }
+	]
+	let updatedBytecode = bytecode
+	for (const { hash, address } of librariesToReplace) {
+		updatedBytecode = updatedBytecode.replaceAll(`__$${ hash }$__`, address.slice(2).toLowerCase())
+	}
+	return `0x${ updatedBytecode }`
 }
 
 export const getSecurityPoolForkerByteCode = (zoltar: `0x${ string }`) => {
@@ -86,7 +92,7 @@ export function getInfraContractAddresses() {
 		yesNoMarkets: getAddress(getYesNoMarketsByteCode()),
 		escalationGameFactory: getAddress(getEscalationGameFactoryByteCode()),
 		zoltarQuestionData: getAddress(getZoltarQuestionDataByteCode()),
-		scalarTradingUtils: getScalarTradingUtilsAddress(),
+		scalarTrading: getScalarTradingAddress(),
 		dualCapBatchAuctionFactory: getAddress(`0x${ peripherals_factories_DualCapBatchAuctionFactory_DualCapBatchAuctionFactory.evm.bytecode.object }`),
 	}
 	const securityPoolFactory = getSecurityPoolFactoryAddress(contracts.securityPoolForker, contracts.yesNoMarkets, contracts.escalationGameFactory, contracts.openOracle, contracts.zoltar, contracts.shareTokenFactory, contracts.auctionFactory, contracts.priceOracleManagerAndOperatorQueuerFactory)
@@ -120,7 +126,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	const deployBytecode = async (bytecode: `0x${ string }`) => await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode })
 
 	if (!existence.dualCapBatchAuctionFactory) await deployBytecode(`0x${ peripherals_factories_DualCapBatchAuctionFactory_DualCapBatchAuctionFactory.evm.bytecode.object }`)
-	if (!existence.scalarTradingUtils) await deployBytecode(`0x${ ScalarTrading_ScalarTrading.evm.bytecode.object }`)
+	if (!existence.scalarTrading) await deployBytecode(`0x${ ScalarTrading_ScalarTrading.evm.bytecode.object }`)
 	if (!existence.securityPoolUtils) await deployBytecode(`0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`)
 	if (!existence.openOracle) await deployBytecode(`0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`)
 	if (!existence.zoltar) await deployBytecode(`0x${ Zoltar_Zoltar.evm.bytecode.object }`)

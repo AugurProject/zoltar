@@ -21,15 +21,14 @@ const CompileResult = funtypes.ReadonlyPartial({
 					indexed: funtypes.Boolean,
 					internalType: funtypes.String,
 					name: funtypes.String,
-					type: funtypes.String
+					type: funtypes.String,
 				}),
 				funtypes.ReadonlyPartial({
 					components: funtypes.ReadonlyArray(
 						funtypes.ReadonlyPartial({
-							indexed: funtypes.Boolean,
 							internalType: funtypes.String,
 							name: funtypes.String,
-							type: funtypes.String
+							type: funtypes.String,
 						})
 					)
 				})
@@ -39,7 +38,7 @@ const CompileResult = funtypes.ReadonlyPartial({
 			type: funtypes.String,
 			name: funtypes.String,
 			outputs: funtypes.ReadonlyArray(funtypes.Intersect(
-				funtypes.ReadonlyObject({
+				funtypes.ReadonlyPartial({
 					internalType: funtypes.String,
 					name: funtypes.String,
 					type: funtypes.String

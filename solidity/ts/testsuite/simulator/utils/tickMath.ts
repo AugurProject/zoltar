@@ -1,6 +1,8 @@
 const FIXED_POINT_SCALING_FACTOR = 10n ** 18n
+const MIN_TICK = -524288n
+const MAX_TICK = 524288n
 
-const powerOf1_0001 = (index: number): bigint => {
+const powerOf1Point0001 = (index: number): bigint => {
 	if (index == 0) return 1000100000000000000n // 1.0001^1
 	if (index == 1) return 1000200010000000000n // 1.0001^2
 	if (index == 2) return 1000400060004000100n // 1.0001^4
@@ -25,12 +27,12 @@ const powerOf1_0001 = (index: number): bigint => {
 }
 
 export const tickToPrice = (tick: bigint): bigint => {
-	if (tick < -524288 || tick > 524288) throw new Error('tick out of bounds')
+	if (tick < MIN_TICK || tick > MAX_TICK) throw new Error('tick out of bounds')
 	const absoluteTick = tick < 0 ? BigInt(-tick) : BigInt(tick)
 	let price = FIXED_POINT_SCALING_FACTOR
 	for (let bitIndex = 0; bitIndex < 20; bitIndex++) {
 		const bitMask = 1n << BigInt(bitIndex)
-		if ((absoluteTick & bitMask) !== 0n) price = price * powerOf1_0001(bitIndex) / FIXED_POINT_SCALING_FACTOR
+		if ((absoluteTick & bitMask) !== 0n) price = price * powerOf1Point0001(bitIndex) / FIXED_POINT_SCALING_FACTOR
 	}
 	if (tick < 0) price = FIXED_POINT_SCALING_FACTOR * FIXED_POINT_SCALING_FACTOR / price
 	return price
@@ -39,8 +41,8 @@ export const tickToPrice = (tick: bigint): bigint => {
 export const priceToClosestTick = (price: bigint): bigint => {
 	if (price <= 0n) throw new Error('price must be positive')
 
-	const minimumTick = -524288n
-	const maximumTick = 524288n
+	const minimumTick = MIN_TICK
+	const maximumTick = MAX_TICK
 
 	let lowerBoundTick = minimumTick
 	let upperBoundTick = maximumTick
@@ -67,9 +69,5 @@ export const priceToClosestTick = (price: bigint): bigint => {
 	const distanceToLowerTick = priceAtLowerTick > price ? priceAtLowerTick - price : price - priceAtLowerTick
 	const distanceToUpperTick = priceAtUpperTick > price ? priceAtUpperTick - price : price - priceAtUpperTick
 	const tick = distanceToLowerTick < distanceToUpperTick ? lowerBoundTick : upperBoundTick
-	if (tick <= -524288 || tick >= 524288) {
-		console.log(price)
-		throw new Error('tick out of bounds')
-	}
 	return tick
 }

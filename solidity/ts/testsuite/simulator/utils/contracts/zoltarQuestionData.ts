@@ -18,14 +18,14 @@ export const getOutcomeLabels = async (readClient: ReadClient, questionId: bigin
 	const numberOfEntries = 30n
 	let pages: string[] = []
 	do {
-		const newDeposits = (await readClient.readContract({
+		const newLabels = (await readClient.readContract({
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'getOutcomeLabels',
 			address: getInfraContractAddresses().zoltarQuestionData,
 			args: [questionId, currentIndex, numberOfEntries]
 		})).filter((outcome) => outcome.length > 0)
-		pages.push(...newDeposits)
-		if (BigInt(newDeposits.length) !== numberOfEntries) break
+		pages.push(...newLabels)
+		if (BigInt(newLabels.length) !== numberOfEntries) break
 		currentIndex += numberOfEntries
 	} while(true)
 	return pages
@@ -87,10 +87,13 @@ export const getAnswerOptionName = async (client: ReadClient, questionId: bigint
 }
 
 export const combineUint256FromTwoWithInvalid = (invalid: boolean, firstPart: bigint, secondPart: bigint): bigint => {
-	const oneHundredTwentyBitMask = (1n << 120n) - 1n
+	const PART_BIT_LENGTH = 120n
+	const TOTAL_BITS = 256n
+
+	const oneHundredTwentyBitMask = (1n << PART_BIT_LENGTH) - 1n
 	const normalizedFirstPart = firstPart & oneHundredTwentyBitMask
 	const normalizedSecondPart = secondPart & oneHundredTwentyBitMask
 	const highestBit = invalid ? 0n : 1n
-	const combinedValue = (highestBit << 255n) | (normalizedFirstPart << 120n) | normalizedSecondPart
+	const combinedValue = (highestBit << (TOTAL_BITS - 1n)) | (normalizedFirstPart << PART_BIT_LENGTH) | normalizedSecondPart
 	return combinedValue
 }

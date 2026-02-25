@@ -16,7 +16,7 @@ describe('Contract Test Suite', () => {
 
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, 0n, 0n)))
+		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse)))
 		await setupTestAccounts(mockWindow)
 	})
 

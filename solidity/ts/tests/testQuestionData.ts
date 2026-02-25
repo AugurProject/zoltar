@@ -17,9 +17,8 @@ describe('Question Data', () => {
 
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(1n, 1n, 2n)))
+		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		//await mockWindow.setStartBLock(mockWindow.getTime)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
@@ -55,12 +54,12 @@ describe('Question Data', () => {
 		assert.ok(await isValidAnswerOption(client, questionId, 0n), 'invalid is valid')
 		assert.ok(await isValidAnswerOption(client, questionId, 1n), 'Yes is valid')
 		assert.ok(await isValidAnswerOption(client, questionId, 2n), 'No is valid')
-		assert.ok(!(await isValidAnswerOption(client, questionId, 3n)), 'doesnt exist')
+		assert.ok(!(await isValidAnswerOption(client, questionId, 3n)), 'doesn\'t exist')
 
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 0n), 'Invalid', 'invalid is valid')
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 1n), 'Yes', 'Yes is valid')
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 2n), 'No', 'No is valid')
-		assert.strictEqual(await getAnswerOptionName(client, questionId, 3n), 'Malformed','doesnt exist')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, 3n), 'Malformed','doesn\'t exist')
 	})
 
 	test('can make scalar question', async () => {

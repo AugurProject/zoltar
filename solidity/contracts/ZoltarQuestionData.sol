@@ -29,11 +29,11 @@ contract ZoltarQuestionData {
 		if (outcomeOptions.length == 0) {
 			// scalar
 			require(questionData.displayValueMax - questionData.displayValueMin > 0, 'max need to be bigger than min and subtraction cannot overflow');
-			require(questionData.numTicks > 0, 'numticks need to be positive');
+			require(questionData.numTicks > 0, 'numTicks needs to be positive');
 		}
 		questions[questionId] = questionData;
 		questionCreatedTimestamp[questionId] = block.timestamp;
-		outcomeLabels[questionId] = outcomeOptions; // TODO, we could check that these are unique (assume sorted) and non empty?
+		outcomeLabels[questionId] = outcomeOptions; // TODO, we could check that these are unique (assume sorted) and non-empty?
 		return questionId;
 	}
 

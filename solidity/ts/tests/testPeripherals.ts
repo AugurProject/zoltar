@@ -49,7 +49,6 @@ describe('Peripherals Contract Test Suite', () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
 		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		//await mockWindow.setStartBLock(mockWindow.getTime)
 		await setupTestAccounts(mockWindow)
 	 	startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		await ensureZoltarDeployed(client)
