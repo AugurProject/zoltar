@@ -25,7 +25,7 @@ describe('Question Data', () => {
 	})
 
 	test('can make categorical question', async () => {
-		const outcomeLabels =  ['Yes', 'No']
+		const outcomeLabels = ['Yes', 'No']
 		const testCategoricalQuestion = {
 			title: 'test categorical question',
 			description: 'test categorical description',

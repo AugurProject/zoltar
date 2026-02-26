@@ -32,7 +32,7 @@ export const getOutcomeLabels = async (readClient: ReadClient, questionId: bigin
 }
 
 export const getQuestionData = async (client: ReadClient, questionId: bigint) => {
-	const [title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit] =  await client.readContract({
+	const [title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit] = await client.readContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'questions',
 		address: getInfraContractAddresses().zoltarQuestionData,
