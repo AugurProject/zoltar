@@ -7,8 +7,8 @@
 		"compile-contracts": "tsc --project tsconfig-compile.json && node ./js/compile.js",
 		"test": "npx tsc && node --test",
 		"test-peripherals": "npx tsc && node --test ./js/tests/testPeripherals.js",
-		"test-escalationGame": "npx tsc && node --test ./js/tests/testEscalationGame.js",
-		"test-questionData": "npx tsc && node --test ./js/tests/testQuestionData.js",
+		"test-escalation-game": "npx tsc && node --test ./js/tests/testEscalationGame.js",
+		"test-question-data": "npx tsc && node --test ./js/tests/testQuestionData.js",
 		"test-auction": "npx tsc && node --test ./js/tests/testAuction.js"
 	},
 	"keywords": [],

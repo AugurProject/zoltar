@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
-import { ScalarTrading } from './ScalarTrading.sol';
+import { ScalarOutcomes } from './ScalarOutcomes.sol';
 
 contract ZoltarQuestionData {
 	struct QuestionData {
@@ -28,12 +28,20 @@ contract ZoltarQuestionData {
 		require(questionCreatedTimestamp[questionId] == 0, 'Market already exists');
 		if (outcomeOptions.length == 0) {
 			// scalar
-			require(questionData.displayValueMax - questionData.displayValueMin > 0, 'max need to be bigger than min and subtraction cannot overflow');
+			int256 tradeInterval = questionData.displayValueMax - questionData.displayValueMin;
+			require(tradeInterval > 0, 'max needs to be bigger than min and subtraction cannot overflow');
 			require(questionData.numTicks > 0, 'numTicks needs to be positive');
+			questionData.displayValueMin + int256(questionData.numTicks) * tradeInterval; // overflow check
+		}
+		else {
+			for (uint256 index = 0; index < outcomeOptions.length; index++) {
+				require(bytes(outcomeOptions[index]).length > 0, 'Empty string');
+			}
+			outcomeLabels[questionId] = outcomeOptions; //todo, check that these are unique?
 		}
 		questions[questionId] = questionData;
 		questionCreatedTimestamp[questionId] = block.timestamp;
-		outcomeLabels[questionId] = outcomeOptions; // TODO, we could check that these are unique (assume sorted) and non-empty?
+
 		return questionId;
 	}
 
@@ -82,7 +90,7 @@ contract ZoltarQuestionData {
 				return 'Malformed';
 			}
 			if (firstPart + secondPart == questions[questionId].numTicks) {
-				return ScalarTrading.getScalarOutcomeName([firstPart, secondPart], questions[questionId].answerUnit, questions[questionId].numTicks, questions[questionId].displayValueMin, questions[questionId].displayValueMax);
+				return ScalarOutcomes.getScalarOutcomeName([firstPart, secondPart], questions[questionId].answerUnit, questions[questionId].numTicks, questions[questionId].displayValueMin, questions[questionId].displayValueMax);
 			}
 		}
 		else if (answer == 0) return 'Invalid';

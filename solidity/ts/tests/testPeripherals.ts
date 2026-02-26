@@ -212,8 +212,8 @@ describe('Peripherals Contract Test Suite', () => {
 		const repBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 
 		// forking
-		const zoltarforkThreshold = await getZoltarForkThreshold (client, genesisUniverse)
-		const burnAmount = zoltarforkThreshold / 5n
+		const zoltarForkThreshold = await getZoltarForkThreshold (client, genesisUniverse)
+		const burnAmount = zoltarForkThreshold / 5n
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		const forkerRepBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), getInfraContractAddresses().securityPoolForker)
 		const zoltarForkData = await getUniverseForkData(client, genesisUniverse)
@@ -261,8 +261,8 @@ describe('Peripherals Contract Test Suite', () => {
 		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 
-		const zoltarforkThreshold = await getZoltarForkThreshold (client, genesisUniverse)
-		const burnAmount = zoltarforkThreshold / 5n
+		const zoltarForkThreshold = await getZoltarForkThreshold (client, genesisUniverse)
+		const burnAmount = zoltarForkThreshold / 5n
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold )
 
 		const repBalanceInGenesisPool = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)

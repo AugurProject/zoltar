@@ -66,8 +66,8 @@ describe('Question Data', () => {
 		const testScalarQuestion = {
 			title: 'test scalar question',
 			description: 'test scalar description',
-			startTime: await mockWindow.getTime() + 100000n,
-			endTime: await mockWindow.getTime() + 200000n,
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
 			numTicks: 1000n,
 			outcomeLabels: [],
 			displayValueMin: -500n * 10n ** 18n,

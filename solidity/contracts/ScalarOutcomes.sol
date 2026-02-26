@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSE
 pragma solidity 0.8.33;
 
-library ScalarTrading {
+library ScalarOutcomes {
 	uint256 internal constant DECIMALS = 18;
 
 	function getTradeInterval(int256 minValue, int256 maxValue, uint256 numTicks) internal pure returns (int256) {

@@ -52,7 +52,7 @@ describe('Auction', () => {
 		strictEqualTypeSafe(clearing.repAbove, 0n, 'repAbove was wrong')
 
 		await finalize(client, auctionAddress)
-		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did no finalize')
+		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
 		strictEqualTypeSafe(await getRepFilledAtClearing(client, auctionAddress), maxRepBeingSold, 'all should be at clearing')
 		const withdrawAmounts = await getWithdrawRepAndEthAmount(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
 		strictEqualTypeSafe(withdrawAmounts.totalFilledRep, maxRepBeingSold, 'rep should match total')
@@ -86,7 +86,7 @@ describe('Auction', () => {
 		strictEqualTypeSafe(clearing.repAbove, 81666811383511067134n, 'repAbove not above')
 
 		await finalize(client, auctionAddress)
-		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did no finalize')
+		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
 		for (const bid of bids) {
 			const tick = priceToClosestTick(bid.priceRepEth)
 			const amounts = await getWithdrawRepAndEthAmount(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
@@ -133,7 +133,7 @@ describe('Auction', () => {
 		strictEqualTypeSafe(clearing.repAbove, 71428052530837060594n, 'repAbove was wrong ')
 
 		await finalize(client, auctionAddress)
-		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did no finalize')
+		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
 		for (const bid of bids) {
 			const tick = priceToClosestTick(bid.priceRepEth)
 			const amounts = await getWithdrawRepAndEthAmount(client, auctionAddress, addressString(bid.address), [{ tick: tick, bidIndex: bid.bidIndex }])
