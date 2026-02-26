@@ -18,10 +18,10 @@ contract DualCapBatchAuction {
 	int256 constant MAX_TICK = 524288;
 	uint256 constant AUCTION_TIME = 1 weeks;
 	uint256 constant PRICE_PRECISION = 1e18;
-	uint256 constant MAX_NUMBER_BINDING_BIDS = 100_000; // todo, check with gas for worst cases
+	uint256 constant MAX_NUMBER_BINDING_BIDS = 100_000; // TODO: check with gas for worst cases
 	uint256 public minBidSize;
 
-	mapping(uint256 => Node) private nodes;
+	mapping(uint256 => Node) private nodes; // TODO: separete AVL tree to separete library?
 
 	struct Bid {
 		address bidder;
@@ -60,7 +60,7 @@ contract DualCapBatchAuction {
 	event WithdrawBids(address withdrawFor, TickIndex[] tickIndices, uint256 totalFilledRep, uint256 totalEthRefund);
 	event RefundLosingBids(address bidder, TickIndex[] tickIndices, uint256 ethAmount);
 
-	function powerOf1Point0001(uint8 index) internal pure returns (uint256) {
+	function powerOf1Point0001(uint8 index) internal pure returns (uint256) { // TODO: separate to different lib?
 		if (index == 0) return 1000100000000000000; // 1.0001^1
 		if (index == 1) return 1000200010000000000; // 1.0001^2
 		if (index == 2) return 1000400060004000100; // 1.0001^4
@@ -85,7 +85,7 @@ contract DualCapBatchAuction {
 	}
 
 	// Computes 1.0001 ^ tick in 18-decimal fixed point
-	function tickToPrice(int256 tick) internal pure returns (uint256 price) {
+	function tickToPrice(int256 tick) internal pure returns (uint256 price) { // TODO: separate to different lib?
 		require(tick >= MIN_TICK && tick <= MAX_TICK, 'tick out of bounds');
 		uint256 absTick = tick < 0 ? uint256(-tick) : uint256(tick);
 		price = PRICE_PRECISION;

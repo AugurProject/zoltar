@@ -17,7 +17,7 @@ const AbiParameter: funtypes.Runtype<{
 	readonly type?: string
 	readonly internalType?: string
 	readonly indexed?: boolean
-	readonly components?: readonly any[]
+	readonly components?: readonly unknown[]
 }> = funtypes.Lazy(() =>
 	funtypes.ReadonlyPartial({
 		name: funtypes.String,
