@@ -45,12 +45,10 @@ contract DualCapBatchAuction {
 	bool public finalized;
 	int256 public clearingTick;
 
-	uint256 public repFilledAtClearingTick;
+	uint256 public repFilledAtClearing;
 
 	uint256 public auctionStarted;
 	address public owner;
-
-	uint256 public totalRepAtClearingTick;
 
 	mapping(int256 => Bid[]) private bidsAtTick;
 	mapping(int256 => uint256) private nodeIdByTick;
@@ -130,95 +128,84 @@ contract DualCapBatchAuction {
 	}
 
 	function finalize() external {
-		require(!finalized, "already finalized");
-		require(msg.sender == owner, "Only owner can finalize");
-		(bool priceFound, int256 foundTick, uint256 repAbove) = computeClearing();
+		require(!finalized, 'already finalized');
+		require(msg.sender == owner, 'Only owner can finalize');
+
+		// Compute clearing normally
+		(bool priceFound, int256 foundTick, uint256 repAbove, uint256 ethAbove) = computeClearing();
 
 		finalized = true;
 
-		uint256 clearingPriceLocal;
 		uint256 ethToSend;
-		uint256 repSold;
+		uint256 clearingPriceLocal;
 
 		if (!priceFound) {
-			// Underfunded auction
+			// Underfunded: uniform price = lowest tick
 			uint256 lowestNodeId = _minNode(root);
-			clearingTick = nodes[lowestNodeId].tick;
+			int256 lowestTick = nodes[lowestNodeId].tick;
+
+			clearingTick = lowestTick;
 			clearingPriceLocal = tickToPrice(clearingTick);
-			uint256 totalEth = nodes[root].subtreeTotalEth;
 
-			// Uniform pricing: all ETH converted at clearing price
-			repSold = totalEth * PRICE_PRECISION / clearingPriceLocal;
+			// Total REP in the entire tree
+			uint256 totalRep = nodes[root].subtreeTotalRep;
 
-			// Apply REP cap
-			if (repSold > maxRepBeingSold) repSold = maxRepBeingSold;
+			repFilledAtClearing = totalRep;
 
-			// Apply ETH cap
-			uint256 maxRepByEth = ethRaiseCap * PRICE_PRECISION / clearingPriceLocal;
-			if (repSold > maxRepByEth) repSold = maxRepByEth;
-
-			// No partial fill at clearing tick in underfunded case
-			repFilledAtClearingTick = nodes[lowestNodeId].totalRepAtPrice;
-			totalRepAtClearingTick = nodes[lowestNodeId].totalRepAtPrice;
+			ethToSend = totalRep * clearingPriceLocal / PRICE_PRECISION;
 
 		} else {
-			// REP cap binds
-
+			// Caps bind -> normal clearing
 			clearingTick = foundTick;
 			clearingPriceLocal = tickToPrice(clearingTick);
 
-			repSold = maxRepBeingSold;
-
-			// Apply ETH cap
-			uint256 maxRepByEth = ethRaiseCap * PRICE_PRECISION / clearingPriceLocal;
-			if (repSold > maxRepByEth) repSold = maxRepByEth;
-
-			// Determine partial fill at clearing tick
-			uint256 repFilled = repSold > repAbove ? repSold - repAbove : 0;
+			uint256 repNeeded = maxRepBeingSold - repAbove;
 
 			uint256 nodeId = nodeIdByTick[clearingTick];
-			uint256 nodeRep = nodes[nodeId].totalRepAtPrice;
+			Node storage clearingNode = nodes[nodeId];
 
+			uint256 nodeRep = clearingNode.totalRepAtPrice;
+
+			uint256 repFilled = repNeeded;
 			if (repFilled > nodeRep) repFilled = nodeRep;
 
-			repFilledAtClearingTick = repFilled;
-			totalRepAtClearingTick = nodeRep;
+			repFilledAtClearing = repFilled;
+
+			uint256 ethFromClearing = repFilled * clearingPriceLocal / PRICE_PRECISION;
+			ethToSend = ethAbove + ethFromClearing;
+			if (ethToSend > ethRaiseCap) ethToSend = ethRaiseCap;
 		}
 
-		ethToSend = repSold * clearingPriceLocal / PRICE_PRECISION;
-		if (ethToSend > ethRaiseCap) ethToSend = ethRaiseCap;
-		(bool sent,) = payable(owner).call{ value: ethToSend }("");
-		require(sent, "Failed to send Ether");
+		// Send ETH to owner
+		(bool sent,) = payable(owner).call{ value: ethToSend }('');
+		require(sent, 'Failed to send Ether');
+
+		emit Finalized(ethToSend, priceFound, clearingTick, repAbove, ethAbove);
 	}
 
-	function computeClearing() public view returns (bool priceFound, int256 foundTick, uint256 repAbove) {
+	function computeClearing() public view returns (bool priceFound, int256 foundTick, uint256 repAbove, uint256 ethAbove) {
 		uint256 current = root;
-		uint256 accumulatedRep = 0;
+		uint256 accumulatedRep;
+		uint256 accumulatedEth;
 
 		while (current != 0) {
 			Node storage node = nodes[current];
-
 			uint256 rightRep = node.right == 0 ? 0 : nodes[node.right].subtreeTotalRep;
-
-			// If crossing is in right subtree
-			if (accumulatedRep + rightRep >= maxRepBeingSold) {
+			uint256 rightEth = node.right == 0 ? 0 : nodes[node.right].subtreeTotalEth;
+			if (accumulatedRep + rightRep <= maxRepBeingSold && accumulatedEth + rightEth <= ethRaiseCap) {
+				accumulatedRep += rightRep;
+				accumulatedEth += rightEth;
+				uint256 nodeRep = node.totalRepAtPrice;
+				uint256 nodeEth = node.totalEthAtPrice;
+				if (accumulatedRep + nodeRep >= maxRepBeingSold || accumulatedEth + nodeEth >= ethRaiseCap) return (true, node.tick, accumulatedRep, accumulatedEth);
+				accumulatedRep += nodeRep;
+				accumulatedEth += nodeEth;
+				current = node.left;
+			} else {
 				current = node.right;
-				continue;
 			}
-
-			// Consume right subtree
-			accumulatedRep += rightRep;
-
-			// Check if crossing happens at this node
-			if (accumulatedRep + node.totalRepAtPrice >= maxRepBeingSold) return (true, node.tick, accumulatedRep);
-
-			// Consume this node and move left
-			accumulatedRep += node.totalRepAtPrice;
-			current = node.left;
 		}
-
-		// Not enough REP to hit cap
-		return (false, 0, accumulatedRep);
+		return (false, 0, accumulatedRep, accumulatedEth);
 	}
 
 	// doesn't actually withdraw rep, the rep is held in custody of owner. This is why only owner can call so it can do the accounting
@@ -252,12 +239,12 @@ contract DualCapBatchAuction {
 
 				uint256 filledRep;
 				uint256 usedEth;
-				if (previousCumulative >= repFilledAtClearingTick) {
+				if (previousCumulative >= repFilledAtClearing) {
 					filledRep = 0;
-				} else if (bid.cumulativeRep <= repFilledAtClearingTick) {
+				} else if (bid.cumulativeRep <= repFilledAtClearing) {
 					filledRep = originalRep;
 				} else {
-					filledRep = repFilledAtClearingTick - previousCumulative;
+					filledRep = repFilledAtClearing - previousCumulative;
 				}
 
 				usedEth = filledRep * clearingPriceLocal / PRICE_PRECISION;
@@ -382,7 +369,7 @@ contract DualCapBatchAuction {
 	function refundLosingBids(TickIndex[] memory tickIndices) external {
 		require(!finalized, 'already finalized');
 
-		(bool priceFound, int256 foundTick,) = computeClearing();
+		(bool priceFound, int256 foundTick,,) = computeClearing();
 		require(priceFound, 'no clearing yet');
 
 		uint256 totalEthToRefund = 0;
