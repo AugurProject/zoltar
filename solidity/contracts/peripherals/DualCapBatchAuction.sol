@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+// Uniform price block auction (everyone get the same price). The auction wants to raise `ethRaiseCap` for as fewest rep as possible. The max REP the contract can sell is maxRepBeingSold. If not all eth is raised, all the rep is sold for as much as ETH we can accumulate, while still obeying the users bids so they never get a worse deal than they ask.
 contract DualCapBatchAuction {
 	struct Node {
 		int256 tick; // ETH per REP
@@ -26,7 +27,7 @@ contract DualCapBatchAuction {
 	struct Bid {
 		address bidder;
 		uint256 ethAmount;
-		uint256 repAmount; // ethAmount * PRICE_PRECISION / price
+		uint256 minRepAmount; // ethAmount * PRICE_PRECISION / price
 		uint256 cumulativeRep; // running total at this price
 	}
 
@@ -227,11 +228,11 @@ contract DualCapBatchAuction {
 			require(bid.ethAmount > 0, 'already claimed');
 
 			uint256 originalEth = bid.ethAmount;
-			uint256 originalRep = bid.repAmount;
+			uint256 originalRep = bid.minRepAmount;
 
 			// Zero out the bid to prevent double withdrawals
 			bid.ethAmount = 0;
-			bid.repAmount = 0;
+			bid.minRepAmount = 0;
 
 			if (tick < clearingTick) {
 				// Losing bid: refund full ETH
@@ -269,19 +270,20 @@ contract DualCapBatchAuction {
 		emit WithdrawBids(withdrawFor, tickIndices, totalFilledRep, totalEthRefund);
 	}
 
-	function _decrease(uint256 nodeId, int256 tick, uint256 repAmount, uint256 ethAmount) internal returns (uint256) {
+	function _decrease(uint256 nodeId, int256 tick, uint256 minRepAmount, uint256 ethAmount) internal returns (uint256) {
 		require(nodeId != 0, 'invalid node');
 		Node storage node = nodes[nodeId];
 		if (tick < node.tick) {
-			node.left = _decrease(node.left, tick, repAmount, ethAmount);
+			node.left = _decrease(node.left, tick, minRepAmount, ethAmount);
 		} else if (tick > node.tick) {
+			node.right = _decrease(node.right, tick, minRepAmount, ethAmount);
 		} else {
 			// Found node
 
-			require(node.totalRepAtPrice >= repAmount, 'rep underflow');
+			require(node.totalRepAtPrice >= minRepAmount, 'rep underflow');
 			require(node.totalEthAtPrice >= ethAmount, 'eth underflow');
 
-			node.totalRepAtPrice -= repAmount;
+			node.totalRepAtPrice -= minRepAmount;
 			node.totalEthAtPrice -= ethAmount;
 
 			// If still non-empty, just update
@@ -361,10 +363,10 @@ contract DualCapBatchAuction {
 		return current;
 	}
 
-	function _decreaseAtPrice(int256 tick, uint256 repAmount, uint256 ethAmount) internal {
+	function _decreaseAtPrice(int256 tick, uint256 minRepAmount, uint256 ethAmount) internal {
 		uint256 nodeId = nodeIdByTick[tick];
 		require(nodeId != 0, 'tick missing');
-		root = _decrease(root, tick, repAmount, ethAmount);
+		root = _decrease(root, tick, minRepAmount, ethAmount);
 	}
 
 	// user can withdraw bid only if the auction is fully funded and they are below clearing
@@ -387,16 +389,16 @@ contract DualCapBatchAuction {
 			require(bid.ethAmount > 0, 'already withdrawn');
 
 			uint256 originalEth = bid.ethAmount;
-			uint256 repAmount = bid.repAmount;
+			uint256 minRepAmount = bid.minRepAmount;
 
 			// Zero out bid to prevent double withdrawal
 			bid.ethAmount = 0;
-			bid.repAmount = 0;
+			bid.minRepAmount = 0;
 
 			totalEthToRefund += originalEth;
 
 			// Update tree totals to remove this losing bid
-			_decreaseAtPrice(tick, repAmount, originalEth);
+			_decreaseAtPrice(tick, minRepAmount, originalEth);
 		}
 
 		// Send ETH back to user
@@ -417,7 +419,7 @@ contract DualCapBatchAuction {
 			nodeIdByTick[tick] = newId;
 			// Initialize the ordered bid list for this price
 			Bid[] storage priceBids = bidsAtTick[tick];
-			priceBids.push(Bid({ bidder: bidder, ethAmount: ethAmount, repAmount: repDemand, cumulativeRep: repDemand }));
+			priceBids.push(Bid({ bidder: bidder, ethAmount: ethAmount, minRepAmount: repDemand, cumulativeRep: repDemand }));
 			return newId;
 		}
 
@@ -429,7 +431,7 @@ contract DualCapBatchAuction {
 			node.totalEthAtPrice += ethAmount;
 			Bid[] storage priceBids = bidsAtTick[tick];
 			uint256 cumulative = priceBids.length == 0 ? repDemand : priceBids[priceBids.length - 1].cumulativeRep + repDemand;
-			priceBids.push(Bid({ bidder: bidder, ethAmount: ethAmount, repAmount: repDemand, cumulativeRep: cumulative }));
+			priceBids.push(Bid({ bidder: bidder, ethAmount: ethAmount, minRepAmount: repDemand, cumulativeRep: cumulative }));
 		} else if (tick < node.tick) {
 			node.left = _insert(node.left, tick, bidder, ethAmount);
 		} else {
