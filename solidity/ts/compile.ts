@@ -12,44 +12,56 @@ const CompileError = funtypes.ReadonlyObject({
 	formattedMessage: funtypes.String
 })
 
+const AbiParameter: funtypes.Runtype<{
+	readonly name?: string
+	readonly type?: string
+	readonly internalType?: string
+	readonly indexed?: boolean
+	readonly components?: readonly unknown[]
+}> = funtypes.Lazy(() =>
+	funtypes.ReadonlyPartial({
+		name: funtypes.String,
+		type: funtypes.String,
+		internalType: funtypes.String,
+		indexed: funtypes.Boolean,
+		components: funtypes.ReadonlyArray(AbiParameter)
+	})
+)
+
+const AbiEntry = funtypes.ReadonlyPartial({
+	type: funtypes.String,
+	name: funtypes.String,
+	stateMutability: funtypes.String,
+	anonymous: funtypes.Boolean,
+	inputs: funtypes.ReadonlyArray(AbiParameter),
+	outputs: funtypes.ReadonlyArray(AbiParameter)
+})
+
+
 type CompileResult = funtypes.Static<typeof CompileResult>
-const CompileResult = funtypes.ReadonlyPartial({
-	contracts: funtypes.Record(funtypes.String, funtypes.Record(funtypes.String, funtypes.ReadonlyObject({
-		abi: funtypes.ReadonlyArray(funtypes.ReadonlyPartial({
-			inputs: funtypes.ReadonlyArray(funtypes.ReadonlyPartial({
-				indexed: funtypes.Boolean,
-				internalType: funtypes.String,
-				name: funtypes.String,
-				type: funtypes.String
-			})),
-			anonymous: funtypes.Boolean,
-			stateMutability: funtypes.String,
-			type: funtypes.String,
-			name: funtypes.String,
-			outputs: funtypes.ReadonlyArray(funtypes.Intersect(
-				funtypes.ReadonlyObject({
-					internalType: funtypes.String,
-					name: funtypes.String,
-					type: funtypes.String
-				}),
-				funtypes.ReadonlyPartial({
-					components: funtypes.ReadonlyArray(
-						funtypes.ReadonlyObject({
-							internalType: funtypes.String,
-							name: funtypes.String,
-							type: funtypes.String
-						})
-					)
+const CompileResult = funtypes.ReadonlyObject({
+	contracts: funtypes.Record(
+		funtypes.String,
+		funtypes.Record(
+			funtypes.String,
+			funtypes.ReadonlyObject({
+				abi: funtypes.ReadonlyArray(AbiEntry),
+				evm: funtypes.ReadonlyObject({
+					bytecode: funtypes.ReadonlyObject({
+						object: funtypes.String
+					}),
+					deployedBytecode: funtypes.ReadonlyObject({
+						object: funtypes.String
+					})
 				})
-			))
-		})),
-		evm: funtypes.ReadonlyObject({
-			bytecode: funtypes.ReadonlyObject({ object: funtypes.String }),
-			deployedBytecode: funtypes.ReadonlyObject({ object: funtypes.String })
-		})
-	}))),
+			})
+		)
+	),
 	sources: funtypes.Unknown,
-	errors: funtypes.Array(CompileError)
+	errors: funtypes.Union(
+		funtypes.ReadonlyArray(CompileError),
+		funtypes.Undefined
+	)
 })
 
 class CompilationError extends Error {

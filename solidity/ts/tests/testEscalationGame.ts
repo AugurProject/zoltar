@@ -8,6 +8,8 @@ import assert from 'node:assert'
 import { deployEscalationGame, depositOnOutcome, getBalances, getStartingTime } from '../testsuite/simulator/utils/contracts/escalationGame.js'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
+import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
+import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
 
 describe('Escalation Game Test Suite', () => {
 	let mockWindow: MockWindowEthereum
@@ -17,6 +19,7 @@ describe('Escalation Game Test Suite', () => {
 	const nonDecisionThreshold = 1000n * 10n ** 18n
 	beforeEach(async () => {
 		mockWindow = getMockedEthSimulateWindowEthereum()
+		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)

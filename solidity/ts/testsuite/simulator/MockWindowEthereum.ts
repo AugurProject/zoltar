@@ -183,7 +183,7 @@ export const getMockedEthSimulateWindowEthereum = (zeroGasPrice: boolean = true)
 					return EthereumData.serialize(result.getCodeReturn)
 				}
 				case 'eth_getTransactionReceipt': {
-					const result =  await getSimulatedTransactionReceipt(ethereumClientService, undefined, simulationState, args.params[0])
+					const result = await getSimulatedTransactionReceipt(ethereumClientService, undefined, simulationState, args.params[0])
 					return EthTransactionReceiptResponse.serialize(result)
 				}
 				default: {

@@ -1,10 +1,10 @@
-import { peripherals_interfaces_IAugur_IAugur, IERC20_IERC20, peripherals_interfaces_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_factories_AuctionFactory_AuctionFactory, ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_YesNoMarkets_YesNoMarkets, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_EscalationGame_EscalationGame } from '../../../../types/contractArtifact.js'
+import { peripherals_interfaces_IAugur_IAugur, IERC20_IERC20, peripherals_interfaces_IWeth9_IWeth9, peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_factories_AuctionFactory_AuctionFactory, ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_YesNoMarkets_YesNoMarkets, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_EscalationGame_EscalationGame, peripherals_DualCapBatchAuction_DualCapBatchAuction } from '../../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../../types/types.js'
-import { addressString } from '../bigint.js'
+import { addressString, bytes32String } from '../bigint.js'
 import { ETHEREUM_LOGS_LOGGER_ADDRESS, TEST_ADDRESSES, WETH_ADDRESS } from '../constants.js'
 import { Deployment } from '../logExplaining.js'
-import { getInfraContractAddresses, getSecurityPoolAddresses } from './deployPeripherals.js'
-import { zeroAddress } from 'viem'
+import { applyLibraries, getInfraContractAddresses, getSecurityPoolAddresses } from './deployPeripherals.js'
+import { Address, encodeDeployData, getCreate2Address, zeroAddress } from 'viem'
 import { getChildUniverseId } from '../utilities.js'
 import { getRepTokenAddress } from './zoltar.js'
 
@@ -53,7 +53,7 @@ const getDeploymentsForUniverse = (universeId: bigint, securityPoolAddress: `0x$
 	}
 ] as const
 
-export const getDeployments = (genesisUniverse: bigint, questionId: bigint, securityMultiplier: bigint): Deployment[] => {
+export const getDeployments = (genesisUniverse: bigint = 0n, questionId: bigint = 0n, securityMultiplier: bigint = 2n): Deployment[] => {
 	const infraAddresses = getInfraContractAddresses()
 	const originAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier)
 
@@ -138,4 +138,16 @@ export const getDeployments = (genesisUniverse: bigint, questionId: bigint, secu
 			address: addressString(testAddress)
 		} as const))
 	] as const).filter((entry) => BigInt(entry.address) !== 0n)
+}
+
+export const getDualCapBatchAuctionAddress = (owner: Address) => {
+	return getCreate2Address({
+		bytecode: encodeDeployData({
+			abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+			bytecode: applyLibraries(peripherals_DualCapBatchAuction_DualCapBatchAuction.evm.bytecode.object),
+			args: [owner]
+		}),
+		from: getInfraContractAddresses().dualCapBatchAuctionFactory,
+		salt: bytes32String(0n)
+	})
 }
