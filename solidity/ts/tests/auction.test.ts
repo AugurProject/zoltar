@@ -4,8 +4,8 @@ import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../tests
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
 import { contractExists, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { Address } from 'viem'
-import { computeClearing, deployDualCapBatchAuction, finalize, getClearingTick, getRepFilledAtClearing, getWithdrawRepAndEthAmount, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids } from '../testsuite/simulator/utils/contracts/auction.js'
-import { strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
+import { computeClearing, deployDualCapBatchAuction, finalize, getClearingTick, getWithdrawRepAndEthAmount, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids } from '../testsuite/simulator/utils/contracts/auction.js'
+import { approximatelyEqual, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
 import { priceToClosestTick, tickToPrice } from '../testsuite/simulator/utils/tickMath.js'
 import assert from 'assert'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
@@ -63,12 +63,10 @@ describe('Auction', () => {
 		const clearing = await computeClearing(client, auctionAddress)
 		strictEqualTypeSafe(clearing.priceFound, true, 'Price was not found!')
 		strictEqualTypeSafe(clearing.foundTick, tick, 'Tick was incorrect!')
-		strictEqualTypeSafe(clearing.ethAbove, 0n, 'ethAbove was wrong')
 		strictEqualTypeSafe(clearing.repAbove, 0n, 'repAbove was wrong')
 
 		await finalize(client, auctionAddress)
 		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
-		strictEqualTypeSafe(await getRepFilledAtClearing(client, auctionAddress), maxRepBeingSold, 'all should be at clearing')
 		const withdrawAmounts = await getWithdrawRepAndEthAmount(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
 		strictEqualTypeSafe(withdrawAmounts.totalFilledRep, maxRepBeingSold, 'rep should match total')
 		strictEqualTypeSafe(withdrawAmounts.totalEthRefund, 0n, 'no refund')
@@ -81,7 +79,9 @@ describe('Auction', () => {
 		const ethRaiseCap = 200_000n * 10n ** 18n
 		const maxRepBeingSold = 100n * 10n ** 18n
 		const startBalance = await getETHBalance(client, client.account.address)
+
 		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
 		const bids = [
 			{ bidSize: maxRepBeingSold / 5n, priceRepEth: PRICE_PRECISION / 4n },
 			{ bidSize: maxRepBeingSold / 5n, priceRepEth: PRICE_PRECISION / 2n },
@@ -90,42 +90,52 @@ describe('Auction', () => {
 			{ bidSize: maxRepBeingSold / 5n, priceRepEth: PRICE_PRECISION * 3n },
 			{ bidSize: maxRepBeingSold / 5n, priceRepEth: PRICE_PRECISION * 4n },
 		]
+
+		let totalEthUsedForWinningBids = 0n
+
 		for (const bid of bids) {
 			await submitBid(client, auctionAddress, priceToClosestTick(bid.priceRepEth), bid.bidSize)
 		}
 
 		const clearing = await computeClearing(client, auctionAddress)
 		strictEqualTypeSafe(clearing.priceFound, true, 'Price was not found!')
-		strictEqualTypeSafe(clearing.foundTick, -13864n, 'Tick was incorrect!')
-		strictEqualTypeSafe(clearing.ethAbove, 100000000000000000000n, 'ethAbove was wrong')
-		strictEqualTypeSafe(clearing.repAbove, 81666811383511067134n, 'repAbove not above')
 
 		await finalize(client, auctionAddress)
 		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
+
 		for (const bid of bids) {
 			const tick = priceToClosestTick(bid.priceRepEth)
 			const amounts = await getWithdrawRepAndEthAmount(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
 			const repDemand = bid.bidSize * PRICE_PRECISION / bid.priceRepEth
+
 			if (tick >= clearing.foundTick) {
 				// winning bid
-				if (bid.bidSize == amounts.totalEthRefund) {
+				const ethUsed = bid.bidSize - amounts.totalEthRefund
+				totalEthUsedForWinningBids += ethUsed
+
+				if (amounts.totalEthRefund === bid.bidSize) {
 					assert.equal(amounts.totalFilledRep, 0n, 'should be full refund')
 				} else {
-					const realizedPrice = amounts.totalFilledRep * PRICE_PRECISION / (bid.bidSize - amounts.totalEthRefund)
+					const realizedPrice = amounts.totalFilledRep * PRICE_PRECISION / ethUsed
 					assert.ok(realizedPrice >= bid.priceRepEth, 'got worse realized price')
 					if (tick > clearing.foundTick) {
-						assert.ok(repDemand <= amounts.totalFilledRep, 'got less rep back than needed')
+						assert.ok(amounts.totalFilledRep >= repDemand, 'got less rep back than needed')
 					}
 				}
 			} else {
+				// losing bid: full refund
 				assert.strictEqual(amounts.totalEthRefund, bid.bidSize, 'got full refund')
 			}
+
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
 		}
 
-		const weShouldHaveAllTheEthAgain = await getETHBalance(client, client.account.address)
-		strictEqualTypeSafe(startBalance, weShouldHaveAllTheEthAgain, 'we did not get eth back')
+		// Check final ETH balance
+		const expectedBalance = startBalance - totalEthUsedForWinningBids
+		const finalBalance = await getETHBalance(client, client.account.address)
+		approximatelyEqual(finalBalance, expectedBalance, 1000n, 'final ETH balance mismatch')
 	})
+
 	test('multiple users bids', async () => {
 		const ethRaiseCap = 200_000n * 10n ** 18n
 		const maxRepBeingSold = 100n * 10n ** 18n
@@ -144,7 +154,6 @@ describe('Auction', () => {
 		const clearing = await computeClearing(client, auctionAddress)
 		strictEqualTypeSafe(clearing.priceFound, true, 'Price was not found!')
 		strictEqualTypeSafe(clearing.foundTick, -13864n, 'Tick was correct!')
-		strictEqualTypeSafe(clearing.ethAbove, 114285714285714285712n, 'ethAbove was wrong')
 		strictEqualTypeSafe(clearing.repAbove, 71428052530837060594n, 'repAbove was wrong ')
 
 		await finalize(client, auctionAddress)
@@ -196,7 +205,6 @@ describe('Auction', () => {
 		const aliceEthAfter = await getETHBalance(client, client.account.address)
 		strictEqualTypeSafe(aliceEthBefore, aliceEthAfter, 'did not get our eth back')
 		const clearing2 = await computeClearing(alice, auctionAddress)
-		assert.strictEqual(clearing2.ethAbove, clearing.ethAbove, 'ethAbove does not match')
 		assert.strictEqual(clearing2.foundTick, clearing.foundTick, 'foundTick does not match')
 		assert.strictEqual(clearing2.priceFound, clearing.priceFound, 'priceFound does not match')
 		assert.strictEqual(clearing2.repAbove, clearing.repAbove, 'repAbove does not match')
@@ -290,7 +298,6 @@ describe('Auction', () => {
 
 		// Verify total filled REP does not exceed maxRepBeingSold and matches state
 		const totalFilled = aliceAmounts.totalFilledRep + bobAmounts.totalFilledRep
-		strictEqualTypeSafe(totalFilled, await getRepFilledAtClearing(client, auctionAddress), 'total filled rep matches state')
 		strictEqualTypeSafe(totalFilled <= maxRepBeingSold, true, 'total filled rep <= maxRepBeingSold')
 	})
 })

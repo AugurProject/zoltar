@@ -33,13 +33,13 @@ export const finalize = async (client: WriteClient, auctionAddress: `0x${ string
 }
 
 export const computeClearing = async (client: ReadClient, auctionAddress: `0x${ string }`) => {
-	const [priceFound, foundTick, repAbove, ethAbove] = await client.readContract({
+	const [priceFound, foundTick, repAbove] = await client.readContract({
 		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
 		functionName: 'computeClearing',
 		address: auctionAddress,
 		args: [],
 	})
-	return { priceFound, foundTick, repAbove, ethAbove }
+	return { priceFound, foundTick, repAbove }
 }
 
 export const refundLosingBids = async (client: WriteClient, auctionAddress: `0x${ string }`, tickIndex: readonly { tick: bigint, bidIndex: bigint }[]) => {
@@ -85,15 +85,6 @@ export const deployDualCapBatchAuction = async (client: WriteClient, owner: `0x$
 		functionName: 'deployDualCapBatchAuction',
 		address: getInfraContractAddresses().dualCapBatchAuctionFactory,
 		args: [owner, bytes32String(0n)],
-	})
-}
-
-export const getRepFilledAtClearing = async (client: ReadClient, auctionAddress: `0x${ string }`) => {
-	return await client.readContract({
-		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
-		functionName: 'repFilledAtClearing',
-		address: auctionAddress,
-		args: [],
 	})
 }
 
