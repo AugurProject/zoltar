@@ -1,4 +1,4 @@
-import test, { describe, beforeEach } from 'node:test'
+import { test, beforeEach, describe } from 'bun:test'
 import assert from 'node:assert'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'

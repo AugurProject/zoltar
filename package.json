@@ -4,11 +4,10 @@
 	"license": "Unlicense",
 	"type": "module",
 	"devDependencies": {
-		"@types/node": "22.13.10",
 		"@zoltu/file-copier": "3.0.0",
 		"better-typescript-lib": "2.11.0",
-		"typescript": "5.8.2",
-		"funtypes": "5.1.1"
+		"funtypes": "5.1.1",
+		"typescript": "5.8.2"
 	},
 	"dependencies": {
 		"viem": "2.38.3"

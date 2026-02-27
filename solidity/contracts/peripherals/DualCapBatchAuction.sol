@@ -275,7 +275,6 @@ contract DualCapBatchAuction {
 		if (tick < node.tick) {
 			node.left = _decrease(node.left, tick, repAmount, ethAmount);
 		} else if (tick > node.tick) {
-			node.right = _decrease(node.right, tick, repAmount, ethAmount);
 		} else {
 			// Found node
 

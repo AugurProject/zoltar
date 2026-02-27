@@ -1,7 +1,7 @@
 {
 	"compilerOptions": {
 		"target": "ESNext",
-		"module": "ES2022",
+		"module": "ESNext",
 		"moduleResolution": "bundler",
 		"rootDir": "solidity/ts",
 		"outDir": "solidity/js",
@@ -27,7 +27,7 @@
 		"lib": ["ESNext", "DOM"],
 		"typeRoots": [ "./node_modules/@types" ],
 		// add any @types here, empty array instead of default to prevent @types/node from being picked up
-		"types": [],
+		"types": ["node"],
 	},
 	"include": [
 		"solidity/ts/tests/test.mts",

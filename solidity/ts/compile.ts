@@ -37,27 +37,29 @@ const AbiEntry = funtypes.ReadonlyPartial({
 	outputs: funtypes.ReadonlyArray(AbiParameter)
 })
 
-
 type CompileResult = funtypes.Static<typeof CompileResult>
 const CompileResult = funtypes.ReadonlyObject({
-	contracts: funtypes.Record(
-		funtypes.String,
+	contracts: funtypes.Union(
 		funtypes.Record(
 			funtypes.String,
-			funtypes.ReadonlyObject({
-				abi: funtypes.ReadonlyArray(AbiEntry),
-				evm: funtypes.ReadonlyObject({
-					bytecode: funtypes.ReadonlyObject({
-						object: funtypes.String
-					}),
-					deployedBytecode: funtypes.ReadonlyObject({
-						object: funtypes.String
+			funtypes.Record(
+				funtypes.String,
+				funtypes.ReadonlyObject({
+					abi: funtypes.ReadonlyArray(AbiEntry),
+					evm: funtypes.ReadonlyObject({
+						bytecode: funtypes.ReadonlyObject({
+							object: funtypes.String
+						}),
+						deployedBytecode: funtypes.ReadonlyObject({
+							object: funtypes.String
+						})
 					})
 				})
-			})
-		)
+			)
+		),
+		funtypes.Undefined
 	),
-	sources: funtypes.Unknown,
+	sources: funtypes.Union(funtypes.Unknown, funtypes.Undefined),
 	errors: funtypes.Union(
 		funtypes.ReadonlyArray(CompileError),
 		funtypes.Undefined

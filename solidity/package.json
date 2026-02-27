@@ -3,23 +3,22 @@
 	"type": "module",
 	"description": "Zoltar Contracts",
 	"scripts": {
-		"setup": "npm ci --ignore-scripts && npm run compile-contracts",
-		"compile-contracts": "tsc --project tsconfig-compile.json && node ./js/compile.js",
-		"test": "npx tsc && node --test",
-		"test-peripherals": "npx tsc && node --test ./js/tests/testPeripherals.js",
-		"test-escalation-game": "npx tsc && node --test ./js/tests/testEscalationGame.js",
-		"test-question-data": "npx tsc && node --test ./js/tests/testQuestionData.js",
-		"test-auction": "npx tsc && node --test ./js/tests/testAuction.js"
+		"setup": "bun install --ignore-scripts && bun run compile-contracts",
+		"compile-contracts": "bun tsc --project tsconfig-compile.json && bun run ./js/compile.js",
+		"test": "bun tsc && bun test --timeout 300000",
+		"test-peripherals": "bun tsc && bun test --timeout 300000 ./js/tests/peripherals.test.js",
+		"test-escalation-game": "bun tsc && bun test --timeout 300000 ./js/tests/escalationGame.test.js",
+		"test-question-data": "bun tsc && bun test --timeout 300000 ./js/tests/questionData.test.js",
+		"test-auction": "bun tsc && bun test --timeout 300000 ./js/tests/auction.test.js"
 	},
 	"keywords": [],
 	"author": "",
 	"license": "ISC",
 	"devDependencies": {
-		"@types/node": "22.13.10",
-		"typescript": "5.8.2",
-		"solc": "0.8.33",
-		"viem": "2.38.3",
 		"funtypes": "5.1.1",
-		"tsx": "4.19.3"
+		"solc": "0.8.33",
+		"tsx": "4.19.3",
+		"typescript": "5.8.2",
+		"viem": "2.38.3"
 	}
 }

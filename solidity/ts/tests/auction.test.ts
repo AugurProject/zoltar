@@ -1,10 +1,10 @@
-import test, { beforeEach, describe } from 'node:test'
+import { test, beforeEach, describe } from 'bun:test'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
 import { contractExists, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { Address } from 'viem'
-import { computeClearing, deployDualCapBatchAuction, finalize, getRepFilledAtClearing, getWithdrawRepAndEthAmount, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids } from '../testsuite/simulator/utils/contracts/auction.js'
+import { computeClearing, deployDualCapBatchAuction, finalize, getClearingTick, getRepFilledAtClearing, getWithdrawRepAndEthAmount, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids } from '../testsuite/simulator/utils/contracts/auction.js'
 import { strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
 import { priceToClosestTick, tickToPrice } from '../testsuite/simulator/utils/tickMath.js'
 import assert from 'assert'
@@ -226,5 +226,58 @@ describe('Auction', () => {
 
 		const clearing = await computeClearing(client, auctionAddress)
 		strictEqualTypeSafe(clearing.priceFound, false, 'auction should be underfunded')
+	})
+
+	test('winning bids receive exactly their requested repAmount with correct eth refund', async () => {
+		const ethRaiseCap = 200_000n * 10n ** 18n
+		const maxRepBeingSold = 100n * 10n ** 18n
+		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+		const alice = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		const bob = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+
+		// Alice: bid at lower tick (cheaper) that becomes clearing tick
+		const aliceTick = priceToClosestTick(PRICE_PRECISION * 2n)
+		const aliceEth = 30n * 10n ** 18n
+		const alicePriceAtTick = tickToPrice(aliceTick)
+		const aliceRepDemand = aliceEth * PRICE_PRECISION / alicePriceAtTick
+
+		// Bob: bid at higher tick (more expensive) > clearing tick
+		const bobTick = priceToClosestTick(PRICE_PRECISION * 4n)
+		const bobEth = 20n * 10n ** 18n
+		const bobPriceAtTick = tickToPrice(bobTick)
+		const bobRepDemand = bobEth * PRICE_PRECISION / bobPriceAtTick
+
+		await submitBid(alice, auctionAddress, aliceTick, aliceEth)
+		await submitBid(bob, auctionAddress, bobTick, bobEth)
+
+		const clearing = await computeClearing(client, auctionAddress)
+		strictEqualTypeSafe(clearing.priceFound, false, 'auction underfunded')
+
+		await finalize(client, auctionAddress)
+		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
+
+		// Get the actual clearing tick set after finalization (underfunded -> lowest tick)
+		const clearingTick = await getClearingTick(client, auctionAddress)
+		strictEqualTypeSafe(clearingTick, aliceTick, 'clearing tick should be alice tick')
+
+		const clearingPrice = tickToPrice(clearingTick)
+
+		// Alice: at clearing tick, full fill
+		const aliceAmounts = await getWithdrawRepAndEthAmount(client, auctionAddress, alice.account.address, [{ tick: aliceTick, bidIndex: 0n }])
+		strictEqualTypeSafe(aliceAmounts.totalFilledRep, aliceRepDemand, 'Alice full rep')
+		const aliceUsedEth = aliceRepDemand * clearingPrice / PRICE_PRECISION
+		strictEqualTypeSafe(aliceAmounts.totalEthRefund, aliceEth - aliceUsedEth, 'Alice eth refund')
+
+		// Bob: tick > clearing, full rep and refund excess ETH
+		const bobAmounts = await getWithdrawRepAndEthAmount(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }])
+		strictEqualTypeSafe(bobAmounts.totalFilledRep, bobRepDemand, 'Bob full rep')
+		const bobUsedEth = bobRepDemand * clearingPrice / PRICE_PRECISION
+		strictEqualTypeSafe(bobAmounts.totalEthRefund, bobEth - bobUsedEth, 'Bob eth refund')
+
+		// Sum of filled rep should equal repFilledAtClearing (total demand)
+		const repFilledAtClearingVal = await getRepFilledAtClearing(client, auctionAddress)
+		const totalFilled = aliceAmounts.totalFilledRep + bobAmounts.totalFilledRep
+		strictEqualTypeSafe(totalFilled, repFilledAtClearingVal, 'total filled rep mismatch')
 	})
 })
