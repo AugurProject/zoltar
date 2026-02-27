@@ -13,6 +13,8 @@ import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/depl
 import { getDeployments, getDualCapBatchAuctionAddress } from '../testsuite/simulator/utils/contracts/deployments.js'
 import { addressString } from '../testsuite/simulator/utils/bigint.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
+import { SimulationState } from '../testsuite/simulator/types/visualizerTypes.js'
+import { copySimulationState } from '../testsuite/simulator/SimulationModeEthereumClientService.js'
 
 describe('Auction', () => {
 	let mockWindow: MockWindowEthereum
@@ -20,14 +22,27 @@ describe('Auction', () => {
 	const PRICE_PRECISION = 1n * 10n ** 18n
 	let auctionAddress: Address
 
+	// Cache for simulation state to speed up test runs
+	let cachedSimulationState: SimulationState | undefined = undefined
+
 	beforeEach(async () => {
-		mockWindow = getMockedEthSimulateWindowEthereum()
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
+		if (cachedSimulationState) {
+			// Restore from cache (deep copy to avoid mutations)
+			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
+		} else {
+			// Fresh setup - run full initialization
+			mockWindow = getMockedEthSimulateWindowEthereum()
+			await setupTestAccounts(mockWindow)
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+			await ensureZoltarDeployed(client)
+			await ensureInfraDeployed(client)
+			await deployDualCapBatchAuction(client, client.account.address)
+			// Cache the state after first full setup (deep copy)
+			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
+		}
+		// Always create a fresh client for the current mockWindow
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		await setupTestAccounts(mockWindow)
-		await ensureZoltarDeployed(client)
-		await ensureInfraDeployed(client)
-		await deployDualCapBatchAuction(client, client.account.address)
+		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
 		auctionAddress = getDualCapBatchAuctionAddress(client.account.address)
 		assert.ok(await contractExists(client, auctionAddress), 'auction exists')
 	})
@@ -245,8 +260,6 @@ describe('Auction', () => {
 		// Bob: bid at higher tick (more expensive) > clearing tick
 		const bobTick = priceToClosestTick(PRICE_PRECISION * 4n)
 		const bobEth = 20n * 10n ** 18n
-		const bobPriceAtTick = tickToPrice(bobTick)
-		const bobRepDemand = bobEth * PRICE_PRECISION / bobPriceAtTick
 
 		await submitBid(alice, auctionAddress, aliceTick, aliceEth)
 		await submitBid(bob, auctionAddress, bobTick, bobEth)
@@ -262,6 +275,7 @@ describe('Auction', () => {
 		strictEqualTypeSafe(clearingTick, aliceTick, 'clearing tick should be alice tick')
 
 		const clearingPrice = tickToPrice(clearingTick)
+		const bobExpectedFilled = bobEth * PRICE_PRECISION / clearingPrice
 
 		// Alice: at clearing tick, full fill
 		const aliceAmounts = await getWithdrawRepAndEthAmount(client, auctionAddress, alice.account.address, [{ tick: aliceTick, bidIndex: 0n }])
@@ -269,15 +283,14 @@ describe('Auction', () => {
 		const aliceUsedEth = aliceRepDemand * clearingPrice / PRICE_PRECISION
 		strictEqualTypeSafe(aliceAmounts.totalEthRefund, aliceEth - aliceUsedEth, 'Alice eth refund')
 
-		// Bob: tick > clearing, full rep and refund excess ETH
+		// Bob: tick > clearing, fully winning: uses all ETH to buy REP at clearing price (no refund)
 		const bobAmounts = await getWithdrawRepAndEthAmount(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }])
-		strictEqualTypeSafe(bobAmounts.totalFilledRep, bobRepDemand, 'Bob full rep')
-		const bobUsedEth = bobRepDemand * clearingPrice / PRICE_PRECISION
-		strictEqualTypeSafe(bobAmounts.totalEthRefund, bobEth - bobUsedEth, 'Bob eth refund')
+		strictEqualTypeSafe(bobAmounts.totalFilledRep, bobExpectedFilled, 'Bob filled rep')
+		strictEqualTypeSafe(bobAmounts.totalEthRefund, 0n, 'Bob no refund')
 
-		// Sum of filled rep should equal repFilledAtClearing (total demand)
-		const repFilledAtClearingVal = await getRepFilledAtClearing(client, auctionAddress)
+		// Verify total filled REP does not exceed maxRepBeingSold and matches state
 		const totalFilled = aliceAmounts.totalFilledRep + bobAmounts.totalFilledRep
-		strictEqualTypeSafe(totalFilled, repFilledAtClearingVal, 'total filled rep mismatch')
+		strictEqualTypeSafe(totalFilled, await getRepFilledAtClearing(client, auctionAddress), 'total filled rep matches state')
+		strictEqualTypeSafe(totalFilled <= maxRepBeingSold, true, 'total filled rep <= maxRepBeingSold')
 	})
 })

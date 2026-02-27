@@ -10,20 +10,36 @@ import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zol
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
 import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
+import { SimulationState } from '../testsuite/simulator/types/visualizerTypes.js'
+import { copySimulationState } from '../testsuite/simulator/SimulationModeEthereumClientService.js'
 
 describe('Escalation Game Test Suite', () => {
 	let mockWindow: MockWindowEthereum
-
 	let client: WriteClient
 	const reportBond = 1n * 10n ** 18n
 	const nonDecisionThreshold = 1000n * 10n ** 18n
+
+	// Cache for simulation state to speed up test runs
+	let cachedSimulationState: SimulationState | undefined = undefined
+
 	beforeEach(async () => {
-		mockWindow = getMockedEthSimulateWindowEthereum()
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
+		if (cachedSimulationState) {
+			// Restore from cache (deep copy to avoid mutations)
+			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
+		} else {
+			// Fresh setup - run full initialization
+			mockWindow = getMockedEthSimulateWindowEthereum()
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
+			await setupTestAccounts(mockWindow)
+			await ensureZoltarDeployed(client)
+			await ensureInfraDeployed(client)
+			// Cache the state after first full setup (deep copy)
+			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
+		}
+		// Always create a fresh client for the current mockWindow
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		await setupTestAccounts(mockWindow)
-		await ensureZoltarDeployed(client)
-		await ensureInfraDeployed(client)
+		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
 	})
 
 	test('can start a game', async () => {

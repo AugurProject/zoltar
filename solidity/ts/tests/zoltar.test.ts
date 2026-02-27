@@ -1,6 +1,6 @@
 import { test, beforeEach, describe } from 'bun:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
-import { createWriteClient } from '../testsuite/simulator/utils/viem.js'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists } from '../testsuite/simulator/utils/utilities.js'
 import assert from 'node:assert'
@@ -9,20 +9,37 @@ import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
 import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
 import { ensureZoltarDeployed, forkerClaimRep, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed, splitRep } from '../testsuite/simulator/utils/contracts/zoltar.js'
+import { SimulationState } from '../testsuite/simulator/types/visualizerTypes.js'
+import { copySimulationState } from '../testsuite/simulator/SimulationModeEthereumClientService.js'
 
 describe('Contract Test Suite', () => {
 	let mockWindow: MockWindowEthereum
+	let client: WriteClient
 	const genesisUniverse = 0n
 
+	// Cache for simulation state to speed up test runs
+	let cachedSimulationState: SimulationState | undefined = undefined
+
 	beforeEach(async () => {
-		mockWindow = getMockedEthSimulateWindowEthereum()
+		if (cachedSimulationState) {
+			// Restore from cache (deep copy to avoid mutations)
+			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
+		} else {
+			// Fresh setup - run full initialization
+			mockWindow = getMockedEthSimulateWindowEthereum()
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse)))
+			await setupTestAccounts(mockWindow)
+			await ensureZoltarDeployed(client)
+			// Cache the state after first full setup (deep copy)
+			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
+		}
+		// Always create a fresh client for the current mockWindow
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse)))
-		await setupTestAccounts(mockWindow)
 	})
 
 	test('canDeployContract', async () => {
-		const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		await ensureZoltarDeployed(client)
 		const isDeployed = await isZoltarDeployed(client)
 		assert.ok(isDeployed, `Not Deployed!`)
 
@@ -31,9 +48,7 @@ describe('Contract Test Suite', () => {
 	})
 
 	test('canForkQuestion', async () => {
-		const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await ensureZoltarDeployed(client)
 		const zoltar = getZoltarAddress()
 		const marketText = 'test market'
 		const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'] as const

@@ -83,15 +83,16 @@ export const formEthSendTransaction = async (ethereumClientService: EthereumClie
 }
 
 export type MockWindowEthereum = EIP1193Provider & {
-	addStateOverrides: (stateOverrides: StateOverrides) => Promise<void>
-	manipulateTime: (blockTimeManipulation: BlockTimeManipulation) => Promise<void>
-	advanceTime: (amountInSeconds: bigint) => Promise<void>
-	setTime: (date: bigint) => Promise<void>
-	getTime: () => Promise<bigint>
-	getBlock: () => Promise<EthereumBlockHeader>
-	setAfterTransactionSendCallBack: (newAfterTransactionSendCallBack: (request: SendTransactionParams, result: SimulatedTransaction) => void) => void
+	addStateOverrides: (stateOverrides: StateOverrides) => Promise<void>,
+	manipulateTime: (blockTimeManipulation: BlockTimeManipulation) => Promise<void>,
+	advanceTime: (amountInSeconds: bigint) => Promise<void>,
+	setTime: (date: bigint) => Promise<void>,
+	getTime: () => Promise<bigint>,
+	getBlock: () => Promise<EthereumBlockHeader>,
+	setAfterTransactionSendCallBack: (newAfterTransactionSendCallBack: (request: SendTransactionParams, result: SimulatedTransaction) => void) => void,
+	getSimulationState: () => SimulationState | undefined,
 }
-export const getMockedEthSimulateWindowEthereum = (zeroGasPrice: boolean = true): MockWindowEthereum => {
+export const getMockedEthSimulateWindowEthereum = (zeroGasPrice: boolean = true, initialSimulationState: SimulationState | undefined = undefined): MockWindowEthereum => {
 	const config = getConfig()
 	const httpsRpc = config.testRPCEndpoint
 	const ethereumClientService = new EthereumClientService(
@@ -100,13 +101,14 @@ export const getMockedEthSimulateWindowEthereum = (zeroGasPrice: boolean = true)
 		async () => {},
 		{ name: 'Ethereum', chainId: 1n, httpsRpc }
 	)
-	let simulationState: SimulationState | undefined = undefined
+	let simulationState: SimulationState | undefined = initialSimulationState
 	const activeAddress = 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045n
 	let afterTransactionSendCallBack = (_request: SendTransactionParams, _result: SimulatedTransaction) => {}
 	const mock = {
 		setAfterTransactionSendCallBack: (newAfterTransactionSendCallBack: (_request: SendTransactionParams, _result: SimulatedTransaction) => void) => {
 			afterTransactionSendCallBack = newAfterTransactionSendCallBack
 		},
+		getSimulationState: () => simulationState,
 		request: async (unknownArgs: unknown): Promise<any> => {
 			const args = EthereumJsonRpcRequest.parse(unknownArgs)
 			switch(args.method) {

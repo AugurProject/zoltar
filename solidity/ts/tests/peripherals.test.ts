@@ -17,12 +17,13 @@ import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
 import { getEscalationGameDeposits, getMarketResolution, getNonDecisionThreshold, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame.js'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseForkData, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar.js'
 import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool.js'
+import { SimulationState } from '../testsuite/simulator/types/visualizerTypes.js'
+import { copySimulationState } from '../testsuite/simulator/SimulationModeEthereumClientService.js'
 
 describe('Peripherals Contract Test Suite', () => {
 	let mockWindow: MockWindowEthereum
-
 	let client: WriteClient
-	let startBalance: bigint
+	let startBalance: bigint = 0n
 	const reportBond = 1n * 10n ** 18n
 	const PRICE_PRECISION = 1n * 10n ** 18n
 	const repDeposit = 1000n * 10n ** 18n
@@ -45,18 +46,33 @@ describe('Peripherals Contract Test Suite', () => {
 	const marketText = 'test market'
 	const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'] as const
 
-	beforeEach(async () => {
-		mockWindow = getMockedEthSimulateWindowEthereum()
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		await setupTestAccounts(mockWindow)
-	 	startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		await ensureZoltarDeployed(client)
-		await ensureInfraDeployed(client)
-		await deployOriginSecurityPool(client, genesisUniverse, EXTRA_INFO, marketEndDate, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+	// Cache for simulation state to speed up test runs
+	let cachedSimulationState: SimulationState | undefined = undefined
 
-		await approveAndDepositRep(client, repDeposit, marketId)
+	beforeEach(async () => {
+		if (cachedSimulationState) {
+			// Restore from cache (deep copy to avoid mutations)
+			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
+		} else {
+			// Fresh setup - run full initialization
+			mockWindow = getMockedEthSimulateWindowEthereum()
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
+			await setupTestAccounts(mockWindow)
+			await ensureZoltarDeployed(client)
+			await ensureInfraDeployed(client)
+			await deployOriginSecurityPool(client, genesisUniverse, EXTRA_INFO, marketEndDate, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+			await approveAndDepositRep(client, repDeposit, marketId)
+			// Cache the state after first full setup (deep copy)
+			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
+		}
+		// Always create a fresh client for the current mockWindow
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
+		// Always compute securityPoolAddresses after mockWindow/client are ready
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, marketId, securityMultiplier)
+		// Fetch startBalance after accounts are set up (balance of GENESIS_REPUTATION_TOKEN)
+		startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 	})
 
 	test('can deposit rep and withdraw it', async () => {

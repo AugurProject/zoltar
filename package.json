@@ -16,7 +16,7 @@
 		"setup": "npm ci --ignore-scripts && npm run setup-contracts",
 		"setup-contracts": "cd solidity && npm run setup",
 		"compile-contracts": "cd solidity && npm run compile-contracts",
-		"test": "cd solidity && npm run test",
+		"test-zoltar": "cd solidity && npm run test-zoltar",
 		"test-peripherals": "cd solidity && npm run compile-contracts && npm run test-peripherals",
 		"test-escalation-game": "cd solidity && npm run compile-contracts && npm run test-escalation-game",
 		"test-question-data": "cd solidity && npm run compile-contracts && npm run test-question-data",
