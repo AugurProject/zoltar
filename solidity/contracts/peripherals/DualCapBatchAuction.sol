@@ -169,11 +169,24 @@ contract DualCapBatchAuction {
 			uint256 repFilled = repNeeded;
 			if (repFilled > nodeRep) repFilled = nodeRep;
 
-			repFilledAtClearing = repFilled;
-
+			// Compute ETH required for this clearing node
 			uint256 ethFromClearing = repFilled * clearingPriceLocal / PRICE_PRECISION;
+			uint256 totalEth = ethAbove + ethFromClearing;
+
+			// Scale repFilled proportionally if ETH cap is exceeded
+			if (totalEth > ethRaiseCap) {
+				uint256 allowedEthForClearing = ethRaiseCap - ethAbove;
+				repFilledAtClearing = allowedEthForClearing * PRICE_PRECISION / clearingPriceLocal;
+
+				// Ensure we don’t exceed node’s REP
+				if (repFilledAtClearing > nodeRep) repFilledAtClearing = nodeRep;
+
+				ethFromClearing = allowedEthForClearing; // exactly what will be sent
+			} else {
+				repFilledAtClearing = repFilled;
+			}
+
 			ethToSend = ethAbove + ethFromClearing;
-			if (ethToSend > ethRaiseCap) ethToSend = ethRaiseCap;
 		}
 
 		// Send ETH to owner

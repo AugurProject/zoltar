@@ -5,7 +5,7 @@ import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
 import { contractExists, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { Address } from 'viem'
 import { computeClearing, deployDualCapBatchAuction, finalize, getClearingTick, getWithdrawRepAndEthAmount, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids } from '../testsuite/simulator/utils/contracts/auction.js'
-import { approximatelyEqual, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
+import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
 import { priceToClosestTick, tickToPrice } from '../testsuite/simulator/utils/tickMath.js'
 import assert from 'assert'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
@@ -91,49 +91,74 @@ describe('Auction', () => {
 			{ bidSize: maxRepBeingSold / 5n, priceRepEth: PRICE_PRECISION * 4n },
 		]
 
-		let totalEthUsedForWinningBids = 0n
-
+		// Submit bids
 		for (const bid of bids) {
 			await submitBid(client, auctionAddress, priceToClosestTick(bid.priceRepEth), bid.bidSize)
 		}
 
+		// Compute clearing
 		const clearing = await computeClearing(client, auctionAddress)
 		strictEqualTypeSafe(clearing.priceFound, true, 'Price was not found!')
 
 		await finalize(client, auctionAddress)
 		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
 
-		for (const bid of bids) {
+		const clearingPrice = tickToPrice(clearing.foundTick)
+
+		// Assert clearing tick is within allowed range
+		assert.ok(clearing.foundTick >= -524_288, 'Clearing tick below MIN_TICK')
+		assert.ok(clearing.foundTick <= 524_288, 'Clearing tick above MAX_TICK')
+
+		// Track cumulative REP and total ETH withdrawn
+		let cumulativeRep = 0n
+		let totalEthWithdrawn = 0n
+
+		for (let i = 0; i < bids.length; i++) {
+			const bid = bids[i]
 			const tick = priceToClosestTick(bid.priceRepEth)
+
+			// Check amounts from contract
 			const amounts = await getWithdrawRepAndEthAmount(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
 			const repDemand = bid.bidSize * PRICE_PRECISION / bid.priceRepEth
 
-			if (tick >= clearing.foundTick) {
-				// winning bid
-				const ethUsed = bid.bidSize - amounts.totalEthRefund
-				totalEthUsedForWinningBids += ethUsed
+			if (tick < clearing.foundTick) {
+				// losing bid: full refund, no REP
+				assert.strictEqual(amounts.totalFilledRep, 0n, `Bid ${i} below clearing tick got REP`)
+				assert.strictEqual(amounts.totalEthRefund, bid.bidSize, `Bid ${i} below clearing tick refund mismatch`)
+				totalEthWithdrawn += amounts.totalEthRefund
+			} else if (tick === clearing.foundTick) {
+				// partially filled at clearing tick
+				const filledRep = amounts.totalFilledRep
+				cumulativeRep += filledRep
 
-				if (amounts.totalEthRefund === bid.bidSize) {
-					assert.equal(amounts.totalFilledRep, 0n, 'should be full refund')
-				} else {
-					const realizedPrice = amounts.totalFilledRep * PRICE_PRECISION / ethUsed
-					assert.ok(realizedPrice >= bid.priceRepEth, 'got worse realized price')
-					if (tick > clearing.foundTick) {
-						assert.ok(amounts.totalFilledRep >= repDemand, 'got less rep back than needed')
-					}
-				}
+				assert.ok(filledRep <= repDemand, `Bid ${i} at clearing tick filled too much REP`)
+				assert.ok(amounts.totalEthRefund <= bid.bidSize, `Bid ${i} at clearing tick refund too high`)
+
+				const ethUsed = filledRep * clearingPrice / PRICE_PRECISION
+				totalEthWithdrawn += ethUsed + amounts.totalEthRefund
 			} else {
-				// losing bid: full refund
-				assert.strictEqual(amounts.totalEthRefund, bid.bidSize, 'got full refund')
+				// fully winning bid above clearing tick
+				cumulativeRep += repDemand
+
+				assert.strictEqual(amounts.totalEthRefund, 0n, `Bid ${i} above clearing tick refund not zero`)
+				assert.ok(amounts.totalFilledRep >= repDemand, `Bid ${i} above clearing tick filled less than demanded REP`)
+
+				const ethUsed = amounts.totalFilledRep * clearingPrice / PRICE_PRECISION
+				totalEthWithdrawn += ethUsed
 			}
 
+			// Withdraw bid to trigger ETH transfer
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
 		}
-
-		// Check final ETH balance
-		const expectedBalance = startBalance - totalEthUsedForWinningBids
+		const totalEthDeposit = bids.reduce((a,b) => a + b.bidSize, 0n)
+		const contractBalance = await getETHBalance(client, auctionAddress)
+		strictEqual18Decimal(contractBalance, 0n, 'auction should be empty by now')
+		// Final ETH balance should match actual ETH withdrawn
 		const finalBalance = await getETHBalance(client, client.account.address)
-		approximatelyEqual(finalBalance, expectedBalance, 1000n, 'final ETH balance mismatch')
+		approximatelyEqual(finalBalance, startBalance + totalEthDeposit - totalEthWithdrawn, 100n, 'final ETH balance mismatch')
+
+		// Extra cumulative REP assertion
+		assert.ok(cumulativeRep <= maxRepBeingSold, 'Cumulative REP exceeds maxRepBeingSold')
 	})
 
 	test('multiple users bids', async () => {
