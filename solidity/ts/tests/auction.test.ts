@@ -4,7 +4,7 @@ import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../tests
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
 import { contractExists, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { Address } from 'viem'
-import { computeClearing, deployDualCapBatchAuction, finalize, getClearingTick, getWithdrawRepAndEthAmount, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids } from '../testsuite/simulator/utils/contracts/auction.js'
+import { computeClearing, deployDualCapBatchAuction, finalize, getClearingTick, getMinBidSize, getWithdrawRepAndEthAmount, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids } from '../testsuite/simulator/utils/contracts/auction.js'
 import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
 import { priceToClosestTick, tickToPrice } from '../testsuite/simulator/utils/tickMath.js'
 import assert from 'assert'
@@ -324,5 +324,103 @@ describe('Auction', () => {
 		// Verify total filled REP does not exceed maxRepBeingSold and matches state
 		const totalFilled = aliceAmounts.totalFilledRep + bobAmounts.totalFilledRep
 		strictEqualTypeSafe(totalFilled <= maxRepBeingSold, true, 'total filled rep <= maxRepBeingSold')
+	})
+
+	test('multiple bids at same tick from same bidder (FIFO pro-rata)', async () => {
+		const ethRaiseCap = 100n * 10n ** 18n
+		const maxRepBeingSold = 10n * 10n ** 18n
+		const alice = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+
+		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+		// Same tick (0 = price 1:1)
+		const sameTick = 0n
+		const bid1Amount = 7n * 10n ** 18n
+		const bid2Amount = 7n * 10n ** 18n
+
+		await submitBid(alice, auctionAddress, sameTick, bid1Amount)
+		await submitBid(alice, auctionAddress, sameTick, bid2Amount)
+
+		await finalize(client, auctionAddress)
+		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
+
+		// Withdraw first bid (index 0): should be fully filled
+		const amounts1 = await getWithdrawRepAndEthAmount(client, auctionAddress, alice.account.address, [{ tick: sameTick, bidIndex: 0n }])
+		strictEqualTypeSafe(amounts1.totalFilledRep, bid1Amount, 'first bid full rep')
+		strictEqualTypeSafe(amounts1.totalEthRefund, 0n, 'first bid no refund')
+
+		// Withdraw second bid (index 1): partially filled, partial refund
+		const amounts2 = await getWithdrawRepAndEthAmount(client, auctionAddress, alice.account.address, [{ tick: sameTick, bidIndex: 1n }])
+		strictEqualTypeSafe(amounts2.totalFilledRep, 3n * 10n ** 18n, 'second bid partial rep')
+		strictEqualTypeSafe(amounts2.totalEthRefund, 4n * 10n ** 18n, 'second bid partial refund')
+
+		await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: sameTick, bidIndex: 0n }])
+		await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: sameTick, bidIndex: 1n }])
+	})
+
+	test('auction time limit prevents bids after expiration', async () => {
+		const ethRaiseCap = 100n * 10n ** 18n
+		const maxRepBeingSold = 10n * 10n ** 18n
+		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+		// Advance time past auction end (AUCTION_TIME = 1 week = 604800 seconds)
+		await mockWindow.advanceTime(604800n + 1n)
+
+		// Attempting to submit a bid should fail with "Auction ended"
+		const tick = priceToClosestTick(PRICE_PRECISION)
+		const bidAmount = 1n * 10n ** 18n
+		await assert.rejects(
+			async () => await submitBid(client, auctionAddress, tick, bidAmount),
+			'Auction ended'
+		)
+	})
+
+	test('minimum bid size enforcement', async () => {
+		// Small ethRaiseCap to get minBidSize = 1
+		const ethRaiseCap = 50000n
+		const maxRepBeingSold = 1n * 10n ** 18n
+		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+		const minBid = await getMinBidSize(client, auctionAddress)
+		strictEqualTypeSafe(minBid, 1n, 'minBidSize should be 1')
+
+		// Bid of 0 should fail
+		await assert.rejects(
+			async () => await submitBid(client, auctionAddress, 0n, 0n),
+			'invalid'
+		)
+
+		// Bid of 1 should succeed
+		await submitBid(client, auctionAddress, 0n, 1n)
+	})
+
+	test('both caps enforced: ETH cap binds and limits REP sold', async () => {
+		const ethRaiseCap = 50n * 10n ** 18n
+		const maxRepBeingSold = 100n * 10n ** 18n
+		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+		// Price = 2 ETH/REP => tick around that
+		const price = 2n * 10n ** 18n
+		const tick = priceToClosestTick(price)
+		const bidAmount = 100n * 10n ** 18n
+
+		await submitBid(client, auctionAddress, tick, bidAmount)
+
+		await finalize(client, auctionAddress)
+		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
+
+		// Get the actual clearing tick and price
+		const clearingTick = await getClearingTick(client, auctionAddress)
+		const clearingPrice = tickToPrice(clearingTick)
+
+		// Compute expected filled REP based on actual clearing price: ethRaiseCap * PRICE_PRECISION / clearingPrice
+		const expectedFilledRep = ethRaiseCap * PRICE_PRECISION / clearingPrice
+
+		// Withdraw should give filledRep = expectedFilledRep, refund = ethRaiseCap
+		const amounts = await getWithdrawRepAndEthAmount(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
+		strictEqualTypeSafe(amounts.totalFilledRep, expectedFilledRep, 'filled rep should match ETH cap')
+		strictEqualTypeSafe(amounts.totalEthRefund, ethRaiseCap, 'total eth refund should equal ethRaiseCap')
+
+		await withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
 	})
 })

@@ -96,3 +96,12 @@ export const getClearingTick = async (client: ReadClient, auctionAddress: `0x${ 
 		args: [],
 	})
 }
+
+export const getMinBidSize = async (client: ReadClient, auctionAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+		functionName: 'minBidSize',
+		address: auctionAddress,
+		args: [],
+	})
+}
