@@ -60,10 +60,10 @@ export const withdrawBids = async (client: WriteClient, auctionAddress: `0x${ st
 	})
 }
 
-export const getWithdrawRepAndEthAmount = async (client: WriteClient, auctionAddress: `0x${ string }`, withdrawFor: `0x${ string }`, tickIndex: readonly { tick: bigint, bidIndex: bigint }[]) => {
+export const simulateWithdrawBids = async (client: WriteClient, auctionAddress: `0x${ string }`, withdrawFor: `0x${ string }`, tickIndex: readonly { tick: bigint, bidIndex: bigint }[]) => {
 	const [totalFilledRep, totalEthRefund] = (await client.simulateContract({
 		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
-		functionName: 'withdrawBids',
+		functionName: 'simWithdrawBids',
 		address: auctionAddress,
 		args: [withdrawFor, tickIndex],
 	})).result
