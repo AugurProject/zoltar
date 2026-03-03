@@ -588,4 +588,74 @@ describe('Auction', () => {
 		const contractBalance = await getETHBalance(client, auctionAddress)
 		approximatelyEqual(contractBalance, 0n, 1000n, 'contract should be empty after all withdrawals')
 	})
+
+	test('combined refundLosingBids and withdrawBids for same user with mixed winning/losing bids', async () => {
+		const ethRaiseCap = 200_000n * 10n ** 18n
+		const maxRepBeingSold = 50n * 10n ** 18n
+		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+		const alice = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+
+		// Ticks: losing (below clearing), at-clearing, winning (above clearing)
+		const losingTick = -20000n
+		const clearingTickBid = 0n
+		const winningTick = 10000n
+
+		const losingEth = 2n * 10n ** 18n
+		const mediumEth = 40n * 10n ** 18n
+		const highEth = 30n * 10n ** 18n
+
+		await submitBid(alice, auctionAddress, losingTick, losingEth)
+		await submitBid(alice, auctionAddress, clearingTickBid, mediumEth)
+		await submitBid(alice, auctionAddress, winningTick, highEth)
+
+		// Compute clearing - should find a price with clearing tick at 0
+		const clearingPre = await computeClearing(client, auctionAddress)
+		assert.ok(clearingPre.priceFound, 'price not found - bids should exceed maxRepBeingSold')
+
+		const clearingTick = clearingPre.foundTick
+		// Verify expected clearing tick
+		assert.strictEqual(clearingTick, clearingTickBid, 'clearing tick expected to be 0')
+		assert.ok(losingTick < clearingTick, 'losing tick should be below clearing')
+		assert.ok(winningTick > clearingTick, 'winning tick should be above clearing')
+
+		// Before finalize: refund the losing bid (since it's below clearing)
+		await refundLosingBids(alice, auctionAddress, [{ tick: losingTick, bidIndex: 0n }])
+
+		// Finalize
+		await finalize(client, auctionAddress)
+		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
+
+		// After finalize: verify clearing tick unchanged
+		const clearingPost = await computeClearing(client, auctionAddress)
+		strictEqualTypeSafe(clearingPost.foundTick, clearingTick, 'clearing tick changed after refund')
+		strictEqualTypeSafe(clearingPost.priceFound, true, 'price found after refund')
+
+		// Withdraw remaining bids
+		const clearingAmounts = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: clearingTickBid, bidIndex: 0n }])
+		const winningAmounts = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: winningTick, bidIndex: 0n }])
+
+		// Compute clearing price
+		const clearingPrice = tickToPrice(clearingTick)
+
+		// Clearing tick: partially filled; filled rep <= mediumEth * PRICE_PRECISION / clearingPrice
+		const clearingMaxRep = mediumEth * PRICE_PRECISION / clearingPrice // = mediumEth since clearingPrice=1e18
+		assert.ok(clearingAmounts.totalFilledRep > 0n && clearingAmounts.totalFilledRep <= clearingMaxRep, 'clearing tick partial fill')
+		// Eth refund = mediumEth - (filledRep * clearingPrice / PRICE_PRECISION)
+		const ethUsed = clearingAmounts.totalFilledRep * clearingPrice / PRICE_PRECISION
+		assert.ok(clearingAmounts.totalEthRefund == mediumEth - ethUsed, 'clearing tick refund calculation')
+
+		// Winning tick: fully winning, rep based on clearing price, no refund
+		const winningExpectedRep = highEth * PRICE_PRECISION / clearingPrice // = highEth since clearingPrice=1e18
+		approximatelyEqual(winningAmounts.totalFilledRep, winningExpectedRep, 1000n, 'winning tick full rep')
+		strictEqualTypeSafe(winningAmounts.totalEthRefund, 0n, 'winning tick no refund')
+
+		// Execute withdrawals
+		await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: clearingTickBid, bidIndex: 0n }])
+		await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: winningTick, bidIndex: 0n }])
+
+		// Check contract empty
+		const contractBalance = await getETHBalance(client, auctionAddress)
+		approximatelyEqual(contractBalance, 0n, 1000n, 'contract should be empty after all withdrawals')
+	})
 })
