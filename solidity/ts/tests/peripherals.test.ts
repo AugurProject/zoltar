@@ -75,14 +75,14 @@ describe('Peripherals Contract Test Suite', () => {
 		startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 	})
 
-	test('can deposit rep and withdraw it', async () => {
+	test.concurrent('can deposit rep and withdraw it', async () => {
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
 		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance, 100n, 'Did not get rep back')
 	})
 
-	test('can deposit rep and redeem it back after market has ended', async () => {
+	test.concurrent('can deposit rep and redeem it back after market has ended', async () => {
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
 		const poolOwnershipDenominator = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
@@ -114,7 +114,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 'Did not empty security pool of rep')
 	})
 
-	test('Can Liquidate', async () => {
+	test.concurrent('Can Liquidate', async () => {
 		const endTime = await getMarketEndDate(client, marketId)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolAllowance = repDeposit / 4n
@@ -155,7 +155,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(liquidatorVault.repDepositShare / PRICE_PRECISION, repDeposit+(repDeposit * 10n), 'liquidator should have all the rep in the pool')
 	})
 
-	test('Open Interest Fees (non forking)', async () => {
+	test.concurrent('Open Interest Fees (non forking)', async () => {
 		const endTime = await getMarketEndDate(client, marketId)
 		strictEqualTypeSafe(endTime > dateToBigintSeconds(new Date), true, 'market has already ended')
 		const securityPoolAllowance = repDeposit / 4n
@@ -193,7 +193,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(contractBalance + ethBalanceAfter - ethBalanceBefore, openInterestAmount, 'contract balance + fees should equal initial open interest')
 	})
 
-	test('can set security bonds allowance, mint complete sets and fork happily' , async () => {
+	test.concurrent('can set security bonds allowance, mint complete sets and fork happily' , async () => {
 		const endTime = await getMarketEndDate(client, marketId)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolAllowance = repDeposit / 4n
@@ -265,7 +265,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(totalFeesOwedToVaultsRightAfterFork, totalFeesOwedToVaultsAfterFork, 'parents fees should be frozen')
 	})
 
-	test('two security pools with disagreement', async () => {
+	test.concurrent('two security pools with disagreement', async () => {
 		const endTime = await getMarketEndDate(client, marketId)
 		await mockWindow.setTime(endTime + 10000n)
 		const openInterestAmount = 10n * 10n ** 18n
@@ -438,7 +438,7 @@ describe('Peripherals Contract Test Suite', () => {
 		approximatelyEqual(await getETHBalance(client, addressString(TEST_ADDRESSES[4])), balancePriorInvalidRedeemal2 + currentShares[0], 10n ** 15n, 'did not gain eth after redeeming invalid shares')
 	})
 
-	test('can fork zero rep pools', async () => {
+	test.concurrent('can fork zero rep pools', async () => {
 		const endTime = await getMarketEndDate(client, marketId)
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)

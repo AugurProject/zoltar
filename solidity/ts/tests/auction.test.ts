@@ -116,7 +116,7 @@ describe('Auction', () => {
 		assert.ok(await contractExists(client, auctionAddress), 'auction exists')
 	})
 
-	test('can start auction and make a single bid that finalizes', async () => {
+	test.concurrent('can start auction and make a single bid that finalizes', async () => {
 		const ethRaiseCap = 200_000n * 10n ** 18n
 		const maxRepBeingSold = 100n * 10n ** 18n
 		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
@@ -139,7 +139,7 @@ describe('Auction', () => {
 		strictEqualTypeSafe(startBalance, finalBalance, 'did not get eth back')
 	})
 
-	test('multiple bids', async () => {
+	test.concurrent('multiple bids', async () => {
 		const ethRaiseCap = 200_000n * 10n ** 18n
 		const maxRepBeingSold = 100n * 10n ** 18n
 		const startBalance = await getETHBalance(client, client.account.address)
@@ -224,7 +224,7 @@ describe('Auction', () => {
 		assert.ok(cumulativeRep <= maxRepBeingSold, 'Cumulative REP exceeds maxRepBeingSold')
 	})
 
-	test('multiple users bids', async () => {
+	test.concurrent('multiple users bids', async () => {
 		const ethRaiseCap = 200_000n * 10n ** 18n
 		const maxRepBeingSold = 100n * 10n ** 18n
 		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
@@ -268,7 +268,7 @@ describe('Auction', () => {
 		}
 	})
 
-	test('should allow withdrawing bids below clearing price', async () => {
+	test.concurrent('should allow withdrawing bids below clearing price', async () => {
 		const ethRaiseCap = 200_000n * 10n ** 18n
 		const maxRepBeingSold = 100n * 10n ** 18n
 		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
@@ -306,7 +306,7 @@ describe('Auction', () => {
 		await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: price2Tick, bidIndex: 0n }])
 	})
 
-	test('should not allow withdrawing bids at or above clearing price', async () => {
+	test.concurrent('should not allow withdrawing bids at or above clearing price', async () => {
 		const ethRaiseCap = 10n * 10n ** 18n
 		const maxRepBeingSold = 5n * 10n ** 18n
 		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
@@ -325,7 +325,7 @@ describe('Auction', () => {
 		await assert.rejects(async () => { await refundLosingBids(bob, auctionAddress, [{ tick: tickForPrice(priceHigh), bidIndex: 0n }]) }, 'cannot withdraw binding bid')
 	})
 
-	test('should correctly handle underfunded auctions', async () => {
+	test.concurrent('should correctly handle underfunded auctions', async () => {
 		const ethRaiseCap = 100n * 10n ** 18n
 		const maxRepBeingSold = 100n * 10n ** 18n
 		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
@@ -341,7 +341,7 @@ describe('Auction', () => {
 		strictEqualTypeSafe(clearing.priceFound, false, 'auction should be underfunded')
 	})
 
-	test('winning bids receive exactly their requested repAmount with correct eth refund', async () => {
+	test.concurrent('winning bids receive exactly their requested repAmount with correct eth refund', async () => {
 		const ethRaiseCap = 200_000n * 10n ** 18n
 		const maxRepBeingSold = 100n * 10n ** 18n
 		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
@@ -390,7 +390,7 @@ describe('Auction', () => {
 		strictEqualTypeSafe(totalFilled <= maxRepBeingSold, true, 'total filled rep <= maxRepBeingSold')
 	})
 
-	test('multiple bids at same tick from same bidder (FIFO pro-rata)', async () => {
+	test.concurrent('multiple bids at same tick from same bidder (FIFO pro-rata)', async () => {
 		const ethRaiseCap = 100n * 10n ** 18n
 		const maxRepBeingSold = 10n * 10n ** 18n
 		const alice = createTestClient(0)
@@ -419,7 +419,7 @@ describe('Auction', () => {
 		await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: sameTick, bidIndex: 1n }])
 	})
 
-	test('auction time limit prevents bids after expiration', async () => {
+	test.concurrent('auction time limit prevents bids after expiration', async () => {
 		const ethRaiseCap = 100n * 10n ** 18n
 		const maxRepBeingSold = 10n * 10n ** 18n
 		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
@@ -436,7 +436,7 @@ describe('Auction', () => {
 		)
 	})
 
-	test('minimum bid size enforcement', async () => {
+	test.concurrent('minimum bid size enforcement', async () => {
 		// Small ethRaiseCap to get minBidSize = 1
 		const ethRaiseCap = 50000n
 		const maxRepBeingSold = 1n * 10n ** 18n
@@ -455,7 +455,7 @@ describe('Auction', () => {
 		await submitBid(client, auctionAddress, 0n, 1n)
 	})
 
-	test('both caps enforced: ETH cap binds and limits REP sold', async () => {
+	test.concurrent('both caps enforced: ETH cap binds and limits REP sold', async () => {
 		const ethRaiseCap = 50n * 10n ** 18n
 		const maxRepBeingSold = 100n * 10n ** 18n
 		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
@@ -497,7 +497,7 @@ describe('Auction', () => {
 		await assertContractEmpty(client, auctionAddress)
 	})
 
-	test('startAuction validation', async () => {
+	test.concurrent('startAuction validation', async () => {
 		const ethRaiseCap = 100n * 10n ** 18n
 		const maxRepBeingSold = 10n * 10n ** 18n
 
@@ -512,7 +512,7 @@ describe('Auction', () => {
 		await assert.rejects(async () => await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold), 'already started')
 	})
 
-	test('submitBid invalid states: before auction start and after finalize', async () => {
+	test.concurrent('submitBid invalid states: before auction start and after finalize', async () => {
 		const ethRaiseCap = 100n * 10n ** 18n
 		const maxRepBeingSold = 10n * 10n ** 18n
 		const tick = tickForPrice(PRICE_PRECISION)
@@ -537,7 +537,7 @@ describe('Auction', () => {
 		)
 	})
 
-	test('withdrawBids reverts before finalize', async () => {
+	test.concurrent('withdrawBids reverts before finalize', async () => {
 		const ethRaiseCap = 100n * 10n ** 18n
 		const maxRepBeingSold = 10n * 10n ** 18n
 		const tick = tickForPrice(PRICE_PRECISION)
@@ -552,7 +552,7 @@ describe('Auction', () => {
 		)
 	})
 
-	test('non-sequential withdrawal of same-tick bids yields correct allocation', async () => {
+	test.concurrent('non-sequential withdrawal of same-tick bids yields correct allocation', async () => {
 		const ethRaiseCap = 100n * 10n ** 18n
 		const maxRepBeingSold = 10n * 10n ** 18n
 
@@ -577,7 +577,7 @@ describe('Auction', () => {
 		await withdrawBids(client, auctionAddress, client.account.address, [{ tick: sameTick, bidIndex: 0n }])
 	})
 
-	test('combined refundLosingBids and withdrawBids for same user with mixed winning/losing bids', async () => {
+	test.concurrent('combined refundLosingBids and withdrawBids for same user with mixed winning/losing bids', async () => {
 		const ethRaiseCap = 200_000n * 10n ** 18n
 		const maxRepBeingSold = 50n * 10n ** 18n
 		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
@@ -647,7 +647,7 @@ describe('Auction', () => {
 		approximatelyEqual(contractBalance, 0n, 1000n, 'contract should be empty after all withdrawals')
 	})
 
-	test('winner unaffected after bidder refunds multiple losing bids', async () => {
+	test.concurrent('winner unaffected after bidder refunds multiple losing bids', async () => {
 		const ethRaiseCap = 200_000n * 10n ** 18n
 		const maxRepBeingSold = 100n * 10n ** 18n
 		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
