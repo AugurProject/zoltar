@@ -10,7 +10,7 @@ import { EthereumBlockHeader, EthereumBytes32, EthereumData, EthereumQuantity, E
 import { ErrorWithDataAndCode, JsonRpcResponseError, printError } from './utils/errors.js'
 import * as funtypes from 'funtypes'
 import { getConfig } from './utils/config.js'
-import { bigintSecondsToDate, dateToBigintSeconds } from './utils/bigint.js'
+import { dateToBigintSeconds } from './utils/bigint.js'
 
 async function singleCallWithFromOverride(ethereumClientService: EthereumClientService, simulationState: SimulationState | undefined, request: EthCallParams, from: bigint) {
 	const callParams = request.params[0]
@@ -205,10 +205,6 @@ export const getMockedEthSimulateWindowEthereum = (zeroGasPrice: boolean = true,
 			simulationState = await createSimulationState(ethereumClientService, undefined, input)
 		},
 		manipulateTime: async (blockTimeManipulation: BlockTimeManipulation) => {
-			if (blockTimeManipulation.type === 'AddToTimestamp') console.log(`> Advance Time For ${ blockTimeManipulation.deltaToAdd } seconds`)
-			else {
-				console.log(`> Set Time to ${ bigintSecondsToDate(blockTimeManipulation.timeToSet).toISOString() }`)
-			}
 			const newBlock = { simulatedTransactions: [], signedMessages: [], stateOverrides: {}, blockTimeManipulation }
 			const prevBlocks = simulationState?.blocks || []
 			const input = {

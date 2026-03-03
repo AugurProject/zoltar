@@ -9,7 +9,7 @@
 		"test-peripherals": "bun tsc && bun test --timeout 300000 ./js/tests/peripherals.test.js",
 		"test-escalation-game": "bun tsc && bun test --timeout 300000 ./js/tests/escalationGame.test.js",
 		"test-question-data": "bun tsc && bun test --timeout 300000 ./js/tests/questionData.test.js",
-		"test-auction": "bun tsc && bun test --timeout 300000 ./js/tests/auction.test.js"
+		"test-auction": "bun tsc && bun test --timeout 300000 ./js/tests/auction/"
 	},
 	"keywords": [],
 	"author": "",
