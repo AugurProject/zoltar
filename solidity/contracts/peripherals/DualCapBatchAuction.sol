@@ -177,8 +177,7 @@ contract DualCapBatchAuction {
 			uint256 totalEth = ethAbove + ethFromClearing;
 
 			if (totalEth > ethRaiseCap) {
-				uint256 allowedEthForClearing =
-					ethRaiseCap - ethAbove;
+				uint256 allowedEthForClearing = ethRaiseCap - ethAbove;
 
 				// ETH authoritative
 				ethFilledAtClearing = allowedEthForClearing;
@@ -270,36 +269,18 @@ contract DualCapBatchAuction {
 				// Losing bid: refund full ETH
 				totalEthRefund += originalEth;
 			} else if (tick == clearingTick) {
-				// ===== CLEARING TICK =====
-
 				uint256 previousCumulativeEth = bid.cumulativeEth - originalEth;
-
 				uint256 ethUsed;
 
 				if (ethFilledAtClearing <= previousCumulativeEth) {
-					// This bid not reached
 					ethUsed = 0;
-
 				} else if (ethFilledAtClearing >= bid.cumulativeEth) {
-					// Fully used
 					ethUsed = originalEth;
-
 				} else {
-					// Partially used
-					ethUsed =
-						ethFilledAtClearing - previousCumulativeEth;
+					ethUsed = ethFilledAtClearing - previousCumulativeEth;
 				}
-
-				// Safety clamp (should never trigger, but keeps invariants strict)
-				if (ethUsed > originalEth) {
-					ethUsed = originalEth;
-				}
-
-				// Derive REP exactly once from ETH
-				uint256 filledRep =
-					ethUsed * PRICE_PRECISION
-					/ clearingPriceLocal;
-
+				if (ethUsed > originalEth) ethUsed = originalEth;
+				uint256 filledRep = ethUsed * PRICE_PRECISION / clearingPriceLocal;
 				totalFilledRep += filledRep;
 				totalEthRefund += originalEth - ethUsed;
 			} else {

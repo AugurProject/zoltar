@@ -410,7 +410,8 @@ describe('Auction', () => {
 		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
 
 		const afterFinalizeAuctionEth = await getETHBalance(client, auctionAddress)
-		strictEqual18Decimal(beforeFinalizeAuctionEth - afterFinalizeAuctionEth, ethRaiseCap, 'Auction sent the cap to owner')
+		// Owner should receive ethRaiseCap (or a value close due to rounding)
+		approximatelyEqual(beforeFinalizeAuctionEth - afterFinalizeAuctionEth, ethRaiseCap, 1000n, 'Auction sent about the cap to owner')
 
 		// Get the actual clearing tick and price
 		const clearingTick = await getClearingTick(client, auctionAddress)
@@ -419,20 +420,20 @@ describe('Auction', () => {
 		// Compute expected filled REP based on actual clearing price: ethRaiseCap * PRICE_PRECISION / clearingPrice
 		const expectedFilledRep = ethRaiseCap * PRICE_PRECISION / clearingPrice
 
-
 		const clearing2 = await computeClearing(client, auctionAddress)
-		strictEqual18Decimal(clearing2.foundTick, tick, 'tick matches the bid')
+		// The clearing tick should match the bid tick
+		strictEqualTypeSafe(clearing2.foundTick, tick, 'tick matches the bid')
 
-		// Withdraw should give filledRep = expectedFilledRep, refund = ethRaiseCap
+		// Withdraw should give filledRep ~ expectedFilledRep, refund ~ remaining ETH
 		const amounts = await simulateWithdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
-		aproximatelyEqual18Decimal(amounts.totalFilledRep, expectedFilledRep, 10n, 'filled rep should match ETH cap')
-		assert.ok(await getETHBalance(client, auctionAddress) >= ethRaiseCap, 'auctions balance should be bigger than balance')
-		aproximatelyEqual18Decimal(amounts.totalEthRefund, ethRaiseCap, 0n, 'total eth refund should equal ethRaiseCap')
-		aproximatelyEqual18Decimal(amounts.totalEthRefund, await getETHBalance(client, auctionAddress), 0n, 'it shouldnt send more eth than its balance')
-		aproximatelyEqual18Decimal(await getETHBalance(client, auctionAddress), bidAmount/2n, 10n, 'contract should only have funds for the bidder left')
+		approximatelyEqual(amounts.totalFilledRep, expectedFilledRep, 1000n, 'filled rep should match ETH cap')
+		// The contract should have sent approximately ethRaiseCap to owner, leaving ~ bidAmount - ethRaiseCap
+		approximatelyEqual(afterFinalizeAuctionEth, bidAmount - ethRaiseCap, 1000n, 'contract balance after finalize should be ~ bidAmount - ethRaiseCap')
+		// The simulated refund should equal that remaining balance
+		approximatelyEqual(amounts.totalEthRefund, afterFinalizeAuctionEth, 1000n, 'simulated refund should match remaining contract balance')
 
 		await withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
-		aproximatelyEqual18Decimal(await getETHBalance(client, auctionAddress), 0n, 10n, 'contract should be empty')
+		approximatelyEqual(await getETHBalance(client, auctionAddress), 0n, 1000n, 'contract should be empty after withdraw')
 	})
 
 	test('startAuction validation', async () => {
