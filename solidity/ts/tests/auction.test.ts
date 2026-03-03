@@ -518,4 +518,58 @@ describe('Auction', () => {
 		await withdrawBids(client, auctionAddress, client.account.address, [{ tick: sameTick, bidIndex: 1n }])
 		await withdrawBids(client, auctionAddress, client.account.address, [{ tick: sameTick, bidIndex: 0n }])
 	})
+
+	test('winner unaffected after bidder refunds multiple losing bids', async () => {
+		const ethRaiseCap = 200_000n * 10n ** 18n
+		const maxRepBeingSold = 100n * 10n ** 18n
+		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+		const alice = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		const bob = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+
+		// Alice: three losing bids at ticks below 0 (prices < 1e18)
+		const lowTicks = [
+			priceToClosestTick(PRICE_PRECISION / 4n),
+			priceToClosestTick(PRICE_PRECISION / 3n),
+			priceToClosestTick(PRICE_PRECISION / 2n),
+		]
+		// Use minBidSize to satisfy bid size requirement
+		const minBidSize = await getMinBidSize(client, auctionAddress)
+		const lowBid = minBidSize
+		for (const t of lowTicks) {
+			await submitBid(alice, auctionAddress, t, lowBid)
+		}
+
+		// Bob: winning bid at tick 0 with enough ETH to exceed maxRep
+		const bobTick = 0n
+		const bobEth = 120n * 10n ** 18n
+		await submitBid(bob, auctionAddress, bobTick, bobEth)
+
+		// Verify clearing tick is bobTick
+		const clearingPre = await computeClearing(client, auctionAddress)
+		assert.ok(clearingPre.priceFound, 'price found')
+		strictEqualTypeSafe(clearingPre.foundTick, bobTick, 'clearing tick is bobTick')
+
+		// Record Alice balance before refund
+		const aliceBalanceBefore = await getETHBalance(client, alice.account.address)
+
+		// Refund all Alice's losing bids (each tick has a single bid => bidIndex 0)
+		const refundIndices = lowTicks.map(t => ({ tick: t, bidIndex: 0n }))
+		await refundLosingBids(alice, auctionAddress, refundIndices)
+
+		// Alice should get total refund = 3 * lowBid
+		const aliceBalanceAfter = await getETHBalance(client, alice.account.address)
+		strictEqualTypeSafe(aliceBalanceAfter - aliceBalanceBefore, 3n * lowBid, 'Alice total refund')
+
+		// Finalize and verify Bob
+		await finalize(client, auctionAddress)
+		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
+
+		// Bob should receive exactly maxRepBeingSold and refund of bobEth - maxRep
+		const bobAmounts = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }])
+		strictEqualTypeSafe(bobAmounts.totalFilledRep, maxRepBeingSold, 'Bob gets full maxRep')
+		strictEqualTypeSafe(bobAmounts.totalEthRefund, bobEth - maxRepBeingSold, 'Bob refund')
+
+		await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }])
+	})
 })
