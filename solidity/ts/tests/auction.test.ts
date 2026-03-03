@@ -19,6 +19,9 @@ describe('Auction', () => {
 	let mockWindow: MockWindowEthereum
 	let client: WriteClient
 	const PRICE_PRECISION = 1n * 10n ** 18n
+	const WEI_PER_ETH = PRICE_PRECISION // alias for clarity
+	const DEFAULT_ETH_RAISE_CAP = 200_000n
+	const DEFAULT_MAX_REP = 100n
 	let auctionAddress: Address
 
 	// Cache for simulation state to speed up test runs
@@ -66,6 +69,19 @@ describe('Auction', () => {
 		}
 	}
 
+	// Assert clearing matches expected values (convenience wrapper)
+	function assertExpectedClearing(
+		clearing: { priceFound: boolean; foundTick: bigint; repAbove: bigint },
+		expectedTick: bigint,
+		expectedRepAbove?: bigint
+	): void {
+		assertClearing(clearing, true)
+		strictEqualTypeSafe(clearing.foundTick, expectedTick, 'clearing tick mismatch')
+		if (expectedRepAbove !== undefined) {
+			strictEqualTypeSafe(clearing.repAbove, expectedRepAbove, 'repAbove mismatch')
+		}
+	}
+
 	// Finalize auction and verify it's finalized
 	async function finalizeAndVerify(client: WriteClient, auctionAddress: Address): Promise<void> {
 		await finalize(client, auctionAddress)
@@ -94,6 +110,21 @@ describe('Auction', () => {
 		approximatelyEqual(balance, 0n, tolerance, 'contract not empty')
 	}
 
+	// Setup auction with standard parameters (defaults: 200k ETH raise cap, 100 REP sold)
+	async function setupStandardAuction(
+		client: WriteClient,
+		auctionAddress: Address,
+		ethRaiseCapEth: bigint = 200_000n,
+		maxRepEth: bigint = 100n
+	): Promise<void> {
+		await startAuction(
+			client,
+			auctionAddress,
+			ethRaiseCapEth * WEI_PER_ETH,
+			maxRepEth * WEI_PER_ETH
+		)
+	}
+
 	beforeEach(async () => {
 		if (cachedSimulationState) {
 			// Restore from cache (deep copy to avoid mutations)
@@ -117,16 +148,15 @@ describe('Auction', () => {
 	})
 
 	test.concurrent('can start auction and make a single bid that finalizes', async () => {
-		const ethRaiseCap = 200_000n * 10n ** 18n
-		const maxRepBeingSold = 100n * 10n ** 18n
-		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+		const maxRepBeingSold = DEFAULT_MAX_REP * WEI_PER_ETH
+		await setupStandardAuction(client, auctionAddress)
 
 		const tick = tickForPrice(PRICE_PRECISION)
 		const bidSize = maxRepBeingSold
 		const startBalance = await submitBidAndVerifyLock(client, auctionAddress, tick, bidSize)
 
 		const clearing = await computeClearing(client, auctionAddress)
-		assertClearing(clearing, true, tick, 0n)
+		assertExpectedClearing(clearing, tick)
 
 		await finalizeAndVerify(client, auctionAddress)
 
@@ -140,11 +170,10 @@ describe('Auction', () => {
 	})
 
 	test.concurrent('multiple bids', async () => {
-		const ethRaiseCap = 200_000n * 10n ** 18n
-		const maxRepBeingSold = 100n * 10n ** 18n
+		const maxRepBeingSold = DEFAULT_MAX_REP * WEI_PER_ETH
 		const startBalance = await getETHBalance(client, client.account.address)
 
-		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+		await setupStandardAuction(client, auctionAddress)
 
 		const bids = [
 			{ bidSize: maxRepBeingSold / 5n, priceRepEth: PRICE_PRECISION / 4n },
@@ -225,9 +254,8 @@ describe('Auction', () => {
 	})
 
 	test.concurrent('multiple users bids', async () => {
-		const ethRaiseCap = 200_000n * 10n ** 18n
-		const maxRepBeingSold = 100n * 10n ** 18n
-		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+		const maxRepBeingSold = DEFAULT_MAX_REP * WEI_PER_ETH
+		await setupStandardAuction(client, auctionAddress)
 		const bids = [
 			{ bidSize: 2n * maxRepBeingSold / 7n, priceRepEth: PRICE_PRECISION / 4n, address: TEST_ADDRESSES[0], bidIndex: 0n },
 			{ bidSize: 2n * maxRepBeingSold / 7n, priceRepEth: PRICE_PRECISION / 4n, address: TEST_ADDRESSES[1], bidIndex: 1n },
@@ -269,9 +297,9 @@ describe('Auction', () => {
 	})
 
 	test.concurrent('should allow withdrawing bids below clearing price', async () => {
-		const ethRaiseCap = 200_000n * 10n ** 18n
-		const maxRepBeingSold = 100n * 10n ** 18n
-		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+		const ethRaiseCap = DEFAULT_ETH_RAISE_CAP * WEI_PER_ETH
+		const maxRepBeingSold = DEFAULT_MAX_REP * WEI_PER_ETH
+		await setupStandardAuction(client, auctionAddress)
 
 		const price1Tick = tickForPrice(1n * 10n ** 18n / 2n)
 		const price2Tick = tickForPrice(1n * 10n ** 18n)
@@ -342,9 +370,8 @@ describe('Auction', () => {
 	})
 
 	test.concurrent('winning bids receive exactly their requested repAmount with correct eth refund', async () => {
-		const ethRaiseCap = 200_000n * 10n ** 18n
-		const maxRepBeingSold = 100n * 10n ** 18n
-		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+		const maxRepBeingSold = DEFAULT_MAX_REP * WEI_PER_ETH
+		await setupStandardAuction(client, auctionAddress)
 
 		const alice = createTestClient(0)
 		const bob = createTestClient(1)
@@ -648,9 +675,8 @@ describe('Auction', () => {
 	})
 
 	test.concurrent('winner unaffected after bidder refunds multiple losing bids', async () => {
-		const ethRaiseCap = 200_000n * 10n ** 18n
-		const maxRepBeingSold = 100n * 10n ** 18n
-		await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+		const maxRepBeingSold = DEFAULT_MAX_REP * WEI_PER_ETH
+		await setupStandardAuction(client, auctionAddress)
 
 		const alice = createTestClient(0)
 		const bob = createTestClient(1)
