@@ -42,7 +42,7 @@ describe('Escalation Game Test Suite', () => {
 		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
 	})
 
-	test.concurrent('can start a game', async () => {
+	test('can start a game', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
 		assert.ok(await contractExists(client, escalationGame), 'game was deployed')
 		const outcomeBalances = await getBalances(client, escalationGame)

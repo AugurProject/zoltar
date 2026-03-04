@@ -40,7 +40,7 @@ describe('Question Data', () => {
 		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
 	})
 
-	test.concurrent('can make categorical question', async () => {
+	test('can make categorical question', async () => {
 		const outcomeLabels = ['Yes', 'No']
 		const testCategoricalQuestion = {
 			title: 'test categorical question',
@@ -78,7 +78,7 @@ describe('Question Data', () => {
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 3n), 'Malformed','doesn\'t exist')
 	})
 
-	test.concurrent('can make scalar question', async () => {
+	test('can make scalar question', async () => {
 		const testScalarQuestion = {
 			title: 'test scalar question',
 			description: 'test scalar description',

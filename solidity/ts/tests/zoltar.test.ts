@@ -39,7 +39,7 @@ describe('Contract Test Suite', () => {
 		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse)))
 	})
 
-	test.concurrent('canDeployContract', async () => {
+	test('canDeployContract', async () => {
 		const isDeployed = await isZoltarDeployed(client)
 		assert.ok(isDeployed, `Not Deployed!`)
 
@@ -47,7 +47,7 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(BigInt(genesisUniverseData.reputationToken), GENESIS_REPUTATION_TOKEN, 'Genesis universe not recognized or not initialized properly')
 	})
 
-	test.concurrent('canForkQuestion', async () => {
+	test('canForkQuestion', async () => {
 		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const zoltar = getZoltarAddress()
 		const marketText = 'test market'
