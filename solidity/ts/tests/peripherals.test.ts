@@ -458,6 +458,6 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'child contract did not record the amount correctly')
 	})
 
-	// - todo test that users can claim their stuff (shares+rep) even if zoltar forks after market ends
+	// - TOdo test that users can claim their stuff (shares+rep) even if zoltar forks after market ends
 })
 

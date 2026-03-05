@@ -37,7 +37,7 @@ contract ZoltarQuestionData {
 			for (uint256 index = 0; index < outcomeOptions.length; index++) {
 				require(bytes(outcomeOptions[index]).length > 0, 'Empty string');
 			}
-			outcomeLabels[questionId] = outcomeOptions; //todo, check that these are unique?
+			outcomeLabels[questionId] = outcomeOptions; //TOdo, check that these are unique?
 		}
 		questions[questionId] = questionData;
 		questionCreatedTimestamp[questionId] = block.timestamp;

@@ -33,7 +33,7 @@ export const BlockTimeManipulation = funtypes.Union(
 		deltaToAdd: EthereumQuantity,
 	}),
 	funtypes.ReadonlyObject({
-		type: funtypes.Literal('SetTimetamp'),
+		type: funtypes.Literal('SetTimestamp'),
 		timeToSet: EthereumQuantity,
 	}),
 )

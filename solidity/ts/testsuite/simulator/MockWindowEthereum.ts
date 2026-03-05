@@ -233,6 +233,6 @@ export const getMockedEthSimulateWindowEthereum = (zeroGasPrice: boolean = true,
 		setTime: async (_date: bigint) => {},
 	}
 	mock.advanceTime = async (amountInSeconds: bigint) => await mock.manipulateTime({ type: 'AddToTimestamp', deltaToAdd: amountInSeconds })
-	mock.setTime = async (date: bigint) => await mock.manipulateTime({ type: 'SetTimetamp', timeToSet: date })
+	mock.setTime = async (date: bigint) => await mock.manipulateTime({ type: 'SetTimestamp', timeToSet: date })
 	return mock
 }

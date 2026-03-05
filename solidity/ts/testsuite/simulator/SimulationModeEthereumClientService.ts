@@ -633,7 +633,7 @@ export const simulatedCall = async (ethereumClientService: EthereumClientService
 		chainId: ethereumClientService.getChainId(),
 	} as const
 
-	//todo, we can optimize this by leaving nonce out
+	//TOdo, we can optimize this by leaving nonce out
 	try {
 		const currentBlock = await ethereumClientService.getBlock(requestAbortController)
 		if (currentBlock === null) throw new Error('cannot perform call on top of missing block')

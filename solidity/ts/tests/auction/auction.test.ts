@@ -91,10 +91,6 @@ describe('Auction', () => {
 		await startAuction(client, auctionAddress, ethRaiseCapEth * WEI_PER_ETH, maxRepBeingSold * WEI_PER_ETH)
 	}
 
-	/**
-	 * Verifies that a user's bids were paid out fairly after auction finalization.
-	 * Returns total filled REP and total ETH refund for this user.
-	 */
 	async function assertFairPayoutForUser(auctionCreator: WriteClient, auctionAddress: Address, userId: `0x${ string }`, bids: { tick: bigint; bidSize: bigint; bidIndex: bigint }[], clearingTick: bigint, tolerance: bigint = DEFAULT_TOLERANCE): Promise<{ totalFilledRep: bigint; totalEthRefund: bigint }> {
 		const clearingPrice = tickToPrice(clearingTick)
 		let totalFilledRep = 0n
@@ -122,7 +118,6 @@ describe('Auction', () => {
 				assert.strictEqual(amounts.totalEthRefund, 0n, `Bid ${ bid.bidIndex } (winning): no ETH refund`)
 				totalFilledRep += amounts.totalFilledRep
 			}
-
 			await withdrawBids(auctionCreator, auctionAddress, userId, [{ tick: bid.tick, bidIndex: bid.bidIndex }])
 		}
 		return { totalFilledRep, totalEthRefund }

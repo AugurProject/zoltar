@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
-// TODO: figure ouf if this can run up issues with gas and figure out how to avoid them
+// TODO: figure out if this can run up issues with gas and figure out how to avoid them
 contract DualCapBatchAuction {
 	struct Node {
 		int256 tick; // ETH/REP price (tick)
@@ -41,7 +41,7 @@ contract DualCapBatchAuction {
 	bool public finalized;
 	int256 public clearingTick;
 	uint256 public ethFilledAtClearing;
-	uint256 public ethRaised; //todo, if ethraised is less than ethRaiseCap (underfunded), we should give all the rep we have to bidders
+	uint256 public ethRaised; //TOdo, if ethraised is less than ethRaiseCap (underfunded), we should give all the rep we have to bidders
 
 	uint256 public auctionStarted;
 	uint256 public minBidSize;
