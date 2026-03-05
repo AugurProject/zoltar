@@ -1,11 +1,12 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+// SPDX-License-Identifier: Unlicense
+pragma solidity 0.8.33;
 
+// TODO: figure ouf if this can run up issues with gas and figure out how to avoid them
 contract DualCapBatchAuction {
 	struct Node {
-		int256 tick;            // ETH/REP price (tick)
-		uint256 totalEth;       // total ETH at this tick
-		uint256 subtreeEth;     // total ETH in subtree
+		int256 tick; // ETH/REP price (tick)
+		uint256 totalEth; // total ETH at this tick
+		uint256 subtreeEth; // total ETH in subtree
 		uint256 left;
 		uint256 right;
 		uint256 height;
@@ -15,7 +16,6 @@ contract DualCapBatchAuction {
 		address bidder;
 		uint256 ethAmount;
 		uint256 cumulativeEth;
-		int256 minTick;         // bidder's minimum tick
 	}
 
 	struct TickIndex {
@@ -31,7 +31,6 @@ contract DualCapBatchAuction {
 
 	mapping(uint256 => Node) private nodes;
 	mapping(int256 => Bid[]) private bidsAtTick;
-	mapping(int256 => uint256) private nodeIdByTick;
 
 	uint256 private root;
 	uint256 private nextId = 1;
@@ -41,13 +40,12 @@ contract DualCapBatchAuction {
 
 	bool public finalized;
 	int256 public clearingTick;
-	uint256 public repFilledAtClearing;
 	uint256 public ethFilledAtClearing;
-	uint256 public ethRaised;
+	uint256 public ethRaised; //todo, if ethraised is less than ethRaiseCap (underfunded), we should give all the rep we have to bidders
 
 	uint256 public auctionStarted;
 	uint256 public minBidSize;
-	address public owner;
+	address public immutable owner;
 
 	event AuctionStarted(uint256 ethRaiseCap, uint256 maxRepBeingSold, uint256 minBidSize);
 	event SubmitBid(address bidder, int256 tick, uint256 amount);
@@ -82,7 +80,7 @@ contract DualCapBatchAuction {
 	function submitBid(int256 tick) external payable isOperational {
 		require(msg.value >= minBidSize, 'bid too small');
 		require(tick >= MIN_TICK && tick <= MAX_TICK, 'tick out of bounds');
-		root = _insert(root, tick, msg.sender, msg.value, tick);
+		root = _insert(root, tick, msg.sender, msg.value);
 		emit SubmitBid(msg.sender, tick, msg.value);
 	}
 
@@ -150,6 +148,7 @@ contract DualCapBatchAuction {
 			if (ethUsedAtTick > ethToTake) ethUsedAtTick = ethToTake;
 			return (true, node.tick, accEth + ethUsedAtTick, ethUsedAtTick);
 		}
+
 		accEth = newAccEth;
 
 		lastValidTick = node.tick;
@@ -160,17 +159,9 @@ contract DualCapBatchAuction {
 		return _compute(node.left, accEth, lastValidTick, lastValidEth, lastValidEthAtTick);
 	}
 
-    function withdrawBids(address withdrawFor, TickIndex[] memory tickIndices) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
+	function withdrawBids(address withdrawFor, TickIndex[] memory tickIndices) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
 		require(finalized, 'not finalized');
 		require(msg.sender == owner, 'Only owner can call');
-		(totalFilledRep, totalEthRefund) = simWithdrawBids(withdrawFor, tickIndices);
-		emit WithdrawBids(withdrawFor, tickIndices, totalFilledRep, totalEthRefund);
-		if (totalEthRefund == 0) return;
-		(bool sent, ) = payable(withdrawFor).call{ value: totalEthRefund }('');
-		require(sent, 'eth transfer failed');
-    }
-
-	function simWithdrawBids(address withdrawFor, TickIndex[] memory tickIndices) public returns (uint256 totalFilledRep, uint256 totalEthRefund) {
 		uint256 clearingPriceLocal = tickToPrice(clearingTick);
 
 		for (uint256 i = 0; i < tickIndices.length; i++) {
@@ -180,46 +171,46 @@ contract DualCapBatchAuction {
 			Bid storage bid = bidsAtTick[tick][index];
 			require(bid.bidder == withdrawFor, 'not their bid');
 			require(bid.ethAmount > 0, 'already claimed');
-
-			uint256 originalEth = bid.ethAmount;
-			bid.ethAmount = 0; // prevent double withdrawals
-
 			if (tick < clearingTick) {
 				// Losing bid: refund full ETH
-				totalEthRefund += originalEth;
+				totalEthRefund += bid.ethAmount;
 			} else if (tick > clearingTick) {
 				// Fully winning: convert all ETH to REP
-				totalFilledRep += originalEth * PRICE_PRECISION / clearingPriceLocal;
+				totalFilledRep += bid.ethAmount * PRICE_PRECISION / clearingPriceLocal;
 			} else {
-				// Tick == clearingTick:  partial fill
+				// Tick == clearingTick: partial fill
 				// Determine previous cumulative ETH at this tick
-				uint256 previousCumulativeEth = bid.cumulativeEth - originalEth;
+				uint256 previousCumulativeEth = bid.cumulativeEth - bid.ethAmount;
 				uint256 ethUsed;
 
 				if (ethFilledAtClearing <= previousCumulativeEth) {
 					ethUsed = 0; // this bid did not get filled
 				} else if (ethFilledAtClearing >= bid.cumulativeEth) {
-					ethUsed = originalEth; // fully filled
+					ethUsed = bid.ethAmount; // fully filled
 				} else {
 					ethUsed = ethFilledAtClearing - previousCumulativeEth; // partially filled
 				}
 
-				if (ethUsed > originalEth) ethUsed = originalEth; // safety clamp
+				if (ethUsed > bid.ethAmount) ethUsed = bid.ethAmount; // safety clamp
 				uint256 filledRep = ethUsed * PRICE_PRECISION / clearingPriceLocal;
 
 				totalFilledRep += filledRep;
-				totalEthRefund += originalEth - ethUsed;
+				totalEthRefund += bid.ethAmount - ethUsed;
 			}
+			bid.ethAmount = 0; // prevent double withdrawals
+		}
+		if (totalEthRefund != 0) {
+			(bool sent, ) = payable(withdrawFor).call{ value: totalEthRefund }('');
+			require(sent, 'eth transfer failed');
 		}
 	}
 
-	function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount, int256 minTick) internal returns (uint256) {
+	function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {
 		if (nodeId == 0) {
 			uint256 newId = nextId++;
 			nodes[newId] = Node({ tick: tick, totalEth: ethAmount, subtreeEth: ethAmount, left: 0, right: 0, height: 1 });
-			nodeIdByTick[tick] = newId;
 
-			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, minTick: minTick, cumulativeEth: ethAmount }));
+			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: ethAmount }));
 
 			return newId;
 		}
@@ -228,11 +219,11 @@ contract DualCapBatchAuction {
 		if (tick == node.tick) {
 			node.totalEth += ethAmount;
 			uint256 cumulativeEth = bidsAtTick[tick].length == 0 ? ethAmount : bidsAtTick[tick][bidsAtTick[tick].length - 1].cumulativeEth + ethAmount;
-			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, minTick: minTick, cumulativeEth: cumulativeEth }));
+			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: cumulativeEth }));
 		} else if (tick < node.tick) {
-			node.left = _insert(node.left, tick, bidder, ethAmount, minTick);
+			node.left = _insert(node.left, tick, bidder, ethAmount);
 		} else {
-			node.right = _insert(node.right, tick, bidder, ethAmount, minTick);
+			node.right = _insert(node.right, tick, bidder, ethAmount);
 		}
 
 		_update(nodeId);
@@ -242,8 +233,14 @@ contract DualCapBatchAuction {
 	function _update(uint256 nodeId) internal {
 		Node storage node = nodes[nodeId];
 		uint256 leftEth; uint256 rightEth; uint256 leftH; uint256 rightH;
-		if (node.left != 0) { leftEth = nodes[node.left].subtreeEth; leftH = nodes[node.left].height; }
-		if (node.right != 0) { rightEth = nodes[node.right].subtreeEth; rightH = nodes[node.right].height; }
+		if (node.left != 0) {
+			leftEth = nodes[node.left].subtreeEth;
+			leftH = nodes[node.left].height;
+		}
+		if (node.right != 0) {
+			rightEth = nodes[node.right].subtreeEth;
+			rightH = nodes[node.right].height;
+		}
 
 		node.subtreeEth = node.totalEth + leftEth + rightEth;
 		node.height = 1 + (leftH > rightH ? leftH : rightH);
@@ -353,9 +350,6 @@ contract DualCapBatchAuction {
 	}
 
 	function _decreaseAtPrice(int256 tick, uint256 ethAmount) internal {
-		uint256 nodeId = nodeIdByTick[tick];
-		require(nodeId != 0, 'tick missing');
-
 		root = _decrease(root, tick, ethAmount);
 	}
 
@@ -395,8 +389,6 @@ contract DualCapBatchAuction {
 		} else if (tick > node.tick) {
 			node.right = _delete(node.right, tick);
 		} else {
-			// Node found
-			delete nodeIdByTick[node.tick];
 
 			// Case 1: no children
 			if (node.left == 0 && node.right == 0) {
@@ -425,9 +417,6 @@ contract DualCapBatchAuction {
 			// Copy successor data
 			node.tick = successor.tick;
 			node.totalEth = successor.totalEth;
-
-			// Update mapping
-			nodeIdByTick[node.tick] = nodeId;
 
 			// Delete successor recursively
 			node.right = _delete(node.right, successor.tick);
