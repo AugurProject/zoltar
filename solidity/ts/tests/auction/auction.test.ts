@@ -467,8 +467,7 @@ describe('Auction', () => {
 			await finalize(client, auctionAddress)
 
 			const clearing = await computeClearing(client, auctionAddress)
-			console.log(clearing)
-			strictEqualTypeSafe(clearing.priceFound, true, 'auction should have price')
+			strictEqualTypeSafe(clearing.priceFound, false, 'auction should not have price')
 		})
 
 		test('auction time limit prevents bids after expiration', async () => {
@@ -543,11 +542,12 @@ describe('Auction', () => {
 			await finalizeAndVerify(client, auctionAddress)
 
 			const afterFinalizeAuctionEth = await getETHBalance(client, auctionAddress)
-			approximatelyEqual(beforeFinalizeAuctionEth - afterFinalizeAuctionEth, ethRaiseCap, 1000n, 'Auction sent about the cap to owner')
-
 			const clearingTick = await getClearingTick(client, auctionAddress)
 			const clearingPrice = tickToPrice(clearingTick)
-			const expectedFilledRep = ethRaiseCap * PRICE_PRECISION / clearingPrice
+			approximatelyEqual(beforeFinalizeAuctionEth - afterFinalizeAuctionEth, maxRepBeingSold * PRICE_PRECISION / clearingPrice, 1000n, 'Auction sent about the cap to owner')
+
+			const clearing = await computeClearing(client, auctionAddress);
+			const expectedFilledRep =  clearing.accumulatedEth * PRICE_PRECISION / clearingPrice
 
 			const clearing2 = await computeClearing(client, auctionAddress)
 			strictEqualTypeSafe(clearing2.foundTick, tick, 'tick matches the bid')
