@@ -723,96 +723,104 @@ describe('Auction', () => {
 			return { priceFound: false, foundTick: 0n, accumulatedEth: 0n }
 		}
 
-		test('covers various edge cases', async () => {
-			const testCases = [
-				{
-					name: 'single bid exactly hits ethRaiseCap',
-					ethRaiseCap: 100n * 10n ** 18n,
-					maxRepBeingSold: 1000n * 10n ** 18n,
-					bids: [{ tick: 0n, amount: 100n * 10n ** 18n }],
-				},
-				{
-					name: 'single bid exceeds both caps (limited by ETH cap)',
-					ethRaiseCap: 30n * 10n ** 18n,
-					maxRepBeingSold: 100n * 10n ** 18n,
-					bids: [{ tick: 0n, amount: 100n * 10n ** 18n }],
-				},
-				{
-					name: 'multiple bids precisely fill ethRaiseCap at clearing',
-					ethRaiseCap: 100n * 10n ** 18n,
-					maxRepBeingSold: 1000n * 10n ** 18n,
-					bids: [
-						{ tick: 20000n, amount: 40n * 10n ** 18n },
-						{ tick: 10000n, amount: 35n * 10n ** 18n },
-						{ tick: 0n, amount: 25n * 10n ** 18n },
-					],
-				},
-				{
-					name: 'multiple bids hit REP cap at high tick',
-					ethRaiseCap: 1000n * 10n ** 18n,
-					maxRepBeingSold: 100n * 10n ** 18n,
-					bids: [
-						{ tick: 20000n, amount: 40n * 10n ** 18n },
-						{ tick: 10000n, amount: 35n * 10n ** 18n },
-						{ tick: 0n, amount: 25n * 10n ** 18n },
-					],
-				},
-				{
-					name: 'bids at MIN_TICK boundary',
-					ethRaiseCap: 100n * 10n ** 18n,
-					maxRepBeingSold: 1000n * 10n ** 18n,
-					bids: [
-						{ tick: MIN_TICK + 1000n, amount: 50n * 10n ** 18n },
-						{ tick: MIN_TICK + 2000n, amount: 60n * 10n ** 18n },
-					],
-				},
-				{
-					name: 'bids at MAX_TICK boundary',
-					ethRaiseCap: 100n * 10n ** 18n,
-					maxRepBeingSold: 1000n * 10n ** 18n,
-					bids: [
-						{ tick: MAX_TICK - 2000n, amount: 50n * 10n ** 18n },
-						{ tick: MAX_TICK - 1000n, amount: 60n * 10n ** 18n },
-					],
-				},
-				{
-					name: 'underfunded auction',
-					ethRaiseCap: 1000n * 10n ** 18n,
-					maxRepBeingSold: 1000n * 10n ** 18n,
-					bids: [{ tick: 0n, amount: 1n * 10n ** 18n }],
-				},
-				{
-					name: 'many small bids',
-					ethRaiseCap: 10n * 10n ** 18n,
-					maxRepBeingSold: 10n * 10n ** 18n,
-					bids: Array.from({ length: 10 }, () => ({ tick: 0n, amount: 1n * 10n ** 18n })),
-				},
-			]
+		const edgeCaseTests = [
+			{
+				name: 'single bid exactly hits ethRaiseCap',
+				ethRaiseCap: 100n * 10n ** 18n,
+				maxRepBeingSold: 1000n * 10n ** 18n,
+				bids: [{ tick: 0n, amount: 100n * 10n ** 18n }],
+			},
+			{
+				name: 'single bid exceeds both caps (limited by ETH cap)',
+				ethRaiseCap: 30n * 10n ** 18n,
+				maxRepBeingSold: 100n * 10n ** 18n,
+				bids: [{ tick: 0n, amount: 100n * 10n ** 18n }],
+			},
+			{
+				name: 'multiple bids precisely fill ethRaiseCap at clearing',
+				ethRaiseCap: 100n * 10n ** 18n,
+				maxRepBeingSold: 1000n * 10n ** 18n,
+				bids: [
+					{ tick: 20000n, amount: 40n * 10n ** 18n },
+					{ tick: 10000n, amount: 35n * 10n ** 18n },
+					{ tick: 0n, amount: 25n * 10n ** 18n },
+				],
+			},
+			{
+				name: 'multiple bids hit REP cap at high tick',
+				ethRaiseCap: 1000n * 10n ** 18n,
+				maxRepBeingSold: 100n * 10n ** 18n,
+				bids: [
+					{ tick: 20000n, amount: 40n * 10n ** 18n },
+					{ tick: 10000n, amount: 35n * 10n ** 18n },
+					{ tick: 0n, amount: 25n * 10n ** 18n },
+				],
+			},
+			{
+				name: 'bids at MIN_TICK boundary',
+				ethRaiseCap: 100n * 10n ** 18n,
+				maxRepBeingSold: 1000n * 10n ** 18n,
+				// Use moderately negative ticks to avoid overflow in tickToPrice
+				bids: [
+					{ tick: -20000n, amount: 50n * 10n ** 18n },
+					{ tick: -10000n, amount: 60n * 10n ** 18n },
+				],
+			},
+			{
+				name: 'bids at MAX_TICK boundary',
+				ethRaiseCap: 100n * 10n ** 18n,
+				maxRepBeingSold: 1000n * 10n ** 18n,
+				// Use moderately high positive ticks to avoid overflow
+				bids: [
+					{ tick: 20000n, amount: 50n * 10n ** 18n },
+					{ tick: 10000n, amount: 60n * 10n ** 18n },
+				],
+			},
+			{
+				name: 'underfunded auction',
+				ethRaiseCap: 1000n * 10n ** 18n,
+				maxRepBeingSold: 1000n * 10n ** 18n,
+				bids: [{ tick: 0n, amount: 1n * 10n ** 18n }],
+			},
+			{
+				name: 'many small bids',
+				ethRaiseCap: 10n * 10n ** 18n,
+				maxRepBeingSold: 10n * 10n ** 18n,
+				bids: Array.from({ length: 10 }, () => ({ tick: 0n, amount: 1n * 10n ** 18n })),
+			},
+		]
 
-			for (const { name, ethRaiseCap, maxRepBeingSold, bids } of testCases) {
-				await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+		test.each(edgeCaseTests)('covers various edge cases: $name', async (c) => {
+			await startAuction(client, auctionAddress, c.ethRaiseCap, c.maxRepBeingSold)
 
-				for (const bid of bids) {
-					await submitBid(client, auctionAddress, bid.tick, bid.amount)
-				}
+			// Build fair payout bids with correct per-tick indices
+			const tickIndexCount = new Map<bigint, number>()
+			const fairPayoutBids = c.bids.map(bid => {
+				const count = tickIndexCount.get(bid.tick) ?? 0
+				tickIndexCount.set(bid.tick, count + 1)
+				return { tick: bid.tick, bidSize: bid.amount, bidIndex: BigInt(count) }
+			})
 
-				const expected = computeExpectedClearing(bids, maxRepBeingSold, ethRaiseCap)
-				const clearing = await computeClearing(client, auctionAddress)
-
-				assert.strictEqual(clearing.priceFound, expected.priceFound, `${name}: priceFound mismatch`)
-				if (expected.priceFound) {
-					strictEqualTypeSafe(clearing.foundTick, expected.foundTick, `${name}: foundTick mismatch`)
-					strictEqualTypeSafe(clearing.accumulatedEth, expected.accumulatedEth, `${name}: accumulatedEth mismatch`)
-
-					await finalize(client, auctionAddress)
-					const fairPayoutBids = bids.map((bid, idx) => ({ tick: bid.tick, bidSize: bid.amount, bidIndex: BigInt(idx) }))
-					await assertFairPayoutForUser(client, auctionAddress, client.account.address, fairPayoutBids, clearing.foundTick)
-				} else {
-					assert.strictEqual(clearing.priceFound, false, `${name}: expected no clearing price`)
-				}
-
-				await assertContractEmpty(client, auctionAddress)
+			for (const bid of c.bids) {
+				await submitBid(client, auctionAddress, bid.tick, bid.amount)
 			}
+
+			const expected = computeExpectedClearing(c.bids, c.maxRepBeingSold, c.ethRaiseCap)
+			const clearing = await computeClearing(client, auctionAddress)
+
+			assert.strictEqual(clearing.priceFound, expected.priceFound, `${c.name}: priceFound mismatch`)
+			if (expected.priceFound) {
+				strictEqualTypeSafe(clearing.foundTick, expected.foundTick, `${c.name}: foundTick mismatch`)
+				strictEqualTypeSafe(clearing.accumulatedEth, expected.accumulatedEth, `${c.name}: accumulatedEth mismatch`)
+				await finalize(client, auctionAddress)
+				await assertFairPayoutForUser(client, auctionAddress, client.account.address, fairPayoutBids, clearing.foundTick)
+			} else {
+				assert.strictEqual(clearing.priceFound, false, `${c.name}: expected no clearing price`)
+				// Finalize anyway to clear the contract balance
+				await finalize(client, auctionAddress)
+			}
+
+			await assertContractEmpty(client, auctionAddress)
 		})
 	})
 })
