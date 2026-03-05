@@ -149,6 +149,8 @@ contract DualCapBatchAuction {
 			return (true, node.tick, accEth + ethUsedAtTick, ethUsedAtTick);
 		}
 
+		if (newAccEth >= ethRaiseCap) return (true, node.tick, newAccEth, ethToTake);
+
 		accEth = newAccEth;
 
 		lastValidTick = node.tick;
