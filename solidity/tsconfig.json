@@ -17,8 +17,7 @@
 		"noFallthroughCasesInSwitch": true,
 		"esModuleInterop": true,
 		"lib": ["ESNext", "DOM"],
-		"types": ["node", "bun-types"],
-		"skipLibCheck": true
+		"types": ["node", "bun-types"]
 	},
 	"include": [
 		"./ts/**/*.ts",
