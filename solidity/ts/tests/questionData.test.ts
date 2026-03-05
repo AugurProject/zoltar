@@ -17,25 +17,20 @@ describe('Question Data', () => {
 	let mockWindow: MockWindowEthereum
 	let client: WriteClient
 
-	// Cache for simulation state to speed up test runs
 	let cachedSimulationState: SimulationState | undefined = undefined
 
 	beforeEach(async () => {
 		if (cachedSimulationState) {
-			// Restore from cache (deep copy to avoid mutations)
 			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
 		} else {
-			// Fresh setup - run full initialization
 			mockWindow = getMockedEthSimulateWindowEthereum()
 			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
 			await setupTestAccounts(mockWindow)
 			await ensureZoltarDeployed(client)
 			await ensureInfraDeployed(client)
-			// Cache the state after first full setup (deep copy)
 			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
 		}
-		// Always create a fresh client for the current mockWindow
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
 	})

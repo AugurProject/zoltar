@@ -46,15 +46,12 @@ describe('Peripherals Contract Test Suite', () => {
 	const marketText = 'test market'
 	const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'] as const
 
-	// Cache for simulation state to speed up test runs
 	let cachedSimulationState: SimulationState | undefined = undefined
 
 	beforeEach(async () => {
 		if (cachedSimulationState) {
-			// Restore from cache (deep copy to avoid mutations)
 			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
 		} else {
-			// Fresh setup - run full initialization
 			mockWindow = getMockedEthSimulateWindowEthereum()
 			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
@@ -63,15 +60,11 @@ describe('Peripherals Contract Test Suite', () => {
 			await ensureInfraDeployed(client)
 			await deployOriginSecurityPool(client, genesisUniverse, EXTRA_INFO, marketEndDate, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
 			await approveAndDepositRep(client, repDeposit, marketId)
-			// Cache the state after first full setup (deep copy)
 			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
 		}
-		// Always create a fresh client for the current mockWindow
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
-		// Always compute securityPoolAddresses after mockWindow/client are ready
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, marketId, securityMultiplier)
-		// Fetch startBalance after accounts are set up (balance of GENESIS_REPUTATION_TOKEN)
 		startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 	})
 

@@ -207,51 +207,7 @@ describe('Auction', () => {
 			const finalBalance = await getETHBalance(client, client.account.address)
 			strictEqualTypeSafe(startBalance, finalBalance, 'did not get eth back')
 		})
-/*type Bid = {
-  bidSize: bigint;      // ETH amount
-  tick: bigint;  // REP per ETH
-  address?: bigint;
-  bidIndex?: bigint;
-};
 
-		function computeClearingTypeScript(bidsByTick: Bid[], maxRepBeingSold: bigint, ethRaiseCap: bigint) {
-		// Sort descending by tick (higher price first)
-		const sortedBids = bidsByTick.slice().sort((a, b) => (b.tick - a.tick > 0n ? 1 : -1));
-
-		let accumulatedEth = 0n;
-		let clearingTick = 0n;
-		let ethFilledAtClearing = 0n;
-		let priceFound = false;
-		for (const node of sortedBids) {
-			const price = tickToPrice(node.tick); // assuming tick = price here
-			const maxEthAtThisTick = maxRepBeingSold * PRICE_PRECISION / price;
-
-			let newAccumulatedEth = accumulatedEth + node.bidSize;
-
-			// Check if this tick overfills the REP cap
-			if (newAccumulatedEth > maxEthAtThisTick) {
-			ethFilledAtClearing = accumulatedEth >= maxEthAtThisTick ? 0n : maxEthAtThisTick - accumulatedEth;
-			accumulatedEth += ethFilledAtClearing;
-			clearingTick = node.tick;
-			priceFound = true;
-			break;
-			}
-
-			// Check ETH raise cap
-			if (newAccumulatedEth >= ethRaiseCap) {
-			ethFilledAtClearing = ethRaiseCap - accumulatedEth;
-			accumulatedEth = ethRaiseCap;
-			clearingTick = node.tick;
-			priceFound = true;
-			break;
-			}
-
-			accumulatedEth = newAccumulatedEth;
-		}
-
-		return { priceFound, clearingTick, accumulatedEth, ethFilledAtClearing };
-		}
-*/
 		test('multiple users bids', async () => {
 			const maxRepBeingSold = DEFAULT_MAX_REP * WEI_PER_ETH
 			await setupStandardAuction(client, auctionAddress)
