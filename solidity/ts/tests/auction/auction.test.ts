@@ -774,4 +774,66 @@ describe('Auction', () => {
 			await assertContractEmpty(client, auctionAddress)
 		})
 	})
+
+	describe('Withdrawals after finalization require owner', () => {
+		test('losing bidder cannot withdraw after finalization - only owner can call withdrawBids', async () => {
+			// Setup auction with enough capacity
+			const ethRaiseCap = 100n * 10n ** 18n
+			const maxRepBeingSold = 10n * 10n ** 18n
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+			// Losing bidder (not owner)
+			const alice = createTestClient(1)
+			const losingTick = -20000n
+			const losingEth = 2n * 10n ** 18n
+			await submitBid(alice, auctionAddress, losingTick, losingEth)
+
+			// Owner places a bid that will be at the clearing tick
+			const clearingTick = 0n
+			const clearingEth = 9n * 10n ** 18n
+			await submitBid(client, auctionAddress, clearingTick, clearingEth)
+
+			// Winning bidder (not owner) - tick above clearing
+			const bob = createTestClient(2)
+			const winningTick = 10000n
+			const winningEth = 1n * 10n ** 18n
+			await submitBid(bob, auctionAddress, winningTick, winningEth)
+
+			// Verify clearing tick is above losing tick
+			const clearingPre = await computeClearing(client, auctionAddress)
+			assert.ok(clearingPre.priceFound)
+			strictEqualTypeSafe(clearingPre.foundTick, clearingTick, 'clearing tick should be 0')
+			strictEqualTypeSafe(clearingPre.foundTick > losingTick, true)
+
+			// Finalize
+			await finalize(client, auctionAddress)
+			strictEqualTypeSafe(await isFinalized(client, auctionAddress), true)
+
+			// 1) Non-owner (alice) cannot withdraw her losing bid -> revert with "Only owner can call"
+			await assert.rejects(
+				async () => await withdrawBids(alice, auctionAddress, alice.account.address, [{ tick: losingTick, bidIndex: 0n }]),
+				'Only owner can call'
+			)
+
+			// 2) Non-owner (bob) cannot withdraw his winning bid -> also revert
+			await assert.rejects(
+				async () => await withdrawBids(bob, auctionAddress, bob.account.address, [{ tick: winningTick, bidIndex: 0n }]),
+				'Only owner can call'
+			)
+
+			// 3) Owner withdraws for alice (losing) -> full ETH refund
+			const aliceBalanceBefore = await getETHBalance(client, alice.account.address)
+			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: losingTick, bidIndex: 0n }])
+			const aliceBalanceAfter = await getETHBalance(client, alice.account.address)
+			strictEqualTypeSafe(aliceBalanceAfter - aliceBalanceBefore, losingEth, 'Alice should get full ETH refund')
+
+			// 4) Owner withdraws for bob (winning) -> no ETH refund, simulate confirms
+			const bobAmounts = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: winningTick, bidIndex: 0n }])
+			strictEqualTypeSafe(bobAmounts.totalEthRefund, 0n, 'Bob should get no ETH refund (winning bid)')
+			await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: winningTick, bidIndex: 0n }])
+
+			// 5) Owner withdraws own clearing bid (optional for completeness)
+			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: clearingTick, bidIndex: 0n }])
+		})
+	})
 })
