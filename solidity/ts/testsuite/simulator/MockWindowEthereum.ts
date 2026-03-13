@@ -91,8 +91,9 @@ export type MockWindowEthereum = EIP1193Provider & {
 	getBlock: () => Promise<EthereumBlockHeader>,
 	setAfterTransactionSendCallBack: (newAfterTransactionSendCallBack: (request: SendTransactionParams, result: SimulatedTransaction) => void) => void,
 	getSimulationState: () => SimulationState | undefined,
+	verbose?: boolean,
 }
-export const getMockedEthSimulateWindowEthereum = (zeroGasPrice: boolean = true, initialSimulationState: SimulationState | undefined = undefined): MockWindowEthereum => {
+export const getMockedEthSimulateWindowEthereum = (zeroGasPrice: boolean = true, initialSimulationState: SimulationState | undefined = undefined, verbose: boolean = false): MockWindowEthereum => {
 	const config = getConfig()
 	const httpsRpc = config.testRPCEndpoint
 	const ethereumClientService = new EthereumClientService(
@@ -109,6 +110,7 @@ export const getMockedEthSimulateWindowEthereum = (zeroGasPrice: boolean = true,
 			afterTransactionSendCallBack = newAfterTransactionSendCallBack
 		},
 		getSimulationState: () => simulationState,
+		verbose,
 		request: async (unknownArgs: unknown): Promise<any> => {
 			const args = EthereumJsonRpcRequest.parse(unknownArgs)
 			switch(args.method) {

@@ -48,7 +48,7 @@ export function printDecodedFunction(contractName: string, data: `0x${ string }`
 	}
 }
 
-export const createTransactionExplainer = (deployments: Deployment[]) => {
+export const createTransactionExplainer = (deployments: Deployment[], verbose: boolean = false) => {
 	return (request: SendTransactionParams, result: SimulatedTransaction) => {
 		const contract = deployments.find((x) => BigInt(x.address) === request.params[0].to)
 		if (contract === undefined) {
@@ -63,17 +63,21 @@ export const createTransactionExplainer = (deployments: Deployment[]) => {
 			}
 		}
 		if (result.ethSimulateV1CallResult.status === 'success') {
-			printLogs(result.ethSimulateV1CallResult.logs.map((event, logIndex) => ({
-				removed: false,
-				logIndex: logIndex,
-				transactionIndex: 1,
-				transactionHash: '0x1',
-				blockHash: '0x1',
-				blockNumber: 1n,
-				address: addressString(event.address),
-				data: dataStringWith0xStart(event.data),
-				topics: event.topics.map((x) => bytes32String(x)) as [`0x${ string }`, ...`0x${ string }`[]]
-			})), deployments)
+			if (verbose) {
+				printLogs(result.ethSimulateV1CallResult.logs.map((event, logIndex) => ({
+					removed: false,
+					logIndex: logIndex,
+					transactionIndex: 1,
+					transactionHash: '0x1',
+					blockHash: '0x1',
+					blockNumber: 1n,
+					address: addressString(event.address),
+					data: dataStringWith0xStart(event.data),
+					topics: event.topics.map((x) => bytes32String(x)) as [`0x${ string }`, ...`0x${ string }`[]]
+				})), deployments)
+			} else {
+				console.log(`  [${ result.ethSimulateV1CallResult.logs.length } logs produced]`)
+			}
 		} else {
 			console.log(`  Failed to error: ${ result.ethSimulateV1CallResult.error.message }`)
 		}

@@ -336,8 +336,12 @@ describe('Auction', () => {
 
 			await refundLosingBids(alice, auctionAddress, [{ tick: losingTick, bidIndex: 0n }])
 
+			// Compute expected ethRaised after refund (matches what finalize will use)
+			const clearingAfterRefund = await computeClearing(client, auctionAddress)
+			const expectedEthRaised = clearingAfterRefund.accumulatedEth
+
 			await finalize(client, auctionAddress)
-			assert.strictEqual(await getEthRaised(client, auctionAddress), 18394891718856185569n, 'raised 18394891718856185569n') //TODO calculate if correct
+			strictEqualTypeSafe(await getEthRaised(client, auctionAddress), expectedEthRaised, 'raised amount mismatch')
 			strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'Did not finalize')
 
 			const clearingPost = await computeClearing(client, auctionAddress)
