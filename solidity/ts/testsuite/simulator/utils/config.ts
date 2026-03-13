@@ -28,9 +28,9 @@ export function getConfig() {
 
 async function fileExists(path: string): Promise<boolean> {
 	try {
-		await fs.access(path, fs.constants.F_OK)
-		return true
-	} catch (error) {
+		const stat = await fs.stat(path)
+		return stat.isFile()
+	} catch {
 		return false
 	}
 }

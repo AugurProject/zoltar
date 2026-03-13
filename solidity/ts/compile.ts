@@ -81,11 +81,21 @@ async function exists(path: string) {
 	}
 }
 
-const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[] = []): Promise<string[]> => {
+const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[] = [], visited?: Set<string>): Promise<string[]> => {
 	// Set base directory on first call and resolve to absolute path
 	if (!baseDir) {
 		baseDir = path.resolve(dirPath)
 	}
+	// Initialize visited set on first call
+	const visitedSet = visited ?? new Set<string>()
+
+	// Get canonical path of current directory to detect cycles
+	const canonicalDir = path.resolve(dirPath)
+	// Skip if already visited (symlink loop detection)
+	if (visitedSet.has(canonicalDir)) {
+		return fileList
+	}
+	visitedSet.add(canonicalDir)
 
 	const files = await fs.readdir(dirPath, { withFileTypes: true })
 	for (const file of files) {
@@ -109,7 +119,7 @@ const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[]
 
 		// Recurse into directories (including symlinked directories that passed the check)
 		if (file.isDirectory() || (file.isSymbolicLink() && (await fs.stat(targetPath)).isDirectory())) {
-			await getAllFiles(targetPath, baseDir, fileList)
+			await getAllFiles(targetPath, baseDir, fileList, visitedSet)
 		} else {
 			fileList.push(filePath)
 		}
@@ -162,7 +172,7 @@ const compileContracts = async () => {
 	const errors = (result!.errors || []).filter(x => x.severity === 'error').map(x => x.formattedMessage)
 	if (errors.length) throw new CompilationError(errors)
 
-	const warnings = (result!.errors || []).map(x => x.formattedMessage)
+	const warnings = (result!.errors || []).filter(x => x.severity === 'warning').map(x => x.formattedMessage)
 	if (warnings.length > 0) warnings.forEach((warning) => console.warn(warning))
 
 	const artifactsDir = path.join(process.cwd(), 'artifacts')

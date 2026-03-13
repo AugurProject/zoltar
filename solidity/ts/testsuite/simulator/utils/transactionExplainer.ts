@@ -50,7 +50,10 @@ export function printDecodedFunction(contractName: string, data: `0x${ string }`
 
 export const createTransactionExplainer = (deployments: Deployment[], verbose: boolean = false) => {
 	return (request: SendTransactionParams, result: SimulatedTransaction) => {
-		const contract = deployments.find((x) => BigInt(x.address) === request.params[0].to)
+		const to = request.params[0].to
+		// Normalize to string for comparison
+		const toStr = typeof to === 'bigint' ? addressString(to) : to
+		const contract = deployments.find((x) => x.address.toLowerCase() === toStr?.toLowerCase())
 		if (contract === undefined) {
 			console.log(`UNKNOWN CALL: ${ jsonStringify(request)} -> ${ decodeUnknownFunctionOutput(result.ethSimulateV1CallResult.returnData, deployments) }`)
 		}
@@ -79,7 +82,7 @@ export const createTransactionExplainer = (deployments: Deployment[], verbose: b
 				console.log(`  [${ result.ethSimulateV1CallResult.logs.length } logs produced]`)
 			}
 		} else {
-			console.log(`  Failed to error: ${ result.ethSimulateV1CallResult.error.message }`)
+			console.log(`  Error: ${ result.ethSimulateV1CallResult.error.message }`)
 		}
 	}
 }
