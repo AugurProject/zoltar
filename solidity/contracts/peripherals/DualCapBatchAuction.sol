@@ -68,8 +68,8 @@ contract DualCapBatchAuction {
 		require(auctionStarted == 0, 'already started');
 		require(_ethRaiseCap > 0 && _maxRepBeingSold > 0, 'invalid caps');
 
-		ethRaiseCap = _ethRaiseCap;
 		maxRepBeingSold = _maxRepBeingSold;
+		ethRaiseCap = _ethRaiseCap;
 		auctionStarted = block.timestamp;
 		minBidSize = _ethRaiseCap / MAX_NUMBER_BINDING_BIDS;
 		if (minBidSize < 1) minBidSize = 1;
@@ -201,8 +201,8 @@ contract DualCapBatchAuction {
 			}
 			bid.ethAmount = 0; // prevent double withdrawals
 		}
-		if (totalEthRefund != 0) {
-			(bool sent, ) = payable(withdrawFor).call{ value: totalEthRefund }('');
+		if (totalEthRefund > 0) {
+			(bool sent,) = payable(withdrawFor).call{ value: totalEthRefund }('');
 			require(sent, 'eth transfer failed');
 		}
 	}

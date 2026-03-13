@@ -86,7 +86,7 @@ describe('Contract Test Suite', () => {
 		for (const index of outcomeIndexes) {
 			const indexUniverse = getChildUniverseId(genesisUniverse, index)
 			const repForIndex = getRepTokenAddress(indexUniverse)
-			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ index } exists`);
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ index } exists`)
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, forkerDeposit)
 		}
@@ -104,7 +104,7 @@ describe('Contract Test Suite', () => {
 		for (const [index, outcomeIndex] of splitOutcomeIndexes.entries()) {
 			const indexUniverse = getChildUniverseId(genesisUniverse, outcomeIndex)
 			const repForIndex = getRepTokenAddress(indexUniverse)
-			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ outcomeIndex } exists`);
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ outcomeIndex } exists`)
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, priorSplitBalance + priorBalances[index], 'after split balance mismatch')
 		}
