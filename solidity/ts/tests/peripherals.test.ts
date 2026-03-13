@@ -458,6 +458,81 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'child contract did not record the amount correctly')
 	})
 
+	test('truth auction with full rep purchase avoids division by zero', async () => {
+		// This test verifies that when all REP in a truth auction is purchased (repPurchased == repAvailable),
+		// the _finalizeTruthAuction function does not revert due to division by zero.
+		//
+		// Manually performs the fork sequence without using triggerOwnGameFork (which has a vault threshold assert).
+
+		const endTime = await getMarketEndDate(client, marketId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		// Set price oracle to 1.0 and security bonds allowance
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance, 1n * PRICE_PRECISION)
+
+		// Deposit REP and create open interest
+		await depositRep(client, securityPoolAddresses.securityPool, repDeposit)
+		const openInterestAmount = 100n * 10n ** 18n
+		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+
+		// Deposit to escalation game for both outcomes to trigger fork eligibility
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
+
+		// Call forkZoltarWithOwnEscalationGame on the SecurityPoolForker (not via triggerOwnGameFork)
+		// Use the ABI directly to avoid any extra checks.
+		const infra = getInfraContractAddresses()
+		await client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'forkZoltarWithOwnEscalationGame',
+			address: infra.securityPoolForker,
+			args: [securityPoolAddresses.securityPool]
+		})
+
+		// Now call forkSecurityPool on the child pool
+		await forkSecurityPool(client, securityPoolAddresses.securityPool)
+
+		// Migrate to Yes outcome (only Yes child needed)
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, marketId, securityMultiplier)
+
+		// Set price oracle for Yes child pool
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer, OperationType.SetPrice, client.account.address, 1n * PRICE_PRECISION)
+
+		// Gather fork data: repAtFork from the PARENT pool, and migratedRep from the CHILD pool
+		const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		const repAtFork = parentForkData.repAtFork
+		const childForkData = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
+		const migratedRep = childForkData.migratedRep
+
+		// Start truth auction after waiting required time
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+
+		// Compute repAvailable (formula same as in startTruthAuction)
+		const MAX_DIVISOR = 1_000_000n
+		const repAvailable = repAtFork - migratedRep / MAX_DIVISOR
+		assert.ok(repAvailable > 0n, 'repAvailable must be positive for test, repAtFork=' + repAtFork.toString() + ' migratedRep=' + migratedRep.toString())
+
+		// A buyer purchases ALL repAvailable with minimal ETH (just needs to send >0)
+		const buyer = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await participateAuction(buyer, yesSecurityPool.truthAuction, repAvailable, 1n)
+
+		// Advance time beyond the auction duration
+		await mockWindow.advanceTime(8n * DAY) // more than 1 week
+
+		// Finalize should succeed without reverting (division by zero would occur if repPurchased == repAvailable)
+		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+		// After finalization, verify the poolOwnershipDenominator is set correctly
+		const denominator = await getPoolOwnershipDenominator(client, yesSecurityPool.securityPool)
+		// When all rep is purchased, denominator should be repAvailable * PRICE_PRECISION (fallback case)
+		const expected = repAvailable * PRICE_PRECISION
+		strictEqualTypeSafe(denominator, expected, 'poolOwnershipDenominator should be repAvailable * PRICE_PRECISION after full purchase')
+	})
+
 	// - TODO test that users can claim their stuff (shares+rep) even if zoltar forks after market ends
 })
 

@@ -191,7 +191,13 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		forkData[securityPool].auctionedSecurityBondAllowance = parentTotalSecurityBondAllowance - securityPool.totalSecurityBondAllowance();
 		securityPool.setTotalSecurityBondAllowance(parentTotalSecurityBondAllowance);
 		if (repAvailable > 0) {
-			securityPool.setPoolOwnershipDenominator(forkData[securityPool].migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / (repAvailable - repPurchased));
+			uint256 denominator = repAvailable - repPurchased;
+			if (denominator > 0) {
+				securityPool.setPoolOwnershipDenominator(forkData[securityPool].migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / denominator);
+			} else {
+				// All rep purchased; avoid division by zero by using repAvailable directly
+				securityPool.setPoolOwnershipDenominator(repAvailable * SecurityPoolUtils.PRICE_PRECISION);
+			}
 		}
 		if (securityPool.poolOwnershipDenominator() == 0) { // wipe all rep holders in vaults
 			securityPool.setPoolOwnershipDenominator(repAvailable * SecurityPoolUtils.PRICE_PRECISION);
