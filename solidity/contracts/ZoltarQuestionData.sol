@@ -73,7 +73,8 @@ contract ZoltarQuestionData {
 				if (firstPart == 0 && secondPart == 0) return false;
 				return true;
 			}
-			return firstPart + secondPart == questions[questionId].numTicks;
+			// When invalid=false (high bit set), malformed iff sum != numTicks
+			return firstPart + secondPart != questions[questionId].numTicks;
 		}
 		if (answer == 0) return false;
 		if (answer < outcomeLabels[questionId].length + 1) { // categorical

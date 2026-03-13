@@ -84,13 +84,35 @@ async function exists(path: string) {
 	}
 }
 
-const getAllFiles = async (dirPath: string, fileList: string[] = []): Promise<string[]> => {
-	const files = await fs.readdir(dirPath);
+const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[] = []): Promise<string[]> => {
+	// Set base directory on first call and resolve to absolute path
+	if (!baseDir) {
+		baseDir = path.resolve(dirPath);
+	}
+
+	const files = await fs.readdir(dirPath, { withFileTypes: true });
 	for (const file of files) {
-		const filePath = path.join(dirPath, file);
-		const stat = await fs.stat(filePath);
-		if (stat.isDirectory()) {
-			await getAllFiles(filePath, fileList);
+		const filePath = path.join(dirPath, file.name);
+
+		// Resolve symbolic links to their target to check for path traversal
+		let targetPath = filePath;
+		if (file.isSymbolicLink()) {
+			targetPath = await fs.realpath(filePath);
+		}
+
+		// Resolve to absolute canonical path
+		const resolvedTarget = path.resolve(targetPath);
+
+		// Security check: ensure resolvedTarget is within baseDir
+		// path.relative returns a path starting with '..' if target is outside baseDir
+		const relative = path.relative(baseDir, resolvedTarget);
+		if (relative.startsWith('..') || path.isAbsolute(relative)) {
+			throw new Error(`Path traversal detected: ${filePath} resolves outside allowed directory`);
+		}
+
+		// Recurse into directories (including symlinked directories that passed the check)
+		if (file.isDirectory() || (file.isSymbolicLink() && (await fs.stat(targetPath)).isDirectory())) {
+			await getAllFiles(targetPath, baseDir, fileList);
 		} else {
 			fileList.push(filePath);
 		}
