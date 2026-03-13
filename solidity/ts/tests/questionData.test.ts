@@ -31,7 +31,11 @@ describe('Question Data', () => {
 			await setupTestAccounts(mockWindow)
 			await ensureZoltarDeployed(client)
 			await ensureInfraDeployed(client)
-			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
+			const simulationState = mockWindow.getSimulationState()
+			if (simulationState === null || simulationState === undefined) {
+				throw new Error('Simulation state is not available after setup')
+			}
+			cachedSimulationState = copySimulationState(simulationState)
 		}
 	})
 

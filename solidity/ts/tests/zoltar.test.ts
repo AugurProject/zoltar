@@ -12,6 +12,10 @@ import { ensureZoltarDeployed, forkerClaimRep, forkUniverse, getRepTokenAddress,
 import { SimulationState } from '../testsuite/simulator/types/visualizerTypes.js'
 import { copySimulationState } from '../testsuite/simulator/SimulationModeEthereumClientService.js'
 
+// Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
+const FORKER_DEPOSIT_FRACTION = 20n
+const FORKER_BURN_FRACTION = 5n
+
 describe('Contract Test Suite', () => {
 	let mockWindow: MockWindowEthereum
 	let client: WriteClient
@@ -63,7 +67,7 @@ describe('Contract Test Suite', () => {
 		// do fork
 		await forkUniverse(client, genesisUniverse, marketText, outcomes)
 		const afterForkBalance = await getERC20Balance(client, genesisRepToken, client.account.address)
-		assert.strictEqual(afterForkBalance + totalTheoreticalSupply/20n, priorRepbalance, 'balance mismatch')
+		assert.strictEqual(afterForkBalance + totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION, priorRepbalance, 'balance mismatch')
 		const universeData = await getUniverseData(client, genesisUniverse)
 		assert.ok(universeData.forkTime > 0, 'Universe was supposed to be forked')
 		assert.strictEqual(universeData.parentUniverseId, 0n, 'Universe had parent')
@@ -71,7 +75,7 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(universeData.reputationToken, genesisRepToken, 'Wrong rep token')
 		const universeForkData = await getUniverseForkData(client, genesisUniverse)
 		assert.strictEqual(universeForkData.forkedBy, client.account.address, 'We should have been the forker')
-		const forkerDeposit = totalTheoreticalSupply / 20n - totalTheoreticalSupply / 20n / 5n // 5% of supply minus 20% burn
+		const forkerDeposit = totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION - totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION / FORKER_BURN_FRACTION // 5% of supply minus 20% burn
 		assert.strictEqual(universeForkData.forkerRepDeposit, forkerDeposit, 'wrong deposit amount')
 		assert.strictEqual(universeForkData.forkingQuestionExtraInfo, marketText, 'Market text did not match')
 		assert.ok(areEqualArrays([...universeForkData.categories], [...outcomes]), 'Outcomes did not match')

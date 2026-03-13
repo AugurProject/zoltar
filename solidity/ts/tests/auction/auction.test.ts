@@ -503,7 +503,7 @@ describe('Auction', () => {
 			await assertContractEmpty(client, auctionAddress)
 		})
 
-		test('multiple bids at same tick from same bidder (FIFO pro-rata)', async () => {
+		test('multiple bids at same tick from same bidder (FIFO pro-rata) - clearing suite', async () => {
 			const ethRaiseCap = 100n * 10n ** 18n
 			const maxRepBeingSold = 10n * 10n ** 18n
 			const alice = createTestClient(0)

@@ -205,6 +205,7 @@ contract DualCapBatchAuction {
 			(bool sent,) = payable(withdrawFor).call{ value: totalEthRefund }('');
 			require(sent, 'eth transfer failed');
 		}
+		emit WithdrawBids(withdrawFor, tickIndices, totalFilledRep, totalEthRefund);
 	}
 
 	function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {
