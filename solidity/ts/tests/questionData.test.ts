@@ -6,7 +6,7 @@ import { setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
 import assert from 'node:assert'
-import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isValidAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData.js'
+import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData.js'
 import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
 import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
@@ -22,6 +22,8 @@ describe('Question Data', () => {
 	beforeEach(async () => {
 		if (cachedSimulationState) {
 			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
+			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		} else {
 			mockWindow = getMockedEthSimulateWindowEthereum()
 			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
@@ -31,8 +33,6 @@ describe('Question Data', () => {
 			await ensureInfraDeployed(client)
 			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
 		}
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
 	})
 
 	test('can make categorical question', async () => {
@@ -62,10 +62,10 @@ describe('Question Data', () => {
 		assert.strictEqual(data.displayValueMax, testCategoricalQuestion.displayValueMax, 'displayValueMax mismatch')
 		assert.strictEqual(data.answerUnit, testCategoricalQuestion.answerUnit, 'answerUnit mismatch')
 
-		assert.ok(await isValidAnswerOption(client, questionId, 0n), 'invalid is valid')
-		assert.ok(await isValidAnswerOption(client, questionId, 1n), 'Yes is valid')
-		assert.ok(await isValidAnswerOption(client, questionId, 2n), 'No is valid')
-		assert.ok(!(await isValidAnswerOption(client, questionId, 3n)), 'doesn\'t exist')
+		assert.ok(!await isMalformedAnswerOption(client, questionId, 0n), 'invalid is valid')
+		assert.ok(!await isMalformedAnswerOption(client, questionId, 1n), 'Yes is valid')
+		assert.ok(!await isMalformedAnswerOption(client, questionId, 2n), 'No is valid')
+		assert.ok(await isMalformedAnswerOption(client, questionId, 3n), 'doesn\'t exist')
 
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 0n), 'Invalid', 'invalid is valid')
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 1n), 'Yes', 'Yes is valid')

@@ -68,10 +68,10 @@ export const createQuestion = async (client: WriteClient, questionData: Question
 	})
 }
 
-export const isValidAnswerOption = async (client: ReadClient, questionId: bigint, answer: bigint) => {
+export const isMalformedAnswerOption = async (client: ReadClient, questionId: bigint, answer: bigint) => {
 	return await client.readContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		functionName: 'isValidAnswerOption',
+		functionName: 'isMalformedAnswerOption',
 		address: getInfraContractAddresses().zoltarQuestionData,
 		args: [questionId, answer],
 	})

@@ -37,7 +37,7 @@ contract ZoltarQuestionData {
 			for (uint256 index = 0; index < outcomeOptions.length; index++) {
 				require(bytes(outcomeOptions[index]).length > 0, 'Empty string');
 			}
-			outcomeLabels[questionId] = outcomeOptions; //TOdo, check that these are unique?
+			outcomeLabels[questionId] = outcomeOptions; //TODO, check that these are unique?
 		}
 		questions[questionId] = questionData;
 		questionCreatedTimestamp[questionId] = block.timestamp;
@@ -66,20 +66,20 @@ contract ZoltarQuestionData {
 		}
 	}
 
-	function isValidAnswerOption(uint256 questionId, uint256 answer) external view returns (bool) {
+	function isMalformedAnswerOption(uint256 questionId, uint256 answer) external view returns (bool) {
 		if (outcomeLabels[questionId].length == 0) { // scalar
 			(bool invalid, uint120 firstPart, uint120 secondPart) = splitUint256IntoTwoWithInvalid(answer);
 			if (invalid) {
-				if (firstPart == 0 && secondPart == 0) return true;
-				return false;
+				if (firstPart == 0 && secondPart == 0) return false;
+				return true;
 			}
 			return firstPart + secondPart == questions[questionId].numTicks;
 		}
-		if (answer == 0) return true;
+		if (answer == 0) return false;
 		if (answer < outcomeLabels[questionId].length + 1) { // categorical
-			return true;
+			return false;
 		}
-		return false;
+		return true;
 	}
 
 	function getAnswerOptionName(uint256 questionId, uint256 answer) external view returns (string memory) {

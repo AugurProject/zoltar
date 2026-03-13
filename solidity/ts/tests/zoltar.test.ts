@@ -22,6 +22,8 @@ describe('Contract Test Suite', () => {
 	beforeEach(async () => {
 		if (cachedSimulationState) {
 			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
+			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse)))
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		} else {
 			mockWindow = getMockedEthSimulateWindowEthereum()
 			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
@@ -30,8 +32,6 @@ describe('Contract Test Suite', () => {
 			await ensureZoltarDeployed(client)
 			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
 		}
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse)))
 	})
 
 	test('canDeployContract', async () => {

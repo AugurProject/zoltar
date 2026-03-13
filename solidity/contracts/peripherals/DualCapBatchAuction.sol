@@ -41,7 +41,7 @@ contract DualCapBatchAuction {
 	bool public finalized;
 	int256 public clearingTick;
 	uint256 public ethFilledAtClearing;
-	uint256 public ethRaised; //TOdo, if ethraised is less than ethRaiseCap (underfunded), we should give all the rep we have to bidders
+	uint256 public ethRaised; //TODO, if ethRaised is less than ethRaiseCap (underfunded), we should give all the rep we have to bidders
 
 	uint256 public auctionStarted;
 	uint256 public minBidSize;

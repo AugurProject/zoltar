@@ -51,10 +51,12 @@ describe('Peripherals Contract Test Suite', () => {
 	beforeEach(async () => {
 		if (cachedSimulationState) {
 			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
+			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		} else {
 			mockWindow = getMockedEthSimulateWindowEthereum()
-			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 			await setupTestAccounts(mockWindow)
 			await ensureZoltarDeployed(client)
 			await ensureInfraDeployed(client)
@@ -62,8 +64,6 @@ describe('Peripherals Contract Test Suite', () => {
 			await approveAndDepositRep(client, repDeposit, marketId)
 			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
 		}
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, marketId, securityMultiplier)
 		startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 	})
@@ -458,6 +458,6 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'child contract did not record the amount correctly')
 	})
 
-	// - TOdo test that users can claim their stuff (shares+rep) even if zoltar forks after market ends
+	// - TODO test that users can claim their stuff (shares+rep) even if zoltar forks after market ends
 })
 

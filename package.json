@@ -20,6 +20,7 @@
 		"test-peripherals": "cd solidity && bun run compile-contracts && bun run test-peripherals",
 		"test-escalation-game": "cd solidity && bun run compile-contracts && bun run test-escalation-game",
 		"test-question-data": "cd solidity && bun run compile-contracts && bun run test-question-data",
-		"test-auction": "cd solidity && bun run compile-contracts && bun run test-auction"
+		"test-auction": "cd solidity && bun run compile-contracts && bun run test-auction",
+		"test": "cd solidity && bun run test"
 	}
 }
