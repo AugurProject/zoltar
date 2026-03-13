@@ -39,25 +39,22 @@ const AbiEntry = funtypes.ReadonlyPartial({
 
 type CompileResult = funtypes.Static<typeof CompileResult>
 const CompileResult = funtypes.ReadonlyObject({
-	contracts: funtypes.Union(
+	contracts: funtypes.Record(
+		funtypes.String,
 		funtypes.Record(
 			funtypes.String,
-			funtypes.Record(
-				funtypes.String,
-				funtypes.ReadonlyObject({
-					abi: funtypes.ReadonlyArray(AbiEntry),
-					evm: funtypes.ReadonlyObject({
-						bytecode: funtypes.ReadonlyObject({
-							object: funtypes.String
-						}),
-						deployedBytecode: funtypes.ReadonlyObject({
-							object: funtypes.String
-						})
+			funtypes.ReadonlyObject({
+				abi: funtypes.ReadonlyArray(AbiEntry),
+				evm: funtypes.ReadonlyObject({
+					bytecode: funtypes.ReadonlyObject({
+						object: funtypes.String
+					}),
+					deployedBytecode: funtypes.ReadonlyObject({
+						object: funtypes.String
 					})
 				})
-			)
-		),
-		funtypes.Undefined
+			})
+		)
 	),
 	sources: funtypes.Union(funtypes.Unknown, funtypes.Undefined),
 	errors: funtypes.Union(
@@ -87,42 +84,41 @@ async function exists(path: string) {
 const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[] = []): Promise<string[]> => {
 	// Set base directory on first call and resolve to absolute path
 	if (!baseDir) {
-		baseDir = path.resolve(dirPath);
+		baseDir = path.resolve(dirPath)
 	}
 
-	const files = await fs.readdir(dirPath, { withFileTypes: true });
+	const files = await fs.readdir(dirPath, { withFileTypes: true })
 	for (const file of files) {
-		const filePath = path.join(dirPath, file.name);
+		const filePath = path.join(dirPath, file.name)
 
 		// Resolve symbolic links to their target to check for path traversal
-		let targetPath = filePath;
+		let targetPath = filePath
 		if (file.isSymbolicLink()) {
-			targetPath = await fs.realpath(filePath);
+			targetPath = await fs.realpath(filePath)
 		}
 
 		// Resolve to absolute canonical path
-		const resolvedTarget = path.resolve(targetPath);
+		const resolvedTarget = path.resolve(targetPath)
 
 		// Security check: ensure resolvedTarget is within baseDir
 		// path.relative returns a path starting with '..' if target is outside baseDir
-		const relative = path.relative(baseDir, resolvedTarget);
+		const relative = path.relative(baseDir, resolvedTarget)
 		if (relative.startsWith('..') || path.isAbsolute(relative)) {
-			throw new Error(`Path traversal detected: ${filePath} resolves outside allowed directory`);
+			throw new Error(`Path traversal detected: ${filePath} resolves outside allowed directory`)
 		}
 
 		// Recurse into directories (including symlinked directories that passed the check)
 		if (file.isDirectory() || (file.isSymbolicLink() && (await fs.stat(targetPath)).isDirectory())) {
-			await getAllFiles(targetPath, baseDir, fileList);
+			await getAllFiles(targetPath, baseDir, fileList)
 		} else {
-			fileList.push(filePath);
+			fileList.push(filePath)
 		}
 	}
-	return fileList;
+	return fileList
 }
 
 const copySolidityContractArtifact = async (contractLocation: string) => {
 	const solidityContract = CompileResult.parse(JSON.parse(await fs.readFile(contractLocation, 'utf8')))
-	if (solidityContract.contracts === undefined) throw new Error('contracts object missing')
 	const contracts = Object.entries(solidityContract.contracts).flatMap(([filename, contract]) => {
 		if (contract === undefined) throw new Error('missing contract')
 		return Object.entries(contract).map(([contractName, contractData]) => ({ contractName: `${ filename.replace('contracts/', '').replace(/-/g, '').replace(/\//g, '_').replace(/\\/g, '_').replace(/\.sol$/, '') }_${ contractName }`, contractData }))

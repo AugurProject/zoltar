@@ -74,7 +74,7 @@ contract ZoltarQuestionData {
 				return true;
 			}
 			// When invalid=false (high bit set), malformed iff sum != numTicks
-			return firstPart + secondPart != questions[questionId].numTicks;
+			return uint256(firstPart) + uint256(secondPart) != questions[questionId].numTicks;
 		}
 		if (answer == 0) return false;
 		if (answer < outcomeLabels[questionId].length + 1) { // categorical
@@ -90,7 +90,7 @@ contract ZoltarQuestionData {
 				if (firstPart == 0 && secondPart == 0) return 'Invalid';
 				return 'Malformed';
 			}
-			if (firstPart + secondPart == questions[questionId].numTicks) {
+			if (uint256(firstPart) + uint256(secondPart) == questions[questionId].numTicks) {
 				return ScalarOutcomes.getScalarOutcomeName([firstPart, secondPart], questions[questionId].answerUnit, questions[questionId].numTicks, questions[questionId].displayValueMin, questions[questionId].displayValueMax);
 			}
 		}

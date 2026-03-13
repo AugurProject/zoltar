@@ -70,7 +70,7 @@ describe('Question Data', () => {
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 0n), 'Invalid', 'invalid is valid')
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 1n), 'Yes', 'Yes is valid')
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 2n), 'No', 'No is valid')
-		assert.strictEqual(await getAnswerOptionName(client, questionId, 3n), 'Malformed','doesn\'t exist')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, 3n), 'Malformed', 'doesn\'t exist')
 	})
 
 	test('can make scalar question', async () => {
@@ -163,5 +163,40 @@ describe('Question Data', () => {
 			const malformed = await isMalformedAnswerOption(client, questionId, ans)
 			assert.strictEqual(malformed, false, 'invalid flag + both zero is Invalid (not malformed)')
 		}
+	})
+
+	test('handles large numTicks without overflow', async () => {
+		// This test demonstrates integer overflow vulnerability in isMalformedAnswerOption and getAnswerOptionName.
+		// When numTicks >= 2^120, the sum of two uint120 parts can overflow, causing valid answers to be incorrectly rejected.
+		const hugeNumTicks = (1n << 120n) + 1000n
+		const testScalarQuestion = {
+			title: 'Huge Scalar',
+			description: 'testing overflow',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: hugeNumTicks,
+			outcomeLabels: [],
+			displayValueMin: 0n,
+			displayValueMax: 1n,
+			answerUnit: '',
+		}
+		await createQuestion(client, testScalarQuestion, [])
+		const questionId = await getQuestionId(client, testScalarQuestion, [])
+
+		// Encode a valid answer where firstPart + secondPart = numTicks, but the sum overflows uint120.
+		const firstPart = (1n << 120n) - 1n // max uint120
+		const secondPart = hugeNumTicks - firstPart // 1001
+		assert.ok(secondPart > 0n && secondPart <= ((1n << 120n) - 1n), 'secondPart within uint120 range')
+		const answer = combineUint256FromTwoWithInvalid(false, firstPart, secondPart)
+
+		// Currently this fails due to overflow bug.
+		const malformed = await isMalformedAnswerOption(client, questionId, answer)
+		// Expected: false (not malformed). The bug causes overflow and returns true.
+		assert.strictEqual(malformed, false, 'Valid answer with numTicks >= 2^120 incorrectly flagged as malformed due to overflow')
+
+		// getAnswerOptionName should not return Malformed or Invalid
+		const name = await getAnswerOptionName(client, questionId, answer)
+		assert.notStrictEqual(name, 'Malformed', 'should not return Malformed')
+		assert.notStrictEqual(name, 'Invalid', 'should not return Invalid')
 	})
 })
