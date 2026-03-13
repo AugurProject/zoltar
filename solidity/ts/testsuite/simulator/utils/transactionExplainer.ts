@@ -4,11 +4,13 @@ import { Deployment, printLogs } from './logExplaining.js'
 import { SimulatedTransaction } from '../types/visualizerTypes.js'
 import { SendTransactionParams } from '../types/jsonRpcTypes.js'
 import { addressString, bytes32String, dataStringWith0xStart } from './bigint.js'
+import { EthereumAddress } from '../types/wire-types.js'
 
 export function decodeOutput(abi: Abi, returnData: Uint8Array<ArrayBufferLike>, functionName: string, deployments: Deployment[]) {
 	const output = jsonStringify(decodeFunctionResult({ abi, functionName: functionName, data: dataStringWith0xStart(returnData) }))
 	if (isAddress(output)) {
-		const matchingDeployment = deployments.find((deploymentItem) => deploymentItem.address.toLowerCase() === output.toLowerCase())
+		const outputAddr = EthereumAddress.parse(output)
+		const matchingDeployment = deployments.find((deploymentItem) => EthereumAddress.parse(deploymentItem.address) === outputAddr)
 		if (matchingDeployment) return `${ matchingDeployment.deploymentName } (${ output })`
 	}
 	return output
@@ -17,7 +19,8 @@ export function decodeOutput(abi: Abi, returnData: Uint8Array<ArrayBufferLike>, 
 export function decodeUnknownFunctionOutput(returnData: Uint8Array<ArrayBufferLike>, deployments: Deployment[]) {
 	const output = dataStringWith0xStart(returnData)
 	if (isAddress(output)) {
-		const matchingDeployment = deployments.find((deploymentItem) => deploymentItem.address.toLowerCase() === output.toLowerCase())
+		const outputAddr = EthereumAddress.parse(output)
+		const matchingDeployment = deployments.find((deploymentItem) => EthereumAddress.parse(deploymentItem.address) === outputAddr)
 		if (matchingDeployment) return `${ matchingDeployment.deploymentName } (${ output })`
 	}
 	return output
@@ -51,9 +54,12 @@ export function printDecodedFunction(contractName: string, data: `0x${ string }`
 export const createTransactionExplainer = (deployments: Deployment[], verbose: boolean = false) => {
 	return (request: SendTransactionParams, result: SimulatedTransaction) => {
 		const to = request.params[0].to
-		// Normalize to string for comparison
-		const toStr = typeof to === 'bigint' ? addressString(to) : to
-		const contract = deployments.find((x) => x.address.toLowerCase() === toStr?.toLowerCase())
+		let contract: Deployment | undefined
+		if (to !== null && to !== undefined) {
+			// to is a bigint (EthereumAddress). Compare as bigint.
+			const toBigInt = to
+			contract = deployments.find((x) => EthereumAddress.parse(x.address) === toBigInt)
+		}
 		if (contract === undefined) {
 			console.log(`UNKNOWN CALL: ${ jsonStringify(request)} -> ${ decodeUnknownFunctionOutput(result.ethSimulateV1CallResult.returnData, deployments) }`)
 		}
