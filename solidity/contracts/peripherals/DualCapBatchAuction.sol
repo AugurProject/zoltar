@@ -178,7 +178,9 @@ contract DualCapBatchAuction {
 				totalEthRefund += bid.ethAmount;
 			} else if (tick > clearingTick) {
 				// Fully winning: convert all ETH to REP
-				totalFilledRep += bid.ethAmount * PRICE_PRECISION / clearingPriceLocal;
+				if (clearingPriceLocal > 0) {
+					totalFilledRep += bid.ethAmount * PRICE_PRECISION / clearingPriceLocal;
+				} // else: price is zero, filled REP remains 0
 			} else {
 				// Tick == clearingTick: partial fill
 				// Determine previous cumulative ETH at this tick
@@ -194,7 +196,12 @@ contract DualCapBatchAuction {
 				}
 
 				if (ethUsed > bid.ethAmount) ethUsed = bid.ethAmount; // safety clamp
-				uint256 filledRep = ethUsed * PRICE_PRECISION / clearingPriceLocal;
+				uint256 filledRep;
+				if (clearingPriceLocal > 0) {
+					filledRep = ethUsed * PRICE_PRECISION / clearingPriceLocal;
+				} else {
+					filledRep = 0; // zero price, no REP can be bought
+				}
 
 				totalFilledRep += filledRep;
 				totalEthRefund += bid.ethAmount - ethUsed;

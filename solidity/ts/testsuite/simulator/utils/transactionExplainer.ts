@@ -6,11 +6,15 @@ import { SendTransactionParams } from '../types/jsonRpcTypes.js'
 import { addressString, bytes32String, dataStringWith0xStart } from './bigint.js'
 import { EthereumAddress } from '../types/wire-types.js'
 
+function findMatchingDeployment(addressStr: string, deployments: Deployment[]): Deployment | undefined {
+	const parsedAddress = EthereumAddress.parse(addressStr)
+	return deployments.find((deployment) => EthereumAddress.parse(deployment.address) === parsedAddress)
+}
+
 export function decodeOutput(abi: Abi, returnData: Uint8Array<ArrayBufferLike>, functionName: string, deployments: Deployment[]) {
 	const output = jsonStringify(decodeFunctionResult({ abi, functionName: functionName, data: dataStringWith0xStart(returnData) }))
 	if (isAddress(output)) {
-		const outputAddr = EthereumAddress.parse(output)
-		const matchingDeployment = deployments.find((deploymentItem) => EthereumAddress.parse(deploymentItem.address) === outputAddr)
+		const matchingDeployment = findMatchingDeployment(output, deployments)
 		if (matchingDeployment) return `${ matchingDeployment.deploymentName } (${ output })`
 	}
 	return output
@@ -19,8 +23,7 @@ export function decodeOutput(abi: Abi, returnData: Uint8Array<ArrayBufferLike>, 
 export function decodeUnknownFunctionOutput(returnData: Uint8Array<ArrayBufferLike>, deployments: Deployment[]) {
 	const output = dataStringWith0xStart(returnData)
 	if (isAddress(output)) {
-		const outputAddr = EthereumAddress.parse(output)
-		const matchingDeployment = deployments.find((deploymentItem) => EthereumAddress.parse(deploymentItem.address) === outputAddr)
+		const matchingDeployment = findMatchingDeployment(output, deployments)
 		if (matchingDeployment) return `${ matchingDeployment.deploymentName } (${ output })`
 	}
 	return output

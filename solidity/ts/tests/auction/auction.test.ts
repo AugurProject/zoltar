@@ -839,5 +839,33 @@ describe('Auction', () => {
 			// 5) Owner withdraws own clearing bid (optional for completeness)
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: clearingTick, bidIndex: 0n }])
 		})
+		test('withdrawBids should succeed with zero clearing price (extreme negative tick)', async () => {
+			// Setup: extremely high cap to avoid hitting it, tiny maxRepBeingSold so rep target not reached
+			const ethRaiseCap = 1_000_000n * WEI_PER_ETH
+			const maxRepBeingSold = 1n // 1 wei REP
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+			// Use a tick where tickToPrice returns 0 (very negative). -450000 yields price 0
+			const zeroPriceTick = -450000n
+			const bidAmount = 1n * WEI_PER_ETH // 1 ETH
+
+			await submitBidAndVerifyLock(client, auctionAddress, zeroPriceTick, bidAmount)
+
+			// Finalize: should succeed
+			await finalizeAndVerify(client, auctionAddress)
+
+			const clearingTick = await getClearingTick(client, auctionAddress)
+			assert.strictEqual(clearingTick, zeroPriceTick, 'clearing tick should be zero-price tick')
+
+			// Withdraw should succeed without reverting (currently fails due to division by zero bug)
+			// With zero price, no REP should be filled, and all ETH should be refunded
+			const amounts = await simulateWithdrawBids(client, auctionAddress, client.account.address, [{ tick: zeroPriceTick, bidIndex: 0n }])
+			assert.strictEqual(amounts.totalFilledRep, 0n, 'filled REP should be 0 when price is zero')
+			assert.strictEqual(amounts.totalEthRefund, bidAmount, 'full ETH refund expected')
+
+			// Actual withdrawBids should also succeed
+			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: zeroPriceTick, bidIndex: 0n }])
+			await assertContractEmpty(client, auctionAddress)
+		})
 	})
 })
