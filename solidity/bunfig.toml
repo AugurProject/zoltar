@@ -1,0 +1,3 @@
+[test]
+threads = 2
+timeout = "120s"
