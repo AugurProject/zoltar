@@ -98,7 +98,15 @@ describe('Auction', () => {
 
 		for (const bid of bids) {
 			const amounts = await simulateWithdrawBids(auctionCreator, auctionAddress, userId, [{ tick: bid.tick, bidIndex: bid.bidIndex }])
-			const minRepBackOnFullBuy = (bid.bidSize * WEI_PER_ETH) / tickToPrice(bid.tick)
+			const bidPrice = tickToPrice(bid.tick)
+			let minRepBackOnFullBuy: bigint
+			if (bidPrice === 0n) {
+				// Zero price means no REP can be bought; expect 0 filled REP
+				minRepBackOnFullBuy = 0n
+			} else {
+				minRepBackOnFullBuy = (bid.bidSize * WEI_PER_ETH) / bidPrice
+			}
+
 			if (bid.tick < clearingTick) {
 				// Losing bid: full refund, no REP
 				assert.strictEqual(amounts.totalFilledRep, 0n, `Bid ${ bid.bidIndex } (losing): should get 0 REP`)
@@ -840,8 +848,8 @@ describe('Auction', () => {
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: clearingTick, bidIndex: 0n }])
 		})
 		test('withdrawBids should succeed with zero clearing price (extreme negative tick)', async () => {
-			// Setup: extremely high cap to avoid hitting it, tiny maxRepBeingSold so rep target not reached
-			const ethRaiseCap = 1_000_000n * WEI_PER_ETH
+			// Setup: high cap to avoid hitting it, tiny maxRepBeingSold so rep target not reached
+			const ethRaiseCap = 1000n * WEI_PER_ETH
 			const maxRepBeingSold = 1n // 1 wei REP
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
 
@@ -869,7 +877,7 @@ describe('Auction', () => {
 		})
 
 		test('computeClearing should not revert with zero-price bid', async () => {
-			const ethRaiseCap = 1_000_000n * WEI_PER_ETH
+			const ethRaiseCap = 1000n * WEI_PER_ETH
 			const maxRepBeingSold = 1n // 1 wei REP
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
 			const zeroPriceTick = -450000n
@@ -878,6 +886,36 @@ describe('Auction', () => {
 			const result = await computeClearing(client, auctionAddress)
 			// With zero price, no rep can be sold, so priceFound should be false
 			assert.strictEqual(result.priceFound, false, 'no clearing price when all bids have zero price')
+		})
+
+		test('zero-price bids (non-clearing) should get full refund', async () => {
+			const ethRaiseCap = 100n * WEI_PER_ETH
+			// Set target low enough that 1 ETH at tick 0 exceeds it
+			const maxRepBeingSold = WEI_PER_ETH / 2n // 0.5 ETH worth of REP
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+			// Zero-price tick (very negative)
+			const zeroPriceTick = -450000n
+			const zeroPriceBidAmount = 1n * WEI_PER_ETH
+			await submitBid(client, auctionAddress, zeroPriceTick, zeroPriceBidAmount)
+
+			// Winning bid with enough ETH to meet/exceed rep target
+			const winningTick = 0n
+			const winningAmount = 1n * WEI_PER_ETH // yields 1 REP wei at price 1, > 0.5 target
+			await submitBid(client, auctionAddress, winningTick, winningAmount)
+
+			await finalizeAndVerify(client, auctionAddress)
+
+			const clearingTick = await getClearingTick(client, auctionAddress)
+			// Clearing tick should be the winning bid's tick (0), not the zero-price tick
+			assert.strictEqual(clearingTick, winningTick, 'clearing tick should be winning tick')
+
+			// Zero-price bid is below clearing tick, so it's a losing bid: full refund, no REP
+			const amounts = await simulateWithdrawBids(client, auctionAddress, client.account.address, [{ tick: zeroPriceTick, bidIndex: 0n }])
+			assert.strictEqual(amounts.totalFilledRep, 0n, 'zero-price bid: no REP filled')
+			assert.strictEqual(amounts.totalEthRefund, zeroPriceBidAmount, 'zero-price bid: full ETH refund')
+
+			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: zeroPriceTick, bidIndex: 0n }])
 		})
 	})
 })

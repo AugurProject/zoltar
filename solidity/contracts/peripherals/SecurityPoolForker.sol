@@ -186,7 +186,10 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		securityPool.setSystemState(SystemState.Operational);
 		ISecurityPool parent = securityPool.parent();
 		uint256 repAvailable = forkData[parent].repAtFork;
-		securityPool.setCompleteSetCollateralAmount(address(securityPool).balance - securityPool.totalFeesOwedToVaults()); //TODO, we might want to reduce fees if we didn't get fully funded?
+		uint256 balance = address(securityPool).balance;
+		uint256 feesOwed = securityPool.totalFeesOwedToVaults();
+		uint256 collateralAmount = balance >= feesOwed ? balance - feesOwed : 0;
+		securityPool.setCompleteSetCollateralAmount(collateralAmount); // If underfunded, collateral is 0
 		uint256 parentTotalSecurityBondAllowance = parent.totalSecurityBondAllowance();
 		forkData[securityPool].auctionedSecurityBondAllowance = parentTotalSecurityBondAllowance - securityPool.totalSecurityBondAllowance();
 		securityPool.setTotalSecurityBondAllowance(parentTotalSecurityBondAllowance);
