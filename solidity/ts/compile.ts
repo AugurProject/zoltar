@@ -82,15 +82,15 @@ async function exists(path: string) {
 }
 
 const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[] = [], visited?: Set<string>): Promise<string[]> => {
-	// Set base directory on first call and resolve to absolute path
+	// Set base directory on first call and resolve to absolute canonical path (resolve symlinks)
 	if (!baseDir) {
-		baseDir = path.resolve(dirPath)
+		baseDir = await fs.realpath(dirPath)
 	}
 	// Initialize visited set on first call
 	const visitedSet = visited ?? new Set<string>()
 
 	// Get canonical path of current directory to detect cycles
-	const canonicalDir = path.resolve(dirPath)
+	const canonicalDir = await fs.realpath(dirPath)
 	// Skip if already visited (symlink loop detection)
 	if (visitedSet.has(canonicalDir)) {
 		return fileList
@@ -105,10 +105,13 @@ const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[]
 		let targetPath = filePath
 		if (file.isSymbolicLink()) {
 			targetPath = await fs.realpath(filePath)
+		} else {
+			// Even for non-symlinks, resolve the full path to handle parent symlinks
+			targetPath = await fs.realpath(filePath)
 		}
 
-		// Resolve to absolute canonical path
-		const resolvedTarget = path.resolve(targetPath)
+		// Resolve to absolute canonical path (already done by realpath)
+		const resolvedTarget = targetPath
 
 		// Security check: ensure resolvedTarget is within baseDir
 		// path.relative returns a path starting with '..' if target is outside baseDir

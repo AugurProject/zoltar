@@ -867,5 +867,17 @@ describe('Auction', () => {
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: zeroPriceTick, bidIndex: 0n }])
 			await assertContractEmpty(client, auctionAddress)
 		})
+
+		test('computeClearing should not revert with zero-price bid', async () => {
+			const ethRaiseCap = 1_000_000n * WEI_PER_ETH
+			const maxRepBeingSold = 1n // 1 wei REP
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+			const zeroPriceTick = -450000n
+			await submitBid(client, auctionAddress, zeroPriceTick, 1n * WEI_PER_ETH)
+			// Should not revert due to division by zero
+			const result = await computeClearing(client, auctionAddress)
+			// With zero price, no rep can be sold, so priceFound should be false
+			assert.strictEqual(result.priceFound, false, 'no clearing price when all bids have zero price')
+		})
 	})
 })

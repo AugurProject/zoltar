@@ -129,41 +129,30 @@ describe('Question Data', () => {
 		await createQuestion(client, testScalarQuestion, [])
 		const questionId = await getQuestionId(client, testScalarQuestion, [])
 
-		const encode = (invalid: boolean, first: bigint, second: bigint): bigint => {
-			// from utils/contracts/zoltarQuestionData.ts: combineUint256FromTwoWithInvalid
-			const PART_BIT_LENGTH = 120n
-			const TOTAL_BITS = 256n
-			const oneHundredTwentyBitMask = (1n << PART_BIT_LENGTH) - 1n
-			const normalizedFirst = first & oneHundredTwentyBitMask
-			const normalizedSecond = second & oneHundredTwentyBitMask
-			const highestBit = invalid ? 0n : 1n
-			return (highestBit << (TOTAL_BITS - 1n)) | (normalizedFirst << PART_BIT_LENGTH) | normalizedSecond
-		}
-
 		// A) high bit set, sum == numTicks -> valid -> not malformed (false)
 		{
-			const ans = encode(false, 600n, 400n)
+			const ans = combineUint256FromTwoWithInvalid(false, 600n, 400n)
 			const malformed = await isMalformedAnswerOption(client, questionId, ans)
 			assert.strictEqual(malformed, false, 'high bit + correct sum should be valid (not malformed)')
 		}
 
 		// B) high bit set, sum != numTicks -> malformed (true)
 		{
-			const ans = encode(false, 500n, 400n) // sum=900 != 1000
+			const ans = combineUint256FromTwoWithInvalid(false, 500n, 400n) // sum=900 != 1000
 			const malformed = await isMalformedAnswerOption(client, questionId, ans)
 			assert.strictEqual(malformed, true, 'high bit + wrong sum should be malformed')
 		}
 
 		// C) high bit clear (invalid=true), non-zero -> malformed (true)
 		{
-			const ans = encode(true, 100n, 900n)
+			const ans = combineUint256FromTwoWithInvalid(true, 100n, 900n)
 			const malformed = await isMalformedAnswerOption(client, questionId, ans)
 			assert.strictEqual(malformed, true, 'invalid flag + non-zero is malformed')
 		}
 
 		// D) high bit clear, both zero -> not malformed (false) (Invalid)
 		{
-			const ans = encode(true, 0n, 0n)
+			const ans = combineUint256FromTwoWithInvalid(true, 0n, 0n)
 			const malformed = await isMalformedAnswerOption(client, questionId, ans)
 			assert.strictEqual(malformed, false, 'invalid flag + both zero is Invalid (not malformed)')
 		}

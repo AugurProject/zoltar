@@ -79,12 +79,12 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(universeForkData.forkerRepDeposit, forkerDeposit, 'wrong deposit amount')
 		assert.strictEqual(universeForkData.forkingQuestionExtraInfo, marketText, 'Market text did not match')
 		assert.ok(areEqualArrays([...universeForkData.categories], [...outcomes]), 'Outcomes did not match')
-		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), forkerDeposit, 'forkers deposit should be in zoltar')
+		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), forkerDeposit, 'forker\'s deposit should be in zoltar')
 
 		// forker claim balance
 		const outcomeIndexes = [0n, 1n, 3n]
 		await forkerClaimRep(client, genesisUniverse, outcomeIndexes)
-		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), 0n, 'forkers deposit should be burned')
+		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), 0n, 'forker\'s deposit should be burned')
 		const universeForkDataAfterClaim = await getUniverseForkData(client, genesisUniverse)
 		assert.strictEqual(universeForkDataAfterClaim.forkerRepDeposit, 0n, 'deposit is gone')
 		for (const index of outcomeIndexes) {
@@ -104,7 +104,7 @@ describe('Contract Test Suite', () => {
 		}))
 		const priorSplitBalance = await getERC20Balance(client, genesisRepToken, client.account.address)
 		await splitRep(client, genesisUniverse, splitOutcomeIndexes)
-		assert.strictEqual(await getERC20Balance(client, genesisRepToken, client.account.address), 0n, 'splitters rep should be gone')
+		assert.strictEqual(await getERC20Balance(client, genesisRepToken, client.account.address), 0n, 'splitter\'s rep should be gone')
 		for (const [index, outcomeIndex] of splitOutcomeIndexes.entries()) {
 			const indexUniverse = getChildUniverseId(genesisUniverse, outcomeIndex)
 			const repForIndex = getRepTokenAddress(indexUniverse)

@@ -103,8 +103,110 @@ contract DualCapBatchAuction {
 	}
 
 	function computeClearing() public view returns (bool priceFound, int256 clearingTickOut, uint256 accumulatedEth, uint256 ethAtClearingTick) {
-		return _compute(root, 0,0,0,0);
+		return _compute(root, 0, 0, 0, 0);
 	}
+
+	function withdrawBids(address withdrawFor, TickIndex[] memory tickIndices) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
+		require(finalized, 'not finalized');
+		require(msg.sender == owner, 'Only owner can call');
+		uint256 clearingPriceLocal = tickToPrice(clearingTick);
+
+		for (uint256 i = 0; i < tickIndices.length; i++) {
+			int256 tick = tickIndices[i].tick;
+			uint256 index = tickIndices[i].bidIndex;
+
+			Bid storage bid = bidsAtTick[tick][index];
+			require(bid.bidder == withdrawFor, 'not their bid');
+			require(bid.ethAmount > 0, 'already claimed');
+			if (tick < clearingTick) {
+				// Losing bid: refund full ETH
+				totalEthRefund += bid.ethAmount;
+			} else if (tick > clearingTick) {
+				// Fully winning: convert all ETH to REP
+				if (clearingPriceLocal > 0) {
+					totalFilledRep += bid.ethAmount * PRICE_PRECISION / clearingPriceLocal;
+				} // else: price is zero, filled REP remains 0
+			} else {
+				// Tick == clearingTick: partial fill
+				// Determine previous cumulative ETH at this tick
+				uint256 previousCumulativeEth = bid.cumulativeEth - bid.ethAmount;
+				uint256 ethUsed;
+
+				if (ethFilledAtClearing <= previousCumulativeEth) {
+					ethUsed = 0; // this bid did not get filled
+				} else if (ethFilledAtClearing >= bid.cumulativeEth) {
+					ethUsed = bid.ethAmount; // fully filled
+				} else {
+					ethUsed = ethFilledAtClearing - previousCumulativeEth; // partially filled
+				}
+
+				if (ethUsed > bid.ethAmount) ethUsed = bid.ethAmount; // safety clamp
+				uint256 filledRep;
+				if (clearingPriceLocal > 0) {
+					filledRep = ethUsed * PRICE_PRECISION / clearingPriceLocal;
+				} else {
+					filledRep = 0; // zero price, no REP can be bought
+				}
+
+				totalFilledRep += filledRep;
+				totalEthRefund += bid.ethAmount - ethUsed;
+			}
+			bid.ethAmount = 0; // prevent double withdrawals
+		}
+		if (totalEthRefund > 0) {
+			(bool sent,) = payable(withdrawFor).call{ value: totalEthRefund }('');
+			require(sent, 'eth transfer failed');
+		}
+		emit WithdrawBids(withdrawFor, tickIndices, totalFilledRep, totalEthRefund);
+	}
+
+	function refundLosingBids(TickIndex[] memory tickIndices) external {
+		require(!finalized, 'already finalized');
+
+		(bool priceFound, int256 foundTick,, ) = computeClearing();
+		require(priceFound, 'no clearing yet');
+
+		uint256 totalEthToRefund = 0;
+
+		for (uint256 i = 0; i < tickIndices.length; i++) {
+			int256 tick = tickIndices[i].tick;
+			uint256 index = tickIndices[i].bidIndex;
+
+			require(tick < foundTick, 'cannot withdraw binding bid');
+
+			Bid storage bid = bidsAtTick[tick][index];
+			require(bid.bidder == msg.sender, 'not bidder');
+			require(bid.ethAmount > 0, 'already withdrawn');
+
+			uint256 originalEth = bid.ethAmount;
+
+			// Zero out bid to prevent double withdrawal
+			bid.ethAmount = 0;
+
+			totalEthToRefund += originalEth;
+
+			// Update tree totals to remove this losing bid
+			_decreaseAtPrice(tick, originalEth);
+		}
+
+		// Send ETH back to user
+		(bool sent,) = payable(msg.sender).call{ value: totalEthToRefund }('');
+		require(sent, 'transfer failed');
+
+		emit RefundLosingBids(msg.sender, tickIndices, totalEthToRefund);
+	}
+
+	function tickToPrice(int256 tick) public pure returns (uint256 price) {
+		require(tick >= MIN_TICK && tick <= MAX_TICK, 'tick out of bounds');
+		uint256 absTick = tick < 0 ? uint256(-tick) : uint256(tick);
+		price = PRICE_PRECISION;
+		for (uint8 i = 0; i < 20; i++) {
+			if ((absTick & (1 << i)) != 0) price = price * powerOf1Point0001(i) / PRICE_PRECISION;
+		}
+		if (tick < 0) price = PRICE_PRECISION * PRICE_PRECISION / price;
+	}
+
+	// Internal/private functions below
 
 	function _wouldClear(uint256 candidateEth, int256 tick) internal view returns (bool) {
 		if (candidateEth >= ethRaiseCap) return true;
@@ -161,58 +263,187 @@ contract DualCapBatchAuction {
 		return _compute(node.left, accEth, lastValidTick, lastValidEth, lastValidEthAtTick);
 	}
 
-	function withdrawBids(address withdrawFor, TickIndex[] memory tickIndices) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
-		require(finalized, 'not finalized');
-		require(msg.sender == owner, 'Only owner can call');
-		uint256 clearingPriceLocal = tickToPrice(clearingTick);
+	function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {
+		if (nodeId == 0) {
+			uint256 newId = nextId++;
+			nodes[newId] = Node({ tick: tick, totalEth: ethAmount, subtreeEth: ethAmount, left: 0, right: 0, height: 1 });
 
-		for (uint256 i = 0; i < tickIndices.length; i++) {
-			int256 tick = tickIndices[i].tick;
-			uint256 index = tickIndices[i].bidIndex;
+			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: ethAmount }));
 
-			Bid storage bid = bidsAtTick[tick][index];
-			require(bid.bidder == withdrawFor, 'not their bid');
-			require(bid.ethAmount > 0, 'already claimed');
-			if (tick < clearingTick) {
-				// Losing bid: refund full ETH
-				totalEthRefund += bid.ethAmount;
-			} else if (tick > clearingTick) {
-				// Fully winning: convert all ETH to REP
-				if (clearingPriceLocal > 0) {
-					totalFilledRep += bid.ethAmount * PRICE_PRECISION / clearingPriceLocal;
-				} // else: price is zero, filled REP remains 0
-			} else {
-				// Tick == clearingTick: partial fill
-				// Determine previous cumulative ETH at this tick
-				uint256 previousCumulativeEth = bid.cumulativeEth - bid.ethAmount;
-				uint256 ethUsed;
+			return newId;
+		}
 
-				if (ethFilledAtClearing <= previousCumulativeEth) {
-					ethUsed = 0; // this bid did not get filled
-				} else if (ethFilledAtClearing >= bid.cumulativeEth) {
-					ethUsed = bid.ethAmount; // fully filled
-				} else {
-					ethUsed = ethFilledAtClearing - previousCumulativeEth; // partially filled
-				}
+		Node storage node = nodes[nodeId];
+		if (tick == node.tick) {
+			node.totalEth += ethAmount;
+			uint256 cumulativeEth = bidsAtTick[tick].length == 0 ? ethAmount : bidsAtTick[tick][bidsAtTick[tick].length - 1].cumulativeEth + ethAmount;
+			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: cumulativeEth }));
+		} else if (tick < node.tick) {
+			node.left = _insert(node.left, tick, bidder, ethAmount);
+		} else {
+			node.right = _insert(node.right, tick, bidder, ethAmount);
+		}
 
-				if (ethUsed > bid.ethAmount) ethUsed = bid.ethAmount; // safety clamp
-				uint256 filledRep;
-				if (clearingPriceLocal > 0) {
-					filledRep = ethUsed * PRICE_PRECISION / clearingPriceLocal;
-				} else {
-					filledRep = 0; // zero price, no REP can be bought
-				}
+		_update(nodeId);
+		return _balance(nodeId);
+	}
 
-				totalFilledRep += filledRep;
-				totalEthRefund += bid.ethAmount - ethUsed;
+	function _update(uint256 nodeId) internal {
+		Node storage node = nodes[nodeId];
+		uint256 leftEth; uint256 rightEth; uint256 leftH; uint256 rightH;
+		if (node.left != 0) {
+			leftEth = nodes[node.left].subtreeEth;
+			leftH = nodes[node.left].height;
+		}
+		if (node.right != 0) {
+			rightEth = nodes[node.right].subtreeEth;
+			rightH = nodes[node.right].height;
+		}
+
+		node.subtreeEth = node.totalEth + leftEth + rightEth;
+		node.height = 1 + (leftH > rightH ? leftH : rightH);
+	}
+
+	function _height(uint256 nodeId) internal view returns (uint256) { return nodeId == 0 ? 0 : nodes[nodeId].height; }
+
+	function _balance(uint256 nodeId) internal returns (uint256) {
+		int256 balance = int256(_height(nodes[nodeId].left)) - int256(_height(nodes[nodeId].right));
+		if (balance > 1) {
+			if (_height(nodes[nodes[nodeId].left].left) < _height(nodes[nodes[nodeId].left].right)) nodes[nodeId].left = _rotateLeft(nodes[nodeId].left);
+			return _rotateRight(nodeId);
+		}
+		if (balance < -1) {
+			if (_height(nodes[nodes[nodeId].right].right) < _height(nodes[nodes[nodeId].right].left)) nodes[nodeId].right = _rotateRight(nodes[nodeId].right);
+			return _rotateLeft(nodeId);
+		}
+		return nodeId;
+	}
+
+	function _rotateLeft(uint256 nodeId) internal returns (uint256) {
+		uint256 newRoot = nodes[nodeId].right;
+		uint256 moved = nodes[newRoot].left;
+		nodes[newRoot].left = nodeId;
+		nodes[nodeId].right = moved;
+		_update(nodeId); _update(newRoot);
+		return newRoot;
+	}
+
+	function _rotateRight(uint256 nodeId) internal returns (uint256) {
+		uint256 newRoot = nodes[nodeId].left;
+		uint256 moved = nodes[newRoot].right;
+		nodes[newRoot].right = nodeId;
+		nodes[nodeId].left = moved;
+		_update(nodeId); _update(newRoot);
+		return newRoot;
+	}
+
+	function powerOf1Point0001(uint8 index) internal pure returns (uint256) {
+		if (index == 0) return 1000100000000000000;
+		if (index == 1) return 1000200010000000000;
+		if (index == 2) return 1000400060004000100;
+		if (index == 3) return 1000800280056007000;
+		if (index == 4) return 1001601200560182043;
+		if (index == 5) return 1003204964963598014;
+		if (index == 6) return 1006420201727613920;
+		if (index == 7) return 1012881622445451097;
+		if (index == 8) return 1025929181087729343;
+		if (index == 9) return 1052530684607338948;
+		if (index == 10) return 1107820842039993613;
+		if (index == 11) return 1227267018058200482;
+		if (index == 12) return 1506184333613467388;
+		if (index == 13) return 2268591246822644826;
+		if (index == 14) return 5146506245160322222;
+		if (index == 15) return 26486526531474198664;
+		if (index == 16) return 701536087702486644953;
+		if (index == 17) return 492152882348911033633683;
+		if (index == 18) return 242214459604341065650571799093;
+		if (index == 19) return 58667844441422969901301586347865591163491;
+		revert('Index out of bounds');
+	}
+
+	function _decreaseAtPrice(int256 tick, uint256 ethAmount) internal {
+		root = _decrease(root, tick, ethAmount);
+	}
+
+	function _decrease(uint256 nodeId, int256 tick, uint256 ethAmount) internal returns (uint256) {
+		require(nodeId != 0, 'invalid node');
+		Node storage node = nodes[nodeId];
+
+		if (tick < node.tick) {
+			node.left = _decrease(node.left, tick, ethAmount);
+		} else if (tick > node.tick) {
+			node.right = _decrease(node.right, tick, ethAmount);
+		} else {
+			// Found node
+			require(node.totalEth >= ethAmount, 'eth underflow');
+			node.totalEth -= ethAmount;
+
+			// If node still has ETH, just update
+			if (node.totalEth > 0) {
+				_update(nodeId);
+				return _balance(nodeId);
 			}
-			bid.ethAmount = 0; // prevent double withdrawals
+
+			// Node empty → delete
+			return _delete(nodeId, tick);
 		}
-		if (totalEthRefund > 0) {
-			(bool sent,) = payable(withdrawFor).call{ value: totalEthRefund }('');
-			require(sent, 'eth transfer failed');
+
+		_update(nodeId);
+		return _balance(nodeId);
+	}
+
+	function _delete(uint256 nodeId, int256 tick) internal returns (uint256) {
+		require(nodeId != 0, 'delete missing');
+		Node storage node = nodes[nodeId];
+
+		if (tick < node.tick) {
+			node.left = _delete(node.left, tick);
+		} else if (tick > node.tick) {
+			node.right = _delete(node.right, tick);
+		} else {
+
+			// Case 1: no children
+			if (node.left == 0 && node.right == 0) {
+				delete nodes[nodeId];
+				return 0;
+			}
+
+			// Case 2: only right child
+			if (node.left == 0) {
+				uint256 rightChild = node.right;
+				delete nodes[nodeId];
+				return rightChild;
+			}
+
+			// Case 3: only left child
+			if (node.right == 0) {
+				uint256 leftChild = node.left;
+				delete nodes[nodeId];
+				return leftChild;
+			}
+
+			// Case 4: two children
+			uint256 successorId = _minNode(node.right); // smallest in right subtree
+			Node storage successor = nodes[successorId];
+
+			// Copy successor data
+			node.tick = successor.tick;
+			node.totalEth = successor.totalEth;
+
+			// Delete successor recursively
+			node.right = _delete(node.right, successor.tick);
 		}
-		emit WithdrawBids(withdrawFor, tickIndices, totalFilledRep, totalEthRefund);
+
+		_update(nodeId);
+		return _balance(nodeId);
+	}
+
+	function _minNode(uint256 nodeId) internal view returns (uint256) {
+		uint256 current = nodeId;
+		while (nodes[current].left != 0) {
+			current = nodes[current].left;
+		}
+		return current;
 	}
 
 	function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {
