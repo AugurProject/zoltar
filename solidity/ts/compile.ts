@@ -37,24 +37,30 @@ const AbiEntry = funtypes.ReadonlyPartial({
 	outputs: funtypes.ReadonlyArray(AbiParameter)
 })
 
+// Contract data may have abi and evm optional (if compilation failed for that contract)
+const ContractData = funtypes.ReadonlyPartial({
+	abi: funtypes.ReadonlyArray(AbiEntry),
+	evm: funtypes.ReadonlyPartial({
+		bytecode: funtypes.ReadonlyPartial({
+			object: funtypes.String
+		}),
+		deployedBytecode: funtypes.ReadonlyPartial({
+			object: funtypes.String
+		})
+	})
+})
+
 type CompileResult = funtypes.Static<typeof CompileResult>
 const CompileResult = funtypes.ReadonlyObject({
-	contracts: funtypes.Record(
-		funtypes.String,
+	contracts: funtypes.Union(
 		funtypes.Record(
 			funtypes.String,
-			funtypes.ReadonlyObject({
-				abi: funtypes.ReadonlyArray(AbiEntry),
-				evm: funtypes.ReadonlyObject({
-					bytecode: funtypes.ReadonlyObject({
-						object: funtypes.String
-					}),
-					deployedBytecode: funtypes.ReadonlyObject({
-						object: funtypes.String
-					})
-				})
-			})
-		)
+			funtypes.Record(
+				funtypes.String,
+				ContractData
+			)
+		),
+		funtypes.Undefined
 	),
 	sources: funtypes.Union(funtypes.Unknown, funtypes.Undefined),
 	errors: funtypes.Union(
@@ -101,21 +107,19 @@ const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[]
 	for (const file of files) {
 		const filePath = path.join(dirPath, file.name)
 
-		// Resolve symbolic links to their target to check for path traversal
+		// Resolve symbolic links to their target for security check and recursion
 		let targetPath = filePath
 		if (file.isSymbolicLink()) {
 			targetPath = await fs.realpath(filePath)
 		} else {
-			// Even for non-symlinks, resolve the full path to handle parent symlinks
-			targetPath = await fs.realpath(filePath)
+			// For regular files/directories, just use absolute path (no need to resolve symlinks in parent chain again)
+			// Since dirPath is already resolved (canonical), filePath is already absolute.
+			// We'll use filePath for security check and recursion for non-symlinks.
+			targetPath = filePath
 		}
 
-		// Resolve to absolute canonical path (already done by realpath)
-		const resolvedTarget = targetPath
-
-		// Security check: ensure resolvedTarget is within baseDir
-		// path.relative returns a path starting with '..' if target is outside baseDir
-		const relative = path.relative(baseDir, resolvedTarget)
+		// Security check: ensure targetPath is within baseDir
+		const relative = path.relative(baseDir, targetPath)
 		if (relative.startsWith('..') || path.isAbsolute(relative)) {
 			throw new Error(`Path traversal detected: ${filePath} resolves outside allowed directory`)
 		}
@@ -132,6 +136,9 @@ const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[]
 
 const copySolidityContractArtifact = async (contractLocation: string) => {
 	const solidityContract = CompileResult.parse(JSON.parse(await fs.readFile(contractLocation, 'utf8')))
+	if (!solidityContract.contracts) {
+		throw new Error('No contracts compiled')
+	}
 	const contracts = Object.entries(solidityContract.contracts).flatMap(([filename, contract]) => {
 		if (contract === undefined) throw new Error('missing contract')
 		return Object.entries(contract).map(([contractName, contractData]) => ({ contractName: `${ filename.replace('contracts/', '').replace(/-/g, '').replace(/\//g, '_').replace(/\\/g, '_').replace(/\.sol$/, '') }_${ contractName }`, contractData }))
