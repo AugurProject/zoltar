@@ -229,6 +229,11 @@ contract DualCapBatchAuction {
 		}
 
 		uint256 price = tickToPrice(node.tick);
+		uint256 ethToTake = node.totalEth;
+		// If price is zero, ignore this node's ETH for clearing calculations
+		if (price == 0) {
+			ethToTake = 0;
+		}
 		if (accEth > 0) {
 			uint256 repIfRepriced = accEth * price / PRICE_PRECISION;
 			if (repIfRepriced > maxRepBeingSold) return (true, lastValidTick, lastValidEth, lastValidEthAtTick);
@@ -236,7 +241,6 @@ contract DualCapBatchAuction {
 
 		if (accEth >= ethRaiseCap) return (true, lastValidTick, lastValidEth, lastValidEthAtTick);
 		uint256 remainingCap = ethRaiseCap - accEth;
-		uint256 ethToTake = node.totalEth;
 		if (ethToTake > remainingCap) ethToTake = remainingCap;
 		uint256 newAccEth = accEth + ethToTake;
 

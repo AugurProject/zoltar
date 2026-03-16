@@ -182,7 +182,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 
 	function _finalizeTruthAuction(ISecurityPool securityPool, uint256 repPurchased) private {
 		require(securityPool.systemState() == SystemState.ForkTruthAuction, 'Auction needs to have started');
-		forkData[securityPool].truthAuction.finalizeAuction(address(securityPool)); // this sends the eth back
+		forkData[securityPool].truthAuction.finalizeAuction(payable(securityPool)); // this sends the eth back
 		securityPool.setSystemState(SystemState.Operational);
 		ISecurityPool parent = securityPool.parent();
 		uint256 repAvailable = forkData[parent].repAtFork;
