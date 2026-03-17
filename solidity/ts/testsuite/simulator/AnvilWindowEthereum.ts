@@ -99,11 +99,14 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<MockWindowEt
 		if (block === null) {
 			throw new Error('Failed to get block')
 		}
+		// block.timestamp is a Date after parsing
 		return dateToBigintSeconds(block.timestamp)
 	}
 
 	const getBlock = async (): Promise<GetBlockReturn> => {
-		return await request({ method: 'eth_getBlockByNumber', params: ['latest', false] })
+		const raw = await request({ method: 'eth_getBlockByNumber', params: ['latest', false] })
+		// Parse the raw JSON through GetBlockReturn parser to convert timestamps, etc.
+		return GetBlockReturn.parse(raw)
 	}
 
 	const advanceTime = async (amountInSeconds: bigint) => {
