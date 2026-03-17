@@ -1,19 +1,17 @@
-import { test, beforeEach, describe } from 'bun:test'
-import { createWriteClient, WriteClient } from '../../testsuite/simulator/utils/viem'
-import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../../testsuite/simulator/MockWindowEthereum'
-import { TEST_ADDRESSES } from '../../testsuite/simulator/utils/constants'
-import { contractExists, getETHBalance, setupTestAccounts } from '../../testsuite/simulator/utils/utilities'
-import { Address } from 'viem'
-import { computeClearing, deployDualCapBatchAuction, finalize, getClearingTick, getMinBidSize, simulateWithdrawBids, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids, getEthRaiseCap, getEthRaised } from '../../testsuite/simulator/utils/contracts/auction'
-import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../../testsuite/simulator/utils/testUtils'
-import { priceToClosestTick, tickToPrice } from '../../testsuite/simulator/utils/tickMath'
-import assert from 'assert'
-import { ensureZoltarDeployed } from '../../testsuite/simulator/utils/contracts/zoltar'
-import { ensureInfraDeployed } from '../../testsuite/simulator/utils/contracts/deployPeripherals'
-import { getDualCapBatchAuctionAddress } from '../../testsuite/simulator/utils/contracts/deployments'
-import { addressString } from '../../testsuite/simulator/utils/bigint'
-import { SimulationState } from '../../testsuite/simulator/types/visualizerTypes'
-import { copySimulationState } from '../../testsuite/simulator/SimulationModeEthereumClientService'
+ import { test, beforeEach, describe } from 'bun:test'
+ import { createWriteClient, WriteClient } from '../../testsuite/simulator/utils/viem'
+ import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../../testsuite/simulator/MockWindowEthereum'
+ import { TEST_ADDRESSES } from '../../testsuite/simulator/utils/constants'
+ import { contractExists, getETHBalance, setupTestAccounts } from '../../testsuite/simulator/utils/utilities'
+ import { Address } from 'viem'
+ import { computeClearing, deployDualCapBatchAuction, finalize, getClearingTick, getMinBidSize, simulateWithdrawBids, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids, getEthRaiseCap, getEthRaised } from '../../testsuite/simulator/utils/contracts/auction'
+ import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../../testsuite/simulator/utils/testUtils'
+ import { priceToClosestTick, tickToPrice } from '../../testsuite/simulator/utils/tickMath'
+ import assert from 'assert'
+ import { ensureZoltarDeployed } from '../../testsuite/simulator/utils/contracts/zoltar'
+ import { ensureInfraDeployed } from '../../testsuite/simulator/utils/contracts/deployPeripherals'
+ import { getDualCapBatchAuctionAddress } from '../../testsuite/simulator/utils/contracts/deployments'
+ import { addressString } from '../../testsuite/simulator/utils/bigint'
 
 // ============ MODULE-LEVEL CONSTANTS ============
 const ATTOETH_PER_ETH  = 10n**18n
@@ -26,13 +24,12 @@ const DEFAULT_TOLERANCE = 1000n
 const DEFAULT_ETH_RAISE_CAP = 200_000n
 const DEFAULT_MAX_REP = 100n
 
-describe('Auction', () => {
-	let mockWindow: MockWindowEthereum
-	let client: WriteClient
-	let auctionAddress: Address
-	let cachedSimulationState: SimulationState | undefined = undefined
+ describe('Auction', () => {
+ 	let mockWindow: MockWindowEthereum
+ 	let client: WriteClient
+ 	let auctionAddress: Address
 
-	// ============ Helper Functions ============
+ 	// ============ Helper Functions ============
 
 	function createTestClient(idx: number): WriteClient {
 		return createWriteClient(mockWindow, TEST_ADDRESSES[idx], 0)
@@ -136,18 +133,12 @@ describe('Auction', () => {
 	}
 
 	beforeEach(async () => {
-		if (cachedSimulationState) {
-			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
-		} else {
-			mockWindow = getMockedEthSimulateWindowEthereum()
-			await setupTestAccounts(mockWindow)
-			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-			await ensureZoltarDeployed(client)
-			await ensureInfraDeployed(client)
-			await deployDualCapBatchAuction(client, client.account.address)
-			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
-		}
+		mockWindow = await getMockedEthSimulateWindowEthereum()
+		await setupTestAccounts(mockWindow)
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		await ensureZoltarDeployed(client)
+		await ensureInfraDeployed(client)
+		await deployDualCapBatchAuction(client, client.account.address)
 		auctionAddress = getDualCapBatchAuctionAddress(client.account.address)
 		assert.ok(await contractExists(client, auctionAddress), 'auction exists')
 	})

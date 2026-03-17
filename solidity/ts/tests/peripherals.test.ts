@@ -1,70 +1,56 @@
-import { test, beforeEach, describe } from 'bun:test'
-import assert from 'node:assert'
-import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
-import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { copySimulationState } from '../testsuite/simulator/SimulationModeEthereumClientService.js'
-import { addressString, dateToBigintSeconds, rpow } from '../testsuite/simulator/utils/bigint.js'
-import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
-import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils.js'
-import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getMarketId, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
-import { balanceOfShares, balanceOfSharesInCash, getEthAmountToBuy, getLastPrice, getMarketEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndQueueOperation } from '../testsuite/simulator/utils/contracts/peripherals.js'
-import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
-import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
-import { SimulationState } from '../testsuite/simulator/types/visualizerTypes.js'
-import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
-import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkSecurityPool, getMarketOutcome, getMigratedRep, getSecurityPoolForkerForkData, migrateFromEscalationGame, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker.js'
-import { getEscalationGameDeposits, getMarketResolution, getNonDecisionThreshold, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame.js'
-import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseForkData, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar.js'
-import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool.js'
+ import { test, beforeEach, describe } from 'bun:test'
+ import assert from 'node:assert'
+ import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
+ import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
+ import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
+ import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+ import { addressString, dateToBigintSeconds, rpow } from '../testsuite/simulator/utils/bigint.js'
+ import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils.js'
+ import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getMarketId, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
+ import { balanceOfShares, balanceOfSharesInCash, getEthAmountToBuy, getLastPrice, getMarketEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndQueueOperation } from '../testsuite/simulator/utils/contracts/peripherals.js'
+ import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
+ import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
+ import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
+ import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkSecurityPool, getMarketOutcome, getMigratedRep, getSecurityPoolForkerForkData, migrateFromEscalationGame, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker.js'
+ import { getEscalationGameDeposits, getMarketResolution, getNonDecisionThreshold, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame.js'
+ import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseForkData, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar.js'
+ import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool.js'
 
-describe('Peripherals Contract Test Suite', () => {
-	let mockWindow: MockWindowEthereum
-	let client: WriteClient
-	const reportBond = 1n * 10n ** 18n
-	const PRICE_PRECISION = 1n * 10n ** 18n
-	const repDeposit = 1000n * 10n ** 18n
-	const currentTimestamp = dateToBigintSeconds(new Date())
-	const marketEndDate = currentTimestamp + 365n * DAY
-	let securityPoolAddresses: {
-		securityPool: `0x${ string }`,
-		priceOracleManagerAndOperatorQueuer: `0x${ string }`,
-		shareToken: `0x${ string }`,
-		truthAuction: `0x${ string }`,
-		escalationGame: `0x${ string }`,
-	}
-	const genesisUniverse = 0n
-	const securityMultiplier = 2n
-	const startingRepEthPrice = 10n
-	const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
-	const EXTRA_INFO = 'test market!'
-	const marketId = getMarketId(genesisUniverse, securityMultiplier, EXTRA_INFO, marketEndDate)
+ describe('Peripherals Contract Test Suite', () => {
+ 	let mockWindow: MockWindowEthereum
+ 	let client: WriteClient
+ 	const reportBond = 1n * 10n ** 18n
+ 	const PRICE_PRECISION = 1n * 10n ** 18n
+ 	const repDeposit = 1000n * 10n ** 18n
+ 	const currentTimestamp = dateToBigintSeconds(new Date())
+ 	const marketEndDate = currentTimestamp + 365n * DAY
+ 	let securityPoolAddresses: {
+ 		securityPool: `0x${ string }`,
+ 		priceOracleManagerAndOperatorQueuer: `0x${ string }`,
+ 		shareToken: `0x${ string }`,
+ 		truthAuction: `0x${ string }`,
+ 		escalationGame: `0x${ string }`,
+ 	}
+ 	const genesisUniverse = 0n
+ 	const securityMultiplier = 2n
+ 	const startingRepEthPrice = 10n
+ 	const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
+ 	const EXTRA_INFO = 'test market!'
+ 	const marketId = getMarketId(genesisUniverse, securityMultiplier, EXTRA_INFO, marketEndDate)
 
-	const marketText = 'test market'
-	const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'] as const
+ 	const marketText = 'test market'
+ 	const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'] as const
 
-	let cachedSimulationState: SimulationState | undefined = undefined
-
-	beforeEach(async () => {
-		if (cachedSimulationState) {
-			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
-			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
-			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		} else {
-			mockWindow = getMockedEthSimulateWindowEthereum()
-			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
-			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-			await setupTestAccounts(mockWindow)
-			await ensureZoltarDeployed(client)
-			await ensureInfraDeployed(client)
-			await deployOriginSecurityPool(client, genesisUniverse, EXTRA_INFO, marketEndDate, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
-			await approveAndDepositRep(client, repDeposit, marketId)
-			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
-		}
-		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, marketId, securityMultiplier)
-	})
+ 	beforeEach(async () => {
+ 		mockWindow = await getMockedEthSimulateWindowEthereum()
+ 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+ 		await setupTestAccounts(mockWindow)
+ 		await ensureZoltarDeployed(client)
+ 		await ensureInfraDeployed(client)
+ 		await deployOriginSecurityPool(client, genesisUniverse, EXTRA_INFO, marketEndDate, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+ 		await approveAndDepositRep(client, repDeposit, marketId)
+ 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, marketId, securityMultiplier)
+ 	})
 
 	test('can deposit rep and withdraw it', async () => {
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)

@@ -7,6 +7,7 @@ import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
 import { QuestionOutcome } from '../types/types.js'
+import { ReputationToken_ReputationToken } from '../../../types/contractArtifact.js'
 export const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
 
 export async function sleep(milliseconds: number) {
@@ -202,9 +203,46 @@ export const getETHBalance = async (client: ReadClient, address: Address) => {
 }
 
 export const setupTestAccounts = async (mockWindowEthereum: MockWindowEthereum) => {
-	const accountValues = TEST_ADDRESSES.map((address) => ({ address: addressString(address), amount: TOKEN_AMOUNT_TO_MINT}))
+	// Impersonate test accounts so they can send transactions without private keys
+	for (const address of TEST_ADDRESSES) {
+		await mockWindowEthereum.impersonateAccount(addressString(address))
+	}
+
+	const accountValues = TEST_ADDRESSES.map((address) => ({ address: addressString(address), amount: TOKEN_AMOUNT_TO_MINT }))
 	await mintETH(mockWindowEthereum, accountValues)
-	await mintERC20(mockWindowEthereum, addressString(GENESIS_REPUTATION_TOKEN), accountValues, 1n)
+	// For OpenZeppelin ERC20, _balances mapping is at slot 0 (first state variable)
+	await mintERC20(mockWindowEthereum, addressString(GENESIS_REPUTATION_TOKEN), accountValues, 0n)
+
+	// Deploy the ReputationToken contract at the genesis address
+	const bytecodeHex = ReputationToken_ReputationToken.evm.deployedBytecode.object
+	const bytes = hexToBytes(bytecodeHex.startsWith('0x') ? bytecodeHex : `0x${bytecodeHex}`)
+	if (!bytes) throw new Error('Failed to convert bytecode to bytes')
+	await mockWindowEthereum.addStateOverrides({
+		[addressString(GENESIS_REPUTATION_TOKEN)]: {
+			code: bytes
+		}
+	})
+
+	// Deploy the ProxyDeployer contract at its known address to avoid raw transaction
+	const proxyDeployerBytecode = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3'
+	await mockWindowEthereum.addStateOverrides({
+		[addressString(PROXY_DEPLOYER_ADDRESS)]: {
+			code: hexToBytes(proxyDeployerBytecode)
+		}
+	})
+
+	// Set total theoretical supply for REP token.
+	// In the storage layout of ReputationToken (which inherits from ERC20), the variable
+	// `totalTheoreticalSupply` is at slot 5 (after _balances slot0, _allowances slot1, _totalSupply slot2, _name slot3, _symbol slot4).
+	const totalTheoreticalSupply = BigInt(TEST_ADDRESSES.length) * TOKEN_AMOUNT_TO_MINT
+	const slot5 = `0x${(5n).toString(16).padStart(64, '0')}`
+	await mockWindowEthereum.addStateOverrides({
+		[addressString(GENESIS_REPUTATION_TOKEN)]: {
+			stateDiff: {
+				[slot5]: totalTheoreticalSupply
+			}
+		}
+	})
 }
 
 export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<void> {
