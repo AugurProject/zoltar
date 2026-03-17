@@ -7,7 +7,7 @@ import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
 import { MockWindowEthereum } from '../MockWindowEthereum.js'
 import { QuestionOutcome } from '../types/types.js'
-import { ReputationToken_ReputationToken } from '../../../types/contractArtifact.js'
+ import { ReputationToken_ReputationToken, peripherals_WETH9_WETH9 } from '../../../types/contractArtifact.js'
 export const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
 
 export async function sleep(milliseconds: number) {
@@ -243,7 +243,18 @@ export const setupTestAccounts = async (mockWindowEthereum: MockWindowEthereum) 
 			}
 		}
 	})
-}
+
+	// Deploy WETH9 at its expected address
+	const wethAddress = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
+	const wethBytecodeHex = peripherals_WETH9_WETH9.evm.deployedBytecode.object
+	const wethBytes = hexToBytes(wethBytecodeHex.startsWith('0x') ? wethBytecodeHex : `0x${wethBytecodeHex}`)
+	if (!wethBytes) throw new Error('Failed to convert WETH bytecode to bytes')
+ 	await mockWindowEthereum.addStateOverrides({
+ 		[wethAddress]: {
+ 			code: wethBytes
+ 		}
+ 	})
+ }
 
 export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<void> {
 	const deployerBytecode = await client.getCode({ address: addressString(PROXY_DEPLOYER_ADDRESS)})
