@@ -1,43 +1,25 @@
-import { test, beforeEach, describe } from 'bun:test'
-import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
-import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
-import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
-import assert from 'node:assert'
-import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData.js'
-import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays.js'
-import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
-import { SimulationState } from '../testsuite/simulator/types/visualizerTypes.js'
-import { copySimulationState } from '../testsuite/simulator/SimulationModeEthereumClientService.js'
+ import { test, beforeEach, describe } from 'bun:test'
+ import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
+ import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
+ import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
+ import { setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+ import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
+ import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
+ import assert from 'node:assert'
+ import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData.js'
+ import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays.js'
 
-describe('Question Data', () => {
-	let mockWindow: MockWindowEthereum
-	let client: WriteClient
+ describe('Question Data', () => {
+ 	let mockWindow: MockWindowEthereum
+ 	let client: WriteClient
 
-	let cachedSimulationState: SimulationState | undefined = undefined
-
-	beforeEach(async () => {
-		if (cachedSimulationState) {
-			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
-			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
-			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		} else {
-			mockWindow = getMockedEthSimulateWindowEthereum()
-			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
-			await setupTestAccounts(mockWindow)
-			await ensureZoltarDeployed(client)
-			await ensureInfraDeployed(client)
-			const simulationState = mockWindow.getSimulationState()
-			if (simulationState === null || simulationState === undefined) {
-				throw new Error('Simulation state is not available after setup')
-			}
-			cachedSimulationState = copySimulationState(simulationState)
-		}
-	})
+ 	beforeEach(async () => {
+ 		mockWindow = await getMockedEthSimulateWindowEthereum()
+ 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+ 		await setupTestAccounts(mockWindow)
+ 		await ensureZoltarDeployed(client)
+ 		await ensureInfraDeployed(client)
+ 	})
 
 	test('can make categorical question', async () => {
 		const outcomeLabels = ['Yes', 'No']

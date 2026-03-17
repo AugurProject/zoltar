@@ -1,41 +1,27 @@
-import { test, beforeEach, describe } from 'bun:test'
-import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
-import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists } from '../testsuite/simulator/utils/utilities.js'
-import assert from 'node:assert'
-import { addressString } from '../testsuite/simulator/utils/bigint.js'
-import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays.js'
-import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
-import { ensureZoltarDeployed, forkerClaimRep, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed, splitRep } from '../testsuite/simulator/utils/contracts/zoltar.js'
-import { SimulationState } from '../testsuite/simulator/types/visualizerTypes.js'
-import { copySimulationState } from '../testsuite/simulator/SimulationModeEthereumClientService.js'
+ import { test, beforeEach, describe } from 'bun:test'
+ import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
+ import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
+ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
+ import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists } from '../testsuite/simulator/utils/utilities.js'
+ import assert from 'node:assert'
+ import { addressString } from '../testsuite/simulator/utils/bigint.js'
+ import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays.js'
+ import { ensureZoltarDeployed, forkerClaimRep, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed, splitRep } from '../testsuite/simulator/utils/contracts/zoltar.js'
 
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
 const FORKER_DEPOSIT_FRACTION = 20n
 const FORKER_BURN_FRACTION = 5n
 
-describe('Contract Test Suite', () => {
-	let mockWindow: MockWindowEthereum
-	let client: WriteClient
-	const genesisUniverse = 0n
+ describe('Contract Test Suite', () => {
+ 	let mockWindow: MockWindowEthereum
+ 	let client: WriteClient
+ 	const genesisUniverse = 0n
 
-	let cachedSimulationState: SimulationState | undefined = undefined
-
-	beforeEach(async () => {
-		if (cachedSimulationState) {
-			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
-			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse)))
-			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		} else {
-			mockWindow = getMockedEthSimulateWindowEthereum()
-			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse)))
-			await setupTestAccounts(mockWindow)
-			await ensureZoltarDeployed(client)
-			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
-		}
+ 	beforeEach(async () => {
+		mockWindow = await getMockedEthSimulateWindowEthereum()
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		await setupTestAccounts(mockWindow)
+		await ensureZoltarDeployed(client)
 	})
 
 	test('canDeployContract', async () => {

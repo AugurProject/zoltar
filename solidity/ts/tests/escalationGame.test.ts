@@ -1,41 +1,27 @@
-import { test, beforeEach, describe } from 'bun:test'
-import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
-import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
-import assert from 'node:assert'
-import { deployEscalationGame, depositOnOutcome, getBalances, getStartingTime } from '../testsuite/simulator/utils/contracts/escalationGame.js'
-import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
-import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
-import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
-import { SimulationState } from '../testsuite/simulator/types/visualizerTypes.js'
-import { copySimulationState } from '../testsuite/simulator/SimulationModeEthereumClientService.js'
+ import { test, beforeEach, describe } from 'bun:test'
+ import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
+ import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
+ import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
+ import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+ import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
+ import assert from 'node:assert'
+ import { deployEscalationGame, depositOnOutcome, getBalances, getStartingTime } from '../testsuite/simulator/utils/contracts/escalationGame.js'
+ import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
+ import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
 
-describe('Escalation Game Test Suite', () => {
-	let mockWindow: MockWindowEthereum
-	let client: WriteClient
-	const reportBond = 1n * 10n ** 18n
-	const nonDecisionThreshold = 1000n * 10n ** 18n
+ describe('Escalation Game Test Suite', () => {
+ 	let mockWindow: MockWindowEthereum
+ 	let client: WriteClient
+ 	const reportBond = 1n * 10n ** 18n
+ 	const nonDecisionThreshold = 1000n * 10n ** 18n
 
-	let cachedSimulationState: SimulationState | undefined = undefined
-
-	beforeEach(async () => {
-		if (cachedSimulationState) {
-			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
-			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
-			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		} else {
-			mockWindow = getMockedEthSimulateWindowEthereum()
-			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
-			await setupTestAccounts(mockWindow)
-			await ensureZoltarDeployed(client)
-			await ensureInfraDeployed(client)
-			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
-		}
-	})
+  	beforeEach(async () => {
+  		mockWindow = await getMockedEthSimulateWindowEthereum()
+  		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+  		await setupTestAccounts(mockWindow)
+  		await ensureZoltarDeployed(client)
+  		await ensureInfraDeployed(client)
+  	})
 
 	test('can start a game', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
