@@ -678,7 +678,7 @@ describe('Auction', () => {
 
 				accumulatedEth = newAccumulatedEth
 			}
-			return { priceFound: false, foundTick: 0n, accumulatedEth: 0n 		}
+			return { priceFound: false, foundTick: 0n, accumulatedEth: 0n }
 		}
 
 		type EdgeCaseTest = {

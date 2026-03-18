@@ -25,9 +25,7 @@ export function stringToUint8Array(data: string) {
 
 export function dataString(data: Uint8Array | null) {
 	if (data === null) return ''
-	return Array.from(data)
-		.map(x => x.toString(16).padStart(2, '0'))
-		.join('')
+	return Array.from(data).map(x => x.toString(16).padStart(2, '0')).join('')
 }
 
 export function dataStringWith0xStart(data: Uint8Array | null): `0x${ string }` {
@@ -48,7 +46,7 @@ export function bigintToUint8Array(value: bigint, numberOfBytes: number) {
 export function stringifyJSONWithBigInts(value: any, space?: string | number | undefined): string {
 	return JSON.stringify(
 		value,
-		(_key, value) => typeof value === 'bigint' ? `0x${ value.toString(16) }` : value,
+		(_key, value) => (typeof value === 'bigint' ? `0x${ value.toString(16) }` : value),
 		space,
 	)
 }

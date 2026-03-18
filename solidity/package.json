@@ -11,9 +11,9 @@
 		"test-question-data": "bun tsc && bun test --timeout 300000 ./js/tests/questionData.test.js",
 		"test-auction": "bun tsc && bun test --timeout 300000 ./js/tests/auction/",
 		"test": "bun run compile-contracts && bun tsc && bun test --timeout 300000 ./js/tests/",
-		"prettify": "prettier --write \"ts/**/*.ts\"",
-		"lint": "eslint . --ext .ts",
-		"knip": "knip"
+ 		"prettify": "bun prettier --write \"ts/**/*.ts\"",
+ 		"lint": "bun eslint .",
+ 		"knip": "bun knip"
 	},
 	"keywords": [],
 	"author": "",

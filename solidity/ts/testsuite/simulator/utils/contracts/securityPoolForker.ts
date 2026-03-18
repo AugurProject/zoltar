@@ -105,5 +105,5 @@ export const migrateFromEscalationGame = async (client: WriteClient, parentSecur
 	abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 	functionName: 'migrateFromEscalationGame',
 	address: getInfraContractAddresses().securityPoolForker,
-	args: [parentSecurityPool, vault, outcomeIndex, depositIndexes.map(x => Number(x))],
+	args: [parentSecurityPool, vault, Number(outcomeIndex), depositIndexes.map(x => Number(x))],
 })

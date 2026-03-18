@@ -4,34 +4,34 @@ import { AccountAddress, QuestionOutcome } from '../../types/types.js'
 import { ReadClient, WriteClient } from '../viem.js'
 import { getInfraContractAddresses } from './deployPeripherals.js'
 
-export const getNonDecisionThreshold = async (client: ReadClient, escalationGame: `0x${ string }`) => await client.readContract({
+export const getNonDecisionThreshold = async (client: ReadClient, escalationGame: AccountAddress) => await client.readContract({
 	abi: peripherals_EscalationGame_EscalationGame.abi,
 	functionName: 'nonDecisionThreshold',
 	address: escalationGame,
 	args: [],
 })
 
-export const getMarketResolution = async (client: ReadClient, escalationGame: `0x${ string }`) => (await client.readContract({
+export const getMarketResolution = async (client: ReadClient, escalationGame: AccountAddress) => (await client.readContract({
 	abi: peripherals_EscalationGame_EscalationGame.abi,
 	functionName: 'getMarketResolution',
 	address: escalationGame,
 	args: [],
 })) as QuestionOutcome
 
-export const getStartBond = async (client: ReadClient, escalationGame: `0x${ string }`) => await client.readContract({
+export const getStartBond = async (client: ReadClient, escalationGame: AccountAddress) => await client.readContract({
 	abi: peripherals_EscalationGame_EscalationGame.abi,
 	functionName: 'startBond',
 	address: escalationGame,
 	args: [],
 })
 
-export const getEscalationGameDeposits = async (readClient: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) => {
+export const getEscalationGameDeposits = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) => {
 	let currentIndex = 0n
 	const numberOfEntries = 30n
-	const pages: { depositIndex: bigint; depositor: `0x${ string }`; amount: bigint; cumulativeAmount: bigint }[] = []
+	const pages: { depositIndex: bigint; depositor: AccountAddress; amount: bigint; cumulativeAmount: bigint }[] = []
 	do {
 		const newDeposits = (
-			await readClient.readContract({
+			await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
 				functionName: 'getDepositsByOutcome',
 				address: escalationGame,
@@ -65,7 +65,7 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBond: 
 	})
 }
 
-export const getBalances = async (client: ReadClient, escalationGame: `0x${ string }`) => {
+export const getBalances = async (client: ReadClient, escalationGame: AccountAddress) => {
 	const [invalid, yes, no] = await client.readContract({
 		abi: peripherals_EscalationGame_EscalationGame.abi,
 		functionName: 'getBalances',
@@ -75,14 +75,14 @@ export const getBalances = async (client: ReadClient, escalationGame: `0x${ stri
 	return { invalid, yes, no }
 }
 
-export const getStartingTime = async (client: ReadClient, escalationGame: `0x${ string }`) => await client.readContract({
+export const getStartingTime = async (client: ReadClient, escalationGame: AccountAddress) => await client.readContract({
 	abi: peripherals_EscalationGame_EscalationGame.abi,
 	functionName: 'startingTime',
 	address: escalationGame,
 	args: [],
 })
 
-export const depositOnOutcome = async (writeClient: WriteClient, escalationGame: `0x${ string }`, depositor: `0x${ string }`, outcome: QuestionOutcome, amount: bigint) => {
+export const depositOnOutcome = async (writeClient: WriteClient, escalationGame: AccountAddress, depositor: AccountAddress, outcome: QuestionOutcome, amount: bigint) => {
 	await writeClient.writeContract({
 		abi: peripherals_EscalationGame_EscalationGame.abi,
 		functionName: 'depositOnOutcome',

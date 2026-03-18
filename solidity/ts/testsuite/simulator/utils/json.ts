@@ -2,7 +2,15 @@ import * as funtypes from 'funtypes'
 
 type typeJSONEncodeable = string | number | boolean | { [x: string]: typeJSONEncodeable | undefined } | readonly typeJSONEncodeable[]
 type JSONEncodeable = funtypes.Static<typeof JSONEncodeable>
-const JSONEncodeable: funtypes.Runtype<typeJSONEncodeable> = funtypes.Lazy(() => funtypes.Union(funtypes.String, funtypes.Boolean, funtypes.Number, funtypes.ReadonlyArray(JSONEncodeable), funtypes.ReadonlyRecord(funtypes.String, JSONEncodeable)))
+const JSONEncodeable: funtypes.Runtype<typeJSONEncodeable> = funtypes.Lazy(() =>
+	funtypes.Union(
+		funtypes.String,
+		funtypes.Boolean,
+		funtypes.Number,
+		funtypes.ReadonlyArray(JSONEncodeable),
+		funtypes.ReadonlyRecord(funtypes.String, JSONEncodeable)
+	)
+)
 
 export type JSONEncodeableObject = funtypes.Static<typeof JSONEncodeableObject>
 export const JSONEncodeableObject = funtypes.ReadonlyRecord(funtypes.String, JSONEncodeable)

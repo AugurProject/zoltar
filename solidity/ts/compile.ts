@@ -29,7 +29,7 @@ const AbiParameter: funtypes.Runtype<{
 		internalType: funtypes.String,
 		indexed: funtypes.Boolean,
 		components: funtypes.ReadonlyArray(AbiParameter),
-	}),
+	})
 )
 
 const AbiEntry = funtypes.ReadonlyPartial({
@@ -98,16 +98,16 @@ const compilerSettings = {
 
 async function computeContractHash(sourceFiles: Map<string, string>): Promise<string> {
 	const hasher = createHash('sha256')
-	
+
 	// Include compiler version to detect solc upgrades
 	const solcAny = solc as unknown as { version(): string }
 	hasher.update(solcAny.version())
 	hasher.update('\n')
-	
+
 	// Include compiler settings in the hash
 	hasher.update(JSON.stringify(compilerSettings))
 	hasher.update('\n')
-	
+
 	// Hash all source files
 	const sortedPaths = Array.from(sourceFiles.keys()).sort()
 	for (const relativePath of sortedPaths) {
@@ -210,7 +210,7 @@ const copySolidityContractArtifact = async (contractLocation: string) => {
 
 const compileContracts = async () => {
 	console.log('Computing contract hash...')
-	
+
 	// Load all source files once
 	const files = await getAllFiles('contracts')
 	const sources = new Map<string, string>()
@@ -218,14 +218,14 @@ const compileContracts = async () => {
 		const relativePath = path.relative(process.cwd(), file).replace(/\\/g, '/')
 		sources.set(relativePath, await fs.readFile(file, 'utf8'))
 	}
-	
+
 	// Compute hash from loaded sources (no additional I/O)
 	const currentContractHash = await computeContractHash(sources)
 	const cache = await loadHashCache()
 
 	// Determine if recompilation is needed
 	const needsRecompilation = !(cache.hash === currentContractHash && (await exists(ARTIFACTS_JSON)))
-	
+
 	if (!needsRecompilation) {
 		console.log('No changes detected in Solidity contracts. Skipping recompilation.')
 	} else {
@@ -256,7 +256,7 @@ const compileContracts = async () => {
 
 		if (!(await exists(ARTIFACTS_DIR))) await fs.mkdir(ARTIFACTS_DIR, { recursive: false })
 		await fs.writeFile(ARTIFACTS_JSON, output)
-		
+
 		// Save updated hash after successful compilation
 		await saveHashCache(currentContractHash)
 		console.log('Compilation complete. Hash cache updated.')

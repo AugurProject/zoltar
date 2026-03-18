@@ -19,7 +19,7 @@ export const TEST_ADDRESSES = [0x0000000000010000000000000000000000000011n, 0x00
 export const YEAR_2030 = 1902074321n
 export const DAY = 86400n
 
-export const MOCK_PRIVATE_KEYS_ADDRESS = 0x7e5f4552091a69125d5dfcb7b8c2659029395bdfn // an address represeting 0x1 privatekey
+export const MOCK_PRIVATE_KEYS_ADDRESS = 0x7e5f4552091a69125d5dfcb7b8c2659029395bdfn // an address representing 0x1 privatekey
 
 export const QUINTILLION = 10n ** 18n
 

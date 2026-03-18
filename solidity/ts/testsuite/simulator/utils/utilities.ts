@@ -19,10 +19,7 @@ export function jsonStringify(value: unknown, space?: string | number | undefine
 		value,
 		(_, value) => {
 			if (typeof value === 'bigint') return `0x${ value.toString(16) }n`
-			if (value instanceof Uint8Array)
-			{return `b'${ Array.from(value)
-				.map(x => x.toString(16).padStart(2, '0'))
-				.join('') }'`}
+			if (value instanceof Uint8Array) return `b'${Array.from(value).map(x => x.toString(16).padStart(2, '0')).join('')}'`
 			// cast works around https://github.com/uhyo/better-typescript-lib/issues/36
 			return value as JSONValueF<unknown>
 		},
@@ -41,7 +38,11 @@ export function jsonParse(text: string): unknown {
 }
 
 export function ensureError(caught: unknown) {
-	return caught instanceof Error ? caught : typeof caught === 'string' ? new Error(caught) : typeof caught === 'object' && caught !== null && 'message' in caught && typeof caught.message === 'string' ? new Error(caught.message) : new Error(`Unknown error occurred.\n${ jsonStringify(caught) }`)
+	return (caught instanceof Error) ? caught
+		: typeof caught === 'string' ? new Error(caught)
+		: typeof caught === 'object' && caught !== null && 'message' in caught && typeof caught.message === 'string' ? new Error(caught.message)
+		: new Error(`Unknown error occurred.
+${ jsonStringify(caught) }`)
 }
 
 function hexToBytes(value: string) {

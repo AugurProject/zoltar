@@ -39,19 +39,19 @@ export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress
 	args: [completeSetsToRedeem],
 })
 
-export const getTotalSecurityBondAllowance = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => (await client.readContract({
+export const getTotalSecurityBondAllowance = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => await client.readContract({
 	abi: peripherals_SecurityPool_SecurityPool.abi,
 	functionName: 'totalSecurityBondAllowance',
 	address: securityPoolAddress,
 	args: [],
-}))
+})
 
-export const getCompleteSetCollateralAmount = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => (await client.readContract({
+export const getCompleteSetCollateralAmount = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => await client.readContract({
 	abi: peripherals_SecurityPool_SecurityPool.abi,
 	functionName: 'completeSetCollateralAmount',
 	address: securityPoolAddress,
 	args: [],
-}))
+})
 
 export const getSystemState = async (client: ReadClient, securityPoolAddress: `0x${ string }`): Promise<SystemState> => await client.readContract({
 	abi: peripherals_SecurityPool_SecurityPool.abi,
