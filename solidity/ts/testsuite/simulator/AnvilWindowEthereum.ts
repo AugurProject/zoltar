@@ -17,20 +17,20 @@ export interface MockWindowEthereum extends EIP1193Provider {
 export const getMockedEthSimulateWindowEthereum = async (): Promise<MockWindowEthereum> => {
 	const ANVIL_RPC = process.env.ANVIL_RPC || 'http://host.docker.internal:8545' || 'http://localhost:8545'
 
-  // Make JSON-RPC request to Anvil
-  const request = async (args: { method: string; params?: any[] }): Promise<any> => {
-    // For eth_sendTransaction, simulate first to catch reverts early
-    if (args.method === 'eth_sendTransaction' && args.params?.[0]) {
-      try {
-        // Simulate the transaction with eth_call (readonly) to see if it would revert
-        await request({ method: 'eth_call', params: [args.params[0], 'latest'] })
-      } catch (simulationError: any) {
-        // Simulation failed, so the transaction would revert - throw the same error
-        throw simulationError
-      }
-    }
+	// Make JSON-RPC request to Anvil
+	const request = async (args: { method: string; params?: any[] }): Promise<any> => {
+		// For eth_sendTransaction, simulate first to catch reverts early
+		if (args.method === 'eth_sendTransaction' && args.params?.[0]) {
+			try {
+				// Simulate the transaction with eth_call (readonly) to see if it would revert
+				await request({ method: 'eth_call', params: [args.params[0], 'latest'] })
+			} catch (simulationError: any) {
+				// Simulation failed, so the transaction would revert - throw the same error
+				throw simulationError
+			}
+		}
 
-    const response = await fetch(ANVIL_RPC, {
+		const response = await fetch(ANVIL_RPC, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({

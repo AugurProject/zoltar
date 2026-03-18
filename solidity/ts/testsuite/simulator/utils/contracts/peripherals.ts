@@ -124,7 +124,7 @@ export const getRequestPriceEthCost = async (client: ReadClient, priceOracleMana
 		functionName: 'getRequestPriceEthCost',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: []
-	}) as bigint
+	})
 }
 
 export const wrapWeth = async (client: WriteClient, amount: bigint) => {
