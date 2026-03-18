@@ -10,6 +10,8 @@ After implementing any feature or fixing a bug, always run the following quality
 
 Repeat the cycle iteratively after each fix to ensure clean builds and avoid accumulating issues.
 
+**Note**: For knip (dead code analysis), address its suggestions by removing unused files/exports or marking them as intentionally unused (e.g., via `_` prefix or `// knip-ignore-next` comments) to keep the codebase clean.
+
 # Package Guidelines
 
 - **Version pinning**: All dependency versions in `package.json` must be exact (no `^` or `~`). This ensures reproducible builds.
