@@ -123,7 +123,10 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	const contractAddresses = getInfraContractAddresses()
 	const existence = await getInfraDeployedInformation(client)
 
-	const deployBytecode = async (bytecode: `0x${ string }`) => await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode })
+	const deployBytecode = async (bytecode: `0x${ string }`) => {
+		const hash = await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode })
+		await client.waitForTransactionReceipt({ hash })
+	}
 
 	if (!existence.dualCapBatchAuctionFactory) await deployBytecode(`0x${ peripherals_factories_DualCapBatchAuctionFactory_DualCapBatchAuctionFactory.evm.bytecode.object }`)
 	if (!existence.scalarOutcomes) await deployBytecode(`0x${ ScalarOutcomes_ScalarOutcomes.evm.bytecode.object }`)
