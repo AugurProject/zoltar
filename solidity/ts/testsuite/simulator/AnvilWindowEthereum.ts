@@ -126,9 +126,9 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 				.map(b => b.toString(16).padStart(2, '0'))
 				.join('')
 		for (const address of Object.keys(stateOverrides)) {
-			const override = stateOverrides[address]!
+			const override = stateOverrides[address]
 			if (override.stateDiff !== undefined) {
-				for (const [keyHex, value] of Object.entries(override.stateDiff) as [string, bigint][]) {
+				for (const [keyHex, value] of Object.entries(override.stateDiff)) {
 					await request({
 						method: 'anvil_setStorageAt',
 						params: [address, keyHex, `0x${ value.toString(16).padStart(64, '0') }`],
