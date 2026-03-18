@@ -16,6 +16,9 @@
 		"knip": "5.86.0",
 		"prettier": "3.8.1"
 	},
+	"overrides": {
+		"eslint-visitor-keys": "5.0.1"
+	},
 	"dependencies": {
 		"viem": "2.38.3"
 	},

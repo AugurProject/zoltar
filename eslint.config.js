@@ -65,7 +65,6 @@ export default [
 	{
 		// Disable no-explicit-any for files that require any
 		files: [
-			'solidity/ts/types/bun-test.d.ts',
 			'solidity/ts/types/index.d.ts',
 			'solidity/ts/testsuite/simulator/utils/bigint.ts',
 			'solidity/ts/testsuite/simulator/AnvilWindowEthereum.ts',

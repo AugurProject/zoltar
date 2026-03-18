@@ -27,6 +27,9 @@ export interface AnvilWindowEthereum extends EIP1193Provider {
 	advanceTime: (amountInSeconds: bigint) => Promise<void>
 	setTime: (timestamp: bigint) => Promise<void>
 	impersonateAccount: (address: string) => Promise<void>
+	setBalance: (address: string, amount: bigint) => Promise<void>
+	anvilSnapshot: () => Promise<string>
+	anvilRevert: (snapshotId: string) => Promise<void>
 }
 
 export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowEthereum> => {
@@ -203,6 +206,22 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 		})
 	}
 
+	const setBalance = async (address: string, amount: bigint) => {
+		await request({
+			method: 'anvil_setBalance',
+			params: [address, `0x${ amount.toString(16) }`],
+		})
+	}
+
+	const anvilSnapshot = async (): Promise<string> => {
+		const result = await request({ method: 'anvil_snapshot', params: [] })
+		return result as string
+	}
+
+	const anvilRevert = async (snapshotId: string): Promise<void> => {
+		await request({ method: 'anvil_revert', params: [snapshotId] })
+	}
+
 	const mock: AnvilWindowEthereum = {
 		async request(args: any): Promise<any> {
 			return await request(args)
@@ -216,6 +235,9 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 		advanceTime,
 		setTime,
 		impersonateAccount,
+		setBalance,
+		anvilSnapshot,
+		anvilRevert,
 	}
 
 	return mock

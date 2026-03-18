@@ -79,14 +79,37 @@ async function exists(path: string) {
 	}
 }
 
-async function computeContractHash(): Promise<string> {
-	const files = await getAllFiles('contracts')
+// Compiler settings that affect output - must be included in hash
+const compilerSettings = {
+	viaIR: true,
+	optimizer: {
+		enabled: true,
+		runs: 1,
+		details: {
+			inliner: true,
+		},
+	},
+	outputSelection: {
+		'*': {
+			'*': ['evm.bytecode.object', 'evm.deployedBytecode.object', 'abi'],
+		},
+	},
+}
+
+async function computeContractHash(sourceFiles: Map<string, string>): Promise<string> {
 	const hasher = createHash('sha256')
-	files.sort()
-	for (const file of files) {
-		const content = await fs.readFile(file, 'utf8')
-		hasher.update(path.relative(process.cwd(), file))
-		hasher.update(content)
+	
+	// Include compiler settings in the hash
+	hasher.update(JSON.stringify(compilerSettings))
+	hasher.update('\n')
+	
+	// Hash all source files
+	const sortedPaths = Array.from(sourceFiles.keys()).sort()
+	for (const relativePath of sortedPaths) {
+		hasher.update(relativePath)
+		hasher.update('\n')
+		hasher.update(sourceFiles.get(relativePath) ?? '')
+		hasher.update('\n')
 	}
 	return hasher.digest('hex')
 }
@@ -182,7 +205,17 @@ const copySolidityContractArtifact = async (contractLocation: string) => {
 
 const compileContracts = async () => {
 	console.log('Computing contract hash...')
-	const currentContractHash = await computeContractHash()
+	
+	// Load all source files once
+	const files = await getAllFiles('contracts')
+	const sources = new Map<string, string>()
+	for (const file of files) {
+		const relativePath = path.relative(process.cwd(), file).replace(/\\/g, '/')
+		sources.set(relativePath, await fs.readFile(file, 'utf8'))
+	}
+	
+	// Compute hash from loaded sources (no additional I/O)
+	const currentContractHash = await computeContractHash(sources)
 	const cache = await loadHashCache()
 
 	// Check if contracts changed
@@ -193,37 +226,16 @@ const compileContracts = async () => {
 
 	console.log('Changes detected or first run. Compiling Solidity contracts...')
 
-	const files = await getAllFiles('contracts')
-	const sources = await files.reduce(
-		async (acc, curr) => {
-			const value = { content: await fs.readFile(curr, 'utf8') }
-			const relativePath = path.relative(process.cwd(), curr).replace(/\\/g, '/')
-			return acc.then(obj => {
-				obj[relativePath] = value
-				return obj
-			})
-		},
-		Promise.resolve(<{ [key: string]: { content: string } }>{}),
-	)
+	// Convert Map to object for solc input
+	const sourcesObj: { [key: string]: { content: string } } = {}
+	for (const [key, value] of sources) {
+		sourcesObj[key] = { content: value }
+	}
 
 	const input = {
 		language: 'Solidity',
-		sources,
-		settings: {
-			viaIR: true,
-			optimizer: {
-				enabled: true,
-				runs: 1,
-				details: {
-					inliner: true,
-				},
-			},
-			outputSelection: {
-				'*': {
-					'*': ['evm.bytecode.object', 'evm.deployedBytecode.object', 'abi'],
-				},
-			},
-		},
+		sources: sourcesObj,
+		settings: compilerSettings,
 	}
 
 	console.time('solc compilation')

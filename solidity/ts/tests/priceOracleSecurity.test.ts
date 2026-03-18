@@ -66,12 +66,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const preBalance = ethCost * 3n // some arbitrary pre-existing balance
 
-		// Use Anvil admin method to directly set the contract's ETH balance
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		await (mockWindow as any).request({
-			method: 'anvil_setBalance',
-			params: [priceOracle, `0x${preBalance.toString(16)}`],
-		})
+		// Use the abstracted method to set the contract's ETH balance
+		await mockWindow.setBalance(priceOracle, preBalance)
 
 		// Verify initial contract balance
 		const balanceBefore = await getETHBalance(client, priceOracle)

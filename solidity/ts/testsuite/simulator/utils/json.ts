@@ -7,10 +7,8 @@ const JSONEncodeable: funtypes.Runtype<typeJSONEncodeable> = funtypes.Lazy(() =>
 export type JSONEncodeableObject = funtypes.Static<typeof JSONEncodeableObject>
 export const JSONEncodeableObject = funtypes.ReadonlyRecord(funtypes.String, JSONEncodeable)
 
-export type JSONEncodeableObjectArray = funtypes.Static<typeof _JSONEncodeableObjectOrArray>
+export type JSONEncodeableObjectArray = funtypes.Static<typeof JSONEncodeableObjectArray>
 export const JSONEncodeableObjectArray = funtypes.Union(funtypes.ReadonlyArray(JSONEncodeableObject))
-
-const _JSONEncodeableObjectOrArray = funtypes.Union(JSONEncodeableObject, JSONEncodeableObjectArray)
 
 export function isJSON(text: string) {
 	if (typeof text !== 'string') return false
