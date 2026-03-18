@@ -99,6 +99,11 @@ const compilerSettings = {
 async function computeContractHash(sourceFiles: Map<string, string>): Promise<string> {
 	const hasher = createHash('sha256')
 	
+	// Include compiler version to detect solc upgrades
+	const solcAny = solc as unknown as { version(): string }
+	hasher.update(solcAny.version())
+	hasher.update('\n')
+	
 	// Include compiler settings in the hash
 	hasher.update(JSON.stringify(compilerSettings))
 	hasher.update('\n')
@@ -218,44 +223,48 @@ const compileContracts = async () => {
 	const currentContractHash = await computeContractHash(sources)
 	const cache = await loadHashCache()
 
-	// Check if contracts changed
-	if (cache.hash === currentContractHash && (await exists(ARTIFACTS_JSON))) {
+	// Determine if recompilation is needed
+	const needsRecompilation = !(cache.hash === currentContractHash && (await exists(ARTIFACTS_JSON)))
+	
+	if (!needsRecompilation) {
 		console.log('No changes detected in Solidity contracts. Skipping recompilation.')
-		return
+	} else {
+		console.log('Changes detected or first run. Compiling Solidity contracts...')
+
+		// Convert Map to object for solc input
+		const sourcesObj: { [key: string]: { content: string } } = {}
+		for (const [key, value] of sources) {
+			sourcesObj[key] = { content: value }
+		}
+
+		const input = {
+			language: 'Solidity',
+			sources: sourcesObj,
+			settings: compilerSettings,
+		}
+
+		console.time('solc compilation')
+		const output = solc.compile(JSON.stringify(input))
+		console.timeEnd('solc compilation')
+
+		const result = CompileResult.parse(JSON.parse(output))
+		const errors = (result.errors || []).filter(x => x.severity === 'error').map(x => x.formattedMessage)
+		if (errors.length) throw new CompilationError(errors)
+
+		const warnings = (result.errors || []).filter(x => x.severity === 'warning').map(x => x.formattedMessage)
+		if (warnings.length > 0) warnings.forEach(warning => console.warn(warning))
+
+		if (!(await exists(ARTIFACTS_DIR))) await fs.mkdir(ARTIFACTS_DIR, { recursive: false })
+		await fs.writeFile(ARTIFACTS_JSON, output)
+		
+		// Save updated hash after successful compilation
+		await saveHashCache(currentContractHash)
+		console.log('Compilation complete. Hash cache updated.')
 	}
 
-	console.log('Changes detected or first run. Compiling Solidity contracts...')
-
-	// Convert Map to object for solc input
-	const sourcesObj: { [key: string]: { content: string } } = {}
-	for (const [key, value] of sources) {
-		sourcesObj[key] = { content: value }
-	}
-
-	const input = {
-		language: 'Solidity',
-		sources: sourcesObj,
-		settings: compilerSettings,
-	}
-
-	console.time('solc compilation')
-	const output = solc.compile(JSON.stringify(input))
-	console.timeEnd('solc compilation')
-
-	const result = CompileResult.parse(JSON.parse(output))
-	const errors = (result.errors || []).filter(x => x.severity === 'error').map(x => x.formattedMessage)
-	if (errors.length) throw new CompilationError(errors)
-
-	const warnings = (result.errors || []).filter(x => x.severity === 'warning').map(x => x.formattedMessage)
-	if (warnings.length > 0) warnings.forEach(warning => console.warn(warning))
-
-	if (!(await exists(ARTIFACTS_DIR))) await fs.mkdir(ARTIFACTS_DIR, { recursive: false })
-	await fs.writeFile(ARTIFACTS_JSON, output)
+	// Always regenerate TypeScript artifact to reflect any changes in the generation logic
 	await copySolidityContractArtifact(ARTIFACTS_JSON)
-
-	// Save updated hash
-	await saveHashCache(currentContractHash)
-	console.log('Compilation complete. Hash cache updated.')
+	console.log('TypeScript artifact generated.')
 }
 
 compileContracts().catch(error => {

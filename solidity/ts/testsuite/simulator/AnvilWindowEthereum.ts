@@ -1,17 +1,15 @@
 import { EIP1193Provider } from 'viem'
 import { dateToBigintSeconds } from './utils/bigint.js'
-import { EthereumAddress, EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes, EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types.js'
+import { EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes, EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types.js'
 import * as funtypes from 'funtypes'
 
 type BlockTimeManipulation = { readonly type: 'AddToTimestamp', readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp', readonly timeToSet: EthereumQuantity }
 
 type AccountOverride = {
-	readonly state?: Readonly<Record<string, EthereumBytes32>>
 	readonly stateDiff?: Readonly<Record<string, EthereumBytes32>>
 	readonly nonce?: EthereumQuantitySmall
 	readonly balance?: EthereumQuantity
 	readonly code?: EthereumData
-	readonly movePrecompileToAddress?: EthereumAddress
 }
 
 type GetBlockReturn = funtypes.Static<typeof GetBlockReturn>

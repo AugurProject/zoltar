@@ -1,4 +1,4 @@
-import { peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker } from '../../../../types/contractArtifact.js'
+import { peripherals_SecurityPoolForker_SecurityPoolForker } from '../../../../types/contractArtifact.js'
 import { QuestionOutcome } from '../../types/types.js'
 import { getInfraContractAddresses } from './deployPeripherals.js'
 import { contractExists } from '../utilities.js'
@@ -106,11 +106,4 @@ export const migrateFromEscalationGame = async (client: WriteClient, parentSecur
 	functionName: 'migrateFromEscalationGame',
 	address: getInfraContractAddresses().securityPoolForker,
 	args: [parentSecurityPool, vault, outcomeIndex, depositIndexes.map(x => Number(x))],
-})
-
-export const getCompleteSetCollateralAmount = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => await client.readContract({
-	abi: peripherals_SecurityPool_SecurityPool.abi,
-	functionName: 'completeSetCollateralAmount',
-	address: securityPoolAddress,
-	args: [],
 })

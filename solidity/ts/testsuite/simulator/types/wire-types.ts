@@ -444,9 +444,6 @@ const EthereumSignedTransaction7702 = funtypes.Intersect(
 					chainId: EthereumQuantity,
 					address: EthereumAddress,
 					nonce: EthereumQuantity,
-					r: EthereumQuantity,
-					s: EthereumQuantity,
-					yParity: funtypes.Union(funtypes.Literal('0x0').withParser(LiteralConverterParserFactory('0x0', 'even' as const)), funtypes.Literal('0x1').withParser(LiteralConverterParserFactory('0x1', 'odd' as const))),
 				}),
 			),
 		})
