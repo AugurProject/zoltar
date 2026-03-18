@@ -60,7 +60,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 
 	function getRequestPriceEthCost() public view returns (uint256) {// TODO, probably something else
 		// https://github.com/j0i0m0b0o/openOracleBase/blob/feeTokenChange/src/OpenOracle.sol#L100
-		uint256 ethCost = block.basefee * 4 * (gasConsumedSettlement + gasConsumedOpenOracleReportPrice); // TODO, probably something else
+		uint256 ethCost = block.basefee * 4 * (gasConsumedSettlement + gasConsumedOpenOracleReportPrice) + 101; // TODO, probably something else
 		return ethCost;
 	}
 	function requestPrice() public payable {
