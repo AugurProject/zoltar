@@ -3,9 +3,13 @@ import * as path from 'path'
 import solc from 'solc'
 import * as funtypes from 'funtypes'
 import * as url from 'url'
+import { createHash } from 'crypto'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const CONTRACT_PATH_APP = path.join(directoryOfThisFile, '..', 'ts', 'types', 'contractArtifact.ts')
+const HASH_CACHE_PATH = path.join(process.cwd(), '.contract-hash.json')
+const ARTIFACTS_DIR = path.join(process.cwd(), 'artifacts')
+const ARTIFACTS_JSON = path.join(ARTIFACTS_DIR, 'Contracts.json')
 
 const CompileError = funtypes.ReadonlyObject({
 	severity: funtypes.String,
@@ -87,6 +91,38 @@ async function exists(path: string) {
 	}
 }
 
+async function computeContractHash(): Promise<string> {
+	const files = await getAllFiles('contracts')
+	const hasher = createHash('sha256')
+	files.sort()
+	for (const file of files) {
+		const content = await fs.readFile(file, 'utf8')
+		hasher.update(path.relative(process.cwd(), file))
+		hasher.update(content)
+	}
+	return hasher.digest('hex')
+}
+
+async function loadHashCache(): Promise<{ hash: string | null }> {
+	try {
+		if (await exists(HASH_CACHE_PATH)) {
+			const data = await fs.readFile(HASH_CACHE_PATH, 'utf8')
+			const parsed = JSON.parse(data) as { hash?: string } | undefined
+			if (parsed) {
+				return { hash: parsed.hash ?? null }
+			}
+		}
+	} catch {
+		// ignore
+	}
+	return { hash: null }
+}
+
+async function saveHashCache(contractHash: string): Promise<void> {
+	await fs.mkdir(path.dirname(HASH_CACHE_PATH), { recursive: true })
+	await fs.writeFile(HASH_CACHE_PATH, JSON.stringify({ hash: contractHash, updated: Date.now() }))
+}
+
 const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[] = [], visited?: Set<string>): Promise<string[]> => {
 	// Set base directory on first call and resolve to absolute canonical path (resolve symlinks)
 	if (!baseDir) {
@@ -149,6 +185,18 @@ const copySolidityContractArtifact = async (contractLocation: string) => {
 }
 
 const compileContracts = async () => {
+	console.log('Computing contract hash...')
+	const currentContractHash = await computeContractHash()
+	const cache = await loadHashCache()
+
+	// Check if contracts changed
+	if (cache.hash === currentContractHash && await exists(ARTIFACTS_JSON)) {
+		console.log('No changes detected in Solidity contracts. Skipping recompilation.')
+		return
+	}
+
+	console.log('Changes detected or first run. Compiling Solidity contracts...')
+
 	const files = await getAllFiles('contracts')
 	const sources = await files.reduce(async (acc, curr) => {
 		const value = { content: await fs.readFile(curr, 'utf8') }
@@ -164,7 +212,7 @@ const compileContracts = async () => {
 			viaIR: true,
 			optimizer: {
 				enabled: true,
-				runs: 500,
+				runs: 1,
 				details: {
 					inliner: true,
 				}
@@ -177,7 +225,10 @@ const compileContracts = async () => {
 		},
 	}
 
+	console.time('solc compilation')
 	const output = solc.compile(JSON.stringify(input))
+	console.timeEnd('solc compilation')
+
 	const result = CompileResult.parse(JSON.parse(output))
 	const errors = (result!.errors || []).filter(x => x.severity === 'error').map(x => x.formattedMessage)
 	if (errors.length) throw new CompilationError(errors)
@@ -185,10 +236,13 @@ const compileContracts = async () => {
 	const warnings = (result!.errors || []).filter(x => x.severity === 'warning').map(x => x.formattedMessage)
 	if (warnings.length > 0) warnings.forEach((warning) => console.warn(warning))
 
-	const artifactsDir = path.join(process.cwd(), 'artifacts')
-	if (!await exists(artifactsDir)) await fs.mkdir(artifactsDir, { recursive: false })
-	await fs.writeFile(path.join(artifactsDir, 'Contracts.json'), output)
-	await copySolidityContractArtifact(path.join(artifactsDir, 'Contracts.json'))
+	if (!await exists(ARTIFACTS_DIR)) await fs.mkdir(ARTIFACTS_DIR, { recursive: false })
+	await fs.writeFile(ARTIFACTS_JSON, output)
+	await copySolidityContractArtifact(ARTIFACTS_JSON)
+
+	// Save updated hash
+	await saveHashCache(currentContractHash)
+	console.log('Compilation complete. Hash cache updated.')
 }
 
 compileContracts().catch(error => {

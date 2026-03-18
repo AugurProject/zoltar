@@ -27,8 +27,11 @@
 		"lib": ["ESNext", "DOM"],
 		"typeRoots": [ "./node_modules/@types" ],
 		"types": ["node"],
+		
+		"incremental": true,
+		"tsBuildInfoFile": "./.tsbuildinfo"
 	},
 	"include": [
-		"solidity/ts/tests/test.mts",
+		"solidity/ts/**/*.ts",
 	],
 }
