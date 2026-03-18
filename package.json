@@ -14,8 +14,7 @@
 		"eslint-plugin-unused-imports": "4.4.1",
 		"globals": "15.9.0",
 		"knip": "5.86.0",
-		"prettier": "3.8.1",
-
+		"prettier": "3.8.1"
 	},
 	"dependencies": {
 		"viem": "2.38.3"

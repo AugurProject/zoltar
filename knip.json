@@ -4,16 +4,14 @@
 		"solidity/js/tests/**/*.js"
 	],
 	"project": [
-		"solidity/ts/**/*.ts",
-		"solidity/js/**/*.js"
+		"solidity/ts/**/*.ts"
 	],
 	"ignore": [
 		"solidity/ts/tests/**",
-		"solidity/ts/testsuite/**",
-		"solidity/ts/abi/**"
+		"solidity/ts/testsuite/**"
 	],
 	"ignoreDependencies": [
-		"viem",
+		"solc",
 		"@zoltu/file-copier",
 		"better-typescript-lib"
 	]
