@@ -1,5 +1,5 @@
 import { test, beforeEach, describe } from 'bun:test'
-import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
+import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
@@ -10,7 +10,7 @@ import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, 
 import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays.js'
 
 describe('Question Data', () => {
-	let mockWindow: MockWindowEthereum
+	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 
 	beforeEach(async () => {

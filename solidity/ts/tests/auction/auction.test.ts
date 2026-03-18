@@ -1,6 +1,6 @@
 import { test, beforeEach, describe } from 'bun:test'
 import { createWriteClient, WriteClient } from '../../testsuite/simulator/utils/viem.js'
-import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../../testsuite/simulator/MockWindowEthereum.js'
+import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../../testsuite/simulator/AnvilWindowEthereum.js'
 import { TEST_ADDRESSES } from '../../testsuite/simulator/utils/constants.js'
 import { contractExists, getETHBalance, setupTestAccounts } from '../../testsuite/simulator/utils/utilities.js'
 import { Address } from 'viem'
@@ -25,7 +25,7 @@ const DEFAULT_ETH_RAISE_CAP = 200_000n
 const DEFAULT_MAX_REP = 100n
 
 describe('Auction', () => {
-	let mockWindow: MockWindowEthereum
+	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	let auctionAddress: Address
 
@@ -602,7 +602,7 @@ describe('Auction', () => {
 			},
 		] as const
 
-		test.each(refundCases)('refundLosingBids: $name', async c => {
+		test.each(refundCases)('refundLosingBids: $name', async (c: RefundTestCase) => {
 			await startAuction(client, auctionAddress, c.ethRaiseCap, c.maxRepBeingSold)
 
 			const alice = createTestClient(0)

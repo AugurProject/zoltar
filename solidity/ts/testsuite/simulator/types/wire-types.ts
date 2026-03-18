@@ -402,18 +402,7 @@ const MessageSignature = funtypes.ReadonlyObject({
 })
 
 type EthereumTransactionLegacySignature = funtypes.Static<typeof EthereumTransactionLegacySignature>
-const EthereumTransactionLegacySignature = funtypes.Intersect(
-	MessageSignature,
-	funtypes.Union(
-		funtypes.ReadonlyObject({
-			v: EthereumQuantity,
-		}),
-		funtypes.ReadonlyObject({
-			yParity: funtypes.Union(funtypes.Literal('0x0').withParser(LiteralConverterParserFactory('0x0', 'even' as const)), funtypes.Literal('0x1').withParser(LiteralConverterParserFactory('0x1', 'odd' as const))),
-			chainId: EthereumQuantity,
-		}),
-	),
-)
+const EthereumTransactionLegacySignature = MessageSignature
 
 type EthereumSignedTransactionOptimismDeposit = funtypes.Static<typeof EthereumSignedTransactionOptimismDeposit>
 const EthereumSignedTransactionOptimismDeposit = funtypes.ReadonlyObject({

@@ -1,5 +1,5 @@
 import { zeroAddress } from 'viem'
-import { MockWindowEthereum } from '../../MockWindowEthereum.js'
+import { AnvilWindowEthereum } from '../../AnvilWindowEthereum.js'
 import { addressString } from '../bigint.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from '../constants.js'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from './deployPeripherals.js'
@@ -43,7 +43,7 @@ export const triggerOwnGameFork = async (client: WriteClient, securityPoolAddres
 	await forkZoltarWithOwnEscalationGame(client, securityPoolAddress)
 }
 
-export const handleOracleReporting = async (client: WriteClient, mockWindow: MockWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, forceRepEthPriceTo: bigint) => {
+export const handleOracleReporting = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, forceRepEthPriceTo: bigint) => {
 	const pendingReportId = await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)
 	if (pendingReportId === 0n) {
 		// operation already executed
@@ -73,12 +73,12 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Moc
 	await openOracleSettle(client, pendingReportId)
 }
 
-export const manipulatePriceOracleAndPerformOperation = async (client: WriteClient, mockWindow: MockWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, operation: OperationType, targetVault: `0x${ string }`, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
+export const manipulatePriceOracleAndPerformOperation = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, operation: OperationType, targetVault: `0x${ string }`, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
 	await requestPriceIfNeededAndQueueOperation(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount)
 	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 }
 
-export const manipulatePriceOracle = async (client: WriteClient, mockWindow: MockWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
+export const manipulatePriceOracle = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: `0x${ string }`, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
 	await requestPrice(client, priceOracleManagerAndOperatorQueuer)
 	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 }

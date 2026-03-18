@@ -5,7 +5,7 @@ import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from
 import { addressString } from './bigint.js'
 import { Address } from 'viem'
 import { ABIS } from '../../../abi/abis.js'
-import { MockWindowEthereum } from '../MockWindowEthereum.js'
+import { AnvilWindowEthereum } from '../AnvilWindowEthereum.js'
 import { QuestionOutcome } from '../types/types.js'
 import { ReputationToken_ReputationToken, peripherals_WETH9_WETH9 } from '../../../types/contractArtifact.js'
 export const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
@@ -131,7 +131,7 @@ export const getAccounts = async () => {
 	return reply[0]
 }
 
-export const mintETH = async (mockWindowEthereum: MockWindowEthereum, mintAmounts: { address: Address; amount: bigint }[]) => {
+export const mintETH = async (AnvilWindowEthereum: AnvilWindowEthereum, mintAmounts: { address: Address; amount: bigint }[]) => {
 	const stateOverrides = mintAmounts.reduce(
 		(acc, current) => {
 			acc[current.address] = { balance: current.amount }
@@ -139,10 +139,10 @@ export const mintETH = async (mockWindowEthereum: MockWindowEthereum, mintAmount
 		},
 		{} as { [key: string]: { [key: string]: bigint } },
 	)
-	await mockWindowEthereum.addStateOverrides(stateOverrides)
+	await AnvilWindowEthereum.addStateOverrides(stateOverrides)
 }
 
-export const mintERC20 = async (mockWindowEthereum: MockWindowEthereum, erc20Address: Address, mintAmounts: { address: Address; amount: bigint }[], balanceSlot: bigint = 2n) => {
+export const mintERC20 = async (AnvilWindowEthereum: AnvilWindowEthereum, erc20Address: Address, mintAmounts: { address: Address; amount: bigint }[], balanceSlot: bigint = 2n) => {
 	const overrides = mintAmounts.map(mintAmount => {
 		const encodedKeySlotHash = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [mintAmount.address, balanceSlot]))
 		return { key: encodedKeySlotHash, value: mintAmount.amount }
@@ -154,7 +154,7 @@ export const mintERC20 = async (mockWindowEthereum: MockWindowEthereum, erc20Add
 		},
 		{} as { [key: string]: bigint },
 	)
-	await mockWindowEthereum.addStateOverrides({ [erc20Address]: { stateDiff: stateSets } })
+	await AnvilWindowEthereum.addStateOverrides({ [erc20Address]: { stateDiff: stateSets } })
 }
 
 export const approveToken = async (client: WriteClient, tokenAddress: Address, spenderAddress: Address) => {
@@ -204,22 +204,22 @@ export const transferERC1155 = async (client: WriteClient, tokenAddress: Address
 
 export const getETHBalance = async (client: ReadClient, address: Address) => await client.getBalance({ address })
 
-export const setupTestAccounts = async (mockWindowEthereum: MockWindowEthereum) => {
+export const setupTestAccounts = async (AnvilWindowEthereum: AnvilWindowEthereum) => {
 	// Impersonate test accounts so they can send transactions without private keys
 	for (const address of TEST_ADDRESSES) {
-		await mockWindowEthereum.impersonateAccount(addressString(address))
+		await AnvilWindowEthereum.impersonateAccount(addressString(address))
 	}
 
 	const accountValues = TEST_ADDRESSES.map(address => ({ address: addressString(address), amount: TOKEN_AMOUNT_TO_MINT }))
-	await mintETH(mockWindowEthereum, accountValues)
+	await mintETH(AnvilWindowEthereum, accountValues)
 	// For OpenZeppelin ERC20, _balances mapping is at slot 0 (first state variable)
-	await mintERC20(mockWindowEthereum, addressString(GENESIS_REPUTATION_TOKEN), accountValues, 0n)
+	await mintERC20(AnvilWindowEthereum, addressString(GENESIS_REPUTATION_TOKEN), accountValues, 0n)
 
 	// Deploy the ReputationToken contract at the genesis address
 	const bytecodeHex = ReputationToken_ReputationToken.evm.deployedBytecode.object
 	const bytes = hexToBytes(bytecodeHex.startsWith('0x') ? bytecodeHex : `0x${ bytecodeHex }`)
 	if (!bytes) throw new Error('Failed to convert bytecode to bytes')
-	await mockWindowEthereum.addStateOverrides({
+	await AnvilWindowEthereum.addStateOverrides({
 		[addressString(GENESIS_REPUTATION_TOKEN)]: {
 			code: bytes,
 		},
@@ -227,7 +227,7 @@ export const setupTestAccounts = async (mockWindowEthereum: MockWindowEthereum) 
 
 	// Deploy the ProxyDeployer contract at its known address to avoid raw transaction
 	const proxyDeployerBytecode = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3'
-	await mockWindowEthereum.addStateOverrides({
+	await AnvilWindowEthereum.addStateOverrides({
 		[addressString(PROXY_DEPLOYER_ADDRESS)]: {
 			code: hexToBytes(proxyDeployerBytecode),
 		},
@@ -238,7 +238,7 @@ export const setupTestAccounts = async (mockWindowEthereum: MockWindowEthereum) 
 	// `totalTheoreticalSupply` is at slot 5 (after _balances slot0, _allowances slot1, _totalSupply slot2, _name slot3, _symbol slot4).
 	const totalTheoreticalSupply = BigInt(TEST_ADDRESSES.length) * TOKEN_AMOUNT_TO_MINT
 	const slot5 = `0x${ 5n.toString(16).padStart(64, '0') }`
-	await mockWindowEthereum.addStateOverrides({
+	await AnvilWindowEthereum.addStateOverrides({
 		[addressString(GENESIS_REPUTATION_TOKEN)]: {
 			stateDiff: {
 				[slot5]: totalTheoreticalSupply,
@@ -251,7 +251,7 @@ export const setupTestAccounts = async (mockWindowEthereum: MockWindowEthereum) 
 	const wethBytecodeHex = peripherals_WETH9_WETH9.evm.deployedBytecode.object
 	const wethBytes = hexToBytes(wethBytecodeHex.startsWith('0x') ? wethBytecodeHex : `0x${ wethBytecodeHex }`)
 	if (!wethBytes) throw new Error('Failed to convert WETH bytecode to bytes')
-	await mockWindowEthereum.addStateOverrides({
+	await AnvilWindowEthereum.addStateOverrides({
 		[wethAddress]: {
 			code: wethBytes,
 		},

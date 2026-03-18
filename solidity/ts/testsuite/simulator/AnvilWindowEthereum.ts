@@ -1,10 +1,25 @@
 import { EIP1193Provider } from 'viem'
-import { StateOverrides } from './types/ethSimulateTypes.js'
-import { BlockTimeManipulation } from './types/visualizerTypes.js'
-import { GetBlockReturn } from './types/jsonRpcTypes.js'
 import { dateToBigintSeconds } from './utils/bigint.js'
+import { EthereumAddress, EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes, EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types.js'
+import * as funtypes from 'funtypes'
 
-export interface MockWindowEthereum extends EIP1193Provider {
+type BlockTimeManipulation = { readonly type: 'AddToTimestamp', readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp', readonly timeToSet: EthereumQuantity }
+
+type AccountOverride = {
+	readonly state?: Readonly<Record<string, EthereumBytes32>>
+	readonly stateDiff?: Readonly<Record<string, EthereumBytes32>>
+	readonly nonce?: EthereumQuantitySmall
+	readonly balance?: EthereumQuantity
+	readonly code?: EthereumData
+	readonly movePrecompileToAddress?: EthereumAddress
+}
+
+type GetBlockReturn = funtypes.Static<typeof GetBlockReturn>
+const GetBlockReturn = funtypes.Union(EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes)
+
+type StateOverrides = Readonly<Record<string, AccountOverride>>
+
+export interface AnvilWindowEthereum extends EIP1193Provider {
 	addStateOverrides: (stateOverrides: StateOverrides) => Promise<void>
 	manipulateTime: (blockTimeManipulation: BlockTimeManipulation) => Promise<void>
 	getTime: () => Promise<bigint>
@@ -14,8 +29,29 @@ export interface MockWindowEthereum extends EIP1193Provider {
 	impersonateAccount: (address: string) => Promise<void>
 }
 
-export const getMockedEthSimulateWindowEthereum = async (): Promise<MockWindowEthereum> => {
+export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowEthereum> => {
 	const ANVIL_RPC = process.env['ANVIL_RPC'] || 'http://host.docker.internal:8545' || 'http://localhost:8545'
+
+	// Validate RPC endpoint points to localhost only for test security
+	const validateLocalhostUrl = (url: string): void => {
+		try {
+			const parsed = new URL(url)
+			const allowedHosts = ['localhost', '127.0.0.1', '::1', 'host.docker.internal']
+			if (!allowedHosts.includes(parsed.hostname)) {
+				throw new Error(
+					`ANVIL_RPC points to unauthorized host '${parsed.hostname}'. ` +
+					`Test RPC endpoints must be localhost (localhost, 127.0.0.1, ::1, host.docker.internal). ` +
+					`Set ANVIL_RPC to a local Anvil instance.`
+				)
+			}
+		} catch (error) {
+			if (error instanceof Error && error.message.includes('unauthorized')) {
+				throw error
+			}
+			throw new Error(`Invalid ANVIL_RPC URL: ${url}. Must be a valid HTTP URL.`)
+		}
+	}
+	validateLocalhostUrl(ANVIL_RPC)
 
 	// Make JSON-RPC request to Anvil
 	const request = async (args: { method: string; params?: unknown[] }): Promise<unknown> => {
@@ -41,12 +77,35 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<MockWindowEt
 			}),
 		})
 		if (!response.ok) throw new Error(`HTTP ${ response.status }: ${ response.statusText }`)
-		const json = (await response.json()) as unknown as {
-			jsonrpc: '2.0'
+		const raw = await response.json()
+		if (typeof raw !== 'object' || raw === null) {
+			throw new Error('Invalid JSON-RPC response: not an object')
+		}
+		const json = raw as {
+			jsonrpc: string
 			id: number | string
 			result?: unknown
 			error?: { code: number; message: string; data?: unknown }
 		}
+
+		// Validate JSON-RPC response structure
+		if (json.jsonrpc !== '2.0') {
+			throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${json.jsonrpc}'`)
+		}
+		if (json.id === undefined) {
+			throw new Error('Invalid JSON-RPC response: missing id field')
+		}
+
+		// Ensure exactly one of result or error is present (per JSON-RPC spec)
+		const hasResult = 'result' in json
+		const hasError = 'error' in json
+		if (hasResult && hasError) {
+			throw new Error('Invalid JSON-RPC response: both result and error present')
+		}
+		if (!hasResult && !hasError) {
+			throw new Error('Invalid JSON-RPC response: neither result nor error present')
+		}
+
 		if (json.error !== undefined) {
 			throw new Error(json.error.message || 'RPC error')
 		}
@@ -144,7 +203,7 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<MockWindowEt
 		})
 	}
 
-	const mock: MockWindowEthereum = {
+	const mock: AnvilWindowEthereum = {
 		async request(args: any): Promise<any> {
 			return await request(args)
 		},

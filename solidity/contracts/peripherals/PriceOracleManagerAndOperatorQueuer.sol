@@ -92,6 +92,13 @@ contract PriceOracleManagerAndOperatorQueuer {
 		}); //typically if feeToken true, fees are paid in less valuable token, if false, fees paid in more valuable token
 
 		pendingReportId = openOracle.createReportInstance{value: ethCost}(reportparams);
+
+		// Refund any excess Ether sent by the caller
+		uint256 excess = msg.value - ethCost;
+		if (excess > 0) {
+			(bool sent, ) = payable(msg.sender).call{ value: excess }('');
+			require(sent, 'failed to refund excess');
+		}
 	}
 	function openOracleReportPrice(uint256 reportId, uint256 price, uint256, address, address) external {
 		require(msg.sender == address(openOracle), 'only open oracle can call');
@@ -119,15 +126,27 @@ contract PriceOracleManagerAndOperatorQueuer {
 			targetVault: targetVault,
 			amount: amount
 		});
+
+		uint256 retained = 0; // amount to retain from msg.value (cost incurred)
+
 		if (isPriceValid()) {
 			executeQueuedOperation(previousQueuedOperationId);
+			// no cost when price is valid
 		} else if (queuedPendingOperationId == 0) {
 			queuedPendingOperationId = previousQueuedOperationId;
-			requestPrice();
+			uint256 ethCost = getRequestPriceEthCost();
+			require(msg.value >= ethCost, 'not enough eth to request price');
+			retained += ethCost;
+			// Forward exactly ethCost to requestPrice to create the report
+			this.requestPrice{value: ethCost}();
 		}
-		// send rest of the eth back
-		(bool sent, ) = payable(msg.sender).call{ value: address(this).balance }('');
-		require(sent, 'failed to return eth');
+
+		// Refund the excess of msg.value that was not retained
+		uint256 refund = msg.value - retained;
+		if (refund > 0) {
+			(bool sent, ) = payable(msg.sender).call{ value: refund }('');
+			require(sent, 'failed to return eth');
+		}
 	}
 
 	function executeQueuedOperation(uint256 operationId) public {
