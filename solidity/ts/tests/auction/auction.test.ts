@@ -547,7 +547,20 @@ describe('Auction', () => {
 	})
 
 	describe('Withdrawals & Refunds', () => {
-		const refundCases = [
+		type RefundTestCase = {
+			name: string
+			ethRaiseCap: bigint
+			maxRepBeingSold: bigint
+			alicePrice: bigint
+			aliceAmount: bigint
+			bobPrice: bigint
+			bobAmount: bigint
+			refundBidder: 'alice' | 'bob'
+			expectedClearingTick: bigint
+			expectRefundToSucceed: boolean
+			checkClearingUnchanged: boolean
+		}
+		const refundCases: RefundTestCase[] = [
 			{
 				name: 'allows refund for bid below clearing',
 				ethRaiseCap: 10n * 10n ** 18n,
@@ -587,9 +600,9 @@ describe('Auction', () => {
 				expectRefundToSucceed: false,
 				checkClearingUnchanged: false,
 			},
-		]
+		] as const
 
-		test.each(refundCases)('refundLosingBids: $name', async c => {
+		test.each(refundCases)('refundLosingBids: $name', async (c: RefundTestCase) => {
 			await startAuction(client, auctionAddress, c.ethRaiseCap, c.maxRepBeingSold)
 
 			const alice = createTestClient(0)
@@ -665,10 +678,16 @@ describe('Auction', () => {
 
 				accumulatedEth = newAccumulatedEth
 			}
-			return { priceFound: false, foundTick: 0n, accumulatedEth: 0n }
+			return { priceFound: false, foundTick: 0n, accumulatedEth: 0n 		}
 		}
 
-		const edgeCaseTests = [
+		type EdgeCaseTest = {
+			name: string
+			ethRaiseCap: bigint
+			maxRepBeingSold: bigint
+			bids: Array<{ tick: bigint; amount: bigint }>
+		}
+		const edgeCaseTests: EdgeCaseTest[] = [
 			{
 				name: 'single bid exactly hits ethRaiseCap',
 				ethRaiseCap: 100n * 10n ** 18n,
@@ -733,9 +752,9 @@ describe('Auction', () => {
 				maxRepBeingSold: 10n * 10n ** 18n,
 				bids: Array.from({ length: 10 }, () => ({ tick: 0n, amount: 1n * 10n ** 18n })),
 			},
-		]
+		] as const
 
-		test.each(edgeCaseTests)('covers various edge cases: $name', async c => {
+		test.each(edgeCaseTests)('covers various edge cases: $name', async (c: EdgeCaseTest) => {
 			await startAuction(client, auctionAddress, c.ethRaiseCap, c.maxRepBeingSold)
 
 			// Build fair payout bids with correct per-tick indices
