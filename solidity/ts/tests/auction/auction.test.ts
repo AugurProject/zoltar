@@ -602,7 +602,7 @@ describe('Auction', () => {
 			},
 		] as const
 
-		test.each(refundCases)('refundLosingBids: $name', async (c: RefundTestCase) => {
+		test.each(refundCases)('refundLosingBids: $name', async c => {
 			await startAuction(client, auctionAddress, c.ethRaiseCap, c.maxRepBeingSold)
 
 			const alice = createTestClient(0)
