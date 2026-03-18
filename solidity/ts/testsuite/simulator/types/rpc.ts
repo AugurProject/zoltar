@@ -14,6 +14,6 @@ export const CodeMessageError = funtypes.Intersect(
 		message: funtypes.String,
 	}),
 	funtypes.ReadonlyPartial({
-		data: funtypes.String
-	})
+		data: funtypes.String,
+	}),
 )

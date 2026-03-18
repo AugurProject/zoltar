@@ -32,9 +32,9 @@ export const tickToPrice = (tick: bigint): bigint => {
 	let price = FIXED_POINT_SCALING_FACTOR
 	for (let bitIndex = 0; bitIndex < 20; bitIndex++) {
 		const bitMask = 1n << BigInt(bitIndex)
-		if ((absoluteTick & bitMask) !== 0n) price = price * powerOf1Point0001(bitIndex) / FIXED_POINT_SCALING_FACTOR
+		if ((absoluteTick & bitMask) !== 0n) price = (price * powerOf1Point0001(bitIndex)) / FIXED_POINT_SCALING_FACTOR
 	}
-	if (tick < 0) price = FIXED_POINT_SCALING_FACTOR * FIXED_POINT_SCALING_FACTOR / price
+	if (tick < 0) price = (FIXED_POINT_SCALING_FACTOR * FIXED_POINT_SCALING_FACTOR) / price
 	return price
 }
 

@@ -5,7 +5,7 @@ import * as funtypes from 'funtypes'
 
 type Config = funtypes.Static<typeof Config>
 const Config = funtypes.ReadonlyObject({
-	testRPCEndpoint: funtypes.String.withConstraint(URL.canParse)
+	testRPCEndpoint: funtypes.String.withConstraint(URL.canParse),
 })
 
 const UserConfig = funtypes.Partial(Config.fields)

@@ -34,7 +34,7 @@ export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigi
 
 export const triggerOwnGameFork = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
 	const repToken = await getRepToken(client, securityPoolAddress)
-	const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n /2n
+	const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / 2n
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
 	const repAmount = await poolOwnershipToRep(client, securityPoolAddress, vault.repDepositShare)
 	assert.ok(repAmount >= 2n * forkThreshold, 'not enough rep in vault to fork')
@@ -55,7 +55,7 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Moc
 
 	// initial report
 	const amount1 = reportMeta.exactToken1Report
-	const amount2 = amount1 * PRICE_PRECISION / forceRepEthPriceTo
+	const amount2 = (amount1 * PRICE_PRECISION) / forceRepEthPriceTo
 
 	const openOracle = getInfraContractAddresses().openOracle
 	await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
@@ -84,4 +84,3 @@ export const manipulatePriceOracle = async (client: WriteClient, mockWindow: Moc
 }
 
 export const canLiquidate = (lastPrice: bigint, securityBondAllowance: bigint, stakedRep: bigint, securityMultiplier: bigint) => securityBondAllowance * lastPrice * securityMultiplier > stakedRep * PRICE_PRECISION
-

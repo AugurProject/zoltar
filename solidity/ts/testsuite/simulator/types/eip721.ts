@@ -4,12 +4,15 @@ import { serialize } from './wire-types.js'
 
 type EIP712MessageUnderlying = funtypes.Static<typeof EIP712MessageUnderlying>
 const EIP712MessageUnderlying = funtypes.ReadonlyObject({
-	types: funtypes.Record(funtypes.String, funtypes.ReadonlyArray(
-		funtypes.ReadonlyObject({
-			name: funtypes.String,
-			type: funtypes.String,
-		})
-	)),
+	types: funtypes.Record(
+		funtypes.String,
+		funtypes.ReadonlyArray(
+			funtypes.ReadonlyObject({
+				name: funtypes.String,
+				type: funtypes.String,
+			}),
+		),
+	),
 	primaryType: funtypes.String,
 	domain: JSONEncodeableObject,
 	message: JSONEncodeableObject,
@@ -21,7 +24,7 @@ const EIP712MessageParser: funtypes.ParsedValue<funtypes.String, EIP712MessageUn
 		return { success: true, value: EIP712MessageUnderlying.parse(JSON.parse(value)) }
 	},
 	serialize: value => {
-		if (!EIP712MessageUnderlying.test(value)) return { success: false, message: `${ value } is not a EIP712 message.`}
+		if (!EIP712MessageUnderlying.test(value)) return { success: false, message: `${ value } is not a EIP712 message.` }
 		return { success: true, value: JSON.stringify(serialize(EIP712MessageUnderlying, value)) }
 	},
 }

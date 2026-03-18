@@ -1,3 +1,19 @@
+# Quality Assurance Guidelines
+
+After implementing any feature or fixing a bug, always run the following quality checks **in order** until all issues are resolved:
+
+1. **TypeScript type checking**: `bun tsc`
+2. **Tests**: Run the relevant test suite (e.g., `bun run test-peripherals`, `bun run test-zoltar`, etc.)
+3. **Code formatting**: `bun run prettify`
+4. **Linting**: `bun run lint`
+5. **Dead code analysis**: `bun run knip`
+
+Repeat the cycle iteratively after each fix to ensure clean builds and avoid accumulating issues.
+
+# Package Guidelines
+
+- **Version pinning**: All dependency versions in `package.json` must be exact (no `^` or `~`). This ensures reproducible builds.
+
 # Testing Guidelines
 
 Always run the appropriate tests after implementing a feature or fixing a bug to ensure correctness and prevent regressions.

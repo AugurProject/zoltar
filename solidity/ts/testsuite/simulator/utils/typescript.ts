@@ -1,7 +1,7 @@
 export type UnionToIntersection<T> = (T extends unknown ? (k: T) => void : never) extends (k: infer I) => void ? I : never
 
 export function assertNever(value: never): never {
-	throw new Error(`Unhandled discriminated union member: ${JSON.stringify(value)}`)
+	throw new Error(`Unhandled discriminated union member: ${ JSON.stringify(value) }`)
 }
 
 export type DistributedOmit<T, K extends keyof UnionToIntersection<T>> = T extends unknown ? Pick<T, Exclude<keyof T, K>> : never
@@ -21,7 +21,7 @@ export function assertIsObject(maybe: unknown): asserts maybe is Object {
 }
 
 export function createGuard<T, U extends T>(check: (maybe: T) => U | undefined): (maybe: T) => maybe is U {
-    return (maybe: T): maybe is U => check(maybe) !== undefined
+	return (maybe: T): maybe is U => check(maybe) !== undefined
 }
 
 export function getWithDefault<Key, Value>(map: Map<Key, Value>, key: Key, defaultValue: Value) {
@@ -32,7 +32,7 @@ export function getWithDefault<Key, Value>(map: Map<Key, Value>, key: Key, defau
 
 type Split<T> = { [K in keyof T]: { [P in K]: T[P] } }[keyof T] | Record<PropertyKey, never>
 export function modifyObject<T extends object>(original: T, subObject: NoInfer<Split<T>>): T {
-	return {...original, ...subObject }
+	return { ...original, ...subObject }
 }
 
 export const objectEntries = <T extends object>(obj: T) => Object.entries(obj) as [string, T[keyof T & string]][]

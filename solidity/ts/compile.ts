@@ -13,7 +13,7 @@ const ARTIFACTS_JSON = path.join(ARTIFACTS_DIR, 'Contracts.json')
 
 const CompileError = funtypes.ReadonlyObject({
 	severity: funtypes.String,
-	formattedMessage: funtypes.String
+	formattedMessage: funtypes.String,
 })
 
 const AbiParameter: funtypes.Runtype<{
@@ -28,8 +28,8 @@ const AbiParameter: funtypes.Runtype<{
 		type: funtypes.String,
 		internalType: funtypes.String,
 		indexed: funtypes.Boolean,
-		components: funtypes.ReadonlyArray(AbiParameter)
-	})
+		components: funtypes.ReadonlyArray(AbiParameter),
+	}),
 )
 
 const AbiEntry = funtypes.ReadonlyPartial({
@@ -38,7 +38,7 @@ const AbiEntry = funtypes.ReadonlyPartial({
 	stateMutability: funtypes.String,
 	anonymous: funtypes.Boolean,
 	inputs: funtypes.ReadonlyArray(AbiParameter),
-	outputs: funtypes.ReadonlyArray(AbiParameter)
+	outputs: funtypes.ReadonlyArray(AbiParameter),
 })
 
 // Contract data may have abi and evm optional (if compilation failed for that contract)
@@ -46,38 +46,26 @@ const ContractData = funtypes.ReadonlyPartial({
 	abi: funtypes.ReadonlyArray(AbiEntry),
 	evm: funtypes.ReadonlyPartial({
 		bytecode: funtypes.ReadonlyPartial({
-			object: funtypes.String
+			object: funtypes.String,
 		}),
 		deployedBytecode: funtypes.ReadonlyPartial({
-			object: funtypes.String
-		})
-	})
+			object: funtypes.String,
+		}),
+	}),
 })
 
 type CompileResult = funtypes.Static<typeof CompileResult>
 const CompileResult = funtypes.ReadonlyObject({
-	contracts: funtypes.Union(
-		funtypes.Record(
-			funtypes.String,
-			funtypes.Record(
-				funtypes.String,
-				ContractData
-			)
-		),
-		funtypes.Undefined
-	),
+	contracts: funtypes.Union(funtypes.Record(funtypes.String, funtypes.Record(funtypes.String, ContractData)), funtypes.Undefined),
 	sources: funtypes.Union(funtypes.Unknown, funtypes.Undefined),
-	errors: funtypes.Union(
-		funtypes.ReadonlyArray(CompileError),
-		funtypes.Undefined
-	)
+	errors: funtypes.Union(funtypes.ReadonlyArray(CompileError), funtypes.Undefined),
 })
 
 class CompilationError extends Error {
 	errors: string[]
 	constructor(errors: string[]) {
 		super('compilation error')
-		this.name = "CompilationError"
+		this.name = 'CompilationError'
 		this.errors = errors
 	}
 }
@@ -157,7 +145,7 @@ const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[]
 		// Security check: ensure targetPath is within baseDir
 		const relative = path.relative(baseDir, targetPath)
 		if (relative.startsWith('..') || path.isAbsolute(relative)) {
-			throw new Error(`Path traversal detected: ${filePath} resolves outside allowed directory`)
+			throw new Error(`Path traversal detected: ${ filePath } resolves outside allowed directory`)
 		}
 
 		// Recurse into directories (including symlinked directories that passed the check)
@@ -177,10 +165,18 @@ const copySolidityContractArtifact = async (contractLocation: string) => {
 	}
 	const contracts = Object.entries(solidityContract.contracts).flatMap(([filename, contract]) => {
 		if (contract === undefined) throw new Error('missing contract')
-		return Object.entries(contract).map(([contractName, contractData]) => ({ contractName: `${ filename.replace('contracts/', '').replace(/-/g, '').replace(/\//g, '_').replace(/\\/g, '_').replace(/\.sol$/, '') }_${ contractName }`, contractData }))
+		return Object.entries(contract).map(([contractName, contractData]) => ({
+			contractName: `${ filename
+				.replace('contracts/', '')
+				.replace(/-/g, '')
+				.replace(/\//g, '_')
+				.replace(/\\/g, '_')
+				.replace(/\.sol$/, '') }_${ contractName }`,
+			contractData,
+		}))
 	})
-	if (new Set(contracts.map((x) => x.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
-	const typescriptString = contracts.map((contract) => `export const ${ contract.contractName } = ${ JSON.stringify(contract.contractData, null, 4) } as const`).join('\r\n\r\n')
+	if (new Set(contracts.map(x => x.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
+	const typescriptString = contracts.map(contract => `export const ${ contract.contractName } = ${ JSON.stringify(contract.contractData, null, 4) } as const`).join('\r\n\r\n')
 	await fs.writeFile(CONTRACT_PATH_APP, typescriptString)
 }
 
@@ -190,7 +186,7 @@ const compileContracts = async () => {
 	const cache = await loadHashCache()
 
 	// Check if contracts changed
-	if (cache.hash === currentContractHash && await exists(ARTIFACTS_JSON)) {
+	if (cache.hash === currentContractHash && (await exists(ARTIFACTS_JSON))) {
 		console.log('No changes detected in Solidity contracts. Skipping recompilation.')
 		return
 	}
@@ -198,12 +194,17 @@ const compileContracts = async () => {
 	console.log('Changes detected or first run. Compiling Solidity contracts...')
 
 	const files = await getAllFiles('contracts')
-	const sources = await files.reduce(async (acc, curr) => {
-		const value = { content: await fs.readFile(curr, 'utf8') }
-		const relativePath = path.relative(process.cwd(), curr).replace(/\\/g, '/')
-		acc.then(obj => obj[relativePath] = value)
-		return acc
-	}, Promise.resolve(<{ [key: string]: { content: string } }>{}))
+	const sources = await files.reduce(
+		async (acc, curr) => {
+			const value = { content: await fs.readFile(curr, 'utf8') }
+			const relativePath = path.relative(process.cwd(), curr).replace(/\\/g, '/')
+			return acc.then(obj => {
+				obj[relativePath] = value
+				return obj
+			})
+		},
+		Promise.resolve(<{ [key: string]: { content: string } }>{}),
+	)
 
 	const input = {
 		language: 'Solidity',
@@ -215,12 +216,12 @@ const compileContracts = async () => {
 				runs: 1,
 				details: {
 					inliner: true,
-				}
+				},
 			},
 			outputSelection: {
-				"*": {
-					'*': [ 'evm.bytecode.object', 'evm.deployedBytecode.object', 'abi' ]
-				}
+				'*': {
+					'*': ['evm.bytecode.object', 'evm.deployedBytecode.object', 'abi'],
+				},
 			},
 		},
 	}
@@ -230,13 +231,13 @@ const compileContracts = async () => {
 	console.timeEnd('solc compilation')
 
 	const result = CompileResult.parse(JSON.parse(output))
-	const errors = (result!.errors || []).filter(x => x.severity === 'error').map(x => x.formattedMessage)
+	const errors = (result.errors || []).filter(x => x.severity === 'error').map(x => x.formattedMessage)
 	if (errors.length) throw new CompilationError(errors)
 
-	const warnings = (result!.errors || []).filter(x => x.severity === 'warning').map(x => x.formattedMessage)
-	if (warnings.length > 0) warnings.forEach((warning) => console.warn(warning))
+	const warnings = (result.errors || []).filter(x => x.severity === 'warning').map(x => x.formattedMessage)
+	if (warnings.length > 0) warnings.forEach(warning => console.warn(warning))
 
-	if (!await exists(ARTIFACTS_DIR)) await fs.mkdir(ARTIFACTS_DIR, { recursive: false })
+	if (!(await exists(ARTIFACTS_DIR))) await fs.mkdir(ARTIFACTS_DIR, { recursive: false })
 	await fs.writeFile(ARTIFACTS_JSON, output)
 	await copySolidityContractArtifact(ARTIFACTS_JSON)
 

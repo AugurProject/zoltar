@@ -1,27 +1,27 @@
- import { test, beforeEach, describe } from 'bun:test'
- import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
- import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
- import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
- import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
- import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
- import assert from 'node:assert'
- import { deployEscalationGame, depositOnOutcome, getBalances, getStartingTime } from '../testsuite/simulator/utils/contracts/escalationGame.js'
- import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
- import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
+import { test, beforeEach, describe } from 'bun:test'
+import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
+import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
+import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
+import assert from 'node:assert'
+import { deployEscalationGame, depositOnOutcome, getBalances, getStartingTime } from '../testsuite/simulator/utils/contracts/escalationGame.js'
+import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
+import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
 
- describe('Escalation Game Test Suite', () => {
- 	let mockWindow: MockWindowEthereum
- 	let client: WriteClient
- 	const reportBond = 1n * 10n ** 18n
- 	const nonDecisionThreshold = 1000n * 10n ** 18n
+describe('Escalation Game Test Suite', () => {
+	let mockWindow: MockWindowEthereum
+	let client: WriteClient
+	const reportBond = 1n * 10n ** 18n
+	const nonDecisionThreshold = 1000n * 10n ** 18n
 
-  	beforeEach(async () => {
-  		mockWindow = await getMockedEthSimulateWindowEthereum()
-  		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-  		await setupTestAccounts(mockWindow)
-  		await ensureZoltarDeployed(client)
-  		await ensureInfraDeployed(client)
-  	})
+	beforeEach(async () => {
+		mockWindow = await getMockedEthSimulateWindowEthereum()
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		await setupTestAccounts(mockWindow)
+		await ensureZoltarDeployed(client)
+		await ensureInfraDeployed(client)
+	})
 
 	test('can start a game', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)

@@ -1,5 +1,4 @@
 declare module 'solc' {
-
 	interface CompilerInputSourceFile {
 		readonly keccak256?: string
 		readonly urls: string[]
@@ -9,10 +8,10 @@ declare module 'solc' {
 		readonly content: string
 	}
 	interface CompilerInput {
-		readonly language: "Solidity" | "serpent" | "lll" | "assembly"
-		readonly settings?: any,
+		readonly language: 'Solidity' | 'serpent' | 'lll' | 'assembly'
+		readonly settings?: any
 		readonly sources: {
-			readonly [globalName: string]: CompilerInputSourceFile|CompilerInputSourceCode,
+			readonly [globalName: string]: CompilerInputSourceFile | CompilerInputSourceCode
 		}
 	}
 	interface CompilerOutputError {
@@ -21,9 +20,9 @@ declare module 'solc' {
 			readonly start: number
 			readonly end: number
 		}
-		readonly type: "TypeError" | "InternalCompilerError" | "Exception"
-		readonly component: "general" | "ewasm"
-		readonly severity: "error" | "warning"
+		readonly type: 'TypeError' | 'InternalCompilerError' | 'Exception'
+		readonly component: 'general' | 'ewasm'
+		readonly severity: 'error' | 'warning'
 		readonly message: string
 		readonly formattedMessage?: string
 	}
@@ -31,18 +30,20 @@ declare module 'solc' {
 		readonly object: string
 		readonly opcodes?: string
 		readonly sourceMap?: string
-		readonly linkReferences?: {} | {
-			readonly [globalName: string]: {
-				readonly [name: string]: { start: number, length: number }[]
-			}
-		}
+		readonly linkReferences?:
+			| {}
+			| {
+					readonly [globalName: string]: {
+						readonly [name: string]: { start: number; length: number }[]
+					}
+			  }
 	}
 	interface CompilerOutputSources {
 		readonly [globalName: string]: {
 			readonly id: number
 			readonly ast: any
 			readonly legacyAST: any
-		},
+		}
 	}
 	interface CompilerOutputContract {
 		readonly metadata?: string
@@ -87,6 +88,6 @@ declare module 'solc' {
 		readonly sources?: CompilerOutputSources
 		readonly contracts: CompilerOutputContracts
 	}
-	type ReadCallback = (path: string) => { contents?: string, error?: string }
+	type ReadCallback = (path: string) => { contents?: string; error?: string }
 	function compile(input: string, readCallback?: ReadCallback): string
 }
