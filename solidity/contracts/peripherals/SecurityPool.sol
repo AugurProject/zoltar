@@ -24,7 +24,7 @@ contract SecurityPool is ISecurityPool {
 	Zoltar public immutable zoltar;
 	ISecurityPool immutable public parent;
 	IShareToken public immutable shareToken;
-	ReputationToken public repToken;
+	ReputationToken public immutable repToken;
 	PriceOracleManagerAndOperatorQueuer public immutable priceOracleManagerAndOperatorQueuer;
 	OpenOracle public immutable openOracle;
 	EscalationGameFactory public immutable escalationGameFactory;

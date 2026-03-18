@@ -16,8 +16,8 @@ import { SimulationState } from '../../testsuite/simulator/types/visualizerTypes
 import { copySimulationState } from '../../testsuite/simulator/SimulationModeEthereumClientService'
 
 // ============ MODULE-LEVEL CONSTANTS ============
-const WEI_PER_ETH = 1000000000000000000n
-const PRICE_PRECISION = WEI_PER_ETH
+const ATTOETH_PER_ETH  = 10n**18n
+const PRICE_PRECISION = ATTOETH_PER_ETH
 const AUCTION_TIME = 604800n
 const MIN_TICK = -524288n
 const MAX_TICK = 524288n
@@ -88,7 +88,7 @@ describe('Auction', () => {
 	}
 
 	async function setupStandardAuction(client: WriteClient, auctionAddress: Address, ethRaiseCapEth: bigint = DEFAULT_ETH_RAISE_CAP, maxRepBeingSold: bigint = DEFAULT_MAX_REP): Promise<void> {
-		await startAuction(client, auctionAddress, ethRaiseCapEth * WEI_PER_ETH, maxRepBeingSold * WEI_PER_ETH)
+		await startAuction(client, auctionAddress, ethRaiseCapEth * ATTOETH_PER_ETH , maxRepBeingSold * ATTOETH_PER_ETH )
 	}
 
 	async function assertFairPayoutForUser(auctionCreator: WriteClient, auctionAddress: Address, userId: `0x${ string }`, bids: { tick: bigint; bidSize: bigint; bidIndex: bigint }[], clearingTick: bigint, tolerance: bigint = DEFAULT_TOLERANCE): Promise<{ totalFilledRep: bigint; totalEthRefund: bigint }> {
@@ -104,7 +104,7 @@ describe('Auction', () => {
 				// Zero price means no REP can be bought; expect 0 filled REP
 				minRepBackOnFullBuy = 0n
 			} else {
-				minRepBackOnFullBuy = (bid.bidSize * WEI_PER_ETH) / bidPrice
+				minRepBackOnFullBuy = (bid.bidSize * ATTOETH_PER_ETH ) / bidPrice
 			}
 
 			if (bid.tick < clearingTick) {
@@ -116,7 +116,7 @@ describe('Auction', () => {
 				// At-clearing: partial fill, partial refund
 				if (amounts.totalEthRefund !== bid.bidSize) assert.ok(amounts.totalFilledRep > 0n, `Bid ${ bid.bidIndex } (clearing): should get some REP`)
 				assert.ok(amounts.totalFilledRep <= minRepBackOnFullBuy, `Bid ${ bid.bidIndex } (clearing): filled REP <= demand`)
-				const ethUsed = (amounts.totalFilledRep * clearingPrice) / WEI_PER_ETH
+				const ethUsed = (amounts.totalFilledRep * clearingPrice) / ATTOETH_PER_ETH
 				approximatelyEqual(amounts.totalEthRefund, bid.bidSize - ethUsed, tolerance, `Bid ${ bid.bidIndex } (clearing): correct ETH refund`)
 				totalFilledRep += amounts.totalFilledRep
 				totalEthRefund += amounts.totalEthRefund
@@ -156,7 +156,7 @@ describe('Auction', () => {
 
 	describe('Lifecycle & Finalization', () => {
 		test('can start auction and make a single bid that finalizes', async () => {
-			const raiseCap = DEFAULT_ETH_RAISE_CAP * WEI_PER_ETH
+			const raiseCap = DEFAULT_ETH_RAISE_CAP * ATTOETH_PER_ETH
 			await setupStandardAuction(client, auctionAddress)
 
 			const tick = tickForPrice(PRICE_PRECISION)
@@ -177,7 +177,7 @@ describe('Auction', () => {
 		})
 
 		test('multiple bids', async () => {
-			const maxRepBeingSold = DEFAULT_MAX_REP * WEI_PER_ETH
+			const maxRepBeingSold = DEFAULT_MAX_REP * ATTOETH_PER_ETH
 			const startBalance = await getETHBalance(client, client.account.address)
 			await setupStandardAuction(client, auctionAddress)
 
@@ -212,7 +212,7 @@ describe('Auction', () => {
 		})
 
 		test('multiple users bids', async () => {
-			const maxRepBeingSold = DEFAULT_MAX_REP * WEI_PER_ETH
+			const maxRepBeingSold = DEFAULT_MAX_REP * ATTOETH_PER_ETH
 			await setupStandardAuction(client, auctionAddress)
 			const bids = [
 				{ bidSize: 2n * maxRepBeingSold / 7n, tick: priceToClosestTick(PRICE_PRECISION / 4n), address: TEST_ADDRESSES[0], bidIndex: 0n },
@@ -228,7 +228,7 @@ describe('Auction', () => {
 				await submitBid(bidClient, auctionAddress, bid.tick, bid.bidSize)
 			}
 
-			//const expectedClearing = computeClearingTypeScript(bids, maxRepBeingSold, DEFAULT_MAX_REP * WEI_PER_ETH)
+			//const expectedClearing = computeClearingTypeScript(bids, maxRepBeingSold, DEFAULT_MAX_REP * ATTOETH_PER_ETH )
 
 			const clearing = await computeClearing(client, auctionAddress)
 			const completelyFilling = bids.filter((x) => x.tick > clearing.foundTick)
@@ -286,7 +286,7 @@ describe('Auction', () => {
 			const bobResult = await assertFairPayoutForUser(client, auctionAddress, bob.account.address, bobBids, clearingTick)
 
 			const totalFilled = aliceResult.totalFilledRep + bobResult.totalFilledRep
-			const maxRep = DEFAULT_MAX_REP * WEI_PER_ETH
+			const maxRep = DEFAULT_MAX_REP * ATTOETH_PER_ETH
 			assert.ok(totalFilled <= maxRep, 'total filled exceeds maxRep')
 		})
 
@@ -566,12 +566,12 @@ describe('Auction', () => {
 				name: 'allows refund for bid below clearing',
 				ethRaiseCap: 10n * 10n ** 18n,
 				maxRepBeingSold: 10n * 10n ** 18n,
-				alicePrice: WEI_PER_ETH / 2n,
+				alicePrice: ATTOETH_PER_ETH  / 2n,
 				aliceAmount: 10n * 10n ** 18n,
-				bobPrice: WEI_PER_ETH,
+				bobPrice: ATTOETH_PER_ETH ,
 				bobAmount: 10n * 10n ** 18n,
 				refundBidder: 'alice' as const,
-				expectedClearingTick: tickForPrice(WEI_PER_ETH),
+				expectedClearingTick: tickForPrice(ATTOETH_PER_ETH ),
 				expectRefundToSucceed: true,
 				checkClearingUnchanged: true,
 			},
@@ -579,12 +579,12 @@ describe('Auction', () => {
 				name: 'rejects refund for bid at clearing tick',
 				ethRaiseCap: 10n * 10n ** 18n,
 				maxRepBeingSold: 10n * 10n ** 18n, // increase so Alice alone does not hit cap
-				alicePrice: WEI_PER_ETH,
+				alicePrice: ATTOETH_PER_ETH ,
 				aliceAmount: 4n * 10n ** 18n,       // 4 ETH at price 1 → 4 REP
-				bobPrice: 2n * WEI_PER_ETH,
+				bobPrice: 2n * ATTOETH_PER_ETH ,
 				bobAmount: 6n * 10n ** 18n,         // 6 ETH at price 2 → hits remaining 6 REP (cap reached)
 				refundBidder: 'bob' as const,
-				expectedClearingTick: tickForPrice(2n * WEI_PER_ETH),
+				expectedClearingTick: tickForPrice(2n * ATTOETH_PER_ETH ),
 				expectRefundToSucceed: false,        // Bob is at clearing tick → cannot refund
 				checkClearingUnchanged: true,        // Alice refund below clearing would not change clearing
 			},
@@ -592,12 +592,12 @@ describe('Auction', () => {
 				name: 'rejects refund for bid above clearing',
 				ethRaiseCap: 10n * 10n ** 18n,
 				maxRepBeingSold: 5n * 10n ** 18n,
-				alicePrice: WEI_PER_ETH,
+				alicePrice: ATTOETH_PER_ETH ,
 				aliceAmount: 4n * 10n ** 18n,
-				bobPrice: 2n * WEI_PER_ETH,
+				bobPrice: 2n * ATTOETH_PER_ETH ,
 				bobAmount: 6n * 10n ** 18n,
 				refundBidder: 'bob' as const,
-				expectedClearingTick: tickForPrice(2n * WEI_PER_ETH),
+				expectedClearingTick: tickForPrice(2n * ATTOETH_PER_ETH ),
 				expectRefundToSucceed: false,
 				checkClearingUnchanged: false,
 			},
@@ -849,13 +849,13 @@ describe('Auction', () => {
 		})
 		test('withdrawBids should succeed with zero clearing price (extreme negative tick)', async () => {
 			// Setup: high cap to avoid hitting it, tiny maxRepBeingSold so rep target not reached
-			const ethRaiseCap = 1000n * WEI_PER_ETH
+			const ethRaiseCap = 1000n * ATTOETH_PER_ETH
 			const maxRepBeingSold = 1n // 1 wei REP
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
 
 			// Use a tick where tickToPrice returns 0 (very negative). -450000 yields price 0
 			const zeroPriceTick = -450000n
-			const bidAmount = 1n * WEI_PER_ETH // 1 ETH
+			const bidAmount = 1n * ATTOETH_PER_ETH  // 1 ETH
 
 			await submitBidAndVerifyLock(client, auctionAddress, zeroPriceTick, bidAmount)
 
@@ -877,11 +877,11 @@ describe('Auction', () => {
 		})
 
 		test('computeClearing should not revert with zero-price bid', async () => {
-			const ethRaiseCap = 1000n * WEI_PER_ETH
+			const ethRaiseCap = 1000n * ATTOETH_PER_ETH
 			const maxRepBeingSold = 1n // 1 wei REP
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
 			const zeroPriceTick = -450000n
-			await submitBid(client, auctionAddress, zeroPriceTick, 1n * WEI_PER_ETH)
+			await submitBid(client, auctionAddress, zeroPriceTick, 1n * ATTOETH_PER_ETH )
 			// Should not revert due to division by zero
 			const result = await computeClearing(client, auctionAddress)
 			// With zero price, no rep can be sold, so priceFound should be false
@@ -889,19 +889,19 @@ describe('Auction', () => {
 		})
 
 		test('zero-price bids (non-clearing) should get full refund', async () => {
-			const ethRaiseCap = 100n * WEI_PER_ETH
+			const ethRaiseCap = 100n * ATTOETH_PER_ETH
 			// Set target low enough that 1 ETH at tick 0 exceeds it
-			const maxRepBeingSold = WEI_PER_ETH / 2n // 0.5 ETH worth of REP
+			const maxRepBeingSold = ATTOETH_PER_ETH  / 2n // 0.5 ETH worth of REP
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
 
 			// Zero-price tick (very negative)
 			const zeroPriceTick = -450000n
-			const zeroPriceBidAmount = 1n * WEI_PER_ETH
+			const zeroPriceBidAmount = 1n * ATTOETH_PER_ETH
 			await submitBid(client, auctionAddress, zeroPriceTick, zeroPriceBidAmount)
 
 			// Winning bid with enough ETH to meet/exceed rep target
 			const winningTick = 0n
-			const winningAmount = 1n * WEI_PER_ETH // yields 1 REP wei at price 1, > 0.5 target
+			const winningAmount = 1n * ATTOETH_PER_ETH  // yields 1 REP wei at price 1, > 0.5 target
 			await submitBid(client, auctionAddress, winningTick, winningAmount)
 
 			await finalizeAndVerify(client, auctionAddress)
