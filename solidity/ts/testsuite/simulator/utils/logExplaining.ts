@@ -1,4 +1,3 @@
-
 import { Abi, decodeEventLog, GetLogsReturnType } from 'viem'
 import { isUnknownAddress } from './utilities.js'
 
@@ -23,23 +22,34 @@ function safeDecodeEventLog(parameters: { abi: Abi; data: `0x${ string }`; topic
 	}
 }
 
+interface DecodedLogEntry {
+	blockNumber: bigint
+	logIndex: number
+	contractName: string
+	eventName: string
+	args: Record<string, unknown> | undefined
+}
+
 export const printLogs = (rawLogs: GetLogsReturnType, deployments: Deployment[]) => {
 	if (rawLogs.length === 0) return
 	const padding = '  '
-	const decodedLogs = []
+	const decodedLogs: DecodedLogEntry[] = []
 
 	for (const log of rawLogs) {
-		const contract = deployments.find((c) => BigInt(c.address) === BigInt(log.address))
+		const contract = deployments.find(c => BigInt(c.address) === BigInt(log.address))
 		if (contract === undefined) {
 			decodedLogs.push({
 				blockNumber: log.blockNumber,
 				logIndex: log.logIndex,
 				contractName: log.address.toLowerCase(),
 				eventName: log.data,
-				args: log.topics.reduce((recordAccumulator, currentValue, currentIndex) => {
-					recordAccumulator[`topic${ currentIndex }`] = currentValue
-					return recordAccumulator
-				}, {} as Record<string, unknown>)
+				args: log.topics.reduce(
+					(recordAccumulator, currentValue, currentIndex) => {
+						recordAccumulator[`topic${ currentIndex }`] = currentValue
+						return recordAccumulator
+					},
+					{} as Record<string, unknown>,
+				),
 			})
 			continue
 		}
@@ -72,7 +82,7 @@ export const printLogs = (rawLogs: GetLogsReturnType, deployments: Deployment[])
 			for (const [paramName, paramValue] of Object.entries(log.args)) {
 				let formattedValue = paramValue
 				if (isUnknownAddress(paramValue)) {
-					const matchingDeployment = deployments.find((deploymentItem) => deploymentItem.address.toLowerCase() === paramValue.toLowerCase())
+					const matchingDeployment = deployments.find(deploymentItem => deploymentItem.address.toLowerCase() === paramValue.toLowerCase())
 					if (matchingDeployment) {
 						formattedValue = `${ matchingDeployment.deploymentName } (${ paramValue })`
 					}

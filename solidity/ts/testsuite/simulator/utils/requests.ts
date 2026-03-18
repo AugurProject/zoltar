@@ -7,7 +7,7 @@ export async function fetchWithTimeout(resource: RequestInfo | URL, init: Reques
 	try {
 		if (requestAndTimeoutSignal.aborted) throw requestAndTimeoutSignal.reason
 		return await fetch(resource, { ...init, signal: requestAndTimeoutSignal })
-	} catch(error: unknown) {
+	} catch (error: unknown) {
 		if (error instanceof DOMException && error.message === 'The user aborted a request.') throw new Error('Fetch request timed out.')
 		throw error
 	} finally {

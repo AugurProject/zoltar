@@ -76,7 +76,7 @@ interface IUnsignedTransaction4844 {
 		readonly address: bigint
 		readonly storageKeys: readonly bigint[]
 	}[]
-	readonly maxFeePerBlobGas: bigint,
+	readonly maxFeePerBlobGas: bigint
 	readonly blobVersionedHashes: readonly bigint[]
 }
 
@@ -118,11 +118,11 @@ type ISignedTransaction7702 = {
 		readonly storageKeys: readonly bigint[]
 	}[]
 	readonly authorizationList: readonly {
-		chainId: bigint,
-		address: bigint,
-		nonce: bigint,
-		yParity: 'even' | 'odd',
-		r: bigint,
+		chainId: bigint
+		address: bigint
+		nonce: bigint
+		yParity: 'even' | 'odd'
+		r: bigint
 		s: bigint
 	}[]
 } & ITransactionSignature1559and2930and4844
@@ -131,12 +131,15 @@ type ITransactionSignatureLegacy = {
 	readonly r: bigint
 	readonly s: bigint
 	readonly hash: bigint
-} & ({
-	readonly v: bigint
-} | {
-	readonly yParity: 'even' | 'odd'
-	readonly chainId: bigint
-})
+} & (
+	| {
+			readonly v: bigint
+	  }
+	| {
+			readonly yParity: 'even' | 'odd'
+			readonly chainId: bigint
+	  }
+)
 
 type ITransactionSignature1559and2930and4844 = {
 	readonly r: bigint
@@ -163,50 +166,15 @@ export function rlpEncode(data: RlpEncodeableData[]): Uint8Array {
 }
 
 function rlpEncodeSignedLegacyTransactionPayload(transaction: DistributiveOmit<ISignedTransactionLegacy, 'hash'>): Uint8Array {
-	return rlpEncode([
-		stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.gasPrice!, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)),
-		transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0),
-		stripLeadingZeros(bigintToUint8Array(transaction.value, 32)),
-		new Uint8Array(transaction.input),
-		stripLeadingZeros(bigintToUint8Array(calculateV(transaction), 32)),
-		(stripLeadingZeros(bigintToUint8Array(transaction.r, 32))),
-		stripLeadingZeros(bigintToUint8Array(transaction.s, 32)),
-	])
+	return rlpEncode([stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)), stripLeadingZeros(bigintToUint8Array(transaction.gasPrice, 32)), stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)), transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0), stripLeadingZeros(bigintToUint8Array(transaction.value, 32)), new Uint8Array(transaction.input), stripLeadingZeros(bigintToUint8Array(calculateV(transaction), 32)), stripLeadingZeros(bigintToUint8Array(transaction.r, 32)), stripLeadingZeros(bigintToUint8Array(transaction.s, 32))])
 }
 
 function rlpEncodeSigned2930TransactionPayload(transaction: DistributiveOmit<ISignedTransaction2930, 'hash'>): Uint8Array {
-	return rlpEncode([
-		stripLeadingZeros(bigintToUint8Array(transaction.chainId, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.gasPrice, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)),
-		transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0),
-		stripLeadingZeros(bigintToUint8Array(transaction.value, 32)),
-		transaction.input,
-		transaction.accessList.map(({address, storageKeys}) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]),
-		stripLeadingZeros(new Uint8Array([transaction.yParity === 'even' ? 0 : 1])),
-		stripLeadingZeros(bigintToUint8Array(transaction.r, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.s, 32)),
-	])
+	return rlpEncode([stripLeadingZeros(bigintToUint8Array(transaction.chainId, 32)), stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)), stripLeadingZeros(bigintToUint8Array(transaction.gasPrice, 32)), stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)), transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0), stripLeadingZeros(bigintToUint8Array(transaction.value, 32)), transaction.input, transaction.accessList.map(({ address, storageKeys }) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]), stripLeadingZeros(new Uint8Array([transaction.yParity === 'even' ? 0 : 1])), stripLeadingZeros(bigintToUint8Array(transaction.r, 32)), stripLeadingZeros(bigintToUint8Array(transaction.s, 32))])
 }
 
 function rlpEncodeSigned1559TransactionPayload(transaction: DistributiveOmit<ISignedTransaction1559, 'hash'>): Uint8Array {
-	return rlpEncode([
-		stripLeadingZeros(bigintToUint8Array(transaction.chainId, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.maxPriorityFeePerGas, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.maxFeePerGas, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)),
-		transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0),
-		stripLeadingZeros(bigintToUint8Array(transaction.value, 32)),
-		transaction.input,
-		transaction.accessList.map(({address, storageKeys}) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]),
-		stripLeadingZeros(new Uint8Array([transaction.yParity === 'even' ? 0 : 1])),
-		stripLeadingZeros(bigintToUint8Array(transaction.r, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.s, 32)),
-	])
+	return rlpEncode([stripLeadingZeros(bigintToUint8Array(transaction.chainId, 32)), stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)), stripLeadingZeros(bigintToUint8Array(transaction.maxPriorityFeePerGas, 32)), stripLeadingZeros(bigintToUint8Array(transaction.maxFeePerGas, 32)), stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)), transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0), stripLeadingZeros(bigintToUint8Array(transaction.value, 32)), transaction.input, transaction.accessList.map(({ address, storageKeys }) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]), stripLeadingZeros(new Uint8Array([transaction.yParity === 'even' ? 0 : 1])), stripLeadingZeros(bigintToUint8Array(transaction.r, 32)), stripLeadingZeros(bigintToUint8Array(transaction.s, 32))])
 }
 function rlpEncodeSigned7702TransactionPayload(transaction: DistributiveOmit<ISignedTransaction7702, 'hash'>): Uint8Array {
 	return rlpEncode([
@@ -218,15 +186,8 @@ function rlpEncodeSigned7702TransactionPayload(transaction: DistributiveOmit<ISi
 		transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0),
 		stripLeadingZeros(bigintToUint8Array(transaction.value, 32)),
 		transaction.input,
-		transaction.accessList.map(({address, storageKeys}) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]),
-		transaction.authorizationList.map(({ chainId, address, nonce, yParity, r, s }) => [
-			stripLeadingZeros(bigintToUint8Array(chainId, 32)),
-			bigintToUint8Array(address, 20),
-			stripLeadingZeros(bigintToUint8Array(nonce, 32)),
-			stripLeadingZeros(new Uint8Array([yParity === 'even' ? 0 : 1])),
-			stripLeadingZeros(bigintToUint8Array(r, 32)),
-			stripLeadingZeros(bigintToUint8Array(s, 32)),
-		]),
+		transaction.accessList.map(({ address, storageKeys }) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]),
+		transaction.authorizationList.map(({ chainId, address, nonce, yParity, r, s }) => [stripLeadingZeros(bigintToUint8Array(chainId, 32)), bigintToUint8Array(address, 20), stripLeadingZeros(bigintToUint8Array(nonce, 32)), stripLeadingZeros(new Uint8Array([yParity === 'even' ? 0 : 1])), stripLeadingZeros(bigintToUint8Array(r, 32)), stripLeadingZeros(bigintToUint8Array(s, 32))]),
 		stripLeadingZeros(new Uint8Array([transaction.yParity === 'even' ? 0 : 1])),
 		stripLeadingZeros(bigintToUint8Array(transaction.r, 32)),
 		stripLeadingZeros(bigintToUint8Array(transaction.s, 32)),
@@ -243,9 +204,9 @@ function rlpEncodeSigned4844TransactionPayload(transaction: DistributiveOmit<ISi
 		transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0),
 		stripLeadingZeros(bigintToUint8Array(transaction.value, 32)),
 		transaction.input,
-		transaction.accessList.map(({address, storageKeys}) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]),
+		transaction.accessList.map(({ address, storageKeys }) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]),
 		stripLeadingZeros(bigintToUint8Array(transaction.maxFeePerBlobGas, 32)),
-		transaction.blobVersionedHashes.map((blobVersionedHash) => bigintToUint8Array(blobVersionedHash, 32)),
+		transaction.blobVersionedHashes.map(blobVersionedHash => bigintToUint8Array(blobVersionedHash, 32)),
 		stripLeadingZeros(new Uint8Array([transaction.yParity === 'even' ? 0 : 1])),
 		stripLeadingZeros(bigintToUint8Array(transaction.r, 32)),
 		stripLeadingZeros(bigintToUint8Array(transaction.s, 32)),
@@ -253,14 +214,7 @@ function rlpEncodeSigned4844TransactionPayload(transaction: DistributiveOmit<ISi
 }
 
 function rlpEncodeUnsignedLegacyTransactionPayload(transaction: IUnsignedTransactionLegacy): Uint8Array {
-	const toEncode = [
-		stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.gasPrice!, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)),
-		transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0),
-		stripLeadingZeros(bigintToUint8Array(transaction.value, 32)),
-		new Uint8Array(transaction.input),
-	]
+	const toEncode = [stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)), stripLeadingZeros(bigintToUint8Array(transaction.gasPrice, 32)), stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)), transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0), stripLeadingZeros(bigintToUint8Array(transaction.value, 32)), new Uint8Array(transaction.input)]
 	if ('chainId' in transaction && transaction.chainId !== undefined) {
 		toEncode.push(stripLeadingZeros(bigintToUint8Array(transaction.chainId, 32)))
 		toEncode.push(stripLeadingZeros(new Uint8Array(0)))
@@ -270,67 +224,21 @@ function rlpEncodeUnsignedLegacyTransactionPayload(transaction: IUnsignedTransac
 }
 
 function rlpEncodeUnsigned2930TransactionPayload(transaction: IUnsignedTransaction2930 | ISignedTransaction2930): Uint8Array {
-	return rlpEncode([
-		stripLeadingZeros(bigintToUint8Array(transaction.chainId, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.gasPrice, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)),
-		transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0),
-		stripLeadingZeros(bigintToUint8Array(transaction.value, 32)),
-		transaction.input,
-		transaction.accessList.map(({address, storageKeys}) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]),
-	])
+	return rlpEncode([stripLeadingZeros(bigintToUint8Array(transaction.chainId, 32)), stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)), stripLeadingZeros(bigintToUint8Array(transaction.gasPrice, 32)), stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)), transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0), stripLeadingZeros(bigintToUint8Array(transaction.value, 32)), transaction.input, transaction.accessList.map(({ address, storageKeys }) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))])])
 }
 
 function rlpEncodeUnsigned1559TransactionPayload(transaction: IUnsignedTransaction1559): Uint8Array {
-	const toEncode = [
-		stripLeadingZeros(bigintToUint8Array(transaction.chainId, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.maxPriorityFeePerGas, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.maxFeePerGas, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)),
-		transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0),
-		stripLeadingZeros(bigintToUint8Array(transaction.value, 32)),
-		transaction.input,
-		transaction.accessList.map(({ address, storageKeys }) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]),
-	]
+	const toEncode = [stripLeadingZeros(bigintToUint8Array(transaction.chainId, 32)), stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)), stripLeadingZeros(bigintToUint8Array(transaction.maxPriorityFeePerGas, 32)), stripLeadingZeros(bigintToUint8Array(transaction.maxFeePerGas, 32)), stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)), transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0), stripLeadingZeros(bigintToUint8Array(transaction.value, 32)), transaction.input, transaction.accessList.map(({ address, storageKeys }) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))])]
 	return rlpEncode(toEncode)
 }
 
 function rlpEncodeUnsigned4844TransactionPayload(transaction: IUnsignedTransaction4844): Uint8Array {
-	const toEncode = [
-		stripLeadingZeros(bigintToUint8Array(transaction.chainId, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.maxPriorityFeePerGas, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.maxFeePerGas, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)),
-		transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0),
-		stripLeadingZeros(bigintToUint8Array(transaction.value, 32)),
-		transaction.input,
-		transaction.accessList.map(({ address, storageKeys }) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]),
-		stripLeadingZeros(bigintToUint8Array(transaction.maxFeePerBlobGas, 32)),
-		transaction.blobVersionedHashes.map((blobVersionedHash) => bigintToUint8Array(blobVersionedHash, 32)),
-	]
+	const toEncode = [stripLeadingZeros(bigintToUint8Array(transaction.chainId, 32)), stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)), stripLeadingZeros(bigintToUint8Array(transaction.maxPriorityFeePerGas, 32)), stripLeadingZeros(bigintToUint8Array(transaction.maxFeePerGas, 32)), stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)), transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0), stripLeadingZeros(bigintToUint8Array(transaction.value, 32)), transaction.input, transaction.accessList.map(({ address, storageKeys }) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]), stripLeadingZeros(bigintToUint8Array(transaction.maxFeePerBlobGas, 32)), transaction.blobVersionedHashes.map(blobVersionedHash => bigintToUint8Array(blobVersionedHash, 32))]
 	return rlpEncode(toEncode)
 }
 
 function rlpEncodeUnsigned7702TransactionPayload(transaction: IUnsignedTransaction7702): Uint8Array {
-	const toEncode = [
-		stripLeadingZeros(bigintToUint8Array(transaction.chainId, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.maxPriorityFeePerGas, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.maxFeePerGas, 32)),
-		stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)),
-		transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0),
-		stripLeadingZeros(bigintToUint8Array(transaction.value, 32)),
-		transaction.input,
-		transaction.accessList.map(({ address, storageKeys }) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]),
-		transaction.authorizationList.map(({ chainId, address, nonce }) => [
-			stripLeadingZeros(bigintToUint8Array(chainId, 32)),
-			bigintToUint8Array(address, 20),
-			stripLeadingZeros(bigintToUint8Array(nonce, 32)),
-		]),
-	]
+	const toEncode = [stripLeadingZeros(bigintToUint8Array(transaction.chainId, 32)), stripLeadingZeros(bigintToUint8Array(transaction.nonce, 32)), stripLeadingZeros(bigintToUint8Array(transaction.maxPriorityFeePerGas, 32)), stripLeadingZeros(bigintToUint8Array(transaction.maxFeePerGas, 32)), stripLeadingZeros(bigintToUint8Array(transaction.gasLimit, 32)), transaction.to !== null ? bigintToUint8Array(transaction.to, 20) : new Uint8Array(0), stripLeadingZeros(bigintToUint8Array(transaction.value, 32)), transaction.input, transaction.accessList.map(({ address, storageKeys }) => [bigintToUint8Array(address, 20), storageKeys.map(slot => bigintToUint8Array(slot, 32))]), transaction.authorizationList.map(({ chainId, address, nonce }) => [stripLeadingZeros(bigintToUint8Array(chainId, 32)), bigintToUint8Array(address, 20), stripLeadingZeros(bigintToUint8Array(nonce, 32))])]
 	return rlpEncode(toEncode)
 }
 
@@ -367,7 +275,7 @@ export function EthereumUnsignedTransactionToUnsignedTransaction(transaction: Et
 			return {
 				...other,
 				gasLimit: gas,
-				accessList: transaction.accessList !== undefined ? transaction.accessList : []
+				accessList: transaction.accessList !== undefined ? transaction.accessList : [],
 			}
 		}
 		case 'legacy': {
@@ -387,7 +295,7 @@ export function EthereumSignedTransactionToSignedTransaction(transaction: Ethere
 		case '7702':
 		case '1559': return {
 			...transaction,
-			yParity: 'yParity' in transaction ? transaction.yParity : (transaction.v === 0n ? 'even' : 'odd'),
+			yParity: 'yParity' in transaction ? transaction.yParity : transaction.v === 0n ? 'even' : 'odd',
 			gasLimit: transaction.gas,
 			accessList: transaction.accessList !== undefined ? transaction.accessList : [],
 		}
@@ -401,5 +309,5 @@ export function EthereumSignedTransactionToSignedTransaction(transaction: Ethere
 }
 
 export function truncateAddr(address: string, charactersFromEachEnd = 7) {
-	return `0x${address.substring(2, 2 + charactersFromEachEnd)}…${address.substring(address.length - charactersFromEachEnd, address.length)}`
+	return `0x${ address.substring(2, 2 + charactersFromEachEnd) }…${ address.substring(address.length - charactersFromEachEnd, address.length) }`
 }

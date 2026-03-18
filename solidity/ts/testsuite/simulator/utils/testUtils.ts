@@ -12,7 +12,7 @@ export const approximatelyEqual = (actual: bigint, expected: bigint, errorDelta:
 		throw new assert.AssertionError({
 			message: errorMessage || `Expected values to be within ${ errorDelta }, but difference was ${ diff }`,
 			actual,
-			expected
+			expected,
 		})
 	}
 }

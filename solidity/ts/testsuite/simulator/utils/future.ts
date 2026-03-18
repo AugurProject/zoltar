@@ -15,19 +15,15 @@ export class Future<T> implements PromiseLike<T> {
 		this.rejectFunction = rejectFunction!
 	}
 
-	public get asPromise() { return this.promise }
-
-	public readonly then = <TResult1 = T, TResult2 = never>(
-		onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null,
-		onrejected?: ((reason: Error) => TResult2 | PromiseLike<TResult2>) | undefined | null
-	): PromiseLike<TResult1 | TResult2> => {
-		// casts are needed :(
-		return this.promise.then(
-			onfulfilled as (reason: unknown) => TResult1 | PromiseLike<TResult1>,
-			onrejected as (reason: unknown) => TResult1 | PromiseLike<TResult1>
-		)
+	public get asPromise() {
+		return this.promise
 	}
 
-	public readonly resolve = (value: T | PromiseLike<T>) => this.resolveFunction!(value)
-	public readonly reject = (reason: Error) => this.rejectFunction!(reason)
+	public readonly then = <TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: Error) => TResult2 | PromiseLike<TResult2>) | undefined | null): PromiseLike<TResult1 | TResult2> => 
+		// casts are needed :(
+		 this.promise.then(onfulfilled as (reason: unknown) => TResult1 | PromiseLike<TResult1>, onrejected as (reason: unknown) => TResult1 | PromiseLike<TResult1>)
+	
+
+	public readonly resolve = (value: T | PromiseLike<T>) => this.resolveFunction(value)
+	public readonly reject = (reason: Error) => this.rejectFunction(reason)
 }

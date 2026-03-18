@@ -1,4 +1,3 @@
-
 import * as funtypes from 'funtypes'
 import { EthereumAddress, EthereumQuantity, EthereumSendableSignedTransaction, EthereumTimestamp } from './wire-types.js'
 import { SignMessageParams } from './jsonRpcSigningTypes.js'
@@ -14,7 +13,7 @@ export const SimulatedTransaction = funtypes.ReadonlyObject({
 
 export type EstimateGasError = funtypes.Static<typeof EstimateGasError>
 export const EstimateGasError = funtypes.ReadonlyObject({
-	error: CodeMessageError
+	error: CodeMessageError,
 })
 
 export type SignedMessageTransaction = funtypes.Static<typeof SignedMessageTransaction>
@@ -48,7 +47,7 @@ export const SimulationStateInputBlock = funtypes.ReadonlyObject({
 
 export type SimulationStateInput = funtypes.Static<typeof SimulationStateInput>
 export const SimulationStateInput = funtypes.ReadonlyObject({
-	blocks: funtypes.ReadonlyArray(SimulationStateInputBlock)
+	blocks: funtypes.ReadonlyArray(SimulationStateInputBlock),
 })
 
 export type SimulationStateBlock = funtypes.Static<typeof SimulationStateBlock>
@@ -79,5 +78,5 @@ export type NamedTokenId = funtypes.Static<typeof NamedTokenId>
 export const NamedTokenId = funtypes.ReadonlyObject({
 	tokenAddress: EthereumAddress,
 	tokenId: EthereumQuantity,
-	tokenIdName: funtypes.String
+	tokenIdName: funtypes.String,
 })
