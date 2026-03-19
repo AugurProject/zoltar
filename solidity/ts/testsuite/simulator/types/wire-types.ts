@@ -119,15 +119,17 @@ const TimestampParser: funtypes.ParsedValue<funtypes.String, Date>['config'] = {
 
 const OptionalBytesParser: funtypes.ParsedValue<funtypes.Union<[funtypes.String, funtypes.Literal<undefined>]>, Uint8Array>['config'] = {
 	parse: value => BytesParser.parse(value || '0x'),
-	serialize: value => BytesParser.serialize(value || new Uint8Array()),
+	serialize: value => {
+		const ser = BytesParser.serialize
+		if (ser === undefined) throw new Error('BytesParser.serialize is undefined')
+		return ser(value || new Uint8Array())
+	},
 }
 
 const LiteralConverterParserFactory: <TInput, TOutput>(input: TInput, output: TOutput) => funtypes.ParsedValue<funtypes.Runtype<TInput>, TOutput>['config'] = (input, output) => ({
 	parse: value => (value === input ? { success: true, value: output } : { success: false, message: `${ value } was expected to be literal.` }),
 	serialize: value => (value === output ? { success: true, value: input } : { success: false, message: `${ value } was expected to be literal.` }),
 })
-
-
 
 //
 // Ethereum
@@ -145,8 +147,6 @@ export type EthereumData = funtypes.Static<typeof EthereumData>
 const EthereumAddress = funtypes.String.withParser(AddressParser)
 type EthereumAddress = funtypes.Static<typeof EthereumAddress>
 
-
-
 export const EthereumBytes32 = funtypes.String.withParser(Bytes32Parser)
 export type EthereumBytes32 = funtypes.Static<typeof EthereumBytes32>
 
@@ -158,7 +158,6 @@ type EthereumBytes16 = funtypes.Static<typeof EthereumBytes16>
 
 const EthereumTimestamp = funtypes.String.withParser(TimestampParser)
 type EthereumTimestamp = funtypes.Static<typeof EthereumTimestamp>
-
 
 const EthereumInput = funtypes.Union(funtypes.String, funtypes.Undefined).withParser(OptionalBytesParser)
 type EthereumInput = funtypes.Static<typeof EthereumInput>
@@ -239,7 +238,6 @@ const EthereumUnsignedTransaction1559 = funtypes.Intersect(
 		.asReadonly(),
 )
 
-
 type EthereumUnsignedTransaction4844 = funtypes.Static<typeof EthereumUnsignedTransaction4844>
 const EthereumUnsignedTransaction4844 = funtypes.Intersect(
 	funtypes
@@ -264,11 +262,6 @@ const EthereumUnsignedTransaction4844 = funtypes.Intersect(
 		})
 		.asReadonly(),
 )
-
-
-
-
-
 
 const EthereumTransaction2930And1559And4844Signature = funtypes.Intersect(
 	funtypes.ReadonlyObject({
@@ -353,7 +346,6 @@ const EthereumSendableSignedTransaction = funtypes.Union(EthereumSignedTransacti
 
 type EthereumSignedTransaction = funtypes.Static<typeof EthereumSignedTransaction>
 const EthereumSignedTransaction = funtypes.Union(EthereumSendableSignedTransaction, EthereumSignedTransactionOptimismDeposit)
-
 
 type EthereumWithdrawal = funtypes.Static<typeof EthereumWithdrawal>
 const EthereumWithdrawal = funtypes.ReadonlyObject({

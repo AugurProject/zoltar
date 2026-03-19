@@ -3,7 +3,7 @@ import { dateToBigintSeconds } from './utils/bigint'
 import { EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes } from './types/wire-types'
 import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types'
 import * as funtypes from 'funtypes'
-import { assertDefined } from './utils/testUtils'
+import { ensureDefined } from './utils/testUtils'
 
 type BlockTimeManipulation = { readonly type: 'AddToTimestamp', readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp', readonly timeToSet: EthereumQuantity }
 
@@ -42,7 +42,7 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 			const allowedHosts = ['localhost', '127.0.0.1', '::1', 'host.docker.internal']
 			if (!allowedHosts.includes(parsed.hostname)) {
 				throw new Error(
-					`ANVIL_RPC points to unauthorized host '${parsed.hostname}'. ` +
+					`ANVIL_RPC points to unauthorized host '${ parsed.hostname }'. ` +
 					`Test RPC endpoints must be localhost (localhost, 127.0.0.1, ::1, host.docker.internal). ` +
 					`Set ANVIL_RPC to a local Anvil instance.`
 				)
@@ -51,7 +51,7 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 			if (error instanceof Error && error.message.includes('unauthorized')) {
 				throw error
 			}
-			throw new Error(`Invalid ANVIL_RPC URL: ${url}. Must be a valid HTTP URL.`)
+			throw new Error(`Invalid ANVIL_RPC URL: ${ url }. Must be a valid HTTP URL.`)
 		}
 	}
 	validateLocalhostUrl(ANVIL_RPC)
@@ -94,7 +94,7 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 
 		// Validate JSON-RPC response structure
 		if (json.jsonrpc !== '2.0') {
-			throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${json.jsonrpc}'`)
+			throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${ json.jsonrpc }'`)
 		}
 		if (json.id === undefined) {
 			throw new Error('Invalid JSON-RPC response: missing id field')
@@ -115,7 +115,7 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 		}
 		// For eth_getTransactionReceipt, return the receipt even if status === '0x0' (reverted)
 		// Callers can check the status field themselves
-		assertDefined(json.result, 'json.result is undefined')
+		ensureDefined(json.result, 'json.result is undefined')
 		return json.result
 	}
 

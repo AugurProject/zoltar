@@ -8,8 +8,3 @@ export function areEqualArrays<T>(first: T[], second: T[]) {
 	return true
 }
 
-
-
-
-
-

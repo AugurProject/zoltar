@@ -71,8 +71,6 @@ export const splitRep = async (client: WriteClient, universeId: bigint, outcomeI
 	args: [universeId, outcomeIndexes.map(index => Number(index))],
 })
 
-
-
 export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0x${ string }`) {
 	return await client.readContract({
 		abi: ReputationToken_ReputationToken.abi,

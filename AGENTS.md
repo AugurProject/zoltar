@@ -1,18 +1,54 @@
 # Quality Assurance Guidelines
 
-After implementing any feature or fixing a bug, always run the following quality checks **in order** until all issues are resolved:
+After implementing any feature or fixing a bug, always run the following quality checks **separately and in order** until all issues are resolved:
 
-1. **TypeScript type checking**: `bun tsc`
-2. **Tests**: Run the relevant test suite (e.g., `bun run test-peripherals`, `bun run test-zoltar`, etc.)
-3. **Code formatting**: `bun run prettify`
-4. **Linting**: `bun run lint`
- 5. **Dead code analysis**: `bun run knip`
- 
- **Autofix**: You can automatically fix many knip issues with `bun run knip:fix`. This will remove unused exports and files. Review changes carefully.
+## Check Commands
+
+Run each command individually and address any issues before proceeding to the next:
+
+1. **TypeScript type checking**:  
+   ```bash
+   bun tsc
+   ```
+
+2. **Tests**: Run the relevant test suite (e.g., `bun run test-peripherals`, `bun run test-zoltar`, etc.)  
+   ```bash
+   bun test
+   ```
+
+3. **Code formatting**:  
+   ```bash
+   bun run prettify
+   ```
+
+4. **Linting**:  
+   ```bash
+   bun run lint
+   ```
+
+5. **Dead code analysis**:  
+   ```bash
+   bun run knip
+   ```
+
+## Autofix
+
+You can automatically fix many issues with:
+
+- **Knip autofix** (removes unused exports and files):  
+  ```bash
+  bun run knip:fix
+  ```
+  Review changes carefully.
+
+- **ESLint autofix** (fixes style and some code issues):  
+  ```bash
+  bun run lint --fix
+  ```
 
 Repeat the cycle iteratively after each fix to ensure clean builds and avoid accumulating issues.
 
-**Important**: The final state after the agent's work must have **zero knip warnings** (no unused exports, no unused files, no configuration hints). All suggested issues from knip must be addressed. The codebase should be production-clean with no dead code warnings.
+**Final requirement**: The codebase must have **zero knip warnings** (no unused exports, no unused files, no configuration hints). All knip issues must be addressed.
 
 # Package Guidelines
 

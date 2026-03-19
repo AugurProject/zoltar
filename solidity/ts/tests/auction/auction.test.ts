@@ -14,7 +14,7 @@ import { getDualCapBatchAuctionAddress } from '../../testsuite/simulator/utils/c
 import { addressString } from '../../testsuite/simulator/utils/bigint'
 
 // ============ MODULE-LEVEL CONSTANTS ============
-const ATTOETH_PER_ETH  = 10n**18n
+const ATTOETH_PER_ETH = 10n**18n
 const PRICE_PRECISION = ATTOETH_PER_ETH
 const AUCTION_TIME = 604800n
 const MIN_TICK = -524288n
@@ -32,8 +32,7 @@ describe('Auction', () => {
 	// ============ Helper Functions ============
 
 	function createTestClient(idx: number): WriteClient {
-		const address = TEST_ADDRESSES[idx]
-		assertDefined(address, `TEST_ADDRESSES[${idx}] is undefined`)
+		const address = ensureDefined(TEST_ADDRESSES[idx], `TEST_ADDRESSES[${ idx }] is undefined`)
 		return createWriteClient(mockWindow, address, 0)
 	}
 
@@ -236,8 +235,7 @@ describe('Auction', () => {
 			for (const bid of bids) {
 				const addr = bid.address
 				if (!bidsByUser.has(addr)) bidsByUser.set(addr, [])
-				const bidsForAddr = bidsByUser.get(addr)
-				assertDefined(bidsForAddr, `No bids array for address ${addr}`)
+				const bidsForAddr = ensureDefined(bidsByUser.get(addr), `No bids array for address ${ addr }`)
 				bidsForAddr.push(bid)
 			}
 
@@ -569,7 +567,7 @@ describe('Auction', () => {
 				name: 'allows refund for bid below clearing',
 				ethRaiseCap: 10n * 10n ** 18n,
 				maxRepBeingSold: 10n * 10n ** 18n,
-				alicePrice: ATTOETH_PER_ETH  / 2n,
+				alicePrice: ATTOETH_PER_ETH / 2n,
 				aliceAmount: 10n * 10n ** 18n,
 				bobPrice: ATTOETH_PER_ETH ,
 				bobAmount: 10n * 10n ** 18n,
@@ -583,13 +581,13 @@ describe('Auction', () => {
 				ethRaiseCap: 10n * 10n ** 18n,
 				maxRepBeingSold: 10n * 10n ** 18n, // increase so Alice alone does not hit cap
 				alicePrice: ATTOETH_PER_ETH ,
-				aliceAmount: 4n * 10n ** 18n,       // 4 ETH at price 1 → 4 REP
+				aliceAmount: 4n * 10n ** 18n, // 4 ETH at price 1 → 4 REP
 				bobPrice: 2n * ATTOETH_PER_ETH ,
-				bobAmount: 6n * 10n ** 18n,         // 6 ETH at price 2 → hits remaining 6 REP (cap reached)
+				bobAmount: 6n * 10n ** 18n, // 6 ETH at price 2 → hits remaining 6 REP (cap reached)
 				refundBidder: 'bob' as const,
 				expectedClearingTick: tickForPrice(2n * ATTOETH_PER_ETH ),
-				expectRefundToSucceed: false,        // Bob is at clearing tick → cannot refund
-				checkClearingUnchanged: true,        // Alice refund below clearing would not change clearing
+				expectRefundToSucceed: false, // Bob is at clearing tick → cannot refund
+				checkClearingUnchanged: true, // Alice refund below clearing would not change clearing
 			},
 			{
 				name: 'rejects refund for bid above clearing',

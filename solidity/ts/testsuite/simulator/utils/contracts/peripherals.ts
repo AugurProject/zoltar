@@ -179,7 +179,6 @@ export const getEthAmountToBuy = async (client: ReadClient, auctionAddress: `0x$
 	args: [],
 })
 
-
 export const balanceOfShares = async (client: ReadClient, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`) => await client.readContract({
 	abi: peripherals_tokens_ShareToken_ShareToken.abi,
 	functionName: 'balanceOfShares',

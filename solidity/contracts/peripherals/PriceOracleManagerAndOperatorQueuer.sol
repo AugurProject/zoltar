@@ -113,7 +113,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 		}
 	}
 
-	function isPriceValid() public view returns (bool)  {
+	function isPriceValid() public view returns (bool) {
 		return lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
 	}
 

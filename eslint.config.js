@@ -3,48 +3,6 @@ import parser from '@typescript-eslint/parser'
 import unusedExports from 'eslint-plugin-unused-imports'
 import globals from 'globals'
 
-// Inline custom plugin to avoid directory import issues
-const localPlugin = {
-	rules: {
-		'single-line-switch-case': {
-			meta: {
-				type: 'layout',
-				fixable: 'whitespace',
-				schema: [],
-				messages: {
-					singleLine: 'Switch case without braces must stay on one line',
-				},
-			},
-			create(context) {
-				const sourceCode = context.getSourceCode()
-				return {
-					SwitchCase(node) {
-						if (node.consequent.length !== 1) return
-						const statement = node.consequent[0]
-						if (statement.type === 'BlockStatement') return
-						const colonToken = sourceCode.getTokenBefore(statement, token => token.value === ':')
-						if (!colonToken) return
-						const colonLine = colonToken.loc.end.line
-						const statementLine = statement.loc.start.line
-						if (colonLine === statementLine) return
-						const rangeStart = colonToken.range[1]
-						const rangeEnd = statement.range[0]
-						const textBetween = sourceCode.text.slice(rangeStart, rangeEnd)
-						if (/\S/.test(textBetween)) return
-						context.report({
-							node: statement,
-							messageId: 'singleLine',
-							fix(fixer) {
-								return fixer.replaceTextRange([rangeStart, rangeEnd], ' ')
-							},
-						})
-					},
-				}
-			},
-		},
-	},
-}
-
 export default [
 	{
 		files: ['solidity/ts/**/*.ts'],
@@ -62,7 +20,6 @@ export default [
 		plugins: {
 			'@typescript-eslint': ts,
 			'unused-imports': unusedExports,
-			local: localPlugin,
 		},
 		rules: {
 			// Let Prettier handle formatting; only enforce rules not covered by Prettier
@@ -99,9 +56,6 @@ export default [
 
 			'arrow-body-style': ['error', 'as-needed'],
 
-			// Custom rules
-			'local/single-line-switch-case': 'error',
-
 			// Disallow non-null assertion operator - use explicit checks instead
 			'no-restricted-syntax': [
 				'error',
@@ -110,6 +64,12 @@ export default [
 					message: 'Unexpected non-null assertion. Perform explicit undefined checks and throw an error if needed.',
 				},
 			],
+
+			// Disallow multiple empty lines
+			'no-multiple-empty-lines': ['error', { max: 1 }],
+
+			// Spacing inside template curly braces
+			'template-curly-spacing': ['error', 'always'],
 		},
 	},
 	{
