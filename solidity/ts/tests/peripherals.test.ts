@@ -9,6 +9,7 @@ import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePr
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getMarketId, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 
 import { balanceOfShares, balanceOfSharesInCash, getEthRaiseCap, getLastPrice, getMarketEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndQueueOperation } from '../testsuite/simulator/utils/contracts/peripherals'
+import { tickToPrice } from '../testsuite/simulator/utils/tickMath'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
@@ -387,7 +388,11 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const yesAuctionParticipantVault = await getSecurityVault(client, yesSecurityPool.securityPool, yesAuctionParticipant.account.address)
 		const yesAuctionParticipantRep = await poolOwnershipToRep(client, yesSecurityPool.securityPool, yesAuctionParticipantVault.repDepositShare)
-		assert.ok(yesAuctionParticipantRep > 0n, 'yes auction participant should have some rep')
+
+		// Compute expected REP from bid parameters: REP = ETH * PRICE_PRECISION / price
+		const yesClearingPrice = tickToPrice(yesAuctionTick)
+		const expectedYesRep = (auctionedEthInYes * 1_000_000_000_000_000_000n) / yesClearingPrice
+		approximatelyEqual(yesAuctionParticipantRep, expectedYesRep, 1_000n, 'yes auction participant should get expected REP')
 
 		const originalYesVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		const originalYesVaultRep = await poolOwnershipToRep(client, yesSecurityPool.securityPool, originalYesVault.repDepositShare)
@@ -423,7 +428,11 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const noAuctionParticipantVault = await getSecurityVault(client, noSecurityPool.securityPool, noAuctionParticipant.account.address)
 		const noAuctionParticipantRep = await poolOwnershipToRep(client, noSecurityPool.securityPool, noAuctionParticipantVault.repDepositShare)
-		assert.ok(noAuctionParticipantRep > 0n, 'no auction participant should have some rep')
+
+		// Compute expected REP from bid parameters
+		const noClearingPrice = tickToPrice(noAuctionTick)
+		const expectedNoRep = (auctionedEthInNo * 1_000_000_000_000_000_000n) / noClearingPrice
+		approximatelyEqual(noAuctionParticipantRep, expectedNoRep, 1_000n, 'no auction participant should get expected REP')
 
 		const originalNoVault = await getSecurityVault(client, noSecurityPool.securityPool, attackerClient.account.address)
 		const originalNoVaultRep = await poolOwnershipToRep(client, noSecurityPool.securityPool, originalNoVault.repDepositShare)
@@ -453,7 +462,11 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const invalidAuctionParticipantVault = await getSecurityVault(client, invalidSecurityPool.securityPool, invalidAuctionParticipant.account.address)
 		const invalidAuctionParticipantRep = await poolOwnershipToRep(client, invalidSecurityPool.securityPool, invalidAuctionParticipantVault.repDepositShare)
-		assert.ok(invalidAuctionParticipantRep > 0n, 'invalid auction participant should have some rep')
+
+		// Compute expected REP from bid parameters
+		const invalidClearingPrice = tickToPrice(invalidAuctionTick)
+		const expectedInvalidRep = (completeSetAmount * 1_000_000_000_000_000_000n) / invalidClearingPrice
+		approximatelyEqual(invalidAuctionParticipantRep, expectedInvalidRep, 1_000n, 'invalid auction participant should get expected REP')
 
 		// try creating new complete sets
 		const openInterestHolder2 = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
