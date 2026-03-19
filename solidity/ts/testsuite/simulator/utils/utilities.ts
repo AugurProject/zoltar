@@ -18,7 +18,7 @@ function hexToBytes(value: string) {
 	return result
 }
 
-const mintETH = async (AnvilWindowEthereum: AnvilWindowEthereum, mintAmounts: { address: Address; amount: bigint }[]) => {
+const mintETH = async (anvilWindowEthereum: AnvilWindowEthereum, mintAmounts: { address: Address; amount: bigint }[]) => {
 	const stateOverrides = mintAmounts.reduce(
 		(acc, current) => {
 			acc[current.address] = { balance: current.amount }
@@ -26,10 +26,10 @@ const mintETH = async (AnvilWindowEthereum: AnvilWindowEthereum, mintAmounts: { 
 		},
 		{} as { [key: string]: { [key: string]: bigint } },
 	)
-	await AnvilWindowEthereum.addStateOverrides(stateOverrides)
+	await anvilWindowEthereum.addStateOverrides(stateOverrides)
 }
 
-const mintERC20 = async (AnvilWindowEthereum: AnvilWindowEthereum, erc20Address: Address, mintAmounts: { address: Address; amount: bigint }[], balanceSlot: bigint = 2n) => {
+const mintERC20 = async (anvilWindowEthereum: AnvilWindowEthereum, erc20Address: Address, mintAmounts: { address: Address; amount: bigint }[], balanceSlot: bigint = 2n) => {
 	const overrides = mintAmounts.map(mintAmount => {
 		const encodedKeySlotHash = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [mintAmount.address, balanceSlot]))
 		return { key: encodedKeySlotHash, value: mintAmount.amount }
@@ -41,7 +41,7 @@ const mintERC20 = async (AnvilWindowEthereum: AnvilWindowEthereum, erc20Address:
 		},
 		{} as { [key: string]: bigint },
 	)
-	await AnvilWindowEthereum.addStateOverrides({ [erc20Address]: { stateDiff: stateSets } })
+	await anvilWindowEthereum.addStateOverrides({ [erc20Address]: { stateDiff: stateSets } })
 }
 
 export const approveToken = async (client: WriteClient, tokenAddress: Address, spenderAddress: Address) => {
@@ -64,22 +64,22 @@ export const getERC20Balance = async (client: ReadClient, tokenAddress: Address,
 
 export const getETHBalance = async (client: ReadClient, address: Address) => await client.getBalance({ address })
 
-export const setupTestAccounts = async (AnvilWindowEthereum: AnvilWindowEthereum) => {
+export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum) => {
 	// Impersonate test accounts so they can send transactions without private keys
 	for (const address of TEST_ADDRESSES) {
-		await AnvilWindowEthereum.impersonateAccount(addressString(address))
+		await anvilWindowEthereum.impersonateAccount(addressString(address))
 	}
 
 	const accountValues = TEST_ADDRESSES.map(address => ({ address: addressString(address), amount: TOKEN_AMOUNT_TO_MINT }))
-	await mintETH(AnvilWindowEthereum, accountValues)
+	await mintETH(anvilWindowEthereum, accountValues)
 	// For OpenZeppelin ERC20, _balances mapping is at slot 0 (first state variable)
-	await mintERC20(AnvilWindowEthereum, addressString(GENESIS_REPUTATION_TOKEN), accountValues, 0n)
+	await mintERC20(anvilWindowEthereum, addressString(GENESIS_REPUTATION_TOKEN), accountValues, 0n)
 
 	// Deploy the ReputationToken contract at the genesis address
 	const bytecodeHex = ReputationToken_ReputationToken.evm.deployedBytecode.object
 	const bytes = hexToBytes(bytecodeHex.startsWith('0x') ? bytecodeHex : `0x${ bytecodeHex }`)
 	if (!bytes) throw new Error('Failed to convert bytecode to bytes')
-	await AnvilWindowEthereum.addStateOverrides({
+	await anvilWindowEthereum.addStateOverrides({
 		[addressString(GENESIS_REPUTATION_TOKEN)]: {
 			code: bytes,
 		},
@@ -87,7 +87,7 @@ export const setupTestAccounts = async (AnvilWindowEthereum: AnvilWindowEthereum
 
 	// Deploy the ProxyDeployer contract at its known address to avoid raw transaction
 	const proxyDeployerBytecode = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3'
-	await AnvilWindowEthereum.addStateOverrides({
+	await anvilWindowEthereum.addStateOverrides({
 		[addressString(PROXY_DEPLOYER_ADDRESS)]: {
 			code: hexToBytes(proxyDeployerBytecode),
 		},
@@ -98,7 +98,7 @@ export const setupTestAccounts = async (AnvilWindowEthereum: AnvilWindowEthereum
 	// `totalTheoreticalSupply` is at slot 5 (after _balances slot0, _allowances slot1, _totalSupply slot2, _name slot3, _symbol slot4).
 	const totalTheoreticalSupply = BigInt(TEST_ADDRESSES.length) * TOKEN_AMOUNT_TO_MINT
 	const slot5 = `0x${ 5n.toString(16).padStart(64, '0') }`
-	await AnvilWindowEthereum.addStateOverrides({
+	await anvilWindowEthereum.addStateOverrides({
 		[addressString(GENESIS_REPUTATION_TOKEN)]: {
 			stateDiff: {
 				[slot5]: totalTheoreticalSupply,
@@ -111,7 +111,7 @@ export const setupTestAccounts = async (AnvilWindowEthereum: AnvilWindowEthereum
 	const wethBytecodeHex = peripherals_WETH9_WETH9.evm.deployedBytecode.object
 	const wethBytes = hexToBytes(wethBytecodeHex.startsWith('0x') ? wethBytecodeHex : `0x${ wethBytecodeHex }`)
 	if (!wethBytes) throw new Error('Failed to convert WETH bytecode to bytes')
-	await AnvilWindowEthereum.addStateOverrides({
+	await anvilWindowEthereum.addStateOverrides({
 		[wethAddress]: {
 			code: wethBytes,
 		},
