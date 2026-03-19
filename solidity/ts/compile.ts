@@ -37,27 +37,32 @@ const AbiEntry = funtypes.ReadonlyPartial({
 	outputs: funtypes.ReadonlyArray(AbiParameter)
 })
 
+// Contract data may have abi and evm optional (if compilation failed for that contract)
+const ContractData = funtypes.ReadonlyPartial({
+	abi: funtypes.ReadonlyArray(AbiEntry),
+	evm: funtypes.ReadonlyPartial({
+		bytecode: funtypes.ReadonlyPartial({
+			object: funtypes.String
+		}),
+		deployedBytecode: funtypes.ReadonlyPartial({
+			object: funtypes.String
+		})
+	})
+})
 
 type CompileResult = funtypes.Static<typeof CompileResult>
 const CompileResult = funtypes.ReadonlyObject({
-	contracts: funtypes.Record(
-		funtypes.String,
+	contracts: funtypes.Union(
 		funtypes.Record(
 			funtypes.String,
-			funtypes.ReadonlyObject({
-				abi: funtypes.ReadonlyArray(AbiEntry),
-				evm: funtypes.ReadonlyObject({
-					bytecode: funtypes.ReadonlyObject({
-						object: funtypes.String
-					}),
-					deployedBytecode: funtypes.ReadonlyObject({
-						object: funtypes.String
-					})
-				})
-			})
-		)
+			funtypes.Record(
+				funtypes.String,
+				ContractData
+			)
+		),
+		funtypes.Undefined
 	),
-	sources: funtypes.Unknown,
+	sources: funtypes.Union(funtypes.Unknown, funtypes.Undefined),
 	errors: funtypes.Union(
 		funtypes.ReadonlyArray(CompileError),
 		funtypes.Undefined
@@ -82,23 +87,58 @@ async function exists(path: string) {
 	}
 }
 
-const getAllFiles = async (dirPath: string, fileList: string[] = []): Promise<string[]> => {
-	const files = await fs.readdir(dirPath);
+const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[] = [], visited?: Set<string>): Promise<string[]> => {
+	// Set base directory on first call and resolve to absolute canonical path (resolve symlinks)
+	if (!baseDir) {
+		baseDir = await fs.realpath(dirPath)
+	}
+	// Initialize visited set on first call
+	const visitedSet = visited ?? new Set<string>()
+
+	// Get canonical path of current directory to detect cycles
+	const canonicalDir = await fs.realpath(dirPath)
+	// Skip if already visited (symlink loop detection)
+	if (visitedSet.has(canonicalDir)) {
+		return fileList
+	}
+	visitedSet.add(canonicalDir)
+
+	const files = await fs.readdir(dirPath, { withFileTypes: true })
 	for (const file of files) {
-		const filePath = path.join(dirPath, file);
-		const stat = await fs.stat(filePath);
-		if (stat.isDirectory()) {
-			await getAllFiles(filePath, fileList);
+		const filePath = path.join(dirPath, file.name)
+
+		// Resolve symbolic links to their target for security check and recursion
+		let targetPath = filePath
+		if (file.isSymbolicLink()) {
+			targetPath = await fs.realpath(filePath)
 		} else {
-			fileList.push(filePath);
+			// For regular files/directories, just use absolute path (no need to resolve symlinks in parent chain again)
+			// Since dirPath is already resolved (canonical), filePath is already absolute.
+			// We'll use filePath for security check and recursion for non-symlinks.
+			targetPath = filePath
+		}
+
+		// Security check: ensure targetPath is within baseDir
+		const relative = path.relative(baseDir, targetPath)
+		if (relative.startsWith('..') || path.isAbsolute(relative)) {
+			throw new Error(`Path traversal detected: ${filePath} resolves outside allowed directory`)
+		}
+
+		// Recurse into directories (including symlinked directories that passed the check)
+		if (file.isDirectory() || (file.isSymbolicLink() && (await fs.stat(targetPath)).isDirectory())) {
+			await getAllFiles(targetPath, baseDir, fileList, visitedSet)
+		} else {
+			fileList.push(filePath)
 		}
 	}
-	return fileList;
+	return fileList
 }
 
 const copySolidityContractArtifact = async (contractLocation: string) => {
 	const solidityContract = CompileResult.parse(JSON.parse(await fs.readFile(contractLocation, 'utf8')))
-	if (solidityContract.contracts === undefined) throw new Error('contracts object missing')
+	if (!solidityContract.contracts) {
+		throw new Error('No contracts compiled')
+	}
 	const contracts = Object.entries(solidityContract.contracts).flatMap(([filename, contract]) => {
 		if (contract === undefined) throw new Error('missing contract')
 		return Object.entries(contract).map(([contractName, contractData]) => ({ contractName: `${ filename.replace('contracts/', '').replace(/-/g, '').replace(/\//g, '_').replace(/\\/g, '_').replace(/\.sol$/, '') }_${ contractName }`, contractData }))
@@ -142,7 +182,7 @@ const compileContracts = async () => {
 	const errors = (result!.errors || []).filter(x => x.severity === 'error').map(x => x.formattedMessage)
 	if (errors.length) throw new CompilationError(errors)
 
-	const warnings = (result!.errors || []).map(x => x.formattedMessage)
+	const warnings = (result!.errors || []).filter(x => x.severity === 'warning').map(x => x.formattedMessage)
 	if (warnings.length > 0) warnings.forEach((warning) => console.warn(warning))
 
 	const artifactsDir = path.join(process.cwd(), 'artifacts')

@@ -4,11 +4,17 @@ import { Deployment, printLogs } from './logExplaining.js'
 import { SimulatedTransaction } from '../types/visualizerTypes.js'
 import { SendTransactionParams } from '../types/jsonRpcTypes.js'
 import { addressString, bytes32String, dataStringWith0xStart } from './bigint.js'
+import { EthereumAddress } from '../types/wire-types.js'
+
+function findMatchingDeployment(addressStr: string, deployments: Deployment[]): Deployment | undefined {
+	const parsedAddress = EthereumAddress.parse(addressStr)
+	return deployments.find((deployment) => EthereumAddress.parse(deployment.address) === parsedAddress)
+}
 
 export function decodeOutput(abi: Abi, returnData: Uint8Array<ArrayBufferLike>, functionName: string, deployments: Deployment[]) {
 	const output = jsonStringify(decodeFunctionResult({ abi, functionName: functionName, data: dataStringWith0xStart(returnData) }))
 	if (isAddress(output)) {
-		const matchingDeployment = deployments.find((deploymentItem) => deploymentItem.address.toLowerCase() === output.toLowerCase())
+		const matchingDeployment = findMatchingDeployment(output, deployments)
 		if (matchingDeployment) return `${ matchingDeployment.deploymentName } (${ output })`
 	}
 	return output
@@ -17,7 +23,7 @@ export function decodeOutput(abi: Abi, returnData: Uint8Array<ArrayBufferLike>, 
 export function decodeUnknownFunctionOutput(returnData: Uint8Array<ArrayBufferLike>, deployments: Deployment[]) {
 	const output = dataStringWith0xStart(returnData)
 	if (isAddress(output)) {
-		const matchingDeployment = deployments.find((deploymentItem) => deploymentItem.address.toLowerCase() === output.toLowerCase())
+		const matchingDeployment = findMatchingDeployment(output, deployments)
 		if (matchingDeployment) return `${ matchingDeployment.deploymentName } (${ output })`
 	}
 	return output
@@ -48,9 +54,15 @@ export function printDecodedFunction(contractName: string, data: `0x${ string }`
 	}
 }
 
-export const createTransactionExplainer = (deployments: Deployment[]) => {
+export const createTransactionExplainer = (deployments: Deployment[], verbose: boolean = false) => {
 	return (request: SendTransactionParams, result: SimulatedTransaction) => {
-		const contract = deployments.find((x) => BigInt(x.address) === request.params[0].to)
+		const to = request.params[0].to
+		let contract: Deployment | undefined
+		if (to !== null && to !== undefined) {
+			// to is a bigint (EthereumAddress). Compare as bigint.
+			const toBigInt = to
+			contract = deployments.find((x) => EthereumAddress.parse(x.address) === toBigInt)
+		}
 		if (contract === undefined) {
 			console.log(`UNKNOWN CALL: ${ jsonStringify(request)} -> ${ decodeUnknownFunctionOutput(result.ethSimulateV1CallResult.returnData, deployments) }`)
 		}
@@ -63,19 +75,23 @@ export const createTransactionExplainer = (deployments: Deployment[]) => {
 			}
 		}
 		if (result.ethSimulateV1CallResult.status === 'success') {
-			printLogs(result.ethSimulateV1CallResult.logs.map((event, logIndex) => ({
-				removed: false,
-				logIndex: logIndex,
-				transactionIndex: 1,
-				transactionHash: '0x1',
-				blockHash: '0x1',
-				blockNumber: 1n,
-				address: addressString(event.address),
-				data: dataStringWith0xStart(event.data),
-				topics: event.topics.map((x) => bytes32String(x)) as [`0x${ string }`, ...`0x${ string }`[]]
-			})), deployments)
+			if (verbose) {
+				printLogs(result.ethSimulateV1CallResult.logs.map((event, logIndex) => ({
+					removed: false,
+					logIndex: logIndex,
+					transactionIndex: 1,
+					transactionHash: '0x1',
+					blockHash: '0x1',
+					blockNumber: 1n,
+					address: addressString(event.address),
+					data: dataStringWith0xStart(event.data),
+					topics: event.topics.map((x) => bytes32String(x)) as [`0x${ string }`, ...`0x${ string }`[]]
+				})), deployments)
+			} else {
+				console.log(`  [${ result.ethSimulateV1CallResult.logs.length } logs produced]`)
+			}
 		} else {
-			console.log(`  Failed to error: ${ result.ethSimulateV1CallResult.error.message }`)
+			console.log(`  Error: ${ result.ethSimulateV1CallResult.error.message }`)
 		}
 	}
 }

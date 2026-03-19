@@ -4,23 +4,23 @@
 	"license": "Unlicense",
 	"type": "module",
 	"devDependencies": {
-		"@types/node": "22.13.10",
 		"@zoltu/file-copier": "3.0.0",
 		"better-typescript-lib": "2.11.0",
-		"typescript": "5.8.2",
-		"funtypes": "5.1.1"
+		"funtypes": "5.1.1",
+		"typescript": "5.8.2"
 	},
 	"dependencies": {
 		"viem": "2.38.3"
 	},
 	"scripts": {
-		"setup": "npm ci --ignore-scripts && npm run setup-contracts",
-		"setup-contracts": "cd solidity && npm run setup",
-		"compile-contracts": "cd solidity && npm run compile-contracts",
-		"test": "cd solidity && npm run test",
-		"test-peripherals": "cd solidity && npm run compile-contracts && npm run test-peripherals",
-		"test-escalation-game": "cd solidity && npm run compile-contracts && npm run test-escalation-game",
-		"test-question-data": "cd solidity && npm run compile-contracts && npm run test-question-data",
-		"test-auction": "cd solidity && npm run compile-contracts && npm run test-auction"
+		"setup": "bun install --ignore-scripts && bun run setup-contracts",
+		"setup-contracts": "cd solidity && bun run setup",
+		"compile-contracts": "cd solidity && bun run compile-contracts",
+		"test-zoltar": "cd solidity && bun run test-zoltar",
+		"test-peripherals": "cd solidity && bun run compile-contracts && bun run test-peripherals",
+		"test-escalation-game": "cd solidity && bun run compile-contracts && bun run test-escalation-game",
+		"test-question-data": "cd solidity && bun run compile-contracts && bun run test-question-data",
+		"test-auction": "cd solidity && bun run compile-contracts && bun run test-auction",
+		"test": "cd solidity && bun run test"
 	}
 }

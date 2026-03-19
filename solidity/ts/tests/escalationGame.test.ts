@@ -1,4 +1,4 @@
-import test, { beforeEach, describe } from 'node:test'
+import { test, beforeEach, describe } from 'bun:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
@@ -10,20 +10,31 @@ import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zol
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
 import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
+import { SimulationState } from '../testsuite/simulator/types/visualizerTypes.js'
+import { copySimulationState } from '../testsuite/simulator/SimulationModeEthereumClientService.js'
 
 describe('Escalation Game Test Suite', () => {
 	let mockWindow: MockWindowEthereum
-
 	let client: WriteClient
 	const reportBond = 1n * 10n ** 18n
 	const nonDecisionThreshold = 1000n * 10n ** 18n
+
+	let cachedSimulationState: SimulationState | undefined = undefined
+
 	beforeEach(async () => {
-		mockWindow = getMockedEthSimulateWindowEthereum()
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		await setupTestAccounts(mockWindow)
-		await ensureZoltarDeployed(client)
-		await ensureInfraDeployed(client)
+		if (cachedSimulationState) {
+			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
+			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		} else {
+			mockWindow = getMockedEthSimulateWindowEthereum()
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
+			await setupTestAccounts(mockWindow)
+			await ensureZoltarDeployed(client)
+			await ensureInfraDeployed(client)
+			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
+		}
 	})
 
 	test('can start a game', async () => {

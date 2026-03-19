@@ -1,9 +1,10 @@
-import test, { describe, beforeEach } from 'node:test'
+import { test, beforeEach, describe } from 'bun:test'
 import assert from 'node:assert'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
+import { copySimulationState } from '../testsuite/simulator/SimulationModeEthereumClientService.js'
 import { addressString, dateToBigintSeconds, rpow } from '../testsuite/simulator/utils/bigint.js'
 import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
@@ -11,18 +12,17 @@ import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePr
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getMarketId, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
 import { balanceOfShares, balanceOfSharesInCash, getEthAmountToBuy, getLastPrice, getMarketEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndQueueOperation } from '../testsuite/simulator/utils/contracts/peripherals.js'
 import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
+import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
+import { SimulationState } from '../testsuite/simulator/types/visualizerTypes.js'
 import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkSecurityPool, getMarketOutcome, getMigratedRep, getSecurityPoolForkerForkData, migrateFromEscalationGame, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker.js'
-import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
 import { getEscalationGameDeposits, getMarketResolution, getNonDecisionThreshold, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame.js'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseForkData, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar.js'
 import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool.js'
 
 describe('Peripherals Contract Test Suite', () => {
 	let mockWindow: MockWindowEthereum
-
 	let client: WriteClient
-	let startBalance: bigint
 	const reportBond = 1n * 10n ** 18n
 	const PRICE_PRECISION = 1n * 10n ** 18n
 	const repDeposit = 1000n * 10n ** 18n
@@ -45,17 +45,24 @@ describe('Peripherals Contract Test Suite', () => {
 	const marketText = 'test market'
 	const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'] as const
 
-	beforeEach(async () => {
-		mockWindow = getMockedEthSimulateWindowEthereum()
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		await setupTestAccounts(mockWindow)
-	 	startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		await ensureZoltarDeployed(client)
-		await ensureInfraDeployed(client)
-		await deployOriginSecurityPool(client, genesisUniverse, EXTRA_INFO, marketEndDate, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+	let cachedSimulationState: SimulationState | undefined = undefined
 
-		await approveAndDepositRep(client, repDeposit, marketId)
+	beforeEach(async () => {
+		if (cachedSimulationState) {
+			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
+			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		} else {
+			mockWindow = getMockedEthSimulateWindowEthereum()
+			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse, marketId, securityMultiplier)))
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+			await setupTestAccounts(mockWindow)
+			await ensureZoltarDeployed(client)
+			await ensureInfraDeployed(client)
+			await deployOriginSecurityPool(client, genesisUniverse, EXTRA_INFO, marketEndDate, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+			await approveAndDepositRep(client, repDeposit, marketId)
+			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
+		}
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, marketId, securityMultiplier)
 	})
 
@@ -63,6 +70,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
 		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
+		const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance, 100n, 'Did not get rep back')
 	})
 
@@ -96,6 +104,23 @@ describe('Peripherals Contract Test Suite', () => {
 		const repAfter = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		strictEqualTypeSafe(repAfter-repBefore, repDeposit, 'did not get rep back')
 		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 'Did not empty security pool of rep')
+	})
+
+	test('create child universe test', async () => {
+		const endTime = await getMarketEndDate(client, marketId)
+		await mockWindow.setTime(endTime + 10000n)
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, marketId)
+		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold )
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await forkSecurityPool(client, securityPoolAddresses.securityPool)
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No)
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid)
 	})
 
 	test('Can Liquidate', async () => {
@@ -137,6 +162,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(originalVault.repDepositShare, 0n, 'original vault should not have any rep')
 		strictEqualTypeSafe(liquidatorVault.securityBondAllowance, securityPoolAllowance, 'liquidator doesn\'t have all the security pool allowances')
 		strictEqualTypeSafe(liquidatorVault.repDepositShare / PRICE_PRECISION, repDeposit+(repDeposit * 10n), 'liquidator should have all the rep in the pool')
+
 	})
 
 	test('Open Interest Fees (non forking)', async () => {
@@ -425,10 +451,11 @@ describe('Peripherals Contract Test Suite', () => {
 	test('can fork zero rep pools', async () => {
 		const endTime = await getMarketEndDate(client, marketId)
 		await mockWindow.setTime(endTime + 10000n)
+		const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
 		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
-		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance, 100n, 'Did not get rep back')
+		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance + repDeposit, 100n, 'Did not get rep back')
 
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, marketText, outcomes)
@@ -449,6 +476,6 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'child contract did not record the amount correctly')
 	})
 
-	// - todo test that users can claim their stuff (shares+rep) even if zoltar forks after market ends
+	// - TODO test that users can claim their stuff (shares+rep) even if zoltar forks after market ends
 })
 

@@ -99,7 +99,7 @@ contract SecurityPool is ISecurityPool {
 		repToken.approve(address(zoltar), type(uint256).max);
 	}
 
-	function setStartingParams(uint256 _currentRetentionRate, uint256 _repEthPrice, uint256 _completeSetCollateralAmount) public {
+	function setStartingParams(uint256 _currentRetentionRate, uint256 _repEthPrice, uint256 _completeSetCollateralAmount) external {
 		require(msg.sender == address(securityPoolFactory), 'only callable by securityPoolFactory');
 		lastUpdatedFeeAccumulator = block.timestamp;
 		currentRetentionRate = _currentRetentionRate;
@@ -142,7 +142,7 @@ contract SecurityPool is ISecurityPool {
 		emit UpdateVaultFees(vault, securityVaults[vault].feeIndex, securityVaults[vault].unpaidEthFees);
 	}
 
-	function redeemFees(address vault) public {
+	function redeemFees(address vault) external {
 		uint256 fees = securityVaults[vault].unpaidEthFees;
 		securityVaults[vault].unpaidEthFees = 0;
 		totalFeesOwedToVaults -= fees;
@@ -155,7 +155,7 @@ contract SecurityPool is ISecurityPool {
 	// withdrawing rep
 	////////////////////////////////////////
 
-	function performWithdrawRep(address vault, uint256 repAmount) public isOperational onlyValidOracle {
+	function performWithdrawRep(address vault, uint256 repAmount) external isOperational onlyValidOracle {
 		uint256 ownershipToWithdraw = repToPoolOwnership(repAmount);
 		uint256 withdrawOwnership = ownershipToWithdraw + repToPoolOwnership(SecurityPoolUtils.MIN_REP_DEPOSIT) > securityVaults[vault].poolOwnership ? securityVaults[vault].poolOwnership : ownershipToWithdraw;
 		uint256 withdrawRepAmount = poolOwnershipToRep(withdrawOwnership);
@@ -187,7 +187,7 @@ contract SecurityPool is ISecurityPool {
 		return completeSetCollateralAmount == 0 ? (eth * SecurityPoolUtils.PRICE_PRECISION) : (eth * shareTokenSupply / completeSetCollateralAmount);
 	}
 
-	function depositRep(uint256 repAmount) public isOperational {
+	function depositRep(uint256 repAmount) external isOperational {
 		uint256 poolOwnership = repToPoolOwnership(repAmount);
 		repToken.transferFrom(msg.sender, address(this), repAmount);
 		securityVaults[msg.sender].poolOwnership += poolOwnership;
@@ -204,7 +204,7 @@ contract SecurityPool is ISecurityPool {
 	// price = REP * PRICE_PRECISION / ETH
 	// liquidation moves share of debt and rep to another pool which need to remain non-liquidable
 	// this is currently very harsh, as we steal all the rep and debt from the pool
-	function performLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount) public isOperational onlyValidOracle {
+	function performLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount) external isOperational onlyValidOracle {
 		updateVaultFees(targetVaultAddress);
 		updateVaultFees(callerVault);
 		uint256 vaultsSecurityBondAllowance = securityVaults[targetVaultAddress].securityBondAllowance;
@@ -235,7 +235,7 @@ contract SecurityPool is ISecurityPool {
 	// set security bond allowance
 	////////////////////////////////////////
 
-	function performSetSecurityBondsAllowance(address callerVault, uint256 amount) public isOperational onlyValidOracle {
+	function performSetSecurityBondsAllowance(address callerVault, uint256 amount) external isOperational onlyValidOracle {
 		updateVaultFees(callerVault);
 
 		uint256 oldAllowance = securityVaults[callerVault].securityBondAllowance;
@@ -254,7 +254,7 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 	// Complete Sets
 	////////////////////////////////////////
-	function createCompleteSet() payable public isOperational { // TODO, we want to be able to create complete sets in the children right away, figure accounting out
+	function createCompleteSet() payable external isOperational { // TODO, we want to be able to create complete sets in the children right away, figure accounting out
 		require(msg.value > 0, 'need to send eth');
 		updateCollateralAmount();
 		require(totalSecurityBondAllowance >= msg.value + completeSetCollateralAmount, 'no capacity to create that many sets');
@@ -266,7 +266,7 @@ contract SecurityPool is ISecurityPool {
 		updateRetentionRate();
 	}
 
-	function redeemCompleteSet(uint256 completeSetAmount) public isOperational { // TODO, we want to allow people to exit, but for accounting purposes that is difficult but maybe there's a way?
+	function redeemCompleteSet(uint256 completeSetAmount) external isOperational { // TODO, we want to allow people to exit, but for accounting purposes that is difficult but maybe there's a way?
 		updateCollateralAmount();
 		// takes in complete set and releases security bond and eth
 		uint256 ethValue = sharesToCash(completeSetAmount);
@@ -289,7 +289,7 @@ contract SecurityPool is ISecurityPool {
 		emit RedeemShares(msg.sender, amount, ethValue);
 	}
 
-	function redeemRep(address vault) public {
+	function redeemRep(address vault) external {
 		require(ISecurityPoolForker(securityPoolForker).getMarketOutcome(this) != YesNoMarkets.Outcome.None, 'Market has not finalized!');
 		updateVaultFees(vault);
 		uint256 repAmount = poolOwnershipToRep(securityVaults[vault].poolOwnership) - securityVaults[vault].lockedRepInEscalationGame;

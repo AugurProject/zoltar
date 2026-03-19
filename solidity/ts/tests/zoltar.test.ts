@@ -1,6 +1,6 @@
-import { describe, beforeEach, test } from 'node:test'
+import { test, beforeEach, describe } from 'bun:test'
 import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
-import { createWriteClient } from '../testsuite/simulator/utils/viem.js'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists } from '../testsuite/simulator/utils/utilities.js'
 import assert from 'node:assert'
@@ -9,20 +9,36 @@ import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays.js'
 import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
 import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
 import { ensureZoltarDeployed, forkerClaimRep, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed, splitRep } from '../testsuite/simulator/utils/contracts/zoltar.js'
+import { SimulationState } from '../testsuite/simulator/types/visualizerTypes.js'
+import { copySimulationState } from '../testsuite/simulator/SimulationModeEthereumClientService.js'
+
+// Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
+const FORKER_DEPOSIT_FRACTION = 20n
+const FORKER_BURN_FRACTION = 5n
 
 describe('Contract Test Suite', () => {
 	let mockWindow: MockWindowEthereum
+	let client: WriteClient
 	const genesisUniverse = 0n
 
+	let cachedSimulationState: SimulationState | undefined = undefined
+
 	beforeEach(async () => {
-		mockWindow = getMockedEthSimulateWindowEthereum()
-		mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse)))
-		await setupTestAccounts(mockWindow)
+		if (cachedSimulationState) {
+			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
+			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse)))
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		} else {
+			mockWindow = getMockedEthSimulateWindowEthereum()
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments(genesisUniverse)))
+			await setupTestAccounts(mockWindow)
+			await ensureZoltarDeployed(client)
+			cachedSimulationState = copySimulationState(mockWindow.getSimulationState()!)
+		}
 	})
 
 	test('canDeployContract', async () => {
-		const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		await ensureZoltarDeployed(client)
 		const isDeployed = await isZoltarDeployed(client)
 		assert.ok(isDeployed, `Not Deployed!`)
 
@@ -31,9 +47,7 @@ describe('Contract Test Suite', () => {
 	})
 
 	test('canForkQuestion', async () => {
-		const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await ensureZoltarDeployed(client)
 		const zoltar = getZoltarAddress()
 		const marketText = 'test market'
 		const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'] as const
@@ -53,7 +67,7 @@ describe('Contract Test Suite', () => {
 		// do fork
 		await forkUniverse(client, genesisUniverse, marketText, outcomes)
 		const afterForkBalance = await getERC20Balance(client, genesisRepToken, client.account.address)
-		assert.strictEqual(afterForkBalance + totalTheoreticalSupply/20n, priorRepbalance, 'balance mismatch')
+		assert.strictEqual(afterForkBalance + totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION, priorRepbalance, 'balance mismatch')
 		const universeData = await getUniverseData(client, genesisUniverse)
 		assert.ok(universeData.forkTime > 0, 'Universe was supposed to be forked')
 		assert.strictEqual(universeData.parentUniverseId, 0n, 'Universe had parent')
@@ -61,22 +75,22 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(universeData.reputationToken, genesisRepToken, 'Wrong rep token')
 		const universeForkData = await getUniverseForkData(client, genesisUniverse)
 		assert.strictEqual(universeForkData.forkedBy, client.account.address, 'We should have been the forker')
-		const forkerDeposit = totalTheoreticalSupply / 20n - totalTheoreticalSupply / 20n / 5n // 5% of supply minus 20% burn
+		const forkerDeposit = totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION - totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION / FORKER_BURN_FRACTION // 5% of supply minus 20% burn
 		assert.strictEqual(universeForkData.forkerRepDeposit, forkerDeposit, 'wrong deposit amount')
 		assert.strictEqual(universeForkData.forkingQuestionExtraInfo, marketText, 'Market text did not match')
 		assert.ok(areEqualArrays([...universeForkData.categories], [...outcomes]), 'Outcomes did not match')
-		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), forkerDeposit, 'forkers deposit should be in zoltar')
+		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), forkerDeposit, 'forker\'s deposit should be in zoltar')
 
 		// forker claim balance
 		const outcomeIndexes = [0n, 1n, 3n]
 		await forkerClaimRep(client, genesisUniverse, outcomeIndexes)
-		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), 0n, 'forkers deposit should be burned')
+		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), 0n, 'forker\'s deposit should be burned')
 		const universeForkDataAfterClaim = await getUniverseForkData(client, genesisUniverse)
 		assert.strictEqual(universeForkDataAfterClaim.forkerRepDeposit, 0n, 'deposit is gone')
 		for (const index of outcomeIndexes) {
 			const indexUniverse = getChildUniverseId(genesisUniverse, index)
 			const repForIndex = getRepTokenAddress(indexUniverse)
-			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ index } exists`);
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ index } exists`)
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, forkerDeposit)
 		}
@@ -90,11 +104,11 @@ describe('Contract Test Suite', () => {
 		}))
 		const priorSplitBalance = await getERC20Balance(client, genesisRepToken, client.account.address)
 		await splitRep(client, genesisUniverse, splitOutcomeIndexes)
-		assert.strictEqual(await getERC20Balance(client, genesisRepToken, client.account.address), 0n, 'splitters rep should be gone')
+		assert.strictEqual(await getERC20Balance(client, genesisRepToken, client.account.address), 0n, 'splitter\'s rep should be gone')
 		for (const [index, outcomeIndex] of splitOutcomeIndexes.entries()) {
 			const indexUniverse = getChildUniverseId(genesisUniverse, outcomeIndex)
 			const repForIndex = getRepTokenAddress(indexUniverse)
-			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ outcomeIndex } exists`);
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ outcomeIndex } exists`)
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, priorSplitBalance + priorBalances[index], 'after split balance mismatch')
 		}

@@ -39,12 +39,12 @@ contract Auction {
 		emit AuctionStarted(ethAmountToBuy, repAvailable);
 	}
 
-	function finalizeAuction(address receiver) public {
+	function finalizeAuction(address payable receiver) public {
 		//require(block.timestamp > auctionStarted + AUCTION_TIME, 'Auction needs to have ended first'); // caller checks
 		require(msg.sender == owner, 'Only owner can finalize');
 		require(!finalized, 'Already finalized');
 		finalized = true;
-		(bool sent, ) = payable(receiver).call{value: address(this).balance}('');
+		(bool sent, ) = receiver.call{value: address(this).balance}('');
 		require(sent, 'failed to send Ether');
 	}
 }

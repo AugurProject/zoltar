@@ -33,13 +33,13 @@ export const finalize = async (client: WriteClient, auctionAddress: `0x${ string
 }
 
 export const computeClearing = async (client: ReadClient, auctionAddress: `0x${ string }`) => {
-	const [priceFound, foundTick, repAbove, ethAbove] = await client.readContract({
+	const [priceFound, foundTick, accumulatedEth] = await client.readContract({
 		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
 		functionName: 'computeClearing',
 		address: auctionAddress,
 		args: [],
 	})
-	return { priceFound, foundTick, repAbove, ethAbove }
+	return { priceFound, foundTick, accumulatedEth }
 }
 
 export const refundLosingBids = async (client: WriteClient, auctionAddress: `0x${ string }`, tickIndex: readonly { tick: bigint, bidIndex: bigint }[]) => {
@@ -60,7 +60,7 @@ export const withdrawBids = async (client: WriteClient, auctionAddress: `0x${ st
 	})
 }
 
-export const getWithdrawRepAndEthAmount = async (client: WriteClient, auctionAddress: `0x${ string }`, withdrawFor: `0x${ string }`, tickIndex: readonly { tick: bigint, bidIndex: bigint }[]) => {
+export const simulateWithdrawBids = async (client: ReadClient, auctionAddress: `0x${ string }`, withdrawFor: `0x${ string }`, tickIndex: readonly { tick: bigint, bidIndex: bigint }[]) => {
 	const [totalFilledRep, totalEthRefund] = (await client.simulateContract({
 		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
 		functionName: 'withdrawBids',
@@ -88,10 +88,37 @@ export const deployDualCapBatchAuction = async (client: WriteClient, owner: `0x$
 	})
 }
 
-export const getRepFilledAtClearing = async (client: ReadClient, auctionAddress: `0x${ string }`) => {
+export const getClearingTick = async (client: ReadClient, auctionAddress: `0x${ string }`) => {
 	return await client.readContract({
 		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
-		functionName: 'repFilledAtClearing',
+		functionName: 'clearingTick',
+		address: auctionAddress,
+		args: [],
+	})
+}
+
+export const getMinBidSize = async (client: ReadClient, auctionAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+		functionName: 'minBidSize',
+		address: auctionAddress,
+		args: [],
+	})
+}
+
+export const getEthRaiseCap = async (client: ReadClient, auctionAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+		functionName: 'ethRaiseCap',
+		address: auctionAddress,
+		args: [],
+	})
+}
+
+export const getEthRaised = async (client: ReadClient, auctionAddress: `0x${ string }`) => {
+	return await client.readContract({
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+		functionName: 'ethRaised',
 		address: auctionAddress,
 		args: [],
 	})

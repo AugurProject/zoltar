@@ -60,9 +60,10 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Moc
 	const openOracle = getInfraContractAddresses().openOracle
 	await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
 	await approveToken(client, WETH_ADDRESS, openOracle)
+	const wethBalanceBefore = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
 	await wrapWeth(client, amount2)
 	const wethBalance = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
-	assert.strictEqual(wethBalance, amount2, 'Did not wrap weth')
+	assert.strictEqual(wethBalance - wethBalanceBefore, amount2, 'Did not wrap correct amount of weth')
 
 	const stateHash = (await getOpenOracleExtraData(client, pendingReportId)).stateHash
 	await openOracleSubmitInitialReport(client, pendingReportId, amount1, amount2, stateHash)

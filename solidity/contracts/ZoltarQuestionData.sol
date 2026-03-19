@@ -37,7 +37,7 @@ contract ZoltarQuestionData {
 			for (uint256 index = 0; index < outcomeOptions.length; index++) {
 				require(bytes(outcomeOptions[index]).length > 0, 'Empty string');
 			}
-			outcomeLabels[questionId] = outcomeOptions; //todo, check that these are unique?
+			outcomeLabels[questionId] = outcomeOptions; //TODO, check that these are unique?
 		}
 		questions[questionId] = questionData;
 		questionCreatedTimestamp[questionId] = block.timestamp;
@@ -66,20 +66,23 @@ contract ZoltarQuestionData {
 		}
 	}
 
-	function isValidAnswerOption(uint256 questionId, uint256 answer) external view returns (bool) {
+	function isMalformedAnswerOption(uint256 questionId, uint256 answer) external view returns (bool) {
 		if (outcomeLabels[questionId].length == 0) { // scalar
 			(bool invalid, uint120 firstPart, uint120 secondPart) = splitUint256IntoTwoWithInvalid(answer);
 			if (invalid) {
-				if (firstPart == 0 && secondPart == 0) return true;
-				return false;
+				if (firstPart == 0 && secondPart == 0) return false;
+				return true;
 			}
-			return firstPart + secondPart == questions[questionId].numTicks;
+			// When invalid=false (high bit set), malformed iff sum != numTicks
+			// Use uint256 for addition to prevent overflow when numTicks > 2^120
+			uint256 sum = uint256(firstPart) + uint256(secondPart);
+			return sum != questions[questionId].numTicks;
 		}
-		if (answer == 0) return true;
+		if (answer == 0) return false;
 		if (answer < outcomeLabels[questionId].length + 1) { // categorical
-			return true;
+			return false;
 		}
-		return false;
+		return true;
 	}
 
 	function getAnswerOptionName(uint256 questionId, uint256 answer) external view returns (string memory) {
@@ -89,7 +92,9 @@ contract ZoltarQuestionData {
 				if (firstPart == 0 && secondPart == 0) return 'Invalid';
 				return 'Malformed';
 			}
-			if (firstPart + secondPart == questions[questionId].numTicks) {
+			// Use uint256 for addition to prevent overflow when numTicks > 2^120
+			uint256 sum = uint256(firstPart) + uint256(secondPart);
+			if (sum == questions[questionId].numTicks) {
 				return ScalarOutcomes.getScalarOutcomeName([firstPart, secondPart], questions[questionId].answerUnit, questions[questionId].numTicks, questions[questionId].displayValueMin, questions[questionId].displayValueMax);
 			}
 		}

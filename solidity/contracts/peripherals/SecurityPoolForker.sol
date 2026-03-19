@@ -12,7 +12,7 @@ import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
 
-//todo, move mappings outside the struct
+//TODO, move mappings outside the struct
 struct ForkData {
 	uint256 repAtFork;
 	mapping(uint8 => ISecurityPool) children; // outcome -> children
@@ -182,16 +182,25 @@ contract SecurityPoolForker is ISecurityPoolForker {
 
 	function _finalizeTruthAuction(ISecurityPool securityPool, uint256 repPurchased) private {
 		require(securityPool.systemState() == SystemState.ForkTruthAuction, 'Auction needs to have started');
-		forkData[securityPool].truthAuction.finalizeAuction(address(securityPool)); // this sends the eth back
+		forkData[securityPool].truthAuction.finalizeAuction(payable(securityPool)); // this sends the eth back
 		securityPool.setSystemState(SystemState.Operational);
 		ISecurityPool parent = securityPool.parent();
 		uint256 repAvailable = forkData[parent].repAtFork;
-		securityPool.setCompleteSetCollateralAmount(address(securityPool).balance - securityPool.totalFeesOwedToVaults()); //todo, we might want to reduce fees if we didn't get fully funded?
+		uint256 balance = address(securityPool).balance;
+		uint256 feesOwed = securityPool.totalFeesOwedToVaults();
+		uint256 collateralAmount = balance >= feesOwed ? balance - feesOwed : 0;
+		securityPool.setCompleteSetCollateralAmount(collateralAmount); // If underfunded, collateral is 0
 		uint256 parentTotalSecurityBondAllowance = parent.totalSecurityBondAllowance();
 		forkData[securityPool].auctionedSecurityBondAllowance = parentTotalSecurityBondAllowance - securityPool.totalSecurityBondAllowance();
 		securityPool.setTotalSecurityBondAllowance(parentTotalSecurityBondAllowance);
 		if (repAvailable > 0) {
-			securityPool.setPoolOwnershipDenominator(forkData[securityPool].migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / (repAvailable - repPurchased));
+			uint256 denominator = repAvailable - repPurchased;
+			if (denominator > 0) {
+				securityPool.setPoolOwnershipDenominator(forkData[securityPool].migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / denominator);
+			} else {
+				// All rep purchased; avoid division by zero by using repAvailable directly
+				securityPool.setPoolOwnershipDenominator(repAvailable * SecurityPoolUtils.PRICE_PRECISION);
+			}
 		}
 		if (securityPool.poolOwnershipDenominator() == 0) { // wipe all rep holders in vaults
 			securityPool.setPoolOwnershipDenominator(repAvailable * SecurityPoolUtils.PRICE_PRECISION);

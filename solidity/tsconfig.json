@@ -1,8 +1,8 @@
 {
 	"compilerOptions": {
 		"target": "ESNext",
-		"module": "NodeNext",
-		"moduleResolution": "NodeNext",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
 		"rootDir": "ts",
 		"outDir": "js",
 		"sourceMap": false,
@@ -17,8 +17,8 @@
 		"noFallthroughCasesInSwitch": true,
 		"esModuleInterop": true,
 		"lib": ["ESNext", "DOM"],
-		"typeRoots": ["../node_modules/@types", "./ts/types"],
-		"types": [ "node" ],
+		"types": ["node", "bun-types"],
+		"skipLibCheck": true
 	},
 	"include": [
 		"./ts/**/*.ts",
