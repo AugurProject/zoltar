@@ -171,7 +171,7 @@ export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOper
 		args: [],
 	})
 
-export const participateAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, repToBuy: bigint, ethToInvest: bigint) => {
+export const participateAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, repToBuy: bigint, ethToInvest: bigint): Promise<bigint> => {
 	if (repToBuy === 0n) {
 		throw new Error('repToBuy cannot be zero')
 	}
@@ -185,6 +185,7 @@ export const participateAuction = async (client: WriteClient, auctionAddress: `0
 		args: [tick],
 		value: ethToInvest,
 	})
+	return tick
 }
 export const getEthRaiseCap = async (client: ReadClient, auctionAddress: `0x${ string }`) =>
 	await client.readContract({
