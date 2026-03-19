@@ -1,9 +1,9 @@
-import { EIP1193Provider } from 'viem'
 import { dateToBigintSeconds } from './utils/bigint'
 import { EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes } from './types/wire-types'
 import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types'
 import * as funtypes from 'funtypes'
 import { ensureDefined } from './utils/testUtils'
+import { ensureArray } from './utils/typed-arrays'
 
 type BlockTimeManipulation = { readonly type: 'AddToTimestamp'; readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp'; readonly timeToSet: EthereumQuantity }
 
@@ -19,7 +19,7 @@ const GetBlockReturn = funtypes.Union(EthereumBlockHeader, EthereumBlockHeaderWi
 
 type StateOverrides = Readonly<Record<string, AccountOverride>>
 
-export interface AnvilWindowEthereum extends EIP1193Provider {
+export interface AnvilWindowEthereum {
 	addStateOverrides: (stateOverrides: StateOverrides) => Promise<void>
 	manipulateTime: (blockTimeManipulation: BlockTimeManipulation) => Promise<void>
 	getTime: () => Promise<bigint>
@@ -30,6 +30,9 @@ export interface AnvilWindowEthereum extends EIP1193Provider {
 	setBalance: (address: string, amount: bigint) => Promise<void>
 	anvilSnapshot: () => Promise<string>
 	anvilRevert: (snapshotId: string) => Promise<void>
+	request: (args: { method: string; params?: unknown }) => Promise<unknown>
+	on: () => void
+	removeListener: () => void
 }
 
 export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowEthereum> => {
@@ -54,12 +57,13 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 
 	// Make JSON-RPC request to Anvil
 	let requestId = 0
-	const request = async (args: { method: string; params?: unknown[] }): Promise<unknown> => {
+	const request = async (args: { method: string; params?: unknown[] | unknown | undefined }): Promise<unknown> => {
 		// For eth_sendTransaction, simulate first to catch reverts early
-		if (args.method === 'eth_sendTransaction' && args.params?.[0]) {
+		const params = ensureArray(args.params)
+		if (args.method === 'eth_sendTransaction' && params[0]) {
 			try {
 				// Simulate the transaction with eth_call (readonly) to see if it would revert
-				await request({ method: 'eth_call', params: [args.params[0], 'latest'] })
+				await request({ method: 'eth_call', params: [params[0], 'latest'] })
 			} catch (simulationError: unknown) {
 				// Simulation failed, so the transaction would revert - throw the same error
 				throw simulationError
@@ -222,9 +226,7 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 	}
 
 	const mock: AnvilWindowEthereum = {
-		async request(args: { method: string; params?: unknown[] }): Promise<unknown> {
-			return await request(args)
-		},
+		request,
 		on: () => {},
 		removeListener: () => {},
 		addStateOverrides,
