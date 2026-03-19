@@ -43,33 +43,37 @@ export const getQuestionData = async (client: ReadClient, questionId: bigint) =>
 	return { questionId, title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit }
 }
 
-export const getQuestionId = async (client: ReadClient, questionData: QuestionData, outcomeLabels: string[]) => await client.readContract({
-	abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-	functionName: 'getQuestionId',
-	address: getInfraContractAddresses().zoltarQuestionData,
-	args: [questionData, outcomeLabels],
-})
+export const getQuestionId = async (client: ReadClient, questionData: QuestionData, outcomeLabels: string[]) =>
+	await client.readContract({
+		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+		functionName: 'getQuestionId',
+		address: getInfraContractAddresses().zoltarQuestionData,
+		args: [questionData, outcomeLabels],
+	})
 
-export const createQuestion = async (client: WriteClient, questionData: QuestionData, outcomeLabels: string[]) => await client.writeContract({
-	abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-	functionName: 'createQuestion',
-	address: getInfraContractAddresses().zoltarQuestionData,
-	args: [questionData, outcomeLabels],
-})
+export const createQuestion = async (client: WriteClient, questionData: QuestionData, outcomeLabels: string[]) =>
+	await client.writeContract({
+		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+		functionName: 'createQuestion',
+		address: getInfraContractAddresses().zoltarQuestionData,
+		args: [questionData, outcomeLabels],
+	})
 
-export const isMalformedAnswerOption = async (client: ReadClient, questionId: bigint, answer: bigint) => await client.readContract({
-	abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-	functionName: 'isMalformedAnswerOption',
-	address: getInfraContractAddresses().zoltarQuestionData,
-	args: [questionId, answer],
-})
+export const isMalformedAnswerOption = async (client: ReadClient, questionId: bigint, answer: bigint) =>
+	await client.readContract({
+		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+		functionName: 'isMalformedAnswerOption',
+		address: getInfraContractAddresses().zoltarQuestionData,
+		args: [questionId, answer],
+	})
 
-export const getAnswerOptionName = async (client: ReadClient, questionId: bigint, answer: bigint) => await client.readContract({
-	abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-	functionName: 'getAnswerOptionName',
-	address: getInfraContractAddresses().zoltarQuestionData,
-	args: [questionId, answer],
-})
+export const getAnswerOptionName = async (client: ReadClient, questionId: bigint, answer: bigint) =>
+	await client.readContract({
+		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+		functionName: 'getAnswerOptionName',
+		address: getInfraContractAddresses().zoltarQuestionData,
+		args: [questionId, answer],
+	})
 
 export const combineUint256FromTwoWithInvalid = (invalid: boolean, firstPart: bigint, secondPart: bigint): bigint => {
 	const PART_BIT_LENGTH = 120n

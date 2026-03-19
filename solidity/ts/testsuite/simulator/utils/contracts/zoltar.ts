@@ -57,19 +57,21 @@ export const getUniverseForkData = async (client: ReadClient, universeId: bigint
 	return { forkingQuestionExtraInfo, forkedBy, forkerRepDeposit, categories }
 }
 
-export const forkUniverse = async (client: WriteClient, universeId: bigint, extraInfo: string, questionCategories: readonly [string, string, string, string]) => await client.writeContract({
-	abi: Zoltar_Zoltar.abi,
-	functionName: 'forkUniverse',
-	address: getZoltarAddress(),
-	args: [universeId, extraInfo, questionCategories],
-})
+export const forkUniverse = async (client: WriteClient, universeId: bigint, extraInfo: string, questionCategories: readonly [string, string, string, string]) =>
+	await client.writeContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'forkUniverse',
+		address: getZoltarAddress(),
+		args: [universeId, extraInfo, questionCategories],
+	})
 
-export const splitRep = async (client: WriteClient, universeId: bigint, outcomeIndexes: bigint[]) => await client.writeContract({
-	abi: Zoltar_Zoltar.abi,
-	functionName: 'splitRep',
-	address: getZoltarAddress(),
-	args: [universeId, outcomeIndexes.map(index => Number(index))],
-})
+export const splitRep = async (client: WriteClient, universeId: bigint, outcomeIndexes: bigint[]) =>
+	await client.writeContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'splitRep',
+		address: getZoltarAddress(),
+		args: [universeId, outcomeIndexes.map(index => Number(index))],
+	})
 
 export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0x${ string }`) {
 	return await client.readContract({
@@ -80,12 +82,13 @@ export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0
 	})
 }
 
-export const forkerClaimRep = async (client: WriteClient, universeId: bigint, outcomeindexes: bigint[]) => await client.writeContract({
-	abi: Zoltar_Zoltar.abi,
-	functionName: 'forkerClaimRep',
-	address: getZoltarAddress(),
-	args: [universeId, outcomeindexes.map(x => Number(x))],
-})
+export const forkerClaimRep = async (client: WriteClient, universeId: bigint, outcomeindexes: bigint[]) =>
+	await client.writeContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'forkerClaimRep',
+		address: getZoltarAddress(),
+		args: [universeId, outcomeindexes.map(x => Number(x))],
+	})
 
 export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
 	if (universeId === 0n) return getAddress(addressString(GENESIS_REPUTATION_TOKEN))
@@ -97,9 +100,10 @@ export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
 	return getCreate2Address({ from: getZoltarAddress(), salt: bytes32String(universeId), bytecodeHash: keccak256(initCode) })
 }
 
-export const getZoltarForkThreshold = async (client: ReadClient, universeId: bigint) => await client.readContract({
-	abi: Zoltar_Zoltar.abi,
-	functionName: 'getForkThreshold',
-	address: getZoltarAddress(),
-	args: [universeId],
-})
+export const getZoltarForkThreshold = async (client: ReadClient, universeId: bigint) =>
+	await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'getForkThreshold',
+		address: getZoltarAddress(),
+		args: [universeId],
+	})

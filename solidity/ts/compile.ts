@@ -29,7 +29,7 @@ const AbiParameter: funtypes.Runtype<{
 		internalType: funtypes.String,
 		indexed: funtypes.Boolean,
 		components: funtypes.ReadonlyArray(AbiParameter),
-	})
+	}),
 )
 
 const AbiEntry = funtypes.ReadonlyPartial({

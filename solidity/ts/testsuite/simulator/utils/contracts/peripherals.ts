@@ -35,12 +35,13 @@ export const requestPrice = async (client: WriteClient, priceOracleManagerAndOpe
 	})
 }
 
-export const getPendingReportId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => (await client.readContract({
-	abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-	functionName: 'pendingReportId',
-	address: priceOracleManagerAndOperatorQueuer,
-	args: [],
-}))
+export const getPendingReportId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) =>
+	await client.readContract({
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+		functionName: 'pendingReportId',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
 
 interface ExtraReportData {
 	stateHash: `0x${ string }`
@@ -77,27 +78,30 @@ export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bi
 	}
 }
 
-export const openOracleSubmitInitialReport = async (client: WriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: `0x${ string }`) => await client.writeContract({
-	abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-	functionName: 'submitInitialReport',
-	address: getInfraContractAddresses().openOracle,
-	args: [reportId, amount1, amount2, stateHash],
-})
+export const openOracleSubmitInitialReport = async (client: WriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: `0x${ string }`) =>
+	await client.writeContract({
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+		functionName: 'submitInitialReport',
+		address: getInfraContractAddresses().openOracle,
+		args: [reportId, amount1, amount2, stateHash],
+	})
 
-export const openOracleSettle = async (client: WriteClient, reportId: bigint) => await client.writeContract({
-	abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-	functionName: 'settle',
-	address: getInfraContractAddresses().openOracle,
-	gas: 5_000_000n, //needed because of gas() opcode being used
-	args: [reportId],
-})
+export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
+	await client.writeContract({
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+		functionName: 'settle',
+		address: getInfraContractAddresses().openOracle,
+		gas: 5_000_000n, //needed because of gas() opcode being used
+		args: [reportId],
+	})
 
-export const getRequestPriceEthCost = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => await client.readContract({
-	abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-	functionName: 'getRequestPriceEthCost',
-	address: priceOracleManagerAndOperatorQueuer,
-	args: [],
-})
+export const getRequestPriceEthCost = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) =>
+	await client.readContract({
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+		functionName: 'getRequestPriceEthCost',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
 
 export const wrapWeth = async (client: WriteClient, amount: bigint) => {
 	const wethAbi = [
@@ -158,33 +162,37 @@ export const getOpenOracleReportMeta = async (client: ReadClient, reportId: bigi
 	}
 }
 
-export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => (await client.readContract({
-	abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-	functionName: 'lastPrice',
-	address: priceOracleManagerAndOperatorQueuer,
-	args: [],
-}))
+export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) =>
+	await client.readContract({
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+		functionName: 'lastPrice',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
 
-export const participateAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, repToBuy: bigint, ethToInvest: bigint) => await client.writeContract({
-	abi: peripherals_Auction_Auction.abi,
-	functionName: 'participate',
-	address: auctionAddress,
-	args: [repToBuy],
-	value: ethToInvest,
-})
-export const getEthAmountToBuy = async (client: ReadClient, auctionAddress: `0x${ string }`) => await client.readContract({
-	abi: peripherals_Auction_Auction.abi,
-	functionName: 'ethAmountToBuy',
-	address: auctionAddress,
-	args: [],
-})
+export const participateAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, repToBuy: bigint, ethToInvest: bigint) =>
+	await client.writeContract({
+		abi: peripherals_Auction_Auction.abi,
+		functionName: 'participate',
+		address: auctionAddress,
+		args: [repToBuy],
+		value: ethToInvest,
+	})
+export const getEthAmountToBuy = async (client: ReadClient, auctionAddress: `0x${ string }`) =>
+	await client.readContract({
+		abi: peripherals_Auction_Auction.abi,
+		functionName: 'ethAmountToBuy',
+		address: auctionAddress,
+		args: [],
+	})
 
-export const balanceOfShares = async (client: ReadClient, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`) => await client.readContract({
-	abi: peripherals_tokens_ShareToken_ShareToken.abi,
-	functionName: 'balanceOfShares',
-	address: shareTokenAddress,
-	args: [universeId, account],
-})
+export const balanceOfShares = async (client: ReadClient, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`) =>
+	await client.readContract({
+		abi: peripherals_tokens_ShareToken_ShareToken.abi,
+		functionName: 'balanceOfShares',
+		address: shareTokenAddress,
+		args: [universeId, account],
+	})
 
 export const balanceOfSharesInCash = async (client: ReadClient, securityPoolAddress: `0x${ string }`, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`) => {
 	const array = await client.readContract({
@@ -201,16 +209,18 @@ const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => {
 	return ((universeId & universeMask) << 8n) | (BigInt(outcome) & 255n)
 }
 
-export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x${ string }`, fromUniverseId: bigint, outcome: QuestionOutcome, outcomes: bigint[]) => await client.writeContract({
-	abi: peripherals_tokens_ShareToken_ShareToken.abi,
-	functionName: 'migrate',
-	address: shareTokenAddress,
-	args: [getTokenId(fromUniverseId, outcome), outcomes.map(x => Number(x))],
-})
+export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x${ string }`, fromUniverseId: bigint, outcome: QuestionOutcome, outcomes: bigint[]) =>
+	await client.writeContract({
+		abi: peripherals_tokens_ShareToken_ShareToken.abi,
+		functionName: 'migrate',
+		address: shareTokenAddress,
+		args: [getTokenId(fromUniverseId, outcome), outcomes.map(x => Number(x))],
+	})
 
-export const getMarketEndDate = async (client: ReadClient, marketId: bigint) => await client.readContract({
-	abi: peripherals_YesNoMarkets_YesNoMarkets.abi,
-	functionName: 'getMarketEndDate',
-	address: getInfraContractAddresses().yesNoMarkets,
-	args: [marketId],
-})
+export const getMarketEndDate = async (client: ReadClient, marketId: bigint) =>
+	await client.readContract({
+		abi: peripherals_YesNoMarkets_YesNoMarkets.abi,
+		functionName: 'getMarketEndDate',
+		address: getInfraContractAddresses().yesNoMarkets,
+		args: [marketId],
+	})

@@ -5,7 +5,7 @@ import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantityS
 import * as funtypes from 'funtypes'
 import { ensureDefined } from './utils/testUtils'
 
-type BlockTimeManipulation = { readonly type: 'AddToTimestamp', readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp', readonly timeToSet: EthereumQuantity }
+type BlockTimeManipulation = { readonly type: 'AddToTimestamp'; readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp'; readonly timeToSet: EthereumQuantity }
 
 type AccountOverride = {
 	readonly stateDiff?: Readonly<Record<string, EthereumBytes32>>
@@ -41,11 +41,7 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 			const parsed = new URL(url)
 			const allowedHosts = ['localhost', '127.0.0.1', '::1', 'host.docker.internal']
 			if (!allowedHosts.includes(parsed.hostname)) {
-				throw new Error(
-					`ANVIL_RPC points to unauthorized host '${ parsed.hostname }'. ` +
-					`Test RPC endpoints must be localhost (localhost, 127.0.0.1, ::1, host.docker.internal). ` +
-					`Set ANVIL_RPC to a local Anvil instance.`
-				)
+				throw new Error(`ANVIL_RPC points to unauthorized host '${ parsed.hostname }'. ` + `Test RPC endpoints must be localhost (localhost, 127.0.0.1, ::1, host.docker.internal). ` + `Set ANVIL_RPC to a local Anvil instance.`)
 			}
 		} catch (error) {
 			if (error instanceof Error && error.message.includes('unauthorized')) {
@@ -226,7 +222,7 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 	}
 
 	const mock: AnvilWindowEthereum = {
-		async request(args: any): Promise<any> {
+		async request(args: { method: string; params?: unknown[] }): Promise<unknown> {
 			return await request(args)
 		},
 		on: () => {},

@@ -106,13 +106,13 @@ const TimestampParser: funtypes.ParsedValue<funtypes.String, Date>['config'] = {
 	parse: value => {
 		if (!/^0x([a-fA-F0-9]{0,8})$/.test(value)) return { success: false, message: `${ value } is not a hex string encoded timestamp.` }
 		const seconds = BigInt(value)
-		if (seconds < 0n || seconds > 0xFFFFFFFFn) return { success: false, message: `${ value } is out of 32-bit unsigned timestamp range.` }
+		if (seconds < 0n || seconds > 0xffffffffn) return { success: false, message: `${ value } is out of 32-bit unsigned timestamp range.` }
 		return { success: true, value: new Date(Number.parseInt(value, 16) * 1000) }
 	},
 	serialize: value => {
 		if (!(value instanceof Date)) return { success: false, message: `${ typeof value } is not a Date.` }
 		const seconds = Math.floor(value.valueOf() / 1000)
-		if (seconds < 0 || seconds > 0xFFFFFFFF) return { success: false, message: `Timestamp ${ value } is out of 32-bit unsigned range.` }
+		if (seconds < 0 || seconds > 0xffffffff) return { success: false, message: `Timestamp ${ value } is out of 32-bit unsigned range.` }
 		return { success: true, value: `0x${ seconds.toString(16) }` }
 	},
 }

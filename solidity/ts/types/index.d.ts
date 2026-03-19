@@ -9,7 +9,7 @@ declare module 'solc' {
 	}
 	interface CompilerInput {
 		readonly language: 'Solidity' | 'serpent' | 'lll' | 'assembly'
-		readonly settings?: any
+		readonly settings?: Record<string, unknown>
 		readonly sources: {
 			readonly [globalName: string]: CompilerInputSourceFile | CompilerInputSourceCode
 		}
@@ -41,18 +41,18 @@ declare module 'solc' {
 	interface CompilerOutputSources {
 		readonly [globalName: string]: {
 			readonly id: number
-			readonly ast: any
-			readonly legacyAST: any
+			readonly ast: unknown
+			readonly legacyAST: unknown
 		}
 	}
 	interface CompilerOutputContract {
 		readonly metadata?: string
-		readonly userdoc?: any
-		readonly devdoc?: any
+		readonly userdoc?: unknown
+		readonly devdoc?: unknown
 		readonly ir?: string
 		readonly evm: {
 			readonly assembly?: string
-			readonly legacyAssembly?: any
+			readonly legacyAssembly?: unknown
 			readonly bytecode: CompilerOutputEvmBytecode
 			readonly deployedBytecode?: CompilerOutputEvmBytecode
 			readonly methodIdentifiers?: {

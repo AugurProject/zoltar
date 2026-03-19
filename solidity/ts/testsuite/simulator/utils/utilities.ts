@@ -54,12 +54,13 @@ export const approveToken = async (client: WriteClient, tokenAddress: Address, s
 	})
 }
 
-export const getERC20Balance = async (client: ReadClient, tokenAddress: Address, ownerAddress: Address) => await client.readContract({
-	abi: ABIS.mainnet.erc20,
-	functionName: 'balanceOf',
-	address: tokenAddress,
-	args: [ownerAddress],
-})
+export const getERC20Balance = async (client: ReadClient, tokenAddress: Address, ownerAddress: Address) =>
+	await client.readContract({
+		abi: ABIS.mainnet.erc20,
+		functionName: 'balanceOf',
+		address: tokenAddress,
+		args: [ownerAddress],
+	})
 
 export const getETHBalance = async (client: ReadClient, address: Address) => await client.getBalance({ address })
 

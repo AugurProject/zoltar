@@ -1,4 +1,3 @@
-
 export function areEqualArrays<T>(first: T[], second: T[]) {
 	if (first === second) return true
 	if (first.length !== second.length) return false
@@ -7,4 +6,3 @@ export function areEqualArrays<T>(first: T[], second: T[]) {
 	}
 	return true
 }
-

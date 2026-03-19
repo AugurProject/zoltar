@@ -25,44 +25,51 @@ export const applyLibraries = (bytecode: string): `0x${ string }` => {
 	return `0x${ updatedBytecode }`
 }
 
-const getSecurityPoolForkerByteCode = (zoltar: `0x${ string }`) => encodeDeployData({
-	abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-	bytecode: applyLibraries(peripherals_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),
-	args: [zoltar],
-})
+const getSecurityPoolForkerByteCode = (zoltar: `0x${ string }`) =>
+	encodeDeployData({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		bytecode: applyLibraries(peripherals_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),
+		args: [zoltar],
+	})
 
-const getSecurityPoolFactoryByteCode = (securityPoolForker: `0x${ string }`, yesNoMarkets: `0x${ string }`, escalationGameFactory: `0x${ string }`, openOracle: `0x${ string }`, zoltar: `0x${ string }`, shareTokenFactory: `0x${ string }`, auctionFactory: `0x${ string }`, priceOracleManagerAndOperatorQueuerFactory: `0x${ string }`) => encodeDeployData({
-	abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-	bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
-	args: [securityPoolForker, yesNoMarkets, escalationGameFactory, openOracle, zoltar, shareTokenFactory, auctionFactory, priceOracleManagerAndOperatorQueuerFactory],
-})
+const getSecurityPoolFactoryByteCode = (securityPoolForker: `0x${ string }`, yesNoMarkets: `0x${ string }`, escalationGameFactory: `0x${ string }`, openOracle: `0x${ string }`, zoltar: `0x${ string }`, shareTokenFactory: `0x${ string }`, auctionFactory: `0x${ string }`, priceOracleManagerAndOperatorQueuerFactory: `0x${ string }`) =>
+	encodeDeployData({
+		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+		bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
+		args: [securityPoolForker, yesNoMarkets, escalationGameFactory, openOracle, zoltar, shareTokenFactory, auctionFactory, priceOracleManagerAndOperatorQueuerFactory],
+	})
 
-const getSecurityPoolFactoryAddress = (securityPoolForker: `0x${ string }`, yesNoMarkets: `0x${ string }`, escalationGameFactory: `0x${ string }`, openOracle: `0x${ string }`, zoltar: `0x${ string }`, shareTokenFactory: `0x${ string }`, auctionFactory: `0x${ string }`, priceOracleManagerAndOperatorQueuerFactory: `0x${ string }`) => getCreate2Address({
-	from: addressString(PROXY_DEPLOYER_ADDRESS),
-	salt: numberToBytes(0),
-	bytecode: getSecurityPoolFactoryByteCode(securityPoolForker, yesNoMarkets, escalationGameFactory, openOracle, zoltar, shareTokenFactory, auctionFactory, priceOracleManagerAndOperatorQueuerFactory),
-})
+const getSecurityPoolFactoryAddress = (securityPoolForker: `0x${ string }`, yesNoMarkets: `0x${ string }`, escalationGameFactory: `0x${ string }`, openOracle: `0x${ string }`, zoltar: `0x${ string }`, shareTokenFactory: `0x${ string }`, auctionFactory: `0x${ string }`, priceOracleManagerAndOperatorQueuerFactory: `0x${ string }`) =>
+	getCreate2Address({
+		from: addressString(PROXY_DEPLOYER_ADDRESS),
+		salt: numberToBytes(0),
+		bytecode: getSecurityPoolFactoryByteCode(securityPoolForker, yesNoMarkets, escalationGameFactory, openOracle, zoltar, shareTokenFactory, auctionFactory, priceOracleManagerAndOperatorQueuerFactory),
+	})
 
-const getShareTokenFactoryByteCode = (zoltar: `0x${ string }`) => encodeDeployData({
-	abi: peripherals_factories_ShareTokenFactory_ShareTokenFactory.abi,
-	bytecode: `0x${ peripherals_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object }`,
-	args: [zoltar],
-})
+const getShareTokenFactoryByteCode = (zoltar: `0x${ string }`) =>
+	encodeDeployData({
+		abi: peripherals_factories_ShareTokenFactory_ShareTokenFactory.abi,
+		bytecode: `0x${ peripherals_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object }`,
+		args: [zoltar],
+	})
 
-const getYesNoMarketsByteCode = () => encodeDeployData({
-	abi: peripherals_YesNoMarkets_YesNoMarkets.abi,
-	bytecode: `0x${ peripherals_YesNoMarkets_YesNoMarkets.evm.bytecode.object }`,
-})
+const getYesNoMarketsByteCode = () =>
+	encodeDeployData({
+		abi: peripherals_YesNoMarkets_YesNoMarkets.abi,
+		bytecode: `0x${ peripherals_YesNoMarkets_YesNoMarkets.evm.bytecode.object }`,
+	})
 
-const getEscalationGameFactoryByteCode = () => encodeDeployData({
-	abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
-	bytecode: `0x${ peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object }`,
-})
+const getEscalationGameFactoryByteCode = () =>
+	encodeDeployData({
+		abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
+		bytecode: `0x${ peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object }`,
+	})
 
-const getZoltarQuestionDataByteCode = () => encodeDeployData({
-	abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-	bytecode: applyLibraries(ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object),
-})
+const getZoltarQuestionDataByteCode = () =>
+	encodeDeployData({
+		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+		bytecode: applyLibraries(ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object),
+	})
 
 export function getInfraContractAddresses() {
 	const getAddress = (bytecode: `0x${ string }`) => getCreate2Address({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
@@ -212,10 +219,10 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 			BigInt(parent) === 0n
 				? zeroAddress
 				: getCreate2Address({
-					bytecode: `0x${ peripherals_Auction_Auction.evm.bytecode.object }`,
-					from: infraContracts.auctionFactory,
-					salt: securityPoolSaltWithMsgSender,
-				}),
+						bytecode: `0x${ peripherals_Auction_Auction.evm.bytecode.object }`,
+						from: infraContracts.auctionFactory,
+						salt: securityPoolSaltWithMsgSender,
+					}),
 	}
 	const securityPool = getCreate2Address({
 		bytecode: encodeDeployData({

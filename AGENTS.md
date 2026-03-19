@@ -18,7 +18,7 @@ Run each command individually and address any issues before proceeding to the ne
 
 3. **Code formatting**:
    ```bash
-   bun run prettify
+   bun run format
    ```
 
 4. **Linting**:
@@ -64,7 +64,7 @@ Repeat the cycle iteratively after each fix to ensure clean builds and avoid acc
 - **Consecutive spaces**: Do not have multiple consecutive spaces within a line. This is enforced by ESLint (`no-multi-spaces`).
 - **Non-null assertions**: Do not use the `!` operator. Instead, perform explicit undefined checks and throw an error if a value is unexpectedly undefined.
 
-Prettier and ESLint are configured to enforce these rules automatically. Run `bun run prettify` and `bun run lint` to format and check your code.
+Prettier and ESLint are configured to enforce these rules automatically. Run `bun run format` and `bun run lint` to format and check your code.
 
 # Testing Guidelines
 
