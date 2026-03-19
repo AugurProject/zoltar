@@ -6,27 +6,27 @@ After implementing any feature or fixing a bug, always run the following quality
 
 Run each command individually and address any issues before proceeding to the next:
 
-1. **TypeScript type checking**:  
+1. **TypeScript type checking**:
    ```bash
    bun tsc
    ```
 
-2. **Tests**: Run the relevant test suite (e.g., `bun run test-peripherals`, `bun run test-zoltar`, etc.)  
+2. **Tests**: Run the relevant test suite (e.g., `bun run test-peripherals`, `bun run test-zoltar`, etc.)
    ```bash
    bun test
    ```
 
-3. **Code formatting**:  
+3. **Code formatting**:
    ```bash
    bun run prettify
    ```
 
-4. **Linting**:  
+4. **Linting**:
    ```bash
    bun run lint
    ```
 
-5. **Dead code analysis**:  
+5. **Dead code analysis**:
    ```bash
    bun run knip
    ```
@@ -35,13 +35,13 @@ Run each command individually and address any issues before proceeding to the ne
 
 You can automatically fix many issues with:
 
-- **Knip autofix** (removes unused exports and files):  
+- **Knip autofix** (removes unused exports and files):
   ```bash
   bun run knip:fix
   ```
   Review changes carefully.
 
-- **ESLint autofix** (fixes style and some code issues):  
+- **ESLint autofix** (fixes style and some code issues):
   ```bash
   bun run lint --fix
   ```
@@ -59,7 +59,7 @@ Repeat the cycle iteratively after each fix to ensure clean builds and avoid acc
 - **Indentation**: Use tabs (not spaces) for indentation. This is enforced by ESLint (`indent: ['error', 'tab']`).
 - **Quotes**: Use single quotes (`'`) for strings. Double quotes are not allowed unless escaping is required.
 - **Semicolons**: Do not use semicolons at the end of statements.
-- **Template literals**: Always include a space inside `${}` (e.g., `\`Hello, \${ name }!\``).
+- **Template literals**: Always include a space inside `${}` (e.g., ``Hello, ${ name }!``).
 - **Empty lines**: Do not have multiple consecutive empty lines (maximum 1).
 - **Consecutive spaces**: Do not have multiple consecutive spaces within a line. This is enforced by ESLint (`no-multi-spaces`).
 - **Non-null assertions**: Do not use the `!` operator. Instead, perform explicit undefined checks and throw an error if a value is unexpectedly undefined.

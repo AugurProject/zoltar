@@ -399,10 +399,10 @@ export const EthereumBlockHeaderWithTransactionHashes = funtypes.Union(funtypes.
 type EthereumUnknownTransactionType = funtypes.Static<typeof EthereumUnknownTransactionType>
 const EthereumUnknownTransactionType = funtypes.ReadonlyObject({
 	hash: EthereumBytes32,
-	type: funtypes.String.withConstraint(type => {
-		if (!isHexEncodedNumber(type)) return false
+	type: funtypes.String.withConstraint(txType => {
+		if (!isHexEncodedNumber(txType)) return false
 		const alreadyHandled = ['0x0', '0x1', '0x2', '0x3', '0x4', '0x7e']
-		if (alreadyHandled.includes(type)) return false
+		if (alreadyHandled.includes(txType)) return false
 		return true
 	}),
 })

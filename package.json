@@ -36,9 +36,9 @@
 		"test": "cd solidity && bun run test",
 		"lint": "bun x eslint . --config eslint.config.js --fix",
 		"lint:fix": "bun x eslint . --config eslint.config.js --fix",
-		"format": "bun x prettier --write solidity/ts/**/*.ts",
-		"prettify": "bun x prettier --write solidity/ts/**/*.ts",
-		"knip": "knip",
-		"knip:fix": "knip --fix"
+		"format": "bun x prettier --write solidity/ts/**/*.ts && bun x eslint . --config eslint.config.js --fix",
+		"prettify": "bun x prettier --write solidity/ts/**/*.ts && bun x eslint . --config eslint.config.js --fix",
+		"knip": "bun x knip",
+		"knip:fix": "bun x knip --fix"
 	}
 }
