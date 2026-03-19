@@ -18,8 +18,6 @@ export const approximatelyEqual = (actual: bigint, expected: bigint, errorDelta:
 }
 
 export function ensureDefined<T>(value: T | undefined, message?: string): T {
-  if (value === undefined) {
-    throw new Error(message ?? 'Expected value to be defined')
 	if (value === undefined) {
 		throw new Error(message ?? 'Expected value to be defined')
 	}
