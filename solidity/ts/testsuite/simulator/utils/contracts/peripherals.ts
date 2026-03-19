@@ -6,7 +6,7 @@ import { peripherals_DualCapBatchAuction_DualCapBatchAuction, peripherals_openOr
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
 import { shareArrayToCash } from './securityPool'
-import { priceToClosestTick } from './tickMath'
+import { priceToClosestTick } from '../tickMath'
 
 export enum OperationType {
 	Liquidation = 0,
@@ -186,10 +186,10 @@ export const participateAuction = async (client: WriteClient, auctionAddress: `0
 		value: ethToInvest,
 	})
 }
-export const getEthAmountToBuy = async (client: ReadClient, auctionAddress: `0x${ string }`) =>
+export const getEthRaiseCap = async (client: ReadClient, auctionAddress: `0x${ string }`) =>
 	await client.readContract({
 		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
-		functionName: 'ethAmountToBuy',
+		functionName: 'ethRaiseCap',
 		address: auctionAddress,
 		args: [],
 	})

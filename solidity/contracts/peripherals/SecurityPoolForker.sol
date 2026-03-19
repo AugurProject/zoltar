@@ -3,7 +3,8 @@ pragma solidity 0.8.33;
 
 import { ReputationToken } from '../ReputationToken.sol';
 import { Zoltar } from '../Zoltar.sol';
-import { Auction } from './Auction.sol';
+import { IDualCapBatchAuction } from './interfaces/IDualCapBatchAuction.sol';
+import { DualCapBatchAuction } from './DualCapBatchAuction.sol';
 import { ISecurityPool, ISecurityPoolFactory, SystemState } from './interfaces/ISecurityPool.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
 import { EscalationGame } from './EscalationGame.sol';
@@ -11,12 +12,11 @@ import { YesNoMarkets } from './YesNoMarkets.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
-
 //TODO, move mappings outside the struct
 struct ForkData {
 	uint256 repAtFork;
 	mapping(uint8 => ISecurityPool) children; // outcome -> children
-	Auction truthAuction;
+	DualCapBatchAuction truthAuction;
 	mapping(address => bool) claimedAuctionProceeds;
 	uint256 truthAuctionStarted;
 	uint256 migratedRep;
@@ -91,7 +91,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		// first vault migrater creates new pool and transfers all REP to it
 		uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(parent.universeId(), outcomeIndex))));
 		uint256 retentionRate = SecurityPoolUtils.calculateRetentionRate(parent.completeSetCollateralAmount(), parent.totalSecurityBondAllowance());
-		(ISecurityPool child, Auction truthAuction) = parent.securityPoolFactory().deployChildSecurityPool(parent, parent.shareToken(), childUniverseId, parent.marketId(), parent.securityMultiplier(), retentionRate, parent.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
+		(ISecurityPool child, DualCapBatchAuction truthAuction) = parent.securityPoolFactory().deployChildSecurityPool(parent, parent.shareToken(), childUniverseId, parent.marketId(), parent.securityMultiplier(), retentionRate, parent.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
 		forkData[child].outcomeIndex = outcomeIndex;
 		forkData[child].truthAuction = truthAuction;
 		forkData[parent].children[outcomeIndex] = child;
@@ -182,7 +182,8 @@ contract SecurityPoolForker is ISecurityPoolForker {
 
 	function _finalizeTruthAuction(ISecurityPool securityPool, uint256 repPurchased) private {
 		require(securityPool.systemState() == SystemState.ForkTruthAuction, 'Auction needs to have started');
-		forkData[securityPool].truthAuction.finalizeAuction(payable(securityPool)); // this sends the eth back
+		// finalize sends ETH to securityPool
+		forkData[securityPool].truthAuction.finalize();
 		securityPool.setSystemState(SystemState.Operational);
 		ISecurityPool parent = securityPool.parent();
 		uint256 repAvailable = forkData[parent].repAtFork;
@@ -227,11 +228,11 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	// accounts the purchased REP from truthAuction to the vault
 	// we should also move a share of bad debt in the system to this vault
 	// anyone can call these so that we can liquidate them if needed
-	function claimAuctionProceeds(ISecurityPool securityPool, address vault) public {
+	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IDualCapBatchAuction.TickIndex[] memory tickIndices) public {
 		require(forkData[securityPool].claimedAuctionProceeds[vault] == false, 'Already Claimed');
 		require(forkData[securityPool].truthAuction.finalized(), 'Auction needs to be finalized');
 		forkData[securityPool].claimedAuctionProceeds[vault] = true;
-		uint256 amount = forkData[securityPool].truthAuction.purchasedRep(vault);
+		(uint256 amount, ) = forkData[securityPool].truthAuction.withdrawBids(vault, tickIndices);
 		require(amount > 0, 'Did not purchase anything'); // not really necessary, but good for testing
 		uint256 poolOwnershipAmount = repToPoolOwnership(securityPool, amount);
 		(uint256 poolOwnership,,,,) = securityPool.securityVaults(vault);

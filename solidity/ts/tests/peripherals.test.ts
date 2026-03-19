@@ -7,7 +7,8 @@ import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getE
 import { addressString, dateToBigintSeconds, rpow } from '../testsuite/simulator/utils/bigint'
 import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getMarketId, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
-import { balanceOfShares, balanceOfSharesInCash, getEthAmountToBuy, getLastPrice, getMarketEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndQueueOperation } from '../testsuite/simulator/utils/contracts/peripherals'
+import { peripherals_DualCapBatchAuction_DualCapBatchAuction } from '../types/contractArtifact'
+import { balanceOfShares, balanceOfSharesInCash, getEthRaiseCap, getLastPrice, getMarketEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndQueueOperation } from '../testsuite/simulator/utils/contracts/peripherals'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
@@ -337,7 +338,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const auctionedEthInYes = completeSetAmount - (completeSetAmount * migratedRepInYes) / repAtFork
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'Auction started')
-		approximatelyEqual(await getEthAmountToBuy(client, yesSecurityPool.truthAuction), auctionedEthInYes, 10n, 'Need to buy half of open interest on yes')
+		approximatelyEqual(await getEthRaiseCap(client, yesSecurityPool.truthAuction), auctionedEthInYes, 10n, 'Need to buy half of open interest on yes')
 		// participate yes auction by buying quarter of all REP (this is a open interest and rep holder happy case where REP holders win 50%)
 		const yesAuctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 		await participateAuction(yesAuctionParticipant, yesSecurityPool.truthAuction, repBalanceInGenesisPool / 4n, auctionedEthInYes)
@@ -346,7 +347,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const auctionedEthInNo = completeSetAmount - (completeSetAmount * migratedRepInNo) / repAtFork
 		await startTruthAuction(client, noSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, noSecurityPool.securityPool), SystemState.ForkTruthAuction, 'Auction started')
-		approximatelyEqual(await getEthAmountToBuy(client, noSecurityPool.truthAuction), auctionedEthInNo, 10n, 'Need to buy half of open interest on no')
+		approximatelyEqual(await getEthRaiseCap(client, noSecurityPool.truthAuction), auctionedEthInNo, 10n, 'Need to buy half of open interest on no')
 		// participate no auction by buying 3/4 of all REP (this is a open interest happy case where REP holders lose 50%)
 		const noAuctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 		await participateAuction(noAuctionParticipant, noSecurityPool.truthAuction, (repBalanceInGenesisPool * 3n) / 4n, auctionedEthInNo)
@@ -354,7 +355,7 @@ describe('Peripherals Contract Test Suite', () => {
 		// auction invalid
 		await startTruthAuction(client, invalidSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, invalidSecurityPool.securityPool), SystemState.ForkTruthAuction, 'Auction started')
-		approximatelyEqual(await getEthAmountToBuy(client, invalidSecurityPool.truthAuction), completeSetAmount, 10n, 'Need to buy all of open interest on invalid')
+		approximatelyEqual(await getEthRaiseCap(client, invalidSecurityPool.truthAuction), completeSetAmount, 10n, 'Need to buy all of open interest on invalid')
 		const invalidAuctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)
 		// buy half of the open interest for 3/4 of everything
 		await participateAuction(invalidAuctionParticipant, invalidSecurityPool.truthAuction, repBalanceInGenesisPool - burnAmount - repBalanceInGenesisPool / 1_000_000n, completeSetAmount / 2n)
@@ -363,6 +364,14 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// yes status: auction fully funds, 1/4 of rep balance is sold for eth
 		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+		const purchasedRep = await client.readContract({
+			abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+			functionName: 'purchasedRep',
+			address: yesSecurityPool.truthAuction,
+			args: [yesAuctionParticipant.account.address]
+		})
+		strictEqualTypeSafe(purchasedRep > 0n, true, 'participant should have purchased REP')
 
 		assert.deepStrictEqual(
 			await balanceOfSharesInCash(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])),
@@ -381,12 +390,12 @@ describe('Peripherals Contract Test Suite', () => {
 		const openInterestFirst = currentOpenInterestArray[0]
 		if (openInterestFirst === undefined) throw new Error('currentOpenInterestArray[0] is undefined')
 		approximatelyEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), openInterestFirst, 10n, 'yes child contract did not record the amount correctly')
-		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'Yes System should be operational again')
+		strictEqualTypeSafe( await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'Yes System should be operational again')
 		await claimAuctionProceeds(client, yesSecurityPool.securityPool, yesAuctionParticipant.account.address)
 
 		const yesAuctionParticipantVault = await getSecurityVault(client, yesSecurityPool.securityPool, yesAuctionParticipant.account.address)
 		const yesAuctionParticipantRep = await poolOwnershipToRep(client, yesSecurityPool.securityPool, yesAuctionParticipantVault.repDepositShare)
-		approximatelyEqual(yesAuctionParticipantRep, repBalanceInGenesisPool / 4n, 10000n, 'yes auction participant did not get ownership of rep they bought')
+		approximatelyEqual(yesAuctionParticipantRep, purchasedRep, 1000n, 'yes auction participant should get ownership equal to purchased')
 
 		const originalYesVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		const originalYesVaultRep = await poolOwnershipToRep(client, yesSecurityPool.securityPool, originalYesVault.repDepositShare)
@@ -409,11 +418,20 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getSystemState(client, noSecurityPool.securityPool), SystemState.Operational, 'No System should be operational again')
 		const noShare0 = ensureDefined(currentShares[0], 'currentShares[0] is undefined')
 		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, noSecurityPool.securityPool), noShare0, 'no child contract did not record the amount correctly')
+
+		// Read purchasedRep for no auction participant
+		const noPurchasedRep = await client.readContract({
+			abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+			functionName: 'purchasedRep',
+			address: noSecurityPool.truthAuction,
+			args: [noAuctionParticipant.account.address]
+		})
+
 		await claimAuctionProceeds(client, noSecurityPool.securityPool, noAuctionParticipant.account.address)
 
 		const noAuctionParticipantVault = await getSecurityVault(client, noSecurityPool.securityPool, noAuctionParticipant.account.address)
 		const noAuctionParticipantRep = await poolOwnershipToRep(client, noSecurityPool.securityPool, noAuctionParticipantVault.repDepositShare)
-		approximatelyEqual(noAuctionParticipantRep, (repBalanceInGenesisPool * 3n) / 4n, 10000n, 'no auction participant did not get ownership of rep they bought')
+		approximatelyEqual(noAuctionParticipantRep, noPurchasedRep, 1000n, 'no auction participant should get ownership equal to purchased')
 
 		const originalNoVault = await getSecurityVault(client, noSecurityPool.securityPool, attackerClient.account.address)
 		const originalNoVaultRep = await poolOwnershipToRep(client, noSecurityPool.securityPool, originalNoVault.repDepositShare)
@@ -433,11 +451,20 @@ describe('Peripherals Contract Test Suite', () => {
 		)
 		strictEqualTypeSafe(await getSystemState(client, invalidSecurityPool.securityPool), SystemState.Operational, 'Invalid System should be operational again')
 		approximatelyEqual(await getCompleteSetCollateralAmount(client, invalidSecurityPool.securityPool), ensureDefined(currentShares[0], 'currentShares[0] is undefined') / 2n, 10n, 'Invalid child contract did not record the amount correctly')
+
+		// Read purchasedRep for invalid auction participant
+		const invalidPurchasedRep = await client.readContract({
+			abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+			functionName: 'purchasedRep',
+			address: invalidSecurityPool.truthAuction,
+			args: [invalidAuctionParticipant.account.address]
+		})
+
 		await claimAuctionProceeds(client, invalidSecurityPool.securityPool, invalidAuctionParticipant.account.address)
 
 		const invalidAuctionParticipantVault = await getSecurityVault(client, invalidSecurityPool.securityPool, invalidAuctionParticipant.account.address)
 		const invalidAuctionParticipantRep = await poolOwnershipToRep(client, invalidSecurityPool.securityPool, invalidAuctionParticipantVault.repDepositShare)
-		approximatelyEqual(invalidAuctionParticipantRep, repBalanceInGenesisPool - repBalanceInGenesisPool / 1_000_000n - burnAmount, 10000n, 'Invalid auction participant did not get ownership of rep they bought')
+		approximatelyEqual(invalidAuctionParticipantRep, invalidPurchasedRep, 1000n, 'invalid auction participant should get ownership equal to purchased')
 
 		// try creating new complete sets
 		const openInterestHolder2 = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
@@ -487,4 +514,75 @@ describe('Peripherals Contract Test Suite', () => {
 	})
 
 	// - TODO test that users can claim their stuff (shares+rep) even if zoltar forks after market ends
+
+	test('simple truth auction: participant buys rep and can claim proceeds', async () => {
+		// Setup: create open interest, trigger fork, migrate
+		const endTime = await getMarketEndDate(client, marketId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		// Set price oracle to 1
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+
+		// Set security bond allowance and deposit extra REP for capacity
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const openInterestAmount = 10n * 10n ** 18n
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+
+		// Fork the security pool
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await forkSecurityPool(client, securityPoolAddresses.securityPool)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, marketId, securityMultiplier)
+
+		// Migrate vault to yes
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		// Skip escalation game migration for simpler test
+		// await migrateFromEscalationGame(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+
+		// Wait for migration period
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+
+		// Start truth auction
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'Auction should start')
+
+		// Get auction parameters
+		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).repAtFork
+		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
+		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+		approximatelyEqual(await getEthRaiseCap(client, yesSecurityPool.truthAuction), expectedEthToBuy, 10n, 'ethToBuy mismatch')
+
+		// Participant bids: buy 1/4 of repAtFork for the full ethToBuy
+		const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const repToBuy = repAtFork / 4n
+		await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repToBuy, expectedEthToBuy)
+
+		// Finalize auction
+		await mockWindow.advanceTime(7n * DAY + DAY)
+		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+		// Verify participant got REP allocation
+		const purchasedRep = await client.readContract({
+			abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+			functionName: 'purchasedRep',
+			address: yesSecurityPool.truthAuction,
+			args: [auctionParticipant.account.address]
+		})
+		assert.ok(purchasedRep > 0n, 'participant should have purchased REP')
+
+		// Claim proceeds
+		await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
+
+		// Verify they got ownership shares matching purchasedRep (with tolerance for rounding)
+		const vault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
+		const repFromOwnership = await poolOwnershipToRep(client, yesSecurityPool.securityPool, vault.repDepositShare)
+		approximatelyEqual(repFromOwnership, purchasedRep, 10000n, 'should have received REP ownership matching purchased')
+	})
 })

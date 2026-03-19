@@ -4,7 +4,7 @@ import { WriteClient } from '../viem'
 import { PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { addressString } from '../bigint'
 import { contractExists } from '../utilities'
-import { peripherals_EscalationGame_EscalationGame, peripherals_factories_DualCapBatchAuctionFactory_DualCapBatchAuctionFactory, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, peripherals_YesNoMarkets_YesNoMarkets, ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
+import { peripherals_EscalationGame_EscalationGame, peripherals_factories_DualCapBatchAuctionFactory_DualCapBatchAuctionFactory, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, peripherals_YesNoMarkets_YesNoMarkets, ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_DualCapBatchAuction_DualCapBatchAuction } from '../../../../types/contractArtifact'
 import { objectEntries } from '../typescript'
 import { getRepTokenAddress, getZoltarAddress } from './zoltar'
 
@@ -126,9 +126,8 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence.openOracle) await deployBytecode(`0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`)
 	if (!existence.zoltar) await deployBytecode(`0x${ Zoltar_Zoltar.evm.bytecode.object }`)
 	if (!existence.shareTokenFactory) await deployBytecode(getShareTokenFactoryByteCode(getZoltarAddress()))
-	if (!existence.auctionFactory) await deployBytecode(`0x${ peripherals_factories_AuctionFactory_AuctionFactory.evm.bytecode.object }`)
 	if (!existence.priceOracleManagerAndOperatorQueuerFactory) await deployBytecode(`0x${ peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object }`)
-	if (!existence.securityPoolFactory) await deployBytecode(getSecurityPoolFactoryByteCode(contractAddresses.securityPoolForker, contractAddresses.yesNoMarkets, contractAddresses.escalationGameFactory, contractAddresses.openOracle, contractAddresses.zoltar, contractAddresses.shareTokenFactory, contractAddresses.auctionFactory, contractAddresses.priceOracleManagerAndOperatorQueuerFactory))
+	if (!existence.securityPoolFactory) await deployBytecode(getSecurityPoolFactoryByteCode(contractAddresses.securityPoolForker, contractAddresses.yesNoMarkets, contractAddresses.escalationGameFactory, contractAddresses.openOracle, contractAddresses.zoltar, contractAddresses.shareTokenFactory, contractAddresses.dualCapBatchAuctionFactory, contractAddresses.priceOracleManagerAndOperatorQueuerFactory))
 	if (!existence.yesNoMarkets) await deployBytecode(getYesNoMarketsByteCode())
 	if (!existence.escalationGameFactory) await deployBytecode(getEscalationGameFactoryByteCode())
 	if (!existence.securityPoolForker) await deployBytecode(getSecurityPoolForkerByteCode(contractAddresses.zoltar))
@@ -224,7 +223,7 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 							args: [infraContracts.securityPoolForker],
 						}),
 						from: infraContracts.dualCapBatchAuctionFactory,
-						salt: securityPoolSaltWithMsgSender,
+						salt: securityPoolSalt,
 					}),
 	}
 	const securityPool = getCreate2Address({

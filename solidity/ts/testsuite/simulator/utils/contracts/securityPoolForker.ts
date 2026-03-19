@@ -38,12 +38,12 @@ export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddr
 		args: [securityPoolAddress],
 	})
 
-export const claimAuctionProceeds = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) =>
+export const claimAuctionProceeds = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`, tickIndex: readonly { tick: bigint; bidIndex: bigint }[]) =>
 	await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'claimAuctionProceeds',
 		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress, vault],
+		args: [securityPoolAddress, vault, tickIndex],
 	})
 
 export const forkZoltarWithOwnEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
