@@ -6,7 +6,7 @@ import { peripherals_DualCapBatchAuction_DualCapBatchAuction, peripherals_openOr
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
 import { shareArrayToCash } from './securityPool'
-import { priceToClosestTick } from './tickMath'
+import { priceToClosestTick } from '../tickMath'
 
 export enum OperationType {
 	Liquidation = 0,
@@ -171,7 +171,7 @@ export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOper
 		args: [],
 	})
 
-export const participateAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, repToBuy: bigint, ethToInvest: bigint) => {
+export const participateAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, repToBuy: bigint, ethToInvest: bigint): Promise<bigint> => {
 	if (repToBuy === 0n) {
 		throw new Error('repToBuy cannot be zero')
 	}
@@ -185,11 +185,12 @@ export const participateAuction = async (client: WriteClient, auctionAddress: `0
 		args: [tick],
 		value: ethToInvest,
 	})
+	return tick
 }
-export const getEthAmountToBuy = async (client: ReadClient, auctionAddress: `0x${ string }`) =>
+export const getEthRaiseCap = async (client: ReadClient, auctionAddress: `0x${ string }`) =>
 	await client.readContract({
 		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
-		functionName: 'ethAmountToBuy',
+		functionName: 'ethRaiseCap',
 		address: auctionAddress,
 		args: [],
 	})
