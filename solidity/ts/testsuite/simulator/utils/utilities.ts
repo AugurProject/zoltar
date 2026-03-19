@@ -10,8 +10,6 @@ import { QuestionOutcome } from '../types/types'
 import { ReputationToken_ReputationToken, peripherals_WETH9_WETH9 } from '../../../types/contractArtifact'
 const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
 
-
-
 function hexToBytes(value: string) {
 	const result = new Uint8Array((value.length - 2) / 2)
 	for (let i = 0; i < result.length; ++i) {
@@ -19,14 +17,6 @@ function hexToBytes(value: string) {
 	}
 	return result
 }
-
-
-
-
-
-
-
-
 
 const mintETH = async (AnvilWindowEthereum: AnvilWindowEthereum, mintAmounts: { address: Address; amount: bigint }[]) => {
 	const stateOverrides = mintAmounts.reduce(
@@ -64,16 +54,12 @@ export const approveToken = async (client: WriteClient, tokenAddress: Address, s
 	})
 }
 
-
 export const getERC20Balance = async (client: ReadClient, tokenAddress: Address, ownerAddress: Address) => await client.readContract({
 	abi: ABIS.mainnet.erc20,
 	functionName: 'balanceOf',
 	address: tokenAddress,
 	args: [ownerAddress],
 })
-
-
-
 
 export const getETHBalance = async (client: ReadClient, address: Address) => await client.getBalance({ address })
 
@@ -141,8 +127,6 @@ export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<
 }
 
 export const contractExists = async (client: ReadClient, contract: `0x${ string }`) => (await client.getCode({ address: contract })) !== undefined
-
-
 
 const uint248BitMask = (1n << 248n) - 1n
 export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint | QuestionOutcome): bigint {

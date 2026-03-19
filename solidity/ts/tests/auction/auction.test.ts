@@ -5,7 +5,7 @@ import { TEST_ADDRESSES } from '../../testsuite/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../../testsuite/simulator/utils/utilities'
 import { Address } from 'viem'
 import { computeClearing, deployDualCapBatchAuction, finalize, getClearingTick, getMinBidSize, simulateWithdrawBids, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids, getEthRaiseCap, getEthRaised } from '../../testsuite/simulator/utils/contracts/auction'
-import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../../testsuite/simulator/utils/testUtils'
+import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../../testsuite/simulator/utils/testUtils'
 import { priceToClosestTick, tickToPrice } from '../../testsuite/simulator/utils/tickMath'
 import assert from 'assert'
 import { ensureZoltarDeployed } from '../../testsuite/simulator/utils/contracts/zoltar'
@@ -32,7 +32,9 @@ describe('Auction', () => {
 	// ============ Helper Functions ============
 
 	function createTestClient(idx: number): WriteClient {
-		return createWriteClient(mockWindow, TEST_ADDRESSES[idx], 0)
+		const address = TEST_ADDRESSES[idx]
+		assertDefined(address, `TEST_ADDRESSES[${idx}] is undefined`)
+		return createWriteClient(mockWindow, address, 0)
 	}
 
 	function tickForPrice(price: bigint): bigint {
@@ -234,7 +236,9 @@ describe('Auction', () => {
 			for (const bid of bids) {
 				const addr = bid.address
 				if (!bidsByUser.has(addr)) bidsByUser.set(addr, [])
-				bidsByUser.get(addr)!.push(bid)
+				const bidsForAddr = bidsByUser.get(addr)
+				assertDefined(bidsForAddr, `No bids array for address ${addr}`)
+				bidsForAddr.push(bid)
 			}
 
 			let grandTotalFilled = 0n

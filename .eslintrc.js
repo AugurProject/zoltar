@@ -21,6 +21,9 @@ module.exports = {
 		// Spacing inside template curly braces
 		'template-curly-spacing': ['error', 'always'],
 
+		// Disallow multiple empty lines
+		'no-multiple-empty-lines': ['error', { max: 1 }],
+
 		// Disallow the use of any type
 		'@typescript-eslint/no-explicit-any': 'error',
 
@@ -36,6 +39,15 @@ module.exports = {
 				ignoreRestSiblings: true,
 				varsIgnorePattern: '^_',
 				argsIgnorePattern: '^_',
+			},
+		],
+
+		// Disallow non-null assertion operator - use explicit checks instead
+		'no-restricted-syntax': [
+			'error',
+			{
+				selector: 'TSNonNullExpression',
+				message: 'Unexpected non-null assertion. Perform explicit undefined checks and throw an error if needed.',
 			},
 		],
 	},

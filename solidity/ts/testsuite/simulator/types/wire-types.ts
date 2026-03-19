@@ -119,7 +119,7 @@ const TimestampParser: funtypes.ParsedValue<funtypes.String, Date>['config'] = {
 
 const OptionalBytesParser: funtypes.ParsedValue<funtypes.Union<[funtypes.String, funtypes.Literal<undefined>]>, Uint8Array>['config'] = {
 	parse: value => BytesParser.parse(value || '0x'),
-	serialize: value => BytesParser.serialize!(value || new Uint8Array()),
+	serialize: value => BytesParser.serialize(value || new Uint8Array()),
 }
 
 const LiteralConverterParserFactory: <TInput, TOutput>(input: TInput, output: TOutput) => funtypes.ParsedValue<funtypes.Runtype<TInput>, TOutput>['config'] = (input, output) => ({

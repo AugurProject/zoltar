@@ -3,6 +3,7 @@ import { dateToBigintSeconds } from './utils/bigint'
 import { EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes } from './types/wire-types'
 import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types'
 import * as funtypes from 'funtypes'
+import { assertDefined } from './utils/testUtils'
 
 type BlockTimeManipulation = { readonly type: 'AddToTimestamp', readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp', readonly timeToSet: EthereumQuantity }
 
@@ -114,7 +115,8 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 		}
 		// For eth_getTransactionReceipt, return the receipt even if status === '0x0' (reverted)
 		// Callers can check the status field themselves
-		return json.result!
+		assertDefined(json.result, 'json.result is undefined')
+		return json.result
 	}
 
 	// Reset Anvil to a clean state before each test
@@ -130,6 +132,7 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 				.join('')
 		for (const address of Object.keys(stateOverrides)) {
 			const override = stateOverrides[address]
+			if (override === undefined) continue
 			if (override.stateDiff !== undefined) {
 				for (const [keyHex, value] of Object.entries(override.stateDiff)) {
 					await request({

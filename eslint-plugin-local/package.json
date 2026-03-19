@@ -1,0 +1,5 @@
+{
+  "name": "eslint-plugin-local",
+  "type": "module",
+  "exports": "./index.js"
+}
