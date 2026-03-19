@@ -1,22 +1,22 @@
 import 'viem/window'
 import { encodeDeployData, getCreate2Address, keccak256, numberToBytes, toHex, zeroAddress, encodeAbiParameters } from 'viem'
-import { WriteClient } from '../viem.js'
-import { PROXY_DEPLOYER_ADDRESS } from '../constants.js'
-import { addressString } from '../bigint.js'
-import { contractExists } from '../utilities.js'
-import { peripherals_Auction_Auction, peripherals_EscalationGame_EscalationGame, peripherals_factories_AuctionFactory_AuctionFactory, peripherals_factories_DualCapBatchAuctionFactory_DualCapBatchAuctionFactory, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, peripherals_YesNoMarkets_YesNoMarkets, ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact.js'
-import { objectEntries } from '../typescript.js'
-import { getRepTokenAddress, getZoltarAddress } from './zoltar.js'
+import { WriteClient } from '../viem'
+import { PROXY_DEPLOYER_ADDRESS } from '../constants'
+import { addressString } from '../bigint'
+import { contractExists } from '../utilities'
+import { peripherals_EscalationGame_EscalationGame, peripherals_factories_DualCapBatchAuctionFactory_DualCapBatchAuctionFactory, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_tokens_ShareToken_ShareToken, peripherals_YesNoMarkets_YesNoMarkets, ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
+import { objectEntries } from '../typescript'
+import { getRepTokenAddress, getZoltarAddress } from './zoltar'
 
-export const getSecurityPoolUtilsAddress = () => getCreate2Address({ bytecode: `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
+const getSecurityPoolUtilsAddress = () => getCreate2Address({ bytecode: `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
 
-export const getScalarOutcomesAddress = () => getCreate2Address({ bytecode: `0x${ ScalarOutcomes_ScalarOutcomes.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
+const getScalarOutcomesAddress = () => getCreate2Address({ bytecode: `0x${ ScalarOutcomes_ScalarOutcomes.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
 
 export const applyLibraries = (bytecode: string): `0x${ string }` => {
-	type LibraryReplacement = { hash: string, address: `0x${ string }`}
+	type LibraryReplacement = { hash: string; address: `0x${ string }` }
 	const librariesToReplace: LibraryReplacement[] = [
 		{ hash: keccak256(toHex('contracts/ScalarOutcomes.sol:ScalarOutcomes')).slice(2, 36), address: getScalarOutcomesAddress() },
-		{ hash: keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36), address: getSecurityPoolUtilsAddress() }
+		{ hash: keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36), address: getSecurityPoolUtilsAddress() },
 	]
 	let updatedBytecode = bytecode
 	for (const { hash, address } of librariesToReplace) {
@@ -25,58 +25,51 @@ export const applyLibraries = (bytecode: string): `0x${ string }` => {
 	return `0x${ updatedBytecode }`
 }
 
-export const getSecurityPoolForkerByteCode = (zoltar: `0x${ string }`) => {
-	return encodeDeployData({
+const getSecurityPoolForkerByteCode = (zoltar: `0x${ string }`) =>
+	encodeDeployData({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		bytecode: applyLibraries(peripherals_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),
-		args: [ zoltar ]
+		args: [zoltar],
 	})
-}
 
-export const getSecurityPoolFactoryByteCode = (securityPoolForker: `0x${ string }`, yesNoMarkets: `0x${ string }`, escalationGameFactory: `0x${ string }`, openOracle: `0x${ string }`, zoltar: `0x${ string }`, shareTokenFactory: `0x${ string }`, auctionFactory: `0x${ string }`, priceOracleManagerAndOperatorQueuerFactory: `0x${ string }`) => {
-	return encodeDeployData({
+const getSecurityPoolFactoryByteCode = (securityPoolForker: `0x${ string }`, yesNoMarkets: `0x${ string }`, escalationGameFactory: `0x${ string }`, openOracle: `0x${ string }`, zoltar: `0x${ string }`, shareTokenFactory: `0x${ string }`, dualCapBatchAuctionFactory: `0x${ string }`, priceOracleManagerAndOperatorQueuerFactory: `0x${ string }`) =>
+	encodeDeployData({
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
-		args: [ securityPoolForker, yesNoMarkets, escalationGameFactory, openOracle, zoltar, shareTokenFactory, auctionFactory, priceOracleManagerAndOperatorQueuerFactory ]
+		args: [securityPoolForker, yesNoMarkets, escalationGameFactory, openOracle, zoltar, shareTokenFactory, dualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory],
 	})
-}
 
-export const getSecurityPoolFactoryAddress = (securityPoolForker: `0x${ string }`, yesNoMarkets: `0x${ string }`, escalationGameFactory: `0x${ string }`, openOracle: `0x${ string }`, zoltar: `0x${ string }`, shareTokenFactory: `0x${ string }`, auctionFactory: `0x${ string }`, priceOracleManagerAndOperatorQueuerFactory: `0x${ string }`) => {
-	return getCreate2Address({
+const getSecurityPoolFactoryAddress = (securityPoolForker: `0x${ string }`, yesNoMarkets: `0x${ string }`, escalationGameFactory: `0x${ string }`, openOracle: `0x${ string }`, zoltar: `0x${ string }`, shareTokenFactory: `0x${ string }`, dualCapBatchAuctionFactory: `0x${ string }`, priceOracleManagerAndOperatorQueuerFactory: `0x${ string }`) =>
+	getCreate2Address({
 		from: addressString(PROXY_DEPLOYER_ADDRESS),
 		salt: numberToBytes(0),
-		bytecode: getSecurityPoolFactoryByteCode(securityPoolForker, yesNoMarkets, escalationGameFactory, openOracle, zoltar, shareTokenFactory, auctionFactory, priceOracleManagerAndOperatorQueuerFactory)
+		bytecode: getSecurityPoolFactoryByteCode(securityPoolForker, yesNoMarkets, escalationGameFactory, openOracle, zoltar, shareTokenFactory, dualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory),
 	})
-}
 
-export const getShareTokenFactoryByteCode = (zoltar: `0x${ string }`) => {
-	return encodeDeployData({
+const getShareTokenFactoryByteCode = (zoltar: `0x${ string }`) =>
+	encodeDeployData({
 		abi: peripherals_factories_ShareTokenFactory_ShareTokenFactory.abi,
 		bytecode: `0x${ peripherals_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object }`,
-		args: [ zoltar ]
+		args: [zoltar],
 	})
-}
 
-export const getYesNoMarketsByteCode = () => {
-	return encodeDeployData({
+const getYesNoMarketsByteCode = () =>
+	encodeDeployData({
 		abi: peripherals_YesNoMarkets_YesNoMarkets.abi,
-		bytecode: `0x${ peripherals_YesNoMarkets_YesNoMarkets.evm.bytecode.object }`
+		bytecode: `0x${ peripherals_YesNoMarkets_YesNoMarkets.evm.bytecode.object }`,
 	})
-}
 
-export const getEscalationGameFactoryByteCode = () => {
-	return encodeDeployData({
+const getEscalationGameFactoryByteCode = () =>
+	encodeDeployData({
 		abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
-		bytecode: `0x${ peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object }`
+		bytecode: `0x${ peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object }`,
 	})
-}
 
-export const getZoltarQuestionDataByteCode = () => {
-	return encodeDeployData({
+const getZoltarQuestionDataByteCode = () =>
+	encodeDeployData({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		bytecode: applyLibraries(ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object)
+		bytecode: applyLibraries(ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object),
 	})
-}
 
 export function getInfraContractAddresses() {
 	const getAddress = (bytecode: `0x${ string }`) => getCreate2Address({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
@@ -86,7 +79,6 @@ export function getInfraContractAddresses() {
 		openOracle: getAddress(`0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`),
 		zoltar: getZoltarAddress(),
 		shareTokenFactory: getAddress(getShareTokenFactoryByteCode(getZoltarAddress())),
-		auctionFactory: getAddress(`0x${ peripherals_factories_AuctionFactory_AuctionFactory.evm.bytecode.object }`),
 		priceOracleManagerAndOperatorQueuerFactory: getAddress(`0x${ peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object }`),
 		securityPoolForker: getAddress(getSecurityPoolForkerByteCode(getZoltarAddress())),
 		yesNoMarkets: getAddress(getYesNoMarketsByteCode()),
@@ -95,11 +87,11 @@ export function getInfraContractAddresses() {
 		scalarOutcomes: getScalarOutcomesAddress(),
 		dualCapBatchAuctionFactory: getAddress(`0x${ peripherals_factories_DualCapBatchAuctionFactory_DualCapBatchAuctionFactory.evm.bytecode.object }`),
 	}
-	const securityPoolFactory = getSecurityPoolFactoryAddress(contracts.securityPoolForker, contracts.yesNoMarkets, contracts.escalationGameFactory, contracts.openOracle, contracts.zoltar, contracts.shareTokenFactory, contracts.auctionFactory, contracts.priceOracleManagerAndOperatorQueuerFactory)
+	const securityPoolFactory = getSecurityPoolFactoryAddress(contracts.securityPoolForker, contracts.yesNoMarkets, contracts.escalationGameFactory, contracts.openOracle, contracts.zoltar, contracts.shareTokenFactory, contracts.dualCapBatchAuctionFactory, contracts.priceOracleManagerAndOperatorQueuerFactory)
 	return { ...contracts, securityPoolFactory }
 }
 
-export async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key in keyof ReturnType<typeof getInfraContractAddresses>]: boolean }> {
+async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key in keyof ReturnType<typeof getInfraContractAddresses>]: boolean }> {
 	const contractAddresses = getInfraContractAddresses()
 	type ContractKeys = keyof typeof contractAddresses
 
@@ -109,7 +101,7 @@ export async function getInfraDeployedInformation(client: WriteClient): Promise<
 		contractKeys.map(async key => {
 			const doesExist = await contractExists(client, contractAddresses[key])
 			return [key, doesExist] as const
-		})
+		}),
 	)
 
 	const contractExistenceObject: { [key in ContractKeys]: boolean } = {} as { [key in ContractKeys]: boolean }
@@ -123,7 +115,10 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	const contractAddresses = getInfraContractAddresses()
 	const existence = await getInfraDeployedInformation(client)
 
-	const deployBytecode = async (bytecode: `0x${ string }`) => await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode })
+	const deployBytecode = async (bytecode: `0x${ string }`) => {
+		const hash = await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode })
+		await client.waitForTransactionReceipt({ hash })
+	}
 
 	if (!existence.dualCapBatchAuctionFactory) await deployBytecode(`0x${ peripherals_factories_DualCapBatchAuctionFactory_DualCapBatchAuctionFactory.evm.bytecode.object }`)
 	if (!existence.scalarOutcomes) await deployBytecode(`0x${ ScalarOutcomes_ScalarOutcomes.evm.bytecode.object }`)
@@ -146,46 +141,56 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 
 const computeSecurityPoolSalt = (parent: `0x${ string }`, universeId: bigint, marketId: bigint, securityMultiplier: bigint) => {
 	const values = [parent, universeId, marketId, securityMultiplier] as const
-	return keccak256(encodeAbiParameters([
-		{ name: 'parent', type: 'address' },
-		{ name: 'universeId', type: 'uint248' },
-		{ name: 'marketId', type: 'uint256' },
-		{ name: 'securityMultiplier', type: 'uint256' },
-	], values))
+	return keccak256(
+		encodeAbiParameters(
+			[
+				{ name: 'parent', type: 'address' },
+				{ name: 'universeId', type: 'uint248' },
+				{ name: 'marketId', type: 'uint256' },
+				{ name: 'securityMultiplier', type: 'uint256' },
+			],
+			values,
+		),
+	)
 }
 
 const computeShareTokenSalt = (securityMultiplier: bigint, marketId: bigint) => {
 	const values = [securityMultiplier, marketId] as const
-	return keccak256(encodeAbiParameters([
-		{ name: 'securityMultiplier', type: 'uint256' },
-		{ name: 'marketId', type: 'uint256' },
-	], values))
+	return keccak256(
+		encodeAbiParameters(
+			[
+				{ name: 'securityMultiplier', type: 'uint256' },
+				{ name: 'marketId', type: 'uint256' },
+			],
+			values,
+		),
+	)
 }
 
 export const getMarketId = (universeId: bigint, securityMultiplier: bigint, extraInfo: string, marketEndDate: bigint) => {
-	const securityPoolfactory = getInfraContractAddresses().securityPoolFactory
+	const securityPoolFactory = getInfraContractAddresses().securityPoolFactory
 	const marketCreationTypes = [
-		{ name: 'securityPoolfactory', type: 'address' },
+		{ name: 'securityPoolFactory', type: 'address' },
 		{ name: 'universeId', type: 'uint248' },
 		{ name: 'securityMultiplier', type: 'uint256' },
 		{ name: 'extraInfo', type: 'string' },
 		{ name: 'marketEndDate', type: 'uint256' },
 	]
-	const salt = keccak256(encodeAbiParameters(marketCreationTypes, [securityPoolfactory, universeId, securityMultiplier, extraInfo, marketEndDate]))
+	const salt = keccak256(encodeAbiParameters(marketCreationTypes, [securityPoolFactory, universeId, securityMultiplier, extraInfo, marketEndDate]))
 	const saltTypes = [
-		{ name: 'securityPoolfactory', type: 'address' },
+		{ name: 'securityPoolFactory', type: 'address' },
 		{ name: 'extraInfo', type: 'string' },
 		{ name: 'marketEndDate', type: 'uint256' },
 		{ name: 'salt', type: 'bytes32' },
 	]
-	return BigInt(keccak256(encodeAbiParameters(saltTypes, [securityPoolfactory, extraInfo, marketEndDate, salt])));
+	return BigInt(keccak256(encodeAbiParameters(saltTypes, [securityPoolFactory, extraInfo, marketEndDate, salt])))
 }
 
 export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bigint, marketId: bigint, securityMultiplier: bigint) => {
 	const securityPoolSalt = computeSecurityPoolSalt(parent, universeId, marketId, securityMultiplier)
 	const infraContracts = getInfraContractAddresses()
 	const securityPoolTypes = [
-		{ name: 'securityPoolfactory', type: 'address' },
+		{ name: 'securityPoolFactory', type: 'address' },
 		{ name: 'securityPoolSalt', type: 'bytes32' },
 	]
 	const securityPoolSaltWithMsgSender = keccak256(encodeAbiParameters(securityPoolTypes, [infraContracts.securityPoolFactory, securityPoolSalt]))
@@ -195,43 +200,50 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 			bytecode: encodeDeployData({
 				abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 				bytecode: `0x${ peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.evm.bytecode.object }`,
-				args: [ infraContracts.openOracle, getRepTokenAddress(universeId) ]
+				args: [infraContracts.openOracle, getRepTokenAddress(universeId)],
 			}),
 			from: infraContracts.priceOracleManagerAndOperatorQueuerFactory,
-			salt: securityPoolSaltWithMsgSender
+			salt: securityPoolSaltWithMsgSender,
 		}),
 		shareToken: getCreate2Address({
 			bytecode: encodeDeployData({
 				abi: peripherals_tokens_ShareToken_ShareToken.abi,
 				bytecode: `0x${ peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object }`,
-				args: [ infraContracts.securityPoolFactory, infraContracts.zoltar ]
+				args: [infraContracts.securityPoolFactory, infraContracts.zoltar],
 			}),
 			from: infraContracts.shareTokenFactory,
-			salt: computeShareTokenSalt(securityMultiplier, marketId)
+			salt: computeShareTokenSalt(securityMultiplier, marketId),
 		}),
-		truthAuction: BigInt(parent) == 0n ? zeroAddress : getCreate2Address({
-			bytecode: `0x${ peripherals_Auction_Auction.evm.bytecode.object }`,
-			from: infraContracts.auctionFactory,
-			salt: securityPoolSaltWithMsgSender
-		}),
+		truthAuction:
+			BigInt(parent) === 0n
+				? zeroAddress
+				: getCreate2Address({
+						bytecode: encodeDeployData({
+							abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+							bytecode: `0x${ peripherals_DualCapBatchAuction_DualCapBatchAuction.evm.bytecode.object }`,
+							args: [infraContracts.securityPoolForker],
+						}),
+						from: infraContracts.dualCapBatchAuctionFactory,
+						salt: securityPoolSaltWithMsgSender,
+					}),
 	}
 	const securityPool = getCreate2Address({
 		bytecode: encodeDeployData({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
-			args: [ infraContracts.securityPoolForker, infraContracts.securityPoolFactory, infraContracts.yesNoMarkets, infraContracts.escalationGameFactory, contracts.priceOracleManagerAndOperatorQueuer, contracts.shareToken, infraContracts.openOracle, parent, infraContracts.zoltar, universeId, marketId, securityMultiplier] as const
+			args: [infraContracts.securityPoolForker, infraContracts.securityPoolFactory, infraContracts.yesNoMarkets, infraContracts.escalationGameFactory, contracts.priceOracleManagerAndOperatorQueuer, contracts.shareToken, infraContracts.openOracle, parent, infraContracts.zoltar, universeId, marketId, securityMultiplier] as const,
 		}),
 		from: infraContracts.securityPoolFactory,
-		salt: numberToBytes(0)
+		salt: numberToBytes(0),
 	})
 	const escalationGame = getCreate2Address({
 		bytecode: encodeDeployData({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			bytecode: `0x${ peripherals_EscalationGame_EscalationGame.evm.bytecode.object }`,
-			args: [ securityPool ]
+			args: [securityPool],
 		}),
 		from: infraContracts.escalationGameFactory,
-		salt: numberToBytes(0)
+		salt: numberToBytes(0),
 	})
 	return { ...contracts, securityPool, escalationGame }
 }
@@ -242,6 +254,6 @@ export const deployOriginSecurityPool = async (client: WriteClient, universeId: 
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deployOriginSecurityPool',
 		address: infraAddresses.securityPoolFactory,
-		args: [universeId, extraInfo, marketEndDate, securityMultiplier, startingRetentionRate, startingRepEthPrice]
+		args: [universeId, extraInfo, marketEndDate, securityMultiplier, startingRetentionRate, startingRepEthPrice],
 	})
 }

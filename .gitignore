@@ -4,3 +4,5 @@ node_modules/
 /solidity/js
 solidity/user-config.json
 solidity/ts/types/contractArtifact.ts
+.tsbuildinfo
+solidity/.contract-hash.json
