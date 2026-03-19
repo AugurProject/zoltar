@@ -61,6 +61,7 @@ Repeat the cycle iteratively after each fix to ensure clean builds and avoid acc
 - **Semicolons**: Do not use semicolons at the end of statements.
 - **Template literals**: Always include a space inside `${}` (e.g., `\`Hello, \${ name }!\``).
 - **Empty lines**: Do not have multiple consecutive empty lines (maximum 1).
+- **Consecutive spaces**: Do not have multiple consecutive spaces within a line. This is enforced by ESLint (`no-multi-spaces`).
 - **Non-null assertions**: Do not use the `!` operator. Instead, perform explicit undefined checks and throw an error if a value is unexpectedly undefined.
 
 Prettier and ESLint are configured to enforce these rules automatically. Run `bun run prettify` and `bun run lint` to format and check your code.

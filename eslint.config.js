@@ -68,6 +68,9 @@ export default [
 			// Disallow multiple empty lines
 			'no-multiple-empty-lines': ['error', { max: 1 }],
 
+			// Disallow consecutive spaces (no two spaces in a row)
+			'no-multi-spaces': 'error',
+
 			// Spacing inside template curly braces
 			'template-curly-spacing': ['error', 'always'],
 		},

@@ -852,7 +852,7 @@ describe('Auction', () => {
 
 			// Use a tick where tickToPrice returns 0 (very negative). -450000 yields price 0
 			const zeroPriceTick = -450000n
-			const bidAmount = 1n * ATTOETH_PER_ETH  // 1 ETH
+			const bidAmount = 1n * ATTOETH_PER_ETH // 1 ETH
 
 			await submitBidAndVerifyLock(client, auctionAddress, zeroPriceTick, bidAmount)
 
@@ -888,7 +888,7 @@ describe('Auction', () => {
 		test('zero-price bids (non-clearing) should get full refund', async () => {
 			const ethRaiseCap = 100n * ATTOETH_PER_ETH
 			// Set target low enough that 1 ETH at tick 0 exceeds it
-			const maxRepBeingSold = ATTOETH_PER_ETH  / 2n // 0.5 ETH worth of REP
+			const maxRepBeingSold = ATTOETH_PER_ETH / 2n // 0.5 ETH worth of REP
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
 
 			// Zero-price tick (very negative)
@@ -898,7 +898,7 @@ describe('Auction', () => {
 
 			// Winning bid with enough ETH to meet/exceed rep target
 			const winningTick = 0n
-			const winningAmount = 1n * ATTOETH_PER_ETH  // yields 1 REP wei at price 1, > 0.5 target
+			const winningAmount = 1n * ATTOETH_PER_ETH // yields 1 REP wei at price 1, > 0.5 target
 			await submitBid(client, auctionAddress, winningTick, winningAmount)
 
 			await finalizeAndVerify(client, auctionAddress)
