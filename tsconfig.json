@@ -29,5 +29,6 @@
 	},
 	"include": [
 		"solidity/ts/**/*.ts",
+		"solidity/ts/**/*.mts",
 	],
 }
