@@ -257,4 +257,6 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		}
 		return YesNoMarkets.Outcome.None;
 	}
+	receive() external payable {}
+
 }
