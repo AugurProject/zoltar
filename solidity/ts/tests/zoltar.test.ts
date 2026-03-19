@@ -70,7 +70,7 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), forkerDeposit, "forker's deposit should be in zoltar")
 
 		// forker claim balance
-		const outcomeIndexes = [0n, 1n, 3n]
+		const outcomeIndexes = [0, 1, 3]
 		await forkerClaimRep(client, genesisUniverse, outcomeIndexes)
 		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), 0n, "forker's deposit should be burned")
 		const universeForkDataAfterClaim = await getUniverseForkData(client, genesisUniverse)
@@ -84,7 +84,7 @@ describe('Contract Test Suite', () => {
 		}
 
 		// split rest of the rep
-		const splitOutcomeIndexes = [0n, 1n, 2n]
+		const splitOutcomeIndexes = [0, 1, 2]
 		const priorBalances = await Promise.all(
 			splitOutcomeIndexes.map(async index => {
 				const indexUniverse = getChildUniverseId(genesisUniverse, index)

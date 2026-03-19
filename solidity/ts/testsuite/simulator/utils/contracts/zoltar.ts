@@ -65,12 +65,12 @@ export const forkUniverse = async (client: WriteClient, universeId: bigint, extr
 		args: [universeId, extraInfo, questionCategories],
 	})
 
-export const splitRep = async (client: WriteClient, universeId: bigint, outcomeIndexes: bigint[]) =>
+export const splitRep = async (client: WriteClient, universeId: bigint, outcomeIndexes: number[]) =>
 	await client.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'splitRep',
 		address: getZoltarAddress(),
-		args: [universeId, outcomeIndexes.map(index => Number(index))],
+		args: [universeId, outcomeIndexes],
 	})
 
 export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0x${ string }`) {
@@ -82,12 +82,12 @@ export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0
 	})
 }
 
-export const forkerClaimRep = async (client: WriteClient, universeId: bigint, outcomeIndexes: bigint[]) =>
+export const forkerClaimRep = async (client: WriteClient, universeId: bigint, outcomeIndexes: number[]) =>
 	await client.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkerClaimRep',
 		address: getZoltarAddress(),
-		args: [universeId, outcomeIndexes.map(x => Number(x))],
+		args: [universeId, outcomeIndexes],
 	})
 
 export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
