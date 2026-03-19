@@ -1,3 +1,5 @@
+/* eslint @typescript-eslint/no-explicit-any: "off" */
+
 declare module 'solc' {
 	interface CompilerInputSourceFile {
 		readonly keccak256?: string

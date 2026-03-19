@@ -29,6 +29,9 @@ module.exports = {
 
 		'local/single-line-switch-case': 'error',
 
+		// Disable core no-unused-vars to avoid conflict with unused-imports plugin
+		'no-unused-vars': 'off',
+
 		'unused-imports/no-unused-imports': 'error',
 		'unused-imports/no-unused-exports': 'error',
 		'unused-imports/no-unused-vars': [

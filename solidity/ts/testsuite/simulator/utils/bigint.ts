@@ -1,3 +1,5 @@
+/* eslint @typescript-eslint/no-explicit-any: "off" */
+
 export function bigintToDecimalString(value: bigint, power: bigint): string {
 	if (value >= 0n) {
 		const integerPart = value / 10n ** power

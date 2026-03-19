@@ -162,29 +162,29 @@ const computeShareTokenSalt = (securityMultiplier: bigint, marketId: bigint) => 
 }
 
 export const getMarketId = (universeId: bigint, securityMultiplier: bigint, extraInfo: string, marketEndDate: bigint) => {
-	const securityPoolfactory = getInfraContractAddresses().securityPoolFactory
+	const securityPoolFactory = getInfraContractAddresses().securityPoolFactory
 	const marketCreationTypes = [
-		{ name: 'securityPoolfactory', type: 'address' },
+		{ name: 'securityPoolFactory', type: 'address' },
 		{ name: 'universeId', type: 'uint248' },
 		{ name: 'securityMultiplier', type: 'uint256' },
 		{ name: 'extraInfo', type: 'string' },
 		{ name: 'marketEndDate', type: 'uint256' },
 	]
-	const salt = keccak256(encodeAbiParameters(marketCreationTypes, [securityPoolfactory, universeId, securityMultiplier, extraInfo, marketEndDate]))
+	const salt = keccak256(encodeAbiParameters(marketCreationTypes, [securityPoolFactory, universeId, securityMultiplier, extraInfo, marketEndDate]))
 	const saltTypes = [
-		{ name: 'securityPoolfactory', type: 'address' },
+		{ name: 'securityPoolFactory', type: 'address' },
 		{ name: 'extraInfo', type: 'string' },
 		{ name: 'marketEndDate', type: 'uint256' },
 		{ name: 'salt', type: 'bytes32' },
 	]
-	return BigInt(keccak256(encodeAbiParameters(saltTypes, [securityPoolfactory, extraInfo, marketEndDate, salt])))
+	return BigInt(keccak256(encodeAbiParameters(saltTypes, [securityPoolFactory, extraInfo, marketEndDate, salt])))
 }
 
 export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bigint, marketId: bigint, securityMultiplier: bigint) => {
 	const securityPoolSalt = computeSecurityPoolSalt(parent, universeId, marketId, securityMultiplier)
 	const infraContracts = getInfraContractAddresses()
 	const securityPoolTypes = [
-		{ name: 'securityPoolfactory', type: 'address' },
+		{ name: 'securityPoolFactory', type: 'address' },
 		{ name: 'securityPoolSalt', type: 'bytes32' },
 	]
 	const securityPoolSaltWithMsgSender = keccak256(encodeAbiParameters(securityPoolTypes, [infraContracts.securityPoolFactory, securityPoolSalt]))
