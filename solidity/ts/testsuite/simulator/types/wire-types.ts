@@ -357,7 +357,7 @@ const EthereumWithdrawal = funtypes.ReadonlyObject({
 
 type EthereumBlockHeaderWithoutTransactions = funtypes.Static<typeof EthereumBlockHeaderWithoutTransactions>
 const EthereumBlockHeaderWithoutTransactions = funtypes.Intersect(
-	funtypes.MutablePartial({
+	funtypes.ReadonlyPartial({
 		author: EthereumAddress,
 	}),
 	funtypes.Intersect(

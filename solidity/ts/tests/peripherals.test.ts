@@ -71,14 +71,14 @@ describe('Peripherals Contract Test Suite', () => {
 		const escalationGameAddress = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(escalationGameAddress, securityPoolAddresses.escalationGame, 'escalation game addresses do not match')
 
-		assert.ok((await getNonDecisionThreshold(client, securityPoolAddresses.escalationGame)) > 10n * reportBond, 'fork treshold need to be big enough')
+		assert.ok((await getNonDecisionThreshold(client, securityPoolAddresses.escalationGame)) > 10n * reportBond, 'fork threshold needs to be big enough')
 		await mockWindow.advanceTime(10n * DAY)
 		const yesDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		strictEqualTypeSafe(yesDeposits.length, 1, 'there should be one deposit')
 		const yesDeposit = ensureDefined(yesDeposits[0], 'yesDeposits[0] is undefined')
 		strictEqualTypeSafe(yesDeposit.depositIndex, 0n, 'index should be zero')
 		strictEqualTypeSafe(yesDeposit.depositor, client.account.address, 'wrong depositor')
-		strictEqualTypeSafe(yesDeposit.cumulativeAmount, reportBond, 'cumulator should be report bond')
+		strictEqualTypeSafe(yesDeposit.cumulativeAmount, reportBond, 'cumulative should be report bond')
 		strictEqualTypeSafe(yesDeposit.amount, reportBond, 'amount should be report bond')
 		strictEqualTypeSafe(await getStartBond(client, securityPoolAddresses.escalationGame), reportBond, 'report bond matches')
 
@@ -244,7 +244,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(forkData.ownFork, true, 'should be own fork')
 		const totalFeesOwedToVaultsRightAfterFork = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
-		strictEqualTypeSafe(0n, await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool), 'Parents original rep is gone')
+		strictEqualTypeSafe(0n, await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool), "Parent's original rep is gone")
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await migrateFromEscalationGame(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -262,7 +262,7 @@ describe('Peripherals Contract Test Suite', () => {
 		approximatelyEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), openInterestAmount - totalFees, 10n, 'child contract did not record the amount correctly')
 
 		const totalFeesOwedToVaultsAfterFork = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
-		strictEqualTypeSafe(totalFeesOwedToVaultsRightAfterFork, totalFeesOwedToVaultsAfterFork, 'parents fees should be frozen')
+		strictEqualTypeSafe(totalFeesOwedToVaultsRightAfterFork, totalFeesOwedToVaultsAfterFork, "parent's fees should be frozen")
 	})
 
 	test('two security pools with disagreement', async () => {
@@ -299,7 +299,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await migrateFromEscalationGame(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 		const yesVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		const yesPoolBalance = await getERC20Balance(client, await getRepToken(client, yesSecurityPool.securityPool), yesSecurityPool.securityPool)
-		strictEqual18Decimal(await poolOwnershipToRep(client, yesSecurityPool.securityPool, yesVault.repDepositShare), yesPoolBalance - repDeposit, 'we should account for all the rep in yes pool (except attackers rep)')
+		strictEqual18Decimal(await poolOwnershipToRep(client, yesSecurityPool.securityPool, yesVault.repDepositShare), yesPoolBalance - repDeposit, 'we should account for all the rep in yes pool (except attacker\'s rep)')
 		const migratedRepInYes = await getMigratedRep(client, yesSecurityPool.securityPool)
 		strictEqual18Decimal(yesPoolBalance - repDeposit, migratedRepInYes, 'yes pool has the same rep as migrated rep')
 		strictEqualTypeSafe(await getMarketOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'yes is finalized')
@@ -476,7 +476,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, marketId, securityMultiplier)
 
-		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'Fork Migration need to start')
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'Fork Migration needs to start')
 		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(migratedRep, 0n, 'correct amount rep migrated')
 		assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'Did not create YES security pool')

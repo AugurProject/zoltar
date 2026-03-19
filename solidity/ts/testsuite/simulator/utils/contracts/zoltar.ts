@@ -82,12 +82,12 @@ export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0
 	})
 }
 
-export const forkerClaimRep = async (client: WriteClient, universeId: bigint, outcomeindexes: bigint[]) =>
+export const forkerClaimRep = async (client: WriteClient, universeId: bigint, outcomeIndexes: bigint[]) =>
 	await client.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkerClaimRep',
 		address: getZoltarAddress(),
-		args: [universeId, outcomeindexes.map(x => Number(x))],
+		args: [universeId, outcomeIndexes.map(x => Number(x))],
 	})
 
 export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
