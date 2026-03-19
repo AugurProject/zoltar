@@ -68,6 +68,10 @@ class CompilationError extends Error {
 		this.name = 'CompilationError'
 		this.errors = errors
 	}
+	override toString() {
+		const unescape = (str: string) => str.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+		return `${ this.name }: ${ this.message }\n errors:\n${ this.errors.map((e, i) => `  [${ i }] ${ unescape(e) }`).join('\n') }`
+	}
 }
 
 async function exists(path: string) {
@@ -277,8 +281,12 @@ const compileContracts = async () => {
 	console.log('TypeScript artifact generated.')
 }
 
-compileContracts().catch(error => {
-	console.error(error)
+compileContracts().catch((error: unknown) => {
+	if (error instanceof CompilationError) {
+		console.error(error.toString())
+	} else {
+		console.error(error)
+	}
 	debugger
 	process.exit(1)
 })
