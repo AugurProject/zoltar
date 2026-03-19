@@ -7,7 +7,7 @@ import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zol
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import assert from 'node:assert'
 import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
-import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays'
+import { areEqualArrays } from '../testsuite/simulator/utils/array-utils'
 
 describe('Question Data', () => {
 	let mockWindow: AnvilWindowEthereum

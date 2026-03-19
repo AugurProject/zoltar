@@ -2,10 +2,11 @@ import 'viem/window'
 import { ReadContractReturnType } from 'viem'
 import { ReadClient, WriteClient } from '../viem'
 import { WETH_ADDRESS } from '../constants'
-import { peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_tokens_ShareToken_ShareToken, peripherals_YesNoMarkets_YesNoMarkets } from '../../../../types/contractArtifact'
+import { peripherals_DualCapBatchAuction_DualCapBatchAuction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_tokens_ShareToken_ShareToken, peripherals_YesNoMarkets_YesNoMarkets } from '../../../../types/contractArtifact'
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
 import { shareArrayToCash } from './securityPool'
+import { priceToClosestTick } from './tickMath'
 
 export enum OperationType {
 	Liquidation = 0,
@@ -170,17 +171,24 @@ export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOper
 		args: [],
 	})
 
-export const participateAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, repToBuy: bigint, ethToInvest: bigint) =>
+export const participateAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, repToBuy: bigint, ethToInvest: bigint) => {
+	if (repToBuy === 0n) {
+		throw new Error('repToBuy cannot be zero')
+	}
+	// Compute price: ethToInvest / repToBuy in PRICE_PRECISION units
+	const price = (ethToInvest * 1_000_000_000_000_000_000n) / repToBuy
+	const tick = priceToClosestTick(price)
 	await client.writeContract({
-		abi: peripherals_Auction_Auction.abi,
-		functionName: 'participate',
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+		functionName: 'submitBid',
 		address: auctionAddress,
-		args: [repToBuy],
+		args: [tick],
 		value: ethToInvest,
 	})
+}
 export const getEthAmountToBuy = async (client: ReadClient, auctionAddress: `0x${ string }`) =>
 	await client.readContract({
-		abi: peripherals_Auction_Auction.abi,
+		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
 		functionName: 'ethAmountToBuy',
 		address: auctionAddress,
 		args: [],

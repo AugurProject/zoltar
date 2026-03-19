@@ -228,11 +228,12 @@ const compileContracts = async () => {
 
 	if (!needsRecompilation) {
 		console.log('No changes detected in Solidity contracts. Skipping recompilation.')
-		// Validate artifact file is accessible and readable
+		// Validate artifact file exists, is accessible, and contains valid data
 		try {
-			await fs.access(ARTIFACTS_JSON)
+			const artifactContent = await fs.readFile(ARTIFACTS_JSON, 'utf8')
+			CompileResult.parse(JSON.parse(artifactContent))
 		} catch {
-			console.log('Artifact file is missing or inaccessible, recompiling...')
+			console.log('Artifact file is missing, inaccessible, or corrupted, recompiling...')
 			needsRecompilation = true
 		}
 	}

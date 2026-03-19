@@ -13,13 +13,13 @@ type QuestionData = {
 	answerUnit: string
 }
 
-export const getOutcomeLabels = async (readClient: ReadClient, questionId: bigint) => {
+export const getOutcomeLabels = async (client: ReadClient, questionId: bigint) => {
 	let currentIndex = 0n
 	const numberOfEntries = 30n
 	const pages: string[] = []
 	do {
 		const newLabels = (
-			await readClient.readContract({
+			await client.readContract({
 				abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 				functionName: 'getOutcomeLabels',
 				address: getInfraContractAddresses().zoltarQuestionData,

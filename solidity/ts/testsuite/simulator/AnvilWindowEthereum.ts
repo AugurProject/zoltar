@@ -3,7 +3,7 @@ import { EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes } from '.
 import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types'
 import * as funtypes from 'funtypes'
 import { ensureDefined } from './utils/testUtils'
-import { ensureArray } from './utils/typed-arrays'
+import { ensureArray } from './utils/array-utils'
 
 type BlockTimeManipulation = { readonly type: 'AddToTimestamp'; readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp'; readonly timeToSet: EthereumQuantity }
 
@@ -210,6 +210,9 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 	}
 
 	const setBalance = async (address: string, amount: bigint) => {
+		if (amount < 0n) {
+			throw new RangeError('Balance cannot be negative')
+		}
 		await request({
 			method: 'anvil_setBalance',
 			params: [address, `0x${ amount.toString(16) }`],
