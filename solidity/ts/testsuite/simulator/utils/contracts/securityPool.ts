@@ -98,12 +98,6 @@ export const poolOwnershipToRep = async (client: ReadClient, securityPoolAddress
 	args: [poolOwnership],
 })
 
-export const repToPoolOwnership = async (client: ReadClient, securityPoolAddress: `0x${ string }`, repAmount: bigint) => await client.readContract({
-	abi: peripherals_SecurityPool_SecurityPool.abi,
-	functionName: 'repToPoolOwnership',
-	address: securityPoolAddress,
-	args: [repAmount],
-})
 
 export const redeemShares = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => await client.writeContract({
 	abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -126,19 +120,7 @@ export const sharesToCash = async (client: ReadClient, securityPoolAddress: `0x$
 	args: [completeSetAmount],
 })
 
-export const cashToShares = async (client: ReadClient, securityPoolAddress: `0x${ string }`, eth: bigint) => await client.readContract({
-	abi: peripherals_SecurityPool_SecurityPool.abi,
-	functionName: 'cashToShares',
-	address: securityPoolAddress,
-	args: [eth],
-})
 
-export const getShareTokenSupply = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => await client.readContract({
-	abi: peripherals_SecurityPool_SecurityPool.abi,
-	functionName: 'shareTokenSupply',
-	address: securityPoolAddress,
-	args: [],
-})
 
 export const shareArrayToCash = async (client: ReadClient, securityPoolAddress: `0x${ string }`, shares: readonly bigint[]) => await Promise.all(shares.map(share => sharesToCash(client, securityPoolAddress, share)))
 

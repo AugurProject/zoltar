@@ -12,13 +12,9 @@ import { forkZoltarWithOwnEscalationGame } from './securityPoolForker'
 import { getTotalTheoreticalSupply } from './zoltar'
 import { depositRep, depositToEscalationGame, getRepToken, getSecurityVault, poolOwnershipToRep } from './securityPool'
 
-export const genesisUniverse = 0n
-export const securityMultiplier = 2n
-export const startingRepEthPrice = 1n
-export const completeSetCollateralAmount = 0n
-export const PRICE_PRECISION = 10n ** 18n
-export const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
-export const EXTRA_INFO = 'test market!'
+const genesisUniverse = 0n
+const securityMultiplier = 2n
+const PRICE_PRECISION = 10n ** 18n
 
 export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigint, marketId: bigint) => {
 	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, marketId, securityMultiplier).securityPool

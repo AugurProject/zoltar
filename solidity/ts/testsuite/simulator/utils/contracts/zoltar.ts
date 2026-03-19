@@ -17,7 +17,7 @@ export const isZoltarDeployed = async (client: ReadClient) => {
 	return deployedBytecode === expectedDeployedBytecode
 }
 
-export const deployZoltarTransaction = () => {
+const deployZoltarTransaction = () => {
 	const bytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.bytecode.object }`
 	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
 }
@@ -71,19 +71,7 @@ export const splitRep = async (client: WriteClient, universeId: bigint, outcomeI
 	args: [universeId, outcomeIndexes.map(index => Number(index))],
 })
 
-export const deployChild = async (client: WriteClient, universeId: bigint, outcomeIndex: bigint) => await client.writeContract({
-	abi: Zoltar_Zoltar.abi,
-	functionName: 'deployChild',
-	address: getZoltarAddress(),
-	args: [universeId, Number(outcomeIndex)],
-})
 
-export const getOutcomeName = async (client: ReadClient, universeId: bigint) => await client.readContract({
-	abi: Zoltar_Zoltar.abi,
-	functionName: 'getOutcomeName',
-	address: getZoltarAddress(),
-	args: [universeId],
-})
 
 export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0x${ string }`) {
 	return await client.readContract({

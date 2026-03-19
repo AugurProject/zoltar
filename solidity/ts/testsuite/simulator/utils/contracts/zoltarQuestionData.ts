@@ -43,12 +43,6 @@ export const getQuestionData = async (client: ReadClient, questionId: bigint) =>
 	return { questionId, title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit }
 }
 
-export const getQuestionCreatedTimestamp = async (client: ReadClient, questionId: bigint) => await client.readContract({
-	abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-	functionName: 'questionCreatedTimestamp',
-	address: getInfraContractAddresses().zoltarQuestionData,
-	args: [questionId],
-})
 
 export const getQuestionId = async (client: ReadClient, questionData: QuestionData, outcomeLabels: string[]) => await client.readContract({
 	abi: ZoltarQuestionData_ZoltarQuestionData.abi,

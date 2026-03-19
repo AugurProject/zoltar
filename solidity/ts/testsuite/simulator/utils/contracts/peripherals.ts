@@ -117,7 +117,7 @@ export const wrapWeth = async (client: WriteClient, amount: bigint) => {
 	})
 }
 
-export interface ReportMeta {
+interface ReportMeta {
 	exactToken1Report: bigint
 	escalationHalt: bigint
 	fee: bigint
@@ -179,12 +179,6 @@ export const getEthAmountToBuy = async (client: ReadClient, auctionAddress: `0x$
 	args: [],
 })
 
-export const balanceOfOutcome = async (client: ReadClient, shareTokenAddress: `0x${ string }`, universeId: bigint, outcome: QuestionOutcome, account: `0x${ string }`) => await client.readContract({
-	abi: peripherals_tokens_ShareToken_ShareToken.abi,
-	functionName: 'balanceOfOutcome',
-	address: shareTokenAddress,
-	args: [universeId, outcome, account],
-})
 
 export const balanceOfShares = async (client: ReadClient, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`) => await client.readContract({
 	abi: peripherals_tokens_ShareToken_ShareToken.abi,
@@ -203,11 +197,10 @@ export const balanceOfSharesInCash = async (client: ReadClient, securityPoolAddr
 	return await shareArrayToCash(client, securityPoolAddress, array)
 }
 
-export const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => {
+const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => {
 	const universeMask = (1n << 248n) - 1n
 	return ((universeId & universeMask) << 8n) | (BigInt(outcome) & 255n)
 }
-export const unpackTokenId = (tokenId: bigint): { universe: bigint; outcome: QuestionOutcome } => ({ universe: tokenId >> 8n, outcome: Number(tokenId & 0xffn) })
 
 export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x${ string }`, fromUniverseId: bigint, outcome: QuestionOutcome, outcomes: bigint[]) => await client.writeContract({
 	abi: peripherals_tokens_ShareToken_ShareToken.abi,

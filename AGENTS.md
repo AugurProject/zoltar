@@ -6,7 +6,9 @@ After implementing any feature or fixing a bug, always run the following quality
 2. **Tests**: Run the relevant test suite (e.g., `bun run test-peripherals`, `bun run test-zoltar`, etc.)
 3. **Code formatting**: `bun run prettify`
 4. **Linting**: `bun run lint`
-5. **Dead code analysis**: `bun run knip`
+ 5. **Dead code analysis**: `bun run knip`
+ 
+ **Autofix**: You can automatically fix many knip issues with `bun run knip:fix`. This will remove unused exports and files. Review changes carefully.
 
 Repeat the cycle iteratively after each fix to ensure clean builds and avoid accumulating issues.
 

@@ -38,6 +38,7 @@
 		"lint:fix": "bun x eslint . --config eslint.config.js --fix",
 		"format": "bun x prettier --write solidity/ts/**/*.ts",
 		"prettify": "bun x prettier --write solidity/ts/**/*.ts",
-		"knip": "knip"
+		"knip": "knip",
+		"knip:fix": "knip --fix"
 	}
 }
