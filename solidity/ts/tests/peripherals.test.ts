@@ -17,14 +17,14 @@ import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoret
 import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
 
 describe('Peripherals Contract Test Suite', () => {
-	let mockWindow!: AnvilWindowEthereum
-	let client!: WriteClient
+	let mockWindow: AnvilWindowEthereum
+	let client: WriteClient
 	const reportBond = 1n * 10n ** 18n
 	const PRICE_PRECISION = 1n * 10n ** 18n
 	const repDeposit = 1000n * 10n ** 18n
 	const currentTimestamp = dateToBigintSeconds(new Date())
 	const marketEndDate = currentTimestamp + 365n * DAY
-	let securityPoolAddresses!: {
+	let securityPoolAddresses: {
 		securityPool: `0x${ string }`
 		priceOracleManagerAndOperatorQueuer: `0x${ string }`
 		shareToken: `0x${ string }`

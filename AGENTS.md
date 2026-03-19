@@ -11,10 +11,10 @@ Run each command individually and address any issues before proceeding to the ne
    bun tsc
    ```
 
-2. **Tests**: Run the relevant test suite (e.g., `bun run test-peripherals`, `bun run test-zoltar`, etc.)
-   ```bash
-   bun test
-   ```
+2. **Tests**: Run all tests
+    ```bash
+    bun test
+    ```
 
 3. **Code formatting**:
    ```bash
@@ -87,16 +87,10 @@ This test-driven approach ensures:
 
 ## Key Principles
 
-- **Run specific test suites relevant to your changes**: If you modified contracts in `contracts/peripherals/`, run `bun run test-peripherals`. For Zoltar changes, run `bun run test-zoltar`, etc.
-- **Run the full test suite occasionally**: `bun test` runs all tests and catches cross-module issues.
+- **Always run the full test suite**: `bun test` runs all tests and catches cross-module issues.
 
 ## Commands
 
-- `bun run test-peripherals` – runs peripherals tests
-- `bun run test-zoltar` – runs zoltar tests
-- `bun run test-escalation-game` – runs escalation game tests
-- `bun run test-question-data` – runs question data tests
-- `bun run test-auction` – runs auction tests
 - `bun test` – runs all tests
 
 ## Notes
