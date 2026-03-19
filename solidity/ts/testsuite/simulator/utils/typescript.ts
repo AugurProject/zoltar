@@ -25,9 +25,8 @@ export function createGuard<T, U extends T>(check: (maybe: T) => U | undefined):
 }
 
 export function getWithDefault<Key, Value>(map: Map<Key, Value>, key: Key, defaultValue: Value) {
-	const previousValue = map.get(key)
-	if (previousValue === undefined) return defaultValue
-	return previousValue
+	if (!map.has(key)) return defaultValue
+	return map.get(key)!
 }
 
 type Split<T> = { [K in keyof T]: { [P in K]: T[P] } }[keyof T] | Record<PropertyKey, never>

@@ -1,6 +1,7 @@
 import { EIP1193Provider } from 'viem'
-import { dateToBigintSeconds } from './utils/bigint.js'
-import { EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes, EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types.js'
+import { dateToBigintSeconds } from './utils/bigint'
+import { EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes } from './types/wire-types'
+import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types'
 import * as funtypes from 'funtypes'
 
 type BlockTimeManipulation = { readonly type: 'AddToTimestamp', readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp', readonly timeToSet: EthereumQuantity }
@@ -55,6 +56,7 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 	validateLocalhostUrl(ANVIL_RPC)
 
 	// Make JSON-RPC request to Anvil
+	let requestId = 0
 	const request = async (args: { method: string; params?: unknown[] }): Promise<unknown> => {
 		// For eth_sendTransaction, simulate first to catch reverts early
 		if (args.method === 'eth_sendTransaction' && args.params?.[0]) {
@@ -72,7 +74,7 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				jsonrpc: '2.0',
-				id: 0,
+				id: requestId++,
 				method: args.method,
 				params: args.params || [],
 			}),
@@ -117,7 +119,7 @@ export const getMockedEthSimulateWindowEthereum = async (): Promise<AnvilWindowE
 
 	// Reset Anvil to a clean state before each test
 	await request({ method: 'anvil_reset', params: [] })
-	await request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [0] })
+	await request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
 
 	// Apply state overrides using Anvil admin methods
 	const addStateOverrides = async (stateOverrides: StateOverrides) => {

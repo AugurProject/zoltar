@@ -10,7 +10,7 @@ After implementing any feature or fixing a bug, always run the following quality
 
 Repeat the cycle iteratively after each fix to ensure clean builds and avoid accumulating issues.
 
-**Note**: For knip (dead code analysis), address its suggestions by removing unused files/exports or marking them as intentionally unused (e.g., via `_` prefix or `// knip-ignore-next` comments) to keep the codebase clean.
+**Important**: The final state after the agent's work must have **zero knip warnings** (no unused exports, no unused files, no configuration hints). All suggested issues from knip must be addressed. The codebase should be production-clean with no dead code warnings.
 
 # Package Guidelines
 

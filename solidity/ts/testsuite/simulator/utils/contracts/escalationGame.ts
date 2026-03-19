@@ -1,8 +1,8 @@
 import { encodeDeployData, getCreate2Address, numberToBytes } from 'viem'
-import { peripherals_EscalationGame_EscalationGame, peripherals_factories_EscalationGameFactory_EscalationGameFactory } from '../../../../types/contractArtifact.js'
-import { AccountAddress, QuestionOutcome } from '../../types/types.js'
-import { ReadClient, WriteClient } from '../viem.js'
-import { getInfraContractAddresses } from './deployPeripherals.js'
+import { peripherals_EscalationGame_EscalationGame, peripherals_factories_EscalationGameFactory_EscalationGameFactory } from '../../../../types/contractArtifact'
+import { AccountAddress, QuestionOutcome } from '../../types/types'
+import { ReadClient, WriteClient } from '../viem'
+import { getInfraContractAddresses } from './deployPeripherals'
 
 export const getNonDecisionThreshold = async (client: ReadClient, escalationGame: AccountAddress) => await client.readContract({
 	abi: peripherals_EscalationGame_EscalationGame.abi,

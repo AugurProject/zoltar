@@ -1,7 +1,7 @@
-import { peripherals_DualCapBatchAuction_DualCapBatchAuction, peripherals_factories_DualCapBatchAuctionFactory_DualCapBatchAuctionFactory } from '../../../../types/contractArtifact.js'
-import { bytes32String } from '../bigint.js'
-import { ReadClient, WriteClient } from '../viem.js'
-import { getInfraContractAddresses } from './deployPeripherals.js'
+import { peripherals_DualCapBatchAuction_DualCapBatchAuction, peripherals_factories_DualCapBatchAuctionFactory_DualCapBatchAuctionFactory } from '../../../../types/contractArtifact'
+import { bytes32String } from '../bigint'
+import { ReadClient, WriteClient } from '../viem'
+import { getInfraContractAddresses } from './deployPeripherals'
 
 export const startAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, ethRaiseCap: bigint, maxRepBeingSold: bigint) => await client.writeContract({
 	abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,

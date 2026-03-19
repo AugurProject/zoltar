@@ -9,7 +9,10 @@ export function areEqualUint8Arrays(first?: Uint8Array, second?: Uint8Array) {
 export function areEqualArrays<T>(first: T[], second: T[]) {
 	if (first === second) return true
 	if (first.length !== second.length) return false
-	return first.every((value, index) => value === second[index])
+	for (let i = 0; i < first.length; i++) {
+		if (first[i] !== second[i]) return false
+	}
+	return true
 }
 
 export function stripLeadingZeros(byteArray: Uint8Array): Uint8Array {
@@ -31,6 +34,7 @@ const arePropValuesEqual = <T>(subject: T, target: T, propNames: (keyof T)[]): b
 export const getUniqueItemsByProperties = <T>(items: T[], propNames: (keyof T)[]): T[] => items.filter((item, index, array) => index === array.findIndex(foundItem => arePropValuesEqual(foundItem, item, propNames)))
 
 export function replaceElementInReadonlyArray<T>(originalArray: readonly T[], index: number, newValue: T): readonly T[] {
+	if (!Number.isInteger(index)) throw new Error('Index must be an integer')
 	if (index < 0 || index >= originalArray.length) throw new Error('Index is out of bounds')
 	const newArray = [...originalArray]
 	newArray[index] = newValue

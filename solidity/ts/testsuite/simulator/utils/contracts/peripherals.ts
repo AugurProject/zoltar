@@ -1,11 +1,11 @@
 import 'viem/window'
 import { ReadContractReturnType } from 'viem'
-import { ReadClient, WriteClient } from '../viem.js'
-import { WETH_ADDRESS } from '../constants.js'
-import { peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_tokens_ShareToken_ShareToken, peripherals_YesNoMarkets_YesNoMarkets } from '../../../../types/contractArtifact.js'
-import { QuestionOutcome } from '../../types/types.js'
-import { getInfraContractAddresses } from './deployPeripherals.js'
-import { shareArrayToCash } from './securityPool.js'
+import { ReadClient, WriteClient } from '../viem'
+import { WETH_ADDRESS } from '../constants'
+import { peripherals_Auction_Auction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_tokens_ShareToken_ShareToken, peripherals_YesNoMarkets_YesNoMarkets } from '../../../../types/contractArtifact'
+import { QuestionOutcome } from '../../types/types'
+import { getInfraContractAddresses } from './deployPeripherals'
+import { shareArrayToCash } from './securityPool'
 
 export enum OperationType {
 	Liquidation = 0,

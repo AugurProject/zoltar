@@ -224,11 +224,20 @@ const compileContracts = async () => {
 	const cache = await loadHashCache()
 
 	// Determine if recompilation is needed
-	const needsRecompilation = !(cache.hash === currentContractHash && (await exists(ARTIFACTS_JSON)))
+	let needsRecompilation = !(cache.hash === currentContractHash && (await exists(ARTIFACTS_JSON)))
 
 	if (!needsRecompilation) {
 		console.log('No changes detected in Solidity contracts. Skipping recompilation.')
-	} else {
+		// Validate artifact file is accessible and readable
+		try {
+			await fs.access(ARTIFACTS_JSON)
+		} catch {
+			console.log('Artifact file is missing or inaccessible, recompiling...')
+			needsRecompilation = true
+		}
+	}
+
+	if (needsRecompilation) {
 		console.log('Changes detected or first run. Compiling Solidity contracts...')
 
 		// Convert Map to object for solc input

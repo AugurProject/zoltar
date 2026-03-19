@@ -1,13 +1,13 @@
 import { test, beforeEach, describe } from 'bun:test'
-import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum.js'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
-import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
+import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
+import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
+import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
+import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import assert from 'node:assert'
-import { deployEscalationGame, depositOnOutcome, getBalances, getStartingTime } from '../testsuite/simulator/utils/contracts/escalationGame.js'
-import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
-import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
+import { deployEscalationGame, depositOnOutcome, getBalances, getStartingTime } from '../testsuite/simulator/utils/contracts/escalationGame'
+import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
+import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 
 describe('Escalation Game Test Suite', () => {
 	let mockWindow: AnvilWindowEthereum

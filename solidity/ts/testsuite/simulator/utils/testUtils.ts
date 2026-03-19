@@ -1,5 +1,5 @@
 import assert from 'node:assert'
-import { abs, bigintToDecimalString } from './bigint.js'
+import { abs, bigintToDecimalString } from './bigint'
 
 export const strictEqualTypeSafe = <Type>(actual: Type, expected: Type, errorMessage?: string | Error | undefined) => assert.strictEqual(actual, expected, errorMessage)
 

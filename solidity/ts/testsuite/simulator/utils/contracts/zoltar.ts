@@ -1,9 +1,9 @@
-import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../../types/contractArtifact.js'
-import { ReadClient, WriteClient } from '../viem.js'
-import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants.js'
+import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../../types/contractArtifact'
+import { ReadClient, WriteClient } from '../viem'
+import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes } from 'viem'
-import { addressString, bytes32String } from '../bigint.js'
-import { ensureProxyDeployerDeployed } from '../utilities.js'
+import { addressString, bytes32String } from '../bigint'
+import { ensureProxyDeployerDeployed } from '../utilities'
 
 export function getZoltarAddress() {
 	const bytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.bytecode.object }`

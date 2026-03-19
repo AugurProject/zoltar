@@ -1,18 +1,17 @@
 {
 	"entry": [
 		"solidity/ts/compile.ts",
-		"solidity/js/tests/**/*.js"
+		"solidity/ts/tests/**/*.ts"
 	],
 	"project": [
 		"solidity/ts/**/*.ts"
 	],
 	"ignore": [
-		"solidity/ts/tests/**",
-		"solidity/ts/testsuite/**"
 	],
 	"ignoreDependencies": [
 		"solc",
 		"@zoltu/file-copier",
-		"better-typescript-lib"
+		"better-typescript-lib",
+		"bun-types"
 	]
 }

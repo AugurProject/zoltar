@@ -1,6 +1,6 @@
 import * as funtypes from 'funtypes'
-import { UnionToIntersection } from '../utils/typescript.js'
-import { isHexEncodedNumber } from '../utils/bigint.js'
+import { UnionToIntersection } from '../utils/typescript'
+import { isHexEncodedNumber } from '../utils/bigint'
 
 const BigIntParser: funtypes.ParsedValue<funtypes.String, bigint>['config'] = {
 	parse: value => {
@@ -9,6 +9,7 @@ const BigIntParser: funtypes.ParsedValue<funtypes.String, bigint>['config'] = {
 	},
 	serialize: value => {
 		if (typeof value !== 'bigint') return { success: false, message: `${ typeof value } is not a bigint.` }
+		if (value < 0n) return { success: false, message: `${ value } must be non-negative.` }
 		return { success: true, value: `0x${ value.toString(16) }` }
 	},
 }
@@ -20,8 +21,8 @@ const SmallIntParser: funtypes.ParsedValue<funtypes.String, bigint>['config'] = 
 		return { success: true, value: BigInt(value) }
 	},
 	serialize: value => {
-		if (value >= 2n ** 64n) return { success: false, message: `${ value } must be smaller than 2^64.` }
 		if (typeof value !== 'bigint') return { success: false, message: `${ typeof value } is not a bigint.` }
+		if (value >= 2n ** 64n) return { success: false, message: `${ value } must be smaller than 2^64.` }
 		return { success: true, value: `0x${ value.toString(16) }` }
 	},
 }
@@ -33,6 +34,8 @@ const AddressParser: funtypes.ParsedValue<funtypes.String, bigint>['config'] = {
 	},
 	serialize: value => {
 		if (typeof value !== 'bigint') return { success: false, message: `${ typeof value } is not a bigint.` }
+		if (value < 0n) return { success: false, message: `${ value } must be non-negative.` }
+		if (value >= 2n ** 160n) return { success: false, message: `${ value } is too large for a 20-byte address.` }
 		return { success: true, value: `0x${ value.toString(16).padStart(40, '0') }` }
 	},
 }
@@ -44,6 +47,8 @@ const Bytes32Parser: funtypes.ParsedValue<funtypes.String, bigint>['config'] = {
 	},
 	serialize: value => {
 		if (typeof value !== 'bigint') return { success: false, message: `${ typeof value } is not a bigint.` }
+		if (value < 0n) return { success: false, message: `${ value } must be non-negative.` }
+		if (value >= 2n ** 256n) return { success: false, message: `${ value } is too large for a 32-byte value.` }
 		return { success: true, value: `0x${ value.toString(16).padStart(64, '0') }` }
 	},
 }
@@ -55,21 +60,25 @@ const Bytes256Parser: funtypes.ParsedValue<funtypes.String, bigint>['config'] = 
 	},
 	serialize: value => {
 		if (typeof value !== 'bigint') return { success: false, message: `${ typeof value } is not a bigint.` }
+		if (value < 0n) return { success: false, message: `${ value } must be non-negative.` }
+		if (value >= 2n ** 2048n) return { success: false, message: `${ value } is too large for a 256-byte value.` }
 		return { success: true, value: `0x${ value.toString(16).padStart(512, '0') }` }
 	},
 }
 const Bytes16Parser: funtypes.ParsedValue<funtypes.String, bigint>['config'] = {
 	parse: value => {
-		if (!/^0x([a-fA-F0-9]{16})$/.test(value)) return { success: false, message: `${ value } is not a hex string encoded 256 byte value.` }
+		if (!/^0x([a-fA-F0-9]{16})$/.test(value)) return { success: false, message: `${ value } is not a hex string encoded 8 byte value.` }
 		return { success: true, value: BigInt(value) }
 	},
 	serialize: value => {
 		if (typeof value !== 'bigint') return { success: false, message: `${ typeof value } is not a bigint.` }
+		if (value < 0n) return { success: false, message: `${ value } must be non-negative.` }
+		if (value >= 2n ** 128n) return { success: false, message: `${ value } is too large for a 16-byte value.` }
 		return { success: true, value: `0x${ value.toString(16).padStart(16, '0') }` }
 	},
 }
 
-export const BytesParser: funtypes.ParsedValue<funtypes.String, Uint8Array>['config'] = {
+const BytesParser: funtypes.ParsedValue<funtypes.String, Uint8Array>['config'] = {
 	parse: value => {
 		const match = /^(?:0x)?([a-fA-F0-9]*)$/.exec(value)
 		if (match === null) return { success: false, message: `Expected a hex string encoded byte array with an optional '0x' prefix but received ${ value }` }
@@ -97,11 +106,15 @@ export const BytesParser: funtypes.ParsedValue<funtypes.String, Uint8Array>['con
 const TimestampParser: funtypes.ParsedValue<funtypes.String, Date>['config'] = {
 	parse: value => {
 		if (!/^0x([a-fA-F0-9]{0,8})$/.test(value)) return { success: false, message: `${ value } is not a hex string encoded timestamp.` }
+		const seconds = BigInt(value)
+		if (seconds < 0n || seconds > 0xFFFFFFFFn) return { success: false, message: `${ value } is out of 32-bit unsigned timestamp range.` }
 		return { success: true, value: new Date(Number.parseInt(value, 16) * 1000) }
 	},
 	serialize: value => {
 		if (!(value instanceof Date)) return { success: false, message: `${ typeof value } is not a Date.` }
-		return { success: true, value: `0x${ Math.floor(value.valueOf() / 1000).toString(16) }` }
+		const seconds = Math.floor(value.valueOf() / 1000)
+		if (seconds < 0 || seconds > 0xFFFFFFFF) return { success: false, message: `Timestamp ${ value } is out of 32-bit unsigned range.` }
+		return { success: true, value: `0x${ seconds.toString(16) }` }
 	},
 }
 
@@ -122,6 +135,7 @@ const BigIntParserNonHex: funtypes.ParsedValue<funtypes.String, bigint>['config'
 	},
 	serialize: value => {
 		if (typeof value !== 'bigint') return { success: false, message: `${ typeof value } is not a bigint.` }
+		if (value < 0n) return { success: false, message: `${ value } must be non-negative.` }
 		return { success: true, value: `${ value.toString() }` }
 	},
 }
@@ -133,13 +147,13 @@ export type NonHexBigInt = funtypes.Static<typeof NonHexBigInt>
 // Ethereum
 //
 
-export const EthereumQuantity = funtypes.String.withParser(BigIntParser)
+const EthereumQuantity = funtypes.String.withParser(BigIntParser)
 export type EthereumQuantity = funtypes.Static<typeof EthereumQuantity>
 
-export const EthereumQuantitySmall = funtypes.String.withParser(SmallIntParser)
+const EthereumQuantitySmall = funtypes.String.withParser(SmallIntParser)
 export type EthereumQuantitySmall = funtypes.Static<typeof EthereumQuantitySmall>
 
-export const EthereumData = funtypes.String.withParser(BytesParser)
+const EthereumData = funtypes.String.withParser(BytesParser)
 export type EthereumData = funtypes.Static<typeof EthereumData>
 
 export const EthereumAddress = funtypes.String.withParser(AddressParser)
@@ -545,40 +559,3 @@ export const EthereumBlockHeaderTransaction = funtypes.Union(EthereumSignedTrans
 
 export type EthereumBlockHeader = funtypes.Static<typeof EthereumBlockHeader>
 export const EthereumBlockHeader = funtypes.Union(funtypes.Null, funtypes.Intersect(EthereumBlockHeaderWithoutTransactions, funtypes.ReadonlyObject({ transactions: funtypes.ReadonlyArray(EthereumBlockHeaderTransaction) })))
-
-//
-// Helpers
-//
-
-export function serialize<T, U extends funtypes.Codec<T>>(funtype: U, value: T) {
-	return funtype.serialize(value) as ToWireType<U>
-}
-
-type ToWireType<T> =
-	T extends funtypes.Intersect<infer U>
-		? UnionToIntersection<{ [I in keyof U]: ToWireType<U[I]> }[number]>
-		: T extends funtypes.Union<infer U>
-			? { [I in keyof U]: ToWireType<U[I]> }[number]
-			: T extends funtypes.Record<infer U, infer V>
-				? Record<funtypes.Static<U>, ToWireType<V>>
-				: T extends funtypes.Partial<infer U, infer V>
-					? V extends true
-						? { readonly [K in keyof U]?: ToWireType<U[K]> }
-						: { [K in keyof U]?: ToWireType<U[K]> }
-					: T extends funtypes.Object<infer U, infer V>
-						? V extends true
-							? { readonly [K in keyof U]: ToWireType<U[K]> }
-							: { [K in keyof U]: ToWireType<U[K]> }
-						: T extends funtypes.Readonly<funtypes.Tuple<infer U>>
-							? { readonly [P in keyof U]: ToWireType<U[P]> }
-							: T extends funtypes.Tuple<infer U>
-								? { [P in keyof U]: ToWireType<U[P]> }
-								: T extends funtypes.ReadonlyArray<infer U>
-									? readonly ToWireType<U>[]
-									: T extends funtypes.Array<infer U>
-										? ToWireType<U>[]
-										: T extends funtypes.ParsedValue<infer U, infer _>
-											? ToWireType<U>
-											: T extends funtypes.Codec<infer U>
-												? U
-												: never

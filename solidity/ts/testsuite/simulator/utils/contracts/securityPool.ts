@@ -1,7 +1,7 @@
-import { peripherals_SecurityPool_SecurityPool } from '../../../../types/contractArtifact.js'
-import { SystemState } from '../../types/peripheralTypes.js'
-import { QuestionOutcome } from '../../types/types.js'
-import { ReadClient, WriteClient } from '../viem.js'
+import { peripherals_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
+import { SystemState } from '../../types/peripheralTypes'
+import { QuestionOutcome } from '../../types/types'
+import { ReadClient, WriteClient } from '../viem'
 
 export const depositToEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome, amount: bigint) => await client.writeContract({
 	abi: peripherals_SecurityPool_SecurityPool.abi,

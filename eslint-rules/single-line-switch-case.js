@@ -26,11 +26,20 @@ module.exports = {
 
 				if (colonLine === statementLine) return
 
+				// Check if there is any non-whitespace content between colon and statement
+				const rangeStart = colonToken.range[1]
+				const rangeEnd = statement.range[0]
+				const textBetween = sourceCode.text.slice(rangeStart, rangeEnd)
+				if (/\S/.test(textBetween)) {
+					// Non-whitespace content (e.g., comments) cannot be autofixed
+					return
+				}
+
 				context.report({
 					node: statement,
 					messageId: 'singleLine',
 					fix(fixer) {
-						return fixer.replaceTextRange([colonToken.range[1], statement.range[0]], ' ')
+						return fixer.replaceTextRange([rangeStart, rangeEnd], ' ')
 					},
 				})
 			},

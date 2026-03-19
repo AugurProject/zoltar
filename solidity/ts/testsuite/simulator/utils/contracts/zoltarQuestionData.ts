@@ -1,6 +1,6 @@
-import { ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact.js'
-import { ReadClient, WriteClient } from '../viem.js'
-import { getInfraContractAddresses } from './deployPeripherals.js'
+import { ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
+import { ReadClient, WriteClient } from '../viem'
+import { getInfraContractAddresses } from './deployPeripherals'
 
 type QuestionData = {
 	title: string

@@ -27,7 +27,6 @@ module.exports = {
 		'local/single-line-switch-case': 'error',
 
 		'unused-imports/no-unused-imports': 'error',
-		'unused-imports/no-unused-exports': 'error',
 	},
 	settings: {
 		// Resolve imports relative to tsconfig paths if needed

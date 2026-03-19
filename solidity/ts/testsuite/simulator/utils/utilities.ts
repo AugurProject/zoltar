@@ -1,13 +1,13 @@
 import 'viem/window'
 import { encodeAbiParameters, keccak256 } from 'viem'
-import { ReadClient, WriteClient } from './viem.js'
-import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants.js'
-import { addressString } from './bigint.js'
+import { ReadClient, WriteClient } from './viem'
+import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants'
+import { addressString } from './bigint'
 import { Address } from 'viem'
-import { ABIS } from '../../../abi/abis.js'
-import { AnvilWindowEthereum } from '../AnvilWindowEthereum.js'
-import { QuestionOutcome } from '../types/types.js'
-import { ReputationToken_ReputationToken, peripherals_WETH9_WETH9 } from '../../../types/contractArtifact.js'
+import { ABIS } from '../../../abi/abis'
+import { AnvilWindowEthereum } from '../AnvilWindowEthereum'
+import { QuestionOutcome } from '../types/types'
+import { ReputationToken_ReputationToken, peripherals_WETH9_WETH9 } from '../../../types/contractArtifact'
 export const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
 
 export async function sleep(milliseconds: number) {
@@ -200,7 +200,7 @@ export const transferERC1155 = async (client: WriteClient, tokenAddress: Address
 	abi: ABIS.mainnet.erc1155,
 	functionName: 'safeTransferFrom',
 	address: tokenAddress,
-	args: [from, to, id, amount],
+	args: [from, to, id, amount, '0x'],
 })
 
 export const getETHBalance = async (client: ReadClient, address: Address) => await client.getBalance({ address })

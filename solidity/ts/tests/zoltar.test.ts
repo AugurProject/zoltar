@@ -1,12 +1,12 @@
 import { test, beforeEach, describe } from 'bun:test'
-import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum.js'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
-import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists } from '../testsuite/simulator/utils/utilities.js'
+import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
+import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists } from '../testsuite/simulator/utils/utilities'
 import assert from 'node:assert'
-import { addressString } from '../testsuite/simulator/utils/bigint.js'
-import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays.js'
-import { ensureZoltarDeployed, forkerClaimRep, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed, splitRep } from '../testsuite/simulator/utils/contracts/zoltar.js'
+import { addressString } from '../testsuite/simulator/utils/bigint'
+import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays'
+import { ensureZoltarDeployed, forkerClaimRep, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed, splitRep } from '../testsuite/simulator/utils/contracts/zoltar'
 
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
 const FORKER_DEPOSIT_FRACTION = 20n

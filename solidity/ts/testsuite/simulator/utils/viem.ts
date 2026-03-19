@@ -1,6 +1,6 @@
 import { createPublicClient, createWalletClient, custom, EIP1193Provider, http, publicActions } from 'viem'
 import 'viem/window'
-import { addressString } from './bigint.js'
+import { addressString } from './bigint'
 import { mainnet } from 'viem/chains'
 
 const DEFAULT_HTTP = 'https://ethereum.dark.florist'

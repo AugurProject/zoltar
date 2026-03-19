@@ -1,20 +1,20 @@
 import { test, beforeEach, describe } from 'bun:test'
 import assert from 'node:assert'
-import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum.js'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
-import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { addressString, dateToBigintSeconds, rpow } from '../testsuite/simulator/utils/bigint.js'
-import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils.js'
-import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getMarketId, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
-import { balanceOfShares, balanceOfSharesInCash, getEthAmountToBuy, getLastPrice, getMarketEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndQueueOperation } from '../testsuite/simulator/utils/contracts/peripherals.js'
-import { QuestionOutcome } from '../testsuite/simulator/types/types.js'
-import { SystemState } from '../testsuite/simulator/types/peripheralTypes.js'
-import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils.js'
-import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkSecurityPool, getMarketOutcome, getMigratedRep, getSecurityPoolForkerForkData, migrateFromEscalationGame, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker.js'
-import { getEscalationGameDeposits, getMarketResolution, getNonDecisionThreshold, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame.js'
-import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseForkData, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar.js'
-import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool.js'
+import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
+import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
+import { addressString, dateToBigintSeconds, rpow } from '../testsuite/simulator/utils/bigint'
+import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
+import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getMarketId, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { balanceOfShares, balanceOfSharesInCash, getEthAmountToBuy, getLastPrice, getMarketEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndQueueOperation } from '../testsuite/simulator/utils/contracts/peripherals'
+import { QuestionOutcome } from '../testsuite/simulator/types/types'
+import { SystemState } from '../testsuite/simulator/types/peripheralTypes'
+import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
+import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkSecurityPool, getMarketOutcome, getMigratedRep, getSecurityPoolForkerForkData, migrateFromEscalationGame, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
+import { getEscalationGameDeposits, getMarketResolution, getNonDecisionThreshold, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
+import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseForkData, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
+import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
 
 describe('Peripherals Contract Test Suite', () => {
 	let mockWindow: AnvilWindowEthereum
@@ -372,7 +372,9 @@ describe('Peripherals Contract Test Suite', () => {
 		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [0n, 1n, 2n])
 		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, [0n, 1n, 2n])
 
-		assert.deepStrictEqual(await balanceOfSharesInCash(client, yesSecurityPool.securityPool, yesSecurityPool.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2])), [completeSetAmount, completeSetAmount, completeSetAmount], 'Not enough shares in yes')
+		const actualShares = await balanceOfSharesInCash(client, yesSecurityPool.securityPool, yesSecurityPool.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2]))
+		assert.strictEqual(actualShares.length, 3, 'should have 3 outcomes')
+		actualShares.forEach((value, idx) => approximatelyEqual(value, completeSetAmount, 10n, `share ${idx} should approximately equal completeSetAmount`))
 
 		approximatelyEqual(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), (await getCurrentOpenInterestArray())[0], 10n, 'yes child contract did not record the amount correctly')
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'Yes System should be operational again')

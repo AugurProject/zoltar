@@ -107,8 +107,15 @@ contract PriceOracleManagerAndOperatorQueuer {
 		lastSettlementTimestamp = block.timestamp;
 		lastPrice = price;
 		emit PriceReported(reportId, lastPrice);
-		if (queuedPendingOperationId != 0) { // TODO we maybe should allow executing couple operations?
-			executeQueuedOperation(queuedPendingOperationId);
+		if (queuedPendingOperationId != 0) {
+			// Execute all queued operations that are pending
+			uint256 currentId = 1;
+			while (currentId <= previousQueuedOperationId) {
+				if (queuedOperations[currentId].amount > 0) {
+					executeQueuedOperation(currentId);
+				}
+				currentId++;
+			}
 			queuedPendingOperationId = 0;
 		}
 	}
