@@ -9,6 +9,7 @@ import { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 import { QuestionOutcome } from '../types/types'
 import { ReputationToken_ReputationToken, peripherals_WETH9_WETH9 } from '../../../types/contractArtifact'
 const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
+const PROXY_DEPLOYER_BYTECODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3'
 
 function hexToBytes(value: string) {
 	const result = new Uint8Array((value.length - 2) / 2)
@@ -86,7 +87,7 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 	})
 
 	// Deploy the ProxyDeployer contract at its known address to avoid raw transaction
-	const proxyDeployerBytecode = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3'
+	const proxyDeployerBytecode = PROXY_DEPLOYER_BYTECODE
 	await anvilWindowEthereum.addStateOverrides({
 		[addressString(PROXY_DEPLOYER_ADDRESS)]: {
 			code: hexToBytes(proxyDeployerBytecode),

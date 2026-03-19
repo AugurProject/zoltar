@@ -25,6 +25,7 @@ export function isHexEncodedNumber(input: string): boolean {
 export const dateToBigintSeconds = (date: Date) => BigInt(date.getTime()) / 1000n
 
 export const rpow = (x: bigint, exponent: bigint, baseUnit: bigint) => {
+	if (baseUnit === 0n) throw new Error('baseUnit cannot be zero')
 	let result = exponent % 2n !== 0n ? x : baseUnit
 	for (exponent = exponent / 2n; exponent !== 0n; exponent = exponent / 2n) {
 		x = (x * x) / baseUnit
