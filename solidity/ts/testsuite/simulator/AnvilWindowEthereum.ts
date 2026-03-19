@@ -1,5 +1,3 @@
-/* eslint @typescript-eslint/no-explicit-any: "off" */
-
 import { EIP1193Provider } from 'viem'
 import { dateToBigintSeconds } from './utils/bigint'
 import { EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes } from './types/wire-types'

@@ -67,16 +67,6 @@ const commonRules = {
 }
 
 export default [
-	// Test files: disable no-non-null-assertion due to beforeEach setup patterns
-	{
-		files: ['solidity/ts/tests/**/*.ts'],
-		languageOptions: commonLanguageOptions,
-		plugins: commonPlugins,
-		rules: {
-			...commonRules,
-			'@typescript-eslint/no-non-null-assertion': 'off',
-		},
-	},
 	// All other TypeScript files in the solidity project
 	{
 		files: ['solidity/ts/**/*.ts'],
@@ -93,7 +83,6 @@ export default [
 			'**/*.js',
 			'**/*.mjs',
 			'**/*.cjs',
-			'tests/**',
 		],
 	},
 ]
