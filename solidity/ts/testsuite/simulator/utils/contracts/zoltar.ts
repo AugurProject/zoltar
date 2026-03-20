@@ -137,23 +137,3 @@ export const getZoltarForkThreshold = async (client: ReadClient, universeId: big
 		address: getZoltarAddress(),
 		args: [universeId],
 	})
-
-interface QuestionData {
-	title: string
-	description: string
-	startTime: bigint
-	endTime: bigint
-	numTicks: bigint
-	displayValueMin: bigint
-	displayValueMax: bigint
-	answerUnit: string
-}
-
-export const createQuestion = async (client: WriteClient, questionData: QuestionData, outcomes: string[]): Promise<void> => {
-	await client.writeContract({
-		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		functionName: 'createQuestion',
-		address: getZoltarQuestionDataAddress(),
-		args: [questionData, outcomes],
-	})
-}

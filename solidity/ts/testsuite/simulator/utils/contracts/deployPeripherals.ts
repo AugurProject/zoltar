@@ -167,8 +167,8 @@ const computeShareTokenSalt = (securityMultiplier: bigint, marketId: bigint) => 
 
 export const getMarketId = (universeId: bigint, securityMultiplier: bigint, extraInfo: string, marketEndDate: bigint) => {
 	// Parameters kept for compatibility but not used in computation
-	void universeId;
-	void securityMultiplier;
+	void universeId
+	void securityMultiplier
 	// Compute questionId as keccak256(abi.encode(QuestionData, outcomeOptions))
 	// QuestionData struct: (string title, string description, uint256 startTime, uint256 endTime, uint256 numTicks, int256 displayValueMin, int256 displayValueMax, string answerUnit)
 	// outcomeOptions: string[]
@@ -180,9 +180,9 @@ export const getMarketId = (universeId: bigint, securityMultiplier: bigint, extr
 		numTicks: 0n,
 		displayValueMin: 0n,
 		displayValueMax: 0n,
-		answerUnit: ''
-	};
-	const outcomeOptions = ['Yes', 'No'];
+		answerUnit: '',
+	}
+	const outcomeOptions = ['Yes', 'No']
 	const encoded = encodeAbiParameters(
 		[
 			{
@@ -196,14 +196,14 @@ export const getMarketId = (universeId: bigint, securityMultiplier: bigint, extr
 					{ name: 'numTicks', type: 'uint256' },
 					{ name: 'displayValueMin', type: 'int256' },
 					{ name: 'displayValueMax', type: 'int256' },
-					{ name: 'answerUnit', type: 'string' }
-				]
+					{ name: 'answerUnit', type: 'string' },
+				],
 			},
-			{ name: 'outcomeOptions', type: 'string[]' }
+			{ name: 'outcomeOptions', type: 'string[]' },
 		],
-		[questionDataTuple, outcomeOptions]
-	);
-	return BigInt(keccak256(encoded));
+		[questionDataTuple, outcomeOptions],
+	)
+	return BigInt(keccak256(encoded))
 }
 
 export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bigint, marketId: bigint, securityMultiplier: bigint) => {
