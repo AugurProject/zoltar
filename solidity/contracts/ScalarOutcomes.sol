@@ -10,7 +10,7 @@ library ScalarOutcomes {
 		return (maxValue - minValue) / int256(numTicks);
 	}
 
-	function getScalarOutcomeName(uint120[2] memory payoutNumerators, string memory unit, uint256 numTicks, int256 minValue, int256 maxValue) external pure returns (string memory) {
+	function getScalarOutcomeName(uint120[2] memory payoutNumerators, string memory unit, uint256 numTicks, int256 minValue, int256 maxValue) internal pure returns (string memory) {
 		int256 tradeInterval = getTradeInterval(minValue, maxValue, numTicks);
 		int256 scalarValue = minValue + int256(uint256(payoutNumerators[1])) * tradeInterval;
 		string memory decimalString = intToDecimalString(scalarValue, DECIMALS);

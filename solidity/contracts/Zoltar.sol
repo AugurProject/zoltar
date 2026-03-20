@@ -76,7 +76,7 @@ contract Zoltar {
 		require(universe.forkTime == 0, 'Universe has forked already');
 		require(zoltarQuestionDataSet, 'ZoltarQuestionData not set');
 		// Validate that the question has outcomes
-		(string[4] memory outcomes) = zoltarQuestionData.getForkingData(_questionId);
+		(, string[4] memory outcomes) = zoltarQuestionData.getForkingData(_questionId);
 		uint256 numOutcomes = 0;
 		for (uint8 i = 0; i < 4; i++) {
 			if (bytes(outcomes[i]).length > 0) numOutcomes++;
@@ -114,7 +114,7 @@ contract Zoltar {
 		Universe memory universe = universes[universeId];
 		if (universe.forkingOutcomeIndex == 0) return 'Invalid';
 		uint256 questionId = universeForkData[universe.parentUniverseId].questionId;
-		(string[4] memory outcomes) = zoltarQuestionData.getForkingData(questionId);
+		(, string[4] memory outcomes) = zoltarQuestionData.getForkingData(questionId);
 		return outcomes[universe.forkingOutcomeIndex - 1];
 	}
 
