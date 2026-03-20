@@ -179,3 +179,13 @@ export const getZoltarForkThreshold = async (client: ReadClient, universeId: big
 		address: getZoltarAddress(),
 		args: [universeId],
 	})
+
+export const getRepTokensMigratedRepBalance = async (client: ReadClient, universeId: bigint, address: `0x${string}`) => {
+	const repBalance = await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'repTokensMigrated',
+		address: getZoltarAddress(),
+		args: [address, universeId],
+	})
+	return repBalance
+}
