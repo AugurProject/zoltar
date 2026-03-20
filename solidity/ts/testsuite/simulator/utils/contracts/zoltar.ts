@@ -3,7 +3,7 @@ import { ReadClient, WriteClient } from '../viem'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes } from 'viem'
 import { addressString, bytes32String } from '../bigint'
-import { ensureProxyDeployerDeployed, getERC20Balance } from '../utilities'
+import { ensureProxyDeployerDeployed } from '../utilities'
 
 function getZoltarInitCode(zoltarQuestionDataAddress: `0x${ string }`): `0x${ string }` {
 	return encodeDeployData({
@@ -99,18 +99,6 @@ export const migrateInternalRep = async (client: WriteClient, universeId: bigint
 		address: getZoltarAddress(),
 		args: [universeId, amount, bigintIndices],
 	})
-}
-
-// splitRep: burns the caller's Genesis REP and mints it to the specified child outcomes
-export const splitRep = async (client: WriteClient, universeId: bigint, outcomeIndexes: (number | bigint)[]) => {
-	// Get the caller's Genesis REP balance
-	const genesisRepBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-	if (genesisRepBalance > 0n) {
-		// Burn the REP and credit internal balance
-		await prepareRepForMigration(client, universeId, genesisRepBalance)
-		// Migrate to children
-		await migrateInternalRep(client, universeId, genesisRepBalance, outcomeIndexes)
-	}
 }
 
 export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0x${ string }`) {
