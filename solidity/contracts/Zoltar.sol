@@ -76,14 +76,6 @@ contract Zoltar {
 		}
 	}
 
-	function getOutcomeName(uint248 universeId) external view returns (string memory) {
-		if (universeId == 0) return 'Genesis';
-		Universe memory universe = universes[universeId];
-		if (universe.forkingOutcomeIndex == 0) return 'Invalid';
-		(, string[4] memory outcomes) = zoltarQuestionData.getForkingData(universe.forkQuestionId);
-		return outcomes[universe.forkingOutcomeIndex - 1];
-	}
-
 	function getChildUniverseId(uint248 universeId, uint256 outcomeIndex) public pure returns (uint248) {
 		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
 	}
