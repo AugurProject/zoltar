@@ -45,7 +45,7 @@ contract ZoltarQuestionData {
 		return questionId;
 	}
 
-	function getMarketEndDate(uint256 questionId) external view returns (uint256) {
+	function getQuestionEndDate(uint256 questionId) external view returns (uint256) {
 		return questions[questionId].endTime;
 	}
 

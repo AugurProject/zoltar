@@ -4,13 +4,15 @@ import { getInfraContractAddresses } from './deployPeripherals'
 import { contractExists } from '../utilities'
 import { ReadClient, WriteClient } from '../viem'
 
-export const forkSecurityPool = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
+export const forkSecurityPool = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcomeIndices: (number | bigint)[]) => {
+	const bigintIndices = outcomeIndices.map(x => BigInt(x))
 	await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'forkSecurityPool',
 		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress],
+		args: [securityPoolAddress, bigintIndices],
 	})
+}
 
 export const migrateVault = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: bigint | QuestionOutcome) =>
 	await client.writeContract({
@@ -79,7 +81,7 @@ export const getMarketOutcome = async (client: ReadClient, securityPoolAddress: 
 				name: 'getMarketOutcome',
 				outputs: [
 					{
-						internalType: 'enum YesNoMarkets.Outcome',
+						internalType: 'enum BinaryOutcomes.BinaryOutcome',
 						name: 'outcome',
 						type: 'uint8',
 					},

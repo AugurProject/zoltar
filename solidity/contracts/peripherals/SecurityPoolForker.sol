@@ -8,7 +8,7 @@ import { DualCapBatchAuction } from './DualCapBatchAuction.sol';
 import { ISecurityPool, ISecurityPoolFactory, SystemState } from './interfaces/ISecurityPool.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
 import { EscalationGame } from './EscalationGame.sol';
-import { YesNoMarkets } from './YesNoMarkets.sol';
+import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
@@ -28,7 +28,6 @@ struct ForkData {
 
 contract SecurityPoolForker is ISecurityPoolForker {
 	Zoltar public immutable zoltar;
-	YesNoMarkets public yesNoMarkets;
 
 	mapping(ISecurityPool => ForkData) public forkData;
 
@@ -39,7 +38,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	event ClaimAuctionProceeds(address vault, uint256 amount, uint256 poolOwnershipAmount, uint256 poolOwnershipDenominator);
 	event MigrateRepFromParent(address vault, uint256 parentSecurityBondAllowance, uint256 parentPoolOwnership);
 	event FinalizeAuction(uint256 repAvailable, uint256 migratedRep, uint256 repPurchased, uint256 poolOwnershipDenominator, uint256 completeSetCollateralAmount);
-	event MigrateFromEscalationGame(ISecurityPool parent, address vault, YesNoMarkets.Outcome outcomeIndex, uint8[] depositIndexes, uint256 totalRep, uint256 newOwnership);
+	event MigrateFromEscalationGame(ISecurityPool parent, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint8[] depositIndexes, uint256 totalRep, uint256 newOwnership);
 
 	function repToPoolOwnership(ISecurityPool securityPool, uint256 repAmount) public view returns (uint256) {
 		if (securityPool.poolOwnershipDenominator() == 0) return repAmount * SecurityPoolUtils.PRICE_PRECISION;
@@ -57,29 +56,21 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		zoltar = _zoltar;
 	}
 
-	function forkSecurityPool(ISecurityPool securityPool) public {
+	function forkSecurityPool(ISecurityPool securityPool, uint256[] memory outcomeIndices) public {
 		uint248 universe = securityPool.universeId();
 		EscalationGame escalationGame = securityPool.escalationGame();
 		require(zoltar.getForkTime(universe) > 0, 'Zoltar needs to have forked before Security Pool can do so');
 		require(securityPool.systemState() == SystemState.Operational, 'System is not operational');
-		require(address(escalationGame) == address(0x0) || escalationGame.getMarketResolution() == YesNoMarkets.Outcome.None, 'question has been finalized already');
+		require(address(escalationGame) == address(0x0) || escalationGame.getMarketResolution() == BinaryOutcomes.BinaryOutcome.None, 'question has been finalized already');
 		securityPool.setSystemState(SystemState.PoolForked);
 		securityPool.updateCollateralAmount();
 		securityPool.setRetentionRate(0);
 		ReputationToken rep = securityPool.repToken();
 		securityPool.stealAllRep();
-		forkData[securityPool].repAtFork = rep.balanceOf(address(this));
-
-		uint8[] memory outcomeIndices = new uint8[](4 + 1);
-		for (uint8 index = 0; index < outcomeIndices.length; index++) {
-			outcomeIndices[index] = index;
-		}
 		rep.approve(address(zoltar), type(uint256).max);
-		zoltar.splitRep(universe, outcomeIndices);
-		if (zoltar.getForkedBy(universe) == address(this)) {
-			forkData[securityPool].repAtFork += zoltar.getForkerDeposit(universe);
-			zoltar.forkerClaimRep(universe, outcomeIndices);
-		}
+		zoltar.prepareRepForMigration(universe, rep.balanceOf(address(this)));
+		forkData[securityPool].repAtFork = zoltar.repTokensMigrated(address(this), universe);
+		zoltar.migrateInternalRep(universe, forkData[securityPool].repAtFork, outcomeIndices);
 		emit ForkSecurityPool(forkData[securityPool].repAtFork);
 		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
 	}
@@ -91,7 +82,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		// first vault migrater creates new pool and transfers all REP to it
 		uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(parent.universeId(), outcomeIndex))));
 		uint256 retentionRate = SecurityPoolUtils.calculateRetentionRate(parent.completeSetCollateralAmount(), parent.totalSecurityBondAllowance());
-		(ISecurityPool child, DualCapBatchAuction truthAuction) = parent.securityPoolFactory().deployChildSecurityPool(parent, parent.shareToken(), childUniverseId, parent.marketId(), parent.securityMultiplier(), retentionRate, parent.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
+		(ISecurityPool child, DualCapBatchAuction truthAuction) = parent.securityPoolFactory().deployChildSecurityPool(parent, parent.shareToken(), childUniverseId, parent.questionId(), parent.securityMultiplier(), retentionRate, parent.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
 		forkData[child].outcomeIndex = outcomeIndex;
 		forkData[child].truthAuction = truthAuction;
 		forkData[parent].children[outcomeIndex] = child;
@@ -107,7 +98,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	}
 
 	// TODO, atm this needs to be called after migratevault
-	function migrateFromEscalationGame(ISecurityPool parent, address vault, YesNoMarkets.Outcome outcomeIndex, uint8[] memory depositIndexes) public {
+	function migrateFromEscalationGame(ISecurityPool parent, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint8[] memory depositIndexes) public {
 		EscalationGame escalationGame = parent.escalationGame();
 		if (address(forkData[parent].children[uint8(outcomeIndex)]) == address(0x0)) createChildUniverse(parent, uint8(outcomeIndex));
 		ISecurityPool child = forkData[parent].children[uint8(outcomeIndex)];
@@ -218,11 +209,10 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) public {
 		EscalationGame escalationGame = securityPool.escalationGame();
 		require(address(escalationGame) != address(0x0) && escalationGame.nonDecisionTimestamp() > 0, 'escalation game has not triggered fork');
-		(string memory extraInfo, string[4] memory outcomes) = securityPool.yesNoMarkets().getForkingData(securityPool.marketId());
 		securityPool.stealAllRep();
 		forkData[securityPool].ownFork = true;
 		securityPool.repToken().approve(address(zoltar), type(uint256).max);
-		zoltar.forkUniverse(securityPool.universeId(), extraInfo, outcomes);
+		zoltar.forkUniverse(securityPool.universeId(), securityPool.questionId());
 	}
 
 	// accounts the purchased REP from truthAuction to the vault
@@ -240,12 +230,12 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		emit ClaimAuctionProceeds(vault, amount, poolOwnershipAmount, securityPool.poolOwnershipDenominator());
 	}
 
-	function getMarketOutcome(ISecurityPool securityPool) external view returns (YesNoMarkets.Outcome outcome){
+	function getMarketOutcome(ISecurityPool securityPool) external view returns (BinaryOutcomes.BinaryOutcome outcome){
 		SystemState systemState = securityPool.systemState();
-		if (systemState == SystemState.PoolForked) return YesNoMarkets.Outcome.None;
+		if (systemState == SystemState.PoolForked) return BinaryOutcomes.BinaryOutcome.None;
 		ISecurityPool parent = securityPool.parent();
 		if (address(parent) != address(0x0)) {
-			if (forkData[parent].ownFork) return YesNoMarkets.Outcome(forkData[securityPool].outcomeIndex);
+			if (forkData[parent].ownFork) return BinaryOutcomes.BinaryOutcome(forkData[securityPool].outcomeIndex);
 		}
 		if (systemState == SystemState.Operational) {
 			EscalationGame escalationGame = securityPool.escalationGame();
@@ -255,7 +245,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 				if (block.timestamp > escalationEndDate && (forkTime == 0 || escalationEndDate < forkTime)) return escalationGame.getMarketResolution();
 			}
 		}
-		return YesNoMarkets.Outcome.None;
+		return BinaryOutcomes.BinaryOutcome.None;
 	}
 	receive() external payable {}
 

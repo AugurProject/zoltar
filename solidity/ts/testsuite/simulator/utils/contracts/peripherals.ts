@@ -2,7 +2,7 @@ import 'viem/window'
 import { ReadContractReturnType } from 'viem'
 import { ReadClient, WriteClient } from '../viem'
 import { WETH_ADDRESS } from '../constants'
-import { peripherals_DualCapBatchAuction_DualCapBatchAuction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_tokens_ShareToken_ShareToken, peripherals_YesNoMarkets_YesNoMarkets } from '../../../../types/contractArtifact'
+import { peripherals_DualCapBatchAuction_DualCapBatchAuction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
 import { shareArrayToCash } from './securityPool'
@@ -203,14 +203,15 @@ export const balanceOfShares = async (client: ReadClient, shareTokenAddress: `0x
 		args: [universeId, account],
 	})
 
-export const balanceOfSharesInCash = async (client: ReadClient, securityPoolAddress: `0x${ string }`, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`) => {
+export const balanceOfSharesInCash = async (client: ReadClient, securityPoolAddress: `0x${ string }`, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`): Promise<[bigint, bigint, bigint]> => {
 	const array = await client.readContract({
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'balanceOfShares',
 		address: shareTokenAddress,
 		args: [universeId, account],
 	})
-	return await shareArrayToCash(client, securityPoolAddress, array)
+	const result = await shareArrayToCash(client, securityPoolAddress, array)
+	return result as [bigint, bigint, bigint]
 }
 
 const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => {
@@ -226,10 +227,10 @@ export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x$
 		args: [getTokenId(fromUniverseId, outcome), outcomes.map(x => Number(x))],
 	})
 
-export const getMarketEndDate = async (client: ReadClient, marketId: bigint) =>
+export const getQuestionEndDate = async (client: ReadClient, questionId: bigint) =>
 	await client.readContract({
-		abi: peripherals_YesNoMarkets_YesNoMarkets.abi,
-		functionName: 'getMarketEndDate',
-		address: getInfraContractAddresses().yesNoMarkets,
-		args: [marketId],
+		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+		functionName: 'getQuestionEndDate',
+		address: getInfraContractAddresses().zoltarQuestionData,
+		args: [questionId],
 	})

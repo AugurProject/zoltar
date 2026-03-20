@@ -8,7 +8,7 @@ import { IShareToken } from './IShareToken.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { PriceOracleManagerAndOperatorQueuer } from '../PriceOracleManagerAndOperatorQueuer.sol';
 import { EscalationGame } from '../EscalationGame.sol';
-import { YesNoMarkets } from '../YesNoMarkets.sol';
+import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
 
 struct SecurityVault {
 	uint256 poolOwnership;
@@ -34,7 +34,7 @@ enum QuestionOutcome {
 interface ISecurityPool {
 
 	// -------- View Functions --------
-	function marketId() external view returns (uint256);
+	function questionId() external view returns (uint256);
 	function universeId() external view returns (uint248);
 	function zoltar() external view returns (Zoltar);
 	function totalSecurityBondAllowance() external view returns (uint256);
@@ -91,7 +91,7 @@ interface ISecurityPool {
 	function setCompleteSetCollateralAmount(uint256 newCompleteSetCollateralAmount) external;
 	function setTotalSecurityBondAllowance(uint256 newTotalSecurityBondAllowance) external;
 	function authorize(ISecurityPool pool) external;
-	function yesNoMarkets() external view returns (YesNoMarkets);
+	function questionData() external view returns (ZoltarQuestionData);
 	function stealAllRep() external;
 	function migrateEth(address payable child, uint256 amount) external;
 
@@ -101,6 +101,6 @@ interface ISecurityPool {
 }
 
 interface ISecurityPoolFactory {
-	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, DualCapBatchAuction truthAuction);
-	function deployOriginSecurityPool(uint248 universeId, string memory extraInfo, uint256 marketEndDate, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice) external returns (ISecurityPool securityPool);
+	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, DualCapBatchAuction truthAuction);
+	function deployOriginSecurityPool(uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice) external returns (ISecurityPool securityPool);
 }

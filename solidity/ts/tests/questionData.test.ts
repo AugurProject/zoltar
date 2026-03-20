@@ -35,7 +35,7 @@ describe('Question Data', () => {
 		}
 
 		await createQuestion(client, testCategoricalQuestion, outcomeLabels)
-		const questionId = await getQuestionId(client, testCategoricalQuestion, outcomeLabels)
+		const questionId = getQuestionId(testCategoricalQuestion, outcomeLabels)
 		const fetchedOutcomeLabels = await getOutcomeLabels(client, questionId)
 		const data = await getQuestionData(client, questionId)
 		assert.strictEqual(data.title, testCategoricalQuestion.title, 'title mismatch')
@@ -51,12 +51,12 @@ describe('Question Data', () => {
 		assert.ok(!(await isMalformedAnswerOption(client, questionId, 0n)), 'invalid is valid')
 		assert.ok(!(await isMalformedAnswerOption(client, questionId, 1n)), 'Yes is valid')
 		assert.ok(!(await isMalformedAnswerOption(client, questionId, 2n)), 'No is valid')
-		assert.ok(await isMalformedAnswerOption(client, questionId, 3n), 'doesn\'t exist')
+		assert.ok(await isMalformedAnswerOption(client, questionId, 3n), "doesn't exist")
 
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 0n), 'Invalid', 'invalid is valid')
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 1n), 'Yes', 'Yes is valid')
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 2n), 'No', 'No is valid')
-		assert.strictEqual(await getAnswerOptionName(client, questionId, 3n), 'Malformed', 'doesn\'t exist')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, 3n), 'Malformed', "doesn't exist")
 	})
 
 	test('can make scalar question', async () => {
@@ -73,7 +73,7 @@ describe('Question Data', () => {
 		}
 
 		await createQuestion(client, testScalarQuestion, [])
-		const questionId = await getQuestionId(client, testScalarQuestion, [])
+		const questionId = getQuestionId(testScalarQuestion, [])
 		const data = await getQuestionData(client, questionId)
 		const fetchedOutcomeLabels = await getOutcomeLabels(client, questionId)
 		assert.strictEqual(data.title, testScalarQuestion.title, 'title mismatch')
@@ -108,7 +108,7 @@ describe('Question Data', () => {
 			answerUnit: 'unit',
 		}
 		await createQuestion(client, testScalarQuestion, [])
-		const questionId = await getQuestionId(client, testScalarQuestion, [])
+		const questionId = getQuestionId(testScalarQuestion, [])
 
 		// A) high bit set, sum == numTicks -> valid -> not malformed (false)
 		{
@@ -155,7 +155,7 @@ describe('Question Data', () => {
 			answerUnit: '',
 		}
 		await createQuestion(client, testScalarQuestion, [])
-		const questionId = await getQuestionId(client, testScalarQuestion, [])
+		const questionId = getQuestionId(testScalarQuestion, [])
 
 		// Encode a valid answer where firstPart + secondPart = numTicks, but the sum overflows uint120.
 		const firstPart = (1n << 120n) - 1n // max uint120
