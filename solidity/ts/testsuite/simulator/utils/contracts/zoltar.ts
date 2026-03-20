@@ -66,15 +66,13 @@ export const ensureZoltarDeployed = async (client: WriteClient) => {
 }
 
 export const getUniverseData = async (client: ReadClient, universeId: bigint) => {
-	const raw = await client.readContract({
+	const [forkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId] = await client.readContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'universes',
 		address: getZoltarAddress(),
 		args: [universeId],
 	})
-	// ABI returns: [forkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId]
-	const [forkTime, , forkingOutcomeIndex, reputationToken, parentUniverseId] = raw as [bigint, bigint, bigint, `0x${string}`, bigint]
-	return { forkTime, reputationToken, parentUniverseId, forkingOutcomeIndex: Number(forkingOutcomeIndex) }
+	return { forkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId }
 }
 
 export const getUniverseForkData = async (client: ReadClient, universeId: bigint) => {
