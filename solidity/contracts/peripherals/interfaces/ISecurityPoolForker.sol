@@ -6,7 +6,7 @@ import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 import { IDualCapBatchAuction } from './IDualCapBatchAuction.sol';
 
 interface ISecurityPoolForker {
-	function forkSecurityPool(ISecurityPool securityPool) external;
+	function forkSecurityPool(ISecurityPool securityPool, uint256[] memory outcomeIndices) external;
 	function createChildUniverse(ISecurityPool securityPool, uint8 outcomeIndex) external;
 	function migrateVault(ISecurityPool securityPool, uint8 outcomeIndex) external;
 	function startTruthAuction(ISecurityPool securityPool) external;

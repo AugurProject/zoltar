@@ -56,7 +56,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		zoltar = _zoltar;
 	}
 
-	function forkSecurityPool(ISecurityPool securityPool) public {
+	function forkSecurityPool(ISecurityPool securityPool, uint256[] memory outcomeIndices) public {
 		uint248 universe = securityPool.universeId();
 		EscalationGame escalationGame = securityPool.escalationGame();
 		require(zoltar.getForkTime(universe) > 0, 'Zoltar needs to have forked before Security Pool can do so');
@@ -69,21 +69,9 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		securityPool.stealAllRep();
 		forkData[securityPool].repAtFork = rep.balanceOf(address(this));
 
-		// Determine valid outcome indices using stored numOutcomes
-		uint256 numOutcomes = zoltar.getNumOutcomes(universe);
-		require(numOutcomes >= 1, 'need atleast one outcome');
-
-		uint8[] memory outcomeIndices = new uint8[](numOutcomes + 1);
-		for (uint8 i = 0; i < outcomeIndices.length; i++) {
-			outcomeIndices[i] = i;
-		}
-
 		rep.approve(address(zoltar), type(uint256).max);
-		zoltar.splitRep(universe, outcomeIndices);
-		if (zoltar.getForkedBy(universe) == address(this)) {
-			forkData[securityPool].repAtFork += zoltar.getForkerDeposit(universe);
-			zoltar.forkerClaimRep(universe, outcomeIndices);
-		}
+		zoltar.prepareRepForMigration(universe, forkData[securityPool].repAtFork);
+		zoltar.migrateInternalRep(universe, forkData[securityPool].repAtFork, outcomeIndices);
 		emit ForkSecurityPool(forkData[securityPool].repAtFork);
 		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
 	}
