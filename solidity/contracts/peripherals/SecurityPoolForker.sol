@@ -75,6 +75,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	}
 
 	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] memory outcomeIndices) public {
+		uint248 universe = securityPool.universeId();
 		zoltar.migrateInternalRep(universe, forkData[securityPool].repAtFork, outcomeIndices);
 	}
 
