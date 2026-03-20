@@ -27,11 +27,11 @@ describe('Peripherals Contract Test Suite', () => {
 	const currentTimestamp = dateToBigintSeconds(new Date())
 	const marketEndDate = currentTimestamp + 365n * DAY
 	let securityPoolAddresses: {
-		securityPool: `0x${ string }`
-		priceOracleManagerAndOperatorQueuer: `0x${ string }`
-		shareToken: `0x${ string }`
-		truthAuction: `0x${ string }`
-		escalationGame: `0x${ string }`
+		securityPool: `0x${string}`
+		priceOracleManagerAndOperatorQueuer: `0x${string}`
+		shareToken: `0x${string}`
+		truthAuction: `0x${string}`
+		escalationGame: `0x${string}`
 	}
 	const genesisUniverse = 0n
 	const securityMultiplier = 2n
@@ -107,7 +107,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await forkSecurityPool(client, securityPoolAddresses.securityPool)
+		await forkSecurityPool(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid)
@@ -234,7 +234,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const zoltarForkData = await getUniverseForkData(client, genesisUniverse)
 		strictEqualTypeSafe(zoltarForkData.forkerRepDeposit + forkerRepBalance + burnAmount, repBalance, 'forkerRepDeposit + forkerRepBalance + burnAmount should equal deposit')
 
-		await forkSecurityPool(client, securityPoolAddresses.securityPool)
+		await forkSecurityPool(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(forkData.repAtFork, repBalance - burnAmount, 'rep at fork does not match deposit rep')
@@ -289,7 +289,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 		assert.deepStrictEqual(await balanceOfSharesInCash(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray, 'Did not create enough complete sets')
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await forkSecurityPool(client, securityPoolAddresses.securityPool)
+		await forkSecurityPool(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, marketId, securityMultiplier)
 
@@ -325,9 +325,10 @@ describe('Peripherals Contract Test Suite', () => {
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 
-		const getCurrentOpenInterestArray = async () => {
+		const getCurrentOpenInterestArray = async (): Promise<[bigint, bigint, bigint]> => {
 			const currentFees = (await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)) + (await getTotalFeesOwedToVaults(client, yesSecurityPool.securityPool))
-			return openInterestArray.map(x => x - currentFees)
+			const result = openInterestArray.map(x => x - currentFees) as [bigint, bigint, bigint]
+			return result
 		}
 
 		// auction yes
@@ -374,7 +375,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const actualShares = await balanceOfSharesInCash(client, yesSecurityPool.securityPool, yesSecurityPool.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2]))
 		assert.strictEqual(actualShares.length, 3, 'should have 3 outcomes')
-		actualShares.forEach((value, idx) => approximatelyEqual(value, completeSetAmount, 1000000000000000n, `share ${ idx } should approximately equal completeSetAmount`))
+		actualShares.forEach((value, idx) => approximatelyEqual(value, completeSetAmount, 1000000000000000n, `share ${idx} should approximately equal completeSetAmount`))
 
 		const currentOpenInterestArray = await getCurrentOpenInterestArray()
 		const openInterestFirst = currentOpenInterestArray[0]
@@ -472,7 +473,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const balancePriorInvalidRedeemal = await getETHBalance(client, addressString(TEST_ADDRESSES[2]))
 		await redeemShares(openInterestHolder, invalidSecurityPool.securityPool)
 		const actualInvalidSharesAfterRedeem1 = await balanceOfSharesInCash(client, invalidSecurityPool.securityPool, invalidSecurityPool.shareToken, invalidUniverse, addressString(TEST_ADDRESSES[2]))
-		const expectedInvalidSharesAfterRedeem1 = [0n, ensureDefined(currentShares[1], 'currentShares[1] is undefined'), ensureDefined(currentShares[2], 'currentShares[2] is undefined')].map(x => x / 2n)
+		const expectedInvalidSharesAfterRedeem1: [bigint, bigint, bigint] = [0n, ensureDefined(currentShares[1], 'currentShares[1] is undefined') / 2n, ensureDefined(currentShares[2], 'currentShares[2] is undefined') / 2n]
 		approximatelyEqual(actualInvalidSharesAfterRedeem1[0], expectedInvalidSharesAfterRedeem1[0], expectedInvalidSharesAfterRedeem1[0], 'invalid after redeem share0 should match')
 		approximatelyEqual(actualInvalidSharesAfterRedeem1[1], expectedInvalidSharesAfterRedeem1[1], expectedInvalidSharesAfterRedeem1[1], 'invalid after redeem share1 should match')
 		approximatelyEqual(actualInvalidSharesAfterRedeem1[2], expectedInvalidSharesAfterRedeem1[2], expectedInvalidSharesAfterRedeem1[2], 'invalid after redeem share2 should match')
@@ -481,7 +482,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const balancePriorInvalidRedeemal2 = await getETHBalance(client, addressString(TEST_ADDRESSES[4]))
 		await redeemShares(openInterestHolder2, invalidSecurityPool.securityPool)
 		const actualInvalidSharesAfterRedeem2 = await balanceOfSharesInCash(client, invalidSecurityPool.securityPool, invalidSecurityPool.shareToken, invalidUniverse, addressString(TEST_ADDRESSES[4]))
-		const expectedInvalidSharesAfterRedeem2 = [0n, ensureDefined(currentShares[1], 'currentShares[1] is undefined'), ensureDefined(currentShares[2], 'currentShares[2] is undefined')]
+		const expectedInvalidSharesAfterRedeem2: [bigint, bigint, bigint] = [0n, ensureDefined(currentShares[1], 'currentShares[1] is undefined'), ensureDefined(currentShares[2], 'currentShares[2] is undefined')]
 		approximatelyEqual(actualInvalidSharesAfterRedeem2[0], expectedInvalidSharesAfterRedeem2[0], expectedInvalidSharesAfterRedeem2[0], 'invalid after redeem2 share0 should match')
 		approximatelyEqual(actualInvalidSharesAfterRedeem2[1], expectedInvalidSharesAfterRedeem2[1], expectedInvalidSharesAfterRedeem2[1], 'invalid after redeem2 share1 should match')
 		approximatelyEqual(actualInvalidSharesAfterRedeem2[2], expectedInvalidSharesAfterRedeem2[2], expectedInvalidSharesAfterRedeem2[2], 'invalid after redeem2 share2 should match')
@@ -499,7 +500,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, marketId)
-		await forkSecurityPool(client, securityPoolAddresses.securityPool)
+		await forkSecurityPool(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -538,7 +539,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// Fork the security pool
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await forkSecurityPool(client, securityPoolAddresses.securityPool)
+		await forkSecurityPool(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, marketId, securityMultiplier)

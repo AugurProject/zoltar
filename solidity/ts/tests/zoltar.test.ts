@@ -107,7 +107,7 @@ describe('Contract Test Suite', () => {
 		const forkerDeposit = totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION - totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION / FORKER_BURN_FRACTION // 5% of supply minus 20% burn
 		assert.strictEqual(universeForkData.forkerRepDeposit, forkerDeposit, 'wrong deposit amount')
 		assert.strictEqual(universeForkData.questionId, questionId, 'Question ID did not match')
-		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), forkerDeposit, "forker's deposit should be in zoltar")
+		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), 0n, "forker's deposit should be burned (not held)")
 
 		// Verify outcomes via ZoltarQuestionData.getForkingData
 		const forkData = await client.readContract({
@@ -124,11 +124,11 @@ describe('Contract Test Suite', () => {
 		await forkerClaimRep(client, genesisUniverse, outcomeIndexes)
 		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), 0n, "forker's deposit should be burned")
 		const universeForkDataAfterClaim = await getUniverseForkData(client, genesisUniverse)
-		assert.strictEqual(universeForkDataAfterClaim.forkerRepDeposit, 0n, 'deposit is gone')
+		assert.strictEqual(universeForkDataAfterClaim.forkerRepDeposit, forkerDeposit, 'deposit should still be available')
 		for (const index of outcomeIndexes) {
 			const indexUniverse = getChildUniverseId(genesisUniverse, index)
 			const repForIndex = getRepTokenAddress(indexUniverse)
-			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ index } exists`)
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${index} exists`)
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, forkerDeposit)
 		}
@@ -148,8 +148,8 @@ describe('Contract Test Suite', () => {
 		for (const [index, outcomeIndex] of splitOutcomeIndexes.entries()) {
 			const indexUniverse = getChildUniverseId(genesisUniverse, outcomeIndex)
 			const repForIndex = getRepTokenAddress(indexUniverse)
-			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ outcomeIndex } exists`)
-			const priorBalance = ensureDefined(priorBalances[index], `priorBalance at index ${ index } is undefined`)
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${outcomeIndex} exists`)
+			const priorBalance = ensureDefined(priorBalances[index], `priorBalance at index ${index} is undefined`)
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, priorSplitBalance + priorBalance, 'after split balance mismatch')
 		}

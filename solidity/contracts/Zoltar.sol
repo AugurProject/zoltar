@@ -58,7 +58,7 @@ contract Zoltar {
 		universes[universeId].forkTime = block.timestamp;
 		universes[universeId].forkQuestionId = questionId;
 		uint256 forkThreshold = getForkThreshold(universeId);
-		burnRep(universes[universeId].reputationToken, address(this), forkThreshold);
+		burnRep(universes[universeId].reputationToken, msg.sender, forkThreshold);
 		repTokensMigrated[msg.sender][universeId].repBalance = forkThreshold - forkThreshold / FORK_BURN_DIVISOR;// burn 20%
 		emit UniverseForked(msg.sender, universeId, questionId);
 	}
