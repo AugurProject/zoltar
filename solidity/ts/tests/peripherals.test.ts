@@ -27,11 +27,11 @@ describe('Peripherals Contract Test Suite', () => {
 	const currentTimestamp = dateToBigintSeconds(new Date())
 	const marketEndDate = currentTimestamp + 365n * DAY
 	let securityPoolAddresses: {
-		securityPool: `0x${string}`
-		priceOracleManagerAndOperatorQueuer: `0x${string}`
-		shareToken: `0x${string}`
-		truthAuction: `0x${string}`
-		escalationGame: `0x${string}`
+		securityPool: `0x${ string }`
+		priceOracleManagerAndOperatorQueuer: `0x${ string }`
+		shareToken: `0x${ string }`
+		truthAuction: `0x${ string }`
+		escalationGame: `0x${ string }`
 	}
 	const genesisUniverse = 0n
 	const securityMultiplier = 2n
@@ -375,7 +375,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const actualShares = await balanceOfSharesInCash(client, yesSecurityPool.securityPool, yesSecurityPool.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2]))
 		assert.strictEqual(actualShares.length, 3, 'should have 3 outcomes')
-		actualShares.forEach((value, idx) => approximatelyEqual(value, completeSetAmount, 1000000000000000n, `share ${idx} should approximately equal completeSetAmount`))
+		actualShares.forEach((value, idx) => approximatelyEqual(value, completeSetAmount, 1000000000000000n, `share ${ idx } should approximately equal completeSetAmount`))
 
 		const currentOpenInterestArray = await getCurrentOpenInterestArray()
 		const openInterestFirst = currentOpenInterestArray[0]

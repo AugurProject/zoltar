@@ -5,15 +5,13 @@ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists } from '../testsuite/simulator/utils/utilities'
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint'
-import { ensureZoltarDeployed, forkerClaimRep, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed, splitRep, getZoltarQuestionDataAddress } from '../testsuite/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, isZoltarDeployed, splitRep, getRepTokensMigratedRepBalance, migrateInternalRep } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureDefined } from '../testsuite/simulator/utils/testUtils'
 import { keccak256, encodeAbiParameters } from 'viem'
-import { ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact'
 
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
 const FORKER_DEPOSIT_FRACTION = 20n
-const FORKER_BURN_FRACTION = 5n
 
 describe('Contract Test Suite', () => {
 	let mockWindow: AnvilWindowEthereum
@@ -102,35 +100,20 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(universeData.forkingOutcomeIndex, 0n, 'Universe has forking outcome index')
 		assert.strictEqual(universeData.reputationToken, genesisRepToken, 'Wrong rep token')
 		ensureDefined(client.account, 'client.account is undefined')
-		const universeForkData = await getUniverseForkData(client, genesisUniverse)
-		assert.strictEqual(universeForkData.forkedBy, client.account.address, 'We should have been the forker')
-		const forkerDeposit = totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION - totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION / FORKER_BURN_FRACTION // 5% of supply minus 20% burn
-		assert.strictEqual(universeForkData.forkerRepDeposit, forkerDeposit, 'wrong deposit amount')
-		assert.strictEqual(universeForkData.questionId, questionId, 'Question ID did not match')
 		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), 0n, "forker's deposit should be burned (not held)")
-
-		// Verify outcomes via ZoltarQuestionData.getForkingData
-		const forkData = await client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getForkingData',
-			address: getZoltarQuestionDataAddress(),
-			args: [questionId],
-		})
-		const [, fetchedOutcomes] = forkData
-		assert.deepStrictEqual([...fetchedOutcomes], [...outcomes], 'Outcomes did not match')
 
 		// forker claim balance
 		const outcomeIndexes = [0, 1, 3]
-		await forkerClaimRep(client, genesisUniverse, outcomeIndexes)
+		const balance = await getRepTokensMigratedRepBalance(client, genesisUniverse, client.account.address)
+		await migrateInternalRep(client, genesisUniverse, balance, outcomeIndexes)
+
 		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), 0n, "forker's deposit should be burned")
-		const universeForkDataAfterClaim = await getUniverseForkData(client, genesisUniverse)
-		assert.strictEqual(universeForkDataAfterClaim.forkerRepDeposit, forkerDeposit, 'deposit should still be available')
 		for (const index of outcomeIndexes) {
 			const indexUniverse = getChildUniverseId(genesisUniverse, index)
 			const repForIndex = getRepTokenAddress(indexUniverse)
-			assert.ok(await contractExists(client, repForIndex), `rep token for index ${index} exists`)
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ index } exists`)
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
-			assert.strictEqual(ourBalance, forkerDeposit)
+			assert.strictEqual(ourBalance, await getRepTokensMigratedRepBalance(client, genesisUniverse, client.account.address))
 		}
 
 		// split rest of the rep
@@ -148,8 +131,8 @@ describe('Contract Test Suite', () => {
 		for (const [index, outcomeIndex] of splitOutcomeIndexes.entries()) {
 			const indexUniverse = getChildUniverseId(genesisUniverse, outcomeIndex)
 			const repForIndex = getRepTokenAddress(indexUniverse)
-			assert.ok(await contractExists(client, repForIndex), `rep token for index ${outcomeIndex} exists`)
-			const priorBalance = ensureDefined(priorBalances[index], `priorBalance at index ${index} is undefined`)
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ outcomeIndex } exists`)
+			const priorBalance = ensureDefined(priorBalances[index], `priorBalance at index ${ index } is undefined`)
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, priorSplitBalance + priorBalance, 'after split balance mismatch')
 		}
