@@ -227,10 +227,10 @@ export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x$
 		args: [getTokenId(fromUniverseId, outcome), outcomes.map(x => Number(x))],
 	})
 
-export const getMarketEndDate = async (client: ReadClient, marketId: bigint) =>
+export const getQuestionEndDate = async (client: ReadClient, questionId: bigint) =>
 	await client.readContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		functionName: 'getMarketEndDate',
+		functionName: 'getQuestionEndDate',
 		address: getInfraContractAddresses().zoltarQuestionData,
-		args: [marketId],
+		args: [questionId],
 	})

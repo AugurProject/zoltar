@@ -146,7 +146,7 @@ contract EscalationGame {
 		return balances[2];
 	}
 
-	// deposits on market outcome, returns how much user actually ended depositing
+	// deposits on question outcome, returns how much user actually ended depositing
 	function depositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) public returns (uint256 depositAmount) {
 		require(nonDecisionTimestamp == 0, 'System has already reached a non-decision');
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');

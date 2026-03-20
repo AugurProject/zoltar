@@ -6,8 +6,8 @@ import { TEST_ADDRESSES, DAY } from '../testsuite/simulator/utils/constants'
 import { addressString, dateToBigintSeconds } from '../testsuite/simulator/utils/bigint'
 import { setupTestAccounts, getETHBalance } from '../testsuite/simulator/utils/utilities'
 import { approveAndDepositRep } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses, getMarketId } from '../testsuite/simulator/utils/contracts/deployPeripherals'
-import { createQuestion } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
+import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { OperationType, getRequestPriceEthCost } from '../testsuite/simulator/utils/contracts/peripherals'
 import { peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer } from '../types/contractArtifact'
@@ -23,8 +23,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	const securityMultiplier = 2n
 	const startingRepEthPrice = 10n
 	const MAX_RETENTION_RATE = 999_999_996_848_000_000n
-	const EXTRA_INFO = 'test market!'
-	const marketId = getMarketId(genesisUniverse, securityMultiplier, EXTRA_INFO, marketEndDate)
+	const EXTRA_INFO = 'test question!'
 
 	beforeEach(async () => {
 		mockWindow = await getMockedEthSimulateWindowEthereum()
@@ -45,10 +44,10 @@ describe('Price Oracle Refund Security Tests', () => {
 		}
 		const outcomes = ['Yes', 'No']
 		await createQuestion(client, questionData, outcomes)
-		const questionId = getMarketId(genesisUniverse, securityMultiplier, EXTRA_INFO, marketEndDate)
+		const questionId = getQuestionId(questionData, outcomes)
 		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
-		await approveAndDepositRep(client, repDeposit, marketId)
-		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, marketId, securityMultiplier)
+		await approveAndDepositRep(client, repDeposit, questionId)
+		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
 		priceOracle = addresses.priceOracleManagerAndOperatorQueuer
 	})
 

@@ -36,7 +36,7 @@ describe('Contract Test Suite', () => {
 	test('canForkQuestion', async () => {
 		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const zoltar = getZoltarAddress()
-		const marketText = 'test market'
+		const marketText = 'test question'
 		const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4']
 
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
@@ -64,7 +64,7 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(preForkUniverseData.reputationToken, genesisRepToken, 'Universe reputation token mismatch')
 		const priorRepbalance = await getERC20Balance(client, genesisRepToken, client.account.address)
 
-		// Compute questionId for the market
+		// Compute questionId for the question
 		const questionId = BigInt(
 			keccak256(
 				encodeAbiParameters(

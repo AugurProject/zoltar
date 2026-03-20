@@ -82,7 +82,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		// first vault migrater creates new pool and transfers all REP to it
 		uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(parent.universeId(), outcomeIndex))));
 		uint256 retentionRate = SecurityPoolUtils.calculateRetentionRate(parent.completeSetCollateralAmount(), parent.totalSecurityBondAllowance());
-		(ISecurityPool child, DualCapBatchAuction truthAuction) = parent.securityPoolFactory().deployChildSecurityPool(parent, parent.shareToken(), childUniverseId, parent.marketId(), parent.securityMultiplier(), retentionRate, parent.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
+		(ISecurityPool child, DualCapBatchAuction truthAuction) = parent.securityPoolFactory().deployChildSecurityPool(parent, parent.shareToken(), childUniverseId, parent.questionId(), parent.securityMultiplier(), retentionRate, parent.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
 		forkData[child].outcomeIndex = outcomeIndex;
 		forkData[child].truthAuction = truthAuction;
 		forkData[parent].children[outcomeIndex] = child;
@@ -212,7 +212,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		securityPool.stealAllRep();
 		forkData[securityPool].ownFork = true;
 		securityPool.repToken().approve(address(zoltar), type(uint256).max);
-		zoltar.forkUniverse(securityPool.universeId(), securityPool.marketId());
+		zoltar.forkUniverse(securityPool.universeId(), securityPool.questionId());
 	}
 
 	// accounts the purchased REP from truthAuction to the vault

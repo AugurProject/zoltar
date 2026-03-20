@@ -15,7 +15,7 @@ import '../BinaryOutcomes.sol';
 */
 contract ShareToken is ForkedERC1155, IShareToken {
 
-	// TODO, rename based on the market they represent
+	// TODO, rename based on the question they represent
 	string constant public name = 'Shares';
 	string constant public symbol = 'SHARE';
 	Zoltar public immutable zoltar;

@@ -34,7 +34,7 @@ enum QuestionOutcome {
 interface ISecurityPool {
 
 	// -------- View Functions --------
-	function marketId() external view returns (uint256);
+	function questionId() external view returns (uint256);
 	function universeId() external view returns (uint248);
 	function zoltar() external view returns (Zoltar);
 	function totalSecurityBondAllowance() external view returns (uint256);
@@ -101,6 +101,6 @@ interface ISecurityPool {
 }
 
 interface ISecurityPoolFactory {
-	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, DualCapBatchAuction truthAuction);
+	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, DualCapBatchAuction truthAuction);
 	function deployOriginSecurityPool(uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice) external returns (ISecurityPool securityPool);
 }

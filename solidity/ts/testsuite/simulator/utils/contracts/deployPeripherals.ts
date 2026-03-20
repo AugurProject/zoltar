@@ -137,14 +137,14 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	}
 }
 
-const computeSecurityPoolSalt = (parent: `0x${ string }`, universeId: bigint, marketId: bigint, securityMultiplier: bigint) => {
-	const values = [parent, universeId, marketId, securityMultiplier] as const
+const computeSecurityPoolSalt = (parent: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint) => {
+	const values = [parent, universeId, questionId, securityMultiplier] as const
 	return keccak256(
 		encodeAbiParameters(
 			[
 				{ name: 'parent', type: 'address' },
 				{ name: 'universeId', type: 'uint248' },
-				{ name: 'marketId', type: 'uint256' },
+				{ name: 'questionId', type: 'uint256' },
 				{ name: 'securityMultiplier', type: 'uint256' },
 			],
 			values,
@@ -152,62 +152,21 @@ const computeSecurityPoolSalt = (parent: `0x${ string }`, universeId: bigint, ma
 	)
 }
 
-const computeShareTokenSalt = (securityMultiplier: bigint, marketId: bigint) => {
-	const values = [securityMultiplier, marketId] as const
+const computeShareTokenSalt = (securityMultiplier: bigint, questionId: bigint) => {
+	const values = [securityMultiplier, questionId] as const
 	return keccak256(
 		encodeAbiParameters(
 			[
 				{ name: 'securityMultiplier', type: 'uint256' },
-				{ name: 'marketId', type: 'uint256' },
+				{ name: 'questionId', type: 'uint256' },
 			],
 			values,
 		),
 	)
 }
 
-export const getMarketId = (universeId: bigint, securityMultiplier: bigint, extraInfo: string, marketEndDate: bigint) => {
-	// Parameters kept for compatibility but not used in computation
-	void universeId
-	void securityMultiplier
-	// Compute questionId as keccak256(abi.encode(QuestionData, outcomeOptions))
-	// QuestionData struct: (string title, string description, uint256 startTime, uint256 endTime, uint256 numTicks, int256 displayValueMin, int256 displayValueMax, string answerUnit)
-	// outcomeOptions: string[]
-	const questionDataTuple = {
-		title: extraInfo,
-		description: '',
-		startTime: 0n,
-		endTime: marketEndDate,
-		numTicks: 0n,
-		displayValueMin: 0n,
-		displayValueMax: 0n,
-		answerUnit: '',
-	}
-	const outcomeOptions = ['Yes', 'No']
-	const encoded = encodeAbiParameters(
-		[
-			{
-				name: 'questionData',
-				type: 'tuple',
-				components: [
-					{ name: 'title', type: 'string' },
-					{ name: 'description', type: 'string' },
-					{ name: 'startTime', type: 'uint256' },
-					{ name: 'endTime', type: 'uint256' },
-					{ name: 'numTicks', type: 'uint256' },
-					{ name: 'displayValueMin', type: 'int256' },
-					{ name: 'displayValueMax', type: 'int256' },
-					{ name: 'answerUnit', type: 'string' },
-				],
-			},
-			{ name: 'outcomeOptions', type: 'string[]' },
-		],
-		[questionDataTuple, outcomeOptions],
-	)
-	return BigInt(keccak256(encoded))
-}
-
-export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bigint, marketId: bigint, securityMultiplier: bigint) => {
-	const securityPoolSalt = computeSecurityPoolSalt(parent, universeId, marketId, securityMultiplier)
+export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint) => {
+	const securityPoolSalt = computeSecurityPoolSalt(parent, universeId, questionId, securityMultiplier)
 	const infraContracts = getInfraContractAddresses()
 	const securityPoolTypes = [
 		{ name: 'securityPoolFactory', type: 'address' },
@@ -232,7 +191,7 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 				args: [infraContracts.securityPoolFactory, infraContracts.zoltar],
 			}),
 			from: infraContracts.shareTokenFactory,
-			salt: computeShareTokenSalt(securityMultiplier, marketId),
+			salt: computeShareTokenSalt(securityMultiplier, questionId),
 		}),
 		truthAuction:
 			BigInt(parent) === 0n
@@ -251,7 +210,7 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 		bytecode: encodeDeployData({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
-			args: [infraContracts.securityPoolForker, infraContracts.securityPoolFactory, infraContracts.zoltarQuestionData, infraContracts.escalationGameFactory, contracts.priceOracleManagerAndOperatorQueuer, contracts.shareToken, infraContracts.openOracle, parent, infraContracts.zoltar, universeId, marketId, securityMultiplier] as const,
+			args: [infraContracts.securityPoolForker, infraContracts.securityPoolFactory, infraContracts.zoltarQuestionData, infraContracts.escalationGameFactory, contracts.priceOracleManagerAndOperatorQueuer, contracts.shareToken, infraContracts.openOracle, parent, infraContracts.zoltar, universeId, questionId, securityMultiplier] as const,
 		}),
 		from: infraContracts.securityPoolFactory,
 		salt: numberToBytes(0),

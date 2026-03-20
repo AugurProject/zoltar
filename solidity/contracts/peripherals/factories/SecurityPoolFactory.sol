@@ -25,7 +25,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	ZoltarQuestionData questionData;
 	ISecurityPoolForker securityPoolForker;
 
-	event DeploySecurityPool(ISecurityPool securityPool, DualCapBatchAuction truthAuction, PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer, IShareToken shareToken, ISecurityPool parent, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount);
+	event DeploySecurityPool(ISecurityPool securityPool, DualCapBatchAuction truthAuction, PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer, IShareToken shareToken, ISecurityPool parent, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount);
 
 	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, DualCapBatchAuctionFactory _dualCapBatchAuctionFactory, PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory) {
 		securityPoolForker = _securityPoolForker;
@@ -38,20 +38,20 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		questionData = _questionData;
 	}
 
-	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, DualCapBatchAuction truthAuction) {
+	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, DualCapBatchAuction truthAuction) {
 		require(msg.sender == address(securityPoolForker), 'only securityPoolForker');
-		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, marketId, securityMultiplier));
+		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, questionId, securityMultiplier));
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
 
 		truthAuction = dualCapBatchAuctionFactory.deployDualCapBatchAuction(address(securityPoolForker), securityPoolSalt);
 
-		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(address(securityPoolForker), this, questionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, marketId, securityMultiplier);
+		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(address(securityPoolForker), this, questionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier);
 
 		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
 		securityPool.setStartingParams(currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
 
-		emit DeploySecurityPool(securityPool, truthAuction, priceOracleManagerAndOperatorQueuer, shareToken, parent, universeId, marketId, securityMultiplier, currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
+		emit DeploySecurityPool(securityPool, truthAuction, priceOracleManagerAndOperatorQueuer, shareToken, parent, universeId, questionId, securityMultiplier, currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
 	}
 
 	function deployOriginSecurityPool(uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice) external returns (ISecurityPool securityPool) {

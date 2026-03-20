@@ -35,7 +35,7 @@ describe('Question Data', () => {
 		}
 
 		await createQuestion(client, testCategoricalQuestion, outcomeLabels)
-		const questionId = await getQuestionId(client, testCategoricalQuestion, outcomeLabels)
+		const questionId = getQuestionId(testCategoricalQuestion, outcomeLabels)
 		const fetchedOutcomeLabels = await getOutcomeLabels(client, questionId)
 		const data = await getQuestionData(client, questionId)
 		assert.strictEqual(data.title, testCategoricalQuestion.title, 'title mismatch')
@@ -73,7 +73,7 @@ describe('Question Data', () => {
 		}
 
 		await createQuestion(client, testScalarQuestion, [])
-		const questionId = await getQuestionId(client, testScalarQuestion, [])
+		const questionId = getQuestionId(testScalarQuestion, [])
 		const data = await getQuestionData(client, questionId)
 		const fetchedOutcomeLabels = await getOutcomeLabels(client, questionId)
 		assert.strictEqual(data.title, testScalarQuestion.title, 'title mismatch')
@@ -108,7 +108,7 @@ describe('Question Data', () => {
 			answerUnit: 'unit',
 		}
 		await createQuestion(client, testScalarQuestion, [])
-		const questionId = await getQuestionId(client, testScalarQuestion, [])
+		const questionId = getQuestionId(testScalarQuestion, [])
 
 		// A) high bit set, sum == numTicks -> valid -> not malformed (false)
 		{
@@ -155,7 +155,7 @@ describe('Question Data', () => {
 			answerUnit: '',
 		}
 		await createQuestion(client, testScalarQuestion, [])
-		const questionId = await getQuestionId(client, testScalarQuestion, [])
+		const questionId = getQuestionId(testScalarQuestion, [])
 
 		// Encode a valid answer where firstPart + secondPart = numTicks, but the sum overflows uint120.
 		const firstPart = (1n << 120n) - 1n // max uint120
