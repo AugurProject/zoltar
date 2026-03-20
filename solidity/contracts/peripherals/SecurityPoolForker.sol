@@ -69,10 +69,15 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		securityPool.stealAllRep();
 		forkData[securityPool].repAtFork = rep.balanceOf(address(this));
 
-		uint8[] memory outcomeIndices = new uint8[](4 + 1);
-		for (uint8 index = 0; index < outcomeIndices.length; index++) {
-			outcomeIndices[index] = index;
+		// Determine valid outcome indices using stored numOutcomes
+		uint256 numOutcomes = zoltar.getNumOutcomes(universe);
+		require(numOutcomes >= 1, 'need atleast one outcome');
+
+		uint8[] memory outcomeIndices = new uint8[](numOutcomes + 1);
+		for (uint8 i = 0; i < outcomeIndices.length; i++) {
+			outcomeIndices[i] = i;
 		}
+
 		rep.approve(address(zoltar), type(uint256).max);
 		zoltar.splitRep(universe, outcomeIndices);
 		if (zoltar.getForkedBy(universe) == address(this)) {
@@ -217,11 +222,10 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) public {
 		EscalationGame escalationGame = securityPool.escalationGame();
 		require(address(escalationGame) != address(0x0) && escalationGame.nonDecisionTimestamp() > 0, 'escalation game has not triggered fork');
-		(string memory extraInfo, string[4] memory outcomes) = securityPool.questionData().getForkingData(securityPool.marketId());
 		securityPool.stealAllRep();
 		forkData[securityPool].ownFork = true;
 		securityPool.repToken().approve(address(zoltar), type(uint256).max);
-		zoltar.forkUniverse(securityPool.universeId(), extraInfo, outcomes);
+		zoltar.forkUniverse(securityPool.universeId(), securityPool.marketId());
 	}
 
 	// accounts the purchased REP from truthAuction to the vault

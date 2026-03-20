@@ -5,9 +5,10 @@ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists } from '../testsuite/simulator/utils/utilities'
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint'
-import { areEqualArrays } from '../testsuite/simulator/utils/array-utils'
-import { ensureZoltarDeployed, forkerClaimRep, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed, splitRep } from '../testsuite/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, createQuestion, forkerClaimRep, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed, splitRep, getZoltarQuestionDataAddress, ensureZoltarQuestionDataDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureDefined } from '../testsuite/simulator/utils/testUtils'
+import { keccak256, encodeAbiParameters } from 'viem'
+import { Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact'
 
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
 const FORKER_DEPOSIT_FRACTION = 20n
@@ -23,6 +24,14 @@ describe('Contract Test Suite', () => {
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
+		await ensureZoltarQuestionDataDeployed(client)
+		// Set ZoltarQuestionData on Zoltar
+		await client.writeContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'setZoltarQuestionData',
+			address: getZoltarAddress(),
+			args: [getZoltarQuestionDataAddress()],
+		})
 	})
 
 	test('canDeployContract', async () => {
@@ -37,10 +46,23 @@ describe('Contract Test Suite', () => {
 		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const zoltar = getZoltarAddress()
 		const marketText = 'test market'
-		const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'] as const
+		const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4']
 
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		// Create the question on ZoltarQuestionData
+		const questionData = {
+			title: marketText,
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: ''
+		}
+		await createQuestion(client, questionData, outcomes)
 
 		const preForkUniverseData = await getUniverseData(client, genesisUniverse)
 		const genesisRepToken = getRepTokenAddress(genesisUniverse)
@@ -51,8 +73,30 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(preForkUniverseData.reputationToken, genesisRepToken, 'Universe reputation token mismatch')
 		const priorRepbalance = await getERC20Balance(client, genesisRepToken, client.account.address)
 
+		// Compute questionId for the market
+		const questionId = BigInt(keccak256(encodeAbiParameters(
+			[
+				{
+					name: 'questionData',
+					type: 'tuple',
+					components: [
+						{ name: 'title', type: 'string' },
+						{ name: 'description', type: 'string' },
+						{ name: 'startTime', type: 'uint256' },
+						{ name: 'endTime', type: 'uint256' },
+						{ name: 'numTicks', type: 'uint256' },
+						{ name: 'displayValueMin', type: 'int256' },
+						{ name: 'displayValueMax', type: 'int256' },
+						{ name: 'answerUnit', type: 'string' }
+					]
+				},
+				{ name: 'outcomeOptions', type: 'string[]' }
+			],
+			[questionData, outcomes]
+		)))
+
 		// do fork
-		await forkUniverse(client, genesisUniverse, marketText, outcomes)
+		await forkUniverse(client, genesisUniverse, questionId)
 		const afterForkBalance = await getERC20Balance(client, genesisRepToken, client.account.address)
 		assert.strictEqual(afterForkBalance + totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION, priorRepbalance, 'balance mismatch')
 		const universeData = await getUniverseData(client, genesisUniverse)
@@ -65,9 +109,18 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(universeForkData.forkedBy, client.account.address, 'We should have been the forker')
 		const forkerDeposit = totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION - totalTheoreticalSupply / FORKER_DEPOSIT_FRACTION / FORKER_BURN_FRACTION // 5% of supply minus 20% burn
 		assert.strictEqual(universeForkData.forkerRepDeposit, forkerDeposit, 'wrong deposit amount')
-		assert.strictEqual(universeForkData.forkingQuestionExtraInfo, marketText, 'Market text did not match')
-		assert.ok(areEqualArrays([...universeForkData.categories], [...outcomes]), 'Outcomes did not match')
+		assert.strictEqual(universeForkData.questionId, questionId, 'Question ID did not match')
 		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), forkerDeposit, "forker's deposit should be in zoltar")
+
+		// Verify outcomes via ZoltarQuestionData.getForkingData
+		const forkData = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getForkingData',
+			address: getZoltarQuestionDataAddress(),
+			args: [questionId],
+		})
+		const [, fetchedOutcomes] = forkData
+		assert.deepStrictEqual([...fetchedOutcomes], [...outcomes], 'Outcomes did not match')
 
 		// forker claim balance
 		const outcomeIndexes = [0, 1, 3]

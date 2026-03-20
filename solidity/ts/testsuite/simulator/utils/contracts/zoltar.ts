@@ -1,4 +1,4 @@
-import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '../../../../types/contractArtifact'
+import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { ReadClient, WriteClient } from '../viem'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes } from 'viem'
@@ -8,6 +8,30 @@ import { ensureProxyDeployerDeployed } from '../utilities'
 export function getZoltarAddress() {
 	const bytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.bytecode.object }`
 	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
+}
+
+export function getZoltarQuestionDataAddress(): `0x${ string }` {
+	const bytecode: `0x${ string }` = `0x${ ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object }`
+	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
+}
+
+export const isZoltarQuestionDataDeployed = async (client: ReadClient) => {
+	const expectedDeployedBytecode: `0x${ string }` = `0x${ ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object }`
+	const address = getZoltarQuestionDataAddress()
+	const deployedBytecode = await client.getCode({ address })
+	return deployedBytecode === expectedDeployedBytecode
+}
+
+const deployZoltarQuestionDataTransaction = () => {
+	const bytecode: `0x${ string }` = `0x${ ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object }`
+	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
+}
+
+export const ensureZoltarQuestionDataDeployed = async (client: WriteClient) => {
+	await ensureProxyDeployerDeployed(client)
+	if (await isZoltarQuestionDataDeployed(client)) return
+	const hash = await client.sendTransaction(deployZoltarQuestionDataTransaction())
+	await client.waitForTransactionReceipt({ hash })
 }
 
 export const isZoltarDeployed = async (client: ReadClient) => {
@@ -47,22 +71,16 @@ export const getUniverseForkData = async (client: ReadClient, universeId: bigint
 		address: getZoltarAddress(),
 		args: [universeId],
 	})
-	const categories = await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'getForkingQuestionCategories',
-		address: getZoltarAddress(),
-		args: [universeId],
-	})
-	const [forkingQuestionExtraInfo, forkedBy, forkerRepDeposit] = universeForkData
-	return { forkingQuestionExtraInfo, forkedBy, forkerRepDeposit, categories }
+	const [forkedBy, forkerRepDeposit, questionId] = universeForkData
+	return { forkedBy, forkerRepDeposit, questionId }
 }
 
-export const forkUniverse = async (client: WriteClient, universeId: bigint, extraInfo: string, questionCategories: readonly [string, string, string, string]) =>
+export const forkUniverse = async (client: WriteClient, universeId: bigint, questionId: bigint) =>
 	await client.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkUniverse',
 		address: getZoltarAddress(),
-		args: [universeId, extraInfo, questionCategories],
+		args: [universeId, questionId],
 	})
 
 export const splitRep = async (client: WriteClient, universeId: bigint, outcomeIndexes: number[]) =>
@@ -107,3 +125,12 @@ export const getZoltarForkThreshold = async (client: ReadClient, universeId: big
 		address: getZoltarAddress(),
 		args: [universeId],
 	})
+
+export const createQuestion = async (client: WriteClient, questionData: any, outcomes: string[]): Promise<void> => {
+	await client.writeContract({
+		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+		functionName: 'createQuestion',
+		address: getZoltarQuestionDataAddress(),
+		args: [questionData, outcomes],
+	})
+}

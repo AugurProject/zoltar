@@ -40,9 +40,6 @@ describe('Peripherals Contract Test Suite', () => {
 	const EXTRA_INFO = 'test market!'
 	const marketId = getMarketId(genesisUniverse, securityMultiplier, EXTRA_INFO, marketEndDate)
 
-	const marketText = 'test market'
-	const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'] as const
-
 	beforeEach(async () => {
 		mockWindow = await getMockedEthSimulateWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
@@ -501,7 +498,7 @@ describe('Peripherals Contract Test Suite', () => {
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance + repDeposit, 100n, 'Did not get rep back')
 
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await forkUniverse(client, genesisUniverse, marketText, outcomes)
+		await forkUniverse(client, genesisUniverse, marketId)
 		await forkSecurityPool(client, securityPoolAddresses.securityPool)
 
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
