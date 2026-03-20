@@ -14,7 +14,7 @@ import { tickToPrice } from '../testsuite/simulator/utils/tickMath'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
-import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkSecurityPool, getMarketOutcome, getMigratedRep, getSecurityPoolForkerForkData, migrateFromEscalationGame, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
+import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMarketOutcome, getMigratedRep, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameDeposits, getMarketResolution, getNonDecisionThreshold, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getRepTokensMigratedRepBalance, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
@@ -121,7 +121,8 @@ describe('Peripherals Contract Test Suite', () => {
 		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await forkSecurityPool(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid)
@@ -248,7 +249,8 @@ describe('Peripherals Contract Test Suite', () => {
 		const forkerRepDeposit = await getRepTokensMigratedRepBalance(client, genesisUniverse, getInfraContractAddresses().securityPoolForker)
 		strictEqualTypeSafe(forkerRepDeposit + forkerRepBalance + burnAmount, repBalance, 'forkerRepDeposit + forkerRepBalance + burnAmount should equal deposit')
 
-		await forkSecurityPool(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(forkData.repAtFork, repBalance - burnAmount, 'rep at fork does not match deposit rep')
@@ -303,7 +305,8 @@ describe('Peripherals Contract Test Suite', () => {
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 		assert.deepStrictEqual(await balanceOfSharesInCash(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken, genesisUniverse, addressString(TEST_ADDRESSES[2])), openInterestArray, 'Did not create enough complete sets')
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await forkSecurityPool(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 
@@ -514,7 +517,8 @@ describe('Peripherals Contract Test Suite', () => {
 
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, questionId)
-		await forkSecurityPool(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -553,7 +557,8 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// Fork the security pool
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		await forkSecurityPool(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
@@ -645,5 +650,67 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// Attempt to deploy security pool with non-existent question should fail
 		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, nonExistentQuestionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice), /Question does not exist/)
+	})
+	test('can fork security pool using separate initiate and migrate calls with multiple migrations', async () => {
+		// Setup: trigger own fork and prepare
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		const zoltarForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
+		const burnAmount = zoltarForkThreshold / 5n
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		await depositRep(attackerClient, securityPoolAddresses.securityPool, forkThreshold)
+
+		const repBalanceInGenesisPool = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+
+		// Step 1: Initiate the security pool fork separately
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+
+		// Verify fork state
+		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
+		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		strictEqualTypeSafe(forkData.repAtFork, repBalanceInGenesisPool - burnAmount, 'rep at fork does not match')
+		strictEqualTypeSafe(forkData.migratedRep, 0n, 'migrated rep should be 0 so far')
+		strictEqualTypeSafe(forkData.ownFork, true, 'should be own fork')
+
+		// Step 2: Call migrateRepToZoltar separately for each outcome
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.No])
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid])
+
+		// Additional migration should fail (all rep already allocated)
+		await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /cannot migrate more than internal balance/i)
+
+		// Create child security pools to verify outcomes
+		// Create Yes child
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'Yes child should be in ForkMigration')
+		strictEqualTypeSafe(await getMarketOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'Yes outcome should be set')
+		assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'YES security pool should exist')
+
+		// Create No child using attacker client
+		await createChildUniverse(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No)
+		const noUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.No)
+		const noSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, noUniverse, questionId, securityMultiplier)
+		strictEqualTypeSafe(await getSystemState(client, noSecurityPool.securityPool), SystemState.ForkMigration, 'No child should be in ForkMigration')
+		strictEqualTypeSafe(await getMarketOutcome(client, noSecurityPool.securityPool), QuestionOutcome.No, 'No outcome should be set')
+		assert.ok(await contractExists(client, noSecurityPool.securityPool), 'NO security pool should exist')
+
+		// Create Invalid child using a third client
+		const thirdClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		await createChildUniverse(thirdClient, securityPoolAddresses.securityPool, QuestionOutcome.Invalid)
+		const invalidUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid)
+		const invalidSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, invalidUniverse, questionId, securityMultiplier)
+		strictEqualTypeSafe(await getSystemState(client, invalidSecurityPool.securityPool), SystemState.ForkMigration, 'Invalid child should be in ForkMigration')
+		strictEqualTypeSafe(await getMarketOutcome(client, invalidSecurityPool.securityPool), QuestionOutcome.Invalid, 'Invalid outcome should be set')
+		assert.ok(await contractExists(client, invalidSecurityPool.securityPool), 'INVALID security pool should exist')
 	})
 })
