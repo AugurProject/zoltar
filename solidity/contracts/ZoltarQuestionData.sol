@@ -49,6 +49,21 @@ contract ZoltarQuestionData {
 		return questions[questionId].endTime;
 	}
 
+	function getForkingData(uint256 questionId) external view returns (string memory extraInfo, string[4] memory outcomes) {
+		QuestionData memory qd = questions[questionId];
+		extraInfo = qd.title;
+		if (outcomeLabels[questionId].length == 0) {
+			// scalar market - return Yes/No as defaults
+			outcomes[0] = 'Yes';
+			outcomes[1] = 'No';
+		} else {
+			require(outcomeLabels[questionId].length <= 4, 'Too many outcomes');
+			for (uint256 i = 0; i < 4; i++) {
+				outcomes[i] = i < outcomeLabels[questionId].length ? outcomeLabels[questionId][i] : '';
+			}
+		}
+	}
+
 	function splitUint256IntoTwoWithInvalid(uint256 value) public pure returns (bool invalid, uint120 firstPart, uint120 secondPart) {
 		// Highest bit (bit 255)
 		invalid = (value >> 255) == 0;

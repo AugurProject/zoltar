@@ -2,7 +2,7 @@ import 'viem/window'
 import { ReadContractReturnType } from 'viem'
 import { ReadClient, WriteClient } from '../viem'
 import { WETH_ADDRESS } from '../constants'
-import { peripherals_DualCapBatchAuction_DualCapBatchAuction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_tokens_ShareToken_ShareToken, peripherals_YesNoMarkets_YesNoMarkets } from '../../../../types/contractArtifact'
+import { peripherals_DualCapBatchAuction_DualCapBatchAuction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
 import { shareArrayToCash } from './securityPool'
@@ -228,8 +228,8 @@ export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x$
 
 export const getMarketEndDate = async (client: ReadClient, marketId: bigint) =>
 	await client.readContract({
-		abi: peripherals_YesNoMarkets_YesNoMarkets.abi,
+		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'getMarketEndDate',
-		address: getInfraContractAddresses().yesNoMarkets,
+		address: getInfraContractAddresses().zoltarQuestionData,
 		args: [marketId],
 	})

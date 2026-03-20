@@ -7,7 +7,7 @@ import './TokenId.sol';
 import '../../Zoltar.sol';
 import '../interfaces/ISecurityPool.sol';
 import '../interfaces/IShareToken.sol';
-import '../YesNoMarkets.sol';
+import '../Outcomes.sol';
 
 /**
 * @title Share Token
@@ -55,7 +55,7 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
 
 		for (uint8 i = 0; i < Constants.NUM_OUTCOMES; i++) {
-			_tokenIds[i] = TokenId.getTokenId(_universeId, YesNoMarkets.Outcome(i));
+			_tokenIds[i] = TokenId.getTokenId(_universeId, Outcomes.Outcome(i));
 			_values[i] = _cashAmount;
 		}
 
@@ -68,7 +68,7 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
 
 		for (uint8 i = 0; i < Constants.NUM_OUTCOMES; i++) {
-			_tokenIds[i] = TokenId.getTokenId(_universeId, YesNoMarkets.Outcome(i));
+			_tokenIds[i] = TokenId.getTokenId(_universeId, Outcomes.Outcome(i));
 			_values[i] = _amount;
 		}
 
@@ -85,31 +85,31 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
 	}
 
-	function totalSupplyForOutcome(uint248 _universeId, YesNoMarkets.Outcome _outcome) public view returns (uint256) {
+	function totalSupplyForOutcome(uint248 _universeId, Outcomes.Outcome _outcome) public view returns (uint256) {
 		uint256 _tokenId = getTokenId(_universeId, _outcome);
 		return totalSupply(_tokenId);
 	}
 
-	function balanceOfOutcome(uint248 _universeId, YesNoMarkets.Outcome _outcome, address _account) public view returns (uint256) {
+	function balanceOfOutcome(uint248 _universeId, Outcomes.Outcome _outcome, address _account) public view returns (uint256) {
 		uint256 _tokenId = getTokenId(_universeId, _outcome);
 		return balanceOf(_account, _tokenId);
 	}
 
 	function balanceOfShares(uint248 _universeId, address _account) public view returns (uint256[3] memory balances) {
-		balances[0] = balanceOf(_account, getTokenId(_universeId, YesNoMarkets.Outcome.Invalid));
-		balances[1] = balanceOf(_account, getTokenId(_universeId, YesNoMarkets.Outcome.Yes));
-		balances[2] = balanceOf(_account, getTokenId(_universeId, YesNoMarkets.Outcome.No));
+		balances[0] = balanceOf(_account, getTokenId(_universeId, Outcomes.Outcome.Invalid));
+		balances[1] = balanceOf(_account, getTokenId(_universeId, Outcomes.Outcome.Yes));
+		balances[2] = balanceOf(_account, getTokenId(_universeId, Outcomes.Outcome.No));
 	}
 
-	function getTokenId(uint248 _universeId, YesNoMarkets.Outcome _outcome) public pure returns (uint256 _tokenId) {
+	function getTokenId(uint248 _universeId, Outcomes.Outcome _outcome) public pure returns (uint256 _tokenId) {
 		return TokenId.getTokenId(_universeId, _outcome);
 	}
 
-	function getTokenIds(uint248 _universeId, YesNoMarkets.Outcome[] memory _outcomes) public pure returns (uint256[] memory _tokenIds) {
+	function getTokenIds(uint248 _universeId, Outcomes.Outcome[] memory _outcomes) public pure returns (uint256[] memory _tokenIds) {
 		return TokenId.getTokenIds(_universeId, _outcomes);
 	}
 
-	function unpackTokenId(uint256 _tokenId) public override pure returns (uint248 _universe, YesNoMarkets.Outcome _outcome) {
+	function unpackTokenId(uint256 _tokenId) public override pure returns (uint248 _universe, Outcomes.Outcome _outcome) {
 		return TokenId.unpackTokenId(_tokenId);
 	}
 }

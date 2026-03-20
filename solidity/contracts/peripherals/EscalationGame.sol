@@ -4,7 +4,7 @@ pragma solidity 0.8.33;
 import { ReputationToken } from '../ReputationToken.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
-import { YesNoMarkets } from './YesNoMarkets.sol';
+import { Outcomes } from './Outcomes.sol';
 
 struct Deposit {
 	address depositor;
@@ -25,8 +25,8 @@ contract EscalationGame {
 	uint256 public nonDecisionTimestamp;
 
 	event GameStarted(uint256 startingTime, uint256 startBond, uint256 nonDecisionThreshold);
-	event DepositOnOutcome(address depositor, YesNoMarkets.Outcome outcome, uint256 amount, uint256 depositIndex, uint256 cumulativeAmount);
-	event WithdrawDeposit(address depositor, YesNoMarkets.Outcome winner, uint256 amountToWithdraw, uint256 depositIndex);
+	event DepositOnOutcome(address depositor, Outcomes.Outcome outcome, uint256 amount, uint256 depositIndex, uint256 cumulativeAmount);
+	event WithdrawDeposit(address depositor, Outcomes.Outcome winner, uint256 amountToWithdraw, uint256 depositIndex);
 	event ClaimDeposit(uint256 amountToWithdraw, uint256 burnAmount);
 
 	constructor(ISecurityPool _securityPool) {
@@ -116,17 +116,17 @@ contract EscalationGame {
 		return compute5TermTaylorSeriesAttritionCostApproximation(timeFromStart);
 	}
 
-	function getMarketResolution() public view returns (YesNoMarkets.Outcome outcome){
+	function getMarketResolution() public view returns (Outcomes.Outcome outcome){
 		uint256 currentTotalCost = totalCost();
 		uint8 invalidOver = balances[0] >= currentTotalCost ? 1 : 0;
 		uint8 yesOver = balances[1] >= currentTotalCost ? 1 : 0;
 		uint8 noOver = balances[2] >= currentTotalCost ? 1 : 0;
-		if (invalidOver + yesOver + noOver >= 2) return YesNoMarkets.Outcome.None; // if two or more outcomes are over the total cost, the game is still going
+		if (invalidOver + yesOver + noOver >= 2) return Outcomes.Outcome.None; // if two or more outcomes are over the total cost, the game is still going
 		// the game has ended due to timeout
 		// TODO, doesn't handle ties well logically. We could avoid it by checking if tie is happening before deposit and break it there
-		if (balances[0] > balances[1] && balances[0] > balances[2]) return YesNoMarkets.Outcome.Invalid;
-		if (balances[1] > balances[0] && balances[1] > balances[2]) return YesNoMarkets.Outcome.Yes;
-		return YesNoMarkets.Outcome.No;
+		if (balances[0] > balances[1] && balances[0] > balances[2]) return Outcomes.Outcome.Invalid;
+		if (balances[1] > balances[0] && balances[1] > balances[2]) return Outcomes.Outcome.Yes;
+		return Outcomes.Outcome.No;
 	}
 
 	function hasReachedNonDecision() public view returns (bool) {
@@ -147,10 +147,10 @@ contract EscalationGame {
 	}
 
 	// deposits on market outcome, returns how much user actually ended depositing
-	function depositOnOutcome(address depositor, YesNoMarkets.Outcome outcome, uint256 amount) public returns (uint256 depositAmount) {
+	function depositOnOutcome(address depositor, Outcomes.Outcome outcome, uint256 amount) public returns (uint256 depositAmount) {
 		require(nonDecisionTimestamp == 0, 'System has already reached a non-decision');
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
-		require(getMarketResolution() == YesNoMarkets.Outcome.None, 'System has already timed out');
+		require(getMarketResolution() == Outcomes.Outcome.None, 'System has already timed out');
 		require(balances[uint256(outcome)] < nonDecisionThreshold, 'Already full');
 		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit'); // checks that we get start bond and spam protection
 		Deposit memory deposit;
@@ -172,7 +172,7 @@ contract EscalationGame {
 	}
 
 	// TODO, this should be calculated against to actual nonDecisionThreshold, not the one set at the start. The actual can be lower than the games treshold but never above
-	function claimDepositForWinning(uint256 depositIndex, YesNoMarkets.Outcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
+	function claimDepositForWinning(uint256 depositIndex, Outcomes.Outcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
 		require(msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()), 'Only Security Pool can withdraw');
 		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
 		deposits[uint8(outcome)][depositIndex].amount = 0;
@@ -198,13 +198,13 @@ contract EscalationGame {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
 		// if system hasnt forked, check outcome is winning
-		YesNoMarkets.Outcome marketResolution = getMarketResolution();
+		Outcomes.Outcome marketResolution = getMarketResolution();
 		(depositor,amountToWithdraw) = claimDepositForWinning(depositIndex, marketResolution);
 		emit WithdrawDeposit(depositor, marketResolution, amountToWithdraw, depositIndex);
 	}
 
 	// TODO, for the UI, we probably want to retrieve multiple outcomes at once
-	function getDepositsByOutcome(YesNoMarkets.Outcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (Deposit[] memory returnDeposits) {
+	function getDepositsByOutcome(Outcomes.Outcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (Deposit[] memory returnDeposits) {
 		returnDeposits = new Deposit[](numberOfEntries);
 		uint256 iterateUntil = startIndex + numberOfEntries > deposits[uint8(outcome)].length ? deposits[uint8(outcome)].length : startIndex + numberOfEntries;
 		for (uint256 i = startIndex; i < iterateUntil; i++) {

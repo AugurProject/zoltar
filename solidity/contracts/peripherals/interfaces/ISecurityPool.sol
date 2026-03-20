@@ -8,7 +8,7 @@ import { IShareToken } from './IShareToken.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { PriceOracleManagerAndOperatorQueuer } from '../PriceOracleManagerAndOperatorQueuer.sol';
 import { EscalationGame } from '../EscalationGame.sol';
-import { YesNoMarkets } from '../YesNoMarkets.sol';
+import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
 
 struct SecurityVault {
 	uint256 poolOwnership;
@@ -91,7 +91,7 @@ interface ISecurityPool {
 	function setCompleteSetCollateralAmount(uint256 newCompleteSetCollateralAmount) external;
 	function setTotalSecurityBondAllowance(uint256 newTotalSecurityBondAllowance) external;
 	function authorize(ISecurityPool pool) external;
-	function yesNoMarkets() external view returns (YesNoMarkets);
+	function questionData() external view returns (ZoltarQuestionData);
 	function stealAllRep() external;
 	function migrateEth(address payable child, uint256 amount) external;
 
