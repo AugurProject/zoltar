@@ -7,6 +7,7 @@ import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getE
 import { addressString, dateToBigintSeconds, rpow } from '../testsuite/simulator/utils/bigint'
 import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getMarketId, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { createQuestion } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 
 import { balanceOfShares, balanceOfSharesInCash, getEthRaiseCap, getLastPrice, getMarketEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndQueueOperation } from '../testsuite/simulator/utils/contracts/peripherals'
 import { tickToPrice } from '../testsuite/simulator/utils/tickMath'
@@ -46,7 +47,21 @@ describe('Peripherals Contract Test Suite', () => {
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
-		await deployOriginSecurityPool(client, genesisUniverse, EXTRA_INFO, marketEndDate, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+		// Create the question on-chain first
+		const questionData = {
+			title: EXTRA_INFO,
+			description: '',
+			startTime: 0n,
+			endTime: marketEndDate,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = ['Yes', 'No']
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getMarketId(genesisUniverse, securityMultiplier, EXTRA_INFO, marketEndDate)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
 		await approveAndDepositRep(client, repDeposit, marketId)
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, marketId, securityMultiplier)
 	})

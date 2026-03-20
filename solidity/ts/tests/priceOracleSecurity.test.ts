@@ -7,6 +7,7 @@ import { addressString, dateToBigintSeconds } from '../testsuite/simulator/utils
 import { setupTestAccounts, getETHBalance } from '../testsuite/simulator/utils/utilities'
 import { approveAndDepositRep } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses, getMarketId } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { createQuestion } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { OperationType, getRequestPriceEthCost } from '../testsuite/simulator/utils/contracts/peripherals'
 import { peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer } from '../types/contractArtifact'
@@ -31,7 +32,21 @@ describe('Price Oracle Refund Security Tests', () => {
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
-		await deployOriginSecurityPool(client, genesisUniverse, EXTRA_INFO, marketEndDate, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+		// Create the question on-chain first
+		const questionData = {
+			title: EXTRA_INFO,
+			description: '',
+			startTime: 0n,
+			endTime: marketEndDate,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = ['Yes', 'No']
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getMarketId(genesisUniverse, securityMultiplier, EXTRA_INFO, marketEndDate)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
 		await approveAndDepositRep(client, repDeposit, marketId)
 		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, marketId, securityMultiplier)
 		priceOracle = addresses.priceOracleManagerAndOperatorQueuer

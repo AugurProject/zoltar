@@ -54,21 +54,17 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		emit DeploySecurityPool(securityPool, truthAuction, priceOracleManagerAndOperatorQueuer, shareToken, parent, universeId, marketId, securityMultiplier, currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
 	}
 
-	function deployOriginSecurityPool(uint248 universeId, string memory extraInfo, uint256 marketEndDate, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice) external returns (ISecurityPool securityPool) {
-		ZoltarQuestionData.QuestionData memory qd = ZoltarQuestionData.QuestionData({
-			title: extraInfo,
-			description: '',
-			startTime: 0,
-			endTime: marketEndDate,
-			numTicks: 0,
-			displayValueMin: 0,
-			displayValueMax: 0,
-			answerUnit: ''
-		});
-		string[] memory outcomes = new string[](2);
-		outcomes[0] = 'Yes';
-		outcomes[1] = 'No';
-		uint256 questionId = questionData.createQuestion(qd, outcomes);
+	function deployOriginSecurityPool(uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice) external returns (ISecurityPool securityPool) {
+		// Validate that the question exists
+		require(questionData.questionCreatedTimestamp(questionId) > 0, 'Question does not exist');
+
+		// Validate that it's a yes-no question (exactly 2 outcomes: Yes and No)
+		// Fetch up to 3 outcomes to verify exactly 2 exist
+		string[] memory outcomes = questionData.getOutcomeLabels(questionId, 0, 3);
+		require(keccak256(bytes(outcomes[0])) == keccak256(bytes('Yes')), 'First outcome must be "Yes"');
+		require(keccak256(bytes(outcomes[1])) == keccak256(bytes('No')), 'Second outcome must be "No"');
+		require(bytes(outcomes[2]).length == 0, 'Question must have exactly 2 outcomes');
+
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		bytes32 securityPoolSalt = keccak256(abi.encode(address(0x0), universeId, questionId, securityMultiplier));
 		PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
