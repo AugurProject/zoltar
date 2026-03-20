@@ -118,32 +118,19 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence.securityPoolUtils) await deployBytecode(`0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`)
 	if (!existence.openOracle) await deployBytecode(`0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`)
 	if (!existence.zoltarQuestionData) await deployBytecode(getZoltarQuestionDataByteCode())
-	if (!existence.zoltar) await deployBytecode(`0x${ Zoltar_Zoltar.evm.bytecode.object }`)
+	if (!existence.zoltar) {
+		const initCode = encodeDeployData({
+			abi: Zoltar_Zoltar.abi,
+			bytecode: `0x${ Zoltar_Zoltar.evm.bytecode.object }`,
+			args: [contractAddresses.zoltarQuestionData],
+		})
+		await deployBytecode(initCode)
+	}
 	if (!existence.shareTokenFactory) await deployBytecode(getShareTokenFactoryByteCode(getZoltarAddress()))
 	if (!existence.priceOracleManagerAndOperatorQueuerFactory) await deployBytecode(`0x${ peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object }`)
 	if (!existence.securityPoolForker) await deployBytecode(getSecurityPoolForkerByteCode(contractAddresses.zoltar))
 	if (!existence.escalationGameFactory) await deployBytecode(getEscalationGameFactoryByteCode())
 	if (!existence.securityPoolFactory) await deployBytecode(getSecurityPoolFactoryByteCode(contractAddresses.securityPoolForker, contractAddresses.zoltarQuestionData, contractAddresses.escalationGameFactory, contractAddresses.openOracle, contractAddresses.zoltar, contractAddresses.shareTokenFactory, contractAddresses.dualCapBatchAuctionFactory, contractAddresses.priceOracleManagerAndOperatorQueuerFactory))
-
-	// Set ZoltarQuestionData on Zoltar (must be done after both are deployed)
-	// Check if not already set, to handle cases where Zoltar was deployed earlier
-	if (await contractExists(client, contractAddresses.zoltar)) {
-		const isSet = await client.readContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'zoltarQuestionDataSet',
-			address: contractAddresses.zoltar,
-			args: [],
-		})
-		if (!isSet) {
-			const setZoltarQuestionDataHash = await client.writeContract({
-				abi: Zoltar_Zoltar.abi,
-				functionName: 'setZoltarQuestionData',
-				address: contractAddresses.zoltar,
-				args: [contractAddresses.zoltarQuestionData],
-			})
-			await client.waitForTransactionReceipt({ hash: setZoltarQuestionDataHash })
-		}
-	}
 
 	for (const [name, contractAddress] of objectEntries(contractAddresses)) {
 		if (!(await contractExists(client, contractAddress))) throw new Error(`${ name } does not exist even though we deployed it`)

@@ -33,12 +33,10 @@ contract Zoltar {
 	event ForkerClaimRep(address forker, uint248 universeId, uint8[] outcomeIndexes, uint256 forkerRepDeposit);
 
 	ZoltarQuestionData public zoltarQuestionData;
-	bool public zoltarQuestionDataSet;
 
-	function setZoltarQuestionData(ZoltarQuestionData _zoltarQuestionData) external {
-		require(!zoltarQuestionDataSet, 'already set');
+	constructor(ZoltarQuestionData _zoltarQuestionData) {
 		zoltarQuestionData = _zoltarQuestionData;
-		zoltarQuestionDataSet = true;
+		universes[0] = Universe(0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0, 0);
 	}
 
 	function getForkTime(uint248 universeId) external view returns (uint256) {
@@ -62,10 +60,6 @@ contract Zoltar {
 		return universeForkData[universeId].numOutcomes;
 	}
 
-	constructor() {
-		universes[0] = Universe(0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0, 0);
-	}
-
 	function getForkThreshold(uint248 universeId) public view returns (uint256) {
 		Universe memory universe = universes[universeId];
 		return universe.reputationToken.getTotalTheoreticalSupply() / FORK_THRESHOLD_DIVISOR;
@@ -74,7 +68,7 @@ contract Zoltar {
 	function forkUniverse(uint248 universeId, uint256 _questionId) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime == 0, 'Universe has forked already');
-		require(zoltarQuestionDataSet, 'ZoltarQuestionData not set');
+		require(address(zoltarQuestionData) != address(0), 'ZoltarQuestionData not set');
 		// Validate that the question has outcomes
 		(, string[4] memory outcomes) = zoltarQuestionData.getForkingData(_questionId);
 		uint256 numOutcomes = 0;

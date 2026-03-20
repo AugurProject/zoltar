@@ -5,10 +5,10 @@ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists } from '../testsuite/simulator/utils/utilities'
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint'
-import { ensureZoltarDeployed, createQuestion, forkerClaimRep, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed, splitRep, getZoltarQuestionDataAddress, ensureZoltarQuestionDataDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, createQuestion, forkerClaimRep, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseForkData, getZoltarAddress, isZoltarDeployed, splitRep, getZoltarQuestionDataAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureDefined } from '../testsuite/simulator/utils/testUtils'
 import { keccak256, encodeAbiParameters } from 'viem'
-import { Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact'
+import { ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact'
 
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
 const FORKER_DEPOSIT_FRACTION = 20n
@@ -24,14 +24,6 @@ describe('Contract Test Suite', () => {
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
-		await ensureZoltarQuestionDataDeployed(client)
-		// Set ZoltarQuestionData on Zoltar
-		await client.writeContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'setZoltarQuestionData',
-			address: getZoltarAddress(),
-			args: [getZoltarQuestionDataAddress()],
-		})
 	})
 
 	test('canDeployContract', async () => {
@@ -60,7 +52,7 @@ describe('Contract Test Suite', () => {
 			numTicks: 0n,
 			displayValueMin: 0n,
 			displayValueMax: 0n,
-			answerUnit: ''
+			answerUnit: '',
 		}
 		await createQuestion(client, questionData, outcomes)
 
@@ -74,26 +66,30 @@ describe('Contract Test Suite', () => {
 		const priorRepbalance = await getERC20Balance(client, genesisRepToken, client.account.address)
 
 		// Compute questionId for the market
-		const questionId = BigInt(keccak256(encodeAbiParameters(
-			[
-				{
-					name: 'questionData',
-					type: 'tuple',
-					components: [
-						{ name: 'title', type: 'string' },
-						{ name: 'description', type: 'string' },
-						{ name: 'startTime', type: 'uint256' },
-						{ name: 'endTime', type: 'uint256' },
-						{ name: 'numTicks', type: 'uint256' },
-						{ name: 'displayValueMin', type: 'int256' },
-						{ name: 'displayValueMax', type: 'int256' },
-						{ name: 'answerUnit', type: 'string' }
-					]
-				},
-				{ name: 'outcomeOptions', type: 'string[]' }
-			],
-			[questionData, outcomes]
-		)))
+		const questionId = BigInt(
+			keccak256(
+				encodeAbiParameters(
+					[
+						{
+							name: 'questionData',
+							type: 'tuple',
+							components: [
+								{ name: 'title', type: 'string' },
+								{ name: 'description', type: 'string' },
+								{ name: 'startTime', type: 'uint256' },
+								{ name: 'endTime', type: 'uint256' },
+								{ name: 'numTicks', type: 'uint256' },
+								{ name: 'displayValueMin', type: 'int256' },
+								{ name: 'displayValueMax', type: 'int256' },
+								{ name: 'answerUnit', type: 'string' },
+							],
+						},
+						{ name: 'outcomeOptions', type: 'string[]' },
+					],
+					[questionData, outcomes],
+				),
+			),
+		)
 
 		// do fork
 		await forkUniverse(client, genesisUniverse, questionId)
