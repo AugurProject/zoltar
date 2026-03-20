@@ -67,10 +67,9 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		securityPool.setRetentionRate(0);
 		ReputationToken rep = securityPool.repToken();
 		securityPool.stealAllRep();
-		forkData[securityPool].repAtFork = rep.balanceOf(address(this));
-
 		rep.approve(address(zoltar), type(uint256).max);
-		zoltar.prepareRepForMigration(universe, forkData[securityPool].repAtFork);
+		zoltar.prepareRepForMigration(universe, rep.balanceOf(address(this)));
+		forkData[securityPool].repAtFork = zoltar.repTokensMigrated(address(this), universe);
 		zoltar.migrateInternalRep(universe, forkData[securityPool].repAtFork, outcomeIndices);
 		emit ForkSecurityPool(forkData[securityPool].repAtFork);
 		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
