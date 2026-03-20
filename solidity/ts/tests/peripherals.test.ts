@@ -301,7 +301,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await migrateFromEscalationGame(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 		const yesVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		const yesPoolBalance = await getERC20Balance(client, await getRepToken(client, yesSecurityPool.securityPool), yesSecurityPool.securityPool)
-		strictEqual18Decimal(await poolOwnershipToRep(client, yesSecurityPool.securityPool, yesVault.repDepositShare), yesPoolBalance - repDeposit, 'we should account for all the rep in yes pool (except attacker\'s rep)')
+		strictEqual18Decimal(await poolOwnershipToRep(client, yesSecurityPool.securityPool, yesVault.repDepositShare), yesPoolBalance - repDeposit, "we should account for all the rep in yes pool (except attacker's rep)")
 		const migratedRepInYes = await getMigratedRep(client, yesSecurityPool.securityPool)
 		strictEqual18Decimal(yesPoolBalance - repDeposit, migratedRepInYes, 'yes pool has the same rep as migrated rep')
 		strictEqualTypeSafe(await getMarketOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'yes is finalized')

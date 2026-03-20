@@ -30,11 +30,13 @@ declare module 'solc' {
 		readonly object: string
 		readonly opcodes?: string
 		readonly sourceMap?: string
-		readonly linkReferences?: {} | {
-			readonly [globalName: string]: {
-				readonly [name: string]: { start: number; length: number }[]
-			}
-		}
+		readonly linkReferences?:
+			| {}
+			| {
+					readonly [globalName: string]: {
+						readonly [name: string]: { start: number; length: number }[]
+					}
+			  }
 	}
 	interface CompilerOutputSources {
 		readonly [globalName: string]: {

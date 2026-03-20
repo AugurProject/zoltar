@@ -79,7 +79,7 @@ export const getMarketOutcome = async (client: ReadClient, securityPoolAddress: 
 				name: 'getMarketOutcome',
 				outputs: [
 					{
-						internalType: 'enum Outcomes.Outcome',
+						internalType: 'enum BinaryOutcomes.BinaryOutcome',
 						name: 'outcome',
 						type: 'uint8',
 					},
