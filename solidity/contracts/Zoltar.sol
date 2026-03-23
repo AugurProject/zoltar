@@ -105,15 +105,17 @@ contract Zoltar {
 		splitRepInternal(universeId, amount, msg.sender, outcomeIndexes);
 	}
 
-	function splitRepInternal(uint248 universeId, uint256 amount, address recipient, uint256[] memory outcomeIndexes) private {
-		for (uint256 i = 0; i < outcomeIndexes.length; i++) {
-			uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndexes[i]);
-			// todo, check that outcome index is valid outcome
-			if (address(universes[childUniverseId].reputationToken) == address(0x0)) deployChild(universeId, outcomeIndexes[i]);
-			repTokensMigrated[msg.sender][universeId].migrationAmounts[childUniverseId] += amount;
-			require(repTokensMigrated[msg.sender][universeId].migrationAmounts[childUniverseId] <= repTokensMigrated[msg.sender][universeId].repBalance, 'cannot migrate more than internal balance');
-			universes[childUniverseId].reputationToken.mint(recipient, amount);
-		}
-	}
+ 	function splitRepInternal(uint248 universeId, uint256 amount, address recipient, uint256[] memory outcomeIndexes) private {
+ 		uint256 questionId = universes[universeId].forkQuestionId;
+ 		for (uint256 i = 0; i < outcomeIndexes.length; i++) {
+ 			uint256 outcomeIndex = outcomeIndexes[i];
+ 			require(!zoltarQuestionData.isMalformedAnswerOption(questionId, outcomeIndex), 'Malformed');
+ 			uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndex);
+ 			if (address(universes[childUniverseId].reputationToken) == address(0x0)) deployChild(universeId, outcomeIndex);
+ 			repTokensMigrated[msg.sender][universeId].migrationAmounts[childUniverseId] += amount;
+ 			require(repTokensMigrated[msg.sender][universeId].migrationAmounts[childUniverseId] <= repTokensMigrated[msg.sender][universeId].repBalance, 'cannot migrate more than internal balance');
+ 			universes[childUniverseId].reputationToken.mint(recipient, amount);
+ 		}
+ 	}
 }
 

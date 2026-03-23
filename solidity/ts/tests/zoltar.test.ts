@@ -217,4 +217,36 @@ describe('Contract Test Suite', () => {
 		assert.ok(universeData.forkTime > 0n, 'Universe should be forked')
 		assert.strictEqual(universeData.forkQuestionId, questionId, 'Fork questionId mismatch')
 	})
+
+	test('migrateInternalRep fails for malformed outcome index', async () => {
+		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const zoltar = getZoltarAddress()
+		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		// Create a question with 4 outcomes
+		const questionData = {
+			title: 'test malformed outcome',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4']
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getQuestionId(questionData, outcomes)
+
+		// Fork the universe
+		await forkUniverse(client, genesisUniverse, questionId)
+
+		// Get the balance available for migration
+		const balance = await getRepTokensMigratedRepBalance(client, genesisUniverse, client.account.address)
+
+		// Try to migrate with a malformed outcome index (5 is > 4 outcomes)
+		const malformedOutcomeIndex = 5n
+		await assert.rejects(migrateInternalRep(client, genesisUniverse, balance, [malformedOutcomeIndex]), /Malformed/)
+	})
 })
