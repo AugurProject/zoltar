@@ -8,6 +8,7 @@ import assert from 'node:assert'
 import { deployEscalationGame, depositOnOutcome, getBalances, getStartingTime } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { peripherals_EscalationGame_EscalationGame } from '../types/contractArtifact'
 
 describe('Escalation Game Test Suite', () => {
 	let mockWindow: AnvilWindowEthereum
@@ -38,5 +39,42 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(outcomeBalancesAfterDeposit.yes, 0n, 'yes stake')
 		assert.strictEqual(outcomeBalancesAfterDeposit.no, reportBond, 'no stake')
 		assert.strictEqual(outcomeBalancesAfterDeposit.invalid, 0n, 'invalid stake')
+	})
+
+	test('depositOnOutcome reverts when outcome is None', async () => {
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
+		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.None, reportBond))
+	})
+
+	test('depositOnOutcome reverts when outcome is out of enum range', async () => {
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
+		// Values > 3 are outside enum (0=Invalid,1=Yes,2=No,3=None)
+		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, 4 as unknown as QuestionOutcome, reportBond))
+		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, 255 as unknown as QuestionOutcome, reportBond))
+	})
+
+	test('claimDepositForWinning reverts when outcome is None', async () => {
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond)
+		await assert.rejects(
+			client.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: escalationGame,
+				functionName: 'claimDepositForWinning',
+				args: [0n, QuestionOutcome.None],
+			}),
+		)
+	})
+
+	test('claimDepositForWinning reverts when outcome is out of enum range', async () => {
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
+		await assert.rejects(
+			client.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: escalationGame,
+				functionName: 'claimDepositForWinning',
+				args: [0n, 4],
+			}),
+		)
 	})
 })

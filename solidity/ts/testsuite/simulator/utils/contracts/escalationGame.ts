@@ -31,7 +31,7 @@ export const getStartBond = async (client: ReadClient, escalationGame: AccountAd
 export const getEscalationGameDeposits = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) => {
 	let currentIndex = 0n
 	const numberOfEntries = 30n
-	const pages: { depositIndex: bigint, depositor: AccountAddress, amount: bigint, cumulativeAmount: bigint }[] = []
+	const pages: { depositIndex: bigint; depositor: AccountAddress; amount: bigint; cumulativeAmount: bigint }[] = []
 	do {
 		const newDeposits = (
 			await client.readContract({
@@ -64,7 +64,7 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBond: 
 			args: [writeClient.account.address],
 		}),
 		from: getInfraContractAddresses().escalationGameFactory,
-		salt: numberToBytes(0),
+		salt: numberToBytes(0, { size: 32 }),
 	})
 }
 

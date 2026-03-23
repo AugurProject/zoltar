@@ -173,4 +173,50 @@ describe('Question Data', () => {
 		assert.notStrictEqual(name, 'Malformed', 'should not return Malformed')
 		assert.notStrictEqual(name, 'Invalid', 'should not return Invalid')
 	})
+
+	// Test for integer overflow in getTradeInterval: maxValue - minValue exceeds int256max
+	test('getTradeInterval handles extreme range without overflow', async () => {
+		const int256Max = (1n << 255n) - 1n
+		const int256Min = -(1n << 255n)
+		const question = {
+			title: 'extreme range overflow',
+			description: '',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: 1000n,
+			displayValueMin: int256Min,
+			displayValueMax: int256Max,
+			answerUnit: '',
+		}
+		await createQuestion(client, question, [])
+		const questionId = getQuestionId(question, [])
+		// Use a valid tick with secondPart = 1 to avoid int256min issue
+		const answer = combineUint256FromTwoWithInvalid(false, question.numTicks - 1n, 1n)
+		// After fix, this should not revert but return a valid scalar outcome name
+		const name = await getAnswerOptionName(client, questionId, answer)
+		assert.ok(name !== 'Malformed' && name !== 'Invalid', 'should return valid outcome name')
+	})
+
+	// Test for integer overflow in getScalarOutcomeName: scalarValue calculation may overflow
+	// This is triggered by the same extreme range, but ensures the full computation succeeds.
+	test('getScalarOutcomeName handles large scalarValue without overflow', async () => {
+		const int256Max = (1n << 255n) - 1n
+		const int256Min = -(1n << 255n)
+		const question = {
+			title: 'scalarValue overflow',
+			description: '',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: 1000n,
+			displayValueMin: int256Min,
+			displayValueMax: int256Max,
+			answerUnit: '',
+		}
+		await createQuestion(client, question, [])
+		const questionId = getQuestionId(question, [])
+		// Use a valid tick with secondPart = 1
+		const answer = combineUint256FromTwoWithInvalid(false, question.numTicks - 1n, 1n)
+		const name = await getAnswerOptionName(client, questionId, answer)
+		assert.ok(name !== 'Malformed' && name !== 'Invalid', 'should return valid outcome name')
+	})
 })

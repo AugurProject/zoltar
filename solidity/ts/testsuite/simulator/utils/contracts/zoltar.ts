@@ -18,14 +18,14 @@ export function getZoltarAddress(): `0x${ string }` {
 	const initCode = getZoltarInitCode(zoltarQuestionDataAddress)
 	return getCreate2Address({
 		from: addressString(PROXY_DEPLOYER_ADDRESS),
-		salt: numberToBytes(0),
+		salt: numberToBytes(0, { size: 32 }),
 		bytecode: initCode,
 	})
 }
 
 export function getZoltarQuestionDataAddress(): `0x${ string }` {
 	const bytecode: `0x${ string }` = `0x${ ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object }`
-	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0) })
+	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0, { size: 32 }) })
 }
 
 export const isZoltarQuestionDataDeployed = async (client: ReadClient) => {

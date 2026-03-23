@@ -8,9 +8,9 @@ import { peripherals_EscalationGame_EscalationGame, peripherals_factories_DualCa
 import { objectEntries } from '../typescript'
 import { getRepTokenAddress, getZoltarAddress } from './zoltar'
 
-const getSecurityPoolUtilsAddress = () => getCreate2Address({ bytecode: `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
+const getSecurityPoolUtilsAddress = () => getCreate2Address({ bytecode: `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0, { size: 32 }) })
 
-const getScalarOutcomesAddress = () => getCreate2Address({ bytecode: `0x${ ScalarOutcomes_ScalarOutcomes.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
+const getScalarOutcomesAddress = () => getCreate2Address({ bytecode: `0x${ ScalarOutcomes_ScalarOutcomes.evm.bytecode.object }`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0, { size: 32 }) })
 
 export const applyLibraries = (bytecode: string): `0x${ string }` => {
 	type LibraryReplacement = { hash: string; address: `0x${ string }` }
@@ -66,7 +66,7 @@ const getZoltarQuestionDataByteCode = () =>
 	})
 
 export function getInfraContractAddresses() {
-	const getAddress = (bytecode: `0x${ string }`) => getCreate2Address({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0) })
+	const getAddress = (bytecode: `0x${ string }`) => getCreate2Address({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: numberToBytes(0, { size: 32 }) })
 
 	const contracts = {
 		securityPoolUtils: getSecurityPoolUtilsAddress(),
@@ -213,7 +213,7 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 			args: [infraContracts.securityPoolForker, infraContracts.securityPoolFactory, infraContracts.zoltarQuestionData, infraContracts.escalationGameFactory, contracts.priceOracleManagerAndOperatorQueuer, contracts.shareToken, infraContracts.openOracle, parent, infraContracts.zoltar, universeId, questionId, securityMultiplier] as const,
 		}),
 		from: infraContracts.securityPoolFactory,
-		salt: numberToBytes(0),
+		salt: numberToBytes(0, { size: 32 }),
 	})
 	const escalationGame = getCreate2Address({
 		bytecode: encodeDeployData({
@@ -222,7 +222,7 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 			args: [securityPool],
 		}),
 		from: infraContracts.escalationGameFactory,
-		salt: numberToBytes(0),
+		salt: numberToBytes(0, { size: 32 }),
 	})
 	return { ...contracts, securityPool, escalationGame }
 }

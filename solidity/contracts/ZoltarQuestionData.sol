@@ -28,10 +28,8 @@ contract ZoltarQuestionData {
 		require(questionCreatedTimestamp[questionId] == 0, 'Question already exists');
 		if (outcomeOptions.length == 0) {
 			// scalar
-			int256 tradeInterval = questionData.displayValueMax - questionData.displayValueMin;
-			require(tradeInterval > 0, 'max needs to be bigger than min and subtraction cannot overflow');
+			require(questionData.displayValueMax > questionData.displayValueMin, 'max must be greater than min');
 			require(questionData.numTicks > 0, 'numTicks needs to be positive');
-			questionData.displayValueMin + int256(questionData.numTicks) * tradeInterval; // overflow check
 		}
 		else {
 			for (uint256 index = 0; index < outcomeOptions.length; index++) {

@@ -150,6 +150,7 @@ contract EscalationGame {
 	function depositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) public returns (uint256 depositAmount) {
 		require(nonDecisionTimestamp == 0, 'System has already reached a non-decision');
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
 		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'System has already timed out');
 		require(balances[uint256(outcome)] < nonDecisionThreshold, 'Already full');
 		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit'); // checks that we get start bond and spam protection
@@ -174,6 +175,7 @@ contract EscalationGame {
 	// TODO, this should be calculated against to actual nonDecisionThreshold, not the one set at the start. The actual can be lower than the games treshold but never above
 	function claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
 		require(msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()), 'Only Security Pool can withdraw');
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
 		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
 		deposits[uint8(outcome)][depositIndex].amount = 0;
 		depositor = deposit.depositor;
