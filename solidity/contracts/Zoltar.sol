@@ -51,17 +51,19 @@ contract Zoltar {
 		return universe.reputationToken.getTotalTheoreticalSupply() / FORK_THRESHOLD_DIVISOR;
 	}
 
-	function forkUniverse(uint248 universeId, uint256 questionId) public {
-		Universe memory universe = universes[universeId];
-		require(universe.forkTime == 0, 'Universe has forked already');
-		// TODO, add check that questionId exists in zoltarQuestionData, and its time has passed
-		universes[universeId].forkTime = block.timestamp;
-		universes[universeId].forkQuestionId = questionId;
-		uint256 forkThreshold = getForkThreshold(universeId);
-		burnRep(universes[universeId].reputationToken, msg.sender, forkThreshold);
-		repTokensMigrated[msg.sender][universeId].repBalance = forkThreshold - forkThreshold / FORK_BURN_DIVISOR;// burn 20%
-		emit UniverseForked(msg.sender, universeId, questionId);
-	}
+ 	function forkUniverse(uint248 universeId, uint256 questionId) public {
+ 		Universe memory universe = universes[universeId];
+ 		require(universe.forkTime == 0, 'Universe has forked already');
+ 		require(zoltarQuestionData.questionCreatedTimestamp(questionId) > 0, 'Question does not exist');
+ 		uint256 endTime = zoltarQuestionData.getQuestionEndDate(questionId);
+ 		require(block.timestamp >= endTime, 'Question has not ended');
+ 		universes[universeId].forkTime = block.timestamp;
+ 		universes[universeId].forkQuestionId = questionId;
+ 		uint256 forkThreshold = getForkThreshold(universeId);
+ 		burnRep(universes[universeId].reputationToken, msg.sender, forkThreshold);
+ 		repTokensMigrated[msg.sender][universeId].repBalance = forkThreshold - forkThreshold / FORK_BURN_DIVISOR;// burn 20%
+ 		emit UniverseForked(msg.sender, universeId, questionId);
+ 	}
 
 	function burnRep(ReputationToken reputationToken, address migrator, uint256 amount) private {
 		// Genesis is using REPv2 which we cannot actually burn

@@ -23,12 +23,12 @@ export function getZoltarAddress(): `0x${ string }` {
 	})
 }
 
-export function getZoltarQuestionDataAddress(): `0x${ string }` {
+function getZoltarQuestionDataAddress(): `0x${ string }` {
 	const bytecode: `0x${ string }` = `0x${ ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object }`
 	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0, { size: 32 }) })
 }
 
-export const isZoltarQuestionDataDeployed = async (client: ReadClient) => {
+const isZoltarQuestionDataDeployed = async (client: ReadClient) => {
 	const expectedDeployedBytecode: `0x${ string }` = `0x${ ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object }`
 	const address = getZoltarQuestionDataAddress()
 	const deployedBytecode = await client.getCode({ address })
@@ -40,7 +40,7 @@ const deployZoltarQuestionDataTransaction = () => {
 	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
 }
 
-export const ensureZoltarQuestionDataDeployed = async (client: WriteClient) => {
+const ensureZoltarQuestionDataDeployed = async (client: WriteClient) => {
 	await ensureProxyDeployerDeployed(client)
 	if (await isZoltarQuestionDataDeployed(client)) return
 	const hash = await client.sendTransaction(deployZoltarQuestionDataTransaction())
