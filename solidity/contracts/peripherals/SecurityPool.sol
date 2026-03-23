@@ -324,14 +324,8 @@ contract SecurityPool is ISecurityPool {
 		}
 	}
 
-	// TODO, cleanup these only forker functions by minimizing amount and adding checks
-	function setSystemState(SystemState newState) external onlyForker {
-		systemState = newState;
-	}
-
-	function setRetentionRate(uint256 newRetention) external onlyForker {
-		currentRetentionRate = newRetention;
-	}
+	// Bundled forker operations to minimize calls
+	// Note: Individual setters kept for backward compatibility where still used
 
 	function setVaultOwnership(address vault, uint256 _poolOwnership, uint256 _securityBondAllowance) external onlyForker {
 		securityVaults[vault].poolOwnership = _poolOwnership;
@@ -373,14 +367,7 @@ contract SecurityPool is ISecurityPool {
 		totalSecurityBondAllowance += _securityBondAllowance;
 	}
 
-	function setVaultSecurityBondAllowance(address vault, uint256 _securityBondAllowance) external onlyForker {
-		securityVaults[vault].securityBondAllowance = _securityBondAllowance;
-
-	}
-	function addToTotalSecurityBondAllowance(uint256 securityBondAllowanceDelta) external onlyForker {
-		totalSecurityBondAllowance += securityBondAllowanceDelta;
-	}
-
+	// Remaining individual setters still used by other contracts
 	function setPoolOwnershipDenominator(uint256 _poolOwnershipDenominator) external onlyForker {
 		poolOwnershipDenominator = _poolOwnershipDenominator;
 	}
@@ -393,26 +380,11 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[vault].feeIndex = newFeeIndex;
 	}
 
-	function setShareTokenSupply(uint256 newShareTokenSupply) external onlyForker {
-		shareTokenSupply = newShareTokenSupply;
-	}
-
-	function setCompleteSetCollateralAmount(uint256 newCompleteSetCollateralAmount) external onlyForker {
-		completeSetCollateralAmount = newCompleteSetCollateralAmount;
-	}
-
-	function setTotalSecurityBondAllowance(uint256 newTotalSecurityBondAllowance) external onlyForker {
-		totalSecurityBondAllowance = newTotalSecurityBondAllowance;
-	}
-
-	function stealAllRep() external onlyForker {
-		repToken.transfer(msg.sender, repToken.balanceOf(address(this)));
-	}
-
 	function migrateEth(address payable receiver, uint256 amount) external onlyForker {
 		(bool sent, ) = receiver.call{ value: amount }('');
-		require(sent, 'failed to steal ETH');
+		require(sent, 'failed to send ETH');
 	}
+
 	function authorize(ISecurityPool pool) external onlyForker {
 		shareToken.authorize(pool);
 	}

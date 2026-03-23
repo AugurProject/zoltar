@@ -56,7 +56,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		zoltar = _zoltar;
 	}
 
-	function initiateSecurityPoolFork(ISecurityPool securityPool) public {
+	function initiateSecurityPoolFork(ISecurityPool securityPool) external {
 		uint248 universe = securityPool.universeId();
 		EscalationGame escalationGame = securityPool.escalationGame();
 		require(zoltar.getForkTime(universe) > 0, 'Zoltar needs to have forked before Security Pool can do so');
@@ -71,7 +71,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
 	}
 
-	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] memory outcomeIndices) public {
+	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] memory outcomeIndices) external {
 		uint248 universe = securityPool.universeId();
 		zoltar.migrateInternalRep(universe, forkData[securityPool].repAtFork, outcomeIndices);
 	}
@@ -208,7 +208,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) public {
 		EscalationGame escalationGame = securityPool.escalationGame();
 		require(address(escalationGame) != address(0x0) && escalationGame.nonDecisionTimestamp() > 0, 'escalation game has not triggered fork');
-		securityPool.stealAllRep();
+		securityPool.initializeFork();
 		forkData[securityPool].ownFork = true;
 		securityPool.repToken().approve(address(zoltar), type(uint256).max);
 		zoltar.forkUniverse(securityPool.universeId(), securityPool.questionId());
