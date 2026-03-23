@@ -42,7 +42,7 @@ const getSecurityPoolFactoryByteCode = (securityPoolForker: `0x${ string }`, que
 const getSecurityPoolFactoryAddress = (securityPoolForker: `0x${ string }`, questionData: `0x${ string }`, escalationGameFactory: `0x${ string }`, openOracle: `0x${ string }`, zoltar: `0x${ string }`, shareTokenFactory: `0x${ string }`, dualCapBatchAuctionFactory: `0x${ string }`, priceOracleManagerAndOperatorQueuerFactory: `0x${ string }`) =>
 	getCreate2Address({
 		from: addressString(PROXY_DEPLOYER_ADDRESS),
-		salt: numberToBytes(0),
+		salt: numberToBytes(0, { size: 32 }),
 		bytecode: getSecurityPoolFactoryByteCode(securityPoolForker, questionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, dualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory),
 	})
 
