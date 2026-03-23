@@ -26,7 +26,7 @@ describe('Peripherals Contract Test Suite', () => {
 	const PRICE_PRECISION = 1n * 10n ** 18n
 	const repDeposit = 1000n * 10n ** 18n
 	const currentTimestamp = dateToBigintSeconds(new Date())
-	const marketEndDate = currentTimestamp + 365n * DAY
+	const questionEndDate = currentTimestamp + 365n * DAY
 	let securityPoolAddresses: {
 		securityPool: `0x${ string }`
 		priceOracleManagerAndOperatorQueuer: `0x${ string }`
@@ -44,7 +44,7 @@ describe('Peripherals Contract Test Suite', () => {
 		title: EXTRA_INFO,
 		description: '',
 		startTime: 0n,
-		endTime: marketEndDate,
+		endTime: questionEndDate,
 		numTicks: 0n,
 		displayValueMin: 0n,
 		displayValueMax: 0n,
@@ -96,7 +96,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getStartBond(client, securityPoolAddresses.escalationGame), reportBond, 'report bond matches')
 
 		const ourDeposits = yesDeposits.filter(deposit => BigInt(deposit.depositor) === BigInt(client.account.address))
-		strictEqualTypeSafe(await getMarketResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'question has resolved')
+		strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'question has resolved')
 		await withdrawFromEscalationGame(
 			client,
 			securityPoolAddresses.securityPool,
@@ -318,7 +318,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqual18Decimal(await poolOwnershipToRep(client, yesSecurityPool.securityPool, yesVault.repDepositShare), yesPoolBalance - repDeposit, "we should account for all the rep in yes pool (except attacker's rep)")
 		const migratedRepInYes = await getMigratedRep(client, yesSecurityPool.securityPool)
 		strictEqual18Decimal(yesPoolBalance - repDeposit, migratedRepInYes, 'yes pool has the same rep as migrated rep')
-		strictEqualTypeSafe(await getMarketOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'yes is finalized')
+		strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'yes is finalized')
 		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesSecurityPool.securityPool), repBalanceInGenesisPool - burnAmount, 'yes has all the rep')
 
 		assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'yes security pool exist')
@@ -328,7 +328,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const noUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.No)
 		const noSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, noUniverse, questionId, securityMultiplier)
 		await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No)
-		strictEqualTypeSafe(await getMarketOutcome(client, noSecurityPool.securityPool), QuestionOutcome.No, 'finalized as no')
+		strictEqualTypeSafe(await getQuestionOutcome(client, noSecurityPool.securityPool), QuestionOutcome.No, 'finalized as no')
 		const migratedRepInNo = await getMigratedRep(client, noSecurityPool.securityPool)
 		approximatelyEqual(migratedRepInNo, repDeposit, 10n, 'other side migrated to no')
 		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(noUniverse), noSecurityPool.securityPool), repBalanceInGenesisPool - burnAmount, 'no has all the rep')
@@ -608,7 +608,7 @@ describe('Peripherals Contract Test Suite', () => {
 			title: 'multi outcome test',
 			description: '',
 			startTime: 0n,
-			endTime: marketEndDate,
+			endTime: questionEndDate,
 			numTicks: 0n,
 			displayValueMin: 0n,
 			displayValueMax: 0n,
@@ -629,7 +629,7 @@ describe('Peripherals Contract Test Suite', () => {
 			title: 'scalar test',
 			description: '',
 			startTime: 0n,
-			endTime: marketEndDate,
+			endTime: questionEndDate,
 			numTicks: 100n,
 			displayValueMin: 0n,
 			displayValueMax: 100n,

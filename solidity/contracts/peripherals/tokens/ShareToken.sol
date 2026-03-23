@@ -49,7 +49,7 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		}
 	}
 
-	function mintCompleteSets(uint248 _universeId, address _account, uint256 _cashAmount) external payable {
+	function mintCompleteSets(uint248 _universeId, address _account, uint256 _cashAmount) external {
 		require(authorized[msg.sender] == true, 'not authorized');
 		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);

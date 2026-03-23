@@ -78,10 +78,10 @@ contract SecurityPool is ISecurityPool {
 		_;
 	}
 
-	constructor(address _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _marketId, uint256 _securityMultiplier) {
+	constructor(address _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _securityMultiplier) {
 		universeId = _universeId;
 		securityPoolFactory = _securityPoolFactory;
-		questionId = _marketId;
+		questionId = _questionId;
 		securityMultiplier = _securityMultiplier;
 		zoltar = _zoltar;
 		parent = _parent;
@@ -280,8 +280,8 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function redeemShares() isOperational external {
-		BinaryOutcomes.BinaryOutcome outcome = ISecurityPoolForker(securityPoolForker).getMarketOutcome(this);
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Market has not finalized!');
+		BinaryOutcomes.BinaryOutcome outcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
 		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
 		uint256 amount = shareToken.burnTokenId(tokenId, msg.sender);
 		uint256 ethValue = sharesToCash(amount);
@@ -291,7 +291,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function redeemRep(address vault) external {
-		require(ISecurityPoolForker(securityPoolForker).getMarketOutcome(this) != BinaryOutcomes.BinaryOutcome.None, 'Market has not finalized!');
+		require(ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this) != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
 		updateVaultFees(vault);
 		uint256 repAmount = poolOwnershipToRep(securityVaults[vault].poolOwnership) - securityVaults[vault].lockedRepInEscalationGame;
 		securityVaults[vault].poolOwnership = 0;
@@ -315,8 +315,8 @@ contract SecurityPool is ISecurityPool {
 
 	function withdrawFromEscalationGame(uint256[] memory depositIndexes) external isOperational {
 		require(address(escalationGame) != address(0x0), 'escalation game needs to be deployed');
-		BinaryOutcomes.BinaryOutcome outcome = ISecurityPoolForker(securityPoolForker).getMarketOutcome(this);
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Market has not finalized!');
+		BinaryOutcomes.BinaryOutcome outcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
 		require(!escalationGame.hasReachedNonDecision(), 'cannot withdraw, escalation game is indecisive');
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
 			(address depositor, uint256 amountToWithdraw) = escalationGame.withdrawDeposit(depositIndexes[index]);

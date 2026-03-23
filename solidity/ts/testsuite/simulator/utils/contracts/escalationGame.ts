@@ -12,10 +12,10 @@ export const getNonDecisionThreshold = async (client: ReadClient, escalationGame
 		args: [],
 	})
 
-export const getMarketResolution = async (client: ReadClient, escalationGame: AccountAddress) =>
+export const getQuestionResolution = async (client: ReadClient, escalationGame: AccountAddress) =>
 	(await client.readContract({
 		abi: peripherals_EscalationGame_EscalationGame.abi,
-		functionName: 'getMarketResolution',
+		functionName: 'getQuestionResolution',
 		address: escalationGame,
 		args: [],
 	})) as QuestionOutcome
@@ -70,7 +70,7 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBond: 
 			args: [writeClient.account.address],
 		}),
 		from: getInfraContractAddresses().escalationGameFactory,
-		salt: numberToBytes(0),
+		salt: numberToBytes(0, { size: 32 }),
 	})
 }
 

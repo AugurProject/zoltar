@@ -12,7 +12,7 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
-//TODO, move mappings outside the struct
+// TODO, move mappings outside the struct
 struct ForkData {
 	uint256 repAtFork;
 	mapping(uint8 => ISecurityPool) children; // outcome -> children
@@ -61,7 +61,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		EscalationGame escalationGame = securityPool.escalationGame();
 		require(zoltar.getForkTime(universe) > 0, 'Zoltar needs to have forked before Security Pool can do so');
 		require(securityPool.systemState() == SystemState.Operational, 'System is not operational');
-		require(address(escalationGame) == address(0x0) || escalationGame.getMarketResolution() == BinaryOutcomes.BinaryOutcome.None, 'question has been finalized already');
+		require(address(escalationGame) == address(0x0) || escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'question has been finalized already');
 		securityPool.setSystemState(SystemState.PoolForked);
 		securityPool.updateCollateralAmount();
 		securityPool.setRetentionRate(0);
@@ -234,7 +234,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		emit ClaimAuctionProceeds(vault, amount, poolOwnershipAmount, securityPool.poolOwnershipDenominator());
 	}
 
-	function getMarketOutcome(ISecurityPool securityPool) external view returns (BinaryOutcomes.BinaryOutcome outcome){
+	function getQuestionOutcome(ISecurityPool securityPool) external view returns (BinaryOutcomes.BinaryOutcome outcome){
 		SystemState systemState = securityPool.systemState();
 		if (systemState == SystemState.PoolForked) return BinaryOutcomes.BinaryOutcome.None;
 		ISecurityPool parent = securityPool.parent();
@@ -246,7 +246,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 			uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
 			if (address(escalationGame) != address(0x0)) {
 				uint256 escalationEndDate = escalationGame.getEscalationGameEndDate();
-				if (block.timestamp > escalationEndDate && (forkTime == 0 || escalationEndDate < forkTime)) return escalationGame.getMarketResolution();
+				if (block.timestamp > escalationEndDate && (forkTime == 0 || escalationEndDate < forkTime)) return escalationGame.getQuestionResolution();
 			}
 		}
 		return BinaryOutcomes.BinaryOutcome.None;
