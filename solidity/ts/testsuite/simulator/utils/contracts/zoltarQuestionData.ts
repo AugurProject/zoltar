@@ -1,6 +1,6 @@
-import { ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact.js'
-import { ReadClient, WriteClient } from '../viem.js'
-import { getInfraContractAddresses } from './deployPeripherals.js'
+import { ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
+import { ReadClient, WriteClient } from '../viem'
+import { getInfraContractAddresses } from './deployPeripherals'
 
 type QuestionData = {
 	title: string
@@ -13,21 +13,23 @@ type QuestionData = {
 	answerUnit: string
 }
 
-export const getOutcomeLabels = async (readClient: ReadClient, questionId: bigint) => {
+export const getOutcomeLabels = async (client: ReadClient, questionId: bigint) => {
 	let currentIndex = 0n
 	const numberOfEntries = 30n
-	let pages: string[] = []
+	const pages: string[] = []
 	do {
-		const newLabels = (await readClient.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getOutcomeLabels',
-			address: getInfraContractAddresses().zoltarQuestionData,
-			args: [questionId, currentIndex, numberOfEntries]
-		})).filter((outcome) => outcome.length > 0)
+		const newLabels = (
+			await client.readContract({
+				abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+				functionName: 'getOutcomeLabels',
+				address: getInfraContractAddresses().zoltarQuestionData,
+				args: [questionId, currentIndex, numberOfEntries],
+			})
+		).filter(outcome => outcome.length > 0)
 		pages.push(...newLabels)
 		if (BigInt(newLabels.length) !== numberOfEntries) break
 		currentIndex += numberOfEntries
-	} while(true)
+	} while (true)
 	return pages
 }
 
@@ -41,50 +43,37 @@ export const getQuestionData = async (client: ReadClient, questionId: bigint) =>
 	return { questionId, title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit }
 }
 
-export const getQuestionCreatedTimestamp = async (client: ReadClient, questionId: bigint) => {
-	return await client.readContract({
-		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		functionName: 'questionCreatedTimestamp',
-		address: getInfraContractAddresses().zoltarQuestionData,
-		args: [questionId],
-	})
-}
-
-export const getQuestionId = async (client: ReadClient, questionData: QuestionData, outcomeLabels: string[]) => {
-	return await client.readContract({
+export const getQuestionId = async (client: ReadClient, questionData: QuestionData, outcomeLabels: string[]) =>
+	await client.readContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'getQuestionId',
 		address: getInfraContractAddresses().zoltarQuestionData,
 		args: [questionData, outcomeLabels],
 	})
-}
 
-export const createQuestion = async (client: WriteClient, questionData: QuestionData, outcomeLabels: string[]) => {
-	return await client.writeContract({
+export const createQuestion = async (client: WriteClient, questionData: QuestionData, outcomeLabels: string[]) =>
+	await client.writeContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'createQuestion',
 		address: getInfraContractAddresses().zoltarQuestionData,
 		args: [questionData, outcomeLabels],
 	})
-}
 
-export const isMalformedAnswerOption = async (client: ReadClient, questionId: bigint, answer: bigint) => {
-	return await client.readContract({
+export const isMalformedAnswerOption = async (client: ReadClient, questionId: bigint, answer: bigint) =>
+	await client.readContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'isMalformedAnswerOption',
 		address: getInfraContractAddresses().zoltarQuestionData,
 		args: [questionId, answer],
 	})
-}
 
-export const getAnswerOptionName = async (client: ReadClient, questionId: bigint, answer: bigint) => {
-	return await client.readContract({
+export const getAnswerOptionName = async (client: ReadClient, questionId: bigint, answer: bigint) =>
+	await client.readContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'getAnswerOptionName',
 		address: getInfraContractAddresses().zoltarQuestionData,
 		args: [questionId, answer],
 	})
-}
 
 export const combineUint256FromTwoWithInvalid = (invalid: boolean, firstPart: bigint, secondPart: bigint): bigint => {
 	const PART_BIT_LENGTH = 120n

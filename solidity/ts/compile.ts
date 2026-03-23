@@ -3,13 +3,17 @@ import * as path from 'path'
 import solc from 'solc'
 import * as funtypes from 'funtypes'
 import * as url from 'url'
+import { createHash } from 'crypto'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const CONTRACT_PATH_APP = path.join(directoryOfThisFile, '..', 'ts', 'types', 'contractArtifact.ts')
+const HASH_CACHE_PATH = path.join(process.cwd(), '.contract-hash.json')
+const ARTIFACTS_DIR = path.join(process.cwd(), 'artifacts')
+const ARTIFACTS_JSON = path.join(ARTIFACTS_DIR, 'Contracts.json')
 
 const CompileError = funtypes.ReadonlyObject({
 	severity: funtypes.String,
-	formattedMessage: funtypes.String
+	formattedMessage: funtypes.String,
 })
 
 const AbiParameter: funtypes.Runtype<{
@@ -24,8 +28,8 @@ const AbiParameter: funtypes.Runtype<{
 		type: funtypes.String,
 		internalType: funtypes.String,
 		indexed: funtypes.Boolean,
-		components: funtypes.ReadonlyArray(AbiParameter)
-	})
+		components: funtypes.ReadonlyArray(AbiParameter),
+	}),
 )
 
 const AbiEntry = funtypes.ReadonlyPartial({
@@ -34,7 +38,7 @@ const AbiEntry = funtypes.ReadonlyPartial({
 	stateMutability: funtypes.String,
 	anonymous: funtypes.Boolean,
 	inputs: funtypes.ReadonlyArray(AbiParameter),
-	outputs: funtypes.ReadonlyArray(AbiParameter)
+	outputs: funtypes.ReadonlyArray(AbiParameter),
 })
 
 // Contract data may have abi and evm optional (if compilation failed for that contract)
@@ -42,38 +46,26 @@ const ContractData = funtypes.ReadonlyPartial({
 	abi: funtypes.ReadonlyArray(AbiEntry),
 	evm: funtypes.ReadonlyPartial({
 		bytecode: funtypes.ReadonlyPartial({
-			object: funtypes.String
+			object: funtypes.String,
 		}),
 		deployedBytecode: funtypes.ReadonlyPartial({
-			object: funtypes.String
-		})
-	})
+			object: funtypes.String,
+		}),
+	}),
 })
 
 type CompileResult = funtypes.Static<typeof CompileResult>
 const CompileResult = funtypes.ReadonlyObject({
-	contracts: funtypes.Union(
-		funtypes.Record(
-			funtypes.String,
-			funtypes.Record(
-				funtypes.String,
-				ContractData
-			)
-		),
-		funtypes.Undefined
-	),
+	contracts: funtypes.Union(funtypes.Record(funtypes.String, funtypes.Record(funtypes.String, ContractData)), funtypes.Undefined),
 	sources: funtypes.Union(funtypes.Unknown, funtypes.Undefined),
-	errors: funtypes.Union(
-		funtypes.ReadonlyArray(CompileError),
-		funtypes.Undefined
-	)
+	errors: funtypes.Union(funtypes.ReadonlyArray(CompileError), funtypes.Undefined),
 })
 
 class CompilationError extends Error {
 	errors: string[]
 	constructor(errors: string[]) {
 		super('compilation error')
-		this.name = "CompilationError"
+		this.name = 'CompilationError'
 		this.errors = errors
 	}
 }
@@ -85,6 +77,66 @@ async function exists(path: string) {
 	} catch {
 		return false
 	}
+}
+
+// Compiler settings that affect output - must be included in hash
+const compilerSettings = {
+	viaIR: true,
+	optimizer: {
+		enabled: true,
+		runs: 1,
+		details: {
+			inliner: true,
+		},
+	},
+	outputSelection: {
+		'*': {
+			'*': ['evm.bytecode.object', 'evm.deployedBytecode.object', 'abi'],
+		},
+	},
+}
+
+async function computeContractHash(sourceFiles: Map<string, string>): Promise<string> {
+	const hasher = createHash('sha256')
+
+	// Include compiler version to detect solc upgrades
+	const solcAny = solc as unknown as { version(): string }
+	hasher.update(solcAny.version())
+	hasher.update('\n')
+
+	// Include compiler settings in the hash
+	hasher.update(JSON.stringify(compilerSettings))
+	hasher.update('\n')
+
+	// Hash all source files
+	const sortedPaths = Array.from(sourceFiles.keys()).sort()
+	for (const relativePath of sortedPaths) {
+		hasher.update(relativePath)
+		hasher.update('\n')
+		hasher.update(sourceFiles.get(relativePath) ?? '')
+		hasher.update('\n')
+	}
+	return hasher.digest('hex')
+}
+
+async function loadHashCache(): Promise<{ hash: string | null }> {
+	try {
+		if (await exists(HASH_CACHE_PATH)) {
+			const data = await fs.readFile(HASH_CACHE_PATH, 'utf8')
+			const parsed = JSON.parse(data) as { hash?: string } | undefined
+			if (parsed) {
+				return { hash: parsed.hash ?? null }
+			}
+		}
+	} catch {
+		// ignore
+	}
+	return { hash: null }
+}
+
+async function saveHashCache(contractHash: string): Promise<void> {
+	await fs.mkdir(path.dirname(HASH_CACHE_PATH), { recursive: true })
+	await fs.writeFile(HASH_CACHE_PATH, JSON.stringify({ hash: contractHash, updated: Date.now() }))
 }
 
 const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[] = [], visited?: Set<string>): Promise<string[]> => {
@@ -121,7 +173,7 @@ const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[]
 		// Security check: ensure targetPath is within baseDir
 		const relative = path.relative(baseDir, targetPath)
 		if (relative.startsWith('..') || path.isAbsolute(relative)) {
-			throw new Error(`Path traversal detected: ${filePath} resolves outside allowed directory`)
+			throw new Error(`Path traversal detected: ${ filePath } resolves outside allowed directory`)
 		}
 
 		// Recurse into directories (including symlinked directories that passed the check)
@@ -141,54 +193,88 @@ const copySolidityContractArtifact = async (contractLocation: string) => {
 	}
 	const contracts = Object.entries(solidityContract.contracts).flatMap(([filename, contract]) => {
 		if (contract === undefined) throw new Error('missing contract')
-		return Object.entries(contract).map(([contractName, contractData]) => ({ contractName: `${ filename.replace('contracts/', '').replace(/-/g, '').replace(/\//g, '_').replace(/\\/g, '_').replace(/\.sol$/, '') }_${ contractName }`, contractData }))
+		return Object.entries(contract).map(([contractName, contractData]) => ({
+			contractName: `${ filename
+				.replace('contracts/', '')
+				.replace(/-/g, '')
+				.replace(/\//g, '_')
+				.replace(/\\/g, '_')
+				.replace(/\.sol$/, '') }_${ contractName }`,
+			contractData,
+		}))
 	})
-	if (new Set(contracts.map((x) => x.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
-	const typescriptString = contracts.map((contract) => `export const ${ contract.contractName } = ${ JSON.stringify(contract.contractData, null, 4) } as const`).join('\r\n\r\n')
+	if (new Set(contracts.map(x => x.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
+	const typescriptString = contracts.map(contract => `export const ${ contract.contractName } = ${ JSON.stringify(contract.contractData, null, 4) } as const`).join('\r\n\r\n')
 	await fs.writeFile(CONTRACT_PATH_APP, typescriptString)
 }
 
 const compileContracts = async () => {
-	const files = await getAllFiles('contracts')
-	const sources = await files.reduce(async (acc, curr) => {
-		const value = { content: await fs.readFile(curr, 'utf8') }
-		const relativePath = path.relative(process.cwd(), curr).replace(/\\/g, '/')
-		acc.then(obj => obj[relativePath] = value)
-		return acc
-	}, Promise.resolve(<{ [key: string]: { content: string } }>{}))
+	console.log('Computing contract hash...')
 
-	const input = {
-		language: 'Solidity',
-		sources,
-		settings: {
-			viaIR: true,
-			optimizer: {
-				enabled: true,
-				runs: 500,
-				details: {
-					inliner: true,
-				}
-			},
-			outputSelection: {
-				"*": {
-					'*': [ 'evm.bytecode.object', 'evm.deployedBytecode.object', 'abi' ]
-				}
-			},
-		},
+	// Load all source files once
+	const files = await getAllFiles('contracts')
+	const sources = new Map<string, string>()
+	for (const file of files) {
+		const relativePath = path.relative(process.cwd(), file).replace(/\\/g, '/')
+		sources.set(relativePath, await fs.readFile(file, 'utf8'))
 	}
 
-	const output = solc.compile(JSON.stringify(input))
-	const result = CompileResult.parse(JSON.parse(output))
-	const errors = (result!.errors || []).filter(x => x.severity === 'error').map(x => x.formattedMessage)
-	if (errors.length) throw new CompilationError(errors)
+	// Compute hash from loaded sources (no additional I/O)
+	const currentContractHash = await computeContractHash(sources)
+	const cache = await loadHashCache()
 
-	const warnings = (result!.errors || []).filter(x => x.severity === 'warning').map(x => x.formattedMessage)
-	if (warnings.length > 0) warnings.forEach((warning) => console.warn(warning))
+	// Determine if recompilation is needed
+	let needsRecompilation = !(cache.hash === currentContractHash && (await exists(ARTIFACTS_JSON)))
 
-	const artifactsDir = path.join(process.cwd(), 'artifacts')
-	if (!await exists(artifactsDir)) await fs.mkdir(artifactsDir, { recursive: false })
-	await fs.writeFile(path.join(artifactsDir, 'Contracts.json'), output)
-	await copySolidityContractArtifact(path.join(artifactsDir, 'Contracts.json'))
+	if (!needsRecompilation) {
+		console.log('No changes detected in Solidity contracts. Skipping recompilation.')
+		// Validate artifact file exists, is accessible, and contains valid data
+		try {
+			const artifactContent = await fs.readFile(ARTIFACTS_JSON, 'utf8')
+			CompileResult.parse(JSON.parse(artifactContent))
+		} catch {
+			console.log('Artifact file is missing, inaccessible, or corrupted, recompiling...')
+			needsRecompilation = true
+		}
+	}
+
+	if (needsRecompilation) {
+		console.log('Changes detected or first run. Compiling Solidity contracts...')
+
+		// Convert Map to object for solc input
+		const sourcesObj: { [key: string]: { content: string } } = {}
+		for (const [key, value] of sources) {
+			sourcesObj[key] = { content: value }
+		}
+
+		const input = {
+			language: 'Solidity',
+			sources: sourcesObj,
+			settings: compilerSettings,
+		}
+
+		console.time('solc compilation')
+		const output = solc.compile(JSON.stringify(input))
+		console.timeEnd('solc compilation')
+
+		const result = CompileResult.parse(JSON.parse(output))
+		const errors = (result.errors || []).filter(x => x.severity === 'error').map(x => x.formattedMessage)
+		if (errors.length) throw new CompilationError(errors)
+
+		const warnings = (result.errors || []).filter(x => x.severity === 'warning').map(x => x.formattedMessage)
+		if (warnings.length > 0) warnings.forEach(warning => console.warn(warning))
+
+		if (!(await exists(ARTIFACTS_DIR))) await fs.mkdir(ARTIFACTS_DIR, { recursive: false })
+		await fs.writeFile(ARTIFACTS_JSON, output)
+
+		// Save updated hash after successful compilation
+		await saveHashCache(currentContractHash)
+		console.log('Compilation complete. Hash cache updated.')
+	}
+
+	// Always regenerate TypeScript artifact to reflect any changes in the generation logic
+	await copySolidityContractArtifact(ARTIFACTS_JSON)
+	console.log('TypeScript artifact generated.')
 }
 
 compileContracts().catch(error => {

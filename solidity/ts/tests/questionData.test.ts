@@ -1,42 +1,24 @@
 import { test, beforeEach, describe } from 'bun:test'
-import { getMockedEthSimulateWindowEthereum, MockWindowEthereum } from '../testsuite/simulator/MockWindowEthereum.js'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem.js'
-import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants.js'
-import { setupTestAccounts } from '../testsuite/simulator/utils/utilities.js'
-import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar.js'
-import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals.js'
+import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
+import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
+import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
+import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
+import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import assert from 'node:assert'
-import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData.js'
-import { areEqualArrays } from '../testsuite/simulator/utils/typed-arrays.js'
-import { createTransactionExplainer } from '../testsuite/simulator/utils/transactionExplainer.js'
-import { getDeployments } from '../testsuite/simulator/utils/contracts/deployments.js'
-import { SimulationState } from '../testsuite/simulator/types/visualizerTypes.js'
-import { copySimulationState } from '../testsuite/simulator/SimulationModeEthereumClientService.js'
+import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
+import { areEqualArrays } from '../testsuite/simulator/utils/array-utils'
 
 describe('Question Data', () => {
-	let mockWindow: MockWindowEthereum
+	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 
-	let cachedSimulationState: SimulationState | undefined = undefined
-
 	beforeEach(async () => {
-		if (cachedSimulationState) {
-			mockWindow = getMockedEthSimulateWindowEthereum(true, copySimulationState(cachedSimulationState))
-			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
-			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		} else {
-			mockWindow = getMockedEthSimulateWindowEthereum()
-			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-			mockWindow.setAfterTransactionSendCallBack(createTransactionExplainer(getDeployments()))
-			await setupTestAccounts(mockWindow)
-			await ensureZoltarDeployed(client)
-			await ensureInfraDeployed(client)
-			const simulationState = mockWindow.getSimulationState()
-			if (simulationState === null || simulationState === undefined) {
-				throw new Error('Simulation state is not available after setup')
-			}
-			cachedSimulationState = copySimulationState(simulationState)
-		}
+		mockWindow = await getMockedEthSimulateWindowEthereum()
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		await setupTestAccounts(mockWindow)
+		await ensureZoltarDeployed(client)
+		await ensureInfraDeployed(client)
 	})
 
 	test('can make categorical question', async () => {
@@ -66,9 +48,9 @@ describe('Question Data', () => {
 		assert.strictEqual(data.displayValueMax, testCategoricalQuestion.displayValueMax, 'displayValueMax mismatch')
 		assert.strictEqual(data.answerUnit, testCategoricalQuestion.answerUnit, 'answerUnit mismatch')
 
-		assert.ok(!await isMalformedAnswerOption(client, questionId, 0n), 'invalid is valid')
-		assert.ok(!await isMalformedAnswerOption(client, questionId, 1n), 'Yes is valid')
-		assert.ok(!await isMalformedAnswerOption(client, questionId, 2n), 'No is valid')
+		assert.ok(!(await isMalformedAnswerOption(client, questionId, 0n)), 'invalid is valid')
+		assert.ok(!(await isMalformedAnswerOption(client, questionId, 1n)), 'Yes is valid')
+		assert.ok(!(await isMalformedAnswerOption(client, questionId, 2n)), 'No is valid')
 		assert.ok(await isMalformedAnswerOption(client, questionId, 3n), 'doesn\'t exist')
 
 		assert.strictEqual(await getAnswerOptionName(client, questionId, 0n), 'Invalid', 'invalid is valid')
@@ -111,7 +93,6 @@ describe('Question Data', () => {
 		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, testScalarQuestion.numTicks / 2n, testScalarQuestion.numTicks / 2n)), '0 km', 'Middle is valid')
 		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, testScalarQuestion.numTicks + 1n, 0n)), 'Malformed', 'Overflow')
 		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, 0n, testScalarQuestion.numTicks + 1n)), 'Malformed', 'Overflow')
-
 	})
 
 	test('isMalformedAnswerOption: scalar answers - bug check for high bit set', async () => {
@@ -124,7 +105,7 @@ describe('Question Data', () => {
 			numTicks: 1000n,
 			displayValueMin: 0n,
 			displayValueMax: 1000n,
-			answerUnit: 'unit'
+			answerUnit: 'unit',
 		}
 		await createQuestion(client, testScalarQuestion, [])
 		const questionId = await getQuestionId(client, testScalarQuestion, [])
@@ -179,7 +160,7 @@ describe('Question Data', () => {
 		// Encode a valid answer where firstPart + secondPart = numTicks, but the sum overflows uint120.
 		const firstPart = (1n << 120n) - 1n // max uint120
 		const secondPart = hugeNumTicks - firstPart // 1001
-		assert.ok(secondPart > 0n && secondPart <= ((1n << 120n) - 1n), 'secondPart within uint120 range')
+		assert.ok(secondPart > 0n && secondPart <= (1n << 120n) - 1n, 'secondPart within uint120 range')
 		const answer = combineUint256FromTwoWithInvalid(false, firstPart, secondPart)
 
 		// Currently this fails due to overflow bug.
