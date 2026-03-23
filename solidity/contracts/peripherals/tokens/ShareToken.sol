@@ -2,18 +2,18 @@
 pragma solidity 0.8.33;
 
 import '../../Constants.sol';
-import './ForkedERC1155.sol';
 import './TokenId.sol';
 import '../../Zoltar.sol';
 import '../interfaces/ISecurityPool.sol';
 import '../interfaces/IShareToken.sol';
 import '../BinaryOutcomes.sol';
+import './ERC1155.sol';
 
 /**
 * @title Share Token
 * @notice ERC1155 contract to hold all share token balances
 */
-contract ShareToken is ForkedERC1155, IShareToken {
+contract ShareToken is ERC1155, IShareToken {
 
 	// TODO, rename based on the question they represent
 	string constant public name = 'Shares';
@@ -21,8 +21,9 @@ contract ShareToken is ForkedERC1155, IShareToken {
 	Zoltar public immutable zoltar;
 	mapping(address => bool) authorized;
 	event Authorized(address indexed securityPool);
+	event Migrate(address migrator, uint256 fromId, uint256 toId, uint256 fromIdBalance);
 
-	function universeHasForked(uint248 universeId) internal override view returns (bool) {
+	function universeHasForked(uint248 universeId) internal view returns (bool) {
 		return zoltar.getForkTime(universeId) > 0;
 	}
 
@@ -37,13 +38,13 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		emit Authorized(address(_securityPoolCandidate));
 	}
 
-	function getUniverseId(uint256 id) internal override pure returns (uint248 universeId) {
+	function getUniverseId(uint256 id) internal pure returns (uint248 universeId) {
 		assembly {
 			universeId := shr(8, and(id, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00))
 		}
 	}
 
-	function getChildId(uint256 originalId, uint248 newUniverse) internal override pure returns (uint256 newId) {
+	function getChildId(uint256 originalId, uint248 newUniverse) internal pure returns (uint256 newId) {
 		assembly {
 			newId := or(and(originalId, 0xFF), shl(8, and(newUniverse, 0x00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)))
 		}
@@ -81,7 +82,7 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		_burn(_owner, _tokenId, balance);
 	}
 
-	function getChildUniverseId(uint248 universeId, uint8 outcomeIndex) public override pure returns (uint248) {
+	function getChildUniverseId(uint248 universeId, uint8 outcomeIndex) public pure returns (uint248) {
 		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
 	}
 
@@ -109,7 +110,22 @@ contract ShareToken is ForkedERC1155, IShareToken {
 		return TokenId.getTokenIds(_universeId, _outcomes);
 	}
 
-	function unpackTokenId(uint256 _tokenId) public override pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome) {
+	function unpackTokenId(uint256 _tokenId) public pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome) {
 		return TokenId.unpackTokenId(_tokenId);
+	}
+
+	function migrate(uint256 fromId) external {
+		uint248 universeId = getUniverseId(fromId);
+		require(universeHasForked(universeId), 'Universe has not forked');
+
+		uint256 fromIdBalance = _balances[fromId][msg.sender];
+		_balances[fromId][msg.sender] = 0;
+		_supplies[fromId] -= fromIdBalance;
+		for (uint8 i = 0; i < Constants.NUM_OUTCOMES; i++) {
+			uint256 toId = getChildId(fromId, getChildUniverseId(universeId, i));
+			_balances[toId][msg.sender] += fromIdBalance;
+			_supplies[toId] += fromIdBalance;
+			emit Migrate(msg.sender, fromId, toId, fromIdBalance);
+		}
 	}
 }

@@ -218,12 +218,12 @@ const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => {
 	return ((universeId & universeMask) << 8n) | (BigInt(outcome) & 255n)
 }
 
-export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x${ string }`, fromUniverseId: bigint, outcome: QuestionOutcome, outcomes: bigint[]) =>
+export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x${ string }`, fromUniverseId: bigint, outcome: QuestionOutcome) =>
 	await client.writeContract({
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'migrate',
 		address: shareTokenAddress,
-		args: [getTokenId(fromUniverseId, outcome), outcomes.map(x => Number(x))],
+		args: [getTokenId(fromUniverseId, outcome)],
 	})
 
 export const getQuestionEndDate = async (client: ReadClient, questionId: bigint) =>
