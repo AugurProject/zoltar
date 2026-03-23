@@ -338,6 +338,41 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[vault].securityBondAllowance = _securityBondAllowance;
 	}
 
+	/// @notice Initialize forked state - combines setSystemState(PoolForked), updateCollateralAmount(), setRetentionRate(0), and stealAllRep
+	function initializeFork() external onlyForker {
+		systemState = SystemState.PoolForked;
+		updateCollateralAmount();
+		currentRetentionRate = 0;
+		repToken.transfer(msg.sender, repToken.balanceOf(address(this)));
+	}
+
+	/// @notice Finalize pool after fork - combines setSystemState(Operational), setCompleteSetCollateralAmount, setTotalSecurityBondAllowance, setPoolOwnershipDenominator
+	function finalizePoolState(uint256 collateralAmount, uint256 totalBondAllowance, uint256 poolDenominator) external onlyForker {
+		systemState = SystemState.Operational;
+		completeSetCollateralAmount = collateralAmount;
+		totalSecurityBondAllowance = totalBondAllowance;
+		poolOwnershipDenominator = poolDenominator;
+	}
+
+	/// @notice Begin truth auction - combines setSystemState(ForkTruthAuction), setShareTokenSupply
+	function startAuctionState(uint256 newShareTokenSupply) external onlyForker {
+		systemState = SystemState.ForkTruthAuction;
+		shareTokenSupply = newShareTokenSupply;
+	}
+
+	/// @notice Set vault state (poolOwnership + securityBondAllowance + feeIndex) in one call
+	function setVaultState(address vault, uint256 _poolOwnership, uint256 _securityBondAllowance, uint256 _feeIndex) external onlyForker {
+		securityVaults[vault].poolOwnership = _poolOwnership;
+		securityVaults[vault].securityBondAllowance = _securityBondAllowance;
+		securityVaults[vault].feeIndex = _feeIndex;
+	}
+
+	/// @notice Set vault security bond allowance and increment total in one call
+	function setVaultSecurityBondAllowanceAndUpdateTotal(address vault, uint256 _securityBondAllowance) external onlyForker {
+		securityVaults[vault].securityBondAllowance = _securityBondAllowance;
+		totalSecurityBondAllowance += _securityBondAllowance;
+	}
+
 	function setVaultSecurityBondAllowance(address vault, uint256 _securityBondAllowance) external onlyForker {
 		securityVaults[vault].securityBondAllowance = _securityBondAllowance;
 

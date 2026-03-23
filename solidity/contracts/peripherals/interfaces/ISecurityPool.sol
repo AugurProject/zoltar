@@ -81,6 +81,21 @@ interface ISecurityPool {
 	function setSystemState(SystemState newState) external;
 	function setVaultOwnership(address vault, uint256 _poolOwnership, uint256 _securityBondAllowance) external;
 
+	// Bundles setSystemState(PoolForked), updateCollateralAmount(), setRetentionRate(0), stealAllRep()
+	function initializeFork() external;
+
+	// Bundles setSystemState(Operational), setCompleteSetCollateralAmount, setTotalSecurityBondAllowance, setPoolOwnershipDenominator
+	function finalizePoolState(uint256 collateralAmount, uint256 totalBondAllowance, uint256 poolDenominator) external;
+
+	// Bundles setSystemState(ForkTruthAuction), setShareTokenSupply
+	function startAuctionState(uint256 newShareTokenSupply) external;
+
+	// Set vault ownership and fee index in one call
+	function setVaultState(address vault, uint256 _poolOwnership, uint256 _securityBondAllowance, uint256 _feeIndex) external;
+
+	// Set vault security bond allowance and increment total in one call
+	function setVaultSecurityBondAllowanceAndUpdateTotal(address vault, uint256 _securityBondAllowance) external;
+
 	function setVaultSecurityBondAllowance(address vault, uint256 _securityBondAllowance) external;
 	function addToTotalSecurityBondAllowance(uint256 securityBondAllowanceDelta) external;
 	function setPoolOwnershipDenominator(uint256 _poolOwnershipDenominator) external;
