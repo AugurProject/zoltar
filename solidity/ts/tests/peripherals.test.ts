@@ -14,8 +14,8 @@ import { tickToPrice } from '../testsuite/simulator/utils/tickMath'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
-import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMarketOutcome, getMigratedRep, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
-import { getEscalationGameDeposits, getMarketResolution, getNonDecisionThreshold, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
+import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMigratedRep, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
+import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getRepTokensMigratedRepBalance, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
 
@@ -694,7 +694,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'Yes child should be in ForkMigration')
-		strictEqualTypeSafe(await getMarketOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'Yes outcome should be set')
+		strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'Yes outcome should be set')
 		assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'YES security pool should exist')
 
 		// Create No child using attacker client
@@ -702,7 +702,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const noUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.No)
 		const noSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, noUniverse, questionId, securityMultiplier)
 		strictEqualTypeSafe(await getSystemState(client, noSecurityPool.securityPool), SystemState.ForkMigration, 'No child should be in ForkMigration')
-		strictEqualTypeSafe(await getMarketOutcome(client, noSecurityPool.securityPool), QuestionOutcome.No, 'No outcome should be set')
+		strictEqualTypeSafe(await getQuestionOutcome(client, noSecurityPool.securityPool), QuestionOutcome.No, 'No outcome should be set')
 		assert.ok(await contractExists(client, noSecurityPool.securityPool), 'NO security pool should exist')
 
 		// Create Invalid child using a third client
@@ -711,7 +711,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const invalidUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid)
 		const invalidSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, invalidUniverse, questionId, securityMultiplier)
 		strictEqualTypeSafe(await getSystemState(client, invalidSecurityPool.securityPool), SystemState.ForkMigration, 'Invalid child should be in ForkMigration')
-		strictEqualTypeSafe(await getMarketOutcome(client, invalidSecurityPool.securityPool), QuestionOutcome.Invalid, 'Invalid outcome should be set')
+		strictEqualTypeSafe(await getQuestionOutcome(client, invalidSecurityPool.securityPool), QuestionOutcome.Invalid, 'Invalid outcome should be set')
 		assert.ok(await contractExists(client, invalidSecurityPool.securityPool), 'INVALID security pool should exist')
 	})
 })
