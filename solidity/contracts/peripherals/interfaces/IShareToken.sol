@@ -6,7 +6,7 @@ import '../BinaryOutcomes.sol';
 
 interface IShareToken {
 	function authorize(ISecurityPool _securityPoolCandidate) external;
-	function mintCompleteSets(uint248 _universeId, address _account, uint256 _cashAmount) external payable;
+	function mintCompleteSets(uint248 _universeId, address _account, uint256 _cashAmount) external;
 	function burnCompleteSets(uint248 _universeId, address _owner, uint256 _amount) external;
 	function burnTokenId(uint256 _tokenId, address _owner) external returns (uint256 balance);
 	function totalSupplyForOutcome(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome) external view returns (uint256);
