@@ -64,7 +64,7 @@ export const getMigratedRep = async (client: ReadClient, securityPoolAddress: `0
 		args: [securityPoolAddress],
 	})
 
-export const getMarketOutcome = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getQuestionOutcome = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	if (!(await contractExists(client, securityPoolAddress))) return QuestionOutcome.None
 	return await client.readContract({
 		abi: [
@@ -78,7 +78,7 @@ export const getMarketOutcome = async (client: ReadClient, securityPoolAddress: 
 				],
 				stateMutability: 'nonpayable',
 				type: 'function',
-				name: 'getMarketOutcome',
+				name: 'getQuestionOutcome',
 				outputs: [
 					{
 						internalType: 'enum BinaryOutcomes.BinaryOutcome',
@@ -88,7 +88,7 @@ export const getMarketOutcome = async (client: ReadClient, securityPoolAddress: 
 				],
 			},
 		] as const, // Typescript limitation on types...
-		functionName: 'getMarketOutcome',
+		functionName: 'getQuestionOutcome',
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress],
 	})

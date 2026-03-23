@@ -25,7 +25,7 @@ contract ZoltarQuestionData {
 
 	function createQuestion(QuestionData memory questionData, string[] calldata outcomeOptions) external returns (uint256) {
 		uint256 questionId = getQuestionId(questionData, outcomeOptions);
-		require(questionCreatedTimestamp[questionId] == 0, 'Market already exists');
+		require(questionCreatedTimestamp[questionId] == 0, 'Question already exists');
 		if (outcomeOptions.length == 0) {
 			// scalar
 			int256 tradeInterval = questionData.displayValueMax - questionData.displayValueMin;
@@ -37,7 +37,7 @@ contract ZoltarQuestionData {
 			for (uint256 index = 0; index < outcomeOptions.length; index++) {
 				require(bytes(outcomeOptions[index]).length > 0, 'Empty string');
 			}
-			outcomeLabels[questionId] = outcomeOptions; //TODO, check that these are unique?
+			outcomeLabels[questionId] = outcomeOptions; // TODO, check that these are unique?
 		}
 		questions[questionId] = questionData;
 		questionCreatedTimestamp[questionId] = block.timestamp;

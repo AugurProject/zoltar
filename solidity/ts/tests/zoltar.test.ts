@@ -36,7 +36,7 @@ describe('Contract Test Suite', () => {
 	test('canForkQuestion', async () => {
 		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const zoltar = getZoltarAddress()
-		const marketText = 'test question'
+		const questionText = 'test question'
 		const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4']
 
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
@@ -44,7 +44,7 @@ describe('Contract Test Suite', () => {
 
 		// Create the question on ZoltarQuestionData
 		const questionData = {
-			title: marketText,
+			title: questionText,
 			description: '',
 			startTime: 0n,
 			endTime: 0n,

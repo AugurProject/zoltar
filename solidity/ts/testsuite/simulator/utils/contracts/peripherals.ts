@@ -5,7 +5,7 @@ import { WETH_ADDRESS } from '../constants'
 import { peripherals_DualCapBatchAuction_DualCapBatchAuction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
-import { shareArrayToCash } from './securityPool'
+import { shareArrayToCash, threeShareArrayToCash } from './securityPool'
 import { priceToClosestTick } from '../tickMath'
 
 export enum OperationType {
@@ -210,8 +210,7 @@ export const balanceOfSharesInCash = async (client: ReadClient, securityPoolAddr
 		address: shareTokenAddress,
 		args: [universeId, account],
 	})
-	const result = await shareArrayToCash(client, securityPoolAddress, array)
-	return result as [bigint, bigint, bigint]
+	return await threeShareArrayToCash(client, securityPoolAddress, array)
 }
 
 const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => {

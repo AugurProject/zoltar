@@ -17,7 +17,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	let client: WriteClient
 	const repDeposit = 1000n * 10n ** 18n
 	const currentTimestamp = dateToBigintSeconds(new Date())
-	const marketEndDate = currentTimestamp + 365n * DAY
+	const questionEndDate = currentTimestamp + 365n * DAY
 	let priceOracle: `0x${ string }`
 	const genesisUniverse = 0n
 	const securityMultiplier = 2n
@@ -36,7 +36,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			title: EXTRA_INFO,
 			description: '',
 			startTime: 0n,
-			endTime: marketEndDate,
+			endTime: questionEndDate,
 			numTicks: 0n,
 			displayValueMin: 0n,
 			displayValueMax: 0n,

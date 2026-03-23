@@ -54,7 +54,7 @@ contract Zoltar {
 	function forkUniverse(uint248 universeId, uint256 questionId) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime == 0, 'Universe has forked already');
-		// TODO, add check that questionid exists in zoltarQuestionData, and its time has passed
+		// TODO, add check that questionId exists in zoltarQuestionData, and its time has passed
 		universes[universeId].forkTime = block.timestamp;
 		universes[universeId].forkQuestionId = questionId;
 		uint256 forkThreshold = getForkThreshold(universeId);

@@ -116,7 +116,7 @@ contract EscalationGame {
 		return compute5TermTaylorSeriesAttritionCostApproximation(timeFromStart);
 	}
 
-	function getMarketResolution() public view returns (BinaryOutcomes.BinaryOutcome outcome){
+	function getQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome outcome){
 		uint256 currentTotalCost = totalCost();
 		uint8 invalidOver = balances[0] >= currentTotalCost ? 1 : 0;
 		uint8 yesOver = balances[1] >= currentTotalCost ? 1 : 0;
@@ -150,7 +150,7 @@ contract EscalationGame {
 	function depositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) public returns (uint256 depositAmount) {
 		require(nonDecisionTimestamp == 0, 'System has already reached a non-decision');
 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
-		require(getMarketResolution() == BinaryOutcomes.BinaryOutcome.None, 'System has already timed out');
+		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'System has already timed out');
 		require(balances[uint256(outcome)] < nonDecisionThreshold, 'Already full');
 		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit'); // checks that we get start bond and spam protection
 		Deposit memory deposit;
@@ -198,9 +198,9 @@ contract EscalationGame {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
 		// if system hasnt forked, check outcome is winning
-		BinaryOutcomes.BinaryOutcome marketResolution = getMarketResolution();
-		(depositor,amountToWithdraw) = claimDepositForWinning(depositIndex, marketResolution);
-		emit WithdrawDeposit(depositor, marketResolution, amountToWithdraw, depositIndex);
+		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();
+		(depositor,amountToWithdraw) = claimDepositForWinning(depositIndex, questionResolution);
+		emit WithdrawDeposit(depositor, questionResolution, amountToWithdraw, depositIndex);
 	}
 
 	// TODO, for the UI, we probably want to retrieve multiple outcomes at once
