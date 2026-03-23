@@ -210,7 +210,7 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 		bytecode: encodeDeployData({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
-			args: [infraContracts.securityPoolForker, infraContracts.securityPoolFactory, infraContracts.zoltarQuestionData, infraContracts.escalationGameFactory, contracts.priceOracleManagerAndOperatorQueuer, contracts.shareToken, infraContracts.openOracle, parent, infraContracts.zoltar, universeId, questionId, securityMultiplier] as const,
+			args: [infraContracts.securityPoolForker, infraContracts.securityPoolFactory, infraContracts.zoltarQuestionData, infraContracts.escalationGameFactory, contracts.priceOracleManagerAndOperatorQueuer, contracts.shareToken, infraContracts.openOracle, parent, infraContracts.zoltar, universeId, questionId, securityMultiplier, contracts.truthAuction] as const,
 		}),
 		from: infraContracts.securityPoolFactory,
 		salt: numberToBytes(0, { size: 32 }),

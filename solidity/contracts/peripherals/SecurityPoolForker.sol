@@ -29,6 +29,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	mapping(ISecurityPool => ForkData) internal forkDataByPool;
 	mapping(ISecurityPool => mapping(uint8 => ISecurityPool)) internal childrenByPoolAndOutcome;
 	mapping(ISecurityPool => mapping(address => bool)) internal claimedAuctionProceedsByPoolAndVault;
+	mapping(address => bool) private trustedAuctionAddresses;
 
 	event InitiateSecurityPoolFork(uint256 repAtFork);
 	event MigrateVault(address vault, uint8 outcome, uint256 poolOwnership, uint256 securityBondAllowance, uint256 parentLockedRepInEscalationGame);
@@ -107,6 +108,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		(ISecurityPool child, DualCapBatchAuction truthAuction) = parent.securityPoolFactory().deployChildSecurityPool(parent, parent.shareToken(), childUniverseId, parent.questionId(), parent.securityMultiplier(), retentionRate, parent.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
 		forkDataByPool[child].outcomeIndex = outcomeIndex;
 		forkDataByPool[child].truthAuction = truthAuction;
+		trustedAuctionAddresses[address(truthAuction)] = true;
 		childrenByPoolAndOutcome[parent][outcomeIndex] = child;
 		parent.authorizeChildPool(child);
 		ReputationToken childReputationToken = child.repToken();
@@ -272,6 +274,8 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		}
 		return BinaryOutcomes.BinaryOutcome.None;
 	}
-	receive() external payable {}
+	receive() external payable {
+		require(trustedAuctionAddresses[msg.sender], 'Unauthorized ETH sender');
+	}
 
 }

@@ -32,6 +32,7 @@ contract SecurityPool is ISecurityPool {
 	EscalationGame public escalationGame;
 	ZoltarQuestionData public questionData;
 	address public securityPoolForker;
+	address public immutable truthAuction;
 	ISecurityPoolFactory public securityPoolFactory;
 
 	uint256 public totalSecurityBondAllowance;
@@ -78,7 +79,7 @@ contract SecurityPool is ISecurityPool {
 		_;
 	}
 
-	constructor(address _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _securityMultiplier) {
+	constructor(address _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _securityMultiplier, address _truthAuction) {
 		universeId = _universeId;
 		securityPoolFactory = _securityPoolFactory;
 		questionId = _questionId;
@@ -89,6 +90,7 @@ contract SecurityPool is ISecurityPool {
 		escalationGameFactory = _escalationGameFactory;
 		priceOracleManagerAndOperatorQueuer = _priceOracleManagerAndOperatorQueuer;
 		securityPoolForker = _securityPoolForker;
+		truthAuction = _truthAuction;
 		questionData = _questionData;
 		if (address(parent) == address(0x0)) { // origin universe never does truthAuction
 			systemState = SystemState.Operational;
@@ -371,7 +373,11 @@ contract SecurityPool is ISecurityPool {
 
 
 	receive() external payable {
-		// needed for Truth Auction to send ETH back
-		// TODO, add check that it's truth auction sending
+		require(
+			msg.sender == securityPoolForker ||
+			msg.sender == truthAuction ||
+			msg.sender == address(parent),
+			'Unauthorized ETH sender'
+		);
 	}
 }
