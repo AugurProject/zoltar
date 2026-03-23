@@ -3,10 +3,10 @@ pragma solidity 0.8.33;
 
 import { Zoltar } from '../../Zoltar.sol';
 import { OpenOracle } from "../openOracle/OpenOracle.sol";
-import { Auction } from "../Auction.sol";
-import { IShareToken } from "./IShareToken.sol";
-import { ReputationToken } from "../../ReputationToken.sol";
-import { PriceOracleManagerAndOperatorQueuer } from "../PriceOracleManagerAndOperatorQueuer.sol";
+import { DualCapBatchAuction } from "../DualCapBatchAuction.sol";
+import { IShareToken } from './IShareToken.sol';
+import { ReputationToken } from '../../ReputationToken.sol';
+import { PriceOracleManagerAndOperatorQueuer } from '../PriceOracleManagerAndOperatorQueuer.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 import { YesNoMarkets } from '../YesNoMarkets.sol';
 
@@ -101,6 +101,6 @@ interface ISecurityPool {
 }
 
 interface ISecurityPoolFactory {
-	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, Auction truthAuction);
+	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 marketId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, DualCapBatchAuction truthAuction);
 	function deployOriginSecurityPool(uint248 universeId, string memory extraInfo, uint256 marketEndDate, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice) external returns (ISecurityPool securityPool);
 }
