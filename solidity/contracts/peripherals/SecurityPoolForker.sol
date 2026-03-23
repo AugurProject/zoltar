@@ -31,7 +31,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 
 	mapping(ISecurityPool => ForkData) public forkData;
 
-	event ForkSecurityPool(uint256 repAtFork);
+	event InitiateSecurityPoolFork(uint256 repAtFork);
 	event MigrateVault(address vault, uint8 outcome, uint256 poolOwnership, uint256 securityBondAllowance, uint256 parentLockedRepInEscalationGame);
 	event TruthAuctionStarted(uint256 completeSetCollateralAmount, uint256 repMigrated, uint256 repAtFork);
 	event TruthAuctionFinalized();
@@ -70,7 +70,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		rep.approve(address(zoltar), type(uint256).max);
 		zoltar.prepareRepForMigration(universe, rep.balanceOf(address(this)));
 		forkData[securityPool].repAtFork = zoltar.repTokensMigrated(address(this), universe);
-		emit ForkSecurityPool(forkData[securityPool].repAtFork);
+		emit InitiateSecurityPoolFork(forkData[securityPool].repAtFork);
 		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
 	}
 

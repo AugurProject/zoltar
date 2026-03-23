@@ -651,6 +651,7 @@ describe('Peripherals Contract Test Suite', () => {
 		// Attempt to deploy security pool with non-existent question should fail
 		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, nonExistentQuestionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice), /Question does not exist/)
 	})
+
 	test('can fork security pool using separate initiate and migrate calls with multiple migrations', async () => {
 		// Setup: trigger own fork and prepare
 		const endTime = await getQuestionEndDate(client, questionId)

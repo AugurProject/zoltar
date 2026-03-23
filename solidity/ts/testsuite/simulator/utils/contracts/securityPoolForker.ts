@@ -4,24 +4,21 @@ import { getInfraContractAddresses } from './deployPeripherals'
 import { contractExists } from '../utilities'
 import { ReadClient, WriteClient } from '../viem'
 
-export const initiateSecurityPoolFork = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+export const initiateSecurityPoolFork = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
 	await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'initiateSecurityPoolFork',
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress],
 	})
-}
 
-export const migrateRepToZoltar = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcomeIndices: (number | bigint)[]) => {
-	const bigintIndices = outcomeIndices.map(x => BigInt(x))
+export const migrateRepToZoltar = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcomeIndices: (number | bigint)[]) =>
 	await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'migrateRepToZoltar',
 		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress, bigintIndices],
+		args: [securityPoolAddress, outcomeIndices.map(x => BigInt(x))],
 	})
-}
 
 export const migrateVault = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: bigint | QuestionOutcome) =>
 	await client.writeContract({
