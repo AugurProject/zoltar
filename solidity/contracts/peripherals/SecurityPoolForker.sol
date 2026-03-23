@@ -56,14 +56,17 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		zoltar = _zoltar;
 	}
 
-	function initiateSecurityPoolFork(ISecurityPool securityPool) external {
+	function initiateSecurityPoolFork(ISecurityPool securityPool) public {
 		uint248 universe = securityPool.universeId();
 		EscalationGame escalationGame = securityPool.escalationGame();
 		require(zoltar.getForkTime(universe) > 0, 'Zoltar needs to have forked before Security Pool can do so');
 		require(securityPool.systemState() == SystemState.Operational, 'System is not operational');
 		require(address(escalationGame) == address(0x0) || escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'question has been finalized already');
-		securityPool.initializeFork();
+		securityPool.setSystemState(SystemState.PoolForked);
+		securityPool.updateCollateralAmount();
+		securityPool.setRetentionRate(0);
 		ReputationToken rep = securityPool.repToken();
+		securityPool.stealAllRep();
 		rep.approve(address(zoltar), type(uint256).max);
 		zoltar.prepareRepForMigration(universe, rep.balanceOf(address(this)));
 		forkData[securityPool].repAtFork = zoltar.repTokensMigrated(address(this), universe);
@@ -71,7 +74,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
 	}
 
-	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] memory outcomeIndices) external {
+	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] memory outcomeIndices) public {
 		uint248 universe = securityPool.universeId();
 		zoltar.migrateInternalRep(universe, forkData[securityPool].repAtFork, outcomeIndices);
 	}
@@ -130,7 +133,8 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		parent.updateCollateralAmount();
 		(uint256 parentPoolOwnership, uint256 parentSecurityBondAllowance, , , uint256 parentLockedRepInEscalationGame) = parent.securityVaults(msg.sender);
 		emit MigrateRepFromParent(msg.sender, parentSecurityBondAllowance, parentPoolOwnership);
-		child.setVaultSecurityBondAllowanceAndUpdateTotal(msg.sender, parentSecurityBondAllowance);
+		child.setVaultSecurityBondAllowance(msg.sender, parentSecurityBondAllowance);
+		child.addToTotalSecurityBondAllowance(parentSecurityBondAllowance);
 
 		if (parent.poolOwnershipDenominator() != 0 && child.repToken().balanceOf(address(child)) != 0) {
 			uint256 ownership = parentPoolOwnership - repToPoolOwnership(child, parentLockedRepInEscalationGame);
@@ -152,11 +156,12 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	function startTruthAuction(ISecurityPool securityPool) public {
 		require(securityPool.systemState() == SystemState.ForkMigration, 'System needs to be in migration');
 		require(block.timestamp > zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME, 'migration time needs to pass first');
+		securityPool.setSystemState(SystemState.ForkTruthAuction);
 		forkData[securityPool].truthAuctionStarted = block.timestamp;
 		ISecurityPool parent = securityPool.parent();
 		parent.updateCollateralAmount();
 		uint256 parentCollateral = parent.completeSetCollateralAmount();
-		securityPool.startAuctionState(parent.shareTokenSupply());
+		securityPool.setShareTokenSupply(parent.shareTokenSupply());
 		emit TruthAuctionStarted(parentCollateral, forkData[securityPool].migratedRep, forkData[parent].repAtFork);
 		if (forkData[securityPool].migratedRep >= forkData[parent].repAtFork) {
 			// we have acquired all the ETH already, no need for truthAuction
@@ -174,29 +179,29 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		require(securityPool.systemState() == SystemState.ForkTruthAuction, 'Auction needs to have started');
 		// finalize sends ETH to securityPool
 		forkData[securityPool].truthAuction.finalize();
+		securityPool.setSystemState(SystemState.Operational);
 		ISecurityPool parent = securityPool.parent();
 		uint256 repAvailable = forkData[parent].repAtFork;
 		uint256 balance = address(securityPool).balance;
 		uint256 feesOwed = securityPool.totalFeesOwedToVaults();
 		uint256 collateralAmount = balance >= feesOwed ? balance - feesOwed : 0;
+		securityPool.setCompleteSetCollateralAmount(collateralAmount); // If underfunded, collateral is 0
 		uint256 parentTotalSecurityBondAllowance = parent.totalSecurityBondAllowance();
 		forkData[securityPool].auctionedSecurityBondAllowance = parentTotalSecurityBondAllowance - securityPool.totalSecurityBondAllowance();
-		uint256 poolDenominator = 0;
+		securityPool.setTotalSecurityBondAllowance(parentTotalSecurityBondAllowance);
 		if (repAvailable > 0) {
 			uint256 denominator = repAvailable - repPurchased;
 			if (denominator > 0) {
-				poolDenominator = forkData[securityPool].migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / denominator;
+				securityPool.setPoolOwnershipDenominator(forkData[securityPool].migratedRep * repAvailable * SecurityPoolUtils.PRICE_PRECISION / denominator);
 			} else {
 				// All rep purchased; avoid division by zero by using repAvailable directly
-				poolDenominator = repAvailable * SecurityPoolUtils.PRICE_PRECISION;
+				securityPool.setPoolOwnershipDenominator(repAvailable * SecurityPoolUtils.PRICE_PRECISION);
 			}
 		}
-		if (poolDenominator == 0) { // wipe all rep holders in vaults
-			poolDenominator = repAvailable * SecurityPoolUtils.PRICE_PRECISION;
+		if (securityPool.poolOwnershipDenominator() == 0) { // wipe all rep holders in vaults
+			securityPool.setPoolOwnershipDenominator(repAvailable * SecurityPoolUtils.PRICE_PRECISION);
 		}
-		// Set all final state in one call
-		securityPool.finalizePoolState(collateralAmount, parentTotalSecurityBondAllowance, poolDenominator);
-		emit FinalizeAuction(repAvailable, forkData[securityPool].migratedRep, repPurchased, poolDenominator, collateralAmount);
+		emit FinalizeAuction(repAvailable, forkData[securityPool].migratedRep, repPurchased, securityPool.poolOwnershipDenominator(), securityPool.completeSetCollateralAmount());
 		securityPool.updateRetentionRate();
 	}
 
@@ -208,7 +213,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) public {
 		EscalationGame escalationGame = securityPool.escalationGame();
 		require(address(escalationGame) != address(0x0) && escalationGame.nonDecisionTimestamp() > 0, 'escalation game has not triggered fork');
-		securityPool.initializeFork();
+		securityPool.stealAllRep();
 		forkData[securityPool].ownFork = true;
 		securityPool.repToken().approve(address(zoltar), type(uint256).max);
 		zoltar.forkUniverse(securityPool.universeId(), securityPool.questionId());

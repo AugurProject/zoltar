@@ -77,23 +77,24 @@ interface ISecurityPool {
 	function redeemCompleteSet(uint256 amount) external;
 
 	function escalationGame() external view returns (EscalationGame);
-
-	// Forker operations
+	function setRetentionRate(uint256 newRetention) external;
+	function setSystemState(SystemState newState) external;
 	function setVaultOwnership(address vault, uint256 _poolOwnership, uint256 _securityBondAllowance) external;
-	function initializeFork() external;
-	function finalizePoolState(uint256 collateralAmount, uint256 totalBondAllowance, uint256 poolDenominator) external;
-	function startAuctionState(uint256 newShareTokenSupply) external;
-	function setVaultState(address vault, uint256 _poolOwnership, uint256 _securityBondAllowance, uint256 _feeIndex) external;
-	function setVaultSecurityBondAllowanceAndUpdateTotal(address vault, uint256 _securityBondAllowance) external;
+
+	function setVaultSecurityBondAllowance(address vault, uint256 _securityBondAllowance) external;
+	function addToTotalSecurityBondAllowance(uint256 securityBondAllowanceDelta) external;
 	function setPoolOwnershipDenominator(uint256 _poolOwnershipDenominator) external;
 	function setVaultPoolOwnership(address vault, uint256 poolOwnership) external;
 	function setVaultFeeIndex(address vault, uint256 newFeeIndex) external;
-	function migrateEth(address payable receiver, uint256 amount) external;
-	function authorize(ISecurityPool pool) external;
-
-	// View functions
 	function feeIndex() external view returns (uint256);
+	function setShareTokenSupply(uint256 newShareTokenSupply) external;
+	function setCompleteSetCollateralAmount(uint256 newCompleteSetCollateralAmount) external;
+	function setTotalSecurityBondAllowance(uint256 newTotalSecurityBondAllowance) external;
+	function authorize(ISecurityPool pool) external;
 	function questionData() external view returns (ZoltarQuestionData);
+	function stealAllRep() external;
+	function migrateEth(address payable child, uint256 amount) external;
+
 	function securityPoolForker() external view returns (address);
 
 	receive() external payable;

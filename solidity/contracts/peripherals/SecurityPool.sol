@@ -324,50 +324,28 @@ contract SecurityPool is ISecurityPool {
 		}
 	}
 
-	// Bundled forker operations to minimize calls
-	// Note: Individual setters kept for backward compatibility where still used
+	// TODO, cleanup these only forker functions by minimizing amount and adding checks
+	function setSystemState(SystemState newState) external onlyForker {
+		systemState = newState;
+	}
+
+	function setRetentionRate(uint256 newRetention) external onlyForker {
+		currentRetentionRate = newRetention;
+	}
 
 	function setVaultOwnership(address vault, uint256 _poolOwnership, uint256 _securityBondAllowance) external onlyForker {
 		securityVaults[vault].poolOwnership = _poolOwnership;
 		securityVaults[vault].securityBondAllowance = _securityBondAllowance;
 	}
 
-	/// @notice Initialize forked state - combines setSystemState(PoolForked), updateCollateralAmount(), setRetentionRate(0), and stealAllRep
-	function initializeFork() external onlyForker {
-		systemState = SystemState.PoolForked;
-		updateCollateralAmount();
-		currentRetentionRate = 0;
-		repToken.transfer(msg.sender, repToken.balanceOf(address(this)));
-	}
-
-	/// @notice Finalize pool after fork - combines setSystemState(Operational), setCompleteSetCollateralAmount, setTotalSecurityBondAllowance, setPoolOwnershipDenominator
-	function finalizePoolState(uint256 collateralAmount, uint256 totalBondAllowance, uint256 poolDenominator) external onlyForker {
-		systemState = SystemState.Operational;
-		completeSetCollateralAmount = collateralAmount;
-		totalSecurityBondAllowance = totalBondAllowance;
-		poolOwnershipDenominator = poolDenominator;
-	}
-
-	/// @notice Begin truth auction - combines setSystemState(ForkTruthAuction), setShareTokenSupply
-	function startAuctionState(uint256 newShareTokenSupply) external onlyForker {
-		systemState = SystemState.ForkTruthAuction;
-		shareTokenSupply = newShareTokenSupply;
-	}
-
-	/// @notice Set vault state (poolOwnership + securityBondAllowance + feeIndex) in one call
-	function setVaultState(address vault, uint256 _poolOwnership, uint256 _securityBondAllowance, uint256 _feeIndex) external onlyForker {
-		securityVaults[vault].poolOwnership = _poolOwnership;
+	function setVaultSecurityBondAllowance(address vault, uint256 _securityBondAllowance) external onlyForker {
 		securityVaults[vault].securityBondAllowance = _securityBondAllowance;
-		securityVaults[vault].feeIndex = _feeIndex;
+
+	}
+	function addToTotalSecurityBondAllowance(uint256 securityBondAllowanceDelta) external onlyForker {
+		totalSecurityBondAllowance += securityBondAllowanceDelta;
 	}
 
-	/// @notice Set vault security bond allowance and increment total in one call
-	function setVaultSecurityBondAllowanceAndUpdateTotal(address vault, uint256 _securityBondAllowance) external onlyForker {
-		securityVaults[vault].securityBondAllowance = _securityBondAllowance;
-		totalSecurityBondAllowance += _securityBondAllowance;
-	}
-
-	// Remaining individual setters still used by other contracts
 	function setPoolOwnershipDenominator(uint256 _poolOwnershipDenominator) external onlyForker {
 		poolOwnershipDenominator = _poolOwnershipDenominator;
 	}
@@ -380,11 +358,26 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[vault].feeIndex = newFeeIndex;
 	}
 
-	function migrateEth(address payable receiver, uint256 amount) external onlyForker {
-		(bool sent, ) = receiver.call{ value: amount }('');
-		require(sent, 'failed to send ETH');
+	function setShareTokenSupply(uint256 newShareTokenSupply) external onlyForker {
+		shareTokenSupply = newShareTokenSupply;
 	}
 
+	function setCompleteSetCollateralAmount(uint256 newCompleteSetCollateralAmount) external onlyForker {
+		completeSetCollateralAmount = newCompleteSetCollateralAmount;
+	}
+
+	function setTotalSecurityBondAllowance(uint256 newTotalSecurityBondAllowance) external onlyForker {
+		totalSecurityBondAllowance = newTotalSecurityBondAllowance;
+	}
+
+	function stealAllRep() external onlyForker {
+		repToken.transfer(msg.sender, repToken.balanceOf(address(this)));
+	}
+
+	function migrateEth(address payable receiver, uint256 amount) external onlyForker {
+		(bool sent, ) = receiver.call{ value: amount }('');
+		require(sent, 'failed to steal ETH');
+	}
 	function authorize(ISecurityPool pool) external onlyForker {
 		shareToken.authorize(pool);
 	}
