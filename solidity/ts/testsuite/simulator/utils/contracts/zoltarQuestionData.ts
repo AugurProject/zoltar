@@ -1,3 +1,4 @@
+import { encodeAbiParameters, keccak256 } from 'viem'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { ReadClient, WriteClient } from '../viem'
 import { getInfraContractAddresses } from './deployPeripherals'
@@ -43,13 +44,28 @@ export const getQuestionData = async (client: ReadClient, questionId: bigint) =>
 	return { questionId, title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit }
 }
 
-export const getQuestionId = async (client: ReadClient, questionData: QuestionData, outcomeLabels: string[]) =>
-	await client.readContract({
-		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		functionName: 'getQuestionId',
-		address: getInfraContractAddresses().zoltarQuestionData,
-		args: [questionData, outcomeLabels],
-	})
+export const getQuestionId = (questionData: QuestionData, outcomeOptions: readonly string[]): bigint => {
+	const encodedData = encodeAbiParameters(
+		[
+			{
+				type: 'tuple',
+				components: [
+					{ name: 'title', type: 'string' },
+					{ name: 'description', type: 'string' },
+					{ name: 'startTime', type: 'uint256' },
+					{ name: 'endTime', type: 'uint256' },
+					{ name: 'numTicks', type: 'uint256' },
+					{ name: 'displayValueMin', type: 'int256' },
+					{ name: 'displayValueMax', type: 'int256' },
+					{ name: 'answerUnit', type: 'string' },
+				],
+			},
+			{ type: 'string[]' },
+		],
+		[questionData, outcomeOptions],
+	)
+	return BigInt(keccak256(encodedData))
+}
 
 export const createQuestion = async (client: WriteClient, questionData: QuestionData, outcomeLabels: string[]) =>
 	await client.writeContract({

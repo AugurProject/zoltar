@@ -4,13 +4,15 @@ import { getInfraContractAddresses } from './deployPeripherals'
 import { contractExists } from '../utilities'
 import { ReadClient, WriteClient } from '../viem'
 
-export const forkSecurityPool = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
+export const forkSecurityPool = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcomeIndices: (number | bigint)[]) => {
+	const bigintIndices = outcomeIndices.map(x => BigInt(x))
 	await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'forkSecurityPool',
 		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress],
+		args: [securityPoolAddress, bigintIndices],
 	})
+}
 
 export const migrateVault = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: bigint | QuestionOutcome) =>
 	await client.writeContract({
@@ -62,7 +64,7 @@ export const getMigratedRep = async (client: ReadClient, securityPoolAddress: `0
 		args: [securityPoolAddress],
 	})
 
-export const getMarketOutcome = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getQuestionOutcome = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	if (!(await contractExists(client, securityPoolAddress))) return QuestionOutcome.None
 	return await client.readContract({
 		abi: [
@@ -76,17 +78,17 @@ export const getMarketOutcome = async (client: ReadClient, securityPoolAddress: 
 				],
 				stateMutability: 'nonpayable',
 				type: 'function',
-				name: 'getMarketOutcome',
+				name: 'getQuestionOutcome',
 				outputs: [
 					{
-						internalType: 'enum YesNoMarkets.Outcome',
+						internalType: 'enum BinaryOutcomes.BinaryOutcome',
 						name: 'outcome',
 						type: 'uint8',
 					},
 				],
 			},
 		] as const, // Typescript limitation on types...
-		functionName: 'getMarketOutcome',
+		functionName: 'getQuestionOutcome',
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress],
 	})

@@ -10,15 +10,16 @@ import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
 import { EscalationGame } from './EscalationGame.sol';
-import { YesNoMarkets } from './YesNoMarkets.sol';
+import { ZoltarQuestionData } from '../ZoltarQuestionData.sol';
 import { SecurityPoolForker } from './SecurityPoolForker.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
+import { BinaryOutcomes } from './BinaryOutcomes.sol';
 
 uint256 constant TODO_INITIAL_ESCALATION_GAME_DEPOSIT = 1 ether; // TODO, how to get this value?
 
 // Security pool for one question, one universe, one denomination (ETH)
 contract SecurityPool is ISecurityPool {
-	uint256 public immutable marketId;
+	uint256 public immutable questionId;
 	uint248 public immutable universeId;
 
 	Zoltar public immutable zoltar;
@@ -29,7 +30,7 @@ contract SecurityPool is ISecurityPool {
 	OpenOracle public immutable openOracle;
 	EscalationGameFactory public immutable escalationGameFactory;
 	EscalationGame public escalationGame;
-	YesNoMarkets public yesNoMarkets;
+	ZoltarQuestionData public questionData;
 	address public securityPoolForker;
 	ISecurityPoolFactory public securityPoolFactory;
 
@@ -60,7 +61,7 @@ contract SecurityPool is ISecurityPool {
 	event PerformLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount, uint256 debtToMove, uint256 repToMove);
 	event RedeemRep(address caller, address vault, uint256 repAmount);
 
-	modifier isOperational { // TODO, system can be operational if the fork has happened after this market has finalized
+	modifier isOperational { // TODO, system can be operational if the fork has happened after this question has finalized
 		require(zoltar.getForkTime(universeId) == 0, 'Zoltar has forked');
 		require(systemState == SystemState.Operational, 'System is not operational');
 		_;
@@ -77,10 +78,10 @@ contract SecurityPool is ISecurityPool {
 		_;
 	}
 
-	constructor(address _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, YesNoMarkets _yesNoMarkets, EscalationGameFactory _escalationGameFactory, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _marketId, uint256 _securityMultiplier) {
+	constructor(address _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _securityMultiplier) {
 		universeId = _universeId;
 		securityPoolFactory = _securityPoolFactory;
-		marketId = _marketId;
+		questionId = _questionId;
 		securityMultiplier = _securityMultiplier;
 		zoltar = _zoltar;
 		parent = _parent;
@@ -88,7 +89,7 @@ contract SecurityPool is ISecurityPool {
 		escalationGameFactory = _escalationGameFactory;
 		priceOracleManagerAndOperatorQueuer = _priceOracleManagerAndOperatorQueuer;
 		securityPoolForker = _securityPoolForker;
-		yesNoMarkets = _yesNoMarkets;
+		questionData = _questionData;
 		if (address(parent) == address(0x0)) { // origin universe never does truthAuction
 			systemState = SystemState.Operational;
 		} else {
@@ -110,7 +111,7 @@ contract SecurityPool is ISecurityPool {
 	function updateCollateralAmount() public {
 		if (totalSecurityBondAllowance == 0) return;
 		uint256 forkTime = zoltar.getForkTime(universeId);
-		uint256 endTime = yesNoMarkets.getMarketEndDate(marketId);
+		uint256 endTime = questionData.getQuestionEndDate(questionId);
 		uint256 feeEndDate = forkTime == 0 ? endTime : forkTime;
 		uint256 clampedCurrentTimestamp = block.timestamp > feeEndDate ? feeEndDate : block.timestamp;
 		if (lastUpdatedFeeAccumulator > clampedCurrentTimestamp) return;
@@ -279,8 +280,8 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function redeemShares() isOperational external {
-		YesNoMarkets.Outcome outcome = ISecurityPoolForker(securityPoolForker).getMarketOutcome(this);
-		require(outcome != YesNoMarkets.Outcome.None, 'Market has not finalized!');
+		BinaryOutcomes.BinaryOutcome outcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
 		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
 		uint256 amount = shareToken.burnTokenId(tokenId, msg.sender);
 		uint256 ethValue = sharesToCash(amount);
@@ -290,7 +291,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function redeemRep(address vault) external {
-		require(ISecurityPoolForker(securityPoolForker).getMarketOutcome(this) != YesNoMarkets.Outcome.None, 'Market has not finalized!');
+		require(ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this) != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
 		updateVaultFees(vault);
 		uint256 repAmount = poolOwnershipToRep(securityVaults[vault].poolOwnership) - securityVaults[vault].lockedRepInEscalationGame;
 		securityVaults[vault].poolOwnership = 0;
@@ -302,10 +303,10 @@ contract SecurityPool is ISecurityPool {
 	// Escalation Game (migrate vault (oi+rep), truth truthAuction)
 	////////////////////////////////////////
 
-	function depositToEscalationGame(YesNoMarkets.Outcome outcome, uint256 maxAmount) external isOperational {
+	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maxAmount) external isOperational {
 		if (address(escalationGame) == address(0x0)) {
-			uint256 endTime = yesNoMarkets.getMarketEndDate(marketId);
-			require(block.timestamp > endTime, 'market has not ended');
+		uint256 endTime = questionData.getQuestionEndDate(questionId);
+			require(block.timestamp > endTime, 'question has not ended');
 			escalationGame = escalationGameFactory.deployEscalationGame(TODO_INITIAL_ESCALATION_GAME_DEPOSIT, repToken.getTotalTheoreticalSupply() / (FORK_THRESHOLD_DIVISOR * 2));
 		}
 		securityVaults[msg.sender].lockedRepInEscalationGame += escalationGame.depositOnOutcome(msg.sender, outcome, maxAmount);
@@ -314,8 +315,8 @@ contract SecurityPool is ISecurityPool {
 
 	function withdrawFromEscalationGame(uint256[] memory depositIndexes) external isOperational {
 		require(address(escalationGame) != address(0x0), 'escalation game needs to be deployed');
-		YesNoMarkets.Outcome outcome = ISecurityPoolForker(securityPoolForker).getMarketOutcome(this);
-		require(outcome != YesNoMarkets.Outcome.None, 'Market has not finalized!');
+		BinaryOutcomes.BinaryOutcome outcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
 		require(!escalationGame.hasReachedNonDecision(), 'cannot withdraw, escalation game is indecisive');
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
 			(address depositor, uint256 amountToWithdraw) = escalationGame.withdrawDeposit(depositIndexes[index]);

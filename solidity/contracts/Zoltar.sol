@@ -3,6 +3,7 @@ pragma solidity 0.8.33;
 
 import './Constants.sol';
 import './ReputationToken.sol';
+import './ZoltarQuestionData.sol';
 
 uint256 constant FORK_THRESHOLD_DIVISOR = 20; // TODO, revisit, 5% of total supply atm
 uint256 constant FORK_BURN_DIVISOR = 5; // TODO, revisit, 20% of fork threshold
@@ -10,51 +11,39 @@ uint256 constant FORK_BURN_DIVISOR = 5; // TODO, revisit, 20% of fork threshold
 contract Zoltar {
 	struct Universe {
 		uint256 forkTime;
+		uint256 forkQuestionId;
+		uint256 forkingOutcomeIndex;
+
 		ReputationToken reputationToken;
 		uint248 parentUniverseId;
-		uint8 forkingOutcomeIndex;
 	}
 
 	mapping(uint248 => Universe) public universes;
 
-	struct UniverseForkData {
-		string forkingQuestionExtraInfo;
-		address forkedBy;
-		uint256 forkerRepDeposit;
-		string[4] forkingQuestionCategories;
+	struct AddressRepMigration {
+		uint256 repBalance;
+		mapping(uint248 => uint256) migrationAmounts; // how much migrated to each universe
 	}
+	mapping(address => mapping(uint248 => AddressRepMigration)) public repTokensMigrated; // userAddress -> fromUniverse
 
-	mapping(uint248 => UniverseForkData) public universeForkData;
+	event UniverseForked(address forker, uint248 universeId, uint256 questionId);
+	event DeployChild(address deployer, uint248 universeId, uint256 outcomeIndex, uint248 childUniverseId, ReputationToken childReputationToken);
 
-	event UniverseForked(address forker, uint248 universeId, string extraInfo, string[4] questionCategories);
-	event DeployChild(address deployer, uint248 universeId, uint8 outcomeIndex, uint248 childUniverseId, ReputationToken childReputationToken);
-	event SplitRep(uint248 universeId, uint256 amount, address migrator, address recipient, uint8[] outcomeIndexes);
-	event ForkerClaimRep(address forker, uint248 universeId, uint8[] outcomeIndexes, uint256 forkerRepDeposit);
+	ZoltarQuestionData public zoltarQuestionData;
+
+	constructor(ZoltarQuestionData _zoltarQuestionData) {
+		zoltarQuestionData = _zoltarQuestionData;
+		universes[0] = Universe(0, 0, 0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0);
+	}
 
 	function getForkTime(uint248 universeId) external view returns (uint256) {
 		Universe memory universe = universes[universeId];
 		return universe.forkTime;
 	}
 
-	function getForkingQuestionCategories(uint248 universeId) external view returns (string[4] memory) {
-		return universeForkData[universeId].forkingQuestionCategories;
-	}
-
 	function getRepToken(uint248 universeId) external view returns (ReputationToken) {
 		Universe memory universe = universes[universeId];
 		return universe.reputationToken;
-	}
-	function getForkedBy(uint248 universeId) external view returns (address) {
-		UniverseForkData memory forkData = universeForkData[universeId];
-		return forkData.forkedBy;
-	}
-	function getForkerDeposit(uint248 universeId) external view returns (uint256) {
-		UniverseForkData memory forkData = universeForkData[universeId];
-		return forkData.forkerRepDeposit;
-	}
-
-	constructor() {
-		universes[0] = Universe(0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0, 0);
 	}
 
 	function getForkThreshold(uint248 universeId) public view returns (uint256) {
@@ -62,21 +51,16 @@ contract Zoltar {
 		return universe.reputationToken.getTotalTheoreticalSupply() / FORK_THRESHOLD_DIVISOR;
 	}
 
-	function forkUniverse(uint248 universeId, string memory _extraInfo, string[4] memory _questionCategories) public {
+	function forkUniverse(uint248 universeId, uint256 questionId) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime == 0, 'Universe has forked already');
-		require(_questionCategories.length >= 1, 'need atleast one category on top of invalid');
+		// TODO, add check that questionId exists in zoltarQuestionData, and its time has passed
 		universes[universeId].forkTime = block.timestamp;
+		universes[universeId].forkQuestionId = questionId;
 		uint256 forkThreshold = getForkThreshold(universeId);
-		universeForkData[universeId] = UniverseForkData(_extraInfo, msg.sender, forkThreshold - forkThreshold / FORK_BURN_DIVISOR, _questionCategories);
-		universes[universeId].reputationToken.transferFrom(msg.sender, address(this), forkThreshold);
-		burnRep(universes[universeId].reputationToken, address(this), forkThreshold / FORK_BURN_DIVISOR); // burn 20%
-		emit UniverseForked(msg.sender, universeId, _extraInfo, _questionCategories);
-	}
-
-	function splitRep(uint248 universeId, uint8[] memory outcomeIndexes) public {
-		uint256 amount = universes[universeId].reputationToken.balanceOf(msg.sender);
-		splitRepInternal(universeId, amount, msg.sender, msg.sender, outcomeIndexes);
+		burnRep(universes[universeId].reputationToken, msg.sender, forkThreshold);
+		repTokensMigrated[msg.sender][universeId].repBalance = forkThreshold - forkThreshold / FORK_BURN_DIVISOR;// burn 20%
+		emit UniverseForked(msg.sender, universeId, questionId);
 	}
 
 	function burnRep(ReputationToken reputationToken, address migrator, uint256 amount) private {
@@ -92,45 +76,40 @@ contract Zoltar {
 		}
 	}
 
-	function getOutcomeName(uint248 universeId) external view returns (string memory) {
-		if (universeId == 0) return 'Genesis';
-		Universe memory universe = universes[universeId];
-		if (universe.forkingOutcomeIndex == 0) return 'Invalid';
-		return universeForkData[universe.parentUniverseId].forkingQuestionCategories[universe.forkingOutcomeIndex - 1];
-	}
-
-	function getChildUniverseId(uint248 universeId, uint8 outcomeIndex) public pure returns (uint248) {
+	function getChildUniverseId(uint248 universeId, uint256 outcomeIndex) public pure returns (uint248) {
 		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
 	}
 
-	function deployChild(uint248 universeId, uint8 outcomeIndex) public {
+	function deployChild(uint248 universeId, uint256 outcomeIndex) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked');
 		uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndex);
 		ReputationToken childReputationToken = new ReputationToken{ salt: bytes32(uint256(childUniverseId)) }(address(this));
 		childReputationToken.setMaxTheoreticalSupply(universe.reputationToken.getTotalTheoreticalSupply());
-		universes[childUniverseId] = Universe(0, childReputationToken, universeId, outcomeIndex);
+		universes[childUniverseId] = Universe(0, universe.forkQuestionId, outcomeIndex, childReputationToken, universeId);
 		emit DeployChild(msg.sender, universeId, outcomeIndex, childUniverseId, childReputationToken);
 	}
 
-	function forkerClaimRep(uint248 universeId, uint8[] memory outcomeIndexes) public {
-		UniverseForkData memory data = universeForkData[universeId];
-		require(data.forkedBy == msg.sender, 'only forker can claim');
-		universeForkData[universeId].forkerRepDeposit = 0;
-		emit ForkerClaimRep(msg.sender, universeId, outcomeIndexes, data.forkerRepDeposit);
-		splitRepInternal(universeId, data.forkerRepDeposit, address(this), data.forkedBy, outcomeIndexes);
-	}
-
-	function splitRepInternal(uint248 universeId, uint256 amount, address migrator, address recipient, uint8[] memory outcomeIndexes) private {
+	// stores rep to universe that can then be migrated with internal REP migration
+	function prepareRepForMigration(uint248 universeId, uint256 amount) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked');
-		emit SplitRep(universeId, amount, migrator, recipient, outcomeIndexes);
-		burnRep(universe.reputationToken, migrator, amount);
-		for (uint8 i = 0; i < outcomeIndexes.length; i++) {
-			require(i == 0 || outcomeIndexes[i] > outcomeIndexes[i - 1], 'outcomes are not sorted'); // force sorting to avoid duplicate indices
-			require(outcomeIndexes[i] < universeForkData[universeId].forkingQuestionCategories.length + 1, 'outcome index overflow');
+		burnRep(universe.reputationToken, msg.sender, amount);
+		repTokensMigrated[msg.sender][universeId].repBalance += amount;
+	}
+	function migrateInternalRep(uint248 universeId, uint256 amount, uint256[] memory outcomeIndexes) public {
+		Universe memory universe = universes[universeId];
+		require(universe.forkTime != 0, 'Universe has not forked');
+		splitRepInternal(universeId, amount, msg.sender, outcomeIndexes);
+	}
+
+	function splitRepInternal(uint248 universeId, uint256 amount, address recipient, uint256[] memory outcomeIndexes) private {
+		for (uint256 i = 0; i < outcomeIndexes.length; i++) {
 			uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndexes[i]);
+			// todo, check that outcome index is valid outcome
 			if (address(universes[childUniverseId].reputationToken) == address(0x0)) deployChild(universeId, outcomeIndexes[i]);
+			repTokensMigrated[msg.sender][universeId].migrationAmounts[childUniverseId] += amount;
+			require(repTokensMigrated[msg.sender][universeId].migrationAmounts[childUniverseId] <= repTokensMigrated[msg.sender][universeId].repBalance, 'cannot migrate more than internal balance');
 			universes[childUniverseId].reputationToken.mint(recipient, amount);
 		}
 	}

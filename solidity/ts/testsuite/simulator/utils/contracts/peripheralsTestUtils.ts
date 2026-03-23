@@ -16,8 +16,8 @@ const genesisUniverse = 0n
 const securityMultiplier = 2n
 const PRICE_PRECISION = 10n ** 18n
 
-export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigint, marketId: bigint) => {
-	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, marketId, securityMultiplier).securityPool
+export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigint, questionId: bigint) => {
+	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).securityPool
 	assert.ok(await contractExists(client, securityPoolAddress), 'security pool not deployed')
 
 	const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)

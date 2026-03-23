@@ -7,12 +7,31 @@ library ScalarOutcomes {
 	function getTradeInterval(int256 minValue, int256 maxValue, uint256 numTicks) internal pure returns (int256) {
 		require(numTicks > 0, 'numTicks=0');
 		require(maxValue > minValue, 'invalid range');
-		return (maxValue - minValue) / int256(numTicks);
+		// Compute the difference as an unsigned integer using unchecked arithmetic.
+		// This works for all signed combinations without overflow.
+		uint256 diffU;
+		unchecked {
+			diffU = uint256(maxValue) - uint256(minValue);
+		}
+		uint256 tradeIntervalU = diffU / numTicks;
+		// Ensure the trade interval fits in an int256.
+		require(tradeIntervalU <= uint256(type(int256).max), 'trade interval overflow');
+		return int256(tradeIntervalU);
 	}
 
-	function getScalarOutcomeName(uint120[2] memory payoutNumerators, string memory unit, uint256 numTicks, int256 minValue, int256 maxValue) external pure returns (string memory) {
+	function getScalarOutcomeName(uint120[2] memory payoutNumerators, string memory unit, uint256 numTicks, int256 minValue, int256 maxValue) internal pure returns (string memory) {
 		int256 tradeInterval = getTradeInterval(minValue, maxValue, numTicks);
-		int256 scalarValue = minValue + int256(uint256(payoutNumerators[1])) * tradeInterval;
+		// Perform multiplication and addition in uint256 to avoid overflow, with proper checks.
+		uint256 payout = uint256(payoutNumerators[1]);
+		uint256 tradeIntervalU = uint256(tradeInterval);
+		uint256 productU = payout * tradeIntervalU;
+		// Ensure the product can be represented as int256.
+		require(productU <= uint256(type(int256).max), 'product overflow');
+		// Ensure adding minValue does not overflow int256 when minValue > 0.
+		if (minValue > 0) {
+			require(productU <= uint256(type(int256).max) - uint256(minValue), 'scalarValue overflow');
+		}
+		int256 scalarValue = minValue + int256(productU);
 		string memory decimalString = intToDecimalString(scalarValue, DECIMALS);
 		if (bytes(unit).length == 0) return decimalString;
 		return string.concat(decimalString, ' ', unit);

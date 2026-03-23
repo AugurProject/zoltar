@@ -12,10 +12,10 @@ export const getNonDecisionThreshold = async (client: ReadClient, escalationGame
 		args: [],
 	})
 
-export const getMarketResolution = async (client: ReadClient, escalationGame: AccountAddress) =>
+export const getQuestionResolution = async (client: ReadClient, escalationGame: AccountAddress) =>
 	(await client.readContract({
 		abi: peripherals_EscalationGame_EscalationGame.abi,
-		functionName: 'getMarketResolution',
+		functionName: 'getQuestionResolution',
 		address: escalationGame,
 		args: [],
 	})) as QuestionOutcome
@@ -31,7 +31,7 @@ export const getStartBond = async (client: ReadClient, escalationGame: AccountAd
 export const getEscalationGameDeposits = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) => {
 	let currentIndex = 0n
 	const numberOfEntries = 30n
-	const pages: { depositIndex: bigint, depositor: AccountAddress, amount: bigint, cumulativeAmount: bigint }[] = []
+	const pages: { depositIndex: bigint; depositor: AccountAddress; amount: bigint; cumulativeAmount: bigint }[] = []
 	do {
 		const newDeposits = (
 			await client.readContract({
@@ -64,7 +64,7 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBond: 
 			args: [writeClient.account.address],
 		}),
 		from: getInfraContractAddresses().escalationGameFactory,
-		salt: numberToBytes(0),
+		salt: numberToBytes(0, { size: 32 }),
 	})
 }
 
