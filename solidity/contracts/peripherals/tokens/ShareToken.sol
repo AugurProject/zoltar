@@ -118,13 +118,16 @@ contract ShareToken is ERC1155, IShareToken {
 		uint248 universeId = getUniverseId(fromId);
 		require(universeHasForked(universeId), 'Universe has not forked');
 
-		uint256 fromIdBalance = _balances[fromId][msg.sender];
-		_balances[fromId][msg.sender] = 0;
-		_supplies[fromId] -= fromIdBalance;
+		uint256 fromIdBalance = balanceOf(msg.sender, fromId);
+		require(fromIdBalance > 0, 'No balance to migrate');
+
+		// Burn from the old token ID using the base ERC1155 _burn function
+		_burn(msg.sender, fromId, fromIdBalance);
+
+		// Mint to the new child universe token IDs using the base ERC1155 _mint function
 		for (uint8 i = 0; i < Constants.NUM_OUTCOMES; i++) {
 			uint256 toId = getChildId(fromId, getChildUniverseId(universeId, i));
-			_balances[toId][msg.sender] += fromIdBalance;
-			_supplies[toId] += fromIdBalance;
+			_mint(msg.sender, toId, fromIdBalance);
 			emit Migrate(msg.sender, fromId, toId, fromIdBalance);
 		}
 	}

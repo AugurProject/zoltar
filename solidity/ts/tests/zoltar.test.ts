@@ -2,7 +2,7 @@ import { test, beforeEach, describe } from 'bun:test'
 import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
-import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists } from '../testsuite/simulator/utils/utilities'
+import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, isZoltarDeployed, getRepTokensMigratedRepBalance, migrateInternalRep, prepareRepForMigration } from '../testsuite/simulator/utils/contracts/zoltar'
@@ -37,7 +37,7 @@ describe('Contract Test Suite', () => {
 		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const zoltar = getZoltarAddress()
 		const questionText = 'test question'
-		const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4']
+		const outcomes = sortStringArrayByKeccak(['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'])
 
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
@@ -171,7 +171,7 @@ describe('Contract Test Suite', () => {
 			displayValueMax: 0n,
 			answerUnit: '',
 		}
-		const outcomes = ['Outcome 1', 'Outcome 2']
+		const outcomes = ['Yes', 'No']
 		await createQuestion(client, questionData, outcomes)
 		const questionId = getQuestionId(questionData, outcomes)
 
@@ -205,7 +205,7 @@ describe('Contract Test Suite', () => {
 			displayValueMax: 0n,
 			answerUnit: '',
 		}
-		const outcomes = ['Outcome 1', 'Outcome 2']
+		const outcomes = ['Yes', 'No']
 		await createQuestion(client, questionData, outcomes)
 		const questionId = getQuestionId(questionData, outcomes)
 
@@ -235,7 +235,7 @@ describe('Contract Test Suite', () => {
 			displayValueMax: 0n,
 			answerUnit: '',
 		}
-		const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4']
+		const outcomes = ['Yes', 'No']
 		await createQuestion(client, questionData, outcomes)
 		const questionId = getQuestionId(questionData, outcomes)
 

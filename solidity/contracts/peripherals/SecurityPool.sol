@@ -340,7 +340,7 @@ contract SecurityPool is ISecurityPool {
 
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maxAmount) external isOperational {
 		if (address(escalationGame) == address(0x0)) {
-		uint256 endTime = questionData.getQuestionEndDate(questionId);
+			uint256 endTime = questionData.getQuestionEndDate(questionId);
 			require(block.timestamp > endTime, 'question has not ended');
 			escalationGame = escalationGameFactory.deployEscalationGame(TODO_INITIAL_ESCALATION_GAME_DEPOSIT, repToken.getTotalTheoreticalSupply() / (FORK_THRESHOLD_DIVISOR * 2));
 		}

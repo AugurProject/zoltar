@@ -44,7 +44,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 	event ExecutedQueuedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
 
 	// operation queuing
-	uint256 public previousQueuedOperationId;
+	uint256 public queuedOperationCounter;
 	mapping(uint256 => QueuedOperation) public queuedOperations;
 
 	constructor(OpenOracle _openOracle, ReputationToken _reputationToken) {
@@ -123,12 +123,12 @@ contract PriceOracleManagerAndOperatorQueuer {
 
 	function requestPriceIfNeededAndQueueOperation(OperationType operation, address targetVault, uint256 amount) public payable {
 		require(amount > 0, 'need to do non zero operation');
-		previousQueuedOperationId++;
+		queuedOperationCounter++;
 		// Capture snapshot of the target vault state at queue time to prevent manipulation
 		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , , ) = securityPool.securityVaults(targetVault);
 		uint256 snapshotTotalRep = securityPool.repToken().balanceOf(address(securityPool));
 		uint256 snapshotDenominator = securityPool.poolOwnershipDenominator();
-		queuedOperations[previousQueuedOperationId] = QueuedOperation({
+		queuedOperations[queuedOperationCounter] = QueuedOperation({
 			operation: operation,
 			initiatorVault: msg.sender,
 			targetVault: targetVault,
@@ -142,10 +142,10 @@ contract PriceOracleManagerAndOperatorQueuer {
 		uint256 retained = 0; // amount to retain from msg.value (cost incurred)
 
 		if (isPriceValid()) {
-			executeQueuedOperation(previousQueuedOperationId);
+			executeQueuedOperation(queuedOperationCounter);
 			// no cost when price is valid
 		} else if (queuedPendingOperationId == 0) {
-			queuedPendingOperationId = previousQueuedOperationId;
+			queuedPendingOperationId = queuedOperationCounter;
 			uint256 ethCost = getRequestPriceEthCost();
 			require(msg.value >= ethCost, 'not enough eth to request price');
 			retained += ethCost;
@@ -185,7 +185,9 @@ contract PriceOracleManagerAndOperatorQueuer {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		} else if (queuedOperations[operationId].operation == OperationType.WithdrawRep) {
-			try securityPool.performWithdrawRep(queuedOperations[operationId].initiatorVault, amount) {
+			try
+				securityPool.performWithdrawRep(queuedOperations[operationId].initiatorVault, amount)
+			{
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
@@ -193,7 +195,9 @@ contract PriceOracleManagerAndOperatorQueuer {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		} else {
-			try securityPool.performSetSecurityBondsAllowance(queuedOperations[operationId].initiatorVault, amount) {
+			try
+				securityPool.performSetSecurityBondsAllowance(queuedOperations[operationId].initiatorVault, amount)
+			{
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);

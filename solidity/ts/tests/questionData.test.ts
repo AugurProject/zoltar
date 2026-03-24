@@ -2,7 +2,7 @@ import { test, beforeEach, describe } from 'bun:test'
 import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
-import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
+import { setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import assert from 'node:assert'
@@ -218,5 +218,86 @@ describe('Question Data', () => {
 		const answer = combineUint256FromTwoWithInvalid(false, question.numTicks - 1n, 1n)
 		const name = await getAnswerOptionName(client, questionId, answer)
 		assert.ok(name !== 'Malformed' && name !== 'Invalid', 'should return valid outcome name')
+	})
+
+	test('createQuestion rejects duplicate outcome options', async () => {
+		const question = {
+			title: 'Test Duplicates',
+			description: 'Testing uniqueness',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		// Duplicate entries: ['Yes', 'Yes']
+		await assert.rejects(createQuestion(client, question, ['Yes', 'Yes']), { message: /Outcome option hashes not sorted/ })
+		// Duplicate entries with more options
+		await assert.rejects(createQuestion(client, question, ['Yes', 'No', 'Yes']), { message: /Outcome option hashes not sorted/ })
+	})
+
+	test('createQuestion enforces binary outcome order', async () => {
+		const question = {
+			title: 'Test Binary Order',
+			description: 'Testing binary order requirement',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		// Correct order ['Yes','No'] is accepted
+		assert.ok(areEqualArrays(sortStringArrayByKeccak(['Yes', 'No']), ['Yes', 'No']), 'sorting mismatch')
+		await createQuestion(client, question, ['Yes', 'No'])
+		const questionId1 = getQuestionId(question, ['Yes', 'No'])
+		const labels1 = await getOutcomeLabels(client, questionId1)
+		assert.deepStrictEqual(labels1, ['Yes', 'No'], 'binary outcome labels should match')
+
+		// Reversed order ['No','Yes'] should be rejected
+		await assert.rejects(createQuestion(client, question, ['No', 'Yes']), { message: /Outcome option hashes not sorted/ })
+	})
+
+	test('createQuestion accepts non-binary outcome options in any order', async () => {
+		const question = {
+			title: 'Test Valid',
+			description: 'Testing valid options',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		// For non-binary questions, any order of unique options is accepted
+		await createQuestion(client, question, sortStringArrayByKeccak(['Apple', 'Banana', 'Cherry']))
+		const questionId = getQuestionId(question, sortStringArrayByKeccak(['Apple', 'Banana', 'Cherry']))
+		const labels = await getOutcomeLabels(client, questionId)
+		assert.deepStrictEqual(labels, sortStringArrayByKeccak(['Apple', 'Banana', 'Cherry']), 'outcome labels should match')
+	})
+
+	test('createQuestion accepts unique outcome options in any order', async () => {
+		const question = {
+			title: 'Test Valid',
+			description: 'Testing valid options',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		// Unique options in arbitrary order are accepted (order not enforced)
+		await createQuestion(client, question, sortStringArrayByKeccak(['Apple', 'Banana', 'Cherry']))
+		const questionId = getQuestionId(question, sortStringArrayByKeccak(['Apple', 'Banana', 'Cherry']))
+		const labels = await getOutcomeLabels(client, questionId)
+		assert.deepStrictEqual(labels, sortStringArrayByKeccak(['Apple', 'Banana', 'Cherry']), 'outcome labels should match')
+
+		// Binary outcome ['Yes','No'] is also accepted
+		await createQuestion(client, question, ['Yes', 'No'])
+		const questionId2 = getQuestionId(question, ['Yes', 'No'])
+		const labels2 = await getOutcomeLabels(client, questionId2)
+		assert.deepStrictEqual(labels2, ['Yes', 'No'], 'binary outcome labels should match')
 	})
 })

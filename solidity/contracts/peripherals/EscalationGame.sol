@@ -53,11 +53,11 @@ contract EscalationGame {
 
 	// Attrition cost = startBond * exp( ln(ratio) * t / T ) where ratio = nonDecisionThreshold / startBond.
 	// Uses fixed-point with SCALE=1e6. ln(ratio) = 2 * atanh(Z) with Z = (ratio-1)/(ratio+1).
-	// Both series iterate until convergence or max 50 iterations. Guarantees:
+	// Series iterate until convergence (max iterations: atanh=MAX_ATANH_ITERATIONS, exp=MAX_EXP_ITERATIONS). Guarantees:
 	// - f(0) = startBond, f(T) = nonDecisionThreshold
 	// - f(t) monotonic increasing for t in (0,T)
 	// - f(t) <= nonDecisionThreshold
-	function compute5TermTaylorSeriesAttritionCostApproximation(uint256 timeSinceStart) public view returns (uint256) {
+	function computeIterativeAttritionCost(uint256 timeSinceStart) public view returns (uint256) {
 		require(timeSinceStart <= escalationTimeLength, 'Invalid time');
 		// Exact edge cases
 		if (timeSinceStart == 0) return startBond;
@@ -76,12 +76,12 @@ contract EscalationGame {
 		uint256 term = z; // k=0: z / 1
 		atanh_scaled += term;
 
-     		for (uint256 k = 1; k < 5000; k++) {
-     			// term = term * z2 * (2k-1) / ((2k+1) * SCALE)
-     			term = term * z2 * (2 * k - 1) / ((2 * k + 1) * SCALE);
-     			if (term == 0) break;
-     			atanh_scaled += term;
-     		}
+		for (uint256 k = 1; k < MAX_ATANH_ITERATIONS; k++) {
+			// term = term * z2 * (2k-1) / ((2k+1) * SCALE)
+			term = term * z2 * (2 * k - 1) / ((2 * k + 1) * SCALE);
+			if (term == 0) break;
+			atanh_scaled += term;
+		}
 
 		uint256 lnRatio_scaled = 2 * atanh_scaled; // ln(ratio) * SCALE
 
@@ -94,11 +94,11 @@ contract EscalationGame {
 		term = exponent; // k=1
 		exp_scaled += term;
 
-   		for (uint256 k = 2; k < 1000; k++) {
-   			term = term * exponent / (k * SCALE);
-   			if (term == 0) break;
-   			exp_scaled += term;
-   		}
+		for (uint256 k = 2; k < MAX_EXP_ITERATIONS; k++) {
+			term = term * exponent / (k * SCALE);
+			if (term == 0) break;
+			exp_scaled += term;
+		}
 
 		uint256 cost = startBond * exp_scaled / SCALE;
 		// Clamp (should be ≤ nonDecisionThreshold, but rounding may cause slight overshoot)
@@ -116,7 +116,7 @@ contract EscalationGame {
 		for (uint256 iteration = 0; iteration < 64; iteration++) {
 			uint256 midTime = (low + high) / 2;
 
-			uint256 midCost = compute5TermTaylorSeriesAttritionCostApproximation(midTime);
+			uint256 midCost = computeIterativeAttritionCost(midTime);
 
 			if (midCost == attritionCost) return midTime;
 			if (midCost < attritionCost) {
@@ -137,7 +137,7 @@ contract EscalationGame {
 		if (startingTime >= block.timestamp) return 0;
 		uint256 timeFromStart = block.timestamp - startingTime;
 		if (timeFromStart >= escalationTimeLength) return nonDecisionThreshold;
-		return compute5TermTaylorSeriesAttritionCostApproximation(timeFromStart);
+		return computeIterativeAttritionCost(timeFromStart);
 	}
 
 	function getQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome outcome){
@@ -146,7 +146,7 @@ contract EscalationGame {
 		uint8 yesOver = balances[1] >= currentTotalCost ? 1 : 0;
 		uint8 noOver = balances[2] >= currentTotalCost ? 1 : 0;
 		if (invalidOver + yesOver + noOver >= 2) return BinaryOutcomes.BinaryOutcome.None; // if two or more outcomes are over the total cost, the game is still going
- 		// the game has ended due to timeout
+		// the game has ended due to timeout
 		if (balances[0] > balances[1] && balances[0] > balances[2]) return BinaryOutcomes.BinaryOutcome.Invalid;
 		if (balances[1] > balances[0] && balances[1] > balances[2]) return BinaryOutcomes.BinaryOutcome.Yes;
 		return BinaryOutcomes.BinaryOutcome.No;
@@ -172,35 +172,35 @@ contract EscalationGame {
 	// deposits on question outcome, returns how much user actually ended depositing
 	function depositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) public returns (uint256 depositAmount) {
 		require(nonDecisionTimestamp == 0, 'System has already reached a non-decision');
- 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
- 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
- 		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'System has already timed out');
- 		require(balances[uint256(outcome)] < nonDecisionThreshold, 'Already full');
- 		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit'); // checks that we get start bond and spam protection
-  		uint256 outcomeIdx = uint256(outcome);
-   		uint256 currentBalance = balances[outcomeIdx];
-  		uint256 room = nonDecisionThreshold - currentBalance;
-  		uint256 effectiveDeposit = amount > room ? room : amount;
-  		uint256 newBalance = currentBalance + effectiveDeposit;
+		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
+		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'System has already timed out');
+		require(balances[uint256(outcome)] < nonDecisionThreshold, 'Already full');
+		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit'); // checks that we get start bond and spam protection
+		uint256 outcomeIdx = uint256(outcome);
+		uint256 currentBalance = balances[outcomeIdx];
+		uint256 room = nonDecisionThreshold - currentBalance;
+		uint256 effectiveDeposit = amount > room ? room : amount;
+		uint256 newBalance = currentBalance + effectiveDeposit;
 
-  		// Snapshot all balances for tie detection
-  		uint256 b0 = balances[0];
-  		uint256 b1 = balances[1];
-  		uint256 b2 = balances[2];
-  		uint256 maxBal = b0 > b1 ? (b0 > b2 ? b0 : b2) : (b1 > b2 ? b1 : b2);
+		// Snapshot all balances for tie detection
+		uint256 b0 = balances[0];
+		uint256 b1 = balances[1];
+		uint256 b2 = balances[2];
+		uint256 maxBal = b0 > b1 ? (b0 > b2 ? b0 : b2) : (b1 > b2 ? b1 : b2);
 
-  		// Check if new balance ties with existing maximum and another outcome has that maximum, and max is below threshold.
-  		// Ties at/above threshold are allowed (to trigger nonDecision/fork).
-  		bool otherHasMax = (outcomeIdx == 0) ? (b1 == maxBal || b2 == maxBal) :
-  		                    (outcomeIdx == 1) ? (b0 == maxBal || b2 == maxBal) :
-  		                    (b0 == maxBal || b1 == maxBal);
-  		if (newBalance == maxBal && otherHasMax && maxBal < nonDecisionThreshold) {
-  			effectiveDeposit -= 1;
-  			newBalance = currentBalance + effectiveDeposit;
-  		}
+		// Check if new balance ties with existing maximum and another outcome has that maximum, and max is below threshold.
+		// Ties at/above threshold are allowed (to trigger nonDecision/fork).
+		bool otherHasMax = (outcomeIdx == 0) ? (b1 == maxBal || b2 == maxBal) :
+		                    (outcomeIdx == 1) ? (b0 == maxBal || b2 == maxBal) :
+		                    (b0 == maxBal || b1 == maxBal);
+		if (newBalance == maxBal && otherHasMax && maxBal < nonDecisionThreshold) {
+			effectiveDeposit -= 1;
+			newBalance = currentBalance + effectiveDeposit;
+		}
 
- 		// Update the balance
- 		balances[outcomeIdx] = newBalance;
+		// Update the balance
+		balances[outcomeIdx] = newBalance;
 		depositAmount = effectiveDeposit;
 
 		// Record deposit

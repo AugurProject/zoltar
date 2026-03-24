@@ -134,3 +134,14 @@ const uint248BitMask = (1n << 248n) - 1n
 export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint | QuestionOutcome): bigint {
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint8' }], [parentUniverseId, Number(outcome)]))) & uint248BitMask
 }
+
+export const sortStringArrayByKeccak = (inputStrings: string[]): string[] =>
+	[...inputStrings].sort((firstString, secondString) => {
+		const firstHash = keccak256(encodeAbiParameters([{ type: 'string' }], [firstString]))
+
+		const secondHash = keccak256(encodeAbiParameters([{ type: 'string' }], [secondString]))
+
+		if (firstHash > secondHash) return -1
+		if (firstHash < secondHash) return 1
+		return 0
+	})
