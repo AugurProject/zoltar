@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
-import { IDualCapBatchAuction } from './interfaces/IDualCapBatchAuction.sol';
+import { IUniformPriceDualCapBatchAuction } from './interfaces/IUniformPriceDualCapBatchAuction.sol';
 
 // TODO: figure out if this can run up issues with gas and figure out how to avoid them
-contract DualCapBatchAuction {
+contract UniformPriceDualCapBatchAuction {
 	struct Node {
 		int256 tick; // ETH/REP price (tick)
 		uint256 totalEth; // total ETH at this tick
@@ -48,8 +48,8 @@ contract DualCapBatchAuction {
 	event AuctionStarted(uint256 ethRaiseCap, uint256 maxRepBeingSold, uint256 minBidSize);
 	event SubmitBid(address bidder, int256 tick, uint256 amount);
 	event Finalized(uint256 ethToSend, bool priceFound, int256 foundTick, uint256 repFilled, uint256 ethFilled);
-	event WithdrawBids(address withdrawFor, IDualCapBatchAuction.TickIndex[] tickIndices, uint256 totalFilledRep, uint256 totalEthRefund);
-	event RefundLosingBids(address bidder, IDualCapBatchAuction.TickIndex[] tickIndices, uint256 ethAmount);
+	event WithdrawBids(address withdrawFor, IUniformPriceDualCapBatchAuction.TickIndex[] tickIndices, uint256 totalFilledRep, uint256 totalEthRefund);
+	event RefundLosingBids(address bidder, IUniformPriceDualCapBatchAuction.TickIndex[] tickIndices, uint256 ethAmount);
 
 	constructor(address _owner) {
 		owner = _owner;
@@ -104,7 +104,7 @@ contract DualCapBatchAuction {
 		return _compute(root, 0, 0, 0, 0);
 	}
 
-	function withdrawBids(address withdrawFor, IDualCapBatchAuction.TickIndex[] memory tickIndices) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
+	function withdrawBids(address withdrawFor, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
 		require(finalized, 'not finalized');
 		require(msg.sender == owner, 'Only owner can call');
 		uint256 clearingPriceLocal = tickToPrice(clearingTick);
@@ -158,7 +158,7 @@ contract DualCapBatchAuction {
 		emit WithdrawBids(withdrawFor, tickIndices, totalFilledRep, totalEthRefund);
 	}
 
-	function refundLosingBids(IDualCapBatchAuction.TickIndex[] memory tickIndices) external {
+	function refundLosingBids(IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) external {
 		require(!finalized, 'already finalized');
 
 		(bool priceFound, int256 foundTick,, ) = computeClearing();

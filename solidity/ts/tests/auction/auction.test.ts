@@ -4,13 +4,13 @@ import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../../t
 import { TEST_ADDRESSES } from '../../testsuite/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../../testsuite/simulator/utils/utilities'
 import { Address } from 'viem'
-import { computeClearing, deployDualCapBatchAuction, finalize, getClearingTick, getMinBidSize, simulateWithdrawBids, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids, getEthRaiseCap, getEthRaised } from '../../testsuite/simulator/utils/contracts/auction'
+import { computeClearing, deployUniformPriceDualCapBatchAuction, finalize, getClearingTick, getMinBidSize, simulateWithdrawBids, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids, getEthRaiseCap, getEthRaised } from '../../testsuite/simulator/utils/contracts/auction'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../../testsuite/simulator/utils/testUtils'
 import { priceToClosestTick, tickToPrice } from '../../testsuite/simulator/utils/tickMath'
 import assert from 'assert'
 import { ensureZoltarDeployed } from '../../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../../testsuite/simulator/utils/contracts/deployPeripherals'
-import { getDualCapBatchAuctionAddress } from '../../testsuite/simulator/utils/contracts/deployments'
+import { getUniformPriceDualCapBatchAuctionAddress } from '../../testsuite/simulator/utils/contracts/deployments'
 import { addressString } from '../../testsuite/simulator/utils/bigint'
 
 // ============ MODULE-LEVEL CONSTANTS ============
@@ -139,8 +139,8 @@ describe('Auction', () => {
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
-		await deployDualCapBatchAuction(client, client.account.address)
-		auctionAddress = getDualCapBatchAuctionAddress(client.account.address)
+		await deployUniformPriceDualCapBatchAuction(client, client.account.address)
+		auctionAddress = getUniformPriceDualCapBatchAuctionAddress(client.account.address)
 		assert.ok(await contractExists(client, auctionAddress), 'auction exists')
 	})
 
@@ -443,8 +443,8 @@ describe('Auction', () => {
 			const tick = tickForPrice(PRICE_PRECISION)
 			const bidAmount = 1n * 10n ** 18n
 
-			const freshAddress = getDualCapBatchAuctionAddress(addressString(TEST_ADDRESSES[3]))
-			await deployDualCapBatchAuction(client, addressString(TEST_ADDRESSES[3]))
+			const freshAddress = getUniformPriceDualCapBatchAuctionAddress(addressString(TEST_ADDRESSES[3]))
+			await deployUniformPriceDualCapBatchAuction(client, addressString(TEST_ADDRESSES[3]))
 			await assert.rejects(async () => await submitBid(client, freshAddress, tick, bidAmount), 'invalid')
 
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)

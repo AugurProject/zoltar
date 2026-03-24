@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
-interface IDualCapBatchAuction {
+interface IUniformPriceDualCapBatchAuction {
 	struct Bid {
 		address bidder;
 		uint256 ethAmount;

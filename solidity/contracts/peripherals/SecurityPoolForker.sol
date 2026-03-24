@@ -3,8 +3,8 @@ pragma solidity 0.8.33;
 
 import { ReputationToken } from '../ReputationToken.sol';
 import { Zoltar } from '../Zoltar.sol';
-import { IDualCapBatchAuction } from './interfaces/IDualCapBatchAuction.sol';
-import { DualCapBatchAuction } from './DualCapBatchAuction.sol';
+import { IUniformPriceDualCapBatchAuction } from './interfaces/IUniformPriceDualCapBatchAuction.sol';
+import { UniformPriceDualCapBatchAuction } from './UniformPriceDualCapBatchAuction.sol';
 import { ISecurityPool, ISecurityPoolFactory, SystemState } from './interfaces/ISecurityPool.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
 import { EscalationGame } from './EscalationGame.sol';
@@ -14,7 +14,7 @@ import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
 struct ForkData {
 	uint256 repAtFork;
-	DualCapBatchAuction truthAuction;
+	UniformPriceDualCapBatchAuction truthAuction;
 	uint256 truthAuctionStarted;
 	uint256 migratedRep;
 	uint256 auctionedSecurityBondAllowance;
@@ -51,7 +51,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 
 	function forkData(ISecurityPool securityPool) public view returns (
 		uint256 repAtFork,
-		DualCapBatchAuction truthAuction,
+		UniformPriceDualCapBatchAuction truthAuction,
 		uint256 truthAuctionStarted,
 		uint256 migratedRep,
 		uint256 auctionedSecurityBondAllowance,
@@ -105,7 +105,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		// first vault migrater creates new pool and transfers all REP to it
 		uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(parent.universeId(), outcomeIndex))));
 		uint256 retentionRate = SecurityPoolUtils.calculateRetentionRate(parent.completeSetCollateralAmount(), parent.totalSecurityBondAllowance());
-		(ISecurityPool child, DualCapBatchAuction truthAuction) = parent.securityPoolFactory().deployChildSecurityPool(parent, parent.shareToken(), childUniverseId, parent.questionId(), parent.securityMultiplier(), retentionRate, parent.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
+		(ISecurityPool child, UniformPriceDualCapBatchAuction truthAuction) = parent.securityPoolFactory().deployChildSecurityPool(parent, parent.shareToken(), childUniverseId, parent.questionId(), parent.securityMultiplier(), retentionRate, parent.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
 		forkDataByPool[child].outcomeIndex = outcomeIndex;
 		forkDataByPool[child].truthAuction = truthAuction;
 		trustedAuctionAddresses[address(truthAuction)] = true;
@@ -244,7 +244,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	// accounts the purchased REP from truthAuction to the vault
 	// we should also move a share of bad debt in the system to this vault
 	// anyone can call these so that we can liquidate them if needed
-	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IDualCapBatchAuction.TickIndex[] memory tickIndices) public {
+	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) public {
 		require(claimedAuctionProceedsByPoolAndVault[securityPool][vault] == false, 'Already Claimed');
 		require(forkDataByPool[securityPool].truthAuction.finalized(), 'Auction needs to be finalized');
 		claimedAuctionProceedsByPoolAndVault[securityPool][vault] = true;
