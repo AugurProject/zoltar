@@ -29,13 +29,13 @@ export const finalize = async (client: WriteClient, auctionAddress: `0x${ string
 	})
 
 export const computeClearing = async (client: ReadClient, auctionAddress: `0x${ string }`) => {
-	const [priceFound, foundTick, accumulatedEth] = await client.readContract({
+	const [hitCap, foundTick, accumulatedEth, ethAtClearingTick] = await client.readContract({
 		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'computeClearing',
 		address: auctionAddress,
 		args: [],
 	})
-	return { priceFound, foundTick, accumulatedEth }
+	return { hitCap, foundTick, accumulatedEth, ethAtClearingTick }
 }
 
 export const refundLosingBids = async (client: WriteClient, auctionAddress: `0x${ string }`, tickIndex: readonly { tick: bigint; bidIndex: bigint }[]) =>

@@ -48,9 +48,9 @@ describe('Auction', () => {
 		return before
 	}
 
-	function assertClearing(clearing: { priceFound: boolean; foundTick: bigint; accumulatedEth: bigint }, expectedPriceFound: boolean, expectedTick?: bigint, expectedAccumulatedEth?: bigint) {
-		strictEqualTypeSafe(clearing.priceFound, expectedPriceFound, 'clearing.priceFound mismatch')
-		if (expectedPriceFound && expectedTick !== undefined) {
+	function assertClearing(clearing: { hitCap: boolean; foundTick: bigint; accumulatedEth: bigint }, expectedHitCap: boolean, expectedTick?: bigint, expectedAccumulatedEth?: bigint) {
+		strictEqualTypeSafe(clearing.hitCap, expectedHitCap, 'clearing.hitCap mismatch')
+		if (expectedHitCap && expectedTick !== undefined) {
 			strictEqualTypeSafe(clearing.foundTick, expectedTick, 'clearing.foundTick mismatch')
 		}
 		if (expectedAccumulatedEth !== undefined) {
@@ -58,9 +58,9 @@ describe('Auction', () => {
 		}
 	}
 
-	function assertExpectedClearing(clearing: { priceFound: boolean; foundTick: bigint; accumulatedEth: bigint }, expectedTick: bigint, expectedAccumulatedEth?: bigint): void {
+	function assertExpectedClearing(clearing: { hitCap: boolean; foundTick: bigint; accumulatedEth: bigint }, expectedTick: bigint, expectedAccumulatedEth?: bigint): void {
 		assertClearing(clearing, true)
-		if (clearing.priceFound) strictEqualTypeSafe(clearing.foundTick, expectedTick, 'clearing tick mismatch')
+		if (clearing.hitCap) strictEqualTypeSafe(clearing.foundTick, expectedTick, 'clearing tick mismatch')
 		if (expectedAccumulatedEth !== undefined) {
 			strictEqualTypeSafe(clearing.accumulatedEth, expectedAccumulatedEth, 'accumulatedEth mismatch')
 		}
@@ -265,7 +265,7 @@ describe('Auction', () => {
 			await submitBidAndVerifyLock(bob, auctionAddress, bobTick, bobEth)
 
 			const clearingPre = await computeClearing(client, auctionAddress)
-			strictEqualTypeSafe(clearingPre.priceFound, true, 'auction should have price')
+			strictEqualTypeSafe(clearingPre.hitCap, true, 'auction should have price')
 
 			await finalizeAndVerify(client, auctionAddress)
 
@@ -328,7 +328,7 @@ describe('Auction', () => {
 			await submitBid(alice, auctionAddress, winningTick, highEth)
 
 			const clearingPre = await computeClearing(client, auctionAddress)
-			assert.ok(clearingPre.priceFound, 'price not found')
+			assert.ok(clearingPre.hitCap, 'price not found')
 
 			const clearingTick = clearingPre.foundTick
 			assert.strictEqual(clearingTick, winningTick, 'clearing tick expected to be winningTick')
@@ -347,7 +347,7 @@ describe('Auction', () => {
 
 			const clearingPost = await computeClearing(client, auctionAddress)
 			strictEqualTypeSafe(clearingPost.foundTick, clearingTick, 'clearing tick changed after refund')
-			strictEqualTypeSafe(clearingPost.priceFound, true, 'price found after refund')
+			strictEqualTypeSafe(clearingPost.hitCap, true, 'price found after refund')
 
 			const remainingBids = [
 				{ tick: clearingTickBid, bidSize: mediumEth, bidIndex: 0n },
@@ -377,7 +377,7 @@ describe('Auction', () => {
 			await submitBidAndVerifyLock(bob, auctionAddress, bobTick, bobEth)
 
 			const clearingPre = await computeClearing(client, auctionAddress)
-			assert.ok(clearingPre.priceFound, 'price found')
+			assert.ok(clearingPre.hitCap, 'price found')
 			strictEqualTypeSafe(clearingPre.foundTick, bobTick, 'clearing tick is bobTick')
 
 			const aliceBalanceBefore = await getETHBalance(client, alice.account.address)
@@ -407,7 +407,7 @@ describe('Auction', () => {
 			await finalize(client, auctionAddress)
 
 			const clearing = await computeClearing(client, auctionAddress)
-			strictEqualTypeSafe(clearing.priceFound, false, 'auction should not have price')
+			strictEqualTypeSafe(clearing.hitCap, false, 'auction should not have price')
 		})
 
 		test('underfunded auction distributes all REP proportionally', async () => {
@@ -421,7 +421,7 @@ describe('Auction', () => {
 			const aliceEth = 4n * 10n ** 18n
 			const bobEth = 6n * 10n ** 18n
 
-			// Use prices that make the auction underfunded (priceFound false)
+			// Use prices that make the auction underfunded (hitCap false)
 			const aliceTick = tickForPrice(2n * 10n ** 18n) // 2 ETH/REP
 			const bobTick = tickForPrice(4n * 10n ** 18n) // 4 ETH/REP
 
@@ -430,7 +430,7 @@ describe('Auction', () => {
 
 			// Check clearing result before finalize to verify underfunded condition
 			const clearingPre = await computeClearing(client, auctionAddress)
-			strictEqualTypeSafe(clearingPre.priceFound, false, 'priceFound should be false (underfunded)')
+			strictEqualTypeSafe(clearingPre.hitCap, false, 'hitCap should be false (underfunded)')
 
 			// Finalize the auction
 			await finalize(client, auctionAddress)
@@ -702,7 +702,7 @@ describe('Auction', () => {
 	})
 
 	describe('Edge Cases & Boundary Conditions', () => {
-		function computeExpectedClearing(bids: Array<{ tick: bigint; amount: bigint }>, maxRepBeingSold: bigint, ethRaiseCap: bigint): { priceFound: boolean; foundTick: bigint; accumulatedEth: bigint } {
+		function computeExpectedClearing(bids: Array<{ tick: bigint; amount: bigint }>, maxRepBeingSold: bigint, ethRaiseCap: bigint): { hitCap: boolean; foundTick: bigint; accumulatedEth: bigint } {
 			const sorted = [...bids].sort((a, b) => {
 				if (b.tick > a.tick) return 1
 				if (b.tick < a.tick) return -1
@@ -717,17 +717,17 @@ describe('Auction', () => {
 				if (newAccumulatedEth > maxEthAtThisTick) {
 					const ethFilledAtClearing = accumulatedEth >= maxEthAtThisTick ? 0n : maxEthAtThisTick - accumulatedEth
 					accumulatedEth += ethFilledAtClearing
-					return { priceFound: true, foundTick: bid.tick, accumulatedEth }
+					return { hitCap: true, foundTick: bid.tick, accumulatedEth }
 				}
 
 				if (newAccumulatedEth >= ethRaiseCap) {
 					accumulatedEth = ethRaiseCap
-					return { priceFound: true, foundTick: bid.tick, accumulatedEth }
+					return { hitCap: true, foundTick: bid.tick, accumulatedEth }
 				}
 
 				accumulatedEth = newAccumulatedEth
 			}
-			return { priceFound: false, foundTick: 0n, accumulatedEth: 0n }
+			return { hitCap: false, foundTick: 0n, accumulatedEth: 0n }
 		}
 
 		type EdgeCaseTest = {
@@ -821,14 +821,14 @@ describe('Auction', () => {
 			const expected = computeExpectedClearing(c.bids, c.maxRepBeingSold, c.ethRaiseCap)
 			const clearing = await computeClearing(client, auctionAddress)
 
-			assert.strictEqual(clearing.priceFound, expected.priceFound, `${ c.name }: priceFound mismatch`)
-			if (expected.priceFound) {
+			assert.strictEqual(clearing.hitCap, expected.hitCap, `${ c.name }: hitCap mismatch`)
+			if (expected.hitCap) {
 				strictEqualTypeSafe(clearing.foundTick, expected.foundTick, `${ c.name }: foundTick mismatch`)
 				strictEqualTypeSafe(clearing.accumulatedEth, expected.accumulatedEth, `${ c.name }: accumulatedEth mismatch`)
 				await finalize(client, auctionAddress)
 				await assertFairPayoutForUser(client, auctionAddress, client.account.address, fairPayoutBids, clearing.foundTick)
 			} else {
-				assert.strictEqual(clearing.priceFound, false, `${ c.name }: expected no clearing price`)
+				assert.strictEqual(clearing.hitCap, false, `${ c.name }: expected no clearing price`)
 				// Finalize anyway to clear the contract balance
 				await finalize(client, auctionAddress)
 			}
@@ -863,7 +863,7 @@ describe('Auction', () => {
 
 			// Verify clearing tick is above losing tick
 			const clearingPre = await computeClearing(client, auctionAddress)
-			assert.ok(clearingPre.priceFound)
+			assert.ok(clearingPre.hitCap)
 			strictEqualTypeSafe(clearingPre.foundTick, clearingTick, 'clearing tick should be 0')
 			strictEqualTypeSafe(clearingPre.foundTick > losingTick, true)
 
@@ -928,8 +928,8 @@ describe('Auction', () => {
 			await submitBid(client, auctionAddress, zeroPriceTick, 1n * ATTOETH_PER_ETH)
 			// Should not revert due to division by zero
 			const result = await computeClearing(client, auctionAddress)
-			// With zero price, no rep can be sold, so priceFound should be false
-			assert.strictEqual(result.priceFound, false, 'no clearing price when all bids have zero price')
+			// With zero price, no rep can be sold, so hitCap should be false
+			assert.strictEqual(result.hitCap, false, 'no clearing price when all bids have zero price')
 		})
 
 		test('zero-price bids (non-clearing) should get full refund', async () => {

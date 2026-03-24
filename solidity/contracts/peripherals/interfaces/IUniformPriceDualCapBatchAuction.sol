@@ -15,7 +15,7 @@ interface IUniformPriceDualCapBatchAuction {
 
 	event AuctionStarted(uint256 ethRaiseCap, uint256 maxRepBeingSold, uint256 minBidSize);
 	event SubmitBid(address bidder, int256 tick, uint256 amount);
-	event Finalized(uint256 ethToSend, bool priceFound, int256 foundTick, uint256 repFilled, uint256 ethFilled);
+	event Finalized(uint256 ethToSend, bool hitCap, int256 foundTick, uint256 repFilled, uint256 ethFilled);
 	event WithdrawBids(address withdrawFor, TickIndex[] tickIndices, uint256 totalFilledRep, uint256 totalEthRefund);
 	event RefundLosingBids(address bidder, TickIndex[] tickIndices, uint256 ethAmount);
 
@@ -43,7 +43,7 @@ interface IUniformPriceDualCapBatchAuction {
 		external
 		view
 		returns (
-			bool priceFound,
+			bool hitCap,
 			int256 clearingTickOut,
 			uint256 accumulatedEth,
 			uint256 ethAtClearingTick

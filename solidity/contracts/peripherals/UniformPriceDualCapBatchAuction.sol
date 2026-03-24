@@ -52,7 +52,7 @@ contract UniformPriceDualCapBatchAuction {
 
 	event AuctionStarted(uint256 ethRaiseCap, uint256 maxRepBeingSold, uint256 minBidSize);
 	event SubmitBid(address bidder, int256 tick, uint256 amount);
-	event Finalized(uint256 ethToSend, bool priceFound, int256 foundTick, uint256 repFilled, uint256 ethFilled);
+	event Finalized(uint256 ethToSend, bool hitCap, int256 foundTick, uint256 repFilled, uint256 ethFilled);
 	event WithdrawBids(address withdrawFor, IUniformPriceDualCapBatchAuction.TickIndex[] tickIndices, uint256 totalFilledRep, uint256 totalEthRefund);
 	event RefundLosingBids(address bidder, IUniformPriceDualCapBatchAuction.TickIndex[] tickIndices, uint256 ethAmount);
 
@@ -91,14 +91,14 @@ contract UniformPriceDualCapBatchAuction {
 		require(!finalized, 'already finalized');
 		require(msg.sender == owner, 'Only owner can finalize');
 
-		(bool priceFound, int256 foundTick, uint256 accumulatedEth, uint256 ethAtClearingTick) = computeClearing();
+		(bool hitCap, int256 foundTick, uint256 accumulatedEth, uint256 ethAtClearingTick) = computeClearing();
 		finalized = true;
 		clearingTick = foundTick;
 		ethFilledAtClearing = ethAtClearingTick;
 		ethRaised = accumulatedEth;
 
 		uint256 ethToSend;
-		if (priceFound) {
+		if (hitCap) {
 			uint256 clearingPrice = tickToPrice(clearingTick);
 			totalRepPurchased = accumulatedEth * clearingPrice / PRICE_PRECISION;
 			ethToSend = accumulatedEth;
@@ -122,10 +122,10 @@ contract UniformPriceDualCapBatchAuction {
 
 		(bool sent,) = payable(owner).call{ value: ethToSend }('');
 		require(sent, 'Failed to send Ether');
-		emit Finalized(ethToSend, priceFound, clearingTick, totalRepPurchased, accumulatedEth);
+		emit Finalized(ethToSend, hitCap, clearingTick, totalRepPurchased, accumulatedEth);
 	}
 
-	function computeClearing() public view returns (bool priceFound, int256 clearingTickOut, uint256 accumulatedEth, uint256 ethAtClearingTick) {
+	function computeClearing() public view returns (bool hitCap, int256 clearingTickOut, uint256 accumulatedEth, uint256 ethAtClearingTick) {
 		return _compute(root, 0, 0, 0, 0);
 	}
 
@@ -196,8 +196,8 @@ contract UniformPriceDualCapBatchAuction {
 	function refundLosingBids(IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) external {
 		require(!finalized, 'already finalized');
 
-		(bool priceFound, int256 foundTick,, ) = computeClearing();
-		require(priceFound, 'no clearing yet');
+		(bool hitCap, int256 foundTick,, ) = computeClearing();
+		require(hitCap, 'no clearing yet');
 
 		uint256 totalEthToRefund = 0;
 
