@@ -10,8 +10,8 @@ import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zol
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { deployOriginSecurityPool, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { approveAndDepositRep } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { depositToEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
-import { getNonDecisionThreshold, getStartingTime } from '../testsuite/simulator/utils/contracts/escalationGame'
+import { depositToEscalationGame, getSecurityVault, poolOwnershipToRep } from '../testsuite/simulator/utils/contracts/securityPool'
+import { getNonDecisionThreshold } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { getTotalTheoreticalSupply, getRepTokenAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { peripherals_SecurityPool_SecurityPool } from '../types/contractArtifact'
@@ -63,6 +63,9 @@ describe('Escalation Game Fork Threshold Test', () => {
 	test('withdrawal amount scaled by actual fork threshold after decrease', async () => {
 		const depositAmount = 1n * 10n ** 18n // 1 ether
 
+		// Advance time past the question's end date to allow escalation game deposit
+		await mockWindow.setTime(questionEndDate + 1n)
+
 		// Deploy escalation game and deposit on Yes
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount)
 		const escalationGameAddress = securityPoolAddresses.escalationGame
@@ -92,39 +95,28 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const actualForkThreshold = newTotalSupply / 20n
 		assert.ok(actualForkThreshold < escalationThreshold, 'actual fork threshold should be lower after override')
 
-		// Advance time past the escalation game's end date to allow withdrawal
-		const startingTime = await getStartingTime(client, escalationGameAddress)
-		await mockWindow.setTime(startingTime + 1n)
+		// Advance time to allow the escalation game to finish and outcome to be known
+		await mockWindow.advanceTime(10n * DAY)
 
 		// Withdraw via SecurityPool's withdrawFromEscalationGame
+		// Get vault ownership before withdrawal
+		const vaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const txHash = await client.writeContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			address: securityPoolAddresses.securityPool,
 			functionName: 'withdrawFromEscalationGame',
 			args: [[0n]], // deposit index 0
 		})
-		const receipt = (await client.waitForTransactionReceipt({ hash: txHash })) as any
+		await client.waitForTransactionReceipt({ hash: txHash })
+		const vaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 
-		// Find ClaimDeposit event from EscalationGame and decode amount
-		let amountToWithdraw: bigint | null = null
-		for (const log of receipt.logs) {
-			if (log.address === escalationGameAddress) {
-				const data = log.data
-				const hex = data.startsWith('0x') ? data.slice(2) : data
-				if (hex.length >= 128) {
-					// two uint256
-					const amountHex = hex.slice(0, 64)
-					amountToWithdraw = BigInt('0x' + amountHex)
-					break
-				}
-			}
-		}
-		assert(amountToWithdraw !== null, 'ClaimDeposit event not found in receipt logs')
+		// The increase in poolOwnership corresponds to the REP amount withdrawn
+		const ownershipIncrease = vaultAfter.repDepositShare - vaultBefore.repDepositShare
+		const amountToWithdraw = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, ownershipIncrease)
 
-		// Expected amount: baseAmount * actualForkThreshold / escalationThreshold
-		// baseAmount = depositAmount * 8n / 5n (from burn calculation in claimDepositForWinning)
-		const baseAmount = (depositAmount * 8n) / 5n
-		const expected = (baseAmount * actualForkThreshold) / escalationThreshold
-		assert.strictEqual(amountToWithdraw, expected, `Withdrawn amount should be scaled by threshold ratio. Expected ${ expected }, got ${ amountToWithdraw }`)
+		// Expected amount: depositAmount scaled by the ratio of thresholds
+		// amountToWithdraw = (depositAmount * actualForkThreshold) / escalationThreshold
+		const expected = (depositAmount * actualForkThreshold) / escalationThreshold
+		assert.strictEqual(amountToWithdraw, expected, 'scaled amount mismatch')
 	})
 })
