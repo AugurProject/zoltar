@@ -105,7 +105,6 @@ contract EscalationGame {
 		return cost > nonDecisionThreshold ? nonDecisionThreshold : cost;
 	}
 
-	// TODO investigate this function more for errors. This can result in weird errors where you fork just before/after escalation game end
 	function computeTimeSinceStartFromAttritionCost(uint256 attritionCost) public view returns (uint256) {
 		uint256 low = 0;
 		uint256 high = escalationTimeLength;
@@ -147,8 +146,7 @@ contract EscalationGame {
 		uint8 yesOver = balances[1] >= currentTotalCost ? 1 : 0;
 		uint8 noOver = balances[2] >= currentTotalCost ? 1 : 0;
 		if (invalidOver + yesOver + noOver >= 2) return BinaryOutcomes.BinaryOutcome.None; // if two or more outcomes are over the total cost, the game is still going
-		// the game has ended due to timeout
-		// TODO, doesn't handle ties well logically. We could avoid it by checking if tie is happening before deposit and break it there
+ 		// the game has ended due to timeout
 		if (balances[0] > balances[1] && balances[0] > balances[2]) return BinaryOutcomes.BinaryOutcome.Invalid;
 		if (balances[1] > balances[0] && balances[1] > balances[2]) return BinaryOutcomes.BinaryOutcome.Yes;
 		return BinaryOutcomes.BinaryOutcome.No;
@@ -174,22 +172,42 @@ contract EscalationGame {
 	// deposits on question outcome, returns how much user actually ended depositing
 	function depositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount) public returns (uint256 depositAmount) {
 		require(nonDecisionTimestamp == 0, 'System has already reached a non-decision');
-		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
-		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'System has already timed out');
-		require(balances[uint256(outcome)] < nonDecisionThreshold, 'Already full');
-		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit'); // checks that we get start bond and spam protection
+ 		require(msg.sender == address(securityPool), 'Only Security Pool can deposit');
+ 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
+ 		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'System has already timed out');
+ 		require(balances[uint256(outcome)] < nonDecisionThreshold, 'Already full');
+ 		require(amount >= startBond, 'all amounts need to be bigger or equal to start deposit'); // checks that we get start bond and spam protection
+  		uint256 outcomeIdx = uint256(outcome);
+   		uint256 currentBalance = balances[outcomeIdx];
+  		uint256 room = nonDecisionThreshold - currentBalance;
+  		uint256 effectiveDeposit = amount > room ? room : amount;
+  		uint256 newBalance = currentBalance + effectiveDeposit;
+
+  		// Snapshot all balances for tie detection
+  		uint256 b0 = balances[0];
+  		uint256 b1 = balances[1];
+  		uint256 b2 = balances[2];
+  		uint256 maxBal = b0 > b1 ? (b0 > b2 ? b0 : b2) : (b1 > b2 ? b1 : b2);
+
+  		// Check if new balance ties with existing maximum and another outcome has that maximum, and max is below threshold.
+  		// Ties at/above threshold are allowed (to trigger nonDecision/fork).
+  		bool otherHasMax = (outcomeIdx == 0) ? (b1 == maxBal || b2 == maxBal) :
+  		                    (outcomeIdx == 1) ? (b0 == maxBal || b2 == maxBal) :
+  		                    (b0 == maxBal || b1 == maxBal);
+  		if (newBalance == maxBal && otherHasMax && maxBal < nonDecisionThreshold) {
+  			effectiveDeposit -= 1;
+  			newBalance = currentBalance + effectiveDeposit;
+  		}
+
+ 		// Update the balance
+ 		balances[outcomeIdx] = newBalance;
+		depositAmount = effectiveDeposit;
+
+		// Record deposit
 		Deposit memory deposit;
 		deposit.depositor = depositor;
-		balances[uint256(outcome)] += amount;
-		if (balances[uint256(outcome)] > nonDecisionThreshold) {
-			depositAmount = amount - (balances[uint256(outcome)] - nonDecisionThreshold);
-			balances[uint256(outcome)] = nonDecisionThreshold;
-		} else {
-			depositAmount = amount;
-		}
 		deposit.amount = depositAmount;
-		deposit.cumulativeAmount = balances[uint256(outcome)];
+		deposit.cumulativeAmount = balances[outcomeIdx];
 		deposits[uint8(outcome)].push(deposit);
 		emit DepositOnOutcome(depositor, outcome, deposit.amount, deposits[uint8(outcome)].length - 1, deposit.cumulativeAmount);
 		if (hasReachedNonDecision()) {

@@ -5,7 +5,7 @@ import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import assert from 'node:assert'
-import { deployEscalationGame, depositOnOutcome, getBalances, getStartingTime } from '../testsuite/simulator/utils/contracts/escalationGame'
+import { deployEscalationGame, depositOnOutcome, getBalances, getStartingTime, getQuestionResolution } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { peripherals_EscalationGame_EscalationGame } from '../types/contractArtifact'
@@ -484,5 +484,42 @@ describe('Escalation Game Test Suite', () => {
 			args: [],
 		})) as bigint
 		assert.strictEqual(bindingCapital, reportBond, 'getBindingCapital returns median')
+	})
+
+	test('depositOnOutcome prevents tie by refunding 1 wei', async () => {
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
+		const depositAmount = 100n * reportBond
+		// Deposit on Yes to establish a leader
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, depositAmount)
+		// Deposit same amount on Invalid; would tie, but fix reduces by 1 wei
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Invalid, depositAmount)
+		const balances = await getBalances(client, escalationGame)
+		assert.strictEqual(balances.yes, depositAmount, 'Yes balance as leader')
+		assert.strictEqual(balances.invalid, depositAmount - 1n, 'Invalid balance reduced by 1 wei')
+		assert.strictEqual(balances.no, 0n, 'No balance remains zero')
+		// Advance time past game end
+		const ESCALATION_TIME_LENGTH = 4233600n
+		const startTime = await getStartingTime(client, escalationGame)
+		await mockWindow.setTime(startTime + ESCALATION_TIME_LENGTH + 1n)
+		const resolution = await getQuestionResolution(client, escalationGame)
+		assert.strictEqual(resolution, QuestionOutcome.Yes, 'Winner should be Yes')
+	})
+
+	test('deposit on leading outcome does not trigger tie-breaking adjustment', async () => {
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
+		const amount1 = 100n * reportBond
+		const amount2 = 50n * reportBond
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, amount1)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, amount2)
+		const balances = await getBalances(client, escalationGame)
+		assert.strictEqual(balances.yes, amount1 + amount2, 'Yes balance increased without adjustment')
+		assert.strictEqual(balances.invalid, 0n, 'Invalid balance zero')
+		assert.strictEqual(balances.no, 0n, 'No balance zero')
+		// Advance time past game end
+		const ESCALATION_TIME_LENGTH = 4233600n
+		const startTime = await getStartingTime(client, escalationGame)
+		await mockWindow.setTime(startTime + ESCALATION_TIME_LENGTH + 1n)
+		const resolution = await getQuestionResolution(client, escalationGame)
+		assert.strictEqual(resolution, QuestionOutcome.Yes, 'Resolution should be Yes')
 	})
 })
