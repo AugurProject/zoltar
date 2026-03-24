@@ -290,15 +290,21 @@ describe('Escalation Game Test Suite', () => {
 
 		// Ensure costs are non-decreasing
 		for (let i = 1; i < costs.length; i++) {
-			const prev = costs[i - 1]!
-			const curr = costs[i]!
+			const prev = costs[i - 1]
+			const curr = costs[i]
+			if (prev === undefined || curr === undefined) {
+				throw new Error(`costs array element is undefined at index ${ i }`)
+			}
 			assert.ok(curr >= prev, `Costs should be non-decreasing: ${ prev } vs ${ curr }`)
 		}
 
 		// Verify recovered times also non-decreasing
 		let prevRecoveredT = 0n
 		for (let i = 0; i < costs.length; i++) {
-			const cost = costs[i]!
+			const cost = costs[i]
+			if (cost === undefined) {
+				throw new Error(`costs array element is undefined at index ${ i }`)
+			}
 			const recoveredT = await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
 				functionName: 'computeTimeSinceStartFromAttritionCost',

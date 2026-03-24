@@ -14,6 +14,9 @@ struct Deposit {
 
 uint256 constant escalationTimeLength = 4233600; // 7 weeks
 uint256 constant SCALE = 1e6;
+uint256 constant MAX_ATANH_ITERATIONS = 5000;
+uint256 constant MAX_EXP_ITERATIONS = 1000;
+
 contract EscalationGame {
 	uint256 public startingTime;
 	uint256[3] public balances; // outcome -> amount
