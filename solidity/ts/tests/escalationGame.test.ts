@@ -238,6 +238,17 @@ describe('Escalation Game Test Suite', () => {
 			args: [],
 		})
 		assert.strictEqual(costBeforeStart, 0n, 'totalCost returns 0 before game starts')
+
+		// Advance time past the escalation period to test after-timeout behavior
+		const startTime = await getStartingTime(client, escalationGame)
+		await mockWindow.setTime(startTime + ESCALATION_TIME_LENGTH + 1n)
+		const costAfterTimeout = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'totalCost',
+			address: escalationGame,
+			args: [],
+		})
+		assert.strictEqual(costAfterTimeout, nonDecisionThreshold, 'totalCost returns nonDecisionThreshold after timeout')
 	})
 
 	// =================== Inverse Relationship Tests ===================

@@ -28,8 +28,8 @@ describe('Escalation Game Fork Threshold Test', () => {
 	const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
 	const questionEndDate = currentTimestamp + 365n * DAY
 	let securityPoolAddresses: {
-		securityPool: `0x${string}`
-		escalationGame: `0x${string}`
+		securityPool: `0x${ string }`
+		escalationGame: `0x${ string }`
 	}
 	let questionId: bigint
 
@@ -125,6 +125,6 @@ describe('Escalation Game Fork Threshold Test', () => {
 		// baseAmount = depositAmount * 8n / 5n (from burn calculation in claimDepositForWinning)
 		const baseAmount = (depositAmount * 8n) / 5n
 		const expected = (baseAmount * actualForkThreshold) / escalationThreshold
-		assert.strictEqual(amountToWithdraw, expected, `Withdrawn amount should be scaled by threshold ratio. Expected ${expected}, got ${amountToWithdraw}`)
+		assert.strictEqual(amountToWithdraw, expected, `Withdrawn amount should be scaled by threshold ratio. Expected ${ expected }, got ${ amountToWithdraw }`)
 	})
 })
