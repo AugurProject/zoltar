@@ -4,7 +4,7 @@ import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../../t
 import { TEST_ADDRESSES } from '../../testsuite/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../../testsuite/simulator/utils/utilities'
 import { Address } from 'viem'
-import { computeClearing, deployUniformPriceDualCapBatchAuction, finalize, getClearingTick, getMinBidSize, simulateWithdrawBids, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids, getEthRaiseCap, getEthRaised } from '../../testsuite/simulator/utils/contracts/auction'
+import { computeClearing, deployUniformPriceDualCapBatchAuction, finalize, getClearingTick, getMinBidSize, getTotalRepPurchased, simulateWithdrawBids, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids, getEthRaiseCap, getEthRaised } from '../../testsuite/simulator/utils/contracts/auction'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../../testsuite/simulator/utils/testUtils'
 import { priceToClosestTick, tickToPrice } from '../../testsuite/simulator/utils/tickMath'
 import assert from 'assert'
@@ -408,6 +408,53 @@ describe('Auction', () => {
 
 			const clearing = await computeClearing(client, auctionAddress)
 			strictEqualTypeSafe(clearing.priceFound, false, 'auction should not have price')
+		})
+
+		test('underfunded auction distributes all REP proportionally', async () => {
+			const ethRaiseCap = 1000n * 10n ** 18n // large enough to not bind
+			const maxRepBeingSold = 100n * 10n ** 18n // 100 REP
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+			const alice = createTestClient(0)
+			const bob = createTestClient(1)
+
+			const aliceEth = 4n * 10n ** 18n
+			const bobEth = 6n * 10n ** 18n
+
+			// Use prices that make the auction underfunded (priceFound false)
+			const aliceTick = tickForPrice(2n * 10n ** 18n) // 2 ETH/REP
+			const bobTick = tickForPrice(4n * 10n ** 18n) // 4 ETH/REP
+
+			await submitBid(alice, auctionAddress, aliceTick, aliceEth)
+			await submitBid(bob, auctionAddress, bobTick, bobEth)
+
+			// Check clearing result before finalize to verify underfunded condition
+			const clearingPre = await computeClearing(client, auctionAddress)
+			strictEqualTypeSafe(clearingPre.priceFound, false, 'priceFound should be false (underfunded)')
+
+			// Finalize the auction
+			await finalize(client, auctionAddress)
+
+			// Verify total REP purchased equals maxRepBeingSold (all rep sold)
+			const totalRep = await getTotalRepPurchased(client, auctionAddress)
+			strictEqualTypeSafe(totalRep, maxRepBeingSold, 'totalRepPurchased should equal maxRep')
+
+			// Alice withdraws her proportional share
+			const aliceBids = [{ tick: aliceTick, bidIndex: 0n }]
+			const aliceResult = await simulateWithdrawBids(client, auctionAddress, alice.account.address, aliceBids)
+			const expectedAliceRep = (aliceEth * maxRepBeingSold) / (aliceEth + bobEth) // 4/10 * 100 = 40
+			strictEqualTypeSafe(aliceResult.totalFilledRep, expectedAliceRep, 'alice proportional REP')
+			strictEqualTypeSafe(aliceResult.totalEthRefund, 0n, 'alice no ETH refund')
+
+			// Bob withdraws his proportional share
+			const bobBids = [{ tick: bobTick, bidIndex: 0n }]
+			const bobResult = await simulateWithdrawBids(client, auctionAddress, bob.account.address, bobBids)
+			const expectedBobRep = (bobEth * maxRepBeingSold) / (aliceEth + bobEth) // 6/10 * 100 = 60
+			strictEqualTypeSafe(bobResult.totalFilledRep, expectedBobRep, 'bob proportional REP')
+			strictEqualTypeSafe(bobResult.totalEthRefund, 0n, 'bob no ETH refund')
+
+			// Contract should have no ETH balance after finalization
+			await assertContractEmpty(client, auctionAddress)
 		})
 
 		test('auction time limit prevents bids after expiration', async () => {

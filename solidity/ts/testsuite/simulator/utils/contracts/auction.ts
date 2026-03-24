@@ -113,3 +113,11 @@ export const getEthRaised = async (client: ReadClient, auctionAddress: `0x${ str
 		address: auctionAddress,
 		args: [],
 	})
+
+export const getTotalRepPurchased = async (client: ReadClient, auctionAddress: `0x${ string }`) =>
+	await client.readContract({
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'totalRepPurchased',
+		address: auctionAddress,
+		args: [],
+	})
