@@ -218,7 +218,6 @@ contract EscalationGame {
 		}
 	}
 
-	// TODO, this should be calculated against to actual nonDecisionThreshold, not the one set at the start. The actual can be lower than the games treshold but never above
 	function claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
 		require(msg.sender == address(securityPool) || msg.sender == address(securityPool.securityPoolForker()), 'Only Security Pool can withdraw');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
@@ -226,19 +225,26 @@ contract EscalationGame {
 		deposits[uint8(outcome)][depositIndex].amount = 0;
 		depositor = deposit.depositor;
 		uint256 maxWithdrawableBalance = getBindingCapital();
+		uint256 burnAmount;
 		if (deposit.cumulativeAmount > maxWithdrawableBalance) {
 			amountToWithdraw = deposit.amount;
-			emit ClaimDeposit(amountToWithdraw, 0);
+			burnAmount = 0;
 		} else if (deposit.cumulativeAmount + deposit.amount > maxWithdrawableBalance) {
 			uint256 excess = (deposit.cumulativeAmount + deposit.amount - maxWithdrawableBalance);
-			uint256 burnAmount = excess * 2 / 5;
+			burnAmount = excess * 2 / 5;
 			amountToWithdraw = (deposit.amount - excess) + excess * 2 - burnAmount;
-			emit ClaimDeposit(amountToWithdraw, burnAmount);
 		} else {
-			uint256 burnAmount = (deposit.amount * 2) / 5;
+			burnAmount = (deposit.amount * 2) / 5;
 			amountToWithdraw = deposit.amount * 2 - burnAmount;
-			emit ClaimDeposit(amountToWithdraw, burnAmount);
 		}
+
+		// Adjust based on actual fork threshold
+		uint256 actualForkThreshold = securityPool.zoltar().getForkThreshold(securityPool.universeId());
+		if (actualForkThreshold < nonDecisionThreshold) {
+			amountToWithdraw = (amountToWithdraw * actualForkThreshold) / nonDecisionThreshold;
+		}
+
+		emit ClaimDeposit(amountToWithdraw, burnAmount);
 	}
 
 	// TODO, allow withdrawing after someones elses fork as well (game is canceled)
