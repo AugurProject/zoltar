@@ -150,9 +150,6 @@ describe('Peripherals Contract Test Suite', () => {
 		const forcedPrice = PRICE_PRECISION * 10n
 		await requestPriceIfNeededAndQueueOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
 
-		// TODO: this should reject as we should not allow user to block liquidation like this
-		//assert.rejects(depositRep(client, securityPoolAddresses.securityPool, repDeposit * 10n), 'operation pending')
-
 		await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
 
 		const currentPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -167,6 +164,83 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(originalVault.repDepositShare, 0n, 'original vault should not have any rep')
 		strictEqualTypeSafe(liquidatorVault.securityBondAllowance, securityPoolAllowance, "liquidator doesn't have all the security pool allowances")
 		strictEqualTypeSafe(liquidatorVault.repDepositShare / PRICE_PRECISION, repDeposit + repDeposit * 10n, 'liquidator should have all the rep in the pool')
+	})
+
+	test('liquidation should use snapshot to prevent blocking via additional rep deposit', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const securityPoolAllowance = repDeposit / 4n
+		// Set price to 1
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
+		// Set the target's security bond allowance
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool), securityPoolAllowance, 'Security pool allowance was not set correctly')
+
+		// Create liquidator and deposit rep
+		const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+		await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 10n)
+
+		// Create open interest
+		const openInterestAmount = 100n * 10n ** 18n
+		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+		await mockWindow.advanceTime(100000n)
+
+		// Snapshot state before attack (just before queuing liquidation)
+		const vaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const snapshotTargetOwnership = vaultBefore.repDepositShare
+		const snapshotTargetAllowance = vaultBefore.securityBondAllowance
+		const snapshotTotalRep = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+		const snapshotDenominator = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
+
+		const snapshotExpectedRepDeposit = (snapshotTargetOwnership * snapshotTotalRep) / snapshotDenominator
+
+		// Queue liquidation (liquidator requests price to trigger liquidation)
+		const forcedPrice = PRICE_PRECISION * 10n
+		await requestPriceIfNeededAndQueueOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
+
+		// Record liquidator's ownership before attack
+		const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+		const liquidatorBeforeOwnership = liquidatorVaultBefore.repDepositShare
+
+		// Attacker (the target vault owner) deposits additional REP while liquidation is pending
+		const extraRepAmount = repDeposit * 5n
+		await depositRep(client, securityPoolAddresses.securityPool, extraRepAmount)
+
+		// Capture state after deposit but before liquidation
+		const vaultAfterDeposit = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const afterDepositOwnership = vaultAfterDeposit.repDepositShare
+		const denominatorAfter = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
+		const totalRepAfter = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+
+		// Trigger the queued liquidation by reporting the forced price
+		await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
+
+		// After liquidation, read final states
+		const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+		const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+
+		// Target's allowance should be zero after liquidation (since we moved the full allowance)
+		strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, 0n, 'target security bond allowance should be zero after liquidation')
+
+		// Compute expected changes based on snapshot
+		const debtToMove = securityPoolAllowance
+		const effectiveDebtToMove = debtToMove < snapshotTargetAllowance ? debtToMove : snapshotTargetAllowance
+		const repToMove = (effectiveDebtToMove * snapshotExpectedRepDeposit) / snapshotTargetAllowance
+		const ownershipToMove = (repToMove * denominatorAfter) / totalRepAfter
+
+		// The target's ownership should decrease by approximately ownershipToMove
+		const targetOwnershipChange = afterDepositOwnership - targetVaultAfter.repDepositShare
+		approximatelyEqual(targetOwnershipChange, ownershipToMove, 1n, 'Target ownership decrease should match ownershipToMove')
+
+		// The liquidator's ownership should increase by the same amount
+		const liquidatorOwnershipChange = liquidatorVaultAfter.repDepositShare - liquidatorBeforeOwnership
+		approximatelyEqual(liquidatorOwnershipChange, ownershipToMove, 1n, 'Liquidator ownership increase should match ownershipToMove')
+
+		// Verify that the REP amount taken (repToMove) matches the reduction in target's claim
+		const claimReduction = (targetOwnershipChange * totalRepAfter) / denominatorAfter
+		approximatelyEqual(claimReduction, repToMove, 1n, 'Claim reduction should equal repToMove')
 	})
 
 	test('Open Interest Fees (non forking)', async () => {
