@@ -270,7 +270,6 @@ contract EscalationGame {
 		emit WithdrawDeposit(depositor, outcome, amountToWithdraw, depositIndex);
 	}
 
-	// TODO, allow withdrawing after someones elses fork as well (game is canceled)
 	function withdrawDeposit(uint256 depositIndex, address expectedDepositor) public returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
