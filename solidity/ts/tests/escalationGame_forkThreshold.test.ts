@@ -101,6 +101,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		// Withdraw via SecurityPool's withdrawFromEscalationGame
 		// Get vault ownership before withdrawal
 		const vaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const repBefore = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultBefore.repDepositShare)
 		const txHash = await client.writeContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			address: securityPoolAddresses.securityPool,
@@ -109,14 +110,12 @@ describe('Escalation Game Fork Threshold Test', () => {
 		})
 		await client.waitForTransactionReceipt({ hash: txHash })
 		const vaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-
-		// The increase in poolOwnership corresponds to the REP amount withdrawn
-		const ownershipIncrease = vaultAfter.repDepositShare - vaultBefore.repDepositShare
-		const amountToWithdraw = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, ownershipIncrease)
+		const repAfter = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultAfter.repDepositShare)
 
 		// Expected amount: depositAmount scaled by the ratio of thresholds
-		// amountToWithdraw = (depositAmount * actualForkThreshold) / escalationThreshold
+		// Net REP claim should change by `expected - depositAmount`, because the original deposit
+		// was already part of the vault's ownership and only locked while the game was active.
 		const expected = (depositAmount * actualForkThreshold) / escalationThreshold
-		assert.strictEqual(amountToWithdraw, expected, 'scaled amount mismatch')
+		assert.strictEqual(repAfter - repBefore, expected - depositAmount, 'scaled amount mismatch')
 	})
 })

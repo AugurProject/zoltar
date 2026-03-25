@@ -358,16 +358,20 @@ contract SecurityPool is ISecurityPool {
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
 			address depositor;
 			uint256 amountToWithdraw;
-			uint256 unlockedDepositAmount;
+			uint256 originalDepositAmount;
 			if (gameCanceledByExternalFork) {
 				(depositor, amountToWithdraw) = escalationGame.refundCanceledDeposit(depositIndexes[index], outcome);
-				unlockedDepositAmount = amountToWithdraw;
+				originalDepositAmount = amountToWithdraw;
 			} else {
 				require(outcome == questionOutcome, 'Wrong outcome');
-				(depositor, amountToWithdraw, unlockedDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index]);
+				(depositor, amountToWithdraw, originalDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index]);
 			}
-			securityVaults[depositor].lockedRepInEscalationGame -= unlockedDepositAmount;
-			securityVaults[depositor].poolOwnership += repToPoolOwnership(amountToWithdraw);
+			securityVaults[depositor].lockedRepInEscalationGame -= originalDepositAmount;
+			if (amountToWithdraw > originalDepositAmount) {
+				securityVaults[depositor].poolOwnership += repToPoolOwnership(amountToWithdraw - originalDepositAmount);
+			} else if (amountToWithdraw < originalDepositAmount) {
+				securityVaults[depositor].poolOwnership -= repToPoolOwnership(originalDepositAmount - amountToWithdraw);
+			}
 		}
 	}
 
