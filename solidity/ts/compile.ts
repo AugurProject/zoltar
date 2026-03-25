@@ -7,6 +7,7 @@ import { createHash } from 'crypto'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const CONTRACT_PATH_APP = path.join(directoryOfThisFile, '..', 'ts', 'types', 'contractArtifact.ts')
+const CONTRACT_PATH_RUNTIME = path.join(directoryOfThisFile, '..', 'types', 'contractArtifact.ts')
 const HASH_CACHE_PATH = path.join(process.cwd(), '.contract-hash.json')
 const ARTIFACTS_DIR = path.join(process.cwd(), 'artifacts')
 const ARTIFACTS_JSON = path.join(ARTIFACTS_DIR, 'Contracts.json')
@@ -209,7 +210,9 @@ const copySolidityContractArtifact = async (contractLocation: string) => {
 	})
 	if (new Set(contracts.map(x => x.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
 	const typescriptString = contracts.map(contract => `export const ${ contract.contractName } = ${ JSON.stringify(contract.contractData, null, 4) } as const`).join('\r\n\r\n')
+	await fs.mkdir(path.dirname(CONTRACT_PATH_RUNTIME), { recursive: true })
 	await fs.writeFile(CONTRACT_PATH_APP, typescriptString)
+	await fs.writeFile(CONTRACT_PATH_RUNTIME, `${ typescriptString }\n`)
 }
 
 const compileContracts = async () => {

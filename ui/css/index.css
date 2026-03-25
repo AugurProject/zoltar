@@ -148,6 +148,37 @@ button.secondary {
 	margin-top: 1rem;
 }
 
+.tab-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin-top: 1rem;
+}
+
+.tab-link {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 999px;
+	padding: 0.85rem 1.25rem;
+	background: rgba(36, 25, 15, 0.08);
+	color: rgba(36, 25, 15, 0.75);
+	text-decoration: none;
+	transition:
+		transform 120ms ease,
+		background 120ms ease,
+		color 120ms ease;
+}
+
+.tab-link:hover {
+	transform: translateY(-1px);
+}
+
+.tab-link.active {
+	background: #24190f;
+	color: #fffaf0;
+}
+
 .contract-panel-header {
 	display: flex;
 	justify-content: space-between;
@@ -219,6 +250,94 @@ button.secondary {
 	word-break: break-all;
 }
 
+.market-panel {
+	margin-top: 1rem;
+}
+
+.market-header {
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+	align-items: end;
+}
+
+.market-grid {
+	display: grid;
+	grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
+	gap: 1rem;
+	margin-top: 1.5rem;
+}
+
+.market-column {
+	display: grid;
+	gap: 1rem;
+}
+
+.status-card {
+	padding: 1.1rem;
+	border-radius: 1.15rem;
+	background: rgba(255, 255, 255, 0.58);
+	border: 1px solid rgba(36, 25, 15, 0.08);
+}
+
+.status-list {
+	list-style: none;
+	padding: 0;
+	margin: 1rem 0 0;
+	display: grid;
+	gap: 0.85rem;
+}
+
+.status-list li {
+	display: grid;
+	gap: 0.35rem;
+}
+
+.status-list strong {
+	font-size: 0.95rem;
+	word-break: break-all;
+}
+
+.form-grid {
+	display: grid;
+	gap: 1rem;
+}
+
+.field-row {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+}
+
+.field {
+	display: grid;
+	gap: 0.45rem;
+}
+
+.field span {
+	font-family: 'Courier New', monospace;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	font-size: 0.72rem;
+	color: rgba(36, 25, 15, 0.6);
+}
+
+.field input,
+.field textarea {
+	width: 100%;
+	border: 1px solid rgba(36, 25, 15, 0.16);
+	border-radius: 1rem;
+	padding: 0.9rem 1rem;
+	font: inherit;
+	background: rgba(255, 255, 255, 0.72);
+	color: #24190f;
+}
+
+.field textarea {
+	min-height: 8rem;
+	resize: vertical;
+}
+
 @media (max-width: 800px) {
 	main {
 		padding: 2rem 1rem 3rem;
@@ -232,7 +351,9 @@ button.secondary {
 	}
 
 	.grid,
-	.metric-row {
+	.metric-row,
+	.field-row,
+	.market-grid {
 		grid-template-columns: 1fr;
 	}
 }

@@ -1,35 +1,14 @@
-import { encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes, toHex, type Address, type Hash, type Hex } from 'viem'
+import { encodeAbiParameters, encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes, toHex, type Address, type Hash, type Hex } from 'viem'
+import { ABIS } from './abis.js'
 import { ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from './contractArtifact.js'
+import type { BalanceReadClient, DeploymentClient, DeploymentReadClient, DeploymentStatus, DeploymentStep, DeploymentStepId, MarketCreationResult, MarketWriteClient, QuestionData } from './types/contracts.js'
 
-export const GENESIS_REPUTATION_TOKEN = bigintToAddress(0x221657776846890989a759ba2973e427dff5c9bbn)
+const GENESIS_REPUTATION_TOKEN = bigintToAddress(0x221657776846890989a759ba2973e427dff5c9bbn)
 const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
 const ZERO_SALT = numberToBytes(0, { size: 32 })
 const FUND_PROXY_DEPLOYER_SIGNER_AMOUNT = 10000000000000000n
-
-type DeploymentStep = {
-	id: string
-	label: string
-	address: Address
-	dependencies: string[]
-	deploy: (client: DeploymentClient) => Promise<Hash>
-}
-
-export type DeploymentStatus = DeploymentStep & {
-	deployed: boolean
-}
-
-type DeploymentClient = {
-	getCode: (parameters: { address: Address }) => Promise<Hex | undefined>
-	sendTransaction: (parameters: { to?: Address; data?: Hex; value?: bigint }) => Promise<Hash>
-	sendRawTransaction: (parameters: { serializedTransaction: Hex }) => Promise<Hash>
-	waitForTransactionReceipt: (parameters: { hash: Hash }) => Promise<unknown>
-}
-
-type DeploymentReadClient = {
-	getCode: (parameters: { address: Address }) => Promise<Hex | undefined>
-}
 
 function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${ value.toString(16).padStart(40, '0') }`)
@@ -290,4 +269,79 @@ export async function loadDeploymentStatuses(client: DeploymentReadClient): Prom
 		...step,
 		deployed: deployed[index] ?? false,
 	}))
+}
+
+export async function loadGenesisRepBalance(client: BalanceReadClient, address: Address) {
+	return (await client.readContract({
+		abi: ABIS.mainnet.erc20,
+		functionName: 'balanceOf',
+		address: GENESIS_REPUTATION_TOKEN,
+		args: [address],
+	})) as bigint
+}
+
+function getDeploymentStep(id: DeploymentStepId) {
+	const step = getDeploymentSteps().find(candidate => candidate.id === id)
+	if (step === undefined) throw new Error(`Unknown deployment step: ${ id }`)
+	return step
+}
+
+function getQuestionId(questionData: QuestionData, outcomeOptions: readonly string[]) {
+	return BigInt(
+		keccak256(
+			encodeAbiParameters(
+				[
+					{
+						type: 'tuple',
+						components: [
+							{ name: 'title', type: 'string' },
+							{ name: 'description', type: 'string' },
+							{ name: 'startTime', type: 'uint256' },
+							{ name: 'endTime', type: 'uint256' },
+							{ name: 'numTicks', type: 'uint256' },
+							{ name: 'displayValueMin', type: 'int256' },
+							{ name: 'displayValueMax', type: 'int256' },
+							{ name: 'answerUnit', type: 'string' },
+						],
+					},
+					{ type: 'string[]' },
+				],
+				[questionData, outcomeOptions],
+			),
+		),
+	)
+}
+
+export async function createYesNoMarket(
+	client: MarketWriteClient,
+	parameters: {
+		questionData: QuestionData
+		securityMultiplier: bigint
+		currentRetentionRate: bigint
+		startingRepEthPrice: bigint
+	},
+) {
+	const questionId = getQuestionId(parameters.questionData, ['Yes', 'No'])
+
+	const createQuestionHash = await client.writeContract({
+		address: getDeploymentStep('zoltarQuestionData').address,
+		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+		functionName: 'createQuestion',
+		args: [parameters.questionData, ['Yes', 'No']],
+	})
+	await client.waitForTransactionReceipt({ hash: createQuestionHash })
+
+	const deployPoolHash = await client.writeContract({
+		address: getDeploymentStep('securityPoolFactory').address,
+		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+		functionName: 'deployOriginSecurityPool',
+		args: [0n, questionId, parameters.securityMultiplier, parameters.currentRetentionRate, parameters.startingRepEthPrice],
+	})
+	await client.waitForTransactionReceipt({ hash: deployPoolHash })
+
+	return {
+		questionId: `0x${ questionId.toString(16) }`,
+		createQuestionHash,
+		deployPoolHash,
+	} satisfies MarketCreationResult
 }
