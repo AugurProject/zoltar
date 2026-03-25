@@ -14,8 +14,9 @@ struct Deposit {
 
 uint256 constant escalationTimeLength = 4233600; // 7 weeks
 uint256 constant SCALE = 1e6;
-uint256 constant MAX_ATANH_ITERATIONS = 5000;
-uint256 constant MAX_EXP_ITERATIONS = 1000;
+uint256 constant LN2_SCALED = 693147;
+uint256 constant MAX_ATANH_ITERATIONS = 16;
+uint256 constant MAX_EXP_ITERATIONS = 16;
 
 contract EscalationGame {
 	uint256 public startingTime;
@@ -24,6 +25,7 @@ contract EscalationGame {
 	ISecurityPool public securityPool;
 	uint256 public nonDecisionThreshold;
 	uint256 public startBond;
+	uint256 public lnRatioScaled;
 	address public owner;
 	uint256 public nonDecisionTimestamp;
 
@@ -47,6 +49,7 @@ contract EscalationGame {
 		startingTime = block.timestamp + 3 days;
 		nonDecisionThreshold = _nonDecisionThreshold;
 		startBond = _startBond;
+		lnRatioScaled = _computeLnRatioScaled(_startBond, _nonDecisionThreshold);
 		emit GameStarted(startingTime, startBond, nonDecisionThreshold);
 	}
 
@@ -55,80 +58,84 @@ contract EscalationGame {
 	}
 
 	// Attrition cost = startBond * exp( ln(ratio) * t / T ) where ratio = nonDecisionThreshold / startBond.
-	// Uses fixed-point with SCALE=1e6. ln(ratio) = 2 * atanh(Z) with Z = (ratio-1)/(ratio+1).
+	// Uses fixed-point with SCALE=1e6. ln(ratio) is cached at start to avoid recomputing it on every read.
 	// Series iterate until convergence (max iterations: atanh=MAX_ATANH_ITERATIONS, exp=MAX_EXP_ITERATIONS). Guarantees:
 	// - f(0) = startBond, f(T) = nonDecisionThreshold
 	// - f(t) monotonic increasing for t in (0,T)
 	// - f(t) <= nonDecisionThreshold
 	function computeIterativeAttritionCost(uint256 timeSinceStart) public view returns (uint256) {
+		uint256 startBondLocal = startBond;
+		uint256 nonDecisionThresholdLocal = nonDecisionThreshold;
 		require(timeSinceStart <= escalationTimeLength, 'Invalid time');
 		// Exact edge cases
-		if (timeSinceStart == 0) return startBond;
-		if (timeSinceStart == escalationTimeLength) return nonDecisionThreshold;
-
-		// Compute Z_scaled = (nonDecisionThreshold - startBond) * SCALE / (nonDecisionThreshold + startBond)
-		uint256 diff = nonDecisionThreshold - startBond;
-		uint256 sum = nonDecisionThreshold + startBond;
-		uint256 z = diff * SCALE / sum; // z ∈ [0, SCALE)
-		if (z == 0) return startBond; // degenerate (should not happen)
-		uint256 z2 = z * z / SCALE; // = Z^2 * SCALE
-
-		// Compute atanh(z/SCALE) * SCALE using series: Σ_{k=0} z^{2k+1} / ((2k+1) * SCALE^k)
-		// Recurrence: term_k = term_{k-1} * z2 * (2k-1) / ((2k+1) * SCALE)
-		uint256 atanh_scaled = 0;
-		uint256 term = z; // k=0: z / 1
-		atanh_scaled += term;
-
-		for (uint256 k = 1; k < MAX_ATANH_ITERATIONS; k++) {
-			// term = term * z2 * (2k-1) / ((2k+1) * SCALE)
-			term = term * z2 * (2 * k - 1) / ((2 * k + 1) * SCALE);
-			if (term == 0) break;
-			atanh_scaled += term;
-		}
-
-		uint256 lnRatio_scaled = 2 * atanh_scaled; // ln(ratio) * SCALE
+		if (timeSinceStart == 0) return startBondLocal;
+		if (timeSinceStart == escalationTimeLength) return nonDecisionThresholdLocal;
 
 		// Exponent = lnRatio_scaled * t / T
-		uint256 exponent = lnRatio_scaled * timeSinceStart / escalationTimeLength;
+		uint256 exponent = lnRatioScaled * timeSinceStart / escalationTimeLength;
+		uint256 exponentPow2 = exponent / LN2_SCALED;
+		uint256 exponentRemainder = exponent - exponentPow2 * LN2_SCALED;
 
-		// Compute exp(exponent / SCALE) * SCALE using series: Σ_{k=0} exponent^k / (k! * SCALE^{k-1})
+		// Compute exp(exponentRemainder / SCALE) * SCALE using series: Σ_{k=0} exponent^k / (k! * SCALE^{k-1})
+		// Range reduction uses exp(x) = 2^k * exp(x - k * ln(2)).
 		// Recurrence: term_k = term_{k-1} * exponent / (k * SCALE)
 		uint256 exp_scaled = SCALE; // k=0
-		term = exponent; // k=1
+		uint256 term = exponentRemainder; // k=1
 		exp_scaled += term;
 
-		for (uint256 k = 2; k < MAX_EXP_ITERATIONS; k++) {
-			term = term * exponent / (k * SCALE);
+		for (uint256 k = 2; k < MAX_EXP_ITERATIONS;) {
+			term = term * exponentRemainder / (k * SCALE);
 			if (term == 0) break;
 			exp_scaled += term;
+			unchecked {
+				++k;
+			}
 		}
 
-		uint256 cost = startBond * exp_scaled / SCALE;
+		exp_scaled <<= exponentPow2;
+		uint256 cost = startBondLocal * exp_scaled / SCALE;
 		// Clamp (should be ≤ nonDecisionThreshold, but rounding may cause slight overshoot)
-		return cost > nonDecisionThreshold ? nonDecisionThreshold : cost;
+		return cost > nonDecisionThresholdLocal ? nonDecisionThresholdLocal : cost;
 	}
 
 	function computeTimeSinceStartFromAttritionCost(uint256 attritionCost) public view returns (uint256) {
-		uint256 low = 0;
-		uint256 high = escalationTimeLength;
 		if (attritionCost <= startBond) return 0;
-		uint256 maxCost = nonDecisionThreshold;
-		if (attritionCost >= maxCost) return escalationTimeLength;
+		if (attritionCost >= nonDecisionThreshold) return escalationTimeLength;
 
-		// binary search
-		for (uint256 iteration = 0; iteration < 64; iteration++) {
-			uint256 midTime = (low + high) / 2;
+		uint256 lnCostRatioScaled = _computeLnRatioScaled(startBond, attritionCost);
+		return lnCostRatioScaled * escalationTimeLength / lnRatioScaled;
+	}
 
-			uint256 midCost = computeIterativeAttritionCost(midTime);
-
-			if (midCost == attritionCost) return midTime;
-			if (midCost < attritionCost) {
-				low = midTime + 1;
-			} else {
-				high = midTime - 1;
+	function _computeLnRatioScaled(uint256 lowValue, uint256 highValue) internal pure returns (uint256) {
+		uint256 normalizedLow = lowValue;
+		uint256 log2Count = 0;
+		while (highValue >= normalizedLow * 2) {
+			unchecked {
+				normalizedLow *= 2;
+				++log2Count;
 			}
 		}
-		return (low + high) / 2;
+
+		uint256 diff = highValue - normalizedLow;
+		uint256 sum = highValue + normalizedLow;
+		uint256 z = diff * SCALE / sum; // z ∈ [0, SCALE / 3] after range reduction
+		if (z == 0) return 0;
+		return log2Count * LN2_SCALED + 2 * _computeAtanhScaled(z); // ln(highValue / lowValue) * SCALE
+	}
+
+	function _computeAtanhScaled(uint256 z) internal pure returns (uint256 atanhScaled) {
+		uint256 z2 = z * z / SCALE; // = Z^2 * SCALE
+		uint256 term = z; // k=0: z / 1
+		atanhScaled = term;
+
+		for (uint256 k = 1; k < MAX_ATANH_ITERATIONS;) {
+			term = term * z2 * (2 * k - 1) / ((2 * k + 1) * SCALE);
+			if (term == 0) break;
+			atanhScaled += term;
+			unchecked {
+				++k;
+			}
+		}
 	}
 
 	function getEscalationGameEndDate() public view returns (uint256 endTime) {
