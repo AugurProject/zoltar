@@ -15,7 +15,7 @@ export enum OperationType {
 }
 
 export const requestPriceIfNeededAndQueueOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`, operation: OperationType, targetVault: `0x${ string }`, amount: bigint) => {
-	const ethCost = (await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)) * 2n
+	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)
 	return await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'requestPriceIfNeededAndQueueOperation',
@@ -26,7 +26,7 @@ export const requestPriceIfNeededAndQueueOperation = async (client: WriteClient,
 }
 
 export const requestPrice = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
-	const ethCost = (await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)) * 2n
+	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)
 	return await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'requestPrice',
