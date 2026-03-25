@@ -1,0 +1,27 @@
+{
+	"description": "forklift",
+	"repository": {},
+	"license": "Unlicense",
+	"type": "module",
+	"devDependencies": {
+		"@types/node": "22.13.10",
+		"@zoltu/file-copier": "3.0.0",
+		"better-typescript-lib": "2.11.0",
+		"esbuild": "0.25.8",
+		"typescript": "5.8.2",
+		"funtypes": "5.1.1"
+	},
+	"dependencies": {
+		"@preact/signals": "2.0.1",
+		"preact": "10.26.4",
+		"viem": "2.23.15"
+	},
+	"scripts": {
+		"contracts": "cd solidity && npm run contracts",
+		"setup": "npm ci --ignore-scripts && npm run contracts && npm run build",
+		"build": "tsc",
+		"watch": "tsc --watch",
+		"serve": "bun ./dev-server.mjs",
+		"vendor": "bun --tsconfig-override=tsconfig.vendor.json ./build/vendor.mts"
+	}
+}

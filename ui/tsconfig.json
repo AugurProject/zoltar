@@ -1,10 +1,14 @@
 {
 	"compilerOptions": {
 		"target": "ESNext",
-		"module": "ESNext",
+		"module": "ES2022",
 		"moduleResolution": "bundler",
+		"rootDir": "./ts",
+		"outDir": "./js",
 		"sourceMap": true,
 		"inlineSources": true,
+		"declaration": true,
+		"declarationMap": true,
 		"skipLibCheck": true,
 		"strict": true,
 		"allowUnusedLabels": false,
@@ -18,17 +22,15 @@
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
 
-		"lib": ["ESNext", "DOM"],
 		"jsx": "react-jsx",
 		"jsxImportSource": "preact",
-		"types": ["node"],
-
-		"incremental": true,
-		"tsBuildInfoFile": "./.tsbuildinfo",
-		"noEmit": true
+		"lib": ["ESNext", "DOM"],
+		"typeRoots": [ "../node_modules/@types" ],
+		// add any @types here, empty array instead of default to prevent @types/node from being picked up
+		"types": [],
 	},
 	"include": [
-		"ui/ts/**/*.ts",
-		"ui/ts/**/*.tsx",
+		"./ts/**/*.ts",
+		"./ts/**/*.tsx"
 	],
 }

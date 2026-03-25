@@ -2,16 +2,21 @@
 	"entry": [
 		"solidity/ts/compile.ts",
 		"solidity/ts/gas-costs.ts",
-		"solidity/ts/tests/**/*.ts"
+		"solidity/ts/tests/**/*.ts",
+		"solidity/ts/types/bun-test.d.ts",
+		"solidity/ts/types/index.d.ts",
+		"ui/ts/index.ts"
 	],
 	"project": [
-		"solidity/ts/**/*.ts"
+		"solidity/ts/**/*.ts",
+		"ui/ts/**/*.ts",
+		"ui/ts/**/*.tsx",
+		"ui/build/**/*.mts"
 	],
 	"ignore": [
 	],
 	"ignoreDependencies": [
 		"solc",
-		"@zoltu/file-copier",
 		"better-typescript-lib"
 	]
 }

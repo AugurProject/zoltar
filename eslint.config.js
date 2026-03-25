@@ -5,13 +5,25 @@ import globals from 'globals'
 
 const commonLanguageOptions = {
 	parser,
-	parserOptions: {
-		project: ['./tsconfig.json'],
-		sourceType: 'module',
-	},
 	globals: {
 		...globals.browser,
 		...globals.node,
+	},
+}
+
+const solidityLanguageOptions = {
+	...commonLanguageOptions,
+	parserOptions: {
+		project: ['./solidity/tsconfig.json'],
+		sourceType: 'module',
+	},
+}
+
+const uiLanguageOptions = {
+	...commonLanguageOptions,
+	parserOptions: {
+		project: ['./tsconfig.json'],
+		sourceType: 'module',
 	},
 }
 
@@ -70,7 +82,13 @@ export default [
 	// All other TypeScript files in the solidity project
 	{
 		files: ['solidity/ts/**/*.ts'],
-		languageOptions: commonLanguageOptions,
+		languageOptions: solidityLanguageOptions,
+		plugins: commonPlugins,
+		rules: commonRules,
+	},
+	{
+		files: ['ui/ts/**/*.ts', 'ui/ts/**/*.tsx'],
+		languageOptions: uiLanguageOptions,
 		plugins: commonPlugins,
 		rules: commonRules,
 	},
@@ -80,6 +98,8 @@ export default [
 			'node_modules/**',
 			'dist/**',
 			'js/**',
+			'ui/js/**',
+			'ui/vendor/**',
 			'**/*.js',
 			'**/*.mjs',
 			'**/*.cjs',

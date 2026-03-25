@@ -5,4 +5,10 @@ node_modules/
 solidity/user-config.json
 solidity/ts/types/contractArtifact.ts
 .tsbuildinfo
+/ui/js
+/ui/vendor
+/ui/ts/abis.ts
+/ui/ts/contractArtifact.ts
+/ui/ts/deploymentArtifacts.ts
+/ui/ts/deploymentsArtifacts.ts
 solidity/.contract-hash.json
