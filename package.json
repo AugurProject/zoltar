@@ -32,7 +32,7 @@
 		"compile-contracts": "cd solidity && bun run compile-contracts",
 		"ui:build": "bun tsc --project ui/tsconfig.json",
 		"ui:serve": "bun ./ui/dev-server.mjs",
-		"ui:vendor": "bun --tsconfig-override=ui/tsconfig.vendor.json ./ui/build/vendor.mts",
+		"ui:vendor": "bun ./ui/build/vendor.mts",
 		"gas-costs": "cd solidity && bun run gas-costs",
 		"test-zoltar": "cd solidity && bun run test-zoltar",
 		"test-peripherals": "cd solidity && bun run compile-contracts && bun run test-peripherals",
