@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { AddressInfo, createServer } from 'node:net'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from './AnvilWindowEthereum'
+import { getDefaultAnvilRpcUrl, getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from './AnvilWindowEthereum'
 import { ensureDefined } from './utils/testUtils'
 
 const DEFAULT_ANVIL_HOST = '127.0.0.1'
@@ -32,6 +32,22 @@ const getFreePort = async (): Promise<number> =>
 	})
 
 type AnvilProcess = ReturnType<typeof spawn>
+
+type AnvilConnectionMode =
+	| { readonly type: 'spawn-isolated'; readonly rpcUrl: string; readonly port: number }
+	| { readonly type: 'use-existing'; readonly rpcUrl: string }
+
+export const getAnvilConnectionMode = (): AnvilConnectionMode => {
+	if (process.platform === 'win32') {
+		return { type: 'use-existing', rpcUrl: process.env['ANVIL_RPC'] ?? getDefaultAnvilRpcUrl() }
+	}
+
+	return {
+		type: 'spawn-isolated',
+		rpcUrl: '',
+		port: 0,
+	}
+}
 
 const waitForRpcReady = async (rpcUrl: string): Promise<void> => {
 	const deadline = Date.now() + RPC_READY_TIMEOUT_MS
@@ -109,6 +125,20 @@ export const useIsolatedAnvilNode = () => {
 	let snapshotId: string | undefined
 
 	beforeAll(async () => {
+		const connectionMode = getAnvilConnectionMode()
+
+		if (connectionMode.type === 'use-existing') {
+			try {
+				await waitForRpcReady(connectionMode.rpcUrl)
+				anvilWindowEthereum = await getMockedEthSimulateWindowEthereum(connectionMode.rpcUrl)
+				snapshotId = await anvilWindowEthereum.anvilSnapshot()
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error)
+				throw new Error(`Failed to connect to existing Anvil node for test file at ${ connectionMode.rpcUrl }: ${ errorMessage }`)
+			}
+			return
+		}
+
 		const port = await getFreePort()
 		const rpcUrl = `http://${ DEFAULT_ANVIL_HOST }:${ port }`
 
@@ -116,7 +146,7 @@ export const useIsolatedAnvilNode = () => {
 			DEFAULT_ANVIL_BIN,
 			['--host', DEFAULT_ANVIL_HOST, '--port', `${ port }`, '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee'],
 			{
-			stdio: ['ignore', 'ignore', 'pipe'],
+				stdio: ['ignore', 'ignore', 'pipe'],
 			},
 		)
 		anvilProcess = process

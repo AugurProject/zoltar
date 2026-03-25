@@ -35,8 +35,11 @@ export interface AnvilWindowEthereum {
 	removeListener: () => void
 }
 
+export const getDefaultAnvilRpcUrl = (): string =>
+	process.platform === 'win32' ? 'http://127.0.0.1:8545' : 'http://host.docker.internal:8545'
+
 export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promise<AnvilWindowEthereum> => {
-	const ANVIL_RPC = rpcUrl ?? process.env['ANVIL_RPC'] ?? 'http://host.docker.internal:8545'
+	const ANVIL_RPC = rpcUrl ?? process.env['ANVIL_RPC'] ?? getDefaultAnvilRpcUrl()
 
 	// Validate RPC endpoint points to localhost only for test security
 	const validateLocalhostUrl = (url: string): void => {
