@@ -11,12 +11,12 @@ export const depositToEscalationGame = async (client: WriteClient, securityPoolA
 		args: [outcome, amount],
 	})
 
-export const withdrawFromEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome, depositIndexes: bigint[]) => {
+export const withdrawFromEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`, depositIndexes: bigint[]) => {
 	const hash = await client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'withdrawFromEscalationGame',
 		address: securityPoolAddress,
-		args: [outcome, depositIndexes],
+		args: [depositIndexes],
 	})
 	await client.waitForTransactionReceipt({ hash })
 	return hash

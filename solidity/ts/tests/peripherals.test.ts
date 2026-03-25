@@ -103,7 +103,6 @@ describe('Peripherals Contract Test Suite', () => {
 		await withdrawFromEscalationGame(
 			client,
 			securityPoolAddresses.securityPool,
-			QuestionOutcome.Yes,
 			ourDeposits.map(deposit => deposit.depositIndex),
 		)
 
@@ -152,8 +151,8 @@ describe('Peripherals Contract Test Suite', () => {
 
 		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.None, 'external fork should cancel the game outcome')
 
-		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [aliceDeposit.depositIndex])
-		await withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [bobDeposit.depositIndex])
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, [aliceDeposit.depositIndex])
+		await withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, [bobDeposit.depositIndex])
 
 		const aliceVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const bobVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
@@ -174,7 +173,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
 
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n]), /Wrong outcome/)
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, [0n]), /Wrong outcome/)
 	})
 
 	test('withdrawFromEscalationGame rejects none outcome after external fork cancellation', async () => {
@@ -204,7 +203,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(attackerClient, genesisUniverse, otherQuestionId)
 
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.None, [0n]), /Invalid outcome: None/)
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, [0n]), /Invalid outcome: None/)
 	})
 
 	test('canceled deposit cannot be withdrawn before escalation game is canceled', async () => {
@@ -222,7 +221,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const noDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
 		const canceledCandidateDeposit = ensureDefined(noDeposits[0], 'no escalation deposit missing')
 
-		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [canceledCandidateDeposit.depositIndex]), /Wrong outcome/)
+		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, [canceledCandidateDeposit.depositIndex]), /Wrong outcome/)
 	})
 
 	test('cannot refund an active escalation deposit before zoltar forks', async () => {
@@ -231,7 +230,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /Question has not finalized!/)
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, [0n]), /Question has not finalized!/)
 	})
 
 	test('create child universe test', async () => {
