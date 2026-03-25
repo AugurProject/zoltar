@@ -1,6 +1,7 @@
 import { test, beforeEach, describe } from 'bun:test'
 import { createWriteClient, WriteClient } from '../../testsuite/simulator/utils/viem'
-import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../../testsuite/simulator/AnvilWindowEthereum'
+import { AnvilWindowEthereum } from '../../testsuite/simulator/AnvilWindowEthereum'
+import { useIsolatedAnvilNode } from '../../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../../testsuite/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../../testsuite/simulator/utils/utilities'
 import { Address } from 'viem'
@@ -25,6 +26,7 @@ const DEFAULT_ETH_RAISE_CAP = 200_000n
 const DEFAULT_MAX_REP = 100n
 
 describe('Auction', () => {
+	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	let auctionAddress: Address
@@ -134,7 +136,7 @@ describe('Auction', () => {
 	}
 
 	beforeEach(async () => {
-		mockWindow = await getMockedEthSimulateWindowEthereum()
+		mockWindow = getAnvilWindowEthereum()
 		await setupTestAccounts(mockWindow)
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await ensureZoltarDeployed(client)

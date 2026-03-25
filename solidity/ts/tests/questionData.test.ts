@@ -1,5 +1,6 @@
 import { test, beforeEach, describe } from 'bun:test'
-import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
@@ -10,11 +11,12 @@ import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, 
 import { areEqualArrays } from '../testsuite/simulator/utils/array-utils'
 
 describe('Question Data', () => {
+	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 
 	beforeEach(async () => {
-		mockWindow = await getMockedEthSimulateWindowEthereum()
+		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)

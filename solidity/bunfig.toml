@@ -1,3 +1,4 @@
 [test]
+root = "js/tests"
 threads = 2
-timeout = "240s"
+timeout = 300000

@@ -1,5 +1,6 @@
 import { test, beforeEach, describe } from 'bun:test'
-import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
@@ -20,6 +21,7 @@ const DAY = 86400n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
 
 describe('Escalation Game Fork Threshold Test', () => {
+	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	const genesisUniverse = 0n
@@ -34,7 +36,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 	let questionId: bigint
 
 	beforeEach(async () => {
-		mockWindow = await getMockedEthSimulateWindowEthereum()
+		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)

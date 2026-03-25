@@ -209,7 +209,7 @@ export const balanceOfSharesInCash = async (client: ReadClient, securityPoolAddr
 		functionName: 'balanceOfShares',
 		address: shareTokenAddress,
 		args: [universeId, account],
-	})
+	}) as [bigint, bigint, bigint]
 	return await threeShareArrayToCash(client, securityPoolAddress, array)
 }
 

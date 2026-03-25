@@ -1,6 +1,7 @@
 import { test, beforeEach, describe } from 'bun:test'
 import assert from 'node:assert'
-import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { TEST_ADDRESSES, DAY } from '../testsuite/simulator/utils/constants'
 import { addressString, dateToBigintSeconds } from '../testsuite/simulator/utils/bigint'
@@ -13,6 +14,7 @@ import { OperationType, getRequestPriceEthCost } from '../testsuite/simulator/ut
 import { peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer } from '../types/contractArtifact'
 
 describe('Price Oracle Refund Security Tests', () => {
+	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	const repDeposit = 1000n * 10n ** 18n
@@ -26,7 +28,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	const EXTRA_INFO = 'test question!'
 
 	beforeEach(async () => {
-		mockWindow = await getMockedEthSimulateWindowEthereum()
+		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)

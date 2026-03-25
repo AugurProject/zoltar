@@ -1,5 +1,6 @@
 import { test, beforeEach, describe } from 'bun:test'
-import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
@@ -13,6 +14,7 @@ import { peripherals_EscalationGame_EscalationGame } from '../types/contractArti
 const ESCALATION_TIME_LENGTH = 4233600n
 
 describe('Escalation Game Test Suite', () => {
+	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	const reportBond = 1n * 10n ** 18n
@@ -35,7 +37,7 @@ describe('Escalation Game Test Suite', () => {
 		})
 
 	beforeEach(async () => {
-		mockWindow = await getMockedEthSimulateWindowEthereum()
+		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
