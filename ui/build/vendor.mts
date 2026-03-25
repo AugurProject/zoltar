@@ -13,7 +13,16 @@ const INDEX_HTML_PATH = path.join(UI_ROOT_PATH, 'index.html')
 const ABI_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'ts', 'abis.ts')
 const ABI_SOURCE_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'abi', 'abis.ts')
 const CONTRACT_ARTIFACT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'ts', 'contractArtifact.ts')
-const CONTRACT_ARTIFACT_SOURCE_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'types', 'contractArtifact.ts')
+const CONTRACT_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'artifacts', 'Contracts.json')
+
+type CompiledContract = {
+	readonly abi?: unknown
+	readonly evm?: unknown
+}
+
+type CompiledContractsJson = {
+	readonly contracts?: Record<string, Record<string, CompiledContract | undefined> | undefined>
+}
 
 type Dependency = { packageName: string, packageToVendor?: string, subfolderToVendor: string, mainEntrypointFile: string, alternateEntrypoints: Record<string, string> }
 const dependencyPaths: Dependency[] = [
@@ -67,29 +76,24 @@ const copyProjectArtifacts = async () => {
 	const solidityAbiSource = await fs.readFile(ABI_SOURCE_PATH, 'utf8')
 	await fs.writeFile(ABI_OUTPUT_PATH, solidityAbiSource)
 
-	const artifactSource = await fs.readFile(CONTRACT_ARTIFACT_SOURCE_PATH, 'utf8')
-	const exportedContractNames = [
-		'ScalarOutcomes_ScalarOutcomes',
-		'Zoltar_Zoltar',
-		'ZoltarQuestionData_ZoltarQuestionData',
-		'peripherals_SecurityPoolForker_SecurityPoolForker',
-		'peripherals_SecurityPoolUtils_SecurityPoolUtils',
-		'peripherals_factories_EscalationGameFactory_EscalationGameFactory',
-		'peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory',
-		'peripherals_factories_SecurityPoolFactory_SecurityPoolFactory',
-		'peripherals_factories_ShareTokenFactory_ShareTokenFactory',
-		'peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory',
-		'peripherals_openOracle_OpenOracle_OpenOracle',
-	] as const
+	const compiledArtifacts = JSON.parse(await fs.readFile(CONTRACT_ARTIFACTS_JSON_PATH, 'utf8')) as CompiledContractsJson
+	if (compiledArtifacts.contracts === undefined) throw new Error('No compiled contracts found in Contracts.json')
 
-	const extractedArtifacts = exportedContractNames.map((contractName, index) => {
-		const exportPattern = new RegExp(`export const ${ contractName } = [\\\\s\\\\S]*?} as const`, 'm')
-		const matchedArtifact = artifactSource.match(exportPattern)?.[0]
-		if (matchedArtifact === undefined) throw new Error(`Unable to find artifact export: ${ contractName }`)
-		return matchedArtifact
+	const contracts = Object.entries(compiledArtifacts.contracts).flatMap(([filename, contractFile]) => {
+		if (contractFile === undefined) throw new Error(`missing compiled contract file for ${ filename }`)
+		return Object.entries(contractFile).map(([contractName, contractData]) => {
+			if (contractData === undefined) throw new Error(`missing compiled contract ${ contractName } in ${ filename }`)
+			const normalizedName = `${ filename
+				.replace('contracts/', '')
+				.replace(/-/g, '')
+				.replace(/\//g, '_')
+				.replace(/\\/g, '_')
+				.replace(/\.sol$/, '') }_${ contractName }`
+			return `export const ${ normalizedName } = ${ JSON.stringify(contractData, null, 4) } as const`
+		})
 	})
 
-	await fs.writeFile(CONTRACT_ARTIFACT_OUTPUT_PATH, `${ extractedArtifacts.join('\n\n') }\n`)
+	await fs.writeFile(CONTRACT_ARTIFACT_OUTPUT_PATH, `${ contracts.join('\n\n') }\n`)
 }
 
 // rewrite the source paths in sourcemap files so they show up in the debugger in a reasonable location and if two source maps refer to the same (relative) path, we end up with them distinguished in the browser debugger
