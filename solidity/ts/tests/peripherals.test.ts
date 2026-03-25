@@ -245,6 +245,22 @@ describe('Peripherals Contract Test Suite', () => {
 		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /Question has not finalized!/)
 	})
 
+	test('withdrawFromEscalationGame rejects withdrawing another users deposit', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		await mockWindow.advanceTime(10n * DAY)
+
+		const yesDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
+		const ourDeposit = ensureDefined(yesDeposits[0], 'yesDeposits[0] is undefined')
+		strictEqualTypeSafe(ourDeposit.depositor, client.account.address, 'wrong depositor')
+
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+
+		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [ourDeposit.depositIndex]), /Only deposit owner can withdraw/)
+	})
+
 	test('create child universe test', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)

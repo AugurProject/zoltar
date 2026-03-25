@@ -19,6 +19,13 @@ import { peripherals_SecurityPool_SecurityPool } from '../types/contractArtifact
 
 const DAY = 86400n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
+const FORK_THRESHOLD_DIVISOR = 20n
+const REP_TOTAL_SUPPLY_SLOT = '0x' + 5n.toString(16).padStart(64, '0')
+
+const getUserRepClaim = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
+	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
+	return await poolOwnershipToRep(client, securityPoolAddress, vault.repDepositShare)
+}
 
 describe('Escalation Game Fork Threshold Test', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
@@ -80,21 +87,20 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const initialTotalSupply = await getTotalTheoreticalSupply(client, repToken)
 
 		// Ensure initial fork threshold > escalationThreshold (should be twice)
-		const initialForkThreshold = initialTotalSupply / 20n
+		const initialForkThreshold = initialTotalSupply / FORK_THRESHOLD_DIVISOR
 		assert.ok(initialForkThreshold > escalationThreshold, 'initial fork threshold must be greater than escalation threshold')
 
 		// Lower total supply to make actual fork threshold less than escalationThreshold
 		const newTotalSupply = initialTotalSupply / 10n // reduce to 10% to get significant ratio
-		const slot5 = '0x' + 5n.toString(16).padStart(64, '0')
 		await mockWindow.addStateOverrides({
 			[repToken]: {
 				stateDiff: {
-					[slot5]: newTotalSupply,
+					[REP_TOTAL_SUPPLY_SLOT]: newTotalSupply,
 				},
 			},
 		})
 
-		const actualForkThreshold = newTotalSupply / 20n
+		const actualForkThreshold = newTotalSupply / FORK_THRESHOLD_DIVISOR
 		assert.ok(actualForkThreshold < escalationThreshold, 'actual fork threshold should be lower after override')
 
 		// Advance time to allow the escalation game to finish and outcome to be known
@@ -102,8 +108,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 
 		// Withdraw via SecurityPool's withdrawFromEscalationGame
 		// Get vault ownership before withdrawal
-		const vaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const repBefore = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultBefore.repDepositShare)
+		const repBefore = await getUserRepClaim(client, securityPoolAddresses.securityPool)
 		await writeContractAndWait(
 			client,
 			async () =>
@@ -114,8 +119,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 					args: [QuestionOutcome.Yes, [0n]], // deposit index 0
 				}),
 		)
-		const vaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const repAfter = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultAfter.repDepositShare)
+		const repAfter = await getUserRepClaim(client, securityPoolAddresses.securityPool)
 
 		// Expected amount: depositAmount scaled by the ratio of thresholds
 		// Net REP claim should change by `expected - depositAmount`, because the original deposit
