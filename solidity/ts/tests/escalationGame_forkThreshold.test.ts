@@ -30,8 +30,8 @@ describe('Escalation Game Fork Threshold Test', () => {
 	const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
 	const questionEndDate = currentTimestamp + 365n * DAY
 	let securityPoolAddresses: {
-		securityPool: `0x${ string }`
-		escalationGame: `0x${ string }`
+		securityPool: `0x${string}`
+		escalationGame: `0x${string}`
 	}
 	let questionId: bigint
 

@@ -204,12 +204,12 @@ export const balanceOfShares = async (client: ReadClient, shareTokenAddress: `0x
 	})
 
 export const balanceOfSharesInCash = async (client: ReadClient, securityPoolAddress: `0x${ string }`, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`): Promise<[bigint, bigint, bigint]> => {
-	const array = await client.readContract({
+	const array: readonly [bigint, bigint, bigint] = await client.readContract({
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'balanceOfShares',
 		address: shareTokenAddress,
 		args: [universeId, account],
-	}) as [bigint, bigint, bigint]
+	})
 	return await threeShareArrayToCash(client, securityPoolAddress, array)
 }
 

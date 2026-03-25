@@ -23,7 +23,6 @@
 		"noUnusedParameters": true,
 
 		"lib": ["ESNext", "DOM"],
-		"types": ["bun", "node"],
 
 		"incremental": true,
 		"tsBuildInfoFile": "./.tsbuildinfo"
