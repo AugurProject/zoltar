@@ -258,10 +258,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRep(attackerClient, repDeposit, questionId)
 
-		await assert.rejects(
-			withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [ourDeposit.depositIndex]),
-			/Only deposit owner can withdraw/,
-		)
+		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [ourDeposit.depositIndex]), /Only deposit owner can withdraw/)
 	})
 
 	test('create child universe test', async () => {
