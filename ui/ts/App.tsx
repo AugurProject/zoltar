@@ -15,9 +15,11 @@ type AccountState = {
 }
 
 function createReadClient() {
+	const ethereum = getInjectedEthereum()
+
 	return createPublicClient({
 		chain: mainnet,
-		transport: http(DEFAULT_RPC_URL, { batch: { wait: 100 } }),
+		transport: ethereum === undefined ? http(DEFAULT_RPC_URL, { batch: { wait: 100 } }) : custom(ethereum),
 	})
 }
 
