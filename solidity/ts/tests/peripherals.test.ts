@@ -17,7 +17,7 @@ import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTyp
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMigratedRep, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getRepTokensMigratedRepBalance, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
-import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemRep, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
+import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
 
 describe('Peripherals Contract Test Suite', () => {
 	let mockWindow: AnvilWindowEthereum
@@ -73,7 +73,7 @@ describe('Peripherals Contract Test Suite', () => {
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance, 100n, 'Did not get rep back')
 	})
 
-	test('can deposit rep and redeem it back after question has ended', async () => {
+	test('withdrawal after question end releases escalation lock without changing ownership in single-sided case', async () => {
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
 		const poolOwnershipDenominator = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
@@ -95,19 +95,153 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(yesDeposit.amount, reportBond, 'amount should be report bond')
 		strictEqualTypeSafe(await getStartBond(client, securityPoolAddresses.escalationGame), reportBond, 'report bond matches')
 
+		const vaultBeforeWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const ourDeposits = yesDeposits.filter(deposit => BigInt(deposit.depositor) === BigInt(client.account.address))
 		strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'question has resolved')
 		await withdrawFromEscalationGame(
 			client,
 			securityPoolAddresses.securityPool,
+			QuestionOutcome.Yes,
 			ourDeposits.map(deposit => deposit.depositIndex),
 		)
 
-		const repBefore = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		await redeemRep(client, securityPoolAddresses.securityPool, client.account.address)
-		const repAfter = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		strictEqualTypeSafe(repAfter - repBefore, repDeposit, 'did not get rep back')
-		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 'Did not empty security pool of rep')
+		const vaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const repClaimIncrease = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultAfterWithdrawal.repDepositShare - vaultBeforeWithdrawal.repDepositShare)
+		strictEqualTypeSafe(repClaimIncrease, 0n, 'single-sided withdrawal should only unlock the original deposit without changing ownership')
+		strictEqualTypeSafe(vaultAfterWithdrawal.lockedRepInEscalationGame, 0n, 'escalation lock should be released after withdrawal')
+	})
+
+	test('can refund escalation deposits after zoltar forks on another question', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
+
+		const aliceDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
+		const bobDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
+		const aliceDeposit = ensureDefined(aliceDeposits[0], 'alice escalation deposit missing')
+		const bobDeposit = ensureDefined(bobDeposits[0], 'bob escalation deposit missing')
+
+		const aliceVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const bobVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
+
+		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const slot5 = '0x' + 5n.toString(16).padStart(64, '0')
+		await mockWindow.addStateOverrides({
+			[repToken]: {
+				stateDiff: {
+					[slot5]: repDeposit * 10n,
+				},
+			},
+		})
+
+		const otherQuestionData = {
+			...questionData,
+			title: 'fork source question',
+		}
+		const otherQuestionId = getQuestionId(otherQuestionData, outcomes)
+		await createQuestion(attackerClient, otherQuestionData, outcomes)
+		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(attackerClient, genesisUniverse, otherQuestionId)
+
+		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.None, 'external fork should cancel the game outcome')
+
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [aliceDeposit.depositIndex])
+		await withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [bobDeposit.depositIndex])
+
+		const aliceVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const bobVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
+
+		const aliceOwnershipDelta = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, aliceVaultAfter.repDepositShare - aliceVaultBefore.repDepositShare)
+		const bobOwnershipDelta = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, bobVaultAfter.repDepositShare - bobVaultBefore.repDepositShare)
+
+		strictEqualTypeSafe(aliceOwnershipDelta, 0n, 'alice refund should only unlock principal after external fork')
+		strictEqualTypeSafe(bobOwnershipDelta, 0n, 'bob refund should only unlock principal after external fork')
+		strictEqualTypeSafe(aliceVaultAfter.lockedRepInEscalationGame, 0n, 'alice escalation lock should be released')
+		strictEqualTypeSafe(bobVaultAfter.lockedRepInEscalationGame, 0n, 'bob escalation lock should be released')
+	})
+
+	test('withdrawFromEscalationGame rejects wrong outcome after normal resolution', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		await mockWindow.advanceTime(10n * DAY)
+
+		await assert.rejects(
+			withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n]),
+			/Wrong outcome/,
+		)
+	})
+
+	test('withdrawFromEscalationGame rejects none outcome after external fork cancellation', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+
+		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const slot5 = '0x' + 5n.toString(16).padStart(64, '0')
+		await mockWindow.addStateOverrides({
+			[repToken]: {
+				stateDiff: {
+					[slot5]: repDeposit * 10n,
+				},
+			},
+		})
+
+		const otherQuestionData = {
+			...questionData,
+			title: 'fork none outcome source question',
+		}
+		const otherQuestionId = getQuestionId(otherQuestionData, outcomes)
+		await createQuestion(attackerClient, otherQuestionData, outcomes)
+		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(attackerClient, genesisUniverse, otherQuestionId)
+
+		await assert.rejects(
+			withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.None, [0n]),
+			/Invalid outcome: None/,
+		)
+	})
+
+	test('canceled deposit cannot be withdrawn before escalation game is canceled', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
+
+		await mockWindow.advanceTime(10n * DAY)
+
+		const noDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
+		const canceledCandidateDeposit = ensureDefined(noDeposits[0], 'no escalation deposit missing')
+
+		await assert.rejects(
+			withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [canceledCandidateDeposit.depositIndex]),
+			/Wrong outcome/,
+		)
+	})
+
+	test('cannot refund an active escalation deposit before zoltar forks', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+
+		await assert.rejects(
+			withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]),
+			/Question has not finalized!/,
+		)
 	})
 
 	test('create child universe test', async () => {

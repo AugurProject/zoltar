@@ -11,12 +11,12 @@ export const depositToEscalationGame = async (client: WriteClient, securityPoolA
 		args: [outcome, amount],
 	})
 
-export const withdrawFromEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`, depositIndexes: bigint[]) => {
+export const withdrawFromEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome, depositIndexes: bigint[]) => {
 	const hash = await client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'withdrawFromEscalationGame',
 		address: securityPoolAddress,
-		args: [depositIndexes],
+		args: [outcome, depositIndexes],
 	})
 	await client.waitForTransactionReceipt({ hash })
 	return hash
@@ -80,13 +80,13 @@ export const getCurrentRetentionRate = async (client: ReadClient, securityPoolAd
 	})
 
 export const getSecurityVault = async (client: ReadClient, securityPoolAddress: `0x${ string }`, securityVault: `0x${ string }`) => {
-	const [repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex] = await client.readContract({
+	const [repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex, lockedRepInEscalationGame] = await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'securityVaults',
 		address: securityPoolAddress,
 		args: [securityVault],
 	})
-	return { repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex }
+	return { repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex, lockedRepInEscalationGame }
 }
 
 export const getSecurityPoolsEscalationGame = async (client: ReadClient, securityPoolAddress: `0x${ string }`) =>

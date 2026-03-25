@@ -248,7 +248,17 @@ contract EscalationGame {
 		emit ClaimDeposit(amountToWithdraw, burnAmount);
 	}
 
-	// TODO, allow withdrawing after someones elses fork as well (game is canceled)
+	function refundCanceledDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
+		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
+		require(securityPool.zoltar().getForkTime(securityPool.universeId()) > 0, 'Zoltar has not forked');
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
+		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
+		deposits[uint8(outcome)][depositIndex].amount = 0;
+		depositor = deposit.depositor;
+		amountToWithdraw = deposit.amount;
+		emit WithdrawDeposit(depositor, outcome, amountToWithdraw, depositIndex);
+	}
+
 	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
