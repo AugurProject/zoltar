@@ -25,6 +25,10 @@ struct QueuedOperation {
 	address initiatorVault;
 	address targetVault;
 	uint256 amount;
+	uint256 snapshotTargetOwnership;
+	uint256 snapshotTargetAllowance;
+	uint256 snapshotTotalRep;
+	uint256 snapshotDenominator;
 }
 
 contract PriceOracleManagerAndOperatorQueuer {
@@ -40,7 +44,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 	event ExecutedQueuedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
 
 	// operation queuing
-	uint256 public previousQueuedOperationId;
+	uint256 public queuedOperationCounter;
 	mapping(uint256 => QueuedOperation) public queuedOperations;
 
 	constructor(OpenOracle _openOracle, ReputationToken _reputationToken) {
@@ -119,21 +123,29 @@ contract PriceOracleManagerAndOperatorQueuer {
 
 	function requestPriceIfNeededAndQueueOperation(OperationType operation, address targetVault, uint256 amount) public payable {
 		require(amount > 0, 'need to do non zero operation');
-		previousQueuedOperationId++;
-		queuedOperations[previousQueuedOperationId] = QueuedOperation({
+		queuedOperationCounter++;
+		// Capture snapshot of the target vault state at queue time to prevent manipulation
+		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , , ) = securityPool.securityVaults(targetVault);
+		uint256 snapshotTotalRep = securityPool.repToken().balanceOf(address(securityPool));
+		uint256 snapshotDenominator = securityPool.poolOwnershipDenominator();
+		queuedOperations[queuedOperationCounter] = QueuedOperation({
 			operation: operation,
 			initiatorVault: msg.sender,
 			targetVault: targetVault,
-			amount: amount
+			amount: amount,
+			snapshotTargetOwnership: snapshotTargetOwnership,
+			snapshotTargetAllowance: snapshotTargetAllowance,
+			snapshotTotalRep: snapshotTotalRep,
+			snapshotDenominator: snapshotDenominator
 		});
 
 		uint256 retained = 0; // amount to retain from msg.value (cost incurred)
 
 		if (isPriceValid()) {
-			executeQueuedOperation(previousQueuedOperationId);
+			executeQueuedOperation(queuedOperationCounter);
 			// no cost when price is valid
 		} else if (queuedPendingOperationId == 0) {
-			queuedPendingOperationId = previousQueuedOperationId;
+			queuedPendingOperationId = queuedOperationCounter;
 			uint256 ethCost = getRequestPriceEthCost();
 			require(msg.value >= ethCost, 'not enough eth to request price');
 			retained += ethCost;
@@ -154,17 +166,28 @@ contract PriceOracleManagerAndOperatorQueuer {
 		require(isPriceValid(), 'price is not valid to execute');
 		uint256 amount = queuedOperations[operationId].amount;
 		queuedOperations[operationId].amount = 0;
-		// TODO, we should allow these operations here to fail, but solidity try catch doesn't work inside the same contract
 		if (queuedOperations[operationId].operation == OperationType.Liquidation) {
-			try securityPool.performLiquidation(queuedOperations[operationId].initiatorVault, queuedOperations[operationId].targetVault, amount) {
+			try
+				securityPool.performLiquidation(
+					queuedOperations[operationId].initiatorVault,
+					queuedOperations[operationId].targetVault,
+					amount,
+					queuedOperations[operationId].snapshotTargetOwnership,
+					queuedOperations[operationId].snapshotTargetAllowance,
+					queuedOperations[operationId].snapshotTotalRep,
+					queuedOperations[operationId].snapshotDenominator
+				)
+			{
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
 			} catch {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
-		} else if(queuedOperations[operationId].operation == OperationType.WithdrawRep) {
-			try securityPool.performWithdrawRep(queuedOperations[operationId].initiatorVault, amount) {
+		} else if (queuedOperations[operationId].operation == OperationType.WithdrawRep) {
+			try
+				securityPool.performWithdrawRep(queuedOperations[operationId].initiatorVault, amount)
+			{
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
@@ -172,7 +195,9 @@ contract PriceOracleManagerAndOperatorQueuer {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
 			}
 		} else {
-			try securityPool.performSetSecurityBondsAllowance(queuedOperations[operationId].initiatorVault, amount) {
+			try
+				securityPool.performSetSecurityBondsAllowance(queuedOperations[operationId].initiatorVault, amount)
+			{
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
 				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);

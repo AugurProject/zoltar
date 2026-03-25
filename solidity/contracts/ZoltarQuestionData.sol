@@ -3,7 +3,7 @@ pragma solidity 0.8.33;
 
 import { ScalarOutcomes } from './ScalarOutcomes.sol';
 
-contract ZoltarQuestionData {
+ contract ZoltarQuestionData {
 	struct QuestionData {
 		string title;
 		string description;
@@ -32,10 +32,15 @@ contract ZoltarQuestionData {
 			require(questionData.numTicks > 0, 'numTicks needs to be positive');
 		}
 		else {
-			for (uint256 index = 0; index < outcomeOptions.length; index++) {
-				require(bytes(outcomeOptions[index]).length > 0, 'Empty string');
+  			// Check that all strings are non-empty
+			uint256 previous = type(uint256).max;
+  			for (uint256 index = 0; index < outcomeOptions.length; index++) {
+  				require(bytes(outcomeOptions[index]).length > 0, 'Empty string');
+				uint256 iHash = uint256(keccak256(abi.encode(outcomeOptions[index])));
+				require (iHash < previous, 'Outcome option hashes not sorted');
+				previous = iHash;
 			}
-			outcomeLabels[questionId] = outcomeOptions; // TODO, check that these are unique?
+			outcomeLabels[questionId] = outcomeOptions;
 		}
 		questions[questionId] = questionData;
 		questionCreatedTimestamp[questionId] = block.timestamp;

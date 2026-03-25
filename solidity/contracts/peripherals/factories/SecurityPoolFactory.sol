@@ -6,8 +6,8 @@ import { ISecurityPool, ISecurityPoolFactory } from '../interfaces/ISecurityPool
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { Zoltar } from '../../Zoltar.sol';
 import { ShareTokenFactory } from './ShareTokenFactory.sol';
-import { DualCapBatchAuctionFactory } from './DualCapBatchAuctionFactory.sol';
-import { DualCapBatchAuction } from '../DualCapBatchAuction.sol';
+import { UniformPriceDualCapBatchAuctionFactory } from './UniformPriceDualCapBatchAuctionFactory.sol';
+import { UniformPriceDualCapBatchAuction } from '../UniformPriceDualCapBatchAuction.sol';
 import { IShareToken } from '../interfaces/IShareToken.sol';
 import { PriceOracleManagerAndOperatorQueuerFactory } from './PriceOracleManagerAndOperatorQueuerFactory.sol';
 import { PriceOracleManagerAndOperatorQueuer } from '../PriceOracleManagerAndOperatorQueuer.sol';
@@ -17,7 +17,7 @@ import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory shareTokenFactory;
-	DualCapBatchAuctionFactory dualCapBatchAuctionFactory;
+	UniformPriceDualCapBatchAuctionFactory uniformPriceDualCapBatchAuctionFactory;
 	PriceOracleManagerAndOperatorQueuerFactory priceOracleManagerAndOperatorQueuerFactory;
 	Zoltar zoltar;
 	OpenOracle openOracle;
@@ -25,12 +25,12 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	ZoltarQuestionData questionData;
 	ISecurityPoolForker securityPoolForker;
 
-	event DeploySecurityPool(ISecurityPool securityPool, DualCapBatchAuction truthAuction, PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer, IShareToken shareToken, ISecurityPool parent, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount);
+	event DeploySecurityPool(ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction, PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer, IShareToken shareToken, ISecurityPool parent, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount);
 
-	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, DualCapBatchAuctionFactory _dualCapBatchAuctionFactory, PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory) {
+	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory, PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory) {
 		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
-		dualCapBatchAuctionFactory = _dualCapBatchAuctionFactory;
+		uniformPriceDualCapBatchAuctionFactory = _uniformPriceDualCapBatchAuctionFactory;
 		priceOracleManagerAndOperatorQueuerFactory = _priceOracleManagerAndOperatorQueuerFactory;
 		zoltar = _zoltar;
 		openOracle = _openOracle;
@@ -38,15 +38,15 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		questionData = _questionData;
 	}
 
-	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, DualCapBatchAuction truthAuction) {
+	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
 		require(msg.sender == address(securityPoolForker), 'only securityPoolForker');
 		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, questionId, securityMultiplier));
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
 
-		truthAuction = dualCapBatchAuctionFactory.deployDualCapBatchAuction(address(securityPoolForker), securityPoolSalt);
+		truthAuction = uniformPriceDualCapBatchAuctionFactory.deployUniformPriceDualCapBatchAuction(address(securityPoolForker), securityPoolSalt);
 
-		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(address(securityPoolForker), this, questionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier);
+		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(address(securityPoolForker), this, questionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, address(truthAuction));
 
 		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
 		securityPool.setStartingParams(currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
@@ -73,13 +73,13 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		bytes32 shareTokenSalt = keccak256(abi.encode(securityMultiplier, questionId));
 		IShareToken shareToken = shareTokenFactory.deployShareToken(shareTokenSalt);
 
-		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(address(securityPoolForker), this, questionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, ISecurityPool(payable(0x0)), zoltar, universeId, questionId, securityMultiplier);
+		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(address(securityPoolForker), this, questionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, ISecurityPool(payable(0x0)), zoltar, universeId, questionId, securityMultiplier, address(0));
 
 		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
 		securityPool.setStartingParams(currentRetentionRate, startingRepEthPrice, 0);
 
 		shareToken.authorize(securityPool);
 
-		emit DeploySecurityPool(securityPool, DualCapBatchAuction(address(0x0)), priceOracleManagerAndOperatorQueuer, shareToken, ISecurityPool(payable(0x0)), universeId, questionId, securityMultiplier, currentRetentionRate, startingRepEthPrice, 0);
+		emit DeploySecurityPool(securityPool, UniformPriceDualCapBatchAuction(address(0x0)), priceOracleManagerAndOperatorQueuer, shareToken, ISecurityPool(payable(0x0)), universeId, questionId, securityMultiplier, currentRetentionRate, startingRepEthPrice, 0);
 	}
 }

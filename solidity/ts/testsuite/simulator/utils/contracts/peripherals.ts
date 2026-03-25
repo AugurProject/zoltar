@@ -2,10 +2,10 @@ import 'viem/window'
 import { ReadContractReturnType } from 'viem'
 import { ReadClient, WriteClient } from '../viem'
 import { WETH_ADDRESS } from '../constants'
-import { peripherals_DualCapBatchAuction_DualCapBatchAuction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
+import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
-import { ThreeShareArrayToCash } from './securityPool'
+import { threeShareArrayToCash } from './securityPool'
 import { priceToClosestTick } from '../tickMath'
 
 export enum OperationType {
@@ -179,7 +179,7 @@ export const participateAuction = async (client: WriteClient, auctionAddress: `0
 	const price = (ethToInvest * 1_000_000_000_000_000_000n) / repToBuy
 	const tick = priceToClosestTick(price)
 	await client.writeContract({
-		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'submitBid',
 		address: auctionAddress,
 		args: [tick],
@@ -189,7 +189,7 @@ export const participateAuction = async (client: WriteClient, auctionAddress: `0
 }
 export const getEthRaiseCap = async (client: ReadClient, auctionAddress: `0x${ string }`) =>
 	await client.readContract({
-		abi: peripherals_DualCapBatchAuction_DualCapBatchAuction.abi,
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'ethRaiseCap',
 		address: auctionAddress,
 		args: [],
@@ -210,7 +210,7 @@ export const balanceOfSharesInCash = async (client: ReadClient, securityPoolAddr
 		address: shareTokenAddress,
 		args: [universeId, account],
 	})
-	return await ThreeShareArrayToCash(client, securityPoolAddress, array)
+	return await threeShareArrayToCash(client, securityPoolAddress, array)
 }
 
 const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => {
@@ -218,12 +218,12 @@ const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => {
 	return ((universeId & universeMask) << 8n) | (BigInt(outcome) & 255n)
 }
 
-export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x${ string }`, fromUniverseId: bigint, outcome: QuestionOutcome, outcomes: bigint[]) =>
+export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x${ string }`, fromUniverseId: bigint, outcome: QuestionOutcome) =>
 	await client.writeContract({
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'migrate',
 		address: shareTokenAddress,
-		args: [getTokenId(fromUniverseId, outcome), outcomes.map(x => Number(x))],
+		args: [getTokenId(fromUniverseId, outcome)],
 	})
 
 export const getQuestionEndDate = async (client: ReadClient, questionId: bigint) =>

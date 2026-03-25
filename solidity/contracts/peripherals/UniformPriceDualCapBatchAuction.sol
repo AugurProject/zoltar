@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
-import { IDualCapBatchAuction } from './interfaces/IDualCapBatchAuction.sol';
+import { IUniformPriceDualCapBatchAuction } from './interfaces/IUniformPriceDualCapBatchAuction.sol';
 
 // TODO: figure out if this can run up issues with gas and figure out how to avoid them
-contract DualCapBatchAuction {
+contract UniformPriceDualCapBatchAuction {
 	struct Node {
 		int256 tick; // ETH/REP price (tick)
 		uint256 totalEth; // total ETH at this tick
@@ -45,11 +45,16 @@ contract DualCapBatchAuction {
 	uint256 public minBidSize;
 	address public immutable owner;
 
+	bool public underfunded;
+	uint256 public underfundedRemainder;
+	uint256 public underfundedThreshold;
+	uint256 public underfundedWinningEth;
+
 	event AuctionStarted(uint256 ethRaiseCap, uint256 maxRepBeingSold, uint256 minBidSize);
 	event SubmitBid(address bidder, int256 tick, uint256 amount);
-	event Finalized(uint256 ethToSend, bool priceFound, int256 foundTick, uint256 repFilled, uint256 ethFilled);
-	event WithdrawBids(address withdrawFor, IDualCapBatchAuction.TickIndex[] tickIndices, uint256 totalFilledRep, uint256 totalEthRefund);
-	event RefundLosingBids(address bidder, IDualCapBatchAuction.TickIndex[] tickIndices, uint256 ethAmount);
+	event Finalized(uint256 ethToSend, bool hitCap, int256 foundTick, uint256 repFilled, uint256 ethFilled);
+	event WithdrawBids(address withdrawFor, IUniformPriceDualCapBatchAuction.TickIndex[] tickIndices, uint256 totalFilledRep, uint256 totalEthRefund);
+	event RefundLosingBids(address bidder, IUniformPriceDualCapBatchAuction.TickIndex[] tickIndices, uint256 ethAmount);
 
 	constructor(address _owner) {
 		owner = _owner;
@@ -86,27 +91,48 @@ contract DualCapBatchAuction {
 		require(!finalized, 'already finalized');
 		require(msg.sender == owner, 'Only owner can finalize');
 
-		(bool priceFound, int256 foundTick, uint256 accumulatedEth, uint256 ethAtClearingTick) = computeClearing();
+		(bool hitCap, int256 foundTick, uint256 accumulatedEth, uint256 ethAtClearingTick) = computeClearing();
 		finalized = true;
 		clearingTick = foundTick;
 		ethFilledAtClearing = ethAtClearingTick;
 		ethRaised = accumulatedEth;
 
-		uint256 clearingPrice = tickToPrice(clearingTick);
-		totalRepPurchased = accumulatedEth * clearingPrice / PRICE_PRECISION;
-		uint256 ethToSend = accumulatedEth;
+		uint256 ethToSend;
+		if (hitCap) {
+			uint256 clearingPrice = tickToPrice(clearingTick);
+			totalRepPurchased = accumulatedEth * clearingPrice / PRICE_PRECISION;
+			ethToSend = accumulatedEth;
+		} else {
+			// Underfunded: compute threshold price (scaled ETH/REP) = totalETH * PRICE_PRECISION / maxRepBeingSold
+			underfunded = true;
+			if (maxRepBeingSold == 0) {
+				// No REP to sell; treat all as losers, refund all ETH
+				underfundedThreshold = type(uint256).max;
+				underfundedWinningEth = 0;
+				totalRepPurchased = 0;
+				ethToSend = 0;
+			} else {
+				underfundedThreshold = ethRaised * PRICE_PRECISION / maxRepBeingSold;
+				underfundedRemainder = 0;
+				underfundedWinningEth = _sumWinningEth(root, underfundedThreshold);
+				totalRepPurchased = underfundedWinningEth > 0 ? maxRepBeingSold : 0;
+				ethToSend = underfundedWinningEth;
+			}
+		}
+
 		(bool sent,) = payable(owner).call{ value: ethToSend }('');
 		require(sent, 'Failed to send Ether');
-		emit Finalized(ethToSend, priceFound, clearingTick, totalRepPurchased, accumulatedEth);
+		emit Finalized(ethToSend, hitCap, clearingTick, totalRepPurchased, accumulatedEth);
 	}
 
-	function computeClearing() public view returns (bool priceFound, int256 clearingTickOut, uint256 accumulatedEth, uint256 ethAtClearingTick) {
+	function computeClearing() public view returns (bool hitCap, int256 clearingTickOut, uint256 accumulatedEth, uint256 ethAtClearingTick) {
 		return _compute(root, 0, 0, 0, 0);
 	}
 
-	function withdrawBids(address withdrawFor, IDualCapBatchAuction.TickIndex[] memory tickIndices) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
+	function withdrawBids(address withdrawFor, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
 		require(finalized, 'not finalized');
 		require(msg.sender == owner, 'Only owner can call');
+
 		uint256 clearingPriceLocal = tickToPrice(clearingTick);
 
 		for (uint256 i = 0; i < tickIndices.length; i++) {
@@ -116,53 +142,62 @@ contract DualCapBatchAuction {
 			Bid storage bid = bidsAtTick[tick][index];
 			require(bid.bidder == withdrawFor, 'not their bid');
 			require(bid.ethAmount > 0, 'already claimed');
-			if (tick < clearingTick) {
-				// Losing bid: refund full ETH
-				totalEthRefund += bid.ethAmount;
-			} else if (tick > clearingTick) {
-				// Fully winning: convert all ETH to REP
-				if (clearingPriceLocal > 0) {
-					totalFilledRep += bid.ethAmount * PRICE_PRECISION / clearingPriceLocal;
-				} // else: price is zero, filled REP remains 0
+
+			if (underfunded) {
+				uint256 price = tickToPrice(tick);
+				if (price > underfundedThreshold) {
+					// Winner: allocate REP proportional to their share of underfundedWinningEth
+					uint256 numerator = bid.ethAmount * totalRepPurchased + underfundedRemainder;
+					uint256 repShare = numerator / underfundedWinningEth;
+					underfundedRemainder = numerator % underfundedWinningEth;
+					totalFilledRep += repShare;
+					// no ETH refund
+				} else {
+					// Loser: full ETH refund
+					totalEthRefund += bid.ethAmount;
+				}
 			} else {
-				// Tick == clearingTick: partial fill
-				// Determine previous cumulative ETH at this tick
-				uint256 previousCumulativeEth = bid.cumulativeEth - bid.ethAmount;
-				uint256 ethUsed;
-
-				if (ethFilledAtClearing <= previousCumulativeEth) {
-					ethUsed = 0; // this bid did not get filled
-				} else if (ethFilledAtClearing >= bid.cumulativeEth) {
-					ethUsed = bid.ethAmount; // fully filled
+				if (tick < clearingTick) {
+					// Losing bid: refund full ETH
+					totalEthRefund += bid.ethAmount;
+				} else if (tick > clearingTick) {
+					// Fully winning: convert all ETH to REP
+					if (clearingPriceLocal > 0) {
+						totalFilledRep += bid.ethAmount * PRICE_PRECISION / clearingPriceLocal;
+					} // else: price is zero, filled REP remains 0
 				} else {
-					ethUsed = ethFilledAtClearing - previousCumulativeEth; // partially filled
+					// Tick == clearingTick: partial fill
+					uint256 previousCumulativeEth = bid.cumulativeEth - bid.ethAmount;
+					uint256 ethUsed;
+					if (ethFilledAtClearing <= previousCumulativeEth) {
+						ethUsed = 0;
+					} else if (ethFilledAtClearing >= bid.cumulativeEth) {
+						ethUsed = bid.ethAmount;
+					} else {
+						ethUsed = ethFilledAtClearing - previousCumulativeEth;
+					}
+					if (ethUsed > bid.ethAmount) ethUsed = bid.ethAmount;
+					if (clearingPriceLocal > 0) {
+						totalFilledRep += ethUsed * PRICE_PRECISION / clearingPriceLocal;
+					}
+					totalEthRefund += bid.ethAmount - ethUsed;
 				}
-
-				if (ethUsed > bid.ethAmount) ethUsed = bid.ethAmount; // safety clamp
-				uint256 filledRep;
-				if (clearingPriceLocal > 0) {
-					filledRep = ethUsed * PRICE_PRECISION / clearingPriceLocal;
-				} else {
-					filledRep = 0; // zero price, no REP can be bought
-				}
-
-				totalFilledRep += filledRep;
-				totalEthRefund += bid.ethAmount - ethUsed;
 			}
 			bid.ethAmount = 0; // prevent double withdrawals
 		}
+
+		emit WithdrawBids(withdrawFor, tickIndices, totalFilledRep, totalEthRefund);
 		if (totalEthRefund > 0) {
 			(bool sent,) = payable(withdrawFor).call{ value: totalEthRefund }('');
 			require(sent, 'eth transfer failed');
 		}
-		emit WithdrawBids(withdrawFor, tickIndices, totalFilledRep, totalEthRefund);
 	}
 
-	function refundLosingBids(IDualCapBatchAuction.TickIndex[] memory tickIndices) external {
+	function refundLosingBids(IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) external {
 		require(!finalized, 'already finalized');
 
-		(bool priceFound, int256 foundTick,, ) = computeClearing();
-		require(priceFound, 'no clearing yet');
+		(bool hitCap, int256 foundTick,, ) = computeClearing();
+		require(hitCap, 'no clearing yet');
 
 		uint256 totalEthToRefund = 0;
 
@@ -262,10 +297,29 @@ contract DualCapBatchAuction {
 		lastValidEthAtTick = ethToTake;
 
 		// continue to lower prices
-		return _compute(node.left, accEth, lastValidTick, lastValidEth, lastValidEthAtTick);
+ 	return _compute(node.left, accEth, lastValidTick, lastValidEth, lastValidEthAtTick);
+ }
+
+	function _sumWinningEth(uint256 nodeId, uint256 threshold) internal returns (uint256) {
+		if (nodeId == 0) return 0;
+		Node storage node = nodes[nodeId];
+		uint256 price = tickToPrice(node.tick);
+		if (price <= threshold) {
+			// This node and left subtree are losers; only right subtree can have winners
+			return _sumWinningEth(node.right, threshold);
+		} else {
+			// This node and right subtree are winners (right subtree > node.tick > threshold)
+			uint256 sum = node.totalEth;
+			if (node.right != 0) {
+				sum += nodes[node.right].subtreeEth;
+			}
+			// Left subtree may have some winners, check recursively
+			sum += _sumWinningEth(node.left, threshold);
+			return sum;
+		}
 	}
 
-	function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {
+ function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {
 		if (nodeId == 0) {
 			uint256 newId = nextId++;
 			nodes[newId] = Node({ tick: tick, totalEth: ethAmount, subtreeEth: ethAmount, left: 0, right: 0, height: 1 });

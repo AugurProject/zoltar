@@ -3,7 +3,7 @@ pragma solidity 0.8.33;
 
 import { Zoltar } from '../../Zoltar.sol';
 import { OpenOracle } from "../openOracle/OpenOracle.sol";
-import { DualCapBatchAuction } from "../DualCapBatchAuction.sol";
+import { UniformPriceDualCapBatchAuction } from "../UniformPriceDualCapBatchAuction.sol";
 import { IShareToken } from './IShareToken.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { PriceOracleManagerAndOperatorQueuer } from '../PriceOracleManagerAndOperatorQueuer.sol';
@@ -70,30 +70,24 @@ interface ISecurityPool {
 	function performWithdrawRep(address vault, uint256 repAmount) external;
 	function depositRep(uint256 repAmount) external;
 	function redeemRep(address vault) external;
-	function performLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount) external;
+	function performLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount, uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, uint256 snapshotTotalRep, uint256 snapshotDenominator) external;
 	function performSetSecurityBondsAllowance(address callerVault, uint256 amount) external;
 
 	function createCompleteSet() external payable;
 	function redeemCompleteSet(uint256 amount) external;
 
 	function escalationGame() external view returns (EscalationGame);
-	function setRetentionRate(uint256 newRetention) external;
+	function activateForkMode() external;
 	function setSystemState(SystemState newState) external;
-	function setVaultOwnership(address vault, uint256 _poolOwnership, uint256 _securityBondAllowance) external;
-
-	function setVaultSecurityBondAllowance(address vault, uint256 _securityBondAllowance) external;
-	function addToTotalSecurityBondAllowance(uint256 securityBondAllowanceDelta) external;
-	function setPoolOwnershipDenominator(uint256 _poolOwnershipDenominator) external;
-	function setVaultPoolOwnership(address vault, uint256 poolOwnership) external;
-	function setVaultFeeIndex(address vault, uint256 newFeeIndex) external;
+	function configureVault(address vault, uint256 poolOwnership, uint256 securityBondAllowance, uint256 feeIndex) external;
+	function setOwnershipDenominator(uint256 newDenominator) external;
 	function feeIndex() external view returns (uint256);
-	function setShareTokenSupply(uint256 newShareTokenSupply) external;
-	function setCompleteSetCollateralAmount(uint256 newCompleteSetCollateralAmount) external;
-	function setTotalSecurityBondAllowance(uint256 newTotalSecurityBondAllowance) external;
-	function authorize(ISecurityPool pool) external;
+	function setTotalShares(uint256 newTotalShares) external;
+	function setPoolFinancials(uint256 newCollateral, uint256 newTotalBondAllowance) external;
+	function authorizeChildPool(ISecurityPool pool) external;
 	function questionData() external view returns (ZoltarQuestionData);
-	function stealAllRep() external;
-	function migrateEth(address payable child, uint256 amount) external;
+	function drainAllRep() external;
+	function transferEth(address payable receiver, uint256 amount) external;
 
 	function securityPoolForker() external view returns (address);
 
@@ -101,6 +95,6 @@ interface ISecurityPool {
 }
 
 interface ISecurityPoolFactory {
-	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, DualCapBatchAuction truthAuction);
+	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction);
 	function deployOriginSecurityPool(uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice) external returns (ISecurityPool securityPool);
 }

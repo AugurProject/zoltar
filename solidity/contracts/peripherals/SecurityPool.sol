@@ -32,6 +32,7 @@ contract SecurityPool is ISecurityPool {
 	EscalationGame public escalationGame;
 	ZoltarQuestionData public questionData;
 	address public securityPoolForker;
+	address public immutable truthAuction;
 	ISecurityPoolFactory public securityPoolFactory;
 
 	uint256 public totalSecurityBondAllowance;
@@ -78,7 +79,7 @@ contract SecurityPool is ISecurityPool {
 		_;
 	}
 
-	constructor(address _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _securityMultiplier) {
+	constructor(address _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _securityMultiplier, address _truthAuction) {
 		universeId = _universeId;
 		securityPoolFactory = _securityPoolFactory;
 		questionId = _questionId;
@@ -89,6 +90,7 @@ contract SecurityPool is ISecurityPool {
 		escalationGameFactory = _escalationGameFactory;
 		priceOracleManagerAndOperatorQueuer = _priceOracleManagerAndOperatorQueuer;
 		securityPoolForker = _securityPoolForker;
+		truthAuction = _truthAuction;
 		questionData = _questionData;
 		if (address(parent) == address(0x0)) { // origin universe never does truthAuction
 			systemState = SystemState.Operational;
@@ -200,34 +202,67 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 	// liquidating vault
 	////////////////////////////////////////
-	// TODO, currently liquidator can be blocked by someone by depositing rep to vault while the deposit is pending. We don't want to block depositReps for this duration though as we want to allow people to participate escalation game using external rep. I feel after liquidation is triggered we should store a snapshot rep balance of the vault that is then used for liquidation calculations
 	//price = (amount1 * PRICE_PRECISION) / amount2;
 	// price = REP * PRICE_PRECISION / ETH
 	// liquidation moves share of debt and rep to another pool which need to remain non-liquidable
 	// this is currently very harsh, as we steal all the rep and debt from the pool
-	function performLiquidation(address callerVault, address targetVaultAddress, uint256 debtAmount) external isOperational onlyValidOracle {
+	function performLiquidation(
+		address callerVault,
+		address targetVaultAddress,
+		uint256 debtAmount,
+		uint256 snapshotTargetOwnership,
+		uint256 snapshotTargetAllowance,
+		uint256 snapshotTotalRep,
+		uint256 snapshotDenominator
+	) external isOperational onlyValidOracle {
 		updateVaultFees(targetVaultAddress);
 		updateVaultFees(callerVault);
-		uint256 vaultsSecurityBondAllowance = securityVaults[targetVaultAddress].securityBondAllowance;
-		uint256 vaultsRepDeposit = poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership);
-		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
-		require(vaultsSecurityBondAllowance * securityMultiplier * repEthPrice > vaultsRepDeposit * SecurityPoolUtils.PRICE_PRECISION, 'vault needs to be liquidable');
 
-		uint256 debtToMove = debtAmount > securityVaults[targetVaultAddress].securityBondAllowance ? securityVaults[targetVaultAddress].securityBondAllowance : debtAmount;
+		uint256 vaultsRepDeposit;
+		if (snapshotDenominator == 0) {
+			vaultsRepDeposit = snapshotTargetOwnership / SecurityPoolUtils.PRICE_PRECISION;
+		} else {
+			vaultsRepDeposit = (snapshotTargetOwnership * snapshotTotalRep) / snapshotDenominator;
+		}
+
+		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
+		require(snapshotTargetAllowance * securityMultiplier * repEthPrice > vaultsRepDeposit * SecurityPoolUtils.PRICE_PRECISION, 'vault needs to be liquidable');
+
+		uint256 debtToMove = debtAmount > snapshotTargetAllowance ? snapshotTargetAllowance : debtAmount;
 		require(debtToMove > 0, 'no debt to move');
-		uint256 repToMove = debtToMove * vaultsRepDeposit / securityVaults[targetVaultAddress].securityBondAllowance;
+		uint256 repToMove = debtToMove * vaultsRepDeposit / snapshotTargetAllowance;
 		uint256 ownershipToMove = repToPoolOwnership(repToMove);
-		require((securityVaults[callerVault].securityBondAllowance + debtToMove) * securityMultiplier * repEthPrice <= poolOwnershipToRep(securityVaults[callerVault].poolOwnership + ownershipToMove) * SecurityPoolUtils.PRICE_PRECISION, 'New pool would be liquidable!');
-		securityVaults[targetVaultAddress].securityBondAllowance -= debtToMove;
+		require(
+			(securityVaults[callerVault].securityBondAllowance + debtToMove) * securityMultiplier * repEthPrice <=
+				poolOwnershipToRep(securityVaults[callerVault].poolOwnership + ownershipToMove) * SecurityPoolUtils.PRICE_PRECISION,
+			'New pool would be liquidable!'
+		);
+
+		// Update target's allowance based on snapshot to prevent blocking via allowance changes
+		securityVaults[targetVaultAddress].securityBondAllowance = snapshotTargetAllowance - debtToMove;
 		securityVaults[targetVaultAddress].poolOwnership -= ownershipToMove;
 		securityVaults[callerVault].securityBondAllowance += debtToMove;
 		securityVaults[callerVault].poolOwnership += ownershipToMove;
 
 		// target vault needs to be above thresholds after liquidation
-		require(poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT || securityVaults[targetVaultAddress].poolOwnership == 0, 'target min deposit requirement');
-		require(securityVaults[targetVaultAddress].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT || securityVaults[targetVaultAddress].securityBondAllowance == 0, 'target min deposit requirement');
-		require(poolOwnershipToRep(securityVaults[callerVault].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT, 'caller min deposit requirement');
-		require(securityVaults[callerVault].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT, 'caller min deposit requirement');
+		require(
+			poolOwnershipToRep(securityVaults[targetVaultAddress].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT ||
+				securityVaults[targetVaultAddress].poolOwnership == 0,
+			'target min deposit requirement'
+		);
+		require(
+			securityVaults[targetVaultAddress].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT ||
+				securityVaults[targetVaultAddress].securityBondAllowance == 0,
+			'target min deposit requirement'
+		);
+		require(
+			poolOwnershipToRep(securityVaults[callerVault].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT,
+			'caller min deposit requirement'
+		);
+		require(
+			securityVaults[callerVault].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT,
+			'caller min deposit requirement'
+		);
 
 		emit PerformLiquidation(callerVault, targetVaultAddress, debtAmount, debtToMove, repToMove);
 	}
@@ -305,7 +340,7 @@ contract SecurityPool is ISecurityPool {
 
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maxAmount) external isOperational {
 		if (address(escalationGame) == address(0x0)) {
-		uint256 endTime = questionData.getQuestionEndDate(questionId);
+			uint256 endTime = questionData.getQuestionEndDate(questionId);
 			require(block.timestamp > endTime, 'question has not ended');
 			escalationGame = escalationGameFactory.deployEscalationGame(TODO_INITIAL_ESCALATION_GAME_DEPOSIT, repToken.getTotalTheoreticalSupply() / (FORK_THRESHOLD_DIVISOR * 2));
 		}
@@ -324,66 +359,58 @@ contract SecurityPool is ISecurityPool {
 		}
 	}
 
-	// TODO, cleanup these only forker functions by minimizing amount and adding checks
+	function activateForkMode() external onlyForker {
+		systemState = SystemState.PoolForked;
+		updateCollateralAmount();
+		currentRetentionRate = 0;
+		repToken.transfer(msg.sender, repToken.balanceOf(address(this)));
+	}
+
 	function setSystemState(SystemState newState) external onlyForker {
 		systemState = newState;
 	}
 
-	function setRetentionRate(uint256 newRetention) external onlyForker {
-		currentRetentionRate = newRetention;
-	}
-
-	function setVaultOwnership(address vault, uint256 _poolOwnership, uint256 _securityBondAllowance) external onlyForker {
-		securityVaults[vault].poolOwnership = _poolOwnership;
-		securityVaults[vault].securityBondAllowance = _securityBondAllowance;
-	}
-
-	function setVaultSecurityBondAllowance(address vault, uint256 _securityBondAllowance) external onlyForker {
-		securityVaults[vault].securityBondAllowance = _securityBondAllowance;
-
-	}
-	function addToTotalSecurityBondAllowance(uint256 securityBondAllowanceDelta) external onlyForker {
-		totalSecurityBondAllowance += securityBondAllowanceDelta;
-	}
-
-	function setPoolOwnershipDenominator(uint256 _poolOwnershipDenominator) external onlyForker {
-		poolOwnershipDenominator = _poolOwnershipDenominator;
-	}
-
-	function setVaultPoolOwnership(address vault, uint256 poolOwnership) external onlyForker {
+	function configureVault(address vault, uint256 poolOwnership, uint256 securityBondAllowance, uint256 feeIndex) external onlyForker {
+		require(vault != address(0x0), 'invalid vault');
 		securityVaults[vault].poolOwnership = poolOwnership;
+		securityVaults[vault].securityBondAllowance = securityBondAllowance;
+		securityVaults[vault].feeIndex = feeIndex;
 	}
 
-	function setVaultFeeIndex(address vault, uint256 newFeeIndex) external onlyForker {
-		securityVaults[vault].feeIndex = newFeeIndex;
+	function setOwnershipDenominator(uint256 newDenominator) external onlyForker {
+		poolOwnershipDenominator = newDenominator;
 	}
 
-	function setShareTokenSupply(uint256 newShareTokenSupply) external onlyForker {
-		shareTokenSupply = newShareTokenSupply;
+	function setTotalShares(uint256 newTotalShares) external onlyForker {
+		shareTokenSupply = newTotalShares;
 	}
 
-	function setCompleteSetCollateralAmount(uint256 newCompleteSetCollateralAmount) external onlyForker {
-		completeSetCollateralAmount = newCompleteSetCollateralAmount;
+	function setPoolFinancials(uint256 newCollateral, uint256 newTotalBondAllowance) external onlyForker {
+		require(newTotalBondAllowance >= newCollateral, 'bond insufficient');
+		completeSetCollateralAmount = newCollateral;
+		totalSecurityBondAllowance = newTotalBondAllowance;
 	}
 
-	function setTotalSecurityBondAllowance(uint256 newTotalSecurityBondAllowance) external onlyForker {
-		totalSecurityBondAllowance = newTotalSecurityBondAllowance;
-	}
-
-	function stealAllRep() external onlyForker {
+	function drainAllRep() external onlyForker {
 		repToken.transfer(msg.sender, repToken.balanceOf(address(this)));
 	}
 
-	function migrateEth(address payable receiver, uint256 amount) external onlyForker {
+	function transferEth(address payable receiver, uint256 amount) external onlyForker {
 		(bool sent, ) = receiver.call{ value: amount }('');
-		require(sent, 'failed to steal ETH');
+		require(sent, 'failed to send ETH');
 	}
-	function authorize(ISecurityPool pool) external onlyForker {
+
+	function authorizeChildPool(ISecurityPool pool) external onlyForker {
 		shareToken.authorize(pool);
 	}
 
+
 	receive() external payable {
-		// needed for Truth Auction to send ETH back
-		// TODO, add check that it's truth auction sending
+		require(
+			msg.sender == securityPoolForker ||
+			msg.sender == truthAuction ||
+			msg.sender == address(parent),
+			'Unauthorized ETH sender'
+		);
 	}
 }

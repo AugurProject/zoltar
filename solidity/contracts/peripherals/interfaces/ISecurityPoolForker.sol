@@ -3,7 +3,7 @@ pragma solidity 0.8.33;
 
 import { ISecurityPool } from './ISecurityPool.sol';
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
-import { IDualCapBatchAuction } from './IDualCapBatchAuction.sol';
+import { IUniformPriceDualCapBatchAuction } from './IUniformPriceDualCapBatchAuction.sol';
 
 interface ISecurityPoolForker {
 	function initiateSecurityPoolFork(ISecurityPool securityPool) external;
@@ -13,6 +13,6 @@ interface ISecurityPoolForker {
 	function startTruthAuction(ISecurityPool securityPool) external;
 	function finalizeTruthAuction(ISecurityPool securityPool) external;
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external;
-	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IDualCapBatchAuction.TickIndex[] memory tickIndices) external;
+	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) external;
 	function getQuestionOutcome(ISecurityPool securityPool) external view returns (BinaryOutcomes.BinaryOutcome outcome);
 }

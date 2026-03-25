@@ -2,11 +2,11 @@ import { test, beforeEach, describe } from 'bun:test'
 import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
-import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists } from '../testsuite/simulator/utils/utilities'
+import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, isZoltarDeployed, getRepTokensMigratedRepBalance, migrateInternalRep, prepareRepForMigration } from '../testsuite/simulator/utils/contracts/zoltar'
-import { createQuestion } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureDefined } from '../testsuite/simulator/utils/testUtils'
 import { keccak256, encodeAbiParameters } from 'viem'
 
@@ -37,7 +37,7 @@ describe('Contract Test Suite', () => {
 		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const zoltar = getZoltarAddress()
 		const questionText = 'test question'
-		const outcomes = ['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4']
+		const outcomes = sortStringArrayByKeccak(['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'])
 
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
@@ -138,5 +138,115 @@ describe('Contract Test Suite', () => {
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, priorSplitBalance + priorBalance, 'after split balance mismatch')
 		}
+	})
+
+	test('forkUniverse fails for non-existent question', async () => {
+		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const zoltar = getZoltarAddress()
+		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		const nonExistentQuestionId = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn
+
+		await assert.rejects(forkUniverse(client, genesisUniverse, nonExistentQuestionId), /Question does not exist/)
+	})
+
+	test('forkUniverse fails when question has not ended', async () => {
+		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const zoltar = getZoltarAddress()
+		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		// Get current time and create a question that ends in the future
+		const currentTime = await mockWindow.getTime()
+		const futureEndTime = currentTime + 1000n
+
+		const questionData = {
+			title: 'future question',
+			description: '',
+			startTime: 0n,
+			endTime: futureEndTime,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = ['Yes', 'No']
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getQuestionId(questionData, outcomes)
+
+		// Should fail because question hasn't ended
+		await assert.rejects(forkUniverse(client, genesisUniverse, questionId), /Question has not ended/)
+
+		// Advance time past the endTime
+		await mockWindow.advanceTime(2000n)
+
+		// Should succeed now
+		await forkUniverse(client, genesisUniverse, questionId)
+	})
+
+	test('forkUniverse succeeds when question has ended', async () => {
+		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const zoltar = getZoltarAddress()
+		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		// Get current time and create a question that already ended
+		const currentTime = await mockWindow.getTime()
+		const pastEndTime = currentTime - 1000n
+
+		const questionData = {
+			title: 'past question',
+			description: '',
+			startTime: 0n,
+			endTime: pastEndTime,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = ['Yes', 'No']
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getQuestionId(questionData, outcomes)
+
+		// Fork should succeed
+		await forkUniverse(client, genesisUniverse, questionId)
+
+		// Verify fork succeeded
+		const universeData = await getUniverseData(client, genesisUniverse)
+		assert.ok(universeData.forkTime > 0n, 'Universe should be forked')
+		assert.strictEqual(universeData.forkQuestionId, questionId, 'Fork questionId mismatch')
+	})
+
+	test('migrateInternalRep fails for malformed outcome index', async () => {
+		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const zoltar = getZoltarAddress()
+		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		// Create a question with 4 outcomes
+		const questionData = {
+			title: 'test malformed outcome',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = ['Yes', 'No']
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getQuestionId(questionData, outcomes)
+
+		// Fork the universe
+		await forkUniverse(client, genesisUniverse, questionId)
+
+		// Get the balance available for migration
+		const balance = await getRepTokensMigratedRepBalance(client, genesisUniverse, client.account.address)
+
+		// Try to migrate with a malformed outcome index (5 is > 4 outcomes)
+		const malformedOutcomeIndex = 5n
+		await assert.rejects(migrateInternalRep(client, genesisUniverse, balance, [malformedOutcomeIndex]), /Malformed/)
 	})
 })
