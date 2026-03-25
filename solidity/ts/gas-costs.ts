@@ -1,4 +1,4 @@
-import { parseGwei, zeroAddress } from 'viem'
+import { zeroAddress } from 'viem'
 import { Zoltar_Zoltar } from './types/contractArtifact'
 import { getMockedEthSimulateWindowEthereum } from './testsuite/simulator/AnvilWindowEthereum'
 import { submitBid, refundLosingBids } from './testsuite/simulator/utils/contracts/auction'
@@ -65,8 +65,6 @@ if (!Number.isFinite(priorityFeeGwei) || priorityFeeGwei < 0) throw new Error('P
 if (!Number.isFinite(baseFeeGwei) || baseFeeGwei < 0) throw new Error('BASE_FEE_GWEI must be a non-negative number')
 if (totalGasPriceGwei <= 0) throw new Error('BASE_FEE_GWEI + PRIORITY_FEE_GWEI must be greater than zero')
 
-const baseFeeWei = parseGwei(`${ baseFeeGwei }`)
-
 const anvil = await getMockedEthSimulateWindowEthereum()
 const alice = createWriteClient(anvil, TEST_ADDRESSES[0], 0)
 const bob = createWriteClient(anvil, TEST_ADDRESSES[1], 0)
@@ -101,7 +99,7 @@ const measureActionGas = async (client: WriteClient, action: () => Promise<void>
 
 const initializeChain = async ({ deployZoltar, deployInfra }: { deployZoltar: boolean; deployInfra: boolean }) => {
 	await anvil.request({ method: 'anvil_reset', params: [] })
-	await anvil.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${ baseFeeWei.toString(16) }`] })
+	await anvil.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
 	await setupTestAccounts(anvil)
 	if (deployZoltar || deployInfra) await ensureZoltarDeployed(alice)
 	if (deployInfra) await ensureInfraDeployed(alice)

@@ -18,6 +18,22 @@ describe('Escalation Game Test Suite', () => {
 	const reportBond = 1n * 10n ** 18n
 	const nonDecisionThreshold = 1000n * 10n ** 18n
 
+	const readIterativeAttritionCost = async (escalationGame: `0x${ string }`, timeSinceStart: bigint) =>
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'computeIterativeAttritionCost',
+			address: escalationGame,
+			args: [timeSinceStart],
+		})
+
+	const readTimeSinceStartFromAttritionCost = async (escalationGame: `0x${ string }`, attritionCost: bigint) =>
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'computeTimeSinceStartFromAttritionCost',
+			address: escalationGame,
+			args: [attritionCost],
+		})
+
 	beforeEach(async () => {
 		mockWindow = await getMockedEthSimulateWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
@@ -86,43 +102,23 @@ describe('Escalation Game Test Suite', () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
 
 		// At time 0, cost should equal startBond
-		const costAt0 = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'computeIterativeAttritionCost',
-			address: escalationGame,
-			args: [0n],
-		})
+		const costAt0 = await readIterativeAttritionCost(escalationGame, 0n)
 		assert.strictEqual(costAt0, reportBond, 'cost at time 0 equals startBond')
 
 		// At full time, cost should equal nonDecisionThreshold
-		const costAtMax = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'computeIterativeAttritionCost',
-			address: escalationGame,
-			args: [ESCALATION_TIME_LENGTH],
-		})
+		const costAtMax = await readIterativeAttritionCost(escalationGame, ESCALATION_TIME_LENGTH)
 		assert.strictEqual(costAtMax, nonDecisionThreshold, 'cost at max time equals nonDecisionThreshold')
 	})
 
 	// Quantifies the maximum round‑trip error in seconds across the entire time range.
 	test('Round‑trip error: max deviation ≤ 20 seconds', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
-		const step = ESCALATION_TIME_LENGTH / 1000n // 1000 points
+		const step = ESCALATION_TIME_LENGTH / 100n
 		let maxError = 0n
 
 		for (let t = 0n; t <= ESCALATION_TIME_LENGTH; t += step) {
-			const cost = await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'computeIterativeAttritionCost',
-				address: escalationGame,
-				args: [t],
-			})
-			const recoveredT = await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'computeTimeSinceStartFromAttritionCost',
-				address: escalationGame,
-				args: [cost],
-			})
+			const cost = await readIterativeAttritionCost(escalationGame, t)
+			const recoveredT = await readTimeSinceStartFromAttritionCost(escalationGame, cost)
 			const error = t > recoveredT ? t - recoveredT : recoveredT - t
 			if (error > maxError) maxError = error
 		}
@@ -138,12 +134,7 @@ describe('Escalation Game Test Suite', () => {
 		let previousCost = 0n
 
 		for (let t = 0n; t <= ESCALATION_TIME_LENGTH; t += step) {
-			const cost = await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'computeIterativeAttritionCost',
-				address: escalationGame,
-				args: [t],
-			})
+			const cost = await readIterativeAttritionCost(escalationGame, t)
 
 			// Cost must always increase or stay same (should always increase for this function)
 			assert.ok(cost >= previousCost, `cost at time ${ t } should be >= cost at time ${ t - step }`)
@@ -157,17 +148,12 @@ describe('Escalation Game Test Suite', () => {
 
 	test('computeIterativeAttritionCost: dense sampling for monotonicity', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
-		const step = ESCALATION_TIME_LENGTH / 1000n
+		const step = ESCALATION_TIME_LENGTH / 250n
 
 		let lastCost = 0n
 
 		for (let t = 0n; t <= ESCALATION_TIME_LENGTH; t += step) {
-			const cost = await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'computeIterativeAttritionCost',
-				address: escalationGame,
-				args: [t],
-			})
+			const cost = await readIterativeAttritionCost(escalationGame, t)
 
 			assert.ok(cost >= lastCost, `Monotonicity violated at time ${ t }: ${ lastCost } -> ${ cost }`)
 			assert.ok(cost >= reportBond, `cost below startBond at time ${ t }`)
@@ -183,20 +169,10 @@ describe('Escalation Game Test Suite', () => {
 
 		for (let t = 0n; t <= ESCALATION_TIME_LENGTH; t += step) {
 			// Get expected cost at this time
-			const expectedCost = await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'computeIterativeAttritionCost',
-				address: escalationGame,
-				args: [t],
-			})
+			const expectedCost = await readIterativeAttritionCost(escalationGame, t)
 
 			// Compute time from this cost
-			const recoveredTime = await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'computeTimeSinceStartFromAttritionCost',
-				address: escalationGame,
-				args: [expectedCost],
-			})
+			const recoveredTime = await readTimeSinceStartFromAttritionCost(escalationGame, expectedCost)
 
 			// Allow some tolerance due to integer math and binary search termination
 			const tolerance = 10n // maximum allowed deviation (in time units)
@@ -209,21 +185,11 @@ describe('Escalation Game Test Suite', () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
 
 		// Cost <= startBond should return 0
-		const timeFromLowCost = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'computeTimeSinceStartFromAttritionCost',
-			address: escalationGame,
-			args: [reportBond],
-		})
+		const timeFromLowCost = await readTimeSinceStartFromAttritionCost(escalationGame, reportBond)
 		assert.strictEqual(timeFromLowCost, 0n, 'startBond maps to time 0')
 
 		// Cost >= nonDecisionThreshold should return escalationTimeLength
-		const timeFromHighCost = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'computeTimeSinceStartFromAttritionCost',
-			address: escalationGame,
-			args: [nonDecisionThreshold],
-		})
+		const timeFromHighCost = await readTimeSinceStartFromAttritionCost(escalationGame, nonDecisionThreshold)
 		assert.strictEqual(timeFromHighCost, ESCALATION_TIME_LENGTH, 'threshold maps to max time')
 	})
 
@@ -257,24 +223,14 @@ describe('Escalation Game Test Suite', () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
 
 		// Test a dense grid of time values
-		const step = ESCALATION_TIME_LENGTH / 100n
+		const step = ESCALATION_TIME_LENGTH / 50n
 
 		for (let t = 0n; t <= ESCALATION_TIME_LENGTH; t += step) {
 			// Compute cost at time t
-			const cost = await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'computeIterativeAttritionCost',
-				address: escalationGame,
-				args: [t],
-			})
+			const cost = await readIterativeAttritionCost(escalationGame, t)
 
 			// Recover time from that cost
-			const recoveredT = await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'computeTimeSinceStartFromAttritionCost',
-				address: escalationGame,
-				args: [cost],
-			})
+			const recoveredT = await readTimeSinceStartFromAttritionCost(escalationGame, cost)
 
 			// The recovered time should be within a small tolerance of original
 			// Due to binary search termination and fixed-point errors
@@ -290,12 +246,7 @@ describe('Escalation Game Test Suite', () => {
 
 		const costs: bigint[] = []
 		for (let t = 0n; t <= ESCALATION_TIME_LENGTH; t += step) {
-			const cost = await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'computeIterativeAttritionCost',
-				address: escalationGame,
-				args: [t],
-			})
+			const cost = await readIterativeAttritionCost(escalationGame, t)
 			costs.push(cost)
 		}
 
@@ -316,12 +267,7 @@ describe('Escalation Game Test Suite', () => {
 			if (cost === undefined) {
 				throw new Error(`costs array element is undefined at index ${ i }`)
 			}
-			const recoveredT = await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'computeTimeSinceStartFromAttritionCost',
-				address: escalationGame,
-				args: [cost],
-			})
+			const recoveredT = await readTimeSinceStartFromAttritionCost(escalationGame, cost)
 
 			assert.ok(recoveredT >= prevRecoveredT, `Recovered time should be non-decreasing with cost: ${ prevRecoveredT } -> ${ recoveredT }`)
 			prevRecoveredT = recoveredT
@@ -342,23 +288,13 @@ describe('Escalation Game Test Suite', () => {
 			const targetCost = reportBond + ((nonDecisionThreshold - reportBond) * fraction) / 10000n
 
 			// Get the time for this cost
-			const recoveredT = await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'computeTimeSinceStartFromAttritionCost',
-				address: escalationGame,
-				args: [targetCost],
-			})
+			const recoveredT = await readTimeSinceStartFromAttritionCost(escalationGame, targetCost)
 
 			// Recovered time should be within [0, ESCALATION_TIME_LENGTH]
 			assert.ok(recoveredT <= ESCALATION_TIME_LENGTH, `Recovered time ${ recoveredT } <= max`)
 
 			// Compute the expected cost at recoveredT and ensure it's close to targetCost
-			const computedCost = await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'computeIterativeAttritionCost',
-				address: escalationGame,
-				args: [recoveredT],
-			})
+			const computedCost = await readIterativeAttritionCost(escalationGame, recoveredT)
 
 			// The computed cost should be close to targetCost (within 5% for on-chain precision)
 			const absError = computedCost > targetCost ? computedCost - targetCost : targetCost - computedCost
