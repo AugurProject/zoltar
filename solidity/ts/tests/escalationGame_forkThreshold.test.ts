@@ -105,7 +105,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			address: securityPoolAddresses.securityPool,
 			functionName: 'withdrawFromEscalationGame',
-			args: [[0n]], // deposit index 0
+			args: [QuestionOutcome.Yes, [0n]], // deposit index 0
 		})
 		await client.waitForTransactionReceipt({ hash: txHash })
 		const vaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)

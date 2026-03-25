@@ -348,13 +348,25 @@ contract SecurityPool is ISecurityPool {
 		require(poolOwnershipToRep(securityVaults[msg.sender].poolOwnership) >= securityVaults[msg.sender].lockedRepInEscalationGame, 'Not enough REP');
 	}
 
-	function withdrawFromEscalationGame(uint256[] memory depositIndexes) external isOperational {
+	function withdrawFromEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256[] memory depositIndexes) external {
 		require(address(escalationGame) != address(0x0), 'escalation game needs to be deployed');
-		BinaryOutcomes.BinaryOutcome outcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
-		require(!escalationGame.hasReachedNonDecision(), 'cannot withdraw, escalation game is indecisive');
+		require(systemState == SystemState.Operational, 'System is not operational');
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
+		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
+		bool gameCanceledByExternalFork = questionOutcome == BinaryOutcomes.BinaryOutcome.None && zoltar.getForkTime(universeId) > 0 && !escalationGame.hasReachedNonDecision();
+		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None || gameCanceledByExternalFork, 'Question has not finalized!');
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
-			(address depositor, uint256 amountToWithdraw) = escalationGame.withdrawDeposit(depositIndexes[index]);
+			address depositor;
+			uint256 amountToWithdraw;
+			uint256 unlockedDepositAmount;
+			if (gameCanceledByExternalFork) {
+				(depositor, amountToWithdraw) = escalationGame.refundCanceledDeposit(depositIndexes[index], outcome);
+				unlockedDepositAmount = amountToWithdraw;
+			} else {
+				require(outcome == questionOutcome, 'Wrong outcome');
+				(depositor, amountToWithdraw, unlockedDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index]);
+			}
+			securityVaults[depositor].lockedRepInEscalationGame -= unlockedDepositAmount;
 			securityVaults[depositor].poolOwnership += repToPoolOwnership(amountToWithdraw);
 		}
 	}

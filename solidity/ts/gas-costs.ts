@@ -244,21 +244,17 @@ const scenarios: Scenario[] = [
 		section: '1. Core Deployment',
 		label: 'deploy Zoltar core contracts',
 		init: { deployZoltar: false, deployInfra: false },
-		run: async () => {
-			return await measureActionGas(alice, async () => {
+		run: async () => await measureActionGas(alice, async () => {
 				await ensureZoltarDeployed(alice)
-			})
-		},
+			}),
 	},
 	{
 		section: '2. Peripheral Deployment',
 		label: 'deploy peripheral contracts',
 		init: { deployZoltar: true, deployInfra: false },
-		run: async () => {
-			return await measureActionGas(alice, async () => {
+		run: async () => await measureActionGas(alice, async () => {
 				await ensureInfraDeployed(alice)
-			})
-		},
+			}),
 	},
 	{
 		section: '3. Question Creation',
@@ -438,7 +434,7 @@ const scenarios: Scenario[] = [
 			await anvil.setTime(context.questionData.endTime + 10_000n)
 			await confirmTx(alice, depositToEscalationGame(alice, context.addresses.securityPool, QuestionOutcome.Yes, reportBond))
 			await anvil.advanceTime(10n * DAY)
-			return await waitForGas(alice, withdrawFromEscalationGame(alice, context.addresses.securityPool, [0n]))
+			return await waitForGas(alice, withdrawFromEscalationGame(alice, context.addresses.securityPool, QuestionOutcome.Yes, [0n]))
 		},
 	},
 	{
@@ -450,7 +446,7 @@ const scenarios: Scenario[] = [
 			await anvil.setTime(context.questionData.endTime + 10_000n)
 			await confirmTx(alice, depositToEscalationGame(alice, context.addresses.securityPool, QuestionOutcome.Yes, reportBond))
 			await anvil.advanceTime(10n * DAY)
-			await confirmTx(alice, withdrawFromEscalationGame(alice, context.addresses.securityPool, [0n]))
+			await confirmTx(alice, withdrawFromEscalationGame(alice, context.addresses.securityPool, QuestionOutcome.Yes, [0n]))
 			return await waitForGas(alice, redeemRep(alice, context.addresses.securityPool, alice.account.address))
 		},
 	},

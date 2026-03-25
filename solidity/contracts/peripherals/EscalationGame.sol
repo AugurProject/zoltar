@@ -247,12 +247,23 @@ contract EscalationGame {
 		emit ClaimDeposit(amountToWithdraw, burnAmount);
 	}
 
-	// TODO, allow withdrawing after someones elses fork as well (game is canceled)
-	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw) {
+	function refundCanceledDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
+		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
+		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
+		deposits[uint8(outcome)][depositIndex].amount = 0;
+		depositor = deposit.depositor;
+		amountToWithdraw = deposit.amount;
+		emit WithdrawDeposit(depositor, outcome, amountToWithdraw, depositIndex);
+	}
+
+	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw, uint256 unlockedDepositAmount) {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
 		// if system hasnt forked, check outcome is winning
 		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();
+		Deposit memory deposit = deposits[uint8(questionResolution)][depositIndex];
+		unlockedDepositAmount = deposit.amount;
 		(depositor,amountToWithdraw) = claimDepositForWinning(depositIndex, questionResolution);
 		emit WithdrawDeposit(depositor, questionResolution, amountToWithdraw, depositIndex);
 	}
