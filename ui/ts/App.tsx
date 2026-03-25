@@ -44,11 +44,15 @@ function formatCurrencyBalance(value: bigint | null, units: number = 18) {
 }
 
 function getPrerequisiteLabel(steps: DeploymentStatus[], index: number) {
-	const missingStep = steps.slice(0, index).find(step => !step.deployed)
-	return missingStep?.label ?? null
+	const currentStep = steps[index]
+	if (currentStep === undefined) return null
+
+	const missingDependency = currentStep.dependencies.map(dependencyId => steps.find(step => step.id === dependencyId)).find(step => step !== undefined && !step.deployed)
+
+	return missingDependency?.label ?? null
 }
 
-function renderDeploymentSection({ title, description, steps, allSteps, accountAddress, busyStepId, onDeploy }: { title: string; description: string; steps: DeploymentStatus[]; allSteps: DeploymentStatus[]; accountAddress: Address | null; busyStepId: string | null; onDeploy: (stepId: string) => Promise<void> }) {
+function renderDeploymentSection({ title, steps, allSteps, accountAddress, busyStepId, onDeploy }: { title: string; steps: DeploymentStatus[]; allSteps: DeploymentStatus[]; accountAddress: Address | null; busyStepId: string | null; onDeploy: (stepId: string) => Promise<void> }) {
 	return (
 		<section class="panel contract-panel">
 			<div class="contract-panel-header">
@@ -56,7 +60,6 @@ function renderDeploymentSection({ title, description, steps, allSteps, accountA
 					<p class="panel-label">{title}</p>
 					<h2>{title}</h2>
 				</div>
-				<p class="detail">{description}</p>
 			</div>
 			<div class="contract-list">
 				{steps.map(step => {
@@ -304,7 +307,6 @@ export function App() {
 
 			{renderDeploymentSection({
 				title: 'Proxy Deployer',
-				description: 'Dedicated deployment path for the proxy deployer bootstrap transaction.',
 				steps: proxyDeployerSteps,
 				allSteps: deploymentStatuses,
 				accountAddress: accountState.address,
@@ -314,7 +316,6 @@ export function App() {
 
 			{renderDeploymentSection({
 				title: 'Zoltar',
-				description: 'Core Zoltar contracts. Deploy ZoltarQuestionData before Zoltar.',
 				steps: zoltarSteps,
 				allSteps: deploymentStatuses,
 				accountAddress: accountState.address,
@@ -324,7 +325,6 @@ export function App() {
 
 			{renderDeploymentSection({
 				title: 'Augur PlaceHolder',
-				description: 'Remaining deterministic deployment steps grouped under the Augur PlaceHolder bucket.',
 				steps: augurPlaceholderSteps,
 				allSteps: deploymentStatuses,
 				accountAddress: accountState.address,

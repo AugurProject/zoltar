@@ -12,6 +12,7 @@ type DeploymentStep = {
 	id: string
 	label: string
 	address: Address
+	dependencies: string[]
 	deploy: (client: DeploymentClient) => Promise<Hash>
 }
 
@@ -190,6 +191,7 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			id: 'proxyDeployer',
 			label: 'Proxy Deployer',
 			address: PROXY_DEPLOYER_ADDRESS,
+			dependencies: [],
 			deploy: async client => {
 				const hash = await ensureProxyDeployerDeployed(client)
 				return hash ?? ('0x0000000000000000000000000000000000000000000000000000000000000000' as Hash)
@@ -199,66 +201,77 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			id: 'uniformPriceDualCapBatchAuctionFactory',
 			label: 'UniformPriceDualCapBatchAuctionFactory',
 			address: addresses.uniformPriceDualCapBatchAuctionFactory,
+			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, `0x${ peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object }`),
 		},
 		{
 			id: 'scalarOutcomes',
 			label: 'ScalarOutcomes',
 			address: addresses.scalarOutcomes,
+			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, `0x${ ScalarOutcomes_ScalarOutcomes.evm.bytecode.object }`),
 		},
 		{
 			id: 'securityPoolUtils',
 			label: 'SecurityPoolUtils',
 			address: addresses.securityPoolUtils,
+			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`),
 		},
 		{
 			id: 'openOracle',
 			label: 'OpenOracle',
 			address: addresses.openOracle,
+			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`),
 		},
 		{
 			id: 'zoltarQuestionData',
 			label: 'ZoltarQuestionData',
 			address: addresses.zoltarQuestionData,
+			dependencies: ['proxyDeployer', 'scalarOutcomes'],
 			deploy: async client => await deployViaProxy(client, getZoltarQuestionDataByteCode()),
 		},
 		{
 			id: 'zoltar',
 			label: 'Zoltar',
 			address: addresses.zoltar,
+			dependencies: ['proxyDeployer', 'zoltarQuestionData'],
 			deploy: async client => await deployViaProxy(client, getZoltarInitCode(addresses.zoltarQuestionData)),
 		},
 		{
 			id: 'shareTokenFactory',
 			label: 'ShareTokenFactory',
 			address: addresses.shareTokenFactory,
+			dependencies: ['proxyDeployer', 'zoltar'],
 			deploy: async client => await deployViaProxy(client, getShareTokenFactoryByteCode(addresses.zoltar)),
 		},
 		{
 			id: 'priceOracleManagerAndOperatorQueuerFactory',
 			label: 'PriceOracleManagerAndOperatorQueuerFactory',
 			address: addresses.priceOracleManagerAndOperatorQueuerFactory,
+			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, `0x${ peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object }`),
 		},
 		{
 			id: 'securityPoolForker',
 			label: 'SecurityPoolForker',
 			address: addresses.securityPoolForker,
+			dependencies: ['proxyDeployer', 'scalarOutcomes', 'securityPoolUtils', 'zoltar'],
 			deploy: async client => await deployViaProxy(client, getSecurityPoolForkerByteCode(addresses.zoltar)),
 		},
 		{
 			id: 'escalationGameFactory',
 			label: 'EscalationGameFactory',
 			address: addresses.escalationGameFactory,
+			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, getEscalationGameFactoryByteCode()),
 		},
 		{
 			id: 'securityPoolFactory',
 			label: 'SecurityPoolFactory',
 			address: addresses.securityPoolFactory,
+			dependencies: ['proxyDeployer', 'securityPoolForker', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'uniformPriceDualCapBatchAuctionFactory', 'priceOracleManagerAndOperatorQueuerFactory', 'securityPoolUtils'],
 			deploy: async client => await deployViaProxy(client, getSecurityPoolFactoryByteCode(addresses.securityPoolForker, addresses.zoltarQuestionData, addresses.escalationGameFactory, addresses.openOracle, addresses.zoltar, addresses.shareTokenFactory, addresses.uniformPriceDualCapBatchAuctionFactory, addresses.priceOracleManagerAndOperatorQueuerFactory)),
 		},
 	]
