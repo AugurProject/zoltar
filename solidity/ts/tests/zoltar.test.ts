@@ -1,5 +1,6 @@
 import { test, beforeEach, describe } from 'bun:test'
-import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
@@ -14,12 +15,13 @@ import { keccak256, encodeAbiParameters } from 'viem'
 const FORKER_DEPOSIT_FRACTION = 20n
 
 describe('Contract Test Suite', () => {
+	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	const genesisUniverse = 0n
 
 	beforeEach(async () => {
-		mockWindow = await getMockedEthSimulateWindowEthereum()
+		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
@@ -191,15 +193,15 @@ describe('Contract Test Suite', () => {
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 
-		// Get current time and create a question that already ended
+		// Create a question that ends in the future, then advance time past its end.
 		const currentTime = await mockWindow.getTime()
-		const pastEndTime = currentTime - 1000n
+		const futureEndTime = currentTime + 1000n
 
 		const questionData = {
 			title: 'past question',
 			description: '',
 			startTime: 0n,
-			endTime: pastEndTime,
+			endTime: futureEndTime,
 			numTicks: 0n,
 			displayValueMin: 0n,
 			displayValueMax: 0n,
@@ -208,6 +210,7 @@ describe('Contract Test Suite', () => {
 		const outcomes = ['Yes', 'No']
 		await createQuestion(client, questionData, outcomes)
 		const questionId = getQuestionId(questionData, outcomes)
+		await mockWindow.advanceTime(2000n)
 
 		// Fork should succeed
 		await forkUniverse(client, genesisUniverse, questionId)

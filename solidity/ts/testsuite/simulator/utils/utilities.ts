@@ -1,6 +1,6 @@
 import 'viem/window'
 import { encodeAbiParameters, keccak256 } from 'viem'
-import { ReadClient, WriteClient } from './viem'
+import { ReadClient, WriteClient, writeContractAndWait } from './viem'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants'
 import { addressString } from './bigint'
 import { Address } from 'viem'
@@ -9,6 +9,7 @@ import { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 import { QuestionOutcome } from '../types/types'
 import { ReputationToken_ReputationToken, peripherals_WETH9_WETH9 } from '../../../types/contractArtifact'
 const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
+const DEFAULT_APPROVAL_AMOUNT = 1000000000000000000000000000000n
 const PROXY_DEPLOYER_BYTECODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3'
 
 function hexToBytes(value: string) {
@@ -45,15 +46,12 @@ const mintERC20 = async (anvilWindowEthereum: AnvilWindowEthereum, erc20Address:
 	await anvilWindowEthereum.addStateOverrides({ [erc20Address]: { stateDiff: stateSets } })
 }
 
-export const approveToken = async (client: WriteClient, tokenAddress: Address, spenderAddress: Address) => {
-	const amount = 1000000000000000000000000000000n
-	return await client.writeContract({
+export const approveToken = async (client: WriteClient, tokenAddress: Address, spenderAddress: Address) => await writeContractAndWait(client, () => client.writeContract({
 		abi: ABIS.mainnet.erc20,
 		functionName: 'approve',
 		address: tokenAddress,
-		args: [spenderAddress, amount],
-	})
-}
+		args: [spenderAddress, DEFAULT_APPROVAL_AMOUNT],
+	}))
 
 export const getERC20Balance = async (client: ReadClient, tokenAddress: Address, ownerAddress: Address) =>
 	await client.readContract({

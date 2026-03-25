@@ -1,6 +1,6 @@
 import 'viem/window'
 import { ReadContractReturnType } from 'viem'
-import { ReadClient, WriteClient } from '../viem'
+import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { WETH_ADDRESS } from '../constants'
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { QuestionOutcome } from '../../types/types'
@@ -16,24 +16,24 @@ export enum OperationType {
 
 export const requestPriceIfNeededAndQueueOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`, operation: OperationType, targetVault: `0x${ string }`, amount: bigint) => {
 	const ethCost = (await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)) * 2n
-	return await client.writeContract({
+	return await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'requestPriceIfNeededAndQueueOperation',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [operation, targetVault, amount],
 		value: ethCost,
-	})
+	}))
 }
 
 export const requestPrice = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) => {
 	const ethCost = (await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)) * 2n
-	return await client.writeContract({
+	return await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'requestPrice',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
 		value: ethCost,
-	})
+	}))
 }
 
 export const getPendingReportId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) =>
@@ -80,21 +80,21 @@ export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bi
 }
 
 export const openOracleSubmitInitialReport = async (client: WriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: `0x${ string }`) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'submitInitialReport',
 		address: getInfraContractAddresses().openOracle,
 		args: [reportId, amount1, amount2, stateHash],
-	})
+	}))
 
 export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
 		address: getInfraContractAddresses().openOracle,
 		gas: 5_000_000n, //needed because of gas() opcode being used
 		args: [reportId],
-	})
+	}))
 
 export const getRequestPriceEthCost = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`) =>
 	await client.readContract({
@@ -114,12 +114,12 @@ export const wrapWeth = async (client: WriteClient, amount: bigint) => {
 			outputs: [],
 		},
 	]
-	return await client.writeContract({
+	return await writeContractAndWait(client, () => client.writeContract({
 		abi: wethAbi,
 		address: WETH_ADDRESS,
 		functionName: 'deposit',
 		value: amount,
-	})
+	}))
 }
 
 interface ReportMeta {
@@ -178,13 +178,13 @@ export const participateAuction = async (client: WriteClient, auctionAddress: `0
 	// Compute price: ethToInvest / repToBuy in PRICE_PRECISION units
 	const price = (ethToInvest * 1_000_000_000_000_000_000n) / repToBuy
 	const tick = priceToClosestTick(price)
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'submitBid',
 		address: auctionAddress,
 		args: [tick],
 		value: ethToInvest,
-	})
+	}))
 	return tick
 }
 export const getEthRaiseCap = async (client: ReadClient, auctionAddress: `0x${ string }`) =>
@@ -204,7 +204,7 @@ export const balanceOfShares = async (client: ReadClient, shareTokenAddress: `0x
 	})
 
 export const balanceOfSharesInCash = async (client: ReadClient, securityPoolAddress: `0x${ string }`, shareTokenAddress: `0x${ string }`, universeId: bigint, account: `0x${ string }`): Promise<[bigint, bigint, bigint]> => {
-	const array = await client.readContract({
+	const array: readonly [bigint, bigint, bigint] = await client.readContract({
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'balanceOfShares',
 		address: shareTokenAddress,
@@ -219,12 +219,12 @@ const getTokenId = (universeId: bigint, outcome: QuestionOutcome) => {
 }
 
 export const migrateShares = async (client: WriteClient, shareTokenAddress: `0x${ string }`, fromUniverseId: bigint, outcome: QuestionOutcome) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'migrate',
 		address: shareTokenAddress,
 		args: [getTokenId(fromUniverseId, outcome)],
-	})
+	}))
 
 export const getQuestionEndDate = async (client: ReadClient, questionId: bigint) =>
 	await client.readContract({

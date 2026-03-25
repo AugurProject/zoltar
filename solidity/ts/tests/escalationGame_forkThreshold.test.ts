@@ -1,6 +1,7 @@
 import { test, beforeEach, describe } from 'bun:test'
-import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
+import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
+import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
@@ -20,6 +21,7 @@ const DAY = 86400n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
 
 describe('Escalation Game Fork Threshold Test', () => {
+	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	const genesisUniverse = 0n
@@ -34,7 +36,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 	let questionId: bigint
 
 	beforeEach(async () => {
-		mockWindow = await getMockedEthSimulateWindowEthereum()
+		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
@@ -102,13 +104,16 @@ describe('Escalation Game Fork Threshold Test', () => {
 		// Get vault ownership before withdrawal
 		const vaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const repBefore = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultBefore.repDepositShare)
-		const txHash = await client.writeContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			address: securityPoolAddresses.securityPool,
-			functionName: 'withdrawFromEscalationGame',
-			args: [QuestionOutcome.Yes, [0n]], // deposit index 0
-		})
-		await client.waitForTransactionReceipt({ hash: txHash })
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					address: securityPoolAddresses.securityPool,
+					functionName: 'withdrawFromEscalationGame',
+					args: [QuestionOutcome.Yes, [0n]], // deposit index 0
+				}),
+		)
 		const vaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const repAfter = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultAfter.repDepositShare)
 

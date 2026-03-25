@@ -1,6 +1,7 @@
 import { test, beforeEach, describe } from 'bun:test'
 import { createWriteClient, WriteClient } from '../../testsuite/simulator/utils/viem'
-import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from '../../testsuite/simulator/AnvilWindowEthereum'
+import { AnvilWindowEthereum } from '../../testsuite/simulator/AnvilWindowEthereum'
+import { useIsolatedAnvilNode } from '../../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../../testsuite/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../../testsuite/simulator/utils/utilities'
 import { Address } from 'viem'
@@ -25,6 +26,7 @@ const DEFAULT_ETH_RAISE_CAP = 200_000n
 const DEFAULT_MAX_REP = 100n
 
 describe('Auction', () => {
+	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	let auctionAddress: Address
@@ -67,6 +69,7 @@ describe('Auction', () => {
 	}
 
 	async function finalizeAndVerify(client: WriteClient, auctionAddress: Address): Promise<void> {
+		await mockWindow.advanceTime(AUCTION_TIME + 1n)
 		await finalize(client, auctionAddress)
 		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'auction not finalized')
 	}
@@ -134,7 +137,7 @@ describe('Auction', () => {
 	}
 
 	beforeEach(async () => {
-		mockWindow = await getMockedEthSimulateWindowEthereum()
+		mockWindow = getAnvilWindowEthereum()
 		await setupTestAccounts(mockWindow)
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await ensureZoltarDeployed(client)
@@ -495,7 +498,10 @@ describe('Auction', () => {
 			await assert.rejects(async () => await submitBid(client, freshAddress, tick, bidAmount), 'invalid')
 
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+			await submitBid(client, auctionAddress, tick, ethRaiseCap)
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalize(client, auctionAddress)
+			strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'auction should be finalized before post-finalization assertions')
 
 			await assert.rejects(async () => await submitBid(client, auctionAddress, tick, bidAmount), 'finalized')
 		})
@@ -868,6 +874,7 @@ describe('Auction', () => {
 			strictEqualTypeSafe(clearingPre.foundTick > losingTick, true)
 
 			// Finalize
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalize(client, auctionAddress)
 			strictEqualTypeSafe(await isFinalized(client, auctionAddress), true)
 
@@ -904,6 +911,7 @@ describe('Auction', () => {
 			await submitBidAndVerifyLock(client, auctionAddress, zeroPriceTick, bidAmount)
 
 			// Finalize: should succeed
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalizeAndVerify(client, auctionAddress)
 
 			const clearingTick = await getClearingTick(client, auctionAddress)

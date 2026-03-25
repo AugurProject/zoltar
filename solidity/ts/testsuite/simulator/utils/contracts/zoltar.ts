@@ -1,5 +1,5 @@
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
-import { ReadClient, WriteClient } from '../viem'
+import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes } from 'viem'
 import { addressString, bytes32String } from '../bigint'
@@ -76,29 +76,29 @@ export const getUniverseData = async (client: ReadClient, universeId: bigint) =>
 }
 
 export const forkUniverse = async (client: WriteClient, universeId: bigint, questionId: bigint) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkUniverse',
 		address: getZoltarAddress(),
 		args: [universeId, questionId],
-	})
+	}))
 
 export const prepareRepForMigration = async (client: WriteClient, universeId: bigint, amount: bigint) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'prepareRepForMigration',
 		address: getZoltarAddress(),
 		args: [universeId, amount],
-	})
+	}))
 
 export const migrateInternalRep = async (client: WriteClient, universeId: bigint, amount: bigint, outcomeIndexes: (number | bigint)[]) => {
 	const bigintIndices = outcomeIndexes.map(x => BigInt(x))
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'migrateInternalRep',
 		address: getZoltarAddress(),
 		args: [universeId, amount, bigintIndices],
-	})
+	}))
 }
 
 export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0x${ string }`) {

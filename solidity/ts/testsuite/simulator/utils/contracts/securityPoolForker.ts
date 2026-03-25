@@ -2,65 +2,65 @@ import { peripherals_SecurityPoolForker_SecurityPoolForker } from '../../../../t
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
 import { contractExists } from '../utilities'
-import { ReadClient, WriteClient } from '../viem'
+import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 
 export const initiateSecurityPoolFork = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'initiateSecurityPoolFork',
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress],
-	})
+	}))
 
 export const migrateRepToZoltar = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcomeIndices: (number | bigint)[]) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'migrateRepToZoltar',
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress, outcomeIndices.map(x => BigInt(x))],
-	})
+	}))
 
 export const migrateVault = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: bigint | QuestionOutcome) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'migrateVault',
 		address: getInfraContractAddresses().securityPoolForker,
 		// `outcome` is a small enum (0-3) or equivalent bigint; safe to convert to number
 		// deno-lint-ignore no-explicit-any
 		args: [securityPoolAddress, Number(outcome)],
-	})
+	}))
 
 export const startTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'startTruthAuction',
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress],
-	})
+	}))
 
 export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'finalizeTruthAuction',
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress],
-	})
+	}))
 
 export const claimAuctionProceeds = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`, tickIndex: readonly { tick: bigint; bidIndex: bigint }[]) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'claimAuctionProceeds',
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress, vault, tickIndex],
-	})
+	}))
 
 export const forkZoltarWithOwnEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'forkZoltarWithOwnEscalationGame',
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress],
-	})
+	}))
 
 export const getMigratedRep = async (client: ReadClient, securityPoolAddress: `0x${ string }`) =>
 	await client.readContract({
@@ -101,14 +101,14 @@ export const getQuestionOutcome = async (client: ReadClient, securityPoolAddress
 }
 
 export const createChildUniverse = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'createChildUniverse',
 		address: getInfraContractAddresses().securityPoolForker,
 		// `outcome` is a small enum; safe to convert to number
 		// deno-lint-ignore no-explicit-any
 		args: [securityPoolAddress, Number(outcome)],
-	})
+	}))
 
 export const getSecurityPoolForkerForkData = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	const data = await client.readContract({
@@ -122,7 +122,7 @@ export const getSecurityPoolForkerForkData = async (client: ReadClient, security
 }
 
 export const migrateFromEscalationGame = async (client: WriteClient, parentSecurityPool: `0x${ string }`, vault: `0x${ string }`, outcomeIndex: QuestionOutcome, depositIndexes: bigint[]) =>
-	await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'migrateFromEscalationGame',
 		address: getInfraContractAddresses().securityPoolForker,
@@ -130,4 +130,4 @@ export const migrateFromEscalationGame = async (client: WriteClient, parentSecur
 		// `depositIndexes` are small indices; safe to convert to numbers.
 		// deno-lint-ignore no-explicit-any
 		args: [parentSecurityPool, vault, Number(outcomeIndex), depositIndexes.map(x => Number(x))],
-	})
+	}))

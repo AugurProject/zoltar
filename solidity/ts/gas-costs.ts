@@ -13,7 +13,7 @@ import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from './t
 import { addressString } from './testsuite/simulator/utils/bigint'
 import { approveToken, getChildUniverseId, getERC20Balance, setupTestAccounts, sortStringArrayByKeccak } from './testsuite/simulator/utils/utilities'
 import { QuestionOutcome } from './testsuite/simulator/types/types'
-import { createWriteClient, WriteClient } from './testsuite/simulator/utils/viem'
+import { createWriteClient, WriteClient, writeContractAndWait } from './testsuite/simulator/utils/viem'
 
 const genesisUniverse = 0n
 const securityMultiplier = 2n
@@ -220,28 +220,28 @@ const prepareOracleInitialReport = async (context: PoolContext) => {
 }
 
 const deployChildTx = async (universeId: bigint, outcomeIndex: bigint) =>
-	await alice.writeContract({
+	await writeContractAndWait(alice, () => alice.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'deployChild',
 		address: getZoltarAddress(),
 		args: [universeId, outcomeIndex],
-	})
+	}))
 
 const prepareRepForMigrationTx = async (universeId: bigint, amount: bigint) =>
-	await alice.writeContract({
+	await writeContractAndWait(alice, () => alice.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'prepareRepForMigration',
 		address: getZoltarAddress(),
 		args: [universeId, amount],
-	})
+	}))
 
 const migrateInternalRepTx = async (universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) =>
-	await alice.writeContract({
+	await writeContractAndWait(alice, () => alice.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'migrateInternalRep',
 		address: getZoltarAddress(),
 		args: [universeId, amount, outcomeIndexes],
-	})
+	}))
 
 const scenarios: Scenario[] = [
 	{
