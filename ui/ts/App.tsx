@@ -48,6 +48,44 @@ function getPrerequisiteLabel(steps: DeploymentStatus[], index: number) {
 	return missingStep?.label ?? null
 }
 
+function renderDeploymentSection({ title, description, steps, allSteps, accountAddress, busyStepId, onDeploy }: { title: string; description: string; steps: DeploymentStatus[]; allSteps: DeploymentStatus[]; accountAddress: Address | null; busyStepId: string | null; onDeploy: (stepId: string) => Promise<void> }) {
+	return (
+		<section class="panel contract-panel">
+			<div class="contract-panel-header">
+				<div>
+					<p class="panel-label">{title}</p>
+					<h2>{title}</h2>
+				</div>
+				<p class="detail">{description}</p>
+			</div>
+			<div class="contract-list">
+				{steps.map(step => {
+					const stepIndex = allSteps.findIndex(candidate => candidate.id === step.id)
+					const prerequisiteLabel = stepIndex === -1 ? null : getPrerequisiteLabel(allSteps, stepIndex)
+					const isBusy = busyStepId === step.id
+					const canDeploy = accountAddress !== null && prerequisiteLabel === null && !step.deployed && busyStepId === null
+
+					return (
+						<div class="contract-row" key={step.id}>
+							<div class="contract-copy">
+								<div class="contract-topline">
+									<span class={`badge ${ step.deployed ? 'ok' : prerequisiteLabel === null ? 'pending' : 'blocked' }`}>{step.deployed ? 'Deployed' : prerequisiteLabel === null ? 'Ready' : 'Blocked'}</span>
+									<h3>{step.label}</h3>
+								</div>
+								<p class="address">{step.address}</p>
+								<p class="detail">{step.deployed ? 'Code found at expected address.' : prerequisiteLabel === null ? 'Ready to deploy.' : `Waiting for ${ prerequisiteLabel }.`}</p>
+							</div>
+							<button onClick={() => void onDeploy(step.id)} disabled={!canDeploy}>
+								{step.deployed ? 'Deployed' : isBusy ? 'Deploying...' : 'Deploy'}
+							</button>
+						</div>
+					)
+				})}
+			</div>
+		</section>
+	)
+}
+
 export function App() {
 	const [accountState, setAccountState] = useState<AccountState>({
 		address: null,
@@ -201,14 +239,17 @@ export function App() {
 
 	const deployedCount = deploymentStatuses.filter(step => step.deployed).length
 	const nextMissingStep = deploymentStatuses.find((step, index) => !step.deployed && getPrerequisiteLabel(deploymentStatuses, index) === null) ?? null
+	const proxyDeployerSteps = deploymentStatuses.filter(step => step.id === 'proxyDeployer')
+	const zoltarSteps = deploymentStatuses.filter(step => step.id === 'zoltarQuestionData' || step.id === 'zoltar')
+	const augurPlaceholderSteps = deploymentStatuses.filter(step => step.id !== 'proxyDeployer' && step.id !== 'zoltarQuestionData' && step.id !== 'zoltar')
 
 	return (
 		<main>
 			<section class="hero">
 				<div>
 					<p class="eyebrow">Wallet Dashboard</p>
-					<h1>Zoltar Deployment Console</h1>
-					<p class="lede">Connect a wallet, inspect ETH and REP balances, then deploy the deterministic core contracts in repository order.</p>
+					<h1>Augur PLACEHOLDER deployment console</h1>
+					<p class="lede">Connect a wallet, inspect ETH and REP balances, then deploy the deterministic core contracts in the grouped order below.</p>
 				</div>
 				<div class="actions">
 					<button class="secondary" onClick={() => void refreshState()} disabled={isRefreshing}>
@@ -261,38 +302,35 @@ export function App() {
 				</article>
 			</section>
 
-			<section class="panel contract-panel">
-				<div class="contract-panel-header">
-					<div>
-						<p class="panel-label">Contracts</p>
-						<h2>Repository Deployment Order</h2>
-					</div>
-					<p class="detail">Each address is deterministic. Deploy in sequence to satisfy constructor dependencies.</p>
-				</div>
-				<div class="contract-list">
-					{deploymentStatuses.map((step, index) => {
-						const prerequisiteLabel = getPrerequisiteLabel(deploymentStatuses, index)
-						const isBusy = busyStepId === step.id
-						const canDeploy = accountState.address !== null && prerequisiteLabel === null && !step.deployed && busyStepId === null
+			{renderDeploymentSection({
+				title: 'Proxy Deployer',
+				description: 'Dedicated deployment path for the proxy deployer bootstrap transaction.',
+				steps: proxyDeployerSteps,
+				allSteps: deploymentStatuses,
+				accountAddress: accountState.address,
+				busyStepId,
+				onDeploy: deployStep,
+			})}
 
-						return (
-							<div class="contract-row" key={step.id}>
-								<div class="contract-copy">
-									<div class="contract-topline">
-										<span class={`badge ${ step.deployed ? 'ok' : prerequisiteLabel === null ? 'pending' : 'blocked' }`}>{step.deployed ? 'Deployed' : prerequisiteLabel === null ? 'Ready' : 'Blocked'}</span>
-										<h3>{step.label}</h3>
-									</div>
-									<p class="address">{step.address}</p>
-									<p class="detail">{step.deployed ? 'Code found at expected address.' : prerequisiteLabel === null ? 'Ready to deploy.' : `Waiting for ${ prerequisiteLabel }.`}</p>
-								</div>
-								<button onClick={() => void deployStep(step.id)} disabled={!canDeploy}>
-									{step.deployed ? 'Deployed' : isBusy ? 'Deploying...' : 'Deploy'}
-								</button>
-							</div>
-						)
-					})}
-				</div>
-			</section>
+			{renderDeploymentSection({
+				title: 'Zoltar',
+				description: 'Core Zoltar contracts. Deploy ZoltarQuestionData before Zoltar.',
+				steps: zoltarSteps,
+				allSteps: deploymentStatuses,
+				accountAddress: accountState.address,
+				busyStepId,
+				onDeploy: deployStep,
+			})}
+
+			{renderDeploymentSection({
+				title: 'Augur PlaceHolder',
+				description: 'Remaining deterministic deployment steps grouped under the Augur PlaceHolder bucket.',
+				steps: augurPlaceholderSteps,
+				allSteps: deploymentStatuses,
+				accountAddress: accountState.address,
+				busyStepId,
+				onDeploy: deployStep,
+			})}
 		</main>
 	)
 }
