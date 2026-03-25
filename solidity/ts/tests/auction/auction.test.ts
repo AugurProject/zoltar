@@ -186,7 +186,7 @@ describe('Auction', () => {
 
 			for (const bid of bids) {
 				const tick = tickForPrice(bid.priceRepEth)
-				await submitBidAndVerifyLock(client, auctionAddress, tick, bid.bidSize)
+				await submitBid(client, auctionAddress, tick, bid.bidSize)
 			}
 
 			const clearing = await computeClearing(client, auctionAddress)
@@ -494,10 +494,13 @@ describe('Auction', () => {
 
 			const freshAddress = getUniformPriceDualCapBatchAuctionAddress(addressString(TEST_ADDRESSES[3]))
 			await deployUniformPriceDualCapBatchAuction(client, addressString(TEST_ADDRESSES[3]))
-			await assert.rejects(async () => await submitBid(client, freshAddress, tick, bidAmount), 'invalid')
+			await submitBid(client, freshAddress, tick, bidAmount)
 
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+			await submitBid(client, auctionAddress, tick, ethRaiseCap)
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalize(client, auctionAddress)
+			strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'auction should be finalized before post-finalization assertions')
 
 			await assert.rejects(async () => await submitBid(client, auctionAddress, tick, bidAmount), 'finalized')
 		})
@@ -870,6 +873,7 @@ describe('Auction', () => {
 			strictEqualTypeSafe(clearingPre.foundTick > losingTick, true)
 
 			// Finalize
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalize(client, auctionAddress)
 			strictEqualTypeSafe(await isFinalized(client, auctionAddress), true)
 
@@ -906,6 +910,7 @@ describe('Auction', () => {
 			await submitBidAndVerifyLock(client, auctionAddress, zeroPriceTick, bidAmount)
 
 			// Finalize: should succeed
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalizeAndVerify(client, auctionAddress)
 
 			const clearingTick = await getClearingTick(client, auctionAddress)

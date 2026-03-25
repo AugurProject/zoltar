@@ -93,9 +93,13 @@ export const useIsolatedAnvilNode = () => {
 		const port = await getFreePort()
 		const rpcUrl = `http://${ DEFAULT_ANVIL_HOST }:${ port }`
 
-		const process = spawn(DEFAULT_ANVIL_BIN, ['--host', DEFAULT_ANVIL_HOST, '--port', `${ port }`, '--chain-id', '1', '--timestamp', '0'], {
+		const process = spawn(
+			DEFAULT_ANVIL_BIN,
+			['--host', DEFAULT_ANVIL_HOST, '--port', `${ port }`, '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee'],
+			{
 			stdio: ['ignore', 'ignore', 'pipe'],
-		})
+			},
+		)
 		anvilProcess = process
 
 		let stderr = ''
