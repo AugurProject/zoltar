@@ -1,4 +1,4 @@
-import { zeroAddress } from 'viem'
+import { parseGwei, zeroAddress } from 'viem'
 import { Zoltar_Zoltar } from './types/contractArtifact'
 import { getMockedEthSimulateWindowEthereum } from './testsuite/simulator/AnvilWindowEthereum'
 import { submitBid, refundLosingBids } from './testsuite/simulator/utils/contracts/auction'
@@ -56,10 +56,16 @@ const numberFormatter = new Intl.NumberFormat('en-US')
 const ethFormatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 6 })
 const usdFormatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const ethPriceUsd = Number.parseFloat(process.env['ETH_PRICE_USD'] ?? '2170.63')
-const gasPriceGwei = Number.parseFloat(process.env['GAS_PRICE_GWEI'] ?? '1')
+const priorityFeeGwei = Number.parseFloat(process.env['PRIORITY_FEE_GWEI'] ?? '1')
+const baseFeeGwei = Number.parseFloat(process.env['BASE_FEE_GWEI'] ?? '0.035')
+const totalGasPriceGwei = baseFeeGwei + priorityFeeGwei
 
 if (!Number.isFinite(ethPriceUsd) || ethPriceUsd <= 0) throw new Error('ETH_PRICE_USD must be a positive number')
-if (!Number.isFinite(gasPriceGwei) || gasPriceGwei <= 0) throw new Error('GAS_PRICE_GWEI must be a positive number')
+if (!Number.isFinite(priorityFeeGwei) || priorityFeeGwei < 0) throw new Error('PRIORITY_FEE_GWEI must be a non-negative number')
+if (!Number.isFinite(baseFeeGwei) || baseFeeGwei < 0) throw new Error('BASE_FEE_GWEI must be a non-negative number')
+if (totalGasPriceGwei <= 0) throw new Error('BASE_FEE_GWEI + PRIORITY_FEE_GWEI must be greater than zero')
+
+const baseFeeWei = parseGwei(`${ baseFeeGwei }`)
 
 const anvil = await getMockedEthSimulateWindowEthereum()
 const alice = createWriteClient(anvil, TEST_ADDRESSES[0], 0)
@@ -95,7 +101,7 @@ const measureActionGas = async (client: WriteClient, action: () => Promise<void>
 
 const initializeChain = async ({ deployZoltar, deployInfra }: { deployZoltar: boolean; deployInfra: boolean }) => {
 	await anvil.request({ method: 'anvil_reset', params: [] })
-	await anvil.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
+	await anvil.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${ baseFeeWei.toString(16) }`] })
 	await setupTestAccounts(anvil)
 	if (deployZoltar || deployInfra) await ensureZoltarDeployed(alice)
 	if (deployInfra) await ensureInfraDeployed(alice)
@@ -244,21 +250,17 @@ const scenarios: Scenario[] = [
 		section: '1. Core Deployment',
 		label: 'deploy Zoltar core contracts',
 		init: { deployZoltar: false, deployInfra: false },
-		run: async () => {
-			return await measureActionGas(alice, async () => {
+		run: async () => await measureActionGas(alice, async () => {
 				await ensureZoltarDeployed(alice)
-			})
-		},
+			}),
 	},
 	{
 		section: '2. Peripheral Deployment',
 		label: 'deploy peripheral contracts',
 		init: { deployZoltar: true, deployInfra: false },
-		run: async () => {
-			return await measureActionGas(alice, async () => {
+		run: async () => await measureActionGas(alice, async () => {
 				await ensureInfraDeployed(alice)
-			})
-		},
+			}),
 	},
 	{
 		section: '3. Question Creation',
@@ -655,12 +657,14 @@ for (const scenario of scenarios) {
 }
 
 const labelWidth = results.reduce((max, result) => result.label.length > max ? result.label.length : max, 0)
-const gasCostInEth = (gas: bigint) => Number(gas) * gasPriceGwei / 1_000_000_000
+const gasCostInEth = (gas: bigint) => Number(gas) * totalGasPriceGwei / 1_000_000_000
 const gasCostInUsd = (gas: bigint) => gasCostInEth(gas) * ethPriceUsd
 
 console.log(`# Pricing Assumptions`)
 console.log(`ETH price: $${ usdFormatter.format(ethPriceUsd) }`)
-console.log(`Gas price: ${ gasPriceGwei } gwei`)
+console.log(`Base fee: ${ baseFeeGwei } gwei`)
+console.log(`Priority fee: ${ priorityFeeGwei } gwei`)
+console.log(`Total gas price: ${ totalGasPriceGwei } gwei`)
 console.log('')
 
 let currentSection = ''
