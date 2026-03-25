@@ -69,6 +69,7 @@ describe('Auction', () => {
 	}
 
 	async function finalizeAndVerify(client: WriteClient, auctionAddress: Address): Promise<void> {
+		await mockWindow.advanceTime(AUCTION_TIME + 1n)
 		await finalize(client, auctionAddress)
 		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'auction not finalized')
 	}
@@ -186,7 +187,7 @@ describe('Auction', () => {
 
 			for (const bid of bids) {
 				const tick = tickForPrice(bid.priceRepEth)
-				await submitBid(client, auctionAddress, tick, bid.bidSize)
+				await submitBidAndVerifyLock(client, auctionAddress, tick, bid.bidSize)
 			}
 
 			const clearing = await computeClearing(client, auctionAddress)

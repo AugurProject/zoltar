@@ -47,12 +47,14 @@ const mintERC20 = async (anvilWindowEthereum: AnvilWindowEthereum, erc20Address:
 
 export const approveToken = async (client: WriteClient, tokenAddress: Address, spenderAddress: Address) => {
 	const amount = 1000000000000000000000000000000n
-	return await client.writeContract({
+	const hash = await client.writeContract({
 		abi: ABIS.mainnet.erc20,
 		functionName: 'approve',
 		address: tokenAddress,
 		args: [spenderAddress, amount],
 	})
+	await client.waitForTransactionReceipt({ hash })
+	return hash
 }
 
 export const getERC20Balance = async (client: ReadClient, tokenAddress: Address, ownerAddress: Address) =>
