@@ -21,12 +21,7 @@ Run each command individually and address any issues before proceeding to the ne
    bun run format
    ```
 
-4. **Linting**:
-   ```bash
-   bun run lint
-   ```
-
-5. **Dead code analysis**:
+4. **Dead code analysis**:
    ```bash
    bun run knip
    ```
@@ -40,11 +35,6 @@ You can automatically fix many issues with:
   bun run knip:fix
   ```
   Review changes carefully.
-
-- **ESLint autofix** (fixes style and some code issues):
-  ```bash
-  bun run lint --fix
-  ```
 
 Repeat the cycle iteratively after each fix to ensure clean builds and avoid accumulating issues.
 
@@ -64,7 +54,7 @@ Repeat the cycle iteratively after each fix to ensure clean builds and avoid acc
 - **Consecutive spaces**: Do not have multiple consecutive spaces within a line. This is enforced by ESLint (`no-multi-spaces`).
 - **Non-null assertions**: Do not use the `!` operator. Instead, perform explicit undefined checks and throw an error if a value is unexpectedly undefined.
 
-Prettier and ESLint are configured to enforce these rules automatically. Run `bun run format` and `bun run lint` to format and check your code.
+Prettier is configured to enforce these rules automatically. Run `bun run format` to format your code.
 
 # Testing Guidelines
 
