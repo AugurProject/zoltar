@@ -1,73 +1,30 @@
 import * as path from 'path'
-import * as url from 'url';
+import * as url from 'url'
 import { promises as fs } from 'fs'
 import { FileType, recursiveDirectoryCopy } from '@zoltu/file-copier'
-import * as funtypes from 'funtypes'
 import esbuild from 'esbuild'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const VENDOR_OUTPUT_PATH = path.join(directoryOfThisFile, '..', 'app', 'vendor')
-const MODULES_ROOT_PATH = path.join(directoryOfThisFile, '..', 'node_modules')
-const INDEX_HTML_PATH = path.join(directoryOfThisFile, '..', 'app', 'index.html')
-const CONTRACT_PATH_APP = path.join(directoryOfThisFile, '..', 'app', 'ts', 'ABI', 'VendoredContracts.ts')
-
-const CompileError = funtypes.ReadonlyObject({
-	severity: funtypes.String,
-	formattedMessage: funtypes.String
-})
-
-type CompileResult = funtypes.Static<typeof CompileResult>
-const CompileResult = funtypes.ReadonlyPartial({
-	contracts: funtypes.Record(funtypes.String, funtypes.Record(funtypes.String, funtypes.ReadonlyObject({
-		abi: funtypes.ReadonlyArray(funtypes.ReadonlyPartial({
-			inputs: funtypes.ReadonlyArray(funtypes.ReadonlyPartial({
-				indexed: funtypes.Boolean,
-				internalType: funtypes.String,
-				name: funtypes.String,
-				type: funtypes.String
-			})),
-			anonymous: funtypes.Boolean,
-			stateMutability: funtypes.String,
-			type: funtypes.String,
-			name: funtypes.String,
-			outputs: funtypes.ReadonlyArray(funtypes.Intersect(
-				funtypes.ReadonlyObject({
-					internalType: funtypes.String,
-					name: funtypes.String,
-					type: funtypes.String
-				}),
-				funtypes.ReadonlyPartial({
-					components: funtypes.ReadonlyArray(
-						funtypes.ReadonlyObject({
-							internalType: funtypes.String,
-							name: funtypes.String,
-							type: funtypes.String
-						})
-					)
-				})
-			))
-		})),
-		evm: funtypes.ReadonlyObject({
-			bytecode: funtypes.ReadonlyObject({ object: funtypes.String }),
-			deployedBytecode: funtypes.ReadonlyObject({ object: funtypes.String })
-		})
-	}))),
-	sources: funtypes.Unknown,
-	errors: funtypes.Array(CompileError)
-})
+const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
+const REPOSITORY_ROOT_PATH = path.join(UI_ROOT_PATH, '..')
+const VENDOR_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'vendor')
+const MODULES_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'node_modules')
+const INDEX_HTML_PATH = path.join(UI_ROOT_PATH, 'index.html')
+const ABI_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'ts', 'abis.ts')
+const ABI_SOURCE_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'abi', 'abis.ts')
+const CONTRACT_ARTIFACT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'ts', 'contractArtifact.ts')
+const CONTRACT_ARTIFACT_SOURCE_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'types', 'contractArtifact.ts')
 
 type Dependency = { packageName: string, packageToVendor?: string, subfolderToVendor: string, mainEntrypointFile: string, alternateEntrypoints: Record<string, string> }
 const dependencyPaths: Dependency[] = [
-    { packageName: 'preact', subfolderToVendor: 'dist', mainEntrypointFile: 'preact.module.js', alternateEntrypoints: {} },
-    { packageName: 'preact/jsx-runtime', subfolderToVendor: 'dist', mainEntrypointFile: 'jsxRuntime.module.js', alternateEntrypoints: {} },
-    { packageName: 'preact/hooks', subfolderToVendor: 'dist', mainEntrypointFile: 'hooks.module.js', alternateEntrypoints: {} },
-    { packageName: '@preact/signals', subfolderToVendor: 'dist', mainEntrypointFile: 'signals.module.js', alternateEntrypoints: {} },
-    { packageName: '@preact/signals-core', subfolderToVendor: 'dist', mainEntrypointFile: 'signals-core.module.js', alternateEntrypoints: {} },
-    { packageName: 'viem', subfolderToVendor: '_esm', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-    { packageName: 'viem/chains', packageToVendor: 'viem/_esm', subfolderToVendor: 'chains', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-    { packageName: 'viem/window', packageToVendor: 'viem/_esm', subfolderToVendor: 'window', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-    { packageName: 'viem/actions', packageToVendor: 'viem/_esm', subfolderToVendor: 'window', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-    { packageName: 'abitype', subfolderToVendor: 'dist/esm', mainEntrypointFile: 'exports/index.js', alternateEntrypoints: { } },
+	{ packageName: 'preact', subfolderToVendor: 'dist', mainEntrypointFile: 'preact.module.js', alternateEntrypoints: {} },
+	{ packageName: 'preact/jsx-runtime', subfolderToVendor: 'dist', mainEntrypointFile: 'jsxRuntime.module.js', alternateEntrypoints: {} },
+	{ packageName: 'preact/hooks', subfolderToVendor: 'dist', mainEntrypointFile: 'hooks.module.js', alternateEntrypoints: {} },
+	{ packageName: 'viem', subfolderToVendor: '_esm', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
+	{ packageName: 'viem/chains', packageToVendor: 'viem/_esm', subfolderToVendor: 'chains', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
+	{ packageName: 'viem/window', packageToVendor: 'viem/_esm', subfolderToVendor: 'window', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
+	{ packageName: 'viem/actions', packageToVendor: 'viem/_esm', subfolderToVendor: 'actions', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
+	{ packageName: 'abitype', subfolderToVendor: 'dist/esm', mainEntrypointFile: 'exports/index.js', alternateEntrypoints: {} },
 	{ packageName: '@noble/hashes', subfolderToVendor: 'esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'crypto': 'crypto.js', 'sha3': 'sha3.js', 'utils': 'utils.js', '_assert': '_assert.js', 'sha256': 'sha256.js', 'sha512': 'sha512.js', 'pbkdf2': 'pbkdf2.js', 'hmac': 'hmac.js', 'ripemd160': 'ripemd160.js' } },
 	{ packageName: '@noble/curves', subfolderToVendor: 'esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'secp256k1': 'secp256k1.js', 'abstract/modular': 'abstract/modular.js', 'abstract/utils': 'abstract/utils.js' } },
 	{ packageName: 'funtypes', subfolderToVendor: 'lib', mainEntrypointFile: 'index.mjs', alternateEntrypoints: {} },
@@ -106,17 +63,33 @@ async function vendorDependencies() {
 	await fs.writeFile(INDEX_HTML_PATH, newIndexHtml)
 }
 
-const copySolidityContractArtifact = async () => {
-	const contractLocation = path.join(directoryOfThisFile, '..', 'solidity/artifacts/VendoredContracts.json')
-	const solidityContract = CompileResult.parse(JSON.parse(await fs.readFile(contractLocation, 'utf8')))
-	if (solidityContract.contracts === undefined) throw new Error('contracts object missing')
-	const contracts = Object.entries(solidityContract.contracts).flatMap(([filename, contract]) => {
-		if (contract === undefined) throw new Error('missing contract')
-		return Object.entries(contract).map(([contractName, contractData]) => ({ contractName: `${ filename.replace('contracts/', '').replace(/-/g, '').replace(/\//g, '_').replace(/\\/g, '_').replace(/\.sol$/, '') }_${ contractName }`, contractData }))
+const copyProjectArtifacts = async () => {
+	const solidityAbiSource = await fs.readFile(ABI_SOURCE_PATH, 'utf8')
+	await fs.writeFile(ABI_OUTPUT_PATH, solidityAbiSource)
+
+	const artifactSource = await fs.readFile(CONTRACT_ARTIFACT_SOURCE_PATH, 'utf8')
+	const exportedContractNames = [
+		'ScalarOutcomes_ScalarOutcomes',
+		'Zoltar_Zoltar',
+		'ZoltarQuestionData_ZoltarQuestionData',
+		'peripherals_SecurityPoolForker_SecurityPoolForker',
+		'peripherals_SecurityPoolUtils_SecurityPoolUtils',
+		'peripherals_factories_EscalationGameFactory_EscalationGameFactory',
+		'peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory',
+		'peripherals_factories_SecurityPoolFactory_SecurityPoolFactory',
+		'peripherals_factories_ShareTokenFactory_ShareTokenFactory',
+		'peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory',
+		'peripherals_openOracle_OpenOracle_OpenOracle',
+	] as const
+
+	const extractedArtifacts = exportedContractNames.map((contractName, index) => {
+		const exportPattern = new RegExp(`export const ${ contractName } = [\\\\s\\\\S]*?} as const`, 'm')
+		const matchedArtifact = artifactSource.match(exportPattern)?.[0]
+		if (matchedArtifact === undefined) throw new Error(`Unable to find artifact export: ${ contractName }`)
+		return matchedArtifact
 	})
-	if (new Set(contracts.map((x) => x.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
-	const typescriptString = contracts.map((contract) => `export const ${ contract.contractName } = ${ JSON.stringify(contract.contractData, null, 4) } as const`).join('\r\n\r\n')
-	await fs.writeFile(CONTRACT_PATH_APP, typescriptString)
+
+	await fs.writeFile(CONTRACT_ARTIFACT_OUTPUT_PATH, `${ extractedArtifacts.join('\n\n') }\n`)
 }
 
 // rewrite the source paths in sourcemap files so they show up in the debugger in a reasonable location and if two source maps refer to the same (relative) path, we end up with them distinguished in the browser debugger
@@ -162,7 +135,7 @@ async function bundleViem() {
 const vendor = async () => {
 	await bundleViem()
 	await vendorDependencies()
-	await copySolidityContractArtifact()
+	await copyProjectArtifacts()
 }
 
 vendor().catch(error => {

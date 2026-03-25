@@ -1,0 +1,238 @@
+html {
+	font-family: 'Iowan Old Style', 'Palatino Linotype', serif;
+	background: radial-gradient(circle at top, rgba(214, 144, 61, 0.18), transparent 30%), linear-gradient(180deg, #f7f1df 0%, #efe3c2 100%);
+	color: #24190f;
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+}
+
+main {
+	max-width: 72rem;
+	margin: 0 auto;
+	padding: 4rem 1.5rem 5rem;
+}
+
+h1 {
+	margin: 0;
+	font-size: clamp(2.7rem, 6vw, 4.8rem);
+	line-height: 1;
+}
+
+h2,
+h3,
+p {
+	margin: 0;
+}
+
+button {
+	border: 0;
+	border-radius: 999px;
+	padding: 0.95rem 1.35rem;
+	font: inherit;
+	font-size: 0.95rem;
+	background: #24190f;
+	color: #fffaf0;
+	cursor: pointer;
+	transition:
+		transform 120ms ease,
+		opacity 120ms ease,
+		background 120ms ease;
+}
+
+button:hover:not(:disabled) {
+	transform: translateY(-1px);
+}
+
+button:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+button.secondary {
+	background: rgba(36, 25, 15, 0.08);
+	color: #24190f;
+}
+
+.hero,
+.panel {
+	border: 1px solid rgba(36, 25, 15, 0.12);
+	border-radius: 1.5rem;
+	background: rgba(255, 252, 245, 0.82);
+	box-shadow: 0 1.5rem 3rem rgba(73, 52, 22, 0.1);
+	backdrop-filter: blur(10px);
+}
+
+.hero {
+	display: flex;
+	justify-content: space-between;
+	gap: 1.5rem;
+	padding: 2rem;
+	align-items: end;
+}
+
+.eyebrow,
+.panel-label,
+.metric-label {
+	font-family: 'Courier New', monospace;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	font-size: 0.72rem;
+	color: rgba(36, 25, 15, 0.6);
+}
+
+.lede,
+.detail {
+	margin-top: 0.85rem;
+	line-height: 1.6;
+	color: rgba(36, 25, 15, 0.8);
+}
+
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+}
+
+.notice {
+	margin-top: 1rem;
+	padding: 1rem 1.1rem;
+	border-radius: 1rem;
+	line-height: 1.5;
+}
+
+.notice.warning {
+	background: rgba(209, 137, 42, 0.14);
+}
+
+.notice.error {
+	background: rgba(163, 48, 24, 0.16);
+}
+
+.notice.success {
+	background: rgba(32, 110, 65, 0.14);
+}
+
+.notice span {
+	font-family: 'Courier New', monospace;
+	word-break: break-all;
+}
+
+.grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+	margin-top: 1rem;
+}
+
+.panel {
+	padding: 1.5rem;
+}
+
+.metric-row {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 1rem;
+	margin-top: 1.5rem;
+}
+
+.metric-row strong {
+	display: block;
+	margin-top: 0.45rem;
+	font-size: 1.15rem;
+}
+
+.contract-panel {
+	margin-top: 1rem;
+}
+
+.contract-panel-header {
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+	align-items: end;
+}
+
+.contract-list {
+	display: grid;
+	gap: 0.9rem;
+	margin-top: 1.5rem;
+}
+
+.contract-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+	align-items: center;
+	padding: 1rem 1.1rem;
+	border-radius: 1.15rem;
+	background: rgba(255, 255, 255, 0.58);
+	border: 1px solid rgba(36, 25, 15, 0.08);
+}
+
+.contract-copy {
+	min-width: 0;
+}
+
+.contract-topline {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	align-items: center;
+}
+
+.contract-topline h3 {
+	font-size: 1.1rem;
+}
+
+.badge {
+	display: inline-flex;
+	align-items: center;
+	border-radius: 999px;
+	padding: 0.3rem 0.65rem;
+	font-family: 'Courier New', monospace;
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
+.badge.ok {
+	background: rgba(32, 110, 65, 0.14);
+	color: #206e41;
+}
+
+.badge.pending {
+	background: rgba(209, 137, 42, 0.14);
+	color: #8f5c15;
+}
+
+.badge.blocked {
+	background: rgba(77, 68, 57, 0.12);
+	color: #584c40;
+}
+
+.address {
+	margin-top: 0.6rem;
+	font-family: 'Courier New', monospace;
+	word-break: break-all;
+}
+
+@media (max-width: 800px) {
+	main {
+		padding: 2rem 1rem 3rem;
+	}
+
+	.hero,
+	.contract-panel-header,
+	.contract-row {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.grid,
+	.metric-row {
+		grid-template-columns: 1fr;
+	}
+}

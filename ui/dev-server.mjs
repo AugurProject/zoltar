@@ -1,13 +1,23 @@
 import * as http from 'node:http'
 import * as filesystem from 'node:fs/promises'
+import * as path from 'node:path'
+import * as url from 'node:url'
+
+const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
+const rootDirectory = directoryOfThisFile
 
 const server = http.createServer()
 server.on('request', async (request, response) => {
 	try {
-		// request.url is technically possible to be undefined, but requires a buggy/broken client connecting
-		const urlPath = (request.url.endsWith('/')) ? `${ request.url }index.html` : request.url
-		const filePath = decodeURI(`./app${ urlPath }`)
-		// NOT SECURE!  Will happily read `../../../../private-file.txt`
+		const requestUrl = request.url === undefined ? '/' : request.url
+		const urlPath = requestUrl.endsWith('/') ? `${ requestUrl }index.html` : requestUrl
+		const relativeFilePath = decodeURI(urlPath).replace(/^\/+/, '')
+		const filePath = path.resolve(rootDirectory, relativeFilePath)
+		if (!filePath.startsWith(rootDirectory)) {
+			response.writeHead(403)
+			response.end()
+			return
+		}
 		const fileContents = await filesystem.readFile(filePath)
 		const extension = filePath.split('.').pop()
 		const mimeType = extension === undefined ? 'text/plain' : mimeTypes[extension]

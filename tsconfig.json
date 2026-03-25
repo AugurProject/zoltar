@@ -3,12 +3,8 @@
 		"target": "ESNext",
 		"module": "ESNext",
 		"moduleResolution": "bundler",
-		"rootDir": "solidity/ts",
-		"outDir": "solidity/js",
 		"sourceMap": true,
 		"inlineSources": true,
-		"declaration": true,
-		"declarationMap": true,
 		"skipLibCheck": true,
 		"strict": true,
 		"allowUnusedLabels": false,
@@ -23,12 +19,16 @@
 		"noUnusedParameters": true,
 
 		"lib": ["ESNext", "DOM"],
+		"jsx": "react-jsx",
+		"jsxImportSource": "preact",
+		"types": ["node"],
 
 		"incremental": true,
-		"tsBuildInfoFile": "./.tsbuildinfo"
+		"tsBuildInfoFile": "./.tsbuildinfo",
+		"noEmit": true
 	},
 	"include": [
-		"solidity/ts/**/*.ts",
-		"solidity/ts/**/*.mts",
+		"ui/ts/**/*.ts",
+		"ui/ts/**/*.tsx",
 	],
 }
