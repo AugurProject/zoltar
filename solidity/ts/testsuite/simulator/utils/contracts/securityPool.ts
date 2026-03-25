@@ -4,7 +4,7 @@ import { QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 
 export const depositToEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome, amount: bigint) =>
-	await writeContractAndWait(client, async () => await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'depositToEscalationGame',
 		address: securityPoolAddress,
@@ -12,7 +12,7 @@ export const depositToEscalationGame = async (client: WriteClient, securityPoolA
 	}))
 
 export const withdrawFromEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome, depositIndexes: bigint[]) => {
-	const hash = await writeContractAndWait(client, async () => await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'withdrawFromEscalationGame',
 		address: securityPoolAddress,
@@ -22,7 +22,7 @@ export const withdrawFromEscalationGame = async (client: WriteClient, securityPo
 }
 
 export const depositRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, amount: bigint) =>
-	await writeContractAndWait(client, async () => await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'depositRep',
 		address: securityPoolAddress,
@@ -30,7 +30,7 @@ export const depositRep = async (client: WriteClient, securityPoolAddress: `0x${
 	}))
 
 export const createCompleteSet = async (client: WriteClient, securityPoolAddress: `0x${ string }`, completeSetsToCreate: bigint) =>
-	await writeContractAndWait(client, async () => await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'createCompleteSet',
 		address: securityPoolAddress,
@@ -39,7 +39,7 @@ export const createCompleteSet = async (client: WriteClient, securityPoolAddress
 	}))
 
 export const redeemCompleteSet = async (client: WriteClient, securityPoolAddress: `0x${ string }`, completeSetsToRedeem: bigint) =>
-	await writeContractAndWait(client, async () => await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemCompleteSet',
 		address: securityPoolAddress,
@@ -113,7 +113,7 @@ export const poolOwnershipToRep = async (client: ReadClient, securityPoolAddress
 	})
 
 export const redeemShares = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
-	await writeContractAndWait(client, async () => await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemShares',
 		address: securityPoolAddress,
@@ -140,7 +140,7 @@ export const threeShareArrayToCash = async (client: ReadClient, securityPoolAddr
 	(await Promise.all(shares.map(share => sharesToCash(client, securityPoolAddress, share))))
 
 export const updateVaultFees = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) =>
-	await writeContractAndWait(client, async () => await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'updateVaultFees',
 		address: securityPoolAddress,
@@ -148,7 +148,7 @@ export const updateVaultFees = async (client: WriteClient, securityPoolAddress: 
 	}))
 
 export const redeemFees = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) =>
-	await writeContractAndWait(client, async () => await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemFees',
 		address: securityPoolAddress,
@@ -156,7 +156,7 @@ export const redeemFees = async (client: WriteClient, securityPoolAddress: `0x${
 	}))
 
 export const redeemRep = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`) =>
-	await writeContractAndWait(client, async () => await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemRep',
 		address: securityPoolAddress,

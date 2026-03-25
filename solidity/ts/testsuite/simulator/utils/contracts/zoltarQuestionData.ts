@@ -68,7 +68,7 @@ export const getQuestionId = (questionData: QuestionData, outcomeOptions: readon
 }
 
 export const createQuestion = async (client: WriteClient, questionData: QuestionData, outcomeLabels: string[]) =>
-	await writeContractAndWait(client, async () => await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'createQuestion',
 		address: getInfraContractAddresses().zoltarQuestionData,

@@ -495,7 +495,7 @@ describe('Auction', () => {
 
 			const freshAddress = getUniformPriceDualCapBatchAuctionAddress(addressString(TEST_ADDRESSES[3]))
 			await deployUniformPriceDualCapBatchAuction(client, addressString(TEST_ADDRESSES[3]))
-			await submitBid(client, freshAddress, tick, bidAmount)
+			await assert.rejects(async () => await submitBid(client, freshAddress, tick, bidAmount), 'invalid')
 
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
 			await submitBid(client, auctionAddress, tick, ethRaiseCap)

@@ -8,6 +8,7 @@ import { ensureDefined } from './utils/testUtils'
 const DEFAULT_ANVIL_HOST = '127.0.0.1'
 const DEFAULT_ANVIL_BIN = process.env['ANVIL_BIN'] ?? 'anvil'
 const RPC_READY_TIMEOUT_MS = 10_000
+const RPC_PROBE_TIMEOUT_MS = 1_000
 const SHUTDOWN_TIMEOUT_MS = 5_000
 
 const getFreePort = async (): Promise<number> =>
@@ -15,7 +16,7 @@ const getFreePort = async (): Promise<number> =>
 		const server = createServer()
 		server.listen(0, DEFAULT_ANVIL_HOST, () => {
 			const address = server.address()
-			if (address === null || typeof address === 'string') {
+			if (address === null) {
 				server.close(() => reject(new Error('Failed to allocate a free TCP port for Anvil')))
 				return
 			}
@@ -37,10 +38,16 @@ const waitForRpcReady = async (rpcUrl: string): Promise<void> => {
 	let lastError: unknown
 
 	while (Date.now() < deadline) {
+		const controller = new AbortController()
+		const remainingMs = deadline - Date.now()
+		const probeTimeoutMs = Math.min(RPC_PROBE_TIMEOUT_MS, remainingMs)
+		const timeoutId = setTimeout(() => controller.abort(), probeTimeoutMs)
+
 		try {
 			const response = await fetch(rpcUrl, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
+				signal: controller.signal,
 				body: JSON.stringify({
 					jsonrpc: '2.0',
 					id: 1,
@@ -49,11 +56,14 @@ const waitForRpcReady = async (rpcUrl: string): Promise<void> => {
 				}),
 			})
 			if (response.ok) {
+				clearTimeout(timeoutId)
 				return
 			}
 			lastError = new Error(`HTTP ${ response.status }: ${ response.statusText }`)
 		} catch (error) {
 			lastError = error
+		} finally {
+			clearTimeout(timeoutId)
 		}
 		await sleep(100)
 	}
@@ -84,6 +94,15 @@ const waitForExit = async (child: AnvilProcess): Promise<void> =>
 		})
 	})
 
+const terminateProcess = (child: AnvilProcess, signal: NodeJS.Signals = 'SIGTERM') => {
+	if (child.exitCode !== null || child.signalCode !== null) return
+	try {
+		child.kill(signal)
+	} catch {
+		// Ignore termination errors while cleaning up a failed spawn/startup path.
+	}
+}
+
 export const useIsolatedAnvilNode = () => {
 	let anvilProcess: AnvilProcess | undefined
 	let anvilWindowEthereum: AnvilWindowEthereum | undefined
@@ -101,6 +120,9 @@ export const useIsolatedAnvilNode = () => {
 			},
 		)
 		anvilProcess = process
+		const spawnErrorPromise = new Promise<never>((_, reject) => {
+			process.once('error', reject)
+		})
 
 		let stderr = ''
 		ensureDefined(process.stderr, 'Anvil stderr pipe is unavailable').on('data', chunk => {
@@ -108,11 +130,11 @@ export const useIsolatedAnvilNode = () => {
 		})
 
 		try {
-			await waitForRpcReady(rpcUrl)
+			await Promise.race([waitForRpcReady(rpcUrl), spawnErrorPromise])
 			anvilWindowEthereum = await getMockedEthSimulateWindowEthereum(rpcUrl)
 			snapshotId = await anvilWindowEthereum.anvilSnapshot()
 		} catch (error) {
-			process.kill('SIGTERM')
+			terminateProcess(process)
 			const errorMessage = error instanceof Error ? error.message : String(error)
 			const stderrMessage = stderr.trim() === '' ? '' : `\nAnvil stderr:\n${ stderr.trim() }`
 			throw new Error(`Failed to start isolated Anvil node for test file: ${ errorMessage }${ stderrMessage }`)
@@ -128,7 +150,7 @@ export const useIsolatedAnvilNode = () => {
 
 	afterAll(async () => {
 		if (anvilProcess === undefined) return
-		anvilProcess.kill('SIGTERM')
+		terminateProcess(anvilProcess)
 		await waitForExit(anvilProcess)
 		anvilProcess = undefined
 		anvilWindowEthereum = undefined

@@ -76,7 +76,7 @@ export const getUniverseData = async (client: ReadClient, universeId: bigint) =>
 }
 
 export const forkUniverse = async (client: WriteClient, universeId: bigint, questionId: bigint) =>
-	await writeContractAndWait(client, async () => await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkUniverse',
 		address: getZoltarAddress(),
@@ -84,7 +84,7 @@ export const forkUniverse = async (client: WriteClient, universeId: bigint, ques
 	}))
 
 export const prepareRepForMigration = async (client: WriteClient, universeId: bigint, amount: bigint) =>
-	await writeContractAndWait(client, async () => await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'prepareRepForMigration',
 		address: getZoltarAddress(),
@@ -93,7 +93,7 @@ export const prepareRepForMigration = async (client: WriteClient, universeId: bi
 
 export const migrateInternalRep = async (client: WriteClient, universeId: bigint, amount: bigint, outcomeIndexes: (number | bigint)[]) => {
 	const bigintIndices = outcomeIndexes.map(x => BigInt(x))
-	await writeContractAndWait(client, async () => await client.writeContract({
+	await writeContractAndWait(client, () => client.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'migrateInternalRep',
 		address: getZoltarAddress(),

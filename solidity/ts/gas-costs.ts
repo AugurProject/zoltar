@@ -220,7 +220,7 @@ const prepareOracleInitialReport = async (context: PoolContext) => {
 }
 
 const deployChildTx = async (universeId: bigint, outcomeIndex: bigint) =>
-	await writeContractAndWait(alice, async () => await alice.writeContract({
+	await writeContractAndWait(alice, () => alice.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'deployChild',
 		address: getZoltarAddress(),
@@ -228,7 +228,7 @@ const deployChildTx = async (universeId: bigint, outcomeIndex: bigint) =>
 	}))
 
 const prepareRepForMigrationTx = async (universeId: bigint, amount: bigint) =>
-	await writeContractAndWait(alice, async () => await alice.writeContract({
+	await writeContractAndWait(alice, () => alice.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'prepareRepForMigration',
 		address: getZoltarAddress(),
@@ -236,7 +236,7 @@ const prepareRepForMigrationTx = async (universeId: bigint, amount: bigint) =>
 	}))
 
 const migrateInternalRepTx = async (universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) =>
-	await writeContractAndWait(alice, async () => await alice.writeContract({
+	await writeContractAndWait(alice, () => alice.writeContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'migrateInternalRep',
 		address: getZoltarAddress(),

@@ -61,6 +61,7 @@ contract UniformPriceDualCapBatchAuction {
 	}
 
 	modifier isOperational {
+		require(auctionStarted != 0, 'not started');
 		require(!finalized, 'finalized');
 		require(block.timestamp < auctionStarted + AUCTION_TIME, 'auction ended');
 		_;

@@ -57,7 +57,7 @@ export const getEscalationGameDeposits = async (client: ReadClient, escalationGa
 }
 
 export const deployEscalationGame = async (writeClient: WriteClient, startBond: bigint, nonDecisionThreshold: bigint) => {
-	await writeContractAndWait(writeClient, async () => await writeClient.writeContract({
+	await writeContractAndWait(writeClient, () => writeClient.writeContract({
 		abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
 		functionName: 'deployEscalationGame',
 		address: getInfraContractAddresses().escalationGameFactory,
@@ -93,7 +93,7 @@ export const getStartingTime = async (client: ReadClient, escalationGame: Accoun
 	})
 
 export const depositOnOutcome = async (writeClient: WriteClient, escalationGame: AccountAddress, depositor: AccountAddress, outcome: QuestionOutcome, amount: bigint) => {
-	await writeContractAndWait(writeClient, async () => await writeClient.writeContract({
+	await writeContractAndWait(writeClient, () => writeClient.writeContract({
 		abi: peripherals_EscalationGame_EscalationGame.abi,
 		functionName: 'depositOnOutcome',
 		address: escalationGame,

@@ -25,7 +25,7 @@ export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigi
 	await depositRep(client, securityPoolAddress, repDeposit)
 
 	const newBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
-	assert.ok(newBalance >= startBalance, 'Pool REP balance should not decrease after deposit')
+	assert.strictEqual(newBalance, startBalance + repDeposit, 'Did not deposit rep')
 }
 
 export const triggerOwnGameFork = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
@@ -59,7 +59,7 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 	const wethBalanceBefore = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
 	await wrapWeth(client, amount2)
 	const wethBalance = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
-	assert.ok(wethBalance >= wethBalanceBefore, 'WETH balance should not decrease when wrapping for oracle reporting')
+	assert.strictEqual(wethBalance - wethBalanceBefore, amount2, 'Did not wrap correct amount of weth')
 
 	const stateHash = (await getOpenOracleExtraData(client, pendingReportId)).stateHash
 	await openOracleSubmitInitialReport(client, pendingReportId, amount1, amount2, stateHash)
