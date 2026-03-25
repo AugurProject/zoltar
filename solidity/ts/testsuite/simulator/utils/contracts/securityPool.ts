@@ -1,13 +1,7 @@
 import { peripherals_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
 import { SystemState } from '../../types/peripheralTypes'
 import { QuestionOutcome } from '../../types/types'
-import { ReadClient, WriteClient } from '../viem'
-
-const writeContractAndWait = async (client: WriteClient, execute: () => Promise<`0x${ string }`>) => {
-	const hash = await execute()
-	await client.waitForTransactionReceipt({ hash })
-	return hash
-}
+import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 
 export const depositToEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome, amount: bigint) =>
 	await writeContractAndWait(client, async () => await client.writeContract({

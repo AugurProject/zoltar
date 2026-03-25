@@ -1,6 +1,6 @@
 import { encodeAbiParameters, keccak256 } from 'viem'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
-import { ReadClient, WriteClient } from '../viem'
+import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { getInfraContractAddresses } from './deployPeripherals'
 
 type QuestionData = {
@@ -68,12 +68,12 @@ export const getQuestionId = (questionData: QuestionData, outcomeOptions: readon
 }
 
 export const createQuestion = async (client: WriteClient, questionData: QuestionData, outcomeLabels: string[]) =>
-	await client.writeContract({
+	await writeContractAndWait(client, async () => await client.writeContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'createQuestion',
 		address: getInfraContractAddresses().zoltarQuestionData,
 		args: [questionData, outcomeLabels],
-	})
+	}))
 
 export const isMalformedAnswerOption = async (client: ReadClient, questionId: bigint, answer: bigint) =>
 	await client.readContract({

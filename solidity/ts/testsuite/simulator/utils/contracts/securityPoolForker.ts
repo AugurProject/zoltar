@@ -2,13 +2,7 @@ import { peripherals_SecurityPoolForker_SecurityPoolForker } from '../../../../t
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
 import { contractExists } from '../utilities'
-import { ReadClient, WriteClient } from '../viem'
-
-const writeContractAndWait = async (client: WriteClient, execute: () => Promise<`0x${ string }`>) => {
-	const hash = await execute()
-	await client.waitForTransactionReceipt({ hash })
-	return hash
-}
+import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 
 export const initiateSecurityPoolFork = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
 	await writeContractAndWait(client, async () => await client.writeContract({

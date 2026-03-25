@@ -1,6 +1,6 @@
 import 'viem/window'
 import { encodeAbiParameters, keccak256 } from 'viem'
-import { ReadClient, WriteClient } from './viem'
+import { ReadClient, WriteClient, writeContractAndWait } from './viem'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants'
 import { addressString } from './bigint'
 import { Address } from 'viem'
@@ -47,14 +47,12 @@ const mintERC20 = async (anvilWindowEthereum: AnvilWindowEthereum, erc20Address:
 
 export const approveToken = async (client: WriteClient, tokenAddress: Address, spenderAddress: Address) => {
 	const amount = 1000000000000000000000000000000n
-	const hash = await client.writeContract({
+	return await writeContractAndWait(client, async () => await client.writeContract({
 		abi: ABIS.mainnet.erc20,
 		functionName: 'approve',
 		address: tokenAddress,
 		args: [spenderAddress, amount],
-	})
-	await client.waitForTransactionReceipt({ hash })
-	return hash
+	}))
 }
 
 export const getERC20Balance = async (client: ReadClient, tokenAddress: Address, ownerAddress: Address) =>

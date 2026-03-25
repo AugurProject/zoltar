@@ -1,7 +1,7 @@
 import { encodeDeployData, getCreate2Address, numberToBytes } from 'viem'
 import { peripherals_EscalationGame_EscalationGame, peripherals_factories_EscalationGameFactory_EscalationGameFactory } from '../../../../types/contractArtifact'
 import { AccountAddress, QuestionOutcome } from '../../types/types'
-import { ReadClient, WriteClient } from '../viem'
+import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { getInfraContractAddresses } from './deployPeripherals'
 
 export const getNonDecisionThreshold = async (client: ReadClient, escalationGame: AccountAddress) =>
@@ -57,12 +57,12 @@ export const getEscalationGameDeposits = async (client: ReadClient, escalationGa
 }
 
 export const deployEscalationGame = async (writeClient: WriteClient, startBond: bigint, nonDecisionThreshold: bigint) => {
-	await writeClient.writeContract({
+	await writeContractAndWait(writeClient, async () => await writeClient.writeContract({
 		abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
 		functionName: 'deployEscalationGame',
 		address: getInfraContractAddresses().escalationGameFactory,
 		args: [startBond, nonDecisionThreshold],
-	})
+	}))
 	return getCreate2Address({
 		bytecode: encodeDeployData({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -93,10 +93,10 @@ export const getStartingTime = async (client: ReadClient, escalationGame: Accoun
 	})
 
 export const depositOnOutcome = async (writeClient: WriteClient, escalationGame: AccountAddress, depositor: AccountAddress, outcome: QuestionOutcome, amount: bigint) => {
-	await writeClient.writeContract({
+	await writeContractAndWait(writeClient, async () => await writeClient.writeContract({
 		abi: peripherals_EscalationGame_EscalationGame.abi,
 		functionName: 'depositOnOutcome',
 		address: escalationGame,
 		args: [depositor, outcome, amount],
-	})
+	}))
 }

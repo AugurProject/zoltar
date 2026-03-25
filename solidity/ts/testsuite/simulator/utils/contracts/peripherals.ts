@@ -1,6 +1,6 @@
 import 'viem/window'
 import { ReadContractReturnType } from 'viem'
-import { ReadClient, WriteClient } from '../viem'
+import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { WETH_ADDRESS } from '../constants'
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { QuestionOutcome } from '../../types/types'
@@ -12,12 +12,6 @@ export enum OperationType {
 	Liquidation = 0,
 	WithdrawRep = 1,
 	SetSecurityBondsAllowance = 2,
-}
-
-const writeContractAndWait = async (client: WriteClient, execute: () => Promise<`0x${ string }`>) => {
-	const hash = await execute()
-	await client.waitForTransactionReceipt({ hash })
-	return hash
 }
 
 export const requestPriceIfNeededAndQueueOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: `0x${ string }`, operation: OperationType, targetVault: `0x${ string }`, amount: bigint) => {

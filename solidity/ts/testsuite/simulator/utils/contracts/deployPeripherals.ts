@@ -1,6 +1,6 @@
 import 'viem/window'
 import { encodeDeployData, getCreate2Address, keccak256, numberToBytes, toHex, zeroAddress, encodeAbiParameters } from 'viem'
-import { WriteClient } from '../viem'
+import { WriteClient, writeContractAndWait } from '../viem'
 import { PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { addressString } from '../bigint'
 import { contractExists } from '../utilities'
@@ -229,10 +229,10 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 
 export const deployOriginSecurityPool = async (client: WriteClient, universeId: bigint, questionId: bigint, securityMultiplier: bigint, startingRetentionRate: bigint, startingRepEthPrice: bigint) => {
 	const infraAddresses = getInfraContractAddresses()
-	return await client.writeContract({
+	return await writeContractAndWait(client, async () => await client.writeContract({
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deployOriginSecurityPool',
 		address: infraAddresses.securityPoolFactory,
 		args: [universeId, questionId, securityMultiplier, startingRetentionRate, startingRepEthPrice],
-	})
+	}))
 }

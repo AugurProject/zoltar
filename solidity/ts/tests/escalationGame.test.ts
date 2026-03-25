@@ -1,7 +1,7 @@
 import { test, beforeEach, describe } from 'bun:test'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
@@ -77,24 +77,32 @@ describe('Escalation Game Test Suite', () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond)
 		await assert.rejects(
-			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				address: escalationGame,
-				functionName: 'claimDepositForWinning',
-				args: [0n, QuestionOutcome.None],
-			}),
+			writeContractAndWait(
+				client,
+				async () =>
+					await client.writeContract({
+						abi: peripherals_EscalationGame_EscalationGame.abi,
+						address: escalationGame,
+						functionName: 'claimDepositForWinning',
+						args: [0n, QuestionOutcome.None],
+					}),
+			),
 		)
 	})
 
 	test('claimDepositForWinning reverts when outcome is out of enum range', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
 		await assert.rejects(
-			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				address: escalationGame,
-				functionName: 'claimDepositForWinning',
-				args: [0n, 4],
-			}),
+			writeContractAndWait(
+				client,
+				async () =>
+					await client.writeContract({
+						abi: peripherals_EscalationGame_EscalationGame.abi,
+						address: escalationGame,
+						functionName: 'claimDepositForWinning',
+						args: [0n, 4],
+					}),
+			),
 		)
 	})
 

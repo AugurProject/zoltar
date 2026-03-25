@@ -2,7 +2,7 @@ import { test, beforeEach, describe } from 'bun:test'
 import assert from 'node:assert'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
-import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
+import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
 import { TEST_ADDRESSES, DAY } from '../testsuite/simulator/utils/constants'
 import { addressString, dateToBigintSeconds } from '../testsuite/simulator/utils/bigint'
 import { setupTestAccounts, getETHBalance } from '../testsuite/simulator/utils/utilities'
@@ -60,12 +60,16 @@ describe('Price Oracle Refund Security Tests', () => {
 		const overpayment = ethCost * 2n
 
 		// Call requestPrice with overpayment
-		await client.writeContract({
-			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-			address: priceOracle,
-			functionName: 'requestPrice',
-			value: overpayment,
-		})
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+					address: priceOracle,
+					functionName: 'requestPrice',
+					value: overpayment,
+				}),
+		)
 
 		const finalBalance = await getETHBalance(client, client.account.address)
 
@@ -92,13 +96,17 @@ describe('Price Oracle Refund Security Tests', () => {
 		// Call requestPriceIfNeededAndQueueOperation with overpayment
 		const caller = client.account.address
 		const sendValue = ethCost * 2n
-		await client.writeContract({
-			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-			address: priceOracle,
-			functionName: 'requestPriceIfNeededAndQueueOperation',
-			args: [OperationType.WithdrawRep, caller, 100n],
-			value: sendValue,
-		})
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndQueueOperation',
+					args: [OperationType.WithdrawRep, caller, 100n],
+					value: sendValue,
+				}),
+		)
 
 		// After the call, the pre-existing balance should remain intact.
 		// The contract should have retained ethCost (to pay OpenOracle) and refunded the excess (sendValue - ethCost).

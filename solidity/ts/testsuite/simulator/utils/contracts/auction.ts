@@ -1,13 +1,7 @@
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '../../../../types/contractArtifact'
 import { bytes32String } from '../bigint'
-import { ReadClient, WriteClient } from '../viem'
+import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { getInfraContractAddresses } from './deployPeripherals'
-
-const writeContractAndWait = async (client: WriteClient, execute: () => Promise<`0x${ string }`>) => {
-	const hash = await execute()
-	await client.waitForTransactionReceipt({ hash })
-	return hash
-}
 
 export const startAuction = async (client: WriteClient, auctionAddress: `0x${ string }`, ethRaiseCap: bigint, maxRepBeingSold: bigint) =>
 	await writeContractAndWait(client, async () => await client.writeContract({
