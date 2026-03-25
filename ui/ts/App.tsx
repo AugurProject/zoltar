@@ -243,8 +243,8 @@ export function App() {
 	const deployedCount = deploymentStatuses.filter(step => step.deployed).length
 	const nextMissingStep = deploymentStatuses.find((step, index) => !step.deployed && getPrerequisiteLabel(deploymentStatuses, index) === null) ?? null
 	const proxyDeployerSteps = deploymentStatuses.filter(step => step.id === 'proxyDeployer')
-	const zoltarSteps = deploymentStatuses.filter(step => step.id === 'zoltarQuestionData' || step.id === 'zoltar')
-	const augurPlaceholderSteps = deploymentStatuses.filter(step => step.id !== 'proxyDeployer' && step.id !== 'zoltarQuestionData' && step.id !== 'zoltar')
+	const zoltarSteps = deploymentStatuses.filter(step => step.id === 'scalarOutcomes' || step.id === 'zoltarQuestionData' || step.id === 'zoltar')
+	const augurPlaceholderSteps = deploymentStatuses.filter(step => step.id !== 'proxyDeployer' && step.id !== 'scalarOutcomes' && step.id !== 'zoltarQuestionData' && step.id !== 'zoltar')
 
 	return (
 		<main>
