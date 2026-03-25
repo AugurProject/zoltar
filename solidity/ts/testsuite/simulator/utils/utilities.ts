@@ -9,6 +9,7 @@ import { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 import { QuestionOutcome } from '../types/types'
 import { ReputationToken_ReputationToken, peripherals_WETH9_WETH9 } from '../../../types/contractArtifact'
 const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
+const ETH_AMOUNT_TO_MINT = 10n ** 30n
 const DEFAULT_APPROVAL_AMOUNT = 1000000000000000000000000000000n
 const PROXY_DEPLOYER_BYTECODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3'
 
@@ -69,10 +70,11 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 		await anvilWindowEthereum.impersonateAccount(addressString(address))
 	}
 
-	const accountValues = TEST_ADDRESSES.map(address => ({ address: addressString(address), amount: TOKEN_AMOUNT_TO_MINT }))
-	await mintETH(anvilWindowEthereum, accountValues)
+	const ethValues = TEST_ADDRESSES.map(address => ({ address: addressString(address), amount: ETH_AMOUNT_TO_MINT }))
+	const tokenValues = TEST_ADDRESSES.map(address => ({ address: addressString(address), amount: TOKEN_AMOUNT_TO_MINT }))
+	await mintETH(anvilWindowEthereum, ethValues)
 	// For OpenZeppelin ERC20, _balances mapping is at slot 0 (first state variable)
-	await mintERC20(anvilWindowEthereum, addressString(GENESIS_REPUTATION_TOKEN), accountValues, 0n)
+	await mintERC20(anvilWindowEthereum, addressString(GENESIS_REPUTATION_TOKEN), tokenValues, 0n)
 
 	// Deploy the ReputationToken contract at the genesis address
 	const bytecodeHex = ReputationToken_ReputationToken.evm.deployedBytecode.object

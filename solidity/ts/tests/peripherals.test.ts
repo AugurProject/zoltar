@@ -49,10 +49,26 @@ describe('Peripherals Contract Test Suite', () => {
 	const genesisUniverse = 0n
 	const securityMultiplier = 2n
 	const startingRepEthPrice = 10n
+	const testInternalSenderBalance = 10n ** 18n
 	const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
 	const EXTRA_INFO = 'test question!'
 	const outcomes = ['Yes', 'No']
 	let questionId: bigint
+
+	const sendEthAndWait = async (from: `0x${ string }`, to: `0x${ string }`, value: bigint) => {
+		const hash = (await mockWindow.request({
+			method: 'eth_sendTransaction',
+			params: [
+				{
+					from,
+					to,
+					value: `0x${ value.toString(16) }`,
+					gasPrice: '0x0',
+				},
+			],
+		})) as `0x${ string }`
+		await client.waitForTransactionReceipt({ hash })
+	}
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
@@ -1013,17 +1029,14 @@ describe('Peripherals Contract Test Suite', () => {
 		const poolAddress = securityPoolAddresses.securityPool
 
 		// Ensure forker has ETH to send
-		await mockWindow.setBalance(forkerAddress, 1000000n)
+		await mockWindow.setBalance(forkerAddress, testInternalSenderBalance)
 
 		// 1. Unauthorized sender should revert
 		await assert.rejects(client.sendTransaction({ to: poolAddress, value: 1000n }), /Unauthorized ETH sender/)
 
 		// 2. Authorized sender: securityPoolForker
 		await mockWindow.impersonateAccount(forkerAddress)
-		await mockWindow.request({
-			method: 'eth_sendTransaction',
-			params: [{ from: forkerAddress, to: poolAddress, value: '0x' + 1000n.toString(16) }],
-		})
+		await sendEthAndWait(forkerAddress, poolAddress, 1000n)
 		const balance = await getETHBalance(client, poolAddress)
 		strictEqualTypeSafe(balance, 1000n, 'Pool balance after forker send')
 
@@ -1051,8 +1064,8 @@ describe('Peripherals Contract Test Suite', () => {
 		const truthAuctionAddress = childAddresses.truthAuction
 
 		// Ensure ETH for testing
-		await mockWindow.setBalance(truthAuctionAddress, 1000000n)
-		await mockWindow.setBalance(forkerAddress, 1000000n)
+		await mockWindow.setBalance(truthAuctionAddress, testInternalSenderBalance)
+		await mockWindow.setBalance(forkerAddress, testInternalSenderBalance)
 
 		// 4. Unauthorized to child pool reverts
 		await assert.rejects(client.sendTransaction({ to: childPoolAddress, value: 100n }), /Unauthorized ETH sender/)
@@ -1062,19 +1075,13 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// 5. Send from forker to child
 		await mockWindow.impersonateAccount(forkerAddress)
-		await mockWindow.request({
-			method: 'eth_sendTransaction',
-			params: [{ from: forkerAddress, to: childPoolAddress, value: '0x' + 2000n.toString(16) }],
-		})
+		await sendEthAndWait(forkerAddress, childPoolAddress, 2000n)
 		const afterForkerBal = await getETHBalance(client, childPoolAddress)
 		strictEqualTypeSafe(afterForkerBal - initialChildBal, 2000n, 'Child balance increase from forker')
 
 		// 6. Send from truthAuction to child
 		await mockWindow.impersonateAccount(truthAuctionAddress)
-		await mockWindow.request({
-			method: 'eth_sendTransaction',
-			params: [{ from: truthAuctionAddress, to: childPoolAddress, value: '0x' + 3000n.toString(16) }],
-		})
+		await sendEthAndWait(truthAuctionAddress, childPoolAddress, 3000n)
 		const afterAuctionBal = await getETHBalance(client, childPoolAddress)
 		strictEqualTypeSafe(afterAuctionBal - initialChildBal, 5000n, 'Child balance total increase from both')
 	})
@@ -1103,7 +1110,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const truthAuctionAddress = childAddresses.truthAuction
 
 		// Ensure auction has ETH to send
-		await mockWindow.setBalance(truthAuctionAddress, 1000000n)
+		await mockWindow.setBalance(truthAuctionAddress, testInternalSenderBalance)
 
 		// 1. Unauthorized sender to forker should revert
 		await assert.rejects(client.sendTransaction({ to: forkerAddress, value: 100n }), /Unauthorized ETH sender/)
@@ -1111,10 +1118,7 @@ describe('Peripherals Contract Test Suite', () => {
 		// 2. Authorized sender: truthAuction
 		const initialForkerBal = await getETHBalance(client, forkerAddress)
 		await mockWindow.impersonateAccount(truthAuctionAddress)
-		await mockWindow.request({
-			method: 'eth_sendTransaction',
-			params: [{ from: truthAuctionAddress, to: forkerAddress, value: '0x' + 2000n.toString(16) }],
-		})
+		await sendEthAndWait(truthAuctionAddress, forkerAddress, 2000n)
 		const newForkerBal = await getETHBalance(client, forkerAddress)
 		strictEqualTypeSafe(newForkerBal - initialForkerBal, 2000n, 'Forker balance increase from truthAuction')
 	})

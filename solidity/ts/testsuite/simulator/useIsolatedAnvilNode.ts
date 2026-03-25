@@ -10,6 +10,7 @@ const DEFAULT_ANVIL_BIN = process.env['ANVIL_BIN'] ?? 'anvil'
 const RPC_READY_TIMEOUT_MS = 10_000
 const RPC_PROBE_TIMEOUT_MS = 1_000
 const SHUTDOWN_TIMEOUT_MS = 5_000
+const TEST_CHAIN_START_TIMESTAMP = 1n
 
 const getFreePort = async (): Promise<number> =>
 	await new Promise((resolve, reject) => {
@@ -175,6 +176,11 @@ export const useIsolatedAnvilNode = () => {
 		const currentEthereum = ensureDefined(anvilWindowEthereum, 'Isolated Anvil node was not initialized')
 		const currentSnapshotId = ensureDefined(snapshotId, 'Missing Anvil snapshot for test isolation')
 		await currentEthereum.anvilRevert(currentSnapshotId)
+		await currentEthereum.setTime(TEST_CHAIN_START_TIMESTAMP)
+		await currentEthereum.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: ['0x0'],
+		})
 		snapshotId = await currentEthereum.anvilSnapshot()
 	})
 
