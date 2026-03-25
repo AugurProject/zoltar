@@ -5,6 +5,7 @@
 	"scripts": {
 		"setup": "bun install --frozen-lockfile --ignore-scripts && bun run compile-contracts",
 		"compile-contracts": "bun tsc --project tsconfig-compile.json && bun run ./js/compile.js",
+		"gas-costs": "bun tsc && bun run ./js/gas-costs.js",
 		"test-zoltar": "bun tsc && bun test --timeout 300000 ./js/tests/zoltar.test.js",
 		"test-peripherals": "bun tsc && bun test --timeout 300000 ./js/tests/peripherals.test.js",
 		"test-escalation-game": "bun tsc && bun test --timeout 300000 ./js/tests/escalationGame.test.js",

@@ -27,6 +27,7 @@
 		"setup": "bun install --ignore-scripts && bun run setup-contracts",
 		"setup-contracts": "cd solidity && bun run setup",
 		"compile-contracts": "cd solidity && bun run compile-contracts",
+		"gas-costs": "cd solidity && bun run gas-costs",
 		"test-zoltar": "cd solidity && bun run test-zoltar",
 		"test-peripherals": "cd solidity && bun run compile-contracts && bun run test-peripherals",
 		"test-escalation-game": "cd solidity && bun run compile-contracts && bun run test-escalation-game",
