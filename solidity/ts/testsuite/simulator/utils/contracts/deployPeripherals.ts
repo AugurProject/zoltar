@@ -188,7 +188,7 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 			bytecode: encodeDeployData({
 				abi: peripherals_tokens_ShareToken_ShareToken.abi,
 				bytecode: `0x${ peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object }`,
-				args: [infraContracts.securityPoolFactory, infraContracts.zoltar],
+				args: [infraContracts.securityPoolFactory, infraContracts.zoltar, questionId],
 			}),
 			from: infraContracts.shareTokenFactory,
 			salt: computeShareTokenSalt(securityMultiplier, questionId),

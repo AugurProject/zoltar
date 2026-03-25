@@ -71,7 +71,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 		// sharetoken has different salt as sharetoken address does not change in forks
 		bytes32 shareTokenSalt = keccak256(abi.encode(securityMultiplier, questionId));
-		IShareToken shareToken = shareTokenFactory.deployShareToken(shareTokenSalt);
+		IShareToken shareToken = shareTokenFactory.deployShareToken(shareTokenSalt, questionId);
 
 		securityPool = new SecurityPool{ salt: bytes32(uint256(0x0)) }(address(securityPoolForker), this, questionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, ISecurityPool(payable(0x0)), zoltar, universeId, questionId, securityMultiplier, address(0));
 

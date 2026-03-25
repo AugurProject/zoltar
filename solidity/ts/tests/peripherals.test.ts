@@ -19,6 +19,7 @@ import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMig
 import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getRepTokensMigratedRepBalance, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
+import { peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
 
 describe('Peripherals Contract Test Suite', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
@@ -84,6 +85,24 @@ describe('Peripherals Contract Test Suite', () => {
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
 		const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance, 100n, 'Did not get rep back')
+	})
+
+	test('share token metadata includes the question id', async () => {
+		const name = await client.readContract({
+			abi: peripherals_tokens_ShareToken_ShareToken.abi,
+			functionName: 'name',
+			address: securityPoolAddresses.shareToken,
+			args: [],
+		})
+		const symbol = await client.readContract({
+			abi: peripherals_tokens_ShareToken_ShareToken.abi,
+			functionName: 'symbol',
+			address: securityPoolAddresses.shareToken,
+			args: [],
+		})
+
+		assert.strictEqual(name, `Shares-${ questionId }`, 'share token name should include the question id')
+		assert.strictEqual(symbol, `SHARE-${ questionId }`, 'share token symbol should include the question id')
 	})
 
 	test('withdrawal after question end releases escalation lock without changing ownership in single-sided case', async () => {

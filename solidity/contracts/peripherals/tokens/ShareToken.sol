@@ -15,9 +15,8 @@ import './ERC1155.sol';
 */
 contract ShareToken is ERC1155, IShareToken {
 
-	// TODO, rename based on the question they represent
-	string constant public name = 'Shares';
-	string constant public symbol = 'SHARE';
+	string public name;
+	string public symbol;
 	Zoltar public immutable zoltar;
 	mapping(address => bool) authorized;
 	event Authorized(address indexed securityPool);
@@ -27,9 +26,31 @@ contract ShareToken is ERC1155, IShareToken {
 		return zoltar.getForkTime(universeId) > 0;
 	}
 
-	constructor(address owner, Zoltar _zoltar) {
+	constructor(address owner, Zoltar _zoltar, uint256 questionId) {
 		zoltar = _zoltar;
+		string memory questionIdString = uintToString(questionId);
+		name = string.concat('Shares-', questionIdString);
+		symbol = string.concat('SHARE-', questionIdString);
 		authorized[owner] = true;
+	}
+
+	function uintToString(uint256 value) internal pure returns (string memory) {
+		if (value == 0) return '0';
+
+		uint256 digits = 0;
+		uint256 temp = value;
+		while (temp != 0) {
+			digits++;
+			temp /= 10;
+		}
+
+		bytes memory buffer = new bytes(digits);
+		while (value != 0) {
+			digits--;
+			buffer[digits] = bytes1(uint8(48 + value % 10));
+			value /= 10;
+		}
+		return string(buffer);
 	}
 
 	function authorize(ISecurityPool _securityPoolCandidate) external {

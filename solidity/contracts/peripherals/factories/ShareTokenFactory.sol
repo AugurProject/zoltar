@@ -10,7 +10,7 @@ contract ShareTokenFactory {
 		zoltar = _zoltar;
 	}
 
-	function deployShareToken(bytes32 salt) external returns (ShareToken shareToken) {
-		return new ShareToken{ salt: salt }(msg.sender, zoltar);
+	function deployShareToken(bytes32 salt, uint256 questionId) external returns (ShareToken shareToken) {
+		return new ShareToken{ salt: salt }(msg.sender, zoltar, questionId);
 	}
 }
