@@ -244,21 +244,17 @@ const scenarios: Scenario[] = [
 		section: '1. Core Deployment',
 		label: 'deploy Zoltar core contracts',
 		init: { deployZoltar: false, deployInfra: false },
-		run: async () => {
-			return await measureActionGas(alice, async () => {
+		run: async () => await measureActionGas(alice, async () => {
 				await ensureZoltarDeployed(alice)
-			})
-		},
+			}),
 	},
 	{
 		section: '2. Peripheral Deployment',
 		label: 'deploy peripheral contracts',
 		init: { deployZoltar: true, deployInfra: false },
-		run: async () => {
-			return await measureActionGas(alice, async () => {
+		run: async () => await measureActionGas(alice, async () => {
 				await ensureInfraDeployed(alice)
-			})
-		},
+			}),
 	},
 	{
 		section: '3. Question Creation',

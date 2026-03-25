@@ -121,7 +121,6 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		}
 	}
 
-	// TODO, atm this needs to be called after migratevault
 	function migrateFromEscalationGame(ISecurityPool parent, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint8[] memory depositIndexes) public {
 		EscalationGame escalationGame = parent.escalationGame();
 		if (address(childrenByPoolAndOutcome[parent][uint8(outcomeIndex)]) == address(0x0)) createChildUniverse(parent, uint8(outcomeIndex));
@@ -129,7 +128,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		require(address(escalationGame) != address(0x0), 'escalation game needs to be deployed');
 		uint256 repMigratedFromEscalationGame = 0;
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
-			(address depositor, uint256 amountToWithdraw) = escalationGame.claimDepositForWinning(depositIndexes[index], outcomeIndex);
+			(address depositor, uint256 amountToWithdraw, ) = escalationGame.claimDepositForWinning(depositIndexes[index], outcomeIndex);
 			require(depositor == vault, 'deposit was not for this vault');
 			repMigratedFromEscalationGame += amountToWithdraw;
 		}
@@ -151,25 +150,27 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		child.updateVaultFees(msg.sender);
 		parent.updateCollateralAmount();
 		(uint256 parentPoolOwnership, uint256 parentSecurityBondAllowance, , , uint256 parentLockedRepInEscalationGame) = parent.securityVaults(msg.sender);
+		(uint256 childCurrentPoolOwnership, uint256 childCurrentSecurityBondAllowance, , uint256 childCurrentFeeIndex, ) = child.securityVaults(msg.sender);
 		emit MigrateRepFromParent(msg.sender, parentSecurityBondAllowance, parentPoolOwnership);
 		uint256 childCurrentCollateral = child.completeSetCollateralAmount();
 		uint256 childCurrentBond = child.totalSecurityBondAllowance();
 		child.setPoolFinancials(childCurrentCollateral, childCurrentBond + parentSecurityBondAllowance);
 
-		uint256 vaultPoolOwnership = 0;
-		uint256 vaultFeeIndex = 0;
+		uint256 vaultPoolOwnership = childCurrentPoolOwnership;
+		uint256 vaultFeeIndex = childCurrentSecurityBondAllowance > 0 ? childCurrentFeeIndex : 0;
 		if (parent.poolOwnershipDenominator() != 0 && child.repToken().balanceOf(address(child)) != 0) {
-			vaultPoolOwnership = parentPoolOwnership - repToPoolOwnership(child, parentLockedRepInEscalationGame);
-			vaultFeeIndex = child.feeIndex();
-			uint256 migratedRep = poolOwnershipToRep(child, vaultPoolOwnership);
+			uint256 migratedPoolOwnership = parentPoolOwnership - repToPoolOwnership(child, parentLockedRepInEscalationGame);
+			vaultPoolOwnership += migratedPoolOwnership;
+			if (parentSecurityBondAllowance > 0) vaultFeeIndex = child.feeIndex();
+			uint256 migratedRep = poolOwnershipToRep(child, migratedPoolOwnership);
 			forkDataByPool[child].migratedRep += migratedRep;
 			// migrate open interest
-			if (vaultPoolOwnership > 0) {
+			if (migratedPoolOwnership > 0) {
 				parent.transferEth(payable(child), parent.completeSetCollateralAmount() * migratedRep / forkDataByPool[parent].repAtFork);
 			}
 		}
 
-		child.configureVault(msg.sender, vaultPoolOwnership, parentSecurityBondAllowance, vaultFeeIndex);
+		child.configureVault(msg.sender, vaultPoolOwnership, childCurrentSecurityBondAllowance + parentSecurityBondAllowance, vaultFeeIndex);
 
 		(uint256 poolOwnership, uint256 securityBondAllowance, , uint256 parentVaultFeeIndex, ) = parent.securityVaults(msg.sender);
 		emit MigrateVault(msg.sender, outcomeIndex, poolOwnership, securityBondAllowance, parentLockedRepInEscalationGame);

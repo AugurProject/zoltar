@@ -354,8 +354,13 @@ contract SecurityPool is ISecurityPool {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
 		require(!escalationGame.hasReachedNonDecision(), 'cannot withdraw, escalation game is indecisive');
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
-			(address depositor, uint256 amountToWithdraw) = escalationGame.withdrawDeposit(depositIndexes[index]);
-			securityVaults[depositor].poolOwnership += repToPoolOwnership(amountToWithdraw);
+			(address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index]);
+			securityVaults[depositor].lockedRepInEscalationGame -= originalDepositAmount;
+			if (amountToWithdraw > originalDepositAmount) {
+				securityVaults[depositor].poolOwnership += repToPoolOwnership(amountToWithdraw - originalDepositAmount);
+			} else if (amountToWithdraw < originalDepositAmount) {
+				securityVaults[depositor].poolOwnership -= repToPoolOwnership(originalDepositAmount - amountToWithdraw);
+			}
 		}
 	}
 
