@@ -360,11 +360,11 @@ contract SecurityPool is ISecurityPool {
 			uint256 amountToWithdraw;
 			uint256 originalDepositAmount;
 			if (gameCanceledByExternalFork) {
-				(depositor, amountToWithdraw) = escalationGame.refundCanceledDeposit(depositIndexes[index], outcome);
+				(depositor, amountToWithdraw) = escalationGame.refundCanceledDeposit(depositIndexes[index], outcome, msg.sender);
 				originalDepositAmount = amountToWithdraw;
 			} else {
 				require(outcome == questionOutcome, 'Wrong outcome');
-				(depositor, amountToWithdraw, originalDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index]);
+				(depositor, amountToWithdraw, originalDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index], msg.sender);
 			}
 			securityVaults[depositor].lockedRepInEscalationGame -= originalDepositAmount;
 			if (amountToWithdraw > originalDepositAmount) {
