@@ -1,6 +1,7 @@
 {
 	"entry": [
 		"solidity/ts/compile.ts",
+		"solidity/ts/gas-costs.ts",
 		"solidity/ts/tests/**/*.ts"
 	],
 	"project": [
