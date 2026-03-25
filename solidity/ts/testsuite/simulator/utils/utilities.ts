@@ -46,14 +46,12 @@ const mintERC20 = async (anvilWindowEthereum: AnvilWindowEthereum, erc20Address:
 	await anvilWindowEthereum.addStateOverrides({ [erc20Address]: { stateDiff: stateSets } })
 }
 
-export const approveToken = async (client: WriteClient, tokenAddress: Address, spenderAddress: Address) => {
-	return await writeContractAndWait(client, () => client.writeContract({
+export const approveToken = async (client: WriteClient, tokenAddress: Address, spenderAddress: Address) => await writeContractAndWait(client, () => client.writeContract({
 		abi: ABIS.mainnet.erc20,
 		functionName: 'approve',
 		address: tokenAddress,
 		args: [spenderAddress, DEFAULT_APPROVAL_AMOUNT],
 	}))
-}
 
 export const getERC20Balance = async (client: ReadClient, tokenAddress: Address, ownerAddress: Address) =>
 	await client.readContract({

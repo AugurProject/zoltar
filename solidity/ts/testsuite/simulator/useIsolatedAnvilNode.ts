@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { createServer } from 'node:net'
+import { AddressInfo, createServer } from 'node:net'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from './AnvilWindowEthereum'
 import { ensureDefined } from './utils/testUtils'
@@ -25,7 +25,7 @@ const getFreePort = async (): Promise<number> =>
 					reject(error)
 					return
 				}
-				resolve(address.port)
+				resolve((address as AddressInfo).port)
 			})
 		})
 		server.on('error', reject)
