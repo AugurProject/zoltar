@@ -34,7 +34,7 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 						<p class="detail">Security pool factory address: {securityPoolFactoryStatus?.address ?? 'Unavailable'}</p>
 					</div>
 
-					{marketResult === undefined ? null : (
+					{marketResult === undefined ? undefined : (
 						<div class="status-card">
 							<p class="panel-label">Latest Market</p>
 							<ul class="status-list hashes">
@@ -93,7 +93,7 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 								<span>Outcome Labels</span>
 								<textarea value={marketForm.categoricalOutcomes} onInput={event => onMarketFormChange({ categoricalOutcomes: event.currentTarget.value })} placeholder={'One outcome per line\nApple\nBanana\nCherry'} />
 							</label>
-						) : null}
+						) : undefined}
 
 						{marketForm.marketType === 'scalar' ? (
 							<>
@@ -124,7 +124,7 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 									<input value={marketForm.scalarStartValue} onInput={event => onMarketFormChange({ scalarStartValue: event.currentTarget.value })} />
 								</label>
 							</>
-						) : null}
+						) : undefined}
 
 						{marketForm.marketType === 'binary' ? (
 							<>
@@ -144,7 +144,7 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 									<input value={marketForm.startingRepEthPrice} onInput={event => onMarketFormChange({ startingRepEthPrice: event.currentTarget.value })} />
 								</label>
 							</>
-						) : null}
+						) : undefined}
 
 						<div class="actions">
 							<button onClick={onCreateMarket} disabled={accountState.address === undefined || !accountState.isMainnet || marketCreating}>
@@ -156,7 +156,7 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 						</div>
 					</div>
 
-					{marketError === undefined ? null : <p class="notice error">{marketError}</p>}
+					{marketError === undefined ? undefined : <p class="notice error">{marketError}</p>}
 				</div>
 			</div>
 		</section>

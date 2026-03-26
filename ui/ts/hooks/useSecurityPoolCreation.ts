@@ -5,7 +5,6 @@ import { createReadClient, createWriteClient, getRequiredInjectedEthereum } from
 import { getErrorMessage } from '../lib/errors.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultSecurityPoolFormState } from '../lib/marketForm.js'
-import { setSignalValue, updateSignalValue } from '../lib/signals.js'
 import type { SecurityPoolFormState } from '../types/app.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '../types/contracts.js'
 
@@ -13,10 +12,13 @@ type UseSecurityPoolCreationParameters = {
 	accountAddress: Address | undefined
 	deploymentStatuses: DeploymentStatus[]
 	onTransaction: (hash: Hash) => void
+	onTransactionFinished: () => void
+	onTransactionRequested: () => void
+	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 }
 
-export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, onTransaction, refreshState }: UseSecurityPoolCreationParameters) {
+export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolCreationParameters) {
 	const loadingMarketDetails = useSignal(false)
 	const marketDetails = useSignal<MarketDetails | undefined>(undefined)
 	const securityPoolCreating = useSignal(false)
@@ -26,12 +28,12 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 
 	const loadMarketById = async (marketId: string) => {
 		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) {
-			setSignalValue(securityPoolError, 'Deploy ZoltarQuestionData before loading a market')
+			securityPoolError.value = 'Deploy ZoltarQuestionData before loading a market'
 			return
 		}
 
-		setSignalValue(loadingMarketDetails, true)
-		setSignalValue(securityPoolError, undefined)
+		loadingMarketDetails.value = true
+		securityPoolError.value = undefined
 		try {
 			const { questionId } = createSecurityPoolParameters({
 				...securityPoolForm.value,
@@ -39,17 +41,17 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 			})
 			const details = await loadMarketDetails(createReadClient(), questionId)
 			if (!details.exists) {
-				setSignalValue(marketDetails, undefined)
-				setSignalValue(securityPoolError, 'No market found for that ID')
+				marketDetails.value = undefined
+				securityPoolError.value = 'No market found for that ID'
 				return
 			}
 
-			setSignalValue(marketDetails, details)
+			marketDetails.value = details
 		} catch (error) {
-			setSignalValue(marketDetails, undefined)
-			setSignalValue(securityPoolError, getErrorMessage(error, 'Failed to load market'))
+			marketDetails.value = undefined
+			securityPoolError.value = getErrorMessage(error, 'Failed to load market')
 		} finally {
-			setSignalValue(loadingMarketDetails, false)
+			loadingMarketDetails.value = false
 		}
 	}
 
@@ -60,43 +62,45 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		try {
 			ethereum = getRequiredInjectedEthereum()
 		} catch {
-			setSignalValue(securityPoolError, 'No injected wallet found')
+			securityPoolError.value = 'No injected wallet found'
 			return
 		}
 		if (accountAddress === undefined) {
-			setSignalValue(securityPoolError, 'Connect a wallet before creating a security pool')
+			securityPoolError.value = 'Connect a wallet before creating a security pool'
 			return
 		}
 		if (!hasDeployedStep(deploymentStatuses, 'securityPoolFactory')) {
-			setSignalValue(securityPoolError, 'Deploy SecurityPoolFactory before creating a security pool')
+			securityPoolError.value = 'Deploy SecurityPoolFactory before creating a security pool'
 			return
 		}
 
 		const parameters = createSecurityPoolParameters(securityPoolForm.value)
 		const details = marketDetails.value ?? (await loadMarketDetails(createReadClient(), parameters.questionId))
 		if (!details.exists) {
-			setSignalValue(securityPoolError, 'No market found for that ID')
+			securityPoolError.value = 'No market found for that ID'
 			return
 		}
 		if (details.marketType !== 'binary') {
-			setSignalValue(securityPoolError, 'Security pools can only be deployed for binary markets')
-			setSignalValue(marketDetails, details)
+			securityPoolError.value = 'Security pools can only be deployed for binary markets'
+			marketDetails.value = details
 			return
 		}
 
-		setSignalValue(securityPoolCreating, true)
-		setSignalValue(securityPoolError, undefined)
-		setSignalValue(securityPoolResult, undefined)
+		securityPoolCreating.value = true
+		securityPoolError.value = undefined
+		securityPoolResult.value = undefined
 		try {
-			const result = await createSecurityPool(createWriteClient(ethereum, accountAddress), parameters)
-			setSignalValue(marketDetails, details)
-			setSignalValue(securityPoolResult, result)
+			onTransactionRequested()
+			const result = await createSecurityPool(createWriteClient(ethereum, accountAddress, { onTransactionSubmitted }), parameters)
+			marketDetails.value = details
+			securityPoolResult.value = result
 			onTransaction(result.deployPoolHash)
 			await refreshState()
 		} catch (error) {
-			setSignalValue(securityPoolError, getErrorMessage(error, 'Failed to create security pool'))
+			securityPoolError.value = getErrorMessage(error, 'Failed to create security pool')
 		} finally {
-			setSignalValue(securityPoolCreating, false)
+			securityPoolCreating.value = false
+			onTransactionFinished()
 		}
 	}
 
@@ -110,7 +114,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		securityPoolForm: securityPoolForm.value,
 		securityPoolResult: securityPoolResult.value,
 		setSecurityPoolForm: (updater: (current: SecurityPoolFormState) => SecurityPoolFormState) => {
-			updateSignalValue(securityPoolForm, updater)
+			securityPoolForm.value = updater(securityPoolForm.value)
 		},
 		createPool,
 	}

@@ -5,17 +5,19 @@ import { createReadClient, createWriteClient, getRequiredInjectedEthereum } from
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput, parseBigIntListInput } from '../lib/inputs.js'
 import { getDefaultReportingFormState, parseBigIntInput } from '../lib/marketForm.js'
-import { setSignalValue, updateSignalValue } from '../lib/signals.js'
 import type { ReportingFormState } from '../types/app.js'
 import type { ReportingActionResult, ReportingDetails } from '../types/contracts.js'
 
 type UseReportingOperationsParameters = {
 	accountAddress: Address | undefined
 	onTransaction: (hash: Hash) => void
+	onTransactionFinished: () => void
+	onTransactionRequested: () => void
+	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 }
 
-export function useReportingOperations({ accountAddress, onTransaction, refreshState }: UseReportingOperationsParameters) {
+export function useReportingOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseReportingOperationsParameters) {
 	const loadingReportingDetails = useSignal(false)
 	const reportingDetails = useSignal<ReportingDetails | undefined>(undefined)
 	const reportingError = useSignal<string | undefined>(undefined)
@@ -23,47 +25,50 @@ export function useReportingOperations({ accountAddress, onTransaction, refreshS
 	const reportingResult = useSignal<ReportingActionResult | undefined>(undefined)
 
 	const loadReporting = async () => {
-		setSignalValue(loadingReportingDetails, true)
-		setSignalValue(reportingError, undefined)
+		loadingReportingDetails.value = true
+		reportingError.value = undefined
 		try {
 			const securityPoolAddress = parseAddressInput(reportingForm.value.securityPoolAddress, 'Security pool address')
 			const details = await loadReportingDetails(createReadClient(), securityPoolAddress, accountAddress)
-			setSignalValue(reportingDetails, details)
+			reportingDetails.value = details
 		} catch (error) {
-			setSignalValue(reportingDetails, undefined)
-			setSignalValue(reportingError, getErrorMessage(error, 'Failed to load reporting details'))
+			reportingDetails.value = undefined
+			reportingError.value = getErrorMessage(error, 'Failed to load reporting details')
 		} finally {
-			setSignalValue(loadingReportingDetails, false)
+			loadingReportingDetails.value = false
 		}
 	}
 
 	const runReportingAction = async (action: (walletAddress: Address, securityPoolAddress: Address) => Promise<ReportingActionResult>, errorFallback: string) => {
 		const ethereum = getRequiredInjectedEthereum()
 		if (ethereum === undefined) {
-			setSignalValue(reportingError, 'No injected wallet found')
+			reportingError.value = 'No injected wallet found'
 			return
 		}
 		if (accountAddress === undefined) {
-			setSignalValue(reportingError, 'Connect a wallet before reporting on a market')
+			reportingError.value = 'Connect a wallet before reporting on a market'
 			return
 		}
 
 		try {
-			setSignalValue(reportingError, undefined)
-			setSignalValue(reportingResult, undefined)
+			onTransactionRequested()
+			reportingError.value = undefined
+			reportingResult.value = undefined
 			const securityPoolAddress = parseAddressInput(reportingForm.value.securityPoolAddress, 'Security pool address')
 			const result = await action(accountAddress, securityPoolAddress)
-			setSignalValue(reportingResult, result)
+			reportingResult.value = result
 			onTransaction(result.hash)
 			await refreshState()
 			const details = await loadReportingDetails(createReadClient(), securityPoolAddress, accountAddress)
-			setSignalValue(reportingDetails, details)
+			reportingDetails.value = details
 		} catch (error) {
-			setSignalValue(reportingError, getErrorMessage(error, errorFallback))
+			reportingError.value = getErrorMessage(error, errorFallback)
+		} finally {
+			onTransactionFinished()
 		}
 	}
 
-	const reportOutcome = async () => await runReportingAction(async (walletAddress, securityPoolAddress) => await reportOutcomeInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress), securityPoolAddress, reportingForm.value.selectedOutcome, parseBigIntInput(reportingForm.value.reportAmount, 'Report amount')), 'Failed to report on outcome')
+	const reportOutcome = async () => await runReportingAction(async (walletAddress, securityPoolAddress) => await reportOutcomeInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress, reportingForm.value.selectedOutcome, parseBigIntInput(reportingForm.value.reportAmount, 'Report amount')), 'Failed to report on outcome')
 
 	const withdrawEscalation = async () =>
 		await runReportingAction(async (walletAddress, securityPoolAddress) => {
@@ -74,7 +79,7 @@ export function useReportingOperations({ accountAddress, onTransaction, refreshS
 				throw new Error('No deposits available to withdraw for the selected side')
 			}
 
-			return await withdrawEscalationFromSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress), securityPoolAddress, reportingForm.value.selectedOutcome, depositIndexes)
+			return await withdrawEscalationFromSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress, reportingForm.value.selectedOutcome, depositIndexes)
 		}, 'Failed to withdraw escalation deposits')
 
 	return {
@@ -86,7 +91,7 @@ export function useReportingOperations({ accountAddress, onTransaction, refreshS
 		reportingForm: reportingForm.value,
 		reportingResult: reportingResult.value,
 		setReportingForm: (updater: (current: ReportingFormState) => ReportingFormState) => {
-			updateSignalValue(reportingForm, updater)
+			reportingForm.value = updater(reportingForm.value)
 		},
 		withdrawEscalation,
 	}

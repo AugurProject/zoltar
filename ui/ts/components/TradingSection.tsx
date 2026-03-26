@@ -15,7 +15,7 @@ export function TradingSection({ accountState, onCreateCompleteSet, onMigrateSha
 
 			<div class="market-grid">
 				<div class="market-column">
-					{tradingResult === undefined ? null : (
+					{tradingResult === undefined ? undefined : (
 						<div class="status-card">
 							<p class="panel-label">Latest Trading Action</p>
 							<p class="detail">Action: {tradingResult.action}</p>
@@ -77,7 +77,7 @@ export function TradingSection({ accountState, onCreateCompleteSet, onMigrateSha
 						</div>
 					</div>
 
-					{tradingError === undefined ? null : <p class="notice error">{tradingError}</p>}
+					{tradingError === undefined ? undefined : <p class="notice error">{tradingError}</p>}
 				</div>
 			</div>
 		</section>

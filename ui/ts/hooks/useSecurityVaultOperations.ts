@@ -6,7 +6,6 @@ import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import { getDefaultSecurityVaultFormState } from '../lib/marketForm.js'
-import { setSignalValue, updateSignalValue } from '../lib/signals.js'
 import type { SecurityVaultFormState } from '../types/app.js'
 import type { SecurityVaultActionResult, SecurityVaultDetails } from '../types/contracts.js'
 
@@ -28,48 +27,48 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 
 	const loadSecurityVault = async () => {
 		if (accountAddress === undefined) {
-			setSignalValue(securityVaultError, 'Connect a wallet before loading a security vault')
+			securityVaultError.value = 'Connect a wallet before loading a security vault'
 			return
 		}
 
-		setSignalValue(loadingSecurityVault, true)
-		setSignalValue(securityVaultError, undefined)
+		loadingSecurityVault.value = true
+		securityVaultError.value = undefined
 		try {
-			onTransactionRequested()
 			const securityPoolAddress = parseAddressInput(securityVaultForm.value.securityPoolAddress, 'Security pool address')
 			const details = await loadSecurityVaultDetails(createReadClient(), securityPoolAddress, accountAddress)
-			setSignalValue(securityVaultDetails, details)
+			securityVaultDetails.value = details
 		} catch (error) {
-			setSignalValue(securityVaultDetails, undefined)
-			setSignalValue(securityVaultError, getErrorMessage(error, 'Failed to load security vault'))
+			securityVaultDetails.value = undefined
+			securityVaultError.value = getErrorMessage(error, 'Failed to load security vault')
 		} finally {
-			setSignalValue(loadingSecurityVault, false)
+			loadingSecurityVault.value = false
 		}
 	}
 
 	const runVaultAction = async (action: (ethereumAddress: Address, securityPoolAddress: Address) => Promise<SecurityVaultActionResult>, errorFallback: string) => {
 		const ethereum = getRequiredInjectedEthereum()
 		if (ethereum === undefined) {
-			setSignalValue(securityVaultError, 'No injected wallet found')
+			securityVaultError.value = 'No injected wallet found'
 			return
 		}
 		if (accountAddress === undefined) {
-			setSignalValue(securityVaultError, 'Connect a wallet before operating a security vault')
+			securityVaultError.value = 'Connect a wallet before operating a security vault'
 			return
 		}
 
 		try {
+			onTransactionRequested()
 			const securityPoolAddress = parseAddressInput(securityVaultForm.value.securityPoolAddress, 'Security pool address')
-			setSignalValue(securityVaultError, undefined)
-			setSignalValue(securityVaultResult, undefined)
+			securityVaultError.value = undefined
+			securityVaultResult.value = undefined
 			const result = await action(accountAddress, securityPoolAddress)
-			setSignalValue(securityVaultResult, result)
+			securityVaultResult.value = result
 			onTransaction(result.hash)
 			const details = await loadSecurityVaultDetails(createReadClient(), securityPoolAddress, accountAddress)
-			setSignalValue(securityVaultDetails, details)
+			securityVaultDetails.value = details
 			await refreshState()
 		} catch (error) {
-			setSignalValue(securityVaultError, getErrorMessage(error, errorFallback))
+			securityVaultError.value = getErrorMessage(error, errorFallback)
 		} finally {
 			onTransactionFinished()
 		}
@@ -101,7 +100,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 		securityVaultForm: securityVaultForm.value,
 		securityVaultResult: securityVaultResult.value,
 		setSecurityVaultForm: (updater: (current: SecurityVaultFormState) => SecurityVaultFormState) => {
-			updateSignalValue(securityVaultForm, updater)
+			securityVaultForm.value = updater(securityVaultForm.value)
 		},
 		updateVaultFees,
 	}

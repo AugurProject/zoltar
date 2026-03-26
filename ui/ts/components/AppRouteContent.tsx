@@ -58,7 +58,31 @@ export function AppRouteContent(props: AppRouteContentProps) {
 		case 'reporting':
 			return <ReportingSection accountState={props.accountState} loadingReportingDetails={props.loadingReportingDetails} onLoadReporting={props.loadReporting} onReportOutcome={props.onReportOutcome} onReportingFormChange={props.onReportingFormChange} onWithdrawEscalation={props.onWithdrawEscalation} reportingDetails={props.reportingDetails} reportingError={props.reportingError} reportingForm={props.reportingForm} reportingResult={props.reportingResult} />
 		case 'fork-auctions':
-			return <ForkAuctionSection accountState={props.accountState} forkAuctionDetails={props.forkAuctionDetails} forkAuctionError={props.forkAuctionError} forkAuctionForm={props.forkAuctionForm} forkAuctionResult={props.forkAuctionResult} loadingForkAuctionDetails={props.loadingForkAuctionDetails} onClaimAuctionProceeds={props.onClaimAuctionProceeds} onCreateChildUniverse={props.onCreateChildUniverse} onFinalizeTruthAuction={props.onFinalizeTruthAuction} onForkAuctionFormChange={props.onForkAuctionFormChange} onForkUniverse={props.onForkUniverse} onForkWithOwnEscalation={props.onForkWithOwnEscalation} onInitiateFork={props.onInitiateFork} onLoadForkAuction={props.loadForkAuction} onMigrateEscalationDeposits={props.onMigrateEscalationDeposits} onMigrateRepToZoltar={props.onMigrateRepToZoltar} onMigrateVault={props.onMigrateVault} onRefundLosingBids={props.onRefundLosingBids} onStartTruthAuction={props.onStartTruthAuction} onSubmitBid={props.onSubmitBid} onWithdrawBids={props.onWithdrawBids} />
+			return (
+				<ForkAuctionSection
+					accountState={props.accountState}
+					forkAuctionDetails={props.forkAuctionDetails}
+					forkAuctionError={props.forkAuctionError}
+					forkAuctionForm={props.forkAuctionForm}
+					forkAuctionResult={props.forkAuctionResult}
+					loadingForkAuctionDetails={props.loadingForkAuctionDetails}
+					onClaimAuctionProceeds={props.onClaimAuctionProceeds}
+					onCreateChildUniverse={props.onCreateChildUniverse}
+					onFinalizeTruthAuction={props.onFinalizeTruthAuction}
+					onForkAuctionFormChange={props.onForkAuctionFormChange}
+					onForkUniverse={props.onForkUniverse}
+					onForkWithOwnEscalation={props.onForkWithOwnEscalation}
+					onInitiateFork={props.onInitiateFork}
+					onLoadForkAuction={props.loadForkAuction}
+					onMigrateEscalationDeposits={props.onMigrateEscalationDeposits}
+					onMigrateRepToZoltar={props.onMigrateRepToZoltar}
+					onMigrateVault={props.onMigrateVault}
+					onRefundLosingBids={props.onRefundLosingBids}
+					onStartTruthAuction={props.onStartTruthAuction}
+					onSubmitBid={props.onSubmitBid}
+					onWithdrawBids={props.onWithdrawBids}
+				/>
+			)
 		case 'trading':
 			return <TradingSection accountState={props.accountState} onCreateCompleteSet={props.onCreateCompleteSet} onMigrateShares={props.onMigrateShares} onRedeemCompleteSet={props.onRedeemCompleteSet} onRedeemShares={props.onRedeemShares} onTradingFormChange={props.onTradingFormChange} tradingError={props.tradingError} tradingForm={props.tradingForm} tradingResult={props.tradingResult} />
 		default:

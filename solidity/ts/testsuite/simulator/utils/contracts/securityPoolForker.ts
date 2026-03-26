@@ -25,8 +25,6 @@ export const migrateVault = async (client: WriteClient, securityPoolAddress: `0x
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'migrateVault',
 		address: getInfraContractAddresses().securityPoolForker,
-		// `outcome` is a small enum (0-3) or equivalent bigint; safe to convert to number
-		// deno-lint-ignore no-explicit-any
 		args: [securityPoolAddress, Number(outcome)],
 	}))
 
@@ -93,7 +91,7 @@ export const getQuestionOutcome = async (client: ReadClient, securityPoolAddress
 					},
 				],
 			},
-		] as const, // Typescript limitation on types...
+		] as const,
 		functionName: 'getQuestionOutcome',
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress],
@@ -105,8 +103,6 @@ export const createChildUniverse = async (client: WriteClient, securityPoolAddre
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'createChildUniverse',
 		address: getInfraContractAddresses().securityPoolForker,
-		// `outcome` is a small enum; safe to convert to number
-		// deno-lint-ignore no-explicit-any
 		args: [securityPoolAddress, Number(outcome)],
 	}))
 
@@ -126,8 +122,5 @@ export const migrateFromEscalationGame = async (client: WriteClient, parentSecur
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'migrateFromEscalationGame',
 		address: getInfraContractAddresses().securityPoolForker,
-		// `outcomeIndex` is a small enum; safe to convert to number.
-		// `depositIndexes` are small indices; safe to convert to numbers.
-		// deno-lint-ignore no-explicit-any
 		args: [parentSecurityPool, vault, Number(outcomeIndex), depositIndexes.map(x => Number(x))],
 	}))

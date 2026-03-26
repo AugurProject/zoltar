@@ -30,7 +30,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 
 			<div class="market-grid">
 				<div class="market-column">
-					{reportingDetails === undefined ? null : (
+					{reportingDetails === undefined ? undefined : (
 						<>
 							<div class="status-card">
 								<p class="panel-label">Loaded Escalation Game</p>
@@ -103,7 +103,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 										<div key={side.key} class={`escalation-side ${ reportingForm.selectedOutcome === side.key ? 'selected' : '' } ${ leadingOutcome === side.key ? 'leading' : '' }`}>
 											<div class="escalation-side-header">
 												<p class="panel-label">{side.label}</p>
-												{leadingOutcome === side.key ? <span class="badge ok">Leading</span> : null}
+												{leadingOutcome === side.key ? <span class="badge ok">Leading</span> : undefined}
 											</div>
 											<p class="detail">Total stake: {formatCurrencyBalance(side.balance)}</p>
 											<p class="detail">Your stake: {formatCurrencyBalance(userStake)}</p>
@@ -117,7 +117,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 						</>
 					)}
 
-					{reportingResult === undefined ? null : (
+					{reportingResult === undefined ? undefined : (
 						<div class="status-card">
 							<p class="panel-label">Latest Reporting Action</p>
 							<p class="detail">Action: {reportingResult.action}</p>
@@ -158,7 +158,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 							<input value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} />
 						</label>
 
-						{selectedEstimate === undefined ? null : (
+						{selectedEstimate === undefined ? undefined : (
 							<p class="detail">
 								If {getReportingOutcomeLabel(reportingForm.selectedOutcome)} wins and no one else contributes afterward, the current amount projects roughly {formatCurrencyBalance(selectedEstimate.profit)} of profit.
 							</p>
@@ -182,7 +182,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 						</div>
 					</div>
 
-					{reportingError === undefined ? null : <p class="notice error">{reportingError}</p>}
+					{reportingError === undefined ? undefined : <p class="notice error">{reportingError}</p>}
 				</div>
 			</div>
 		</section>

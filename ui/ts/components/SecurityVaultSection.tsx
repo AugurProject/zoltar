@@ -14,7 +14,7 @@ export function SecurityVaultSection({ accountState, loadingSecurityVault, onApp
 
 			<div class="market-grid">
 				<div class="market-column">
-					{securityVaultDetails === undefined ? null : (
+					{securityVaultDetails === undefined ? undefined : (
 						<div class="status-card">
 							<p class="panel-label">Vault Details</p>
 							<ul class="status-list hashes">
@@ -54,7 +54,7 @@ export function SecurityVaultSection({ accountState, loadingSecurityVault, onApp
 						</div>
 					)}
 
-					{securityVaultResult === undefined ? null : (
+					{securityVaultResult === undefined ? undefined : (
 						<div class="status-card">
 							<p class="panel-label">Latest Vault Action</p>
 							<p class="detail">Action: {securityVaultResult.action}</p>
@@ -110,7 +110,7 @@ export function SecurityVaultSection({ accountState, loadingSecurityVault, onApp
 						</div>
 					</div>
 
-					{securityVaultError === undefined ? null : <p class="notice error">{securityVaultError}</p>}
+					{securityVaultError === undefined ? undefined : <p class="notice error">{securityVaultError}</p>}
 				</div>
 			</div>
 		</section>

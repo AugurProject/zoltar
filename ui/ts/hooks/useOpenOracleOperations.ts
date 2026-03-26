@@ -6,7 +6,6 @@ import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput, parseBytes32Input, parseOracleQueueOperationInput, parseReportIdInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import { getDefaultOpenOracleFormState } from '../lib/marketForm.js'
-import { setSignalValue, updateSignalValue } from '../lib/signals.js'
 import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '../types/contracts.js'
 
@@ -27,45 +26,46 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 	const oracleManagerDetails = useSignal<OracleManagerDetails | undefined>(undefined)
 
 	const loadOracleManager = async () => {
-		setSignalValue(loadingOracleManager, true)
-		setSignalValue(openOracleError, undefined)
+		loadingOracleManager.value = true
+		openOracleError.value = undefined
 		try {
 			const managerAddress = parseAddressInput(openOracleForm.value.managerAddress, 'Manager address')
 			const details = await loadOracleManagerDetails(createReadClient(), managerAddress)
-			setSignalValue(oracleManagerDetails, details)
-			updateSignalValue(openOracleForm, current => ({
+			oracleManagerDetails.value = details
+			const current = openOracleForm.value
+			openOracleForm.value = {
 				...current,
 				amount1: details.exactToken1Report?.toString() ?? current.amount1,
 				reportId: details.pendingReportId === 0n ? current.reportId : details.pendingReportId.toString(),
 				stateHash: details.callbackStateHash ?? current.stateHash,
-			}))
+			}
 		} catch (error) {
-			setSignalValue(oracleManagerDetails, undefined)
-			setSignalValue(openOracleError, getErrorMessage(error, 'Failed to load oracle manager'))
+			oracleManagerDetails.value = undefined
+			openOracleError.value = getErrorMessage(error, 'Failed to load oracle manager')
 		} finally {
-			setSignalValue(loadingOracleManager, false)
+			loadingOracleManager.value = false
 		}
 	}
 
 	const runOracleAction = async (action: (walletAddress: Address) => Promise<OpenOracleActionResult>, errorFallback: string) => {
 		if (accountAddress === undefined) {
-			setSignalValue(openOracleError, 'Connect a wallet before operating open oracle')
+			openOracleError.value = 'Connect a wallet before operating open oracle'
 			return
 		}
 
 		try {
 			onTransactionRequested()
-			setSignalValue(openOracleError, undefined)
-			setSignalValue(openOracleResult, undefined)
+			openOracleError.value = undefined
+			openOracleResult.value = undefined
 			const result = await action(accountAddress)
-			setSignalValue(openOracleResult, result)
+			openOracleResult.value = result
 			onTransaction(result.hash)
 			await refreshState()
 			if (openOracleForm.value.managerAddress.trim() !== '') {
 				await loadOracleManager()
 			}
 		} catch (error) {
-			setSignalValue(openOracleError, getErrorMessage(error, errorFallback))
+			openOracleError.value = getErrorMessage(error, errorFallback)
 		} finally {
 			onTransactionFinished()
 		}
@@ -125,7 +125,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		openOracleResult: openOracleResult.value,
 		oracleManagerDetails: oracleManagerDetails.value,
 		setOpenOracleForm: (updater: (current: OpenOracleFormState) => OpenOracleFormState) => {
-			updateSignalValue(openOracleForm, updater)
+			openOracleForm.value = updater(openOracleForm.value)
 		},
 		settleReport,
 		submitInitialReport,

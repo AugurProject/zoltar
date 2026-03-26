@@ -14,7 +14,7 @@ export function OpenOracleSection({ accountState, loadingOracleManager, onApprov
 
 			<div class="market-grid">
 				<div class="market-column">
-					{oracleManagerDetails === undefined ? null : (
+					{oracleManagerDetails === undefined ? undefined : (
 						<div class="status-card">
 							<p class="panel-label">Oracle Manager</p>
 							<ul class="status-list hashes">
@@ -48,7 +48,7 @@ export function OpenOracleSection({ accountState, loadingOracleManager, onApprov
 						</div>
 					)}
 
-					{openOracleResult === undefined ? null : (
+					{openOracleResult === undefined ? undefined : (
 						<div class="status-card">
 							<p class="panel-label">Latest Oracle Action</p>
 							<p class="detail">Action: {openOracleResult.action}</p>
@@ -139,7 +139,7 @@ export function OpenOracleSection({ accountState, loadingOracleManager, onApprov
 						</div>
 					</div>
 
-					{openOracleError === undefined ? null : <p class="notice error">{openOracleError}</p>}
+					{openOracleError === undefined ? undefined : <p class="notice error">{openOracleError}</p>}
 				</div>
 			</div>
 		</section>

@@ -5,7 +5,6 @@ import { createWriteClient, getRequiredInjectedEthereum } from '../lib/clients.j
 import { getErrorMessage } from '../lib/errors.js'
 import { createMarketParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultMarketFormState } from '../lib/marketForm.js'
-import { setSignalValue, updateSignalValue } from '../lib/signals.js'
 import type { MarketFormState } from '../types/app.js'
 import type { DeploymentStatus, MarketCreationResult } from '../types/contracts.js'
 
@@ -13,10 +12,13 @@ type UseMarketCreationParameters = {
 	accountAddress: Address | undefined
 	deploymentStatuses: DeploymentStatus[]
 	onTransaction: (hash: Hash) => void
+	onTransactionFinished: () => void
+	onTransactionRequested: () => void
+	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 }
 
-export function useMarketCreation({ accountAddress, deploymentStatuses, onTransaction, refreshState }: UseMarketCreationParameters) {
+export function useMarketCreation({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseMarketCreationParameters) {
 	const marketForm = useSignal<MarketFormState>(getDefaultMarketFormState())
 	const marketCreating = useSignal(false)
 	const marketResult = useSignal<MarketCreationResult | undefined>(undefined)
@@ -27,39 +29,41 @@ export function useMarketCreation({ accountAddress, deploymentStatuses, onTransa
 		try {
 			ethereum = getRequiredInjectedEthereum()
 		} catch {
-			setSignalValue(marketError, 'No injected wallet found')
+			marketError.value = 'No injected wallet found'
 			return
 		}
 		if (accountAddress === undefined) {
-			setSignalValue(marketError, 'Connect a wallet before creating a market')
+			marketError.value = 'Connect a wallet before creating a market'
 			return
 		}
 		const marketParameters = createMarketParameters(marketForm.value)
 		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) {
-			setSignalValue(marketError, 'Deploy ZoltarQuestionData before creating a market')
+			marketError.value = 'Deploy ZoltarQuestionData before creating a market'
 			return
 		}
 
-		setSignalValue(marketCreating, true)
-		setSignalValue(marketError, undefined)
-		setSignalValue(marketResult, undefined)
+		marketCreating.value = true
+		marketError.value = undefined
+		marketResult.value = undefined
 
 		try {
-			const result = await createMarketTransaction(createWriteClient(ethereum, accountAddress), marketParameters)
-			setSignalValue(marketResult, result)
+			onTransactionRequested()
+			const result = await createMarketTransaction(createWriteClient(ethereum, accountAddress, { onTransactionSubmitted }), marketParameters)
+			marketResult.value = result
 			onTransaction(result.createQuestionHash)
 			await refreshState()
 		} catch (error) {
-			setSignalValue(marketError, getErrorMessage(error, 'Failed to create market'))
+			marketError.value = getErrorMessage(error, 'Failed to create market')
 		} finally {
-			setSignalValue(marketCreating, false)
+			marketCreating.value = false
+			onTransactionFinished()
 		}
 	}
 
 	const resetMarket = () => {
-		setSignalValue(marketForm, getDefaultMarketFormState())
-		setSignalValue(marketError, undefined)
-		setSignalValue(marketResult, undefined)
+		marketForm.value = getDefaultMarketFormState()
+		marketError.value = undefined
+		marketResult.value = undefined
 	}
 
 	return {
@@ -70,7 +74,7 @@ export function useMarketCreation({ accountAddress, deploymentStatuses, onTransa
 		marketResult: marketResult.value,
 		resetMarket,
 		setMarketForm: (updater: (current: MarketFormState) => MarketFormState) => {
-			updateSignalValue(marketForm, updater)
+			marketForm.value = updater(marketForm.value)
 		},
 	}
 }

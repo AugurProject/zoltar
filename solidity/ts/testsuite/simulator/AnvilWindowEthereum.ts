@@ -120,6 +120,12 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				// Simulation failed, so the transaction would revert - throw the same error
 				throw simulationError
 			}
+
+			const latestBlock = parseBlock(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
+			await request({
+				method: 'evm_setNextBlockTimestamp',
+				params: [`0x${ (latestBlock.timestamp + 1n).toString(16) }`],
+			})
 		}
 
 		const response = await fetch(ANVIL_RPC, {
@@ -208,10 +214,22 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			})
 			await request({ method: 'evm_mine', params: [] })
 		} else if (blockTimeManipulation.type === 'SetTimestamp') {
-			await request({
-				method: 'evm_setNextBlockTimestamp',
-				params: [`0x${ blockTimeManipulation.timeToSet.toString(16) }`],
-			})
+			const hexTimestamp = `0x${ blockTimeManipulation.timeToSet.toString(16) }`
+			try {
+				await request({
+					method: 'evm_setNextBlockTimestamp',
+					params: [hexTimestamp],
+				})
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error)
+				if (!errorMessage.includes('timestamp is too big')) {
+					throw error
+				}
+				await request({
+					method: 'evm_setNextBlockTimestamp',
+					params: [blockTimeManipulation.timeToSet.toString()],
+				})
+			}
 			await request({ method: 'evm_mine', params: [] })
 		}
 	}

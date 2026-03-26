@@ -27,7 +27,7 @@ export function SecurityPoolSection({ accountState, deploymentStatuses, lastCrea
 						<p class="detail">Security pool factory address: {securityPoolFactoryStatus?.address ?? 'Unavailable'}</p>
 					</div>
 
-					{marketDetails === undefined ? null : (
+					{marketDetails === undefined ? undefined : (
 						<div class="status-card">
 							<p class="panel-label">Loaded Market</p>
 							<ul class="status-list hashes">
@@ -63,7 +63,7 @@ export function SecurityPoolSection({ accountState, deploymentStatuses, lastCrea
 						</div>
 					)}
 
-					{securityPoolResult === undefined ? null : (
+					{securityPoolResult === undefined ? undefined : (
 						<div class="status-card">
 							<p class="panel-label">Latest Security Pool</p>
 							<ul class="status-list hashes">
@@ -126,8 +126,8 @@ export function SecurityPoolSection({ accountState, deploymentStatuses, lastCrea
 						</div>
 					</div>
 
-					{lastCreatedQuestionId === undefined ? null : <p class="detail">Latest created market ID: {lastCreatedQuestionId}</p>}
-					{securityPoolError === undefined ? null : <p class="notice error">{securityPoolError}</p>}
+					{lastCreatedQuestionId === undefined ? undefined : <p class="detail">Latest created market ID: {lastCreatedQuestionId}</p>}
+					{securityPoolError === undefined ? undefined : <p class="notice error">{securityPoolError}</p>}
 				</div>
 			</div>
 		</section>

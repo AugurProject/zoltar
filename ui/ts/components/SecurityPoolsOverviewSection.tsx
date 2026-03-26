@@ -29,12 +29,12 @@ export function SecurityPoolsOverviewSection({ accountState, liquidationAmount, 
 					</label>
 				</div>
 
-				{securityPoolOverviewResult === undefined ? null : (
+				{securityPoolOverviewResult === undefined ? undefined : (
 					<p class="notice success">
 						Queued liquidation for {securityPoolOverviewResult.securityPoolAddress}: {securityPoolOverviewResult.hash}
 					</p>
 				)}
-				{securityPoolOverviewError === undefined ? null : <p class="notice error">{securityPoolOverviewError}</p>}
+				{securityPoolOverviewError === undefined ? undefined : <p class="notice error">{securityPoolOverviewError}</p>}
 
 				<div class="contract-list">
 					{securityPools.map(pool => (

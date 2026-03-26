@@ -5,7 +5,6 @@ import { createWriteClient, getRequiredInjectedEthereum } from '../lib/clients.j
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput, parseReportingOutcomeInput } from '../lib/inputs.js'
 import { getDefaultTradingFormState, parseBigIntInput } from '../lib/marketForm.js'
-import { setSignalValue, updateSignalValue } from '../lib/signals.js'
 import type { TradingFormState } from '../types/app.js'
 import type { TradingActionResult } from '../types/contracts.js'
 
@@ -26,25 +25,25 @@ export function useTradingOperations({ accountAddress, onTransaction, onTransact
 	const runTradingAction = async (action: (walletAddress: Address, securityPoolAddress: Address) => Promise<TradingActionResult>, errorFallback: string) => {
 		const ethereum = getRequiredInjectedEthereum()
 		if (ethereum === undefined) {
-			setSignalValue(tradingError, 'No injected wallet found')
+			tradingError.value = 'No injected wallet found'
 			return
 		}
 		if (accountAddress === undefined) {
-			setSignalValue(tradingError, 'Connect a wallet before trading')
+			tradingError.value = 'Connect a wallet before trading'
 			return
 		}
 
 		try {
 			onTransactionRequested()
-			setSignalValue(tradingError, undefined)
-			setSignalValue(tradingResult, undefined)
+			tradingError.value = undefined
+			tradingResult.value = undefined
 			const securityPoolAddress = parseAddressInput(tradingForm.value.securityPoolAddress, 'Security pool address')
 			const result = await action(accountAddress, securityPoolAddress)
-			setSignalValue(tradingResult, result)
+			tradingResult.value = result
 			onTransaction(result.hash)
 			await refreshState()
 		} catch (error) {
-			setSignalValue(tradingError, getErrorMessage(error, errorFallback))
+			tradingError.value = getErrorMessage(error, errorFallback)
 		} finally {
 			onTransactionFinished()
 		}
@@ -56,8 +55,7 @@ export function useTradingOperations({ accountAddress, onTransaction, onTransact
 
 	const redeemShares = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemSharesInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress), 'Failed to redeem shares')
 
-	const migrateShares = async () =>
-		await runTradingAction(async (walletAddress, securityPoolAddress) => await migrateSharesFromUniverse(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.fromUniverseId, 'From universe ID'), parseReportingOutcomeInput(tradingForm.value.selectedOutcome)), 'Failed to migrate shares')
+	const migrateShares = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await migrateSharesFromUniverse(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.fromUniverseId, 'From universe ID'), parseReportingOutcomeInput(tradingForm.value.selectedOutcome)), 'Failed to migrate shares')
 
 	return {
 		createCompleteSet,
@@ -65,7 +63,7 @@ export function useTradingOperations({ accountAddress, onTransaction, onTransact
 		redeemCompleteSet,
 		redeemShares,
 		setTradingForm: (updater: (current: TradingFormState) => TradingFormState) => {
-			updateSignalValue(tradingForm, updater)
+			tradingForm.value = updater(tradingForm.value)
 		},
 		tradingError: tradingError.value,
 		tradingForm: tradingForm.value,

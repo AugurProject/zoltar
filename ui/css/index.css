@@ -115,9 +115,39 @@ button.secondary {
 	background: rgba(32, 110, 65, 0.14);
 }
 
+.notice a {
+	color: inherit;
+	text-decoration-thickness: 0.08em;
+}
+
 .notice span {
 	font-family: 'Courier New', monospace;
 	word-break: break-all;
+}
+
+.spinner {
+	display: inline-block;
+	width: 0.9rem;
+	height: 0.9rem;
+	margin-right: 0.5rem;
+	border: 2px solid rgba(36, 25, 15, 0.2);
+	border-top-color: currentColor;
+	border-radius: 50%;
+	animation: spin 0.9s linear infinite;
+	vertical-align: -0.1rem;
+}
+
+.route-shell {
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 .grid {

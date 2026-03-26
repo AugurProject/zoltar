@@ -5,7 +5,6 @@ import { getDeploymentSteps, loadDeploymentStatuses, loadGenesisRepBalance } fro
 import { getInjectedEthereum } from '../injectedEthereum.js'
 import { createReadClient, normalizeAccount } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { setSignalValue } from '../lib/signals.js'
 import type { AccountState } from '../types/app.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 
@@ -48,9 +47,9 @@ export function useOnchainState() {
 
 	const refreshState = async () => {
 		const ethereum = getInjectedEthereum()
-		setSignalValue(hasInjectedWallet, ethereum !== undefined)
+		hasInjectedWallet.value = ethereum !== undefined
 
-		setSignalValue(isRefreshing, true)
+		isRefreshing.value = true
 		try {
 			const readClient = createReadClient()
 			const accounts = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' })
@@ -59,35 +58,35 @@ export function useOnchainState() {
 
 			const [statuses, balances] = await Promise.all([loadDeploymentStatuses(readClient), loadAccountBalances(readClient, connectedAddress)])
 
-			setSignalValue(deploymentStatuses, statuses)
-			setSignalValue(accountState, {
+			deploymentStatuses.value = statuses
+			accountState.value = {
 				address: connectedAddress,
 				chainId,
 				ethBalance: balances.ethBalance,
 				isMainnet: chainId === DEFAULT_CHAIN_ID,
 				repBalance: balances.repBalance,
-			})
-			setSignalValue(errorMessage, undefined)
+			}
+			errorMessage.value = undefined
 		} catch (error) {
-			setSignalValue(errorMessage, getErrorMessage(error, 'Failed to refresh wallet state'))
+			errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
 		} finally {
-			setSignalValue(isRefreshing, false)
+			isRefreshing.value = false
 		}
 	}
 
 	const connectWallet = async () => {
 		const ethereum = getInjectedEthereum()
 		if (ethereum === undefined) {
-			setSignalValue(errorMessage, 'No injected wallet found')
+			errorMessage.value = 'No injected wallet found'
 			return
 		}
 
 		try {
-			setSignalValue(errorMessage, undefined)
+			errorMessage.value = undefined
 			await ethereum.request({ method: 'eth_requestAccounts' })
 			await refreshState()
 		} catch (error) {
-			setSignalValue(errorMessage, getErrorMessage(error, 'Wallet connection failed'))
+			errorMessage.value = getErrorMessage(error, 'Wallet connection failed')
 		}
 	}
 
