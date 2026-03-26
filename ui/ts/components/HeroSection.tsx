@@ -4,9 +4,7 @@ export function HeroSection({ accountAddress, isRefreshing, onRefresh, onConnect
 	return (
 		<section className="hero">
 			<div>
-				<p className="eyebrow">Wallet Dashboard</p>
-				<h1>Augur PLACEHOLDER deployment console</h1>
-				<p className="lede">Wallet, balances, and deployment state stay visible while you switch between contract deployment and market creation.</p>
+				<h1>Augur PLACEHOLDER</h1>
 			</div>
 			<div className="actions">
 				<button className="secondary" onClick={onRefresh} disabled={isRefreshing}>
