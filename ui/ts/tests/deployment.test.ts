@@ -1,5 +1,6 @@
-import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
+/// <reference types="bun-types" />
+
+import { describe, expect, test } from 'bun:test'
 import { findNextDeployableStep, getPrerequisiteLabel } from '../lib/deployment.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 
@@ -20,12 +21,12 @@ void describe('deployment helpers', () => {
 	void test('getPrerequisiteLabel reports missing dependency ids', () => {
 		const steps = [createStep('proxyDeployer', true), createStep('zoltar', false, ['securityPoolFactory'])]
 
-		assert.equal(getPrerequisiteLabel(steps, 1), 'securityPoolFactory')
+		expect(getPrerequisiteLabel(steps, 1)).toBe('securityPoolFactory')
 	})
 
 	void test('findNextDeployableStep blocks steps with missing dependency ids', () => {
 		const steps = [createStep('zoltar', false, ['securityPoolFactory'])]
 
-		assert.equal(findNextDeployableStep(steps), undefined)
+		expect(findNextDeployableStep(steps)).toBe(undefined)
 	})
 })

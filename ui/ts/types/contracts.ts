@@ -1,5 +1,6 @@
 import type { Address, Hash, Hex } from 'viem'
-import type { createReadClient, createWriteClient } from '../lib/clients.js'
+import type { WriteClient as ClientsWriteClient } from '../lib/clients.js'
+export type { ReadClient, WriteClient } from '../lib/clients.js'
 
 export type DeploymentStepId = 'proxyDeployer' | 'uniformPriceDualCapBatchAuctionFactory' | 'scalarOutcomes' | 'securityPoolUtils' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'priceOracleManagerAndOperatorQueuerFactory' | 'securityPoolForker' | 'escalationGameFactory' | 'securityPoolFactory'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
@@ -19,15 +20,12 @@ export type QuestionData = {
 	answerUnit: string
 }
 
-export type ReadClient = ReturnType<typeof createReadClient>
-export type WriteClient = ReturnType<typeof createWriteClient>
-
 export type DeploymentStep = {
 	id: DeploymentStepId
 	label: string
 	address: Address
 	dependencies: DeploymentStepId[]
-	deploy: (client: WriteClient) => Promise<Hash>
+	deploy: (client: ClientsWriteClient) => Promise<Hash>
 }
 
 export type DeploymentStatus = DeploymentStep & {

@@ -1,10 +1,13 @@
-import { createPublicClient, createWalletClient, custom, http, publicActions, getAddress, type Address, type Hash } from 'viem'
+import { createPublicClient, createWalletClient, custom, http, publicActions, getAddress, type Account, type Address, type Hash, type PublicActions, type Transport, type WalletClient } from 'viem'
 import { mainnet } from 'viem/chains'
 import { getInjectedEthereum, type InjectedEthereum } from '../injectedEthereum.js'
 
 const DEFAULT_RPC_URL = 'https://ethereum.dark.florist'
 
-export function createReadClient() {
+export type ReadClient = ReturnType<typeof createPublicClient>
+export type WriteClient = WalletClient<Transport, typeof mainnet, Account> & PublicActions<Transport, typeof mainnet>
+
+export function createReadClient(): ReadClient {
 	const ethereum = getInjectedEthereum()
 
 	return createPublicClient({
@@ -17,7 +20,7 @@ type CreateWriteClientCallbacks = {
 	onTransactionSubmitted?: (hash: Hash) => void
 }
 
-export function createWriteClient(ethereum: InjectedEthereum, accountAddress: Address, callbacks: CreateWriteClientCallbacks = {}) {
+function createWriteClient(ethereum: InjectedEthereum, accountAddress: Address, callbacks: CreateWriteClientCallbacks = {}): WriteClient {
 	const baseClient = createWalletClient({
 		account: accountAddress,
 		chain: mainnet,
@@ -50,7 +53,7 @@ export function createWriteClient(ethereum: InjectedEthereum, accountAddress: Ad
 	}
 }
 
-export function createWalletWriteClient(accountAddress: Address, callbacks: CreateWriteClientCallbacks = {}) {
+export function createWalletWriteClient(accountAddress: Address, callbacks: CreateWriteClientCallbacks = {}): WriteClient {
 	return createWriteClient(getRequiredInjectedEthereum(), accountAddress, callbacks)
 }
 
