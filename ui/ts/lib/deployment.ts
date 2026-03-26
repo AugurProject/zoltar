@@ -1,5 +1,21 @@
 import type { DeploymentStatus } from '../types/contracts.js'
 
+const DEPLOYMENT_SECTION_TITLES = ['Proxy Deployer', 'Zoltar', 'Augur PlaceHolder'] as const
+const DEPLOYMENT_SECTION_BY_STEP_ID: Record<DeploymentStatus['id'], (typeof DEPLOYMENT_SECTION_TITLES)[number]> = {
+	proxyDeployer: 'Proxy Deployer',
+	uniformPriceDualCapBatchAuctionFactory: 'Augur PlaceHolder',
+	scalarOutcomes: 'Zoltar',
+	securityPoolUtils: 'Augur PlaceHolder',
+	openOracle: 'Augur PlaceHolder',
+	zoltarQuestionData: 'Zoltar',
+	zoltar: 'Zoltar',
+	shareTokenFactory: 'Augur PlaceHolder',
+	priceOracleManagerAndOperatorQueuerFactory: 'Augur PlaceHolder',
+	securityPoolForker: 'Augur PlaceHolder',
+	escalationGameFactory: 'Augur PlaceHolder',
+	securityPoolFactory: 'Augur PlaceHolder',
+}
+
 export function getPrerequisiteLabel(steps: DeploymentStatus[], index: number) {
 	const currentStep = steps[index]
 	if (currentStep === undefined) return undefined
@@ -18,18 +34,8 @@ export function findNextDeployableStep(steps: DeploymentStatus[]) {
 }
 
 export function getDeploymentSections(steps: DeploymentStatus[]) {
-	return [
-		{
-			title: 'Proxy Deployer',
-			steps: steps.filter(step => step.id === 'proxyDeployer'),
-		},
-		{
-			title: 'Zoltar',
-			steps: steps.filter(step => step.id === 'scalarOutcomes' || step.id === 'zoltarQuestionData' || step.id === 'zoltar'),
-		},
-		{
-			title: 'Augur PlaceHolder',
-			steps: steps.filter(step => step.id !== 'proxyDeployer' && step.id !== 'scalarOutcomes' && step.id !== 'zoltarQuestionData' && step.id !== 'zoltar'),
-		},
-	]
+	return DEPLOYMENT_SECTION_TITLES.map(title => ({
+		title,
+		steps: steps.filter(step => DEPLOYMENT_SECTION_BY_STEP_ID[step.id] === title),
+	}))
 }

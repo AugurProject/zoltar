@@ -5,6 +5,7 @@ import type { TradingSectionProps } from '../types/components.js'
 
 export function TradingSection({ accountState, onCreateCompleteSet, onMigrateShares, onRedeemCompleteSet, onRedeemShares, onTradingFormChange, tradingError, tradingForm, tradingResult }: TradingSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
+	const isTradingDisabled = accountState.address === undefined || !isMainnet
 	return (
 		<section className="panel market-panel">
 			<div className="market-header">
@@ -64,16 +65,16 @@ export function TradingSection({ accountState, onCreateCompleteSet, onMigrateSha
 						</div>
 
 						<div className="actions">
-							<button onClick={onCreateCompleteSet} disabled={accountState.address === undefined || !isMainnet}>
+							<button onClick={onCreateCompleteSet} disabled={isTradingDisabled}>
 								Mint Complete Sets
 							</button>
-							<button className="secondary" onClick={onRedeemCompleteSet} disabled={accountState.address === undefined || !isMainnet}>
+							<button className="secondary" onClick={onRedeemCompleteSet} disabled={isTradingDisabled}>
 								Redeem Complete Sets
 							</button>
-							<button className="secondary" onClick={onMigrateShares} disabled={accountState.address === undefined || !isMainnet}>
+							<button className="secondary" onClick={onMigrateShares} disabled={isTradingDisabled}>
 								Migrate Shares
 							</button>
-							<button className="secondary" onClick={onRedeemShares} disabled={accountState.address === undefined || !isMainnet}>
+							<button className="secondary" onClick={onRedeemShares} disabled={isTradingDisabled}>
 								Redeem Shares
 							</button>
 						</div>

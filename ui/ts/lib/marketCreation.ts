@@ -97,11 +97,6 @@ function getMarketSpecificParameters(form: MarketFormState, marketType: MarketTy
 				startingRepEthPrice: parseBigIntInput(form.startingRepEthPrice, 'Starting REP/ETH price'),
 			}
 		case 'categorical':
-			return {
-				currentRetentionRate: undefined,
-				securityMultiplier: undefined,
-				startingRepEthPrice: parseBigIntInput(form.scalarStartValue, 'Initial scalar reference value'),
-			}
 		case 'scalar':
 			return {
 				currentRetentionRate: undefined,

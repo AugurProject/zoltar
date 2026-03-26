@@ -1,16 +1,17 @@
 export function getErrorMessage(error: unknown, fallbackMessage: string) {
+	let detail: string | undefined
+
 	if (error instanceof Error) {
-		const detail = typeof error.message === 'string' ? error.message.trim() : String(error.message).trim()
-		return detail === '' ? fallbackMessage : `${ fallbackMessage }: ${ detail }`
+		detail = typeof error.message === 'string' ? error.message.trim() : String(error.message).trim()
+	} else if (typeof error === 'string') {
+		detail = error.trim()
+	} else {
+		try {
+			detail = JSON.stringify(error) ?? undefined
+		} catch {
+			detail = undefined
+		}
 	}
 
-	if (typeof error === 'string' && error.trim() !== '') {
-		return `${ fallbackMessage }: ${ error }`
-	}
-
-	try {
-		return `${ fallbackMessage }: ${ JSON.stringify(error) }`
-	} catch {
-		return fallbackMessage
-	}
+	return detail === undefined || detail === '' ? fallbackMessage : `${ fallbackMessage }: ${ detail }`
 }

@@ -26,7 +26,7 @@ export function AppRouteContent({ deployment, forkAuction, market, openOracle, r
 				</>
 			)
 		case 'markets':
-			return <MarketSection accountState={market.accountState} deploymentStatuses={market.deploymentStatuses} marketForm={market.marketForm} marketCreating={market.marketCreating} marketResult={market.marketResult} marketError={market.marketError} onMarketFormChange={market.onMarketFormChange} onCreateMarket={market.createMarket} onResetMarket={market.onResetMarket} />
+			return <MarketSection accountState={market.accountState} deploymentStatuses={market.deploymentStatuses} marketForm={market.marketForm} marketCreating={market.marketCreating} marketResult={market.marketResult} marketError={market.marketError} onMarketFormChange={market.onMarketFormChange} onCreateMarket={market.onCreateMarket} onResetMarket={market.onResetMarket} />
 		case 'security-pools':
 			return (
 				<SecurityPoolSection
@@ -42,11 +42,12 @@ export function AppRouteContent({ deployment, forkAuction, market, openOracle, r
 					onLoadLatestMarket={() => {
 						if (securityPool.lastCreatedQuestionId === undefined) return
 						securityPool.onSecurityPoolFormChange({ marketId: securityPool.lastCreatedQuestionId })
-						void securityPool.loadMarketById(securityPool.lastCreatedQuestionId)
+						void securityPool.onLoadMarketById(securityPool.lastCreatedQuestionId)
 					}}
-					onLoadMarket={securityPool.loadMarket}
+					onLoadMarket={securityPool.onLoadMarket}
+					onLoadMarketById={securityPool.onLoadMarketById}
 					onSecurityPoolFormChange={securityPool.onSecurityPoolFormChange}
-					onCreateSecurityPool={securityPool.createPool}
+					onCreateSecurityPool={securityPool.onCreateSecurityPool}
 				/>
 			)
 		case 'security-pools-overview':

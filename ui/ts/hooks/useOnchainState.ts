@@ -40,14 +40,15 @@ export function useOnchainState() {
 		})),
 	)
 	const hasInjectedWallet = useSignal(getInjectedEthereum() !== undefined)
-	const isRefreshing = useSignal(false)
+	const refreshLoadCount = useSignal(0)
+	const refreshRequestId = useSignal(0)
 	const errorMessage = useSignal<string | undefined>(undefined)
 
 	const refreshState = async () => {
+		const requestId = refreshRequestId.value + 1
+		refreshRequestId.value = requestId
+		refreshLoadCount.value += 1
 		const ethereum = getInjectedEthereum()
-		hasInjectedWallet.value = ethereum !== undefined
-
-		isRefreshing.value = true
 		try {
 			const readClient = createReadClient()
 			const accounts = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' })
@@ -55,6 +56,7 @@ export function useOnchainState() {
 			const chainId = ethereum === undefined ? MAINNET_CHAIN_ID : await ethereum.request({ method: 'eth_chainId' })
 
 			const [statuses, balances] = await Promise.all([loadDeploymentStatuses(readClient), loadAccountBalances(readClient, connectedAddress)])
+			if (requestId !== refreshRequestId.value) return
 
 			deploymentStatuses.value = statuses
 			accountState.value = {
@@ -63,11 +65,13 @@ export function useOnchainState() {
 				ethBalance: balances.ethBalance,
 				repBalance: balances.repBalance,
 			}
+			hasInjectedWallet.value = ethereum !== undefined
 			errorMessage.value = undefined
 		} catch (error) {
+			if (requestId !== refreshRequestId.value) return
 			errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
 		} finally {
-			isRefreshing.value = false
+			refreshLoadCount.value = Math.max(0, refreshLoadCount.value - 1)
 		}
 	}
 
@@ -117,7 +121,7 @@ export function useOnchainState() {
 		deploymentStatuses: deploymentStatuses.value,
 		errorMessage: errorMessage.value,
 		hasInjectedWallet: hasInjectedWallet.value,
-		isRefreshing: isRefreshing.value,
+		isRefreshing: refreshLoadCount.value > 0,
 		refreshState,
 	}
 }

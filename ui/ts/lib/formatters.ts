@@ -1,7 +1,14 @@
 import { formatEther, formatUnits, type Address } from 'viem'
 
+const ADDRESS_PREFIX_LENGTH = 6
+const ADDRESS_SUFFIX_LENGTH = 4
+const MILLISECONDS_PER_SECOND = 1000
+const SECONDS_PER_MINUTE = 60n
+const SECONDS_PER_HOUR = 60n * SECONDS_PER_MINUTE
+const SECONDS_PER_DAY = 24n * SECONDS_PER_HOUR
+
 export function formatAddress(address: Address) {
-	return `${ address.slice(0, 6) }...${ address.slice(-4) }`
+	return `${ address.slice(0, ADDRESS_PREFIX_LENGTH) }...${ address.slice(-ADDRESS_SUFFIX_LENGTH) }`
 }
 
 function formatDecimalString(value: string) {
@@ -21,15 +28,15 @@ export function formatCurrencyBalance(value: bigint | undefined, units: number =
 
 export function formatTimestamp(timestamp: bigint) {
 	if (timestamp === 0n) return 'Immediate'
-	return new Date(Number(timestamp) * 1000).toLocaleString()
+	return new Date(Number(timestamp) * MILLISECONDS_PER_SECOND).toLocaleString()
 }
 
 export function formatDuration(seconds: bigint) {
 	if (seconds <= 0n) return '0m'
 
-	const days = seconds / 86_400n
-	const hours = (seconds % 86_400n) / 3_600n
-	const minutes = (seconds % 3_600n) / 60n
+	const days = seconds / SECONDS_PER_DAY
+	const hours = (seconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR
+	const minutes = (seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE
 
 	if (days > 0n) return `${ days }d ${ hours }h ${ minutes }m`
 	if (hours > 0n) return `${ hours }h ${ minutes }m`

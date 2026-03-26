@@ -5,6 +5,7 @@ import type { SecurityPoolSectionProps } from '../types/components.js'
 export function SecurityPoolSection({ accountState, deploymentStatuses, lastCreatedQuestionId, loadingMarketDetails, marketDetails, onCreateSecurityPool, onLoadLatestMarket, onLoadMarket, onSecurityPoolFormChange, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult }: SecurityPoolSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const securityPoolFactoryStatus = deploymentStatuses.find(step => step.id === 'securityPoolFactory')
+	const isCreateDisabled = accountState.address === undefined || !isMainnet || securityPoolCreating || marketDetails?.marketType !== 'binary'
 
 	return (
 		<section className="panel market-panel">
@@ -122,7 +123,7 @@ export function SecurityPoolSection({ accountState, deploymentStatuses, lastCrea
 						</label>
 
 						<div className="actions">
-							<button onClick={onCreateSecurityPool} disabled={accountState.address === undefined || !isMainnet || securityPoolCreating || marketDetails?.marketType !== 'binary'}>
+							<button onClick={onCreateSecurityPool} disabled={isCreateDisabled}>
 								{securityPoolCreating ? 'Creating Security Pool...' : 'Create Security Pool'}
 							</button>
 						</div>

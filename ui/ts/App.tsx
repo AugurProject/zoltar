@@ -49,6 +49,9 @@ export function App() {
 	const transactionInFlightCount = useSignal(0)
 	const transactionSubmitted = useSignal(false)
 	const transactionUrl = useSignal<string | undefined>(undefined)
+	const onTransaction = (hash: Hash) => {
+		lastTransactionHash.value = hash
+	}
 	const markTransactionRequested = () => {
 		transactionInFlightCount.value += 1
 		transactionSubmitted.value = false
@@ -64,99 +67,23 @@ export function App() {
 	}
 	const { navigate, route } = useHashRoute()
 	const { accountState, connectWallet, deploymentStatuses, errorMessage: walletErrorMessage, hasInjectedWallet, isRefreshing, refreshState } = useOnchainState()
-	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({
+	const baseHookConfig = {
 		accountAddress: accountState.address,
-		deploymentStatuses,
-		onTransaction: hash => {
-			lastTransactionHash.value = hash
-		},
+		onTransaction,
 		onTransactionFinished: markTransactionFinished,
 		onTransactionRequested: markTransactionRequested,
 		onTransactionSubmitted: markTransactionSubmitted,
 		refreshState,
-	})
-	const { createMarket, marketCreating, marketError, marketForm, marketResult, resetMarket, setMarketForm } = useMarketCreation({
-		accountAddress: accountState.address,
-		deploymentStatuses,
-		onTransaction: hash => {
-			lastTransactionHash.value = hash
-		},
-		onTransactionFinished: markTransactionFinished,
-		onTransactionRequested: markTransactionRequested,
-		onTransactionSubmitted: markTransactionSubmitted,
-		refreshState,
-	})
-	const { createPool, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({
-		accountAddress: accountState.address,
-		deploymentStatuses,
-		onTransaction: hash => {
-			lastTransactionHash.value = hash
-		},
-		onTransactionFinished: markTransactionFinished,
-		onTransactionRequested: markTransactionRequested,
-		onTransactionSubmitted: markTransactionSubmitted,
-		refreshState,
-	})
-	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, redeemRep, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult, setSecurityVaultForm, updateVaultFees } = useSecurityVaultOperations({
-		accountAddress: accountState.address,
-		onTransaction: hash => {
-			lastTransactionHash.value = hash
-		},
-		onTransactionFinished: markTransactionFinished,
-		onTransactionRequested: markTransactionRequested,
-		onTransactionSubmitted: markTransactionSubmitted,
-		refreshState,
-	})
-	const { approveToken1, approveToken2, loadOracleManager, loadingOracleManager, onQueueOperation, onRequestPrice, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails, setOpenOracleForm, settleReport, submitInitialReport } = useOpenOracleOperations({
-		accountAddress: accountState.address,
-		onTransaction: hash => {
-			lastTransactionHash.value = hash
-		},
-		onTransactionFinished: markTransactionFinished,
-		onTransactionRequested: markTransactionRequested,
-		onTransactionSubmitted: markTransactionSubmitted,
-		refreshState,
-	})
-	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations({
-		accountAddress: accountState.address,
-		onTransaction: hash => {
-			lastTransactionHash.value = hash
-		},
-		onTransactionFinished: markTransactionFinished,
-		onTransactionRequested: markTransactionRequested,
-		onTransactionSubmitted: markTransactionSubmitted,
-		refreshState,
-	})
-	const { liquidationAmount, liquidationTargetVault, loadingSecurityPools, queueLiquidation, securityPoolOverviewError, securityPoolOverviewResult, securityPools, setLiquidationAmount, setLiquidationTargetVault, loadSecurityPools } = useSecurityPoolsOverview({
-		accountAddress: accountState.address,
-		onTransaction: hash => {
-			lastTransactionHash.value = hash
-		},
-		onTransactionFinished: markTransactionFinished,
-		onTransactionRequested: markTransactionRequested,
-		onTransactionSubmitted: markTransactionSubmitted,
-		refreshState,
-	})
-	const { createCompleteSet, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingError, tradingForm, tradingResult } = useTradingOperations({
-		accountAddress: accountState.address,
-		onTransaction: hash => {
-			lastTransactionHash.value = hash
-		},
-		onTransactionFinished: markTransactionFinished,
-		onTransactionRequested: markTransactionRequested,
-		onTransactionSubmitted: markTransactionSubmitted,
-		refreshState,
-	})
-	const { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkAuctionDetails, forkAuctionError, forkAuctionForm, forkAuctionResult, forkUniverse, forkWithOwnEscalation, initiateFork, loadForkAuction, loadingForkAuctionDetails, migrateEscalation, migrateRepToZoltar, migrateVault, refundLosingBids, setForkAuctionForm, startTruthAuction, submitBid, withdrawBids } = useForkAuctionOperations({
-		accountAddress: accountState.address,
-		onTransaction: hash => {
-			lastTransactionHash.value = hash
-		},
-		onTransactionFinished: markTransactionFinished,
-		onTransactionRequested: markTransactionRequested,
-		onTransactionSubmitted: markTransactionSubmitted,
-		refreshState,
-	})
+	}
+	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses })
+	const { createMarket, marketCreating, marketError, marketForm, marketResult, resetMarket, setMarketForm } = useMarketCreation({ ...baseHookConfig, deploymentStatuses })
+	const { createPool, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({ ...baseHookConfig, deploymentStatuses })
+	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, redeemRep, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult, setSecurityVaultForm, updateVaultFees } = useSecurityVaultOperations(baseHookConfig)
+	const { approveToken1, approveToken2, loadOracleManager, loadingOracleManager, onQueueOperation, onRequestPrice, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails, setOpenOracleForm, settleReport, submitInitialReport } = useOpenOracleOperations(baseHookConfig)
+	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
+	const { liquidationAmount, liquidationTargetVault, loadingSecurityPools, queueLiquidation, securityPoolOverviewError, securityPoolOverviewResult, securityPools, setLiquidationAmount, setLiquidationTargetVault, loadSecurityPools } = useSecurityPoolsOverview(baseHookConfig)
+	const { createCompleteSet, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingError, tradingForm, tradingResult } = useTradingOperations(baseHookConfig)
+	const { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkAuctionDetails, forkAuctionError, forkAuctionForm, forkAuctionResult, forkUniverse, forkWithOwnEscalation, initiateFork, loadForkAuction, loadingForkAuctionDetails, migrateEscalation, migrateRepToZoltar, migrateVault, refundLosingBids, setForkAuctionForm, startTruthAuction, submitBid, withdrawBids } = useForkAuctionOperations(baseHookConfig)
 
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
@@ -224,7 +151,7 @@ export function App() {
 						}}
 						market={{
 							accountState,
-							createMarket: () => void createMarket(),
+							onCreateMarket: () => void createMarket(),
 							deploymentStatuses,
 							marketCreating,
 							marketError,
@@ -264,11 +191,11 @@ export function App() {
 						route={route}
 						securityPool={{
 							accountState,
-							createPool: () => void createPool(),
+							onCreateSecurityPool: () => void createPool(),
 							deploymentStatuses,
 							lastCreatedQuestionId,
-							loadMarket: () => void loadMarket(),
-							loadMarketById,
+							onLoadMarket: () => void loadMarket(),
+							onLoadMarketById: loadMarketById,
 							loadingMarketDetails,
 							marketDetails,
 							onSecurityPoolFormChange: update => setSecurityPoolForm(current => ({ ...current, ...update })),

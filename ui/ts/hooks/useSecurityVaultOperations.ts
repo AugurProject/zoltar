@@ -49,7 +49,8 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 		}
 	}
 
-	const runVaultAction = async (action: (ethereumAddress: Address, securityPoolAddress: Address) => Promise<SecurityVaultActionResult>, errorFallback: string, onSuccess?: (result: SecurityVaultActionResult, securityPoolAddress: Address, walletAddress: Address) => Promise<void> | void) =>
+	const runVaultAction = async (action: (ethereumAddress: Address, securityPoolAddress: Address) => Promise<SecurityVaultActionResult>, errorFallback: string, onSuccess?: (result: SecurityVaultActionResult, securityPoolAddress: Address, walletAddress: Address) => Promise<void> | void) => {
+		let securityPoolAddress: Address | undefined
 		await runWriteAction(
 			{
 				accountAddress,
@@ -63,19 +64,20 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 				},
 			},
 			async walletAddress => {
-				const securityPoolAddress = parseAddressInput(securityVaultForm.value.securityPoolAddress, 'Security pool address')
+				const currentForm = securityVaultForm.value
+				securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
 				securityVaultError.value = undefined
 				securityVaultResult.value = undefined
-				const result = await action(walletAddress, securityPoolAddress)
-				return result
+				return await action(walletAddress, securityPoolAddress)
 			},
 			errorFallback,
 			async (result, walletAddress) => {
+				if (securityPoolAddress === undefined) throw new Error('Security pool address is required')
 				securityVaultResult.value = result
-				const securityPoolAddress = parseAddressInput(securityVaultForm.value.securityPoolAddress, 'Security pool address')
 				await onSuccess?.(result, securityPoolAddress, walletAddress)
 			},
 		)
+	}
 
 	const approveRep = async () =>
 		await runVaultAction(

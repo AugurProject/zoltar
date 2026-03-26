@@ -9,6 +9,7 @@ export const OPEN_ORACLE_ROUTE = '#/open-oracle'
 export const REPORTING_ROUTE = '#/reporting'
 export const TRADING_ROUTE = '#/trading'
 export const FORK_AUCTION_ROUTE = '#/fork-auctions'
+const ROUTE_NAMES: Route[] = ['deploy', 'markets', 'security-pools', 'security-pools-overview', 'security-vaults', 'open-oracle', 'reporting', 'trading', 'fork-auctions']
 const ROUTE_HASHES: Record<Route, string> = {
 	deploy: DEPLOY_ROUTE,
 	markets: MARKET_ROUTE,
@@ -21,17 +22,10 @@ const ROUTE_HASHES: Record<Route, string> = {
 	'fork-auctions': FORK_AUCTION_ROUTE,
 }
 
-const ROUTE_BY_HASH: Record<string, Route> = {
-	[DEPLOY_ROUTE]: 'deploy',
-	[MARKET_ROUTE]: 'markets',
-	[SECURITY_POOL_ROUTE]: 'security-pools',
-	[SECURITY_POOLS_OVERVIEW_ROUTE]: 'security-pools-overview',
-	[SECURITY_VAULT_ROUTE]: 'security-vaults',
-	[OPEN_ORACLE_ROUTE]: 'open-oracle',
-	[REPORTING_ROUTE]: 'reporting',
-	[TRADING_ROUTE]: 'trading',
-	[FORK_AUCTION_ROUTE]: 'fork-auctions',
-}
+const ROUTE_BY_HASH = ROUTE_NAMES.reduce<Partial<Record<string, Route>>>((routeByHash, route) => {
+	routeByHash[ROUTE_HASHES[route]] = route
+	return routeByHash
+}, {})
 
 export function ensureRouteHash() {
 	if (window.location.hash === '') {

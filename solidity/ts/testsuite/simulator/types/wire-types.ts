@@ -20,6 +20,7 @@ const SmallIntParser: funtypes.ParsedValue<funtypes.String, bigint>['config'] = 
 	},
 	serialize: value => {
 		if (typeof value !== 'bigint') return { success: false, message: `${ typeof value } is not a bigint.` }
+		if (value < 0n) return { success: false, message: `${ value } must be non-negative.` }
 		if (value >= 2n ** 64n) return { success: false, message: `${ value } must be smaller than 2^64.` }
 		return { success: true, value: `0x${ value.toString(16) }` }
 	},

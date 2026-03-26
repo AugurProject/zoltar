@@ -19,18 +19,6 @@ export type HeroSectionProps = {
 	onConnect: () => void
 }
 
-export type MarketSectionProps = {
-	accountState: AccountState
-	deploymentStatuses: DeploymentStatus[]
-	marketForm: MarketFormState
-	marketCreating: boolean
-	marketResult: MarketCreationResult | undefined
-	marketError: string | undefined
-	onMarketFormChange: (update: Partial<MarketFormState>) => void
-	onCreateMarket: () => void
-	onResetMarket: () => void
-}
-
 export type OverviewPanelsProps = {
 	accountState: AccountState
 	deploymentStatuses: DeploymentStatus[]
@@ -53,118 +41,6 @@ export type TabNavigationProps = {
 	onRouteChange: (route: Route) => void
 }
 
-export type SecurityPoolSectionProps = {
-	accountState: AccountState
-	deploymentStatuses: DeploymentStatus[]
-	lastCreatedQuestionId: string | undefined
-	marketDetails: MarketDetails | undefined
-	loadingMarketDetails: boolean
-	securityPoolCreating: boolean
-	securityPoolError: string | undefined
-	securityPoolForm: SecurityPoolFormState
-	securityPoolResult: SecurityPoolCreationResult | undefined
-	onLoadLatestMarket: () => void
-	onLoadMarket: () => void
-	onSecurityPoolFormChange: (update: Partial<SecurityPoolFormState>) => void
-	onCreateSecurityPool: () => void
-}
-
-export type SecurityVaultSectionProps = {
-	accountState: AccountState
-	loadingSecurityVault: boolean
-	onApproveRep: () => void
-	onDepositRep: () => void
-	onLoadSecurityVault: () => void
-	onRedeemFees: () => void
-	onRedeemRep: () => void
-	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
-	onUpdateVaultFees: () => void
-	securityVaultDetails: SecurityVaultDetails | undefined
-	securityVaultError: string | undefined
-	securityVaultForm: SecurityVaultFormState
-	securityVaultResult: SecurityVaultActionResult | undefined
-}
-
-export type OpenOracleSectionProps = {
-	accountState: AccountState
-	loadingOracleManager: boolean
-	onApproveToken1: () => void
-	onApproveToken2: () => void
-	onLoadOracleManager: () => void
-	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
-	onQueueOperation: () => void
-	onRequestPrice: () => void
-	onSettleReport: () => void
-	onSubmitInitialReport: () => void
-	openOracleError: string | undefined
-	openOracleForm: OpenOracleFormState
-	openOracleResult: OpenOracleActionResult | undefined
-	oracleManagerDetails: OracleManagerDetails | undefined
-}
-
-export type SecurityPoolsOverviewSectionProps = {
-	accountState: AccountState
-	liquidationAmount: string
-	liquidationTargetVault: string
-	loadingSecurityPools: boolean
-	onLiquidationAmountChange: (value: string) => void
-	onLiquidationTargetVaultChange: (value: string) => void
-	onLoadSecurityPools: () => void
-	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
-	securityPoolOverviewError: string | undefined
-	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
-	securityPools: ListedSecurityPool[]
-}
-
-export type TradingSectionProps = {
-	accountState: AccountState
-	onCreateCompleteSet: () => void
-	onMigrateShares: () => void
-	onRedeemCompleteSet: () => void
-	onRedeemShares: () => void
-	onTradingFormChange: (update: Partial<TradingFormState>) => void
-	tradingError: string | undefined
-	tradingForm: TradingFormState
-	tradingResult: TradingActionResult | undefined
-}
-
-export type ReportingSectionProps = {
-	accountState: AccountState
-	loadingReportingDetails: boolean
-	onLoadReporting: () => void
-	onReportOutcome: () => void
-	onReportingFormChange: (update: Partial<ReportingFormState>) => void
-	onWithdrawEscalation: () => void
-	reportingDetails: ReportingDetails | undefined
-	reportingError: string | undefined
-	reportingForm: ReportingFormState
-	reportingResult: ReportingActionResult | undefined
-}
-
-export type ForkAuctionSectionProps = {
-	accountState: AccountState
-	forkAuctionDetails: ForkAuctionDetails | undefined
-	forkAuctionError: string | undefined
-	forkAuctionForm: ForkAuctionFormState
-	forkAuctionResult: ForkAuctionActionResult | undefined
-	loadingForkAuctionDetails: boolean
-	onClaimAuctionProceeds: () => void
-	onCreateChildUniverse: () => void
-	onFinalizeTruthAuction: () => void
-	onForkAuctionFormChange: (update: Partial<ForkAuctionFormState>) => void
-	onForkUniverse: () => void
-	onForkWithOwnEscalation: () => void
-	onInitiateFork: () => void
-	onLoadForkAuction: () => void
-	onMigrateEscalationDeposits: () => void
-	onMigrateRepToZoltar: () => void
-	onMigrateVault: () => void
-	onRefundLosingBids: () => void
-	onStartTruthAuction: () => void
-	onSubmitBid: () => void
-	onWithdrawBids: () => void
-}
-
 export type MainnetGateSectionProps = {
 	message: string
 }
@@ -181,7 +57,7 @@ export type DeploymentRouteContentProps = {
 
 export type MarketRouteContentProps = {
 	accountState: AccountState
-	createMarket: () => void
+	onCreateMarket: () => void
 	deploymentStatuses: DeploymentStatus[]
 	marketCreating: boolean
 	marketError: string | undefined
@@ -193,11 +69,12 @@ export type MarketRouteContentProps = {
 
 export type SecurityPoolRouteContentProps = {
 	accountState: AccountState
-	createPool: () => void
+	onCreateSecurityPool: () => void
 	deploymentStatuses: DeploymentStatus[]
 	lastCreatedQuestionId: string | undefined
-	loadMarket: () => void
-	loadMarketById: (marketId: string) => Promise<void>
+	onLoadLatestMarket?: () => void
+	onLoadMarket: () => void
+	onLoadMarketById: (marketId: string) => Promise<void>
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
 	onSecurityPoolFormChange: (update: Partial<SecurityPoolFormState>) => void
@@ -206,6 +83,9 @@ export type SecurityPoolRouteContentProps = {
 	securityPoolForm: SecurityPoolFormState
 	securityPoolResult: SecurityPoolCreationResult | undefined
 }
+
+export type MarketSectionProps = MarketRouteContentProps
+export type SecurityPoolSectionProps = SecurityPoolRouteContentProps
 
 export type SecurityPoolsOverviewRouteContentProps = {
 	accountState: AccountState
@@ -220,6 +100,8 @@ export type SecurityPoolsOverviewRouteContentProps = {
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	securityPools: ListedSecurityPool[]
 }
+
+export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
 export type SecurityVaultRouteContentProps = {
 	accountState: AccountState
@@ -236,6 +118,8 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultForm: SecurityVaultFormState
 	securityVaultResult: SecurityVaultActionResult | undefined
 }
+
+export type SecurityVaultSectionProps = SecurityVaultRouteContentProps
 
 export type OpenOracleRouteContentProps = {
 	accountState: AccountState
@@ -254,6 +138,8 @@ export type OpenOracleRouteContentProps = {
 	oracleManagerDetails: OracleManagerDetails | undefined
 }
 
+export type OpenOracleSectionProps = OpenOracleRouteContentProps
+
 export type ReportingRouteContentProps = {
 	accountState: AccountState
 	loadingReportingDetails: boolean
@@ -267,6 +153,8 @@ export type ReportingRouteContentProps = {
 	reportingResult: ReportingActionResult | undefined
 }
 
+export type ReportingSectionProps = ReportingRouteContentProps
+
 export type TradingRouteContentProps = {
 	accountState: AccountState
 	onCreateCompleteSet: () => void
@@ -278,6 +166,8 @@ export type TradingRouteContentProps = {
 	tradingForm: TradingFormState
 	tradingResult: TradingActionResult | undefined
 }
+
+export type TradingSectionProps = TradingRouteContentProps
 
 export type ForkAuctionRouteContentProps = {
 	accountState: AccountState
@@ -302,6 +192,8 @@ export type ForkAuctionRouteContentProps = {
 	onSubmitBid: () => void
 	onWithdrawBids: () => void
 }
+
+export type ForkAuctionSectionProps = ForkAuctionRouteContentProps
 
 export type AppRouteContentProps = {
 	deployment: DeploymentRouteContentProps

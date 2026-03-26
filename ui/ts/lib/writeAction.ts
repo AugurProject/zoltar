@@ -21,12 +21,12 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 		parameters.onTransactionRequested()
 		parameters.setErrorMessage(undefined)
 		const result = await action(parameters.accountAddress)
-		parameters.onTransaction(result.hash)
+		await Promise.resolve(parameters.onTransaction(result.hash))
 		await onSuccess?.(result, parameters.accountAddress)
 		await parameters.refreshState()
 	} catch (error) {
 		parameters.setErrorMessage(getErrorMessage(error, errorFallback))
 	} finally {
-		parameters.onTransactionFinished()
+		await Promise.resolve(parameters.onTransactionFinished())
 	}
 }
