@@ -130,17 +130,17 @@ async function computeContractHash(sourceFiles: Map<string, string>): Promise<st
 	return hasher.digest('hex')
 }
 
-async function loadHashCache(): Promise<{ hash: string | null }> {
+async function loadHashCache(): Promise<{ hash: string | undefined }> {
 	try {
 		if (await exists(HASH_CACHE_PATH)) {
 			const data = await fs.readFile(HASH_CACHE_PATH, 'utf8')
 			const parsed = HashCache.parse(JSON.parse(data))
-			return { hash: parsed.hash ?? null }
+			return { hash: parsed.hash }
 		}
 	} catch {
 		// ignore
 	}
-	return { hash: null }
+	return { hash: undefined }
 }
 
 async function saveHashCache(contractHash: string): Promise<void> {

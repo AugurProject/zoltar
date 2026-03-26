@@ -134,7 +134,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 }
 
 const computeSecurityPoolSalt = (parent: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint) => {
-	const values = [parent, universeId, questionId, securityMultiplier] as const
+	const values: readonly [`0x${ string }`, bigint, bigint, bigint] = [parent, universeId, questionId, securityMultiplier]
 	return keccak256(
 		encodeAbiParameters(
 			[
@@ -149,7 +149,7 @@ const computeSecurityPoolSalt = (parent: `0x${ string }`, universeId: bigint, qu
 }
 
 const computeShareTokenSalt = (securityMultiplier: bigint, questionId: bigint) => {
-	const values = [securityMultiplier, questionId] as const
+	const values: readonly [bigint, bigint] = [securityMultiplier, questionId]
 	return keccak256(
 		encodeAbiParameters(
 			[
@@ -206,7 +206,21 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 		bytecode: encodeDeployData({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
-			args: [infraContracts.securityPoolForker, infraContracts.securityPoolFactory, infraContracts.zoltarQuestionData, infraContracts.escalationGameFactory, contracts.priceOracleManagerAndOperatorQueuer, contracts.shareToken, infraContracts.openOracle, parent, infraContracts.zoltar, universeId, questionId, securityMultiplier, contracts.truthAuction] as const,
+			args: [
+				infraContracts.securityPoolForker,
+				infraContracts.securityPoolFactory,
+				infraContracts.zoltarQuestionData,
+				infraContracts.escalationGameFactory,
+				contracts.priceOracleManagerAndOperatorQueuer,
+				contracts.shareToken,
+				infraContracts.openOracle,
+				parent,
+				infraContracts.zoltar,
+				universeId,
+				questionId,
+				securityMultiplier,
+				contracts.truthAuction,
+			],
 		}),
 		from: infraContracts.securityPoolFactory,
 		salt: numberToBytes(0, { size: 32 }),

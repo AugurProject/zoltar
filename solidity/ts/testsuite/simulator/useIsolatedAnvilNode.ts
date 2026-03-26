@@ -15,8 +15,8 @@ export const TEST_TIMEOUT_MS = 300_000
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
-function getAddressPort(address: string | AddressInfo | null) {
-	if (address === null || typeof address === 'string') {
+function getAddressPort(address: string | AddressInfo | undefined) {
+	if (address === undefined || typeof address === 'string') {
 		throw new Error('Failed to resolve TCP port for Anvil')
 	}
 	return address.port
@@ -26,8 +26,8 @@ const getFreePort = async (): Promise<number> =>
 	await new Promise((resolve, reject) => {
 		const server = createServer()
 		server.listen(0, DEFAULT_ANVIL_HOST, () => {
-			const address = server.address()
-			if (address === null) {
+			const address = server.address() ?? undefined
+			if (address === undefined) {
 				server.close(() => reject(new Error('Failed to allocate a free TCP port for Anvil')))
 				return
 			}

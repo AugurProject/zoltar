@@ -3,6 +3,29 @@ import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
 import { contractExists } from '../utilities'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
+import type { Abi } from 'viem'
+
+const getQuestionOutcomeAbi = [
+	{
+		inputs: [
+			{
+				internalType: 'contract ISecurityPool',
+				name: 'securityPool',
+				type: 'address',
+			},
+		],
+		stateMutability: 'nonpayable',
+		type: 'function',
+		name: 'getQuestionOutcome',
+		outputs: [
+			{
+				internalType: 'enum BinaryOutcomes.BinaryOutcome',
+				name: 'outcome',
+				type: 'uint8',
+			},
+		],
+	},
+] satisfies Abi
 
 export const initiateSecurityPoolFork = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
 	await writeContractAndWait(client, () => client.writeContract({
@@ -71,27 +94,7 @@ export const getMigratedRep = async (client: ReadClient, securityPoolAddress: `0
 export const getQuestionOutcome = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
 	if (!(await contractExists(client, securityPoolAddress))) return QuestionOutcome.None
 	return await client.readContract({
-		abi: [
-			{
-				inputs: [
-					{
-						internalType: 'contract ISecurityPool',
-						name: 'securityPool',
-						type: 'address',
-					},
-				],
-				stateMutability: 'nonpayable',
-				type: 'function',
-				name: 'getQuestionOutcome',
-				outputs: [
-					{
-						internalType: 'enum BinaryOutcomes.BinaryOutcome',
-						name: 'outcome',
-						type: 'uint8',
-					},
-				],
-			},
-		] as const,
+		abi: getQuestionOutcomeAbi,
 		functionName: 'getQuestionOutcome',
 		address: getInfraContractAddresses().securityPoolForker,
 		args: [securityPoolAddress],
