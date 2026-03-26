@@ -3,14 +3,15 @@ import type { MarketSectionProps } from '../types/components.js'
 export function MarketSection({ accountState, deploymentStatuses, marketForm, marketCreating, marketResult, marketError, onMarketFormChange, onCreateMarket, onResetMarket }: MarketSectionProps) {
 	const zoltarQuestionDataStatus = deploymentStatuses.find(step => step.id === 'zoltarQuestionData')
 	const securityPoolFactoryStatus = deploymentStatuses.find(step => step.id === 'securityPoolFactory')
+	const requiresSecurityPool = marketForm.marketType === 'binary'
 
 	return (
 		<section class="panel market-panel">
 			<div class="market-header">
 				<div>
 					<p class="panel-label">Market Creation</p>
-					<h2>Create yes/no markets</h2>
-					<p class="detail">This uses the built contract artifacts and deterministic addresses from the deployment flow already shown above.</p>
+					<h2>Create binary, categorical, or scalar markets</h2>
+					<p class="detail">Binary markets create the question and deploy a security pool. Categorical and scalar markets create the question only.</p>
 				</div>
 			</div>
 
@@ -25,7 +26,7 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 							</li>
 							<li>
 								<span>SecurityPoolFactory</span>
-								<strong>{securityPoolFactoryStatus?.deployed ? 'Ready' : 'Missing'}</strong>
+								<strong>{requiresSecurityPool ? (securityPoolFactoryStatus?.deployed ? 'Ready' : 'Missing') : 'Optional'}</strong>
 							</li>
 						</ul>
 						<p class="detail">Question data address: {zoltarQuestionDataStatus?.address ?? 'Unavailable'}</p>
@@ -37,6 +38,10 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 							<p class="panel-label">Latest Market</p>
 							<ul class="status-list hashes">
 								<li>
+									<span>Type</span>
+									<strong>{marketResult.marketType}</strong>
+								</li>
+								<li>
 									<span>Question Id</span>
 									<strong>{marketResult.questionId}</strong>
 								</li>
@@ -44,17 +49,23 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 									<span>Create Question Tx</span>
 									<strong>{marketResult.createQuestionHash}</strong>
 								</li>
-								<li>
-									<span>Deploy Pool Tx</span>
-									<strong>{marketResult.deployPoolHash}</strong>
-								</li>
 							</ul>
+							<p class="detail">Created market ID: {marketResult.questionId}</p>
 						</div>
 					)}
 				</div>
 
 				<div class="market-column">
 					<div class="form-grid">
+						<label class="field">
+							<span>Market Type</span>
+							<select value={marketForm.marketType} onInput={event => onMarketFormChange({ marketType: event.currentTarget.value as typeof marketForm.marketType })}>
+								<option value="binary">Binary</option>
+								<option value="categorical">Categorical</option>
+								<option value="scalar">Scalar</option>
+							</select>
+						</label>
+
 						<label class="field">
 							<span>Title</span>
 							<input value={marketForm.title} onInput={event => onMarketFormChange({ title: event.currentTarget.value })} placeholder="Will event X happen?" />
@@ -76,25 +87,67 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 							</label>
 						</div>
 
-						<div class="field-row">
+						{marketForm.marketType === 'categorical' ? (
 							<label class="field">
-								<span>Security Multiplier</span>
-								<input value={marketForm.securityMultiplier} onInput={event => onMarketFormChange({ securityMultiplier: event.currentTarget.value })} />
+								<span>Outcome Labels</span>
+								<textarea value={marketForm.categoricalOutcomes} onInput={event => onMarketFormChange({ categoricalOutcomes: event.currentTarget.value })} placeholder={'One outcome per line\nApple\nBanana\nCherry'} />
 							</label>
-							<label class="field">
-								<span>Current Retention Rate</span>
-								<input value={marketForm.currentRetentionRate} onInput={event => onMarketFormChange({ currentRetentionRate: event.currentTarget.value })} />
-							</label>
-						</div>
+						) : null}
 
-						<label class="field">
-							<span>Starting REP / ETH Price</span>
-							<input value={marketForm.startingRepEthPrice} onInput={event => onMarketFormChange({ startingRepEthPrice: event.currentTarget.value })} />
-						</label>
+						{marketForm.marketType === 'scalar' ? (
+							<>
+								<div class="field-row">
+									<label class="field">
+										<span>Number Of Ticks</span>
+										<input value={marketForm.numTicks} onInput={event => onMarketFormChange({ numTicks: event.currentTarget.value })} />
+									</label>
+									<label class="field">
+										<span>Answer Unit</span>
+										<input value={marketForm.answerUnit} onInput={event => onMarketFormChange({ answerUnit: event.currentTarget.value })} placeholder="USD" />
+									</label>
+								</div>
+
+								<div class="field-row">
+									<label class="field">
+										<span>Display Value Min</span>
+										<input value={marketForm.displayValueMin} onInput={event => onMarketFormChange({ displayValueMin: event.currentTarget.value })} />
+									</label>
+									<label class="field">
+										<span>Display Value Max</span>
+										<input value={marketForm.displayValueMax} onInput={event => onMarketFormChange({ displayValueMax: event.currentTarget.value })} />
+									</label>
+								</div>
+
+								<label class="field">
+									<span>Initial Scalar Reference Value</span>
+									<input value={marketForm.scalarStartValue} onInput={event => onMarketFormChange({ scalarStartValue: event.currentTarget.value })} />
+								</label>
+							</>
+						) : null}
+
+						{marketForm.marketType === 'binary' ? (
+							<>
+								<div class="field-row">
+									<label class="field">
+										<span>Security Multiplier</span>
+										<input value={marketForm.securityMultiplier} onInput={event => onMarketFormChange({ securityMultiplier: event.currentTarget.value })} />
+									</label>
+									<label class="field">
+										<span>Current Retention Rate</span>
+										<input value={marketForm.currentRetentionRate} onInput={event => onMarketFormChange({ currentRetentionRate: event.currentTarget.value })} />
+									</label>
+								</div>
+
+								<label class="field">
+									<span>Starting REP / ETH Price</span>
+									<input value={marketForm.startingRepEthPrice} onInput={event => onMarketFormChange({ startingRepEthPrice: event.currentTarget.value })} />
+								</label>
+							</>
+						) : null}
 
 						<div class="actions">
 							<button onClick={onCreateMarket} disabled={accountState.address === null || marketCreating}>
-								{marketCreating ? 'Creating Market...' : 'Create Market'}
+								{marketCreating ? 'Creating Market...' : marketForm.marketType === 'binary' ? 'Create Market And Pool' : 'Create Question'}
 							</button>
 							<button class="secondary" onClick={onResetMarket}>
 								Reset

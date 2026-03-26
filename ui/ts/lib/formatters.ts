@@ -8,3 +8,8 @@ export function formatCurrencyBalance(value: bigint | null, units: number = 18) 
 	if (value === null) return 'Unavailable'
 	return units === 18 ? Number(formatEther(value)).toLocaleString(undefined, { maximumFractionDigits: 6 }) : Number(formatUnits(value, units)).toLocaleString(undefined, { maximumFractionDigits: 6 })
 }
+
+export function formatTimestamp(timestamp: bigint) {
+	if (timestamp === 0n) return 'Immediate'
+	return new Date(Number(timestamp) * 1000).toLocaleString()
+}

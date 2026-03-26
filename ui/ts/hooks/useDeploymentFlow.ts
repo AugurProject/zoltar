@@ -71,6 +71,5 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 		deployNextMissing,
 		deployStep,
 		errorMessage,
-		setErrorMessage,
 	}
 }

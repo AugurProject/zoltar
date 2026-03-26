@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
-import { createYesNoMarket } from '../contracts.js'
+import { createMarket as createMarketTransaction } from '../contracts.js'
 import { getInjectedEthereum } from '../injectedEthereum.js'
 import { createWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
@@ -32,8 +32,9 @@ export function useMarketCreation({ accountAddress, deploymentStatuses, onTransa
 			setMarketError('Connect a wallet before creating a market')
 			return
 		}
-		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData') || !hasDeployedStep(deploymentStatuses, 'securityPoolFactory')) {
-			setMarketError('Deploy ZoltarQuestionData and SecurityPoolFactory before creating a market')
+		const marketParameters = createMarketParameters(marketForm)
+		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) {
+			setMarketError('Deploy ZoltarQuestionData before creating a market')
 			return
 		}
 
@@ -42,9 +43,9 @@ export function useMarketCreation({ accountAddress, deploymentStatuses, onTransa
 		setMarketResult(null)
 
 		try {
-			const result = await createYesNoMarket(createWriteClient(ethereum, accountAddress), createMarketParameters(marketForm))
+			const result = await createMarketTransaction(createWriteClient(ethereum, accountAddress), marketParameters)
 			setMarketResult(result)
-			onTransaction(result.deployPoolHash)
+			onTransaction(result.createQuestionHash)
 			await refreshState()
 		} catch (error) {
 			setMarketError(getErrorMessage(error, 'Failed to create market'))

@@ -1,6 +1,7 @@
+import type { MarketType } from './contracts.js'
 import type { Address } from 'viem'
 
-export type Route = 'deploy' | 'markets'
+export type Route = 'deploy' | 'markets' | 'security-pools' | 'security-pools-overview' | 'security-vaults' | 'open-oracle' | 'trading'
 
 export type AccountState = {
 	address: Address | null
@@ -10,11 +11,45 @@ export type AccountState = {
 }
 
 export type MarketFormState = {
-	title: string
-	description: string
-	startTime: string
-	endTime: string
-	securityMultiplier: string
+	answerUnit: string
+	categoricalOutcomes: string
 	currentRetentionRate: string
+	description: string
+	displayValueMax: string
+	displayValueMin: string
+	title: string
+	endTime: string
+	marketType: MarketType
+	numTicks: string
+	scalarStartValue: string
+	startTime: string
+	securityMultiplier: string
 	startingRepEthPrice: string
+}
+
+export type SecurityPoolFormState = {
+	currentRetentionRate: string
+	marketId: string
+	securityMultiplier: string
+	startingRepEthPrice: string
+}
+
+export type SecurityVaultFormState = {
+	depositAmount: string
+	repApprovalAmount: string
+	securityPoolAddress: string
+}
+
+export type OpenOracleFormState = {
+	amount1: string
+	amount2: string
+	managerAddress: string
+	reportId: string
+	stateHash: string
+}
+
+export type TradingFormState = {
+	completeSetAmount: string
+	redeemAmount: string
+	securityPoolAddress: string
 }

@@ -8,6 +8,23 @@ import type { AccountState } from '../types/app.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 
 const REFRESH_INTERVAL_MS = 15_000
+const DEFAULT_CHAIN_ID = `0x${ mainnet.id.toString(16) }`
+
+async function loadAccountBalances(readClient: ReturnType<typeof createReadClient>, connectedAddress: AccountState['address']) {
+	if (connectedAddress === null) {
+		return {
+			ethBalance: null,
+			repBalance: null,
+		}
+	}
+
+	const [ethBalance, repBalance] = await Promise.all([readClient.getBalance({ address: connectedAddress }), loadGenesisRepBalance(readClient, connectedAddress).catch(() => null)])
+
+	return {
+		ethBalance,
+		repBalance,
+	}
+}
 
 export function useOnchainState() {
 	const [accountState, setAccountState] = useState<AccountState>({
@@ -35,16 +52,16 @@ export function useOnchainState() {
 			const readClient = createReadClient()
 			const accounts = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' })
 			const connectedAddress = normalizeAccount(accounts[0])
-			const chainId = ethereum === undefined ? `0x${ mainnet.id.toString(16) }` : await ethereum.request({ method: 'eth_chainId' })
+			const chainId = ethereum === undefined ? DEFAULT_CHAIN_ID : await ethereum.request({ method: 'eth_chainId' })
 
-			const [statuses, ethBalance, repBalance] = await Promise.all([loadDeploymentStatuses(readClient), connectedAddress === null ? Promise.resolve(null) : readClient.getBalance({ address: connectedAddress }), connectedAddress === null ? Promise.resolve(null) : loadGenesisRepBalance(readClient, connectedAddress).catch(() => null)])
+			const [statuses, balances] = await Promise.all([loadDeploymentStatuses(readClient), loadAccountBalances(readClient, connectedAddress)])
 
 			setDeploymentStatuses(statuses)
 			setAccountState({
 				address: connectedAddress,
 				chainId,
-				ethBalance,
-				repBalance,
+				ethBalance: balances.ethBalance,
+				repBalance: balances.repBalance,
 			})
 		} catch (error) {
 			setErrorMessage(getErrorMessage(error, 'Failed to refresh wallet state'))
@@ -101,6 +118,5 @@ export function useOnchainState() {
 		hasInjectedWallet,
 		isRefreshing,
 		refreshState,
-		setErrorMessage,
 	}
 }
