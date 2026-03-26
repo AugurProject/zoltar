@@ -51,7 +51,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, refres
 		try {
 			setSignalValue(forkAuctionError, undefined)
 			setSignalValue(forkAuctionResult, undefined)
-			const details = forkAuctionDetails.value ?? await loadForkAuctionDetails(createReadClient(), parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address'))
+			const details = forkAuctionDetails.value ?? (await loadForkAuctionDetails(createReadClient(), parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address')))
 			const result = await action(accountAddress, details)
 			setSignalValue(forkAuctionResult, result)
 			onTransaction(result.hash)
@@ -63,20 +63,15 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, refres
 		}
 	}
 
-	const forkWithOwnEscalation = async () =>
-		await runForkAuctionAction(async (walletAddress, details) => await forkZoltarWithOwnEscalation(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId), 'Failed to fork with own escalation game')
+	const forkWithOwnEscalation = async () => await runForkAuctionAction(async (walletAddress, details) => await forkZoltarWithOwnEscalation(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId), 'Failed to fork with own escalation game')
 
-	const initiateFork = async () =>
-		await runForkAuctionAction(async (walletAddress, details) => await initiateSecurityPoolFork(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId), 'Failed to initiate security pool fork')
+	const initiateFork = async () => await runForkAuctionAction(async (walletAddress, details) => await initiateSecurityPoolFork(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId), 'Failed to initiate security pool fork')
 
-	const createChildUniverse = async () =>
-		await runForkAuctionAction(async (walletAddress, details) => await createChildUniverseFromSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome)), 'Failed to create child universe')
+	const createChildUniverse = async () => await runForkAuctionAction(async (walletAddress, details) => await createChildUniverseFromSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome)), 'Failed to create child universe')
 
-	const migrateRepToZoltar = async () =>
-		await runForkAuctionAction(async (walletAddress, details) => await migrateRepToZoltarFromSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId, parseReportingOutcomeListInput(forkAuctionForm.value.repMigrationOutcomes, 'REP migration outcomes')), 'Failed to migrate REP to Zoltar')
+	const migrateRepToZoltar = async () => await runForkAuctionAction(async (walletAddress, details) => await migrateRepToZoltarFromSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId, parseReportingOutcomeListInput(forkAuctionForm.value.repMigrationOutcomes, 'REP migration outcomes')), 'Failed to migrate REP to Zoltar')
 
-	const migrateVault = async () =>
-		await runForkAuctionAction(async (walletAddress, details) => await migrateSecurityVault(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome)), 'Failed to migrate vault')
+	const migrateVault = async () => await runForkAuctionAction(async (walletAddress, details) => await migrateSecurityVault(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome)), 'Failed to migrate vault')
 
 	const migrateEscalation = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {
@@ -84,8 +79,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, refres
 			return await migrateEscalationDeposits(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId, vaultAddress, parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome), parseBigIntListInput(forkAuctionForm.value.depositIndexes, 'Deposit indexes'))
 		}, 'Failed to migrate escalation deposits')
 
-	const startTruthAuction = async () =>
-		await runForkAuctionAction(async (walletAddress, details) => await startTruthAuctionForSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId), 'Failed to start truth auction')
+	const startTruthAuction = async () => await runForkAuctionAction(async (walletAddress, details) => await startTruthAuctionForSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId), 'Failed to start truth auction')
 
 	const submitBid = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {
@@ -99,8 +93,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, refres
 			return await refundTruthAuctionBid(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId, details.truthAuctionAddress, parseBigIntInput(forkAuctionForm.value.refundTick, 'Refund tick'), parseBigIntInput(forkAuctionForm.value.refundBidIndex, 'Refund bid index'))
 		}, 'Failed to refund losing bids')
 
-	const finalizeTruthAuction = async () =>
-		await runForkAuctionAction(async (walletAddress, details) => await finalizeSecurityPoolTruthAuction(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId), 'Failed to finalize truth auction')
+	const finalizeTruthAuction = async () => await runForkAuctionAction(async (walletAddress, details) => await finalizeSecurityPoolTruthAuction(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId), 'Failed to finalize truth auction')
 
 	const claimAuctionProceeds = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {

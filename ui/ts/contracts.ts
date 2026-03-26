@@ -1,7 +1,7 @@
 import { encodeAbiParameters, encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes, parseAbiItem, toHex, zeroAddress, type Address, type Hash, type Hex } from 'viem'
 import { ABIS } from './abis.js'
-import { ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_EscalationGame_EscalationGame, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from './contractArtifact.js'
-import type { BalanceReadClient, ContractReadClient, DeploymentClient, DeploymentReadClient, DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, ForkAuctionAction, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, MarketType, MarketWriteClient, OpenOracleActionResult, OracleManagerDetails, QuestionData, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityPoolSystemState, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, TruthAuctionMetrics } from './types/contracts.js'
+import { ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_EscalationGame_EscalationGame, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from './contractArtifact.js'
+import type { DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, ForkAuctionAction, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, MarketType, OpenOracleActionResult, OracleManagerDetails, OracleQueueOperation, QuestionData, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityPoolSystemState, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, TruthAuctionMetrics, WriteClient } from './types/contracts.js'
 
 const GENESIS_REPUTATION_TOKEN = bigintToAddress(0x221657776846890989a759ba2973e427dff5c9bbn)
 const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
@@ -212,7 +212,7 @@ function getInfraContractAddresses() {
 	}
 }
 
-async function deployViaProxy(client: DeploymentClient, bytecode: Hex) {
+async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 	const hash = await client.sendTransaction({
 		to: PROXY_DEPLOYER_ADDRESS,
 		data: bytecode,
@@ -221,7 +221,7 @@ async function deployViaProxy(client: DeploymentClient, bytecode: Hex) {
 	return hash
 }
 
-async function ensureProxyDeployerDeployed(client: DeploymentClient) {
+async function ensureProxyDeployerDeployed(client: WriteClient) {
 	const code = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
 	if (code !== undefined && code !== '0x') return undefined
 
@@ -332,7 +332,7 @@ export function getDeploymentSteps(): DeploymentStep[] {
 	]
 }
 
-export async function loadDeploymentStatuses(client: DeploymentReadClient): Promise<DeploymentStatus[]> {
+export async function loadDeploymentStatuses(client: ReadClient): Promise<DeploymentStatus[]> {
 	const steps = getDeploymentSteps()
 	const deployed = await Promise.all(
 		steps.map(async step => {
@@ -347,7 +347,7 @@ export async function loadDeploymentStatuses(client: DeploymentReadClient): Prom
 	}))
 }
 
-export async function loadGenesisRepBalance(client: BalanceReadClient, address: Address) {
+export async function loadGenesisRepBalance(client: ReadClient, address: Address) {
 	return (await client.readContract({
 		abi: ABIS.mainnet.erc20,
 		functionName: 'balanceOf',
@@ -459,7 +459,7 @@ function getMarketType(questionData: QuestionData, outcomeLabels: string[]): Mar
 	return 'categorical'
 }
 
-async function loadOutcomeLabels(client: ContractReadClient, questionId: bigint) {
+async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
 	let currentIndex = 0n
 	const pageSize = 30n
 	const outcomeLabels: string[] = []
@@ -482,7 +482,7 @@ async function loadOutcomeLabels(client: ContractReadClient, questionId: bigint)
 	return outcomeLabels
 }
 
-async function loadEscalationDeposits(client: ContractReadClient, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
+async function loadEscalationDeposits(client: ReadClient, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
 	let currentIndex = 0n
 	const pageSize = 30n
 	const deposits: EscalationDeposit[] = []
@@ -513,7 +513,7 @@ async function loadEscalationDeposits(client: ContractReadClient, escalationGame
 	return deposits
 }
 
-export async function loadMarketDetails(client: ContractReadClient, questionId: bigint): Promise<MarketDetails> {
+export async function loadMarketDetails(client: ReadClient, questionId: bigint): Promise<MarketDetails> {
 	const question = await client.readContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'questions',
@@ -541,7 +541,7 @@ export async function loadMarketDetails(client: ContractReadClient, questionId: 
 	}
 }
 
-export async function loadReportingDetails(client: ContractReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
+export async function loadReportingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
 	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId] = await Promise.all([
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -659,7 +659,7 @@ export async function loadReportingDetails(client: ContractReadClient, securityP
 }
 
 export async function createMarket(
-	client: MarketWriteClient,
+	client: WriteClient,
 	parameters: {
 		marketType: MarketType
 		outcomeLabels: string[]
@@ -687,7 +687,7 @@ export async function createMarket(
 }
 
 export async function createSecurityPool(
-	client: MarketWriteClient,
+	client: WriteClient,
 	parameters: {
 		currentRetentionRate: bigint
 		questionId: bigint
@@ -711,7 +711,7 @@ export async function createSecurityPool(
 	} satisfies SecurityPoolCreationResult
 }
 
-export async function loadSecurityVaultDetails(client: ContractReadClient, securityPoolAddress: Address, vaultAddress: Address): Promise<SecurityVaultDetails> {
+export async function loadSecurityVaultDetails(client: ReadClient, securityPoolAddress: Address, vaultAddress: Address): Promise<SecurityVaultDetails> {
 	const [currentRetentionRate, poolOwnershipDenominator, repToken, totalSecurityBondAllowance, universeId, vaultData] = await Promise.all([
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -770,7 +770,7 @@ export async function loadSecurityVaultDetails(client: ContractReadClient, secur
 }
 
 export async function approveErc20<Action extends SecurityVaultActionResult['action'] | OpenOracleActionResult['action']>(
-	client: MarketWriteClient,
+	client: WriteClient,
 	tokenAddress: Address,
 	spenderAddress: Address,
 	amount: bigint,
@@ -786,7 +786,7 @@ export async function approveErc20<Action extends SecurityVaultActionResult['act
 	return { action, hash }
 }
 
-export async function depositRepToSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, amount: bigint) {
+export async function depositRepToSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
 	const hash = await client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -800,7 +800,7 @@ export async function depositRepToSecurityPool(client: MarketWriteClient, securi
 	} satisfies SecurityVaultActionResult
 }
 
-export async function updateSecurityVaultFees(client: MarketWriteClient, securityPoolAddress: Address, vaultAddress: Address) {
+export async function updateSecurityVaultFees(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
 	const hash = await client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -814,7 +814,7 @@ export async function updateSecurityVaultFees(client: MarketWriteClient, securit
 	} satisfies SecurityVaultActionResult
 }
 
-export async function redeemSecurityVaultFees(client: MarketWriteClient, securityPoolAddress: Address, vaultAddress: Address) {
+export async function redeemSecurityVaultFees(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
 	const hash = await client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -828,7 +828,7 @@ export async function redeemSecurityVaultFees(client: MarketWriteClient, securit
 	} satisfies SecurityVaultActionResult
 }
 
-export async function redeemSecurityVaultRep(client: MarketWriteClient, securityPoolAddress: Address, vaultAddress: Address) {
+export async function redeemSecurityVaultRep(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
 	const hash = await client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -842,7 +842,7 @@ export async function redeemSecurityVaultRep(client: MarketWriteClient, security
 	} satisfies SecurityVaultActionResult
 }
 
-export async function loadOracleManagerDetails(client: ContractReadClient, managerAddress: Address): Promise<OracleManagerDetails> {
+export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address): Promise<OracleManagerDetails> {
 	const [lastPrice, pendingReportId, requestPriceEthCost] = await Promise.all([
 		client.readContract({
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
@@ -903,7 +903,7 @@ export async function loadOracleManagerDetails(client: ContractReadClient, manag
 	}
 }
 
-export async function requestOraclePrice(client: MarketWriteClient, managerAddress: Address, ethCost: bigint) {
+export async function requestOraclePrice(client: WriteClient, managerAddress: Address, ethCost: bigint) {
 	const hash = await client.writeContract({
 		address: managerAddress,
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
@@ -918,7 +918,7 @@ export async function requestOraclePrice(client: MarketWriteClient, managerAddre
 	} satisfies OpenOracleActionResult
 }
 
-export async function submitInitialOracleReport(client: MarketWriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: Hex) {
+export async function submitInitialOracleReport(client: WriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: Hex) {
 	const hash = await client.writeContract({
 		address: getInfraContractAddresses().openOracle,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
@@ -932,7 +932,7 @@ export async function submitInitialOracleReport(client: MarketWriteClient, repor
 	} satisfies OpenOracleActionResult
 }
 
-export async function settleOracleReport(client: MarketWriteClient, reportId: bigint) {
+export async function settleOracleReport(client: WriteClient, reportId: bigint) {
 	const hash = await client.writeContract({
 		address: getInfraContractAddresses().openOracle,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
@@ -946,7 +946,7 @@ export async function settleOracleReport(client: MarketWriteClient, reportId: bi
 	} satisfies OpenOracleActionResult
 }
 
-export async function loadForkAuctionDetails(client: ContractReadClient, securityPoolAddress: Address): Promise<ForkAuctionDetails> {
+export async function loadForkAuctionDetails(client: ReadClient, securityPoolAddress: Address): Promise<ForkAuctionDetails> {
 	const [
 		questionId,
 		parentSecurityPoolAddress,
@@ -1122,7 +1122,7 @@ export async function loadForkAuctionDetails(client: ContractReadClient, securit
 	}
 }
 
-async function executeForkAuctionAction(client: MarketWriteClient, action: ForkAuctionAction, securityPoolAddress: Address, universeId: bigint, request: () => Promise<Hash>) {
+async function executeForkAuctionAction(client: WriteClient, action: ForkAuctionAction | 'forkUniverse' | 'withdrawBids', securityPoolAddress: Address, universeId: bigint, request: () => Promise<Hash>) {
 	const hash = await request()
 	await client.waitForTransactionReceipt({ hash })
 	return {
@@ -1133,7 +1133,7 @@ async function executeForkAuctionAction(client: MarketWriteClient, action: ForkA
 	} satisfies ForkAuctionActionResult
 }
 
-export async function forkZoltarWithOwnEscalation(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint) {
+export async function forkZoltarWithOwnEscalation(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(client, 'forkWithOwnEscalation', securityPoolAddress, universeId, async () => await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'forkZoltarWithOwnEscalationGame',
@@ -1142,7 +1142,7 @@ export async function forkZoltarWithOwnEscalation(client: MarketWriteClient, sec
 	}))
 }
 
-export async function initiateSecurityPoolFork(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint) {
+export async function initiateSecurityPoolFork(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(client, 'initiateFork', securityPoolAddress, universeId, async () => await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'initiateSecurityPoolFork',
@@ -1151,7 +1151,7 @@ export async function initiateSecurityPoolFork(client: MarketWriteClient, securi
 	}))
 }
 
-export async function createChildUniverseFromSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
+export async function createChildUniverseFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
 	return await executeForkAuctionAction(client, 'createChildUniverse', securityPoolAddress, universeId, async () => await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'createChildUniverse',
@@ -1160,7 +1160,7 @@ export async function createChildUniverseFromSecurityPool(client: MarketWriteCli
 	}))
 }
 
-export async function migrateRepToZoltarFromSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
+export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
 	return await executeForkAuctionAction(client, 'migrateRepToZoltar', securityPoolAddress, universeId, async () => await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'migrateRepToZoltar',
@@ -1169,7 +1169,7 @@ export async function migrateRepToZoltarFromSecurityPool(client: MarketWriteClie
 	}))
 }
 
-export async function migrateSecurityVault(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
+export async function migrateSecurityVault(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
 	return await executeForkAuctionAction(client, 'migrateVault', securityPoolAddress, universeId, async () => await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'migrateVault',
@@ -1178,7 +1178,7 @@ export async function migrateSecurityVault(client: MarketWriteClient, securityPo
 	}))
 }
 
-export async function migrateEscalationDeposits(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
+export async function migrateEscalationDeposits(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
 	return await executeForkAuctionAction(client, 'migrateEscalationDeposits', securityPoolAddress, universeId, async () => await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'migrateFromEscalationGame',
@@ -1187,7 +1187,7 @@ export async function migrateEscalationDeposits(client: MarketWriteClient, secur
 	}))
 }
 
-export async function startTruthAuctionForSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint) {
+export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(client, 'startTruthAuction', securityPoolAddress, universeId, async () => await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'startTruthAuction',
@@ -1196,7 +1196,7 @@ export async function startTruthAuctionForSecurityPool(client: MarketWriteClient
 	}))
 }
 
-export async function submitTruthAuctionBid(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, amount: bigint) {
+export async function submitTruthAuctionBid(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, amount: bigint) {
 	return await executeForkAuctionAction(client, 'submitBid', securityPoolAddress, universeId, async () => await client.writeContract({
 		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'submitBid',
@@ -1206,7 +1206,7 @@ export async function submitTruthAuctionBid(client: MarketWriteClient, securityP
 	}))
 }
 
-export async function refundTruthAuctionBid(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, bidIndex: bigint) {
+export async function refundTruthAuctionBid(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, bidIndex: bigint) {
 	return await executeForkAuctionAction(client, 'refundLosingBids', securityPoolAddress, universeId, async () => await client.writeContract({
 		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'refundLosingBids',
@@ -1215,7 +1215,7 @@ export async function refundTruthAuctionBid(client: MarketWriteClient, securityP
 	}))
 }
 
-export async function finalizeSecurityPoolTruthAuction(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint) {
+export async function finalizeSecurityPoolTruthAuction(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(client, 'finalizeTruthAuction', securityPoolAddress, universeId, async () => await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'finalizeTruthAuction',
@@ -1224,7 +1224,7 @@ export async function finalizeSecurityPoolTruthAuction(client: MarketWriteClient
 	}))
 }
 
-export async function claimSecurityPoolAuctionProceeds(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, tick: bigint, bidIndex: bigint) {
+export async function claimSecurityPoolAuctionProceeds(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, tick: bigint, bidIndex: bigint) {
 	return await executeForkAuctionAction(client, 'claimAuctionProceeds', securityPoolAddress, universeId, async () => await client.writeContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'claimAuctionProceeds',
@@ -1233,7 +1233,7 @@ export async function claimSecurityPoolAuctionProceeds(client: MarketWriteClient
 	}))
 }
 
-export async function loadAllSecurityPools(client: ContractReadClient): Promise<ListedSecurityPool[]> {
+export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSecurityPool[]> {
 	const logs = await client.getLogs({
 		address: getInfraContractAddresses().securityPoolFactory,
 		event: DEPLOY_SECURITY_POOL_EVENT,
@@ -1286,7 +1286,7 @@ export async function loadAllSecurityPools(client: ContractReadClient): Promise<
 	}))
 }
 
-export async function queueSecurityPoolLiquidation(client: MarketWriteClient, managerAddress: Address, targetVault: Address, amount: bigint, ethCost: bigint) {
+export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, ethCost: bigint) {
 	const hash = await client.writeContract({
 		address: managerAddress,
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
@@ -1298,7 +1298,137 @@ export async function queueSecurityPoolLiquidation(client: MarketWriteClient, ma
 	return hash
 }
 
-export async function createCompleteSetInSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, amount: bigint) {
+function getOracleOperationType(operation: OracleQueueOperation) {
+	switch (operation) {
+		case 'liquidation':
+			return 0n
+		case 'withdrawRep':
+			return 1n
+		case 'setSecurityBondsAllowance':
+			return 2n
+		default:
+			return assertNever(operation)
+	}
+}
+
+function getShareMigrationOutcomeValue(outcome: ReportingOutcomeKey) {
+	switch (outcome) {
+		case 'invalid':
+			return 0n
+		case 'yes':
+			return 1n
+		case 'no':
+			return 2n
+		default:
+			return assertNever(outcome)
+	}
+}
+
+function getShareTokenId(universeId: bigint, outcome: ReportingOutcomeKey) {
+	const universeMask = (1n << 248n) - 1n
+	return ((universeId & universeMask) << 8n) | (getShareMigrationOutcomeValue(outcome) & 255n)
+}
+
+export async function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint, ethCost: bigint) {
+	const hash = await client.writeContract({
+		address: managerAddress,
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+		functionName: 'requestPriceIfNeededAndQueueOperation',
+		args: [getOracleOperationType(operation), targetVault, amount],
+		value: ethCost,
+	})
+	await client.waitForTransactionReceipt({ hash })
+	return {
+		action: 'queueOperation',
+		hash,
+	} satisfies OpenOracleActionResult
+}
+
+export async function redeemSharesInSecurityPool(client: WriteClient, securityPoolAddress: Address) {
+	const universeId = await client.readContract({
+		address: securityPoolAddress,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'universeId',
+		args: [],
+	})
+	const hash = await client.writeContract({
+		address: securityPoolAddress,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'redeemShares',
+		args: [],
+	})
+	await client.waitForTransactionReceipt({ hash })
+	return {
+		action: 'redeemShares',
+		hash,
+		securityPoolAddress,
+		universeId,
+	} satisfies TradingActionResult
+}
+
+export async function migrateSharesFromUniverse(client: WriteClient, securityPoolAddress: Address, fromUniverseId: bigint, outcome: ReportingOutcomeKey) {
+	const [universeId, shareTokenAddress] = await Promise.all([
+		client.readContract({
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'universeId',
+			args: [],
+		}),
+		client.readContract({
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'shareToken',
+			args: [],
+		}),
+	])
+	const hash = await client.writeContract({
+		address: shareTokenAddress,
+		abi: peripherals_tokens_ShareToken_ShareToken.abi,
+		functionName: 'migrate',
+		args: [getShareTokenId(fromUniverseId, outcome)],
+	})
+	await client.waitForTransactionReceipt({ hash })
+	return {
+		action: 'migrateShares',
+		hash,
+		securityPoolAddress,
+		universeId,
+	} satisfies TradingActionResult
+}
+
+export async function forkUniverseDirectly(client: WriteClient, universeId: bigint, questionId: bigint, securityPoolAddress: Address) {
+	const hash = await client.writeContract({
+		address: getInfraContractAddresses().zoltar,
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'forkUniverse',
+		args: [universeId, questionId],
+	})
+	await client.waitForTransactionReceipt({ hash })
+	return {
+		action: 'forkUniverse',
+		hash,
+		securityPoolAddress,
+		universeId,
+	} satisfies ForkAuctionActionResult
+}
+
+export async function withdrawTruthAuctionBids(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, withdrawFor: Address, tick: bigint, bidIndex: bigint) {
+	const hash = await client.writeContract({
+		address: truthAuctionAddress,
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'withdrawBids',
+		args: [withdrawFor, [{ tick, bidIndex }]],
+	})
+	await client.waitForTransactionReceipt({ hash })
+	return {
+		action: 'withdrawBids',
+		hash,
+		securityPoolAddress,
+		universeId,
+	} satisfies ForkAuctionActionResult
+}
+
+export async function createCompleteSetInSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
 	const universeId = await client.readContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -1321,7 +1451,7 @@ export async function createCompleteSetInSecurityPool(client: MarketWriteClient,
 	} satisfies TradingActionResult
 }
 
-export async function redeemCompleteSetInSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, amount: bigint) {
+export async function redeemCompleteSetInSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
 	const universeId = await client.readContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -1343,7 +1473,7 @@ export async function redeemCompleteSetInSecurityPool(client: MarketWriteClient,
 	} satisfies TradingActionResult
 }
 
-export async function reportOutcomeInSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amount: bigint) {
+export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amount: bigint) {
 	const universeId = await client.readContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -1366,7 +1496,7 @@ export async function reportOutcomeInSecurityPool(client: MarketWriteClient, sec
 	} satisfies ReportingActionResult
 }
 
-export async function withdrawEscalationFromSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
+export async function withdrawEscalationFromSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
 	const universeId = await client.readContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,

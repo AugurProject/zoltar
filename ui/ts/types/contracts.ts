@@ -6,6 +6,7 @@ export type MarketType = 'binary' | 'categorical' | 'scalar'
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
 export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
 export type ForkAuctionAction = 'forkWithOwnEscalation' | 'initiateFork' | 'createChildUniverse' | 'migrateRepToZoltar' | 'migrateVault' | 'migrateEscalationDeposits' | 'startTruthAuction' | 'submitBid' | 'refundLosingBids' | 'finalizeTruthAuction' | 'claimAuctionProceeds'
+export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
 
 export type QuestionData = {
 	title: string
@@ -18,18 +19,15 @@ export type QuestionData = {
 	answerUnit: string
 }
 
-export type DeploymentClient = ReturnType<typeof createWriteClient>
-export type DeploymentReadClient = ReturnType<typeof createReadClient>
-export type BalanceReadClient = ReturnType<typeof createReadClient>
-export type ContractReadClient = ReturnType<typeof createReadClient>
-export type MarketWriteClient = ReturnType<typeof createWriteClient>
+export type ReadClient = ReturnType<typeof createReadClient>
+export type WriteClient = ReturnType<typeof createWriteClient>
 
 export type DeploymentStep = {
 	id: DeploymentStepId
 	label: string
 	address: Address
 	dependencies: DeploymentStepId[]
-	deploy: (client: DeploymentClient) => Promise<Hash>
+	deploy: (client: WriteClient) => Promise<Hash>
 }
 
 export type DeploymentStatus = DeploymentStep & {
@@ -95,7 +93,7 @@ export type OracleManagerDetails = {
 }
 
 export type OpenOracleActionResult = {
-	action: 'approveToken1' | 'approveToken2' | 'requestPrice' | 'settle' | 'submitInitialReport'
+	action: 'approveToken1' | 'approveToken2' | 'queueOperation' | 'requestPrice' | 'settle' | 'submitInitialReport'
 	hash: Hash
 }
 
@@ -123,7 +121,7 @@ export type SecurityPoolOverviewActionResult = {
 }
 
 export type TradingActionResult = {
-	action: 'createCompleteSet' | 'redeemCompleteSet'
+	action: 'createCompleteSet' | 'migrateShares' | 'redeemCompleteSet' | 'redeemShares'
 	hash: Hash
 	securityPoolAddress: Address
 	universeId: bigint
@@ -210,7 +208,7 @@ export type ForkAuctionDetails = {
 }
 
 export type ForkAuctionActionResult = {
-	action: ForkAuctionAction
+	action: ForkAuctionAction | 'forkUniverse' | 'withdrawBids'
 	hash: Hash
 	securityPoolAddress: Address
 	universeId: bigint

@@ -48,6 +48,9 @@ export function getDefaultOpenOracleFormState(): OpenOracleFormState {
 		amount1: '0',
 		amount2: '0',
 		managerAddress: '',
+		operationAmount: '0',
+		operationTargetVault: '',
+		queuedOperation: 'liquidation',
 		reportId: '',
 		stateHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
 	}
@@ -56,8 +59,10 @@ export function getDefaultOpenOracleFormState(): OpenOracleFormState {
 export function getDefaultTradingFormState(): TradingFormState {
 	return {
 		completeSetAmount: '0',
+		fromUniverseId: '0',
 		redeemAmount: '0',
 		securityPoolAddress: '',
+		selectedOutcome: 'yes',
 	}
 }
 
@@ -77,11 +82,16 @@ export function getDefaultForkAuctionFormState(): ForkAuctionFormState {
 		bidTick: '0',
 		claimVaultAddress: '',
 		depositIndexes: '',
+		directForkQuestionId: '',
+		directForkUniverseId: '0',
 		refundBidIndex: '0',
 		refundTick: '0',
 		repMigrationOutcomes: 'yes',
 		securityPoolAddress: '',
 		selectedOutcome: 'yes',
+		withdrawBidIndex: '0',
+		withdrawForAddress: '',
+		withdrawTick: '0',
 	}
 }
 

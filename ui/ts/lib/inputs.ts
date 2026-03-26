@@ -1,4 +1,4 @@
-import type { MarketType, ReportingOutcomeKey } from '../types/contracts.js'
+import type { MarketType, OracleQueueOperation, ReportingOutcomeKey } from '../types/contracts.js'
 import { getAddress, isHex, type Address, type Hex } from 'viem'
 import { parseBigIntInput } from './marketForm.js'
 
@@ -51,6 +51,17 @@ export function parseReportingOutcomeInput(value: string): ReportingOutcomeKey {
 			return value
 		default:
 			throw new Error(`Unknown reporting outcome: ${ value }`)
+	}
+}
+
+export function parseOracleQueueOperationInput(value: string): OracleQueueOperation {
+	switch (value) {
+		case 'liquidation':
+		case 'withdrawRep':
+		case 'setSecurityBondsAllowance':
+			return value
+		default:
+			throw new Error(`Unknown queued oracle operation: ${ value }`)
 	}
 }
 

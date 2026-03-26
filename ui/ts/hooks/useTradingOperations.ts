@@ -1,9 +1,9 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
-import { createCompleteSetInSecurityPool, redeemCompleteSetInSecurityPool } from '../contracts.js'
+import { createCompleteSetInSecurityPool, migrateSharesFromUniverse, redeemCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '../contracts.js'
 import { createWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { parseAddressInput } from '../lib/inputs.js'
+import { parseAddressInput, parseReportingOutcomeInput } from '../lib/inputs.js'
 import { getDefaultTradingFormState, parseBigIntInput } from '../lib/marketForm.js'
 import { setSignalValue, updateSignalValue } from '../lib/signals.js'
 import type { TradingFormState } from '../types/app.js'
@@ -48,9 +48,16 @@ export function useTradingOperations({ accountAddress, onTransaction, refreshSta
 
 	const redeemCompleteSet = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemCompleteSetInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress), securityPoolAddress, parseBigIntInput(tradingForm.value.redeemAmount, 'Redeem amount')), 'Failed to redeem complete sets')
 
+	const redeemShares = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemSharesInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress), securityPoolAddress), 'Failed to redeem shares')
+
+	const migrateShares = async () =>
+		await runTradingAction(async (walletAddress, securityPoolAddress) => await migrateSharesFromUniverse(createWriteClient(getRequiredInjectedEthereum(), walletAddress), securityPoolAddress, parseBigIntInput(tradingForm.value.fromUniverseId, 'From universe ID'), parseReportingOutcomeInput(tradingForm.value.selectedOutcome)), 'Failed to migrate shares')
+
 	return {
 		createCompleteSet,
+		migrateShares,
 		redeemCompleteSet,
+		redeemShares,
 		setTradingForm: (updater: (current: TradingFormState) => TradingFormState) => {
 			updateSignalValue(tradingForm, updater)
 		},

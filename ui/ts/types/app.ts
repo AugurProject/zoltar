@@ -45,14 +45,19 @@ export type OpenOracleFormState = {
 	amount1: string
 	amount2: string
 	managerAddress: string
+	operationAmount: string
+	operationTargetVault: string
+	queuedOperation: 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
 	reportId: string
 	stateHash: string
 }
 
 export type TradingFormState = {
 	completeSetAmount: string
+	fromUniverseId: string
 	redeemAmount: string
 	securityPoolAddress: string
+	selectedOutcome: ReportingOutcomeKey
 }
 
 export type ReportingFormState = {
@@ -68,9 +73,14 @@ export type ForkAuctionFormState = {
 	bidTick: string
 	claimVaultAddress: string
 	depositIndexes: string
+	directForkQuestionId: string
+	directForkUniverseId: string
 	refundBidIndex: string
 	refundTick: string
 	repMigrationOutcomes: string
 	securityPoolAddress: string
 	selectedOutcome: ReportingOutcomeKey
+	withdrawBidIndex: string
+	withdrawForAddress: string
+	withdrawTick: string
 }
