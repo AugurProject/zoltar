@@ -8,6 +8,7 @@ export const SECURITY_VAULT_ROUTE = '#/security-vaults'
 export const OPEN_ORACLE_ROUTE = '#/open-oracle'
 export const REPORTING_ROUTE = '#/reporting'
 export const TRADING_ROUTE = '#/trading'
+export const FORK_AUCTION_ROUTE = '#/fork-auctions'
 
 export function ensureRouteHash() {
 	if (window.location.hash === '') {
@@ -31,6 +32,8 @@ export function getCurrentRoute() {
 			return 'reporting' satisfies Route
 		case TRADING_ROUTE:
 			return 'trading' satisfies Route
+		case FORK_AUCTION_ROUTE:
+			return 'fork-auctions' satisfies Route
 		case DEPLOY_ROUTE:
 		case '':
 			return 'deploy' satisfies Route

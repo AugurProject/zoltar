@@ -1,5 +1,6 @@
 import { MainnetGateSection } from './MainnetGateSection.js'
 import { DeploymentSection } from './DeploymentSection.js'
+import { ForkAuctionSection } from './ForkAuctionSection.js'
 import { MarketSection } from './MarketSection.js'
 import { OpenOracleSection } from './OpenOracleSection.js'
 import { ReportingSection } from './ReportingSection.js'
@@ -56,6 +57,8 @@ export function AppRouteContent(props: AppRouteContentProps) {
 			return <OpenOracleSection accountState={props.accountState} loadingOracleManager={props.loadingOracleManager} onApproveToken1={props.onApproveToken1} onApproveToken2={props.onApproveToken2} onLoadOracleManager={props.loadOracleManager} onOpenOracleFormChange={props.onOpenOracleFormChange} onRequestPrice={props.onRequestPrice} onSettleReport={props.onSettleReport} onSubmitInitialReport={props.onSubmitInitialReport} openOracleError={props.openOracleError} openOracleForm={props.openOracleForm} openOracleResult={props.openOracleResult} oracleManagerDetails={props.oracleManagerDetails} />
 		case 'reporting':
 			return <ReportingSection accountState={props.accountState} loadingReportingDetails={props.loadingReportingDetails} onLoadReporting={props.loadReporting} onReportOutcome={props.onReportOutcome} onReportingFormChange={props.onReportingFormChange} onWithdrawEscalation={props.onWithdrawEscalation} reportingDetails={props.reportingDetails} reportingError={props.reportingError} reportingForm={props.reportingForm} reportingResult={props.reportingResult} />
+		case 'fork-auctions':
+			return <ForkAuctionSection accountState={props.accountState} forkAuctionDetails={props.forkAuctionDetails} forkAuctionError={props.forkAuctionError} forkAuctionForm={props.forkAuctionForm} forkAuctionResult={props.forkAuctionResult} loadingForkAuctionDetails={props.loadingForkAuctionDetails} onClaimAuctionProceeds={props.onClaimAuctionProceeds} onCreateChildUniverse={props.onCreateChildUniverse} onFinalizeTruthAuction={props.onFinalizeTruthAuction} onForkAuctionFormChange={props.onForkAuctionFormChange} onForkWithOwnEscalation={props.onForkWithOwnEscalation} onInitiateFork={props.onInitiateFork} onLoadForkAuction={props.loadForkAuction} onMigrateEscalationDeposits={props.onMigrateEscalationDeposits} onMigrateRepToZoltar={props.onMigrateRepToZoltar} onMigrateVault={props.onMigrateVault} onRefundLosingBids={props.onRefundLosingBids} onStartTruthAuction={props.onStartTruthAuction} onSubmitBid={props.onSubmitBid} />
 		case 'trading':
 			return <TradingSection accountState={props.accountState} onCreateCompleteSet={props.onCreateCompleteSet} onRedeemCompleteSet={props.onRedeemCompleteSet} onTradingFormChange={props.onTradingFormChange} tradingError={props.tradingError} tradingForm={props.tradingForm} tradingResult={props.tradingResult} />
 		default:

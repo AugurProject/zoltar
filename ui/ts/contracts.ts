@@ -1,7 +1,7 @@
 import { encodeAbiParameters, encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes, parseAbiItem, toHex, zeroAddress, type Address, type Hash, type Hex } from 'viem'
 import { ABIS } from './abis.js'
-import { ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_EscalationGame_EscalationGame, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from './contractArtifact.js'
-import type { BalanceReadClient, ContractReadClient, DeploymentClient, DeploymentReadClient, DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, ListedSecurityPool, MarketCreationResult, MarketDetails, MarketType, MarketWriteClient, OpenOracleActionResult, OracleManagerDetails, QuestionData, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityPoolSystemState, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult } from './types/contracts.js'
+import { ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_EscalationGame_EscalationGame, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from './contractArtifact.js'
+import type { BalanceReadClient, ContractReadClient, DeploymentClient, DeploymentReadClient, DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, ForkAuctionAction, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, MarketType, MarketWriteClient, OpenOracleActionResult, OracleManagerDetails, QuestionData, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityPoolSystemState, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, TruthAuctionMetrics } from './types/contracts.js'
 
 const GENESIS_REPUTATION_TOKEN = bigintToAddress(0x221657776846890989a759ba2973e427dff5c9bbn)
 const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
@@ -12,6 +12,9 @@ const ZERO_SALT = numberToBytes(0, { size: 32 })
 const FUND_PROXY_DEPLOYER_SIGNER_AMOUNT = 10000000000000000n
 const LIQUIDATION_OPERATION_TYPE = 0
 const ESCALATION_TIME_LENGTH = 4_233_600n
+const MIGRATION_TIME_LENGTH = 4_838_400n
+const TRUTH_AUCTION_TIME_LENGTH = 604_800n
+const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
 
 function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${ value.toString(16).padStart(40, '0') }`)
@@ -58,6 +61,15 @@ function isBigintTriple(value: unknown): value is [bigint, bigint, bigint] {
 
 function isBigintQuintuple(value: unknown): value is [bigint, bigint, bigint, bigint, bigint] {
 	return Array.isArray(value) && value.length === 5 && value.every(item => typeof item === 'bigint')
+}
+
+function isAuctionClearingTuple(value: unknown): value is [boolean, bigint, bigint, bigint] {
+	return Array.isArray(value)
+		&& value.length === 4
+		&& typeof value[0] === 'boolean'
+		&& typeof value[1] === 'bigint'
+		&& typeof value[2] === 'bigint'
+		&& typeof value[3] === 'bigint'
 }
 
 function isForkDataTuple(value: unknown): value is [bigint, Address, bigint, bigint, bigint, boolean, number] {
@@ -932,6 +944,293 @@ export async function settleOracleReport(client: MarketWriteClient, reportId: bi
 		action: 'settle',
 		hash,
 	} satisfies OpenOracleActionResult
+}
+
+export async function loadForkAuctionDetails(client: ContractReadClient, securityPoolAddress: Address): Promise<ForkAuctionDetails> {
+	const [
+		questionId,
+		parentSecurityPoolAddress,
+		universeId,
+		systemStateValue,
+		truthAuctionAddress,
+		completeSetCollateralAmount,
+		forkData,
+		block,
+		questionOutcome,
+	] = await Promise.all([
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'questionId',
+			address: securityPoolAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'parent',
+			address: securityPoolAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'universeId',
+			address: securityPoolAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'systemState',
+			address: securityPoolAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'truthAuction',
+			address: securityPoolAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'completeSetCollateralAmount',
+			address: securityPoolAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'forkData',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		}),
+		client.getBlock(),
+		client.readContract({
+			abi: QUESTION_OUTCOME_ABI,
+			functionName: 'getQuestionOutcome',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		}),
+	])
+	if (!isForkDataTuple(forkData)) throw new Error('Unexpected fork data response')
+	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
+	const marketDetails = await loadMarketDetails(client, questionId)
+	const [repAtFork, , truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, forkOwnSecurityPool, forkOutcomeIndex] = forkData
+	const systemState = getSecurityPoolSystemState(systemStateValue)
+	const migrationEndsAt = truthAuctionStartedAt > 0n ? undefined : (await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'getForkTime',
+		address: getInfraContractAddresses().zoltar,
+		args: [universeId],
+	})) + MIGRATION_TIME_LENGTH
+
+	let truthAuction: TruthAuctionMetrics | undefined
+	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
+		const [computeClearingResult, ethRaiseCap, ethRaised, finalized, maxRepBeingSold, minBidSize, totalRepPurchased, underfunded] = await Promise.all([
+			client.readContract({
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'computeClearing',
+				address: truthAuctionAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'ethRaiseCap',
+				address: truthAuctionAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'ethRaised',
+				address: truthAuctionAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'finalized',
+				address: truthAuctionAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'maxRepBeingSold',
+				address: truthAuctionAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'minBidSize',
+				address: truthAuctionAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'totalRepPurchased',
+				address: truthAuctionAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'underfunded',
+				address: truthAuctionAddress,
+				args: [],
+			}),
+		])
+		if (!isAuctionClearingTuple(computeClearingResult)) throw new Error('Unexpected auction clearing response')
+		const [hitCap, clearingTick, accumulatedEth, ethAtClearingTick] = computeClearingResult
+		const clearingPrice = clearingTick === 0n && accumulatedEth === 0n ? undefined : await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'tickToPrice',
+			address: truthAuctionAddress,
+			args: [clearingTick],
+		})
+
+		truthAuction = {
+			accumulatedEth,
+			auctionEndsAt: truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH,
+			clearingPrice,
+			clearingTick,
+			ethAtClearingTick,
+			ethRaiseCap,
+			ethRaised,
+			finalized,
+			hitCap,
+			maxRepBeingSold,
+			minBidSize,
+			repPurchasableAtBid: clearingPrice === undefined || clearingPrice === 0n ? undefined : (ethRaiseCap * 10n ** 18n) / clearingPrice,
+			timeRemaining: finalized ? 0n : block.timestamp >= truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH ? 0n : truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH - block.timestamp,
+			totalRepPurchased,
+			underfunded,
+		}
+	}
+
+	return {
+		auctionedSecurityBondAllowance,
+		claimingAvailable: systemState === 'operational' && truthAuctionAddress !== zeroAddress,
+		completeSetCollateralAmount,
+		currentTime: block.timestamp,
+		forkOutcome: getReportingOutcomeKey(forkOutcomeIndex),
+		forkOwnSecurityPool,
+		marketDetails,
+		migratedRep,
+		migrationEndsAt,
+		parentSecurityPoolAddress,
+		questionOutcome: getReportingOutcomeKey(questionOutcome),
+		repAtFork,
+		securityPoolAddress,
+		systemState,
+		truthAuction,
+		truthAuctionAddress,
+		truthAuctionStartedAt,
+		universeId,
+	}
+}
+
+async function executeForkAuctionAction(client: MarketWriteClient, action: ForkAuctionAction, securityPoolAddress: Address, universeId: bigint, request: () => Promise<Hash>) {
+	const hash = await request()
+	await client.waitForTransactionReceipt({ hash })
+	return {
+		action,
+		hash,
+		securityPoolAddress,
+		universeId,
+	} satisfies ForkAuctionActionResult
+}
+
+export async function forkZoltarWithOwnEscalation(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint) {
+	return await executeForkAuctionAction(client, 'forkWithOwnEscalation', securityPoolAddress, universeId, async () => await client.writeContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'forkZoltarWithOwnEscalationGame',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress],
+	}))
+}
+
+export async function initiateSecurityPoolFork(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint) {
+	return await executeForkAuctionAction(client, 'initiateFork', securityPoolAddress, universeId, async () => await client.writeContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'initiateSecurityPoolFork',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress],
+	}))
+}
+
+export async function createChildUniverseFromSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
+	return await executeForkAuctionAction(client, 'createChildUniverse', securityPoolAddress, universeId, async () => await client.writeContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'createChildUniverse',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
+	}))
+}
+
+export async function migrateRepToZoltarFromSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
+	return await executeForkAuctionAction(client, 'migrateRepToZoltar', securityPoolAddress, universeId, async () => await client.writeContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'migrateRepToZoltar',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress, outcomes.map(outcome => BigInt(getReportingOutcomeValue(outcome)))],
+	}))
+}
+
+export async function migrateSecurityVault(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
+	return await executeForkAuctionAction(client, 'migrateVault', securityPoolAddress, universeId, async () => await client.writeContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'migrateVault',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
+	}))
+}
+
+export async function migrateEscalationDeposits(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
+	return await executeForkAuctionAction(client, 'migrateEscalationDeposits', securityPoolAddress, universeId, async () => await client.writeContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'migrateFromEscalationGame',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress, vaultAddress, getReportingOutcomeValue(outcome), depositIndexes.map(value => Number(value))],
+	}))
+}
+
+export async function startTruthAuctionForSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint) {
+	return await executeForkAuctionAction(client, 'startTruthAuction', securityPoolAddress, universeId, async () => await client.writeContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'startTruthAuction',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress],
+	}))
+}
+
+export async function submitTruthAuctionBid(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, amount: bigint) {
+	return await executeForkAuctionAction(client, 'submitBid', securityPoolAddress, universeId, async () => await client.writeContract({
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'submitBid',
+		address: truthAuctionAddress,
+		args: [tick],
+		value: amount,
+	}))
+}
+
+export async function refundTruthAuctionBid(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, bidIndex: bigint) {
+	return await executeForkAuctionAction(client, 'refundLosingBids', securityPoolAddress, universeId, async () => await client.writeContract({
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'refundLosingBids',
+		address: truthAuctionAddress,
+		args: [[{ tick, bidIndex }]],
+	}))
+}
+
+export async function finalizeSecurityPoolTruthAuction(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint) {
+	return await executeForkAuctionAction(client, 'finalizeTruthAuction', securityPoolAddress, universeId, async () => await client.writeContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'finalizeTruthAuction',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress],
+	}))
+}
+
+export async function claimSecurityPoolAuctionProceeds(client: MarketWriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, tick: bigint, bidIndex: bigint) {
+	return await executeForkAuctionAction(client, 'claimAuctionProceeds', securityPoolAddress, universeId, async () => await client.writeContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'claimAuctionProceeds',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress, vaultAddress, [{ tick, bidIndex }]],
+	}))
 }
 
 export async function loadAllSecurityPools(client: ContractReadClient): Promise<ListedSecurityPool[]> {

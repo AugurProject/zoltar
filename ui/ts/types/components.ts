@@ -1,6 +1,6 @@
 import type { Address } from 'viem'
-import type { AccountState, MarketFormState, OpenOracleFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from './app.js'
-import type { DeploymentStatus, DeploymentStepId, ListedSecurityPool, MarketCreationResult, MarketDetails, OpenOracleActionResult, OracleManagerDetails, ReportingActionResult, ReportingDetails, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult } from './contracts.js'
+import type { AccountState, ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from './app.js'
+import type { DeploymentStatus, DeploymentStepId, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, OpenOracleActionResult, OracleManagerDetails, ReportingActionResult, ReportingDetails, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult } from './contracts.js'
 
 export type DeploymentSectionProps = {
 	title: string
@@ -42,6 +42,7 @@ export type OverviewPanelsProps = {
 export type TabNavigationProps = {
 	route: Route
 	deployRoute: string
+	forkAuctionRoute: string
 	marketRoute: string
 	openOracleRoute: string
 	reportingRoute: string
@@ -137,6 +138,28 @@ export type ReportingSectionProps = {
 	reportingResult: ReportingActionResult | undefined
 }
 
+export type ForkAuctionSectionProps = {
+	accountState: AccountState
+	forkAuctionDetails: ForkAuctionDetails | undefined
+	forkAuctionError: string | undefined
+	forkAuctionForm: ForkAuctionFormState
+	forkAuctionResult: ForkAuctionActionResult | undefined
+	loadingForkAuctionDetails: boolean
+	onClaimAuctionProceeds: () => void
+	onCreateChildUniverse: () => void
+	onFinalizeTruthAuction: () => void
+	onForkAuctionFormChange: (update: Partial<ForkAuctionFormState>) => void
+	onForkWithOwnEscalation: () => void
+	onInitiateFork: () => void
+	onLoadForkAuction: () => void
+	onMigrateEscalationDeposits: () => void
+	onMigrateRepToZoltar: () => void
+	onMigrateVault: () => void
+	onRefundLosingBids: () => void
+	onStartTruthAuction: () => void
+	onSubmitBid: () => void
+}
+
 export type MainnetGateSectionProps = {
 	message: string
 }
@@ -154,11 +177,13 @@ export type AppRouteContentProps = {
 	liquidationTargetVault: string
 	loadMarket: () => void
 	loadMarketById: (marketId: string) => Promise<void>
+	loadForkAuction: () => void
 	loadOracleManager: () => void
 	loadReporting: () => void
 	loadSecurityPools: () => void
 	loadSecurityVault: () => void
 	loadingMarketDetails: boolean
+	loadingForkAuctionDetails: boolean
 	loadingOracleManager: boolean
 	loadingReportingDetails: boolean
 	loadingSecurityPools: boolean
@@ -172,8 +197,14 @@ export type AppRouteContentProps = {
 	onApproveToken1: () => void
 	onApproveToken2: () => void
 	onCreateCompleteSet: () => void
+	onClaimAuctionProceeds: () => void
+	onCreateChildUniverse: () => void
 	onDeployNextMissing: () => void
 	onDepositRep: () => void
+	onFinalizeTruthAuction: () => void
+	onForkAuctionFormChange: (update: Partial<ForkAuctionFormState>) => void
+	onForkWithOwnEscalation: () => void
+	onInitiateFork: () => void
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTargetVaultChange: (value: string) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
@@ -191,13 +222,23 @@ export type AppRouteContentProps = {
 	onReportingFormChange: (update: Partial<ReportingFormState>) => void
 	onTradingFormChange: (update: Partial<TradingFormState>) => void
 	onSettleReport: () => void
+	onStartTruthAuction: () => void
+	onSubmitBid: () => void
 	onSubmitInitialReport: () => void
 	onUpdateVaultFees: () => void
 	onWithdrawEscalation: () => void
+	onMigrateEscalationDeposits: () => void
+	onMigrateRepToZoltar: () => void
+	onMigrateVault: () => void
+	onRefundLosingBids: () => void
 	openOracleError: string | undefined
 	openOracleForm: OpenOracleFormState
 	openOracleResult: OpenOracleActionResult | undefined
 	oracleManagerDetails: OracleManagerDetails | undefined
+	forkAuctionDetails: ForkAuctionDetails | undefined
+	forkAuctionError: string | undefined
+	forkAuctionForm: ForkAuctionFormState
+	forkAuctionResult: ForkAuctionActionResult | undefined
 	reportingDetails: ReportingDetails | undefined
 	reportingError: string | undefined
 	reportingForm: ReportingFormState

@@ -5,6 +5,7 @@ import { HeroSection } from './components/HeroSection.js'
 import { OverviewPanels } from './components/OverviewPanels.js'
 import { TabNavigation } from './components/TabNavigation.js'
 import { useDeploymentFlow } from './hooks/useDeploymentFlow.js'
+import { useForkAuctionOperations } from './hooks/useForkAuctionOperations.js'
 import { useHashRoute } from './hooks/useHashRoute.js'
 import { useMarketCreation } from './hooks/useMarketCreation.js'
 import { useOnchainState } from './hooks/useOnchainState.js'
@@ -14,12 +15,13 @@ import { useSecurityPoolCreation } from './hooks/useSecurityPoolCreation.js'
 import { useSecurityPoolsOverview } from './hooks/useSecurityPoolsOverview.js'
 import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from './hooks/useTradingOperations.js'
+import { assertNever } from './lib/assert.js'
 import { getDeploymentSections } from './lib/deployment.js'
-import { DEPLOY_ROUTE, MARKET_ROUTE, OPEN_ORACLE_ROUTE, REPORTING_ROUTE, SECURITY_POOLS_OVERVIEW_ROUTE, SECURITY_POOL_ROUTE, SECURITY_VAULT_ROUTE, TRADING_ROUTE } from './lib/routing.js'
+import { DEPLOY_ROUTE, FORK_AUCTION_ROUTE, MARKET_ROUTE, OPEN_ORACLE_ROUTE, REPORTING_ROUTE, SECURITY_POOLS_OVERVIEW_ROUTE, SECURITY_POOL_ROUTE, SECURITY_VAULT_ROUTE, TRADING_ROUTE } from './lib/routing.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
 import type { Route } from './types/app.js'
 
-function getUniverseLabel(route: Route, securityPoolsUniverseIds: bigint[], reportingUniverseId: bigint | undefined, securityVaultUniverseId: bigint | undefined, tradingUniverseId: bigint | undefined) {
+function getUniverseLabel(route: Route, securityPoolsUniverseIds: bigint[], reportingUniverseId: bigint | undefined, securityVaultUniverseId: bigint | undefined, tradingUniverseId: bigint | undefined, forkAuctionUniverseId: bigint | undefined) {
 	switch (route) {
 		case 'deploy':
 		case 'markets':
@@ -34,6 +36,10 @@ function getUniverseLabel(route: Route, securityPoolsUniverseIds: bigint[], repo
 			return formatUniverseCollectionLabel(reportingUniverseId === undefined ? [] : [reportingUniverseId])
 		case 'trading':
 			return formatUniverseCollectionLabel(tradingUniverseId === undefined ? [] : [tradingUniverseId])
+		case 'fork-auctions':
+			return formatUniverseCollectionLabel(forkAuctionUniverseId === undefined ? [] : [forkAuctionUniverseId])
+		default:
+			return assertNever(route)
 	}
 }
 
@@ -100,12 +106,19 @@ export function App() {
 		},
 		refreshState,
 	})
+	const { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkAuctionDetails, forkAuctionError, forkAuctionForm, forkAuctionResult, forkWithOwnEscalation, initiateFork, loadForkAuction, loadingForkAuctionDetails, migrateEscalation, migrateRepToZoltar, migrateVault, refundLosingBids, setForkAuctionForm, startTruthAuction, submitBid } = useForkAuctionOperations({
+		accountAddress: accountState.address,
+		onTransaction: hash => {
+			lastTransactionHash.value = hash
+		},
+		refreshState,
+	})
 
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
 	const lastCreatedQuestionId = marketResult?.questionId
 	const wrongNetworkMessage = accountState.address !== undefined && !accountState.isMainnet ? 'This application requires Ethereum mainnet. Switch your wallet to Ethereum mainnet before using deployment, market, oracle, reporting, vault, pool, or trading actions.' : undefined
-	const universeLabel = getUniverseLabel(route, securityPools.map(pool => pool.universeId), reportingDetails?.universeId, securityVaultDetails?.universeId, tradingResult?.universeId)
+	const universeLabel = getUniverseLabel(route, securityPools.map(pool => pool.universeId), reportingDetails?.universeId, securityVaultDetails?.universeId, tradingResult?.universeId, forkAuctionDetails?.universeId)
 
 	return (
 		<main>
@@ -121,7 +134,7 @@ export function App() {
 
 			<OverviewPanels accountState={accountState} deploymentStatuses={deploymentStatuses} busyStepId={busyStepId} onDeployNextMissing={() => void deployNextMissing()} universeLabel={universeLabel} />
 
-			<TabNavigation route={route} deployRoute={DEPLOY_ROUTE} marketRoute={MARKET_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} reportingRoute={REPORTING_ROUTE} securityPoolRoute={SECURITY_POOL_ROUTE} securityPoolsOverviewRoute={SECURITY_POOLS_OVERVIEW_ROUTE} securityVaultRoute={SECURITY_VAULT_ROUTE} tradingRoute={TRADING_ROUTE} onRouteChange={navigate} />
+			<TabNavigation route={route} deployRoute={DEPLOY_ROUTE} forkAuctionRoute={FORK_AUCTION_ROUTE} marketRoute={MARKET_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} reportingRoute={REPORTING_ROUTE} securityPoolRoute={SECURITY_POOL_ROUTE} securityPoolsOverviewRoute={SECURITY_POOLS_OVERVIEW_ROUTE} securityVaultRoute={SECURITY_VAULT_ROUTE} tradingRoute={TRADING_ROUTE} onRouteChange={navigate} />
 
 			<AppRouteContent
 				accountState={accountState}
@@ -134,6 +147,7 @@ export function App() {
 				lastCreatedQuestionId={lastCreatedQuestionId}
 				liquidationAmount={liquidationAmount}
 				liquidationTargetVault={liquidationTargetVault}
+				loadForkAuction={() => void loadForkAuction()}
 				loadMarket={() => void loadMarket()}
 				loadMarketById={loadMarketById}
 				loadOracleManager={() => void loadOracleManager()}
@@ -141,6 +155,7 @@ export function App() {
 				loadSecurityPools={() => void loadSecurityPools()}
 				loadSecurityVault={() => void loadSecurityVault()}
 				loadingMarketDetails={loadingMarketDetails}
+				loadingForkAuctionDetails={loadingForkAuctionDetails}
 				loadingOracleManager={loadingOracleManager}
 				loadingReportingDetails={loadingReportingDetails}
 				loadingSecurityPools={loadingSecurityPools}
@@ -154,8 +169,14 @@ export function App() {
 				onApproveToken1={() => void approveToken1()}
 				onApproveToken2={() => void approveToken2()}
 				onCreateCompleteSet={() => void createCompleteSet()}
+				onClaimAuctionProceeds={() => void claimAuctionProceeds()}
+				onCreateChildUniverse={() => void createChildUniverse()}
 				onDeployNextMissing={() => void deployNextMissing()}
 				onDepositRep={() => void depositRep()}
+				onFinalizeTruthAuction={() => void finalizeTruthAuction()}
+				onForkAuctionFormChange={update => setForkAuctionForm(current => ({ ...current, ...update }))}
+				onForkWithOwnEscalation={() => void forkWithOwnEscalation()}
+				onInitiateFork={() => void initiateFork()}
 				onLiquidationAmountChange={setLiquidationAmount}
 				onLiquidationTargetVaultChange={setLiquidationTargetVault}
 				onQueueLiquidation={(managerAddress, securityPoolAddress) => void queueLiquidation(managerAddress, securityPoolAddress)}
@@ -172,10 +193,20 @@ export function App() {
 				onOpenOracleFormChange={update => setOpenOracleForm(current => ({ ...current, ...update }))}
 				onReportingFormChange={update => setReportingForm(current => ({ ...current, ...update }))}
 				onTradingFormChange={update => setTradingForm(current => ({ ...current, ...update }))}
+				onStartTruthAuction={() => void startTruthAuction()}
+				onSubmitBid={() => void submitBid()}
 				onSettleReport={() => void settleReport()}
 				onSubmitInitialReport={() => void submitInitialReport()}
 				onUpdateVaultFees={() => void updateVaultFees()}
 				onWithdrawEscalation={() => void withdrawEscalation()}
+				onMigrateEscalationDeposits={() => void migrateEscalation()}
+				onMigrateRepToZoltar={() => void migrateRepToZoltar()}
+				onMigrateVault={() => void migrateVault()}
+				onRefundLosingBids={() => void refundLosingBids()}
+				forkAuctionDetails={forkAuctionDetails}
+				forkAuctionError={forkAuctionError}
+				forkAuctionForm={forkAuctionForm}
+				forkAuctionResult={forkAuctionResult}
 				openOracleError={openOracleError}
 				openOracleForm={openOracleForm}
 				openOracleResult={openOracleResult}

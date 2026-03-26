@@ -1,4 +1,4 @@
-import type { MarketFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
+import type { ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
 
 function toDatetimeLocalValue(timestampMs: number) {
 	const date = new Date(timestampMs)
@@ -67,6 +67,21 @@ export function getDefaultReportingFormState(): ReportingFormState {
 		securityPoolAddress: '',
 		selectedOutcome: 'yes',
 		withdrawDepositIndexes: '',
+	}
+}
+
+export function getDefaultForkAuctionFormState(): ForkAuctionFormState {
+	return {
+		bidAmount: '0',
+		bidIndex: '0',
+		bidTick: '0',
+		claimVaultAddress: '',
+		depositIndexes: '',
+		refundBidIndex: '0',
+		refundTick: '0',
+		repMigrationOutcomes: 'yes',
+		securityPoolAddress: '',
+		selectedOutcome: 'yes',
 	}
 }
 

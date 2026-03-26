@@ -1,7 +1,7 @@
 import type { MarketType, ReportingOutcomeKey } from './contracts.js'
 import type { Address } from 'viem'
 
-export type Route = 'deploy' | 'markets' | 'security-pools' | 'security-pools-overview' | 'security-vaults' | 'open-oracle' | 'reporting' | 'trading'
+export type Route = 'deploy' | 'markets' | 'security-pools' | 'security-pools-overview' | 'security-vaults' | 'open-oracle' | 'reporting' | 'trading' | 'fork-auctions'
 
 export type AccountState = {
 	address: Address | undefined
@@ -60,4 +60,17 @@ export type ReportingFormState = {
 	securityPoolAddress: string
 	selectedOutcome: ReportingOutcomeKey
 	withdrawDepositIndexes: string
+}
+
+export type ForkAuctionFormState = {
+	bidAmount: string
+	bidIndex: string
+	bidTick: string
+	claimVaultAddress: string
+	depositIndexes: string
+	refundBidIndex: string
+	refundTick: string
+	repMigrationOutcomes: string
+	securityPoolAddress: string
+	selectedOutcome: ReportingOutcomeKey
 }

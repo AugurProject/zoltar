@@ -5,6 +5,7 @@ export type DeploymentStepId = 'proxyDeployer' | 'uniformPriceDualCapBatchAuctio
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
 export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
+export type ForkAuctionAction = 'forkWithOwnEscalation' | 'initiateFork' | 'createChildUniverse' | 'migrateRepToZoltar' | 'migrateVault' | 'migrateEscalationDeposits' | 'startTruthAuction' | 'submitBid' | 'refundLosingBids' | 'finalizeTruthAuction' | 'claimAuctionProceeds'
 
 export type QuestionData = {
 	title: string
@@ -165,6 +166,52 @@ export type ReportingActionResult = {
 	action: 'reportOutcome' | 'withdrawEscalation'
 	hash: Hash
 	outcome: ReportingOutcomeKey
+	securityPoolAddress: Address
+	universeId: bigint
+}
+
+export type TruthAuctionMetrics = {
+	accumulatedEth: bigint
+	auctionEndsAt: bigint | undefined
+	clearingPrice: bigint | undefined
+	clearingTick: bigint | undefined
+	ethAtClearingTick: bigint
+	ethRaiseCap: bigint
+	ethRaised: bigint
+	finalized: boolean
+	hitCap: boolean
+	maxRepBeingSold: bigint
+	minBidSize: bigint
+	repPurchasableAtBid: bigint | undefined
+	timeRemaining: bigint | undefined
+	totalRepPurchased: bigint
+	underfunded: boolean
+}
+
+export type ForkAuctionDetails = {
+	auctionedSecurityBondAllowance: bigint
+	claimingAvailable: boolean
+	completeSetCollateralAmount: bigint
+	currentTime: bigint
+	forkOutcome: ReportingOutcomeKey | 'none'
+	forkOwnSecurityPool: boolean
+	marketDetails: MarketDetails
+	migratedRep: bigint
+	migrationEndsAt: bigint | undefined
+	parentSecurityPoolAddress: Address
+	questionOutcome: ReportingOutcomeKey | 'none'
+	repAtFork: bigint
+	securityPoolAddress: Address
+	systemState: SecurityPoolSystemState
+	truthAuction: TruthAuctionMetrics | undefined
+	truthAuctionAddress: Address
+	truthAuctionStartedAt: bigint
+	universeId: bigint
+}
+
+export type ForkAuctionActionResult = {
+	action: ForkAuctionAction
+	hash: Hash
 	securityPoolAddress: Address
 	universeId: bigint
 }

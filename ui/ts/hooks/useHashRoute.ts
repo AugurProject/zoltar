@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { DEPLOY_ROUTE, ensureRouteHash, getCurrentRoute, MARKET_ROUTE, OPEN_ORACLE_ROUTE, REPORTING_ROUTE, SECURITY_POOLS_OVERVIEW_ROUTE, SECURITY_POOL_ROUTE, SECURITY_VAULT_ROUTE, TRADING_ROUTE } from '../lib/routing.js'
+import { DEPLOY_ROUTE, ensureRouteHash, FORK_AUCTION_ROUTE, getCurrentRoute, MARKET_ROUTE, OPEN_ORACLE_ROUTE, REPORTING_ROUTE, SECURITY_POOLS_OVERVIEW_ROUTE, SECURITY_POOL_ROUTE, SECURITY_VAULT_ROUTE, TRADING_ROUTE } from '../lib/routing.js'
 import { assertNever } from '../lib/assert.js'
 import { setSignalValue } from '../lib/signals.js'
 import type { Route } from '../types/app.js'
@@ -33,6 +33,9 @@ export function useHashRoute() {
 				return
 			case 'trading':
 				window.location.hash = TRADING_ROUTE
+				return
+			case 'fork-auctions':
+				window.location.hash = FORK_AUCTION_ROUTE
 				return
 			default:
 				assertNever(nextRoute)

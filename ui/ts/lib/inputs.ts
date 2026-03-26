@@ -53,3 +53,14 @@ export function parseReportingOutcomeInput(value: string): ReportingOutcomeKey {
 			throw new Error(`Unknown reporting outcome: ${ value }`)
 	}
 }
+
+export function parseReportingOutcomeListInput(value: string, label: string): ReportingOutcomeKey[] {
+	const values = value
+		.split(',')
+		.map(entry => entry.trim().toLowerCase())
+		.filter(entry => entry !== '')
+
+	if (values.length === 0) throw new Error(`${ label } is required`)
+
+	return values.map(entry => parseReportingOutcomeInput(entry))
+}
