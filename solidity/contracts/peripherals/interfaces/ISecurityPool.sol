@@ -112,6 +112,5 @@ interface ISecurityPoolFactory {
 	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction);
 	function deployOriginSecurityPool(uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice) external returns (ISecurityPool securityPool);
 	function securityPoolDeploymentCount() external view returns (uint256);
-	function securityPoolDeploymentAt(uint256 index) external view returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction, PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer, IShareToken shareToken, ISecurityPool parent, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount);
 	function securityPoolDeploymentsRange(uint256 startIndex, uint256 count) external view returns (SecurityPoolDeployment[] memory deployments);
 }

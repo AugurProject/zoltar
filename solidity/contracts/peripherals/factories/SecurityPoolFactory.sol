@@ -43,11 +43,6 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		return securityPoolDeployments.length;
 	}
 
-	function securityPoolDeploymentAt(uint256 index) external view returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction, PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer, IShareToken shareToken, ISecurityPool parent, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) {
-		SecurityPoolDeployment memory deployment = securityPoolDeployments[index];
-		return (deployment.securityPool, deployment.truthAuction, deployment.priceOracleManagerAndOperatorQueuer, deployment.shareToken, deployment.parent, deployment.universeId, deployment.questionId, deployment.securityMultiplier, deployment.currentRetentionRate, deployment.startingRepEthPrice, deployment.completeSetCollateralAmount);
-	}
-
 	function securityPoolDeploymentsRange(uint256 startIndex, uint256 count) external view returns (SecurityPoolDeployment[] memory deployments) {
 		require(startIndex <= securityPoolDeployments.length, 'range start out of bounds');
 		require(count <= securityPoolDeployments.length - startIndex, 'range end out of bounds');
