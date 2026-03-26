@@ -19,6 +19,41 @@ const GetBlockReturn = funtypes.Union(EthereumBlockHeader, EthereumBlockHeaderWi
 
 type StateOverrides = Readonly<Record<string, AccountOverride>>
 
+type JsonRpcSuccess = {
+	jsonrpc: string
+	id: number | string
+	result?: unknown
+	error?: { code: number; message: string; data?: unknown }
+}
+
+function isJsonRpcError(value: unknown): value is { code: number; message: string; data?: unknown } {
+	return typeof value === 'object' && value !== null && 'message' in value && typeof value.message === 'string'
+}
+
+function parseJsonRpcResponse(raw: unknown): JsonRpcSuccess {
+	if (typeof raw !== 'object' || raw === null) {
+		throw new Error('Invalid JSON-RPC response: not an object')
+	}
+	if (!('jsonrpc' in raw) || raw.jsonrpc !== '2.0') {
+		throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${ String('jsonrpc' in raw ? raw.jsonrpc : undefined) }'`)
+	}
+	if (!('id' in raw) || (typeof raw.id !== 'number' && typeof raw.id !== 'string')) {
+		throw new Error('Invalid JSON-RPC response: missing id field')
+	}
+	if ('error' in raw && raw.error !== undefined && !isJsonRpcError(raw.error)) {
+		throw new Error('Invalid JSON-RPC response: malformed error object')
+	}
+
+	return raw
+}
+
+function parseSnapshotId(value: unknown) {
+	if (typeof value !== 'string') {
+		throw new Error('Invalid anvil_snapshot response: expected string snapshot id')
+	}
+	return value
+}
+
 export interface AnvilWindowEthereum {
 	addStateOverrides: (stateOverrides: StateOverrides) => Promise<void>
 	manipulateTime: (blockTimeManipulation: BlockTimeManipulation) => Promise<void>
@@ -85,24 +120,9 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		})
 		if (!response.ok) throw new Error(`HTTP ${ response.status }: ${ response.statusText }`)
 		const raw = await response.json()
-		if (typeof raw !== 'object' || raw === null) {
-			throw new Error('Invalid JSON-RPC response: not an object')
-		}
-		const json = raw as {
-			jsonrpc: string
-			id: number | string
-			result?: unknown
-			error?: { code: number; message: string; data?: unknown }
-		}
+		const json = parseJsonRpcResponse(raw)
 
 		// Validate JSON-RPC response structure
-		if (json.jsonrpc !== '2.0') {
-			throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${ json.jsonrpc }'`)
-		}
-		if (json.id === undefined) {
-			throw new Error('Invalid JSON-RPC response: missing id field')
-		}
-
 		// Ensure exactly one of result or error is present (per JSON-RPC spec)
 		const hasResult = 'result' in json
 		const hasError = 'error' in json
@@ -224,7 +244,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 
 	const anvilSnapshot = async (): Promise<string> => {
 		const result = await request({ method: 'anvil_snapshot', params: [] })
-		return result as string
+		return parseSnapshotId(result)
 	}
 
 	const anvilRevert = async (snapshotId: string): Promise<void> => {

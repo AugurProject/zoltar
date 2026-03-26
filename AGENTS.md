@@ -53,6 +53,7 @@ Repeat the cycle iteratively after each fix to ensure clean builds and avoid acc
 - **Empty lines**: Do not have multiple consecutive empty lines (maximum 1).
 - **Consecutive spaces**: Do not have multiple consecutive spaces within a line. This is enforced by ESLint (`no-multi-spaces`).
 - **Non-null assertions**: Do not use the `!` operator. Instead, perform explicit undefined checks and throw an error if a value is unexpectedly undefined.
+- **Type casts**: Avoid using `as` casts unless they are truly necessary. Prefer narrower helper functions, explicit runtime checks, better generic typing, or inferred types first.
 - **Nullability**: Prefer `undefined` over `null` for absent optional values. Avoid introducing new `null` usage unless there is a strong external API reason.
 
 Prettier is configured to enforce these rules automatically. Run `bun run format` to format your code.

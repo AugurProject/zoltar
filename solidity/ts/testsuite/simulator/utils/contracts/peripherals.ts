@@ -56,15 +56,25 @@ interface ExtraReportData {
 	feeToken: boolean
 }
 
+function isOpenOracleExtraData(
+	value: ReadContractReturnType,
+): value is readonly [`0x${ string }`, `0x${ string }`, bigint, bigint, `0x${ string }`, `0x${ string }`, boolean, boolean, boolean] {
+	return Array.isArray(value) && value.length === 9
+}
+
 export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bigint): Promise<ExtraReportData> => {
-	const result = (await client.readContract({
+	const result = await client.readContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'extraData',
 		address: getInfraContractAddresses().openOracle,
 		args: [extraDataId],
-	})) as ReadContractReturnType
+	})
 
-	const [stateHash, callbackContract, numReports, callbackGasLimit, callbackSelector, protocolFeeRecipient, trackDisputes, keepFee, feeToken] = result as [`0x${ string }`, `0x${ string }`, bigint, bigint, `0x${ string }`, `0x${ string }`, boolean, boolean, boolean]
+	if (!isOpenOracleExtraData(result)) {
+		throw new Error('OpenOracle extraData returned an unexpected shape')
+	}
+
+	const [stateHash, callbackContract, numReports, callbackGasLimit, callbackSelector, protocolFeeRecipient, trackDisputes, keepFee, feeToken] = result
 
 	return {
 		stateHash,

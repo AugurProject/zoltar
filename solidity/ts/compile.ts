@@ -62,6 +62,10 @@ const CompileResult = funtypes.ReadonlyObject({
 	errors: funtypes.Union(funtypes.ReadonlyArray(CompileError), funtypes.Undefined),
 })
 
+const HashCache = funtypes.ReadonlyPartial({
+	hash: funtypes.String,
+})
+
 class CompilationError extends Error {
 	errors: string[]
 	constructor(errors: string[]) {
@@ -105,8 +109,10 @@ async function computeContractHash(sourceFiles: Map<string, string>): Promise<st
 	const hasher = createHash('sha256')
 
 	// Include compiler version to detect solc upgrades
-	const solcAny = solc as unknown as { version(): string }
-	hasher.update(solcAny.version())
+	if (!('version' in solc) || typeof solc.version !== 'function') {
+		throw new Error('solc.version is unavailable')
+	}
+	hasher.update(solc.version())
 	hasher.update('\n')
 
 	// Include compiler settings in the hash
@@ -128,10 +134,8 @@ async function loadHashCache(): Promise<{ hash: string | null }> {
 	try {
 		if (await exists(HASH_CACHE_PATH)) {
 			const data = await fs.readFile(HASH_CACHE_PATH, 'utf8')
-			const parsed = JSON.parse(data) as { hash?: string } | undefined
-			if (parsed) {
-				return { hash: parsed.hash ?? null }
-			}
+			const parsed = HashCache.parse(JSON.parse(data))
+			return { hash: parsed.hash ?? null }
 		}
 	} catch {
 		// ignore

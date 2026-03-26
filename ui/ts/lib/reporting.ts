@@ -1,8 +1,6 @@
 import type { EscalationSide, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 import { assertNever } from './assert.js'
 
-export const ESCALATION_TIME_LENGTH = 4_233_600n
-
 export const REPORTING_OUTCOME_OPTIONS: { key: ReportingOutcomeKey; label: string }[] = [
 	{ key: 'invalid', label: 'Invalid' },
 	{ key: 'yes', label: 'Yes' },

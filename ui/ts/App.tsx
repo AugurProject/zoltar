@@ -102,6 +102,7 @@ export function App() {
 							steps={section.steps}
 							allSteps={deploymentStatuses}
 							accountAddress={accountState.address}
+							isMainnet={accountState.isMainnet}
 							busyStepId={busyStepId}
 							onDeploy={deployStep}
 						/>
@@ -217,6 +218,7 @@ export function App() {
 							steps={section.steps}
 							allSteps={deploymentStatuses}
 							accountAddress={accountState.address}
+							isMainnet={accountState.isMainnet}
 							busyStepId={busyStepId}
 							onDeploy={deployStep}
 						/>

@@ -7,6 +7,7 @@ export type DeploymentSectionProps = {
 	steps: DeploymentStatus[]
 	allSteps: DeploymentStatus[]
 	accountAddress: Address | undefined
+	isMainnet: boolean
 	busyStepId: DeploymentStepId | undefined
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 }

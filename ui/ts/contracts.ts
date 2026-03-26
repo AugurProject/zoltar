@@ -7,6 +7,7 @@ const GENESIS_REPUTATION_TOKEN = bigintToAddress(0x221657776846890989a759ba2973e
 const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
+const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
 const ZERO_SALT = numberToBytes(0, { size: 32 })
 const FUND_PROXY_DEPLOYER_SIGNER_AMOUNT = 10000000000000000n
 const LIQUIDATION_OPERATION_TYPE = 0
@@ -14,6 +15,53 @@ const ESCALATION_TIME_LENGTH = 4_233_600n
 
 function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${ value.toString(16).padStart(40, '0') }`)
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null
+}
+
+function readOptionalBigint(record: Record<string, unknown>, key: string) {
+	const value = record[key]
+	return typeof value === 'bigint' ? value : undefined
+}
+
+function readOptionalAddress(record: Record<string, unknown>, key: string) {
+	const value = record[key]
+	return typeof value === 'string' ? getAddress(value) : undefined
+}
+
+function isStringArray(value: unknown): value is string[] {
+	return Array.isArray(value) && value.every(item => typeof item === 'string')
+}
+
+function isEscalationDepositPage(value: unknown): value is readonly { amount: bigint; cumulativeAmount: bigint; depositor: Address }[] {
+	return Array.isArray(value) && value.every(item => isObjectRecord(item) && typeof item['amount'] === 'bigint' && typeof item['cumulativeAmount'] === 'bigint' && typeof item['depositor'] === 'string')
+}
+
+function isQuestionTuple(value: unknown): value is [string, string, bigint, bigint, bigint, bigint, bigint, string] {
+	return Array.isArray(value)
+		&& value.length === 8
+		&& typeof value[0] === 'string'
+		&& typeof value[1] === 'string'
+		&& typeof value[2] === 'bigint'
+		&& typeof value[3] === 'bigint'
+		&& typeof value[4] === 'bigint'
+		&& typeof value[5] === 'bigint'
+		&& typeof value[6] === 'bigint'
+		&& typeof value[7] === 'string'
+}
+
+function isBigintTriple(value: unknown): value is [bigint, bigint, bigint] {
+	return Array.isArray(value) && value.length === 3 && value.every(item => typeof item === 'bigint')
+}
+
+function isBigintQuintuple(value: unknown): value is [bigint, bigint, bigint, bigint, bigint] {
+	return Array.isArray(value) && value.length === 5 && value.every(item => typeof item === 'bigint')
+}
+
+function hasTimestamp(value: unknown): value is { timestamp: bigint } {
+	return isObjectRecord(value) && typeof value['timestamp'] === 'bigint'
 }
 
 const getSecurityPoolUtilsAddress = () =>
@@ -177,7 +225,7 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			dependencies: [],
 			deploy: async client => {
 				const hash = await ensureProxyDeployerDeployed(client)
-				return hash ?? ('0x0000000000000000000000000000000000000000000000000000000000000000' as Hash)
+				return hash ?? ZERO_HASH
 			},
 		},
 		{
@@ -281,7 +329,7 @@ export async function loadGenesisRepBalance(client: BalanceReadClient, address: 
 		functionName: 'balanceOf',
 		address: GENESIS_REPUTATION_TOKEN,
 		args: [address],
-	})) as bigint
+	}))
 }
 
 function getDeploymentStep(id: DeploymentStepId) {
@@ -374,12 +422,13 @@ async function loadOutcomeLabels(client: ContractReadClient, questionId: bigint)
 	const outcomeLabels: string[] = []
 
 	while (true) {
-		const page = (await client.readContract({
+		const page = await client.readContract({
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'getOutcomeLabels',
 			address: getDeploymentStep('zoltarQuestionData').address,
 			args: [questionId, currentIndex, pageSize],
-		})) as string[]
+		})
+		if (!isStringArray(page)) throw new Error('Unexpected outcome labels response')
 
 		const labels = page.filter(label => label.length > 0)
 		outcomeLabels.push(...labels)
@@ -396,12 +445,13 @@ async function loadEscalationDeposits(client: ContractReadClient, escalationGame
 	const deposits: EscalationDeposit[] = []
 
 	while (true) {
-		const page = (await client.readContract({
+		const page = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getDepositsByOutcome',
 			args: [getReportingOutcomeValue(outcome), currentIndex, pageSize],
-		})) as readonly { amount: bigint; cumulativeAmount: bigint; depositor: Address }[]
+		})
+		if (!isEscalationDepositPage(page)) throw new Error('Unexpected escalation deposits response')
 
 		const normalizedPage = page
 			.map((deposit, index) => ({
@@ -421,12 +471,14 @@ async function loadEscalationDeposits(client: ContractReadClient, escalationGame
 }
 
 export async function loadMarketDetails(client: ContractReadClient, questionId: bigint): Promise<MarketDetails> {
-	const [title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit] = (await client.readContract({
+	const question = await client.readContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'questions',
 		address: getDeploymentStep('zoltarQuestionData').address,
 		args: [questionId],
-	})) as [string, string, bigint, bigint, bigint, bigint, bigint, string]
+	})
+	if (!isQuestionTuple(question)) throw new Error('Unexpected question data response')
+	const [title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit] = question
 
 	const exists = title !== '' || description !== '' || startTime !== 0n || endTime !== 0n || numTicks !== 0n
 	const outcomeLabels = exists ? await loadOutcomeLabels(client, questionId) : []
@@ -453,19 +505,19 @@ export async function loadReportingDetails(client: ContractReadClient, securityP
 			functionName: 'questionId',
 			address: securityPoolAddress,
 			args: [],
-		}) as Promise<bigint>,
+		}),
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'escalationGame',
 			address: securityPoolAddress,
 			args: [],
-		}) as Promise<Address>,
+		}),
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'completeSetCollateralAmount',
 			address: securityPoolAddress,
 			args: [],
-		}) as Promise<bigint>,
+		}),
 	])
 
 	const [
@@ -483,45 +535,47 @@ export async function loadReportingDetails(client: ContractReadClient, securityP
 			functionName: 'startBond',
 			address: escalationGameAddress,
 			args: [],
-		}) as Promise<bigint>,
+		}),
 		client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'nonDecisionThreshold',
 			address: escalationGameAddress,
 			args: [],
-		}) as Promise<bigint>,
+		}),
 		client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'startingTime',
 			address: escalationGameAddress,
 			args: [],
-		}) as Promise<bigint>,
+		}),
 		client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'totalCost',
 			address: escalationGameAddress,
 			args: [],
-		}) as Promise<bigint>,
+		}),
 		client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'getBindingCapital',
 			address: escalationGameAddress,
 			args: [],
-		}) as Promise<bigint>,
+		}),
 		client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'getBalances',
 			address: escalationGameAddress,
 			args: [],
-		}) as Promise<[bigint, bigint, bigint]>,
+		}),
 		client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'getQuestionResolution',
 			address: escalationGameAddress,
 			args: [],
-		}) as Promise<number>,
-		client.getBlock() as Promise<{ timestamp: bigint }>,
+		}),
+		client.getBlock(),
 	])
+	if (!isBigintTriple(balances)) throw new Error('Unexpected escalation balances response')
+	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 
 	const marketDetails = await loadMarketDetails(client, questionId)
 	const [invalidDeposits, yesDeposits, noDeposits] = await Promise.all([
@@ -613,32 +667,33 @@ export async function loadSecurityVaultDetails(client: ContractReadClient, secur
 			functionName: 'currentRetentionRate',
 			address: securityPoolAddress,
 			args: [],
-		}) as Promise<bigint>,
+		}),
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'poolOwnershipDenominator',
 			address: securityPoolAddress,
 			args: [],
-		}) as Promise<bigint>,
+		}),
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'repToken',
 			address: securityPoolAddress,
 			args: [],
-		}) as Promise<Address>,
+		}),
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'totalSecurityBondAllowance',
 			address: securityPoolAddress,
 			args: [],
-		}) as Promise<bigint>,
+		}),
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'securityVaults',
 			address: securityPoolAddress,
 			args: [vaultAddress],
-		}) as Promise<[bigint, bigint, bigint, bigint, bigint]>,
+		}),
 	])
+	if (!isBigintQuintuple(vaultData)) throw new Error('Unexpected security vault response')
 
 	const [repDepositShare, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = vaultData
 
@@ -736,19 +791,19 @@ export async function loadOracleManagerDetails(client: ContractReadClient, manag
 			functionName: 'lastPrice',
 			address: managerAddress,
 			args: [],
-		}) as Promise<bigint>,
+		}),
 		client.readContract({
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 			functionName: 'pendingReportId',
 			address: managerAddress,
 			args: [],
-		}) as Promise<bigint>,
+		}),
 		client.readContract({
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 			functionName: 'getRequestPriceEthCost',
 			address: managerAddress,
 			args: [],
-		}) as Promise<bigint>,
+		}),
 	])
 
 	let callbackStateHash: Hex | undefined
@@ -762,14 +817,14 @@ export async function loadOracleManagerDetails(client: ContractReadClient, manag
 			functionName: 'extraData',
 			address: getInfraContractAddresses().openOracle,
 			args: [pendingReportId],
-		})) as readonly [Hex, Address, number, number, Hex, Address, boolean, boolean, boolean]
+		}))
 
 		const reportMeta = (await client.readContract({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'reportMeta',
 			address: getInfraContractAddresses().openOracle,
 			args: [pendingReportId],
-		})) as readonly [bigint, bigint, bigint, bigint, Address, number, Address, boolean, number, number, number, number]
+		}))
 
 		callbackStateHash = extraData[0]
 		exactToken1Report = reportMeta[0]
@@ -842,26 +897,17 @@ export async function loadAllSecurityPools(client: ContractReadClient) {
 	})
 
 	return logs.map((log: { args: Record<string, unknown> }) => {
-		const args = log.args as {
-			currentRetentionRate?: bigint
-			parent?: Address
-			priceOracleManagerAndOperatorQueuer?: Address
-			questionId?: bigint
-			securityMultiplier?: bigint
-			securityPool?: Address
-			startingRepEthPrice?: bigint
-			universeId?: bigint
-		}
+		const args = isObjectRecord(log.args) ? log.args : {}
 
 		return {
-			currentRetentionRate: args.currentRetentionRate ?? 0n,
-			managerAddress: args.priceOracleManagerAndOperatorQueuer ?? zeroAddress,
-			parent: args.parent ?? zeroAddress,
-			questionId: getQuestionIdHex(args.questionId ?? 0n),
-			securityMultiplier: args.securityMultiplier ?? 0n,
-			securityPoolAddress: args.securityPool ?? zeroAddress,
-			startingRepEthPrice: args.startingRepEthPrice ?? 0n,
-			universeId: args.universeId ?? 0n,
+			currentRetentionRate: readOptionalBigint(args, 'currentRetentionRate') ?? 0n,
+			managerAddress: readOptionalAddress(args, 'priceOracleManagerAndOperatorQueuer') ?? zeroAddress,
+			parent: readOptionalAddress(args, 'parent') ?? zeroAddress,
+			questionId: getQuestionIdHex(readOptionalBigint(args, 'questionId') ?? 0n),
+			securityMultiplier: readOptionalBigint(args, 'securityMultiplier') ?? 0n,
+			securityPoolAddress: readOptionalAddress(args, 'securityPool') ?? zeroAddress,
+			startingRepEthPrice: readOptionalBigint(args, 'startingRepEthPrice') ?? 0n,
+			universeId: readOptionalBigint(args, 'universeId') ?? 0n,
 		}
 	})
 }
