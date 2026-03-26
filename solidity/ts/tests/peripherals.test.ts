@@ -1,7 +1,7 @@
-import { test, beforeEach, describe } from 'bun:test'
+import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from 'node:assert'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
-import { useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
@@ -20,6 +20,8 @@ import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResoluti
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getRepTokensMigratedRepBalance, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
 import { peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
+
+setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Peripherals Contract Test Suite', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()

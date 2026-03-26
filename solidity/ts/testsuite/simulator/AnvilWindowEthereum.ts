@@ -1,7 +1,4 @@
-import { dateToBigintSeconds } from './utils/bigint'
-import { EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes } from './types/wire-types'
 import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types'
-import * as funtypes from 'funtypes'
 import { ensureDefined } from './utils/testUtils'
 import { ensureArray } from './utils/array-utils'
 
@@ -14,8 +11,9 @@ type AccountOverride = {
 	readonly code?: EthereumData
 }
 
-type GetBlockReturn = funtypes.Static<typeof GetBlockReturn>
-const GetBlockReturn = funtypes.Union(EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes)
+type GetBlockReturn = {
+	readonly timestamp: bigint
+}
 
 type StateOverrides = Readonly<Record<string, AccountOverride>>
 
@@ -52,6 +50,22 @@ function parseSnapshotId(value: unknown) {
 		throw new Error('Invalid anvil_snapshot response: expected string snapshot id')
 	}
 	return value
+}
+
+function parseBlock(value: unknown): GetBlockReturn {
+	if (typeof value !== 'object' || value === null) {
+		throw new Error('Invalid eth_getBlockByNumber response: block is not an object')
+	}
+	if (!('timestamp' in value) || typeof value.timestamp !== 'string') {
+		throw new Error('Invalid eth_getBlockByNumber response: missing timestamp')
+	}
+	if (!/^0x([a-fA-F0-9]{1,64})$/.test(value.timestamp)) {
+		throw new Error(`Invalid eth_getBlockByNumber response: invalid timestamp ${ value.timestamp }`)
+	}
+
+	return {
+		timestamp: BigInt(value.timestamp),
+	}
 }
 
 export interface AnvilWindowEthereum {
@@ -204,17 +218,12 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 
 	const getTime = async (): Promise<bigint> => {
 		const block = await getBlock()
-		if (block === null) {
-			throw new Error('Failed to get block')
-		}
-		// block.timestamp is a Date after parsing
-		return dateToBigintSeconds(block.timestamp)
+		return block.timestamp
 	}
 
 	const getBlock = async (): Promise<GetBlockReturn> => {
 		const raw = await request({ method: 'eth_getBlockByNumber', params: ['latest', false] })
-		// Parse the raw JSON through GetBlockReturn parser to convert timestamps, etc.
-		return GetBlockReturn.parse(raw)
+		return parseBlock(raw)
 	}
 
 	const advanceTime = async (amountInSeconds: bigint) => {

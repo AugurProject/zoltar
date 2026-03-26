@@ -86,23 +86,19 @@ export function getInfraContractAddresses() {
 
 async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key in keyof ReturnType<typeof getInfraContractAddresses>]: boolean }> {
 	const contractAddresses = getInfraContractAddresses()
-	type ContractKeys = keyof typeof contractAddresses
-
-	const contractKeys = Object.keys(contractAddresses) as ContractKeys[]
-
-	const contractExistencePairs = await Promise.all(
-		contractKeys.map(async key => {
-			const doesExist = await contractExists(client, contractAddresses[key])
-			return [key, doesExist] as const
-		}),
-	)
-
-	const contractExistenceObject: { [key in ContractKeys]: boolean } = {} as { [key in ContractKeys]: boolean }
-	contractExistencePairs.forEach(([key, doesExist]) => {
-		contractExistenceObject[key] = doesExist
-	})
-
-	return contractExistenceObject
+	return {
+		securityPoolUtils: await contractExists(client, contractAddresses.securityPoolUtils),
+		openOracle: await contractExists(client, contractAddresses.openOracle),
+		zoltar: await contractExists(client, contractAddresses.zoltar),
+		shareTokenFactory: await contractExists(client, contractAddresses.shareTokenFactory),
+		priceOracleManagerAndOperatorQueuerFactory: await contractExists(client, contractAddresses.priceOracleManagerAndOperatorQueuerFactory),
+		securityPoolForker: await contractExists(client, contractAddresses.securityPoolForker),
+		escalationGameFactory: await contractExists(client, contractAddresses.escalationGameFactory),
+		zoltarQuestionData: await contractExists(client, contractAddresses.zoltarQuestionData),
+		scalarOutcomes: await contractExists(client, contractAddresses.scalarOutcomes),
+		uniformPriceDualCapBatchAuctionFactory: await contractExists(client, contractAddresses.uniformPriceDualCapBatchAuctionFactory),
+		securityPoolFactory: await contractExists(client, contractAddresses.securityPoolFactory),
+	}
 }
 export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	const contractAddresses = getInfraContractAddresses()

@@ -17,11 +17,6 @@ export const bytes32String = (bytes32: bigint): `0x${ string }` => `0x${ bytes32
 
 export const abs = (x: bigint) => (x < 0n ? -1n * x : x)
 
-export function isHexEncodedNumber(input: string): boolean {
-	const hexNumberRegex = /^(0x)?[0-9a-fA-F]+$/
-	return hexNumberRegex.test(input)
-}
-
 export const dateToBigintSeconds = (date: Date) => BigInt(date.getTime()) / 1000n
 
 export const rpow = (x: bigint, exponent: bigint, baseUnit: bigint) => {

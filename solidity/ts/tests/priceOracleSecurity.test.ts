@@ -1,7 +1,7 @@
-import { test, beforeEach, describe } from 'bun:test'
+import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from 'node:assert'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
-import { useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
 import { TEST_ADDRESSES, DAY } from '../testsuite/simulator/utils/constants'
 import { addressString, dateToBigintSeconds } from '../testsuite/simulator/utils/bigint'
@@ -12,6 +12,8 @@ import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/cont
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { OperationType, getRequestPriceEthCost } from '../testsuite/simulator/utils/contracts/peripherals'
 import { peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer } from '../types/contractArtifact'
+
+setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Price Oracle Refund Security Tests', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()

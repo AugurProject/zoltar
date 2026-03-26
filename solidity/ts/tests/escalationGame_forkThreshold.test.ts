@@ -1,6 +1,6 @@
-import { test, beforeEach, describe } from 'bun:test'
+import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
-import { useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts } from '../testsuite/simulator/utils/utilities'
@@ -21,6 +21,8 @@ const DAY = 86400n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
 const FORK_THRESHOLD_DIVISOR = 20n
 const REP_TOTAL_SUPPLY_SLOT = '0x' + 5n.toString(16).padStart(64, '0')
+
+setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const getUserRepClaim = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
