@@ -31,6 +31,10 @@ export function SecurityVaultSection({ accountState, loadingSecurityVault, onApp
 									<strong>{securityVaultDetails.repToken}</strong>
 								</li>
 								<li>
+									<span>Universe</span>
+									<strong>{securityVaultDetails.universeId.toString()}</strong>
+								</li>
+								<li>
 									<span>REP Deposit Share</span>
 									<strong>{securityVaultDetails.repDepositShare.toString()}</strong>
 								</li>

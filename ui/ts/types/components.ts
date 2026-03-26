@@ -36,6 +36,7 @@ export type OverviewPanelsProps = {
 	deploymentStatuses: DeploymentStatus[]
 	busyStepId: DeploymentStepId | undefined
 	onDeployNextMissing: () => void
+	universeLabel: string
 }
 
 export type TabNavigationProps = {
@@ -134,4 +135,88 @@ export type ReportingSectionProps = {
 	reportingError: string | undefined
 	reportingForm: ReportingFormState
 	reportingResult: ReportingActionResult | undefined
+}
+
+export type MainnetGateSectionProps = {
+	message: string
+}
+
+export type AppRouteContentProps = {
+	accountState: AccountState
+	createMarket: () => void
+	createPool: () => void
+	deployNextMissing: () => void
+	deployStep: (stepId: DeploymentStepId) => Promise<void>
+	deploymentSections: { title: string; steps: DeploymentStatus[] }[]
+	deploymentStatuses: DeploymentStatus[]
+	lastCreatedQuestionId: string | undefined
+	liquidationAmount: string
+	liquidationTargetVault: string
+	loadMarket: () => void
+	loadMarketById: (marketId: string) => Promise<void>
+	loadOracleManager: () => void
+	loadReporting: () => void
+	loadSecurityPools: () => void
+	loadSecurityVault: () => void
+	loadingMarketDetails: boolean
+	loadingOracleManager: boolean
+	loadingReportingDetails: boolean
+	loadingSecurityPools: boolean
+	loadingSecurityVault: boolean
+	marketCreating: boolean
+	marketDetails: MarketDetails | undefined
+	marketError: string | undefined
+	marketForm: MarketFormState
+	marketResult: MarketCreationResult | undefined
+	onApproveRep: () => void
+	onApproveToken1: () => void
+	onApproveToken2: () => void
+	onCreateCompleteSet: () => void
+	onDeployNextMissing: () => void
+	onDepositRep: () => void
+	onLiquidationAmountChange: (value: string) => void
+	onLiquidationTargetVaultChange: (value: string) => void
+	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
+	onRedeemCompleteSet: () => void
+	onRedeemFees: () => void
+	onRedeemRep: () => void
+	onReportOutcome: () => void
+	onRequestPrice: () => void
+	onResetMarket: () => void
+	onRouteChange: (route: Route) => void
+	onSecurityPoolFormChange: (update: Partial<SecurityPoolFormState>) => void
+	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
+	onMarketFormChange: (update: Partial<MarketFormState>) => void
+	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
+	onReportingFormChange: (update: Partial<ReportingFormState>) => void
+	onTradingFormChange: (update: Partial<TradingFormState>) => void
+	onSettleReport: () => void
+	onSubmitInitialReport: () => void
+	onUpdateVaultFees: () => void
+	onWithdrawEscalation: () => void
+	openOracleError: string | undefined
+	openOracleForm: OpenOracleFormState
+	openOracleResult: OpenOracleActionResult | undefined
+	oracleManagerDetails: OracleManagerDetails | undefined
+	reportingDetails: ReportingDetails | undefined
+	reportingError: string | undefined
+	reportingForm: ReportingFormState
+	reportingResult: ReportingActionResult | undefined
+	route: Route
+	securityPoolCreating: boolean
+	securityPoolError: string | undefined
+	securityPoolForm: SecurityPoolFormState
+	securityPoolOverviewError: string | undefined
+	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
+	securityPoolResult: SecurityPoolCreationResult | undefined
+	securityPools: ListedSecurityPool[]
+	securityVaultDetails: SecurityVaultDetails | undefined
+	securityVaultError: string | undefined
+	securityVaultForm: SecurityVaultFormState
+	securityVaultResult: SecurityVaultActionResult | undefined
+	tradingError: string | undefined
+	tradingForm: TradingFormState
+	tradingResult: TradingActionResult | undefined
+	busyStepId: DeploymentStepId | undefined
+	wrongNetworkMessage: string | undefined
 }

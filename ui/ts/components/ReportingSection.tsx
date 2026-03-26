@@ -52,6 +52,10 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 										<strong>{reportingDetails.marketDetails.title}</strong>
 									</li>
 									<li>
+										<span>Universe</span>
+										<strong>{reportingDetails.universeId.toString()}</strong>
+									</li>
+									<li>
 										<span>Market End</span>
 										<strong>{formatTimestamp(reportingDetails.marketDetails.endTime)}</strong>
 									</li>
@@ -119,6 +123,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 							<p class="detail">Action: {reportingResult.action}</p>
 							<p class="detail">Outcome: {getReportingOutcomeLabel(reportingResult.outcome)}</p>
 							<p class="detail">Pool: {reportingResult.securityPoolAddress}</p>
+							<p class="detail">Universe: {reportingResult.universeId.toString()}</p>
 							<p class="detail">Transaction: {reportingResult.hash}</p>
 						</div>
 					)}

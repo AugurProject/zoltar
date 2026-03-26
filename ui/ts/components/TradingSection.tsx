@@ -18,6 +18,7 @@ export function TradingSection({ accountState, onCreateCompleteSet, onRedeemComp
 							<p class="panel-label">Latest Trading Action</p>
 							<p class="detail">Action: {tradingResult.action}</p>
 							<p class="detail">Pool: {tradingResult.securityPoolAddress}</p>
+							<p class="detail">Universe: {tradingResult.universeId.toString()}</p>
 							<p class="detail">Transaction: {tradingResult.hash}</p>
 						</div>
 					)}

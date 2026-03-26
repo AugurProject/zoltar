@@ -2,7 +2,7 @@ import { formatAddress, formatCurrencyBalance } from '../lib/formatters.js'
 import { getPrerequisiteLabel } from '../lib/deployment.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 
-export function OverviewPanels({ accountState, deploymentStatuses, busyStepId, onDeployNextMissing }: OverviewPanelsProps) {
+export function OverviewPanels({ accountState, deploymentStatuses, busyStepId, onDeployNextMissing, universeLabel }: OverviewPanelsProps) {
 	const deployedCount = deploymentStatuses.filter(step => step.deployed).length
 	const nextMissingStep = deploymentStatuses.find((step, index) => !step.deployed && getPrerequisiteLabel(deploymentStatuses, index) === undefined)
 
@@ -24,6 +24,10 @@ export function OverviewPanels({ accountState, deploymentStatuses, busyStepId, o
 					<div>
 						<span class="metric-label">REP</span>
 						<strong>{formatCurrencyBalance(accountState.repBalance)} REP</strong>
+					</div>
+					<div>
+						<span class="metric-label">Universe</span>
+						<strong>{universeLabel}</strong>
 					</div>
 				</div>
 			</article>

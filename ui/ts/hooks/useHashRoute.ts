@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useSignal } from '@preact/signals'
+import { useEffect } from 'preact/hooks'
 import { DEPLOY_ROUTE, ensureRouteHash, getCurrentRoute, MARKET_ROUTE, OPEN_ORACLE_ROUTE, REPORTING_ROUTE, SECURITY_POOLS_OVERVIEW_ROUTE, SECURITY_POOL_ROUTE, SECURITY_VAULT_ROUTE, TRADING_ROUTE } from '../lib/routing.js'
 import { assertNever } from '../lib/assert.js'
+import { setSignalValue } from '../lib/signals.js'
 import type { Route } from '../types/app.js'
 
 export function useHashRoute() {
-	const [route, setRoute] = useState<Route>(() => getCurrentRoute())
+	const route = useSignal<Route>(getCurrentRoute())
 
 	const navigate = (nextRoute: Route) => {
 		switch (nextRoute) {
@@ -39,10 +41,10 @@ export function useHashRoute() {
 
 	useEffect(() => {
 		ensureRouteHash()
-		setRoute(getCurrentRoute())
+		setSignalValue(route, getCurrentRoute())
 
 		const onHashChange = () => {
-			setRoute(getCurrentRoute())
+			setSignalValue(route, getCurrentRoute())
 		}
 
 		window.addEventListener('hashchange', onHashChange)
@@ -54,6 +56,6 @@ export function useHashRoute() {
 
 	return {
 		navigate,
-		route,
+		route: route.value,
 	}
 }

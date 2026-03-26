@@ -4,6 +4,7 @@ import type { createReadClient, createWriteClient } from '../lib/clients.js'
 export type DeploymentStepId = 'proxyDeployer' | 'uniformPriceDualCapBatchAuctionFactory' | 'scalarOutcomes' | 'securityPoolUtils' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'priceOracleManagerAndOperatorQueuerFactory' | 'securityPoolForker' | 'escalationGameFactory' | 'securityPoolFactory'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
+export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
 
 export type QuestionData = {
 	title: string
@@ -58,6 +59,7 @@ export type SecurityPoolCreationResult = {
 	deployPoolHash: Hash
 	questionId: string
 	securityMultiplier: bigint
+	universeId: bigint
 }
 
 export type SecurityVaultDetails = {
@@ -70,6 +72,7 @@ export type SecurityVaultDetails = {
 	securityPoolAddress: Address
 	totalSecurityBondAllowance: bigint
 	unpaidEthFees: bigint
+	universeId: bigint
 	vaultAddress: Address
 }
 
@@ -97,12 +100,18 @@ export type OpenOracleActionResult = {
 
 export type ListedSecurityPool = {
 	currentRetentionRate: bigint
+	forkOutcome: ReportingOutcomeKey | 'none'
+	forkOwnSecurityPool: boolean
 	managerAddress: Address
+	migratedRep: bigint
 	parent: Address
 	questionId: string
 	securityMultiplier: bigint
 	securityPoolAddress: Address
 	startingRepEthPrice: bigint
+	systemState: SecurityPoolSystemState
+	truthAuctionAddress: Address
+	truthAuctionStartedAt: bigint
 	universeId: bigint
 }
 
@@ -116,6 +125,7 @@ export type TradingActionResult = {
 	action: 'createCompleteSet' | 'redeemCompleteSet'
 	hash: Hash
 	securityPoolAddress: Address
+	universeId: bigint
 }
 
 export type EscalationDeposit = {
@@ -148,6 +158,7 @@ export type ReportingDetails = {
 	startBond: bigint
 	startingTime: bigint
 	totalCost: bigint
+	universeId: bigint
 }
 
 export type ReportingActionResult = {
@@ -155,4 +166,5 @@ export type ReportingActionResult = {
 	hash: Hash
 	outcome: ReportingOutcomeKey
 	securityPoolAddress: Address
+	universeId: bigint
 }

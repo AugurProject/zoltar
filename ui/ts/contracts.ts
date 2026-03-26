@@ -1,7 +1,7 @@
 import { encodeAbiParameters, encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes, parseAbiItem, toHex, zeroAddress, type Address, type Hash, type Hex } from 'viem'
 import { ABIS } from './abis.js'
 import { ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_EscalationGame_EscalationGame, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from './contractArtifact.js'
-import type { BalanceReadClient, ContractReadClient, DeploymentClient, DeploymentReadClient, DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, MarketCreationResult, MarketDetails, MarketType, MarketWriteClient, OpenOracleActionResult, OracleManagerDetails, QuestionData, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult } from './types/contracts.js'
+import type { BalanceReadClient, ContractReadClient, DeploymentClient, DeploymentReadClient, DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, ListedSecurityPool, MarketCreationResult, MarketDetails, MarketType, MarketWriteClient, OpenOracleActionResult, OracleManagerDetails, QuestionData, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityPoolSystemState, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult } from './types/contracts.js'
 
 const GENESIS_REPUTATION_TOKEN = bigintToAddress(0x221657776846890989a759ba2973e427dff5c9bbn)
 const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
@@ -58,6 +58,18 @@ function isBigintTriple(value: unknown): value is [bigint, bigint, bigint] {
 
 function isBigintQuintuple(value: unknown): value is [bigint, bigint, bigint, bigint, bigint] {
 	return Array.isArray(value) && value.length === 5 && value.every(item => typeof item === 'bigint')
+}
+
+function isForkDataTuple(value: unknown): value is [bigint, Address, bigint, bigint, bigint, boolean, number] {
+	return Array.isArray(value)
+		&& value.length === 7
+		&& typeof value[0] === 'bigint'
+		&& typeof value[1] === 'string'
+		&& typeof value[2] === 'bigint'
+		&& typeof value[3] === 'bigint'
+		&& typeof value[4] === 'bigint'
+		&& typeof value[5] === 'boolean'
+		&& typeof value[6] === 'number'
 }
 
 function hasTimestamp(value: unknown): value is { timestamp: bigint } {
@@ -410,6 +422,25 @@ function getEscalationSideLabel(key: ReportingOutcomeKey) {
 	}
 }
 
+function getSecurityPoolSystemState(value: bigint | number): SecurityPoolSystemState {
+	switch (value) {
+		case 0:
+		case 0n:
+			return 'operational'
+		case 1:
+		case 1n:
+			return 'poolForked'
+		case 2:
+		case 2n:
+			return 'forkMigration'
+		case 3:
+		case 3n:
+			return 'forkTruthAuction'
+		default:
+			throw new Error(`Unhandled security pool system state: ${ JSON.stringify(value) }`)
+	}
+}
+
 function getMarketType(questionData: QuestionData, outcomeLabels: string[]): MarketType {
 	if (outcomeLabels.length === 0 && questionData.numTicks > 0n) return 'scalar'
 	if (outcomeLabels.length === 2 && outcomeLabels[0] === 'Yes' && outcomeLabels[1] === 'No') return 'binary'
@@ -499,7 +530,7 @@ export async function loadMarketDetails(client: ContractReadClient, questionId: 
 }
 
 export async function loadReportingDetails(client: ContractReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
-	const [questionId, escalationGameAddress, completeSetCollateralAmount] = await Promise.all([
+	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId] = await Promise.all([
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'questionId',
@@ -515,6 +546,12 @@ export async function loadReportingDetails(client: ContractReadClient, securityP
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'completeSetCollateralAmount',
+			address: securityPoolAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'universeId',
 			address: securityPoolAddress,
 			args: [],
 		}),
@@ -605,6 +642,7 @@ export async function loadReportingDetails(client: ContractReadClient, securityP
 		startBond,
 		startingTime,
 		totalCost,
+		universeId,
 	}
 }
 
@@ -657,11 +695,12 @@ export async function createSecurityPool(
 		deployPoolHash,
 		questionId: getQuestionIdHex(parameters.questionId),
 		securityMultiplier: parameters.securityMultiplier,
+		universeId: 0n,
 	} satisfies SecurityPoolCreationResult
 }
 
 export async function loadSecurityVaultDetails(client: ContractReadClient, securityPoolAddress: Address, vaultAddress: Address): Promise<SecurityVaultDetails> {
-	const [currentRetentionRate, poolOwnershipDenominator, repToken, totalSecurityBondAllowance, vaultData] = await Promise.all([
+	const [currentRetentionRate, poolOwnershipDenominator, repToken, totalSecurityBondAllowance, universeId, vaultData] = await Promise.all([
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'currentRetentionRate',
@@ -688,6 +727,12 @@ export async function loadSecurityVaultDetails(client: ContractReadClient, secur
 		}),
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'universeId',
+			address: securityPoolAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'securityVaults',
 			address: securityPoolAddress,
 			args: [vaultAddress],
@@ -707,6 +752,7 @@ export async function loadSecurityVaultDetails(client: ContractReadClient, secur
 		securityPoolAddress,
 		totalSecurityBondAllowance: totalSecurityBondAllowance,
 		unpaidEthFees,
+		universeId,
 		vaultAddress,
 	}
 }
@@ -888,7 +934,7 @@ export async function settleOracleReport(client: MarketWriteClient, reportId: bi
 	} satisfies OpenOracleActionResult
 }
 
-export async function loadAllSecurityPools(client: ContractReadClient) {
+export async function loadAllSecurityPools(client: ContractReadClient): Promise<ListedSecurityPool[]> {
 	const logs = await client.getLogs({
 		address: getInfraContractAddresses().securityPoolFactory,
 		event: DEPLOY_SECURITY_POOL_EVENT,
@@ -896,20 +942,49 @@ export async function loadAllSecurityPools(client: ContractReadClient) {
 		toBlock: 'latest',
 	})
 
-	return logs.map((log: { args: Record<string, unknown> }) => {
+	return await Promise.all(logs.map(async (log: { args: Record<string, unknown> }) => {
 		const args = isObjectRecord(log.args) ? log.args : {}
+		const securityPoolAddress = readOptionalAddress(args, 'securityPool') ?? zeroAddress
+		const [systemState, truthAuctionAddress, forkData] = await Promise.all([
+			client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'systemState',
+				address: securityPoolAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'truthAuction',
+				address: securityPoolAddress,
+				args: [],
+			}),
+			client.readContract({
+				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				functionName: 'forkData',
+				address: getInfraContractAddresses().securityPoolForker,
+				args: [securityPoolAddress],
+			}),
+		])
+		if (!isForkDataTuple(forkData)) throw new Error('Unexpected fork data response')
+		const [, , truthAuctionStartedAt, migratedRep, , forkOwnSecurityPool, forkOutcomeIndex] = forkData
 
 		return {
 			currentRetentionRate: readOptionalBigint(args, 'currentRetentionRate') ?? 0n,
+			forkOutcome: getReportingOutcomeKey(forkOutcomeIndex),
+			forkOwnSecurityPool,
 			managerAddress: readOptionalAddress(args, 'priceOracleManagerAndOperatorQueuer') ?? zeroAddress,
+			migratedRep,
 			parent: readOptionalAddress(args, 'parent') ?? zeroAddress,
 			questionId: getQuestionIdHex(readOptionalBigint(args, 'questionId') ?? 0n),
 			securityMultiplier: readOptionalBigint(args, 'securityMultiplier') ?? 0n,
-			securityPoolAddress: readOptionalAddress(args, 'securityPool') ?? zeroAddress,
+			securityPoolAddress,
 			startingRepEthPrice: readOptionalBigint(args, 'startingRepEthPrice') ?? 0n,
+			systemState: getSecurityPoolSystemState(systemState),
+			truthAuctionAddress,
+			truthAuctionStartedAt,
 			universeId: readOptionalBigint(args, 'universeId') ?? 0n,
 		}
-	})
+	}))
 }
 
 export async function queueSecurityPoolLiquidation(client: MarketWriteClient, managerAddress: Address, targetVault: Address, amount: bigint, ethCost: bigint) {
@@ -925,6 +1000,12 @@ export async function queueSecurityPoolLiquidation(client: MarketWriteClient, ma
 }
 
 export async function createCompleteSetInSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, amount: bigint) {
+	const universeId = await client.readContract({
+		address: securityPoolAddress,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'universeId',
+		args: [],
+	})
 	const hash = await client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -937,10 +1018,17 @@ export async function createCompleteSetInSecurityPool(client: MarketWriteClient,
 		action: 'createCompleteSet',
 		hash,
 		securityPoolAddress,
+		universeId,
 	} satisfies TradingActionResult
 }
 
 export async function redeemCompleteSetInSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, amount: bigint) {
+	const universeId = await client.readContract({
+		address: securityPoolAddress,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'universeId',
+		args: [],
+	})
 	const hash = await client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -952,10 +1040,17 @@ export async function redeemCompleteSetInSecurityPool(client: MarketWriteClient,
 		action: 'redeemCompleteSet',
 		hash,
 		securityPoolAddress,
+		universeId,
 	} satisfies TradingActionResult
 }
 
 export async function reportOutcomeInSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amount: bigint) {
+	const universeId = await client.readContract({
+		address: securityPoolAddress,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'universeId',
+		args: [],
+	})
 	const hash = await client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -968,10 +1063,17 @@ export async function reportOutcomeInSecurityPool(client: MarketWriteClient, sec
 		hash,
 		outcome,
 		securityPoolAddress,
+		universeId,
 	} satisfies ReportingActionResult
 }
 
 export async function withdrawEscalationFromSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
+	const universeId = await client.readContract({
+		address: securityPoolAddress,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'universeId',
+		args: [],
+	})
 	const hash = await client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -984,5 +1086,6 @@ export async function withdrawEscalationFromSecurityPool(client: MarketWriteClie
 		hash,
 		outcome,
 		securityPoolAddress,
+		universeId,
 	} satisfies ReportingActionResult
 }

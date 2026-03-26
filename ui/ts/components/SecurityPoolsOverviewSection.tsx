@@ -45,7 +45,14 @@ export function SecurityPoolsOverviewSection({ accountState, liquidationAmount, 
 									<h3>{pool.securityPoolAddress}</h3>
 								</div>
 								<p class="detail">Question ID: {pool.questionId}</p>
+								<p class="detail">Universe: {pool.universeId.toString()}</p>
 								<p class="detail">Manager: {pool.managerAddress}</p>
+								<p class="detail">System state: {pool.systemState}</p>
+								<p class="detail">Truth auction: {pool.truthAuctionAddress}</p>
+								<p class="detail">Truth auction started: {pool.truthAuctionStartedAt === 0n ? 'Not started' : pool.truthAuctionStartedAt.toString()}</p>
+								<p class="detail">Fork mode: {pool.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent/Zoltar fork'}</p>
+								<p class="detail">Fork outcome: {pool.forkOutcome}</p>
+								<p class="detail">Migrated REP: {pool.migratedRep.toString()}</p>
 								<p class="detail">Security multiplier: {pool.securityMultiplier.toString()}</p>
 								<p class="detail">Retention rate: {pool.currentRetentionRate.toString()}</p>
 							</div>

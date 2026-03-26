@@ -76,6 +76,10 @@ export function SecurityPoolSection({ accountState, deploymentStatuses, lastCrea
 									<strong>{securityPoolResult.securityMultiplier.toString()}</strong>
 								</li>
 								<li>
+									<span>Universe</span>
+									<strong>{securityPoolResult.universeId.toString()}</strong>
+								</li>
+								<li>
 									<span>Deploy Pool Tx</span>
 									<strong>{securityPoolResult.deployPoolHash}</strong>
 								</li>

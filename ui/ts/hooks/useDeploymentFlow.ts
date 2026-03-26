@@ -1,9 +1,10 @@
-import { useState } from 'preact/hooks'
+import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { loadDeploymentStatuses } from '../contracts.js'
 import { createReadClient, createWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { findNextDeployableStep, getPrerequisiteLabel } from '../lib/deployment.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { setSignalValue } from '../lib/signals.js'
 import type { DeploymentStatus, DeploymentStepId } from '../types/contracts.js'
 
 type UseDeploymentFlowParameters = {
@@ -14,19 +15,19 @@ type UseDeploymentFlowParameters = {
 }
 
 export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransaction, refreshState }: UseDeploymentFlowParameters) {
-	const [busyStepId, setBusyStepId] = useState<DeploymentStepId | undefined>(undefined)
-	const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined)
+	const busyStepId = useSignal<DeploymentStepId | undefined>(undefined)
+	const errorMessage = useSignal<string | undefined>(undefined)
 
 	const deployStep = async (stepId: DeploymentStepId) => {
 		let ethereum
 		try {
 			ethereum = getRequiredInjectedEthereum()
 		} catch {
-			setErrorMessage('No injected wallet found')
+			setSignalValue(errorMessage, 'No injected wallet found')
 			return
 		}
 		if (accountAddress === undefined) {
-			setErrorMessage('Connect a wallet before deploying')
+			setSignalValue(errorMessage, 'Connect a wallet before deploying')
 			return
 		}
 
@@ -36,7 +37,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 
 		const prerequisiteLabel = getPrerequisiteLabel(latestStatuses, stepIndex)
 		if (prerequisiteLabel !== undefined) {
-			setErrorMessage(`Deploy ${ prerequisiteLabel } first`)
+			setSignalValue(errorMessage, `Deploy ${ prerequisiteLabel } first`)
 			return
 		}
 
@@ -46,8 +47,8 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 			return
 		}
 
-		setBusyStepId(step.id)
-		setErrorMessage(undefined)
+		setSignalValue(busyStepId, step.id)
+		setSignalValue(errorMessage, undefined)
 
 		try {
 			const client = createWriteClient(ethereum, accountAddress)
@@ -55,9 +56,9 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 			onTransaction(hash)
 			await refreshState()
 		} catch (error) {
-			setErrorMessage(getErrorMessage(error, `Failed to deploy ${ step.label }`))
+			setSignalValue(errorMessage, getErrorMessage(error, `Failed to deploy ${ step.label }`))
 		} finally {
-			setBusyStepId(undefined)
+			setSignalValue(busyStepId, undefined)
 		}
 	}
 
@@ -68,9 +69,9 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 	}
 
 	return {
-		busyStepId,
+		busyStepId: busyStepId.value,
 		deployNextMissing,
 		deployStep,
-		errorMessage,
+		errorMessage: errorMessage.value,
 	}
 }

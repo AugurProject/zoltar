@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useSignal } from '@preact/signals'
+import { useEffect } from 'preact/hooks'
 import { mainnet } from 'viem/chains'
 import { getDeploymentSteps, loadDeploymentStatuses, loadGenesisRepBalance } from '../contracts.js'
 import { getInjectedEthereum } from '../injectedEthereum.js'
 import { createReadClient, normalizeAccount } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { setSignalValue } from '../lib/signals.js'
 import type { AccountState } from '../types/app.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 
@@ -27,28 +29,28 @@ async function loadAccountBalances(readClient: ReturnType<typeof createReadClien
 }
 
 export function useOnchainState() {
-	const [accountState, setAccountState] = useState<AccountState>({
+	const accountState = useSignal<AccountState>({
 		address: undefined,
 		chainId: undefined,
 		ethBalance: undefined,
 		isMainnet: true,
 		repBalance: undefined,
 	})
-	const [deploymentStatuses, setDeploymentStatuses] = useState<DeploymentStatus[]>(() =>
+	const deploymentStatuses = useSignal<DeploymentStatus[]>(
 		getDeploymentSteps().map(step => ({
 			...step,
 			deployed: false,
 		})),
 	)
-	const [hasInjectedWallet, setHasInjectedWallet] = useState<boolean>(() => getInjectedEthereum() !== undefined)
-	const [isRefreshing, setIsRefreshing] = useState(false)
-	const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined)
+	const hasInjectedWallet = useSignal(getInjectedEthereum() !== undefined)
+	const isRefreshing = useSignal(false)
+	const errorMessage = useSignal<string | undefined>(undefined)
 
 	const refreshState = async () => {
 		const ethereum = getInjectedEthereum()
-		setHasInjectedWallet(ethereum !== undefined)
+		setSignalValue(hasInjectedWallet, ethereum !== undefined)
 
-		setIsRefreshing(true)
+		setSignalValue(isRefreshing, true)
 		try {
 			const readClient = createReadClient()
 			const accounts = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' })
@@ -57,34 +59,35 @@ export function useOnchainState() {
 
 			const [statuses, balances] = await Promise.all([loadDeploymentStatuses(readClient), loadAccountBalances(readClient, connectedAddress)])
 
-			setDeploymentStatuses(statuses)
-			setAccountState({
+			setSignalValue(deploymentStatuses, statuses)
+			setSignalValue(accountState, {
 				address: connectedAddress,
 				chainId,
 				ethBalance: balances.ethBalance,
 				isMainnet: chainId === DEFAULT_CHAIN_ID,
 				repBalance: balances.repBalance,
 			})
+			setSignalValue(errorMessage, undefined)
 		} catch (error) {
-			setErrorMessage(getErrorMessage(error, 'Failed to refresh wallet state'))
+			setSignalValue(errorMessage, getErrorMessage(error, 'Failed to refresh wallet state'))
 		} finally {
-			setIsRefreshing(false)
+			setSignalValue(isRefreshing, false)
 		}
 	}
 
 	const connectWallet = async () => {
 		const ethereum = getInjectedEthereum()
 		if (ethereum === undefined) {
-			setErrorMessage('No injected wallet found')
+			setSignalValue(errorMessage, 'No injected wallet found')
 			return
 		}
 
 		try {
-			setErrorMessage(undefined)
+			setSignalValue(errorMessage, undefined)
 			await ethereum.request({ method: 'eth_requestAccounts' })
 			await refreshState()
 		} catch (error) {
-			setErrorMessage(getErrorMessage(error, 'Wallet connection failed'))
+			setSignalValue(errorMessage, getErrorMessage(error, 'Wallet connection failed'))
 		}
 	}
 
@@ -113,12 +116,12 @@ export function useOnchainState() {
 	}, [])
 
 	return {
-		accountState,
+		accountState: accountState.value,
 		connectWallet,
-		deploymentStatuses,
-		errorMessage,
-		hasInjectedWallet,
-		isRefreshing,
+		deploymentStatuses: deploymentStatuses.value,
+		errorMessage: errorMessage.value,
+		hasInjectedWallet: hasInjectedWallet.value,
+		isRefreshing: isRefreshing.value,
 		refreshState,
 	}
 }
