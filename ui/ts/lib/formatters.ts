@@ -6,7 +6,8 @@ export function formatAddress(address: Address) {
 
 export function formatCurrencyBalance(value: bigint | undefined, units: number = 18) {
 	if (value === undefined) return 'Unavailable'
-	return units === 18 ? Number(formatEther(value)).toLocaleString(undefined, { maximumFractionDigits: 6 }) : Number(formatUnits(value, units)).toLocaleString(undefined, { maximumFractionDigits: 6 })
+	const formattedValue = units === 18 ? formatEther(value) : formatUnits(value, units)
+	return Number(formattedValue).toLocaleString(undefined, { maximumFractionDigits: 6 })
 }
 
 export function formatTimestamp(timestamp: bigint) {

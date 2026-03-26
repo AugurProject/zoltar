@@ -1115,7 +1115,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	}
 }
 
-async function executeForkAuctionAction(client: WriteClient, action: ForkAuctionAction | 'forkUniverse' | 'withdrawBids', securityPoolAddress: Address, universeId: bigint, request: () => Promise<Hash>) {
+async function executeForkAuctionAction(client: WriteClient, action: ForkAuctionAction, securityPoolAddress: Address, universeId: bigint, request: () => Promise<Hash>) {
 	const hash = await request()
 	await client.waitForTransactionReceipt({ hash })
 	return {

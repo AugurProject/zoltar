@@ -5,7 +5,7 @@ export type DeploymentStepId = 'proxyDeployer' | 'uniformPriceDualCapBatchAuctio
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
 export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
-export type ForkAuctionAction = 'forkWithOwnEscalation' | 'initiateFork' | 'createChildUniverse' | 'migrateRepToZoltar' | 'migrateVault' | 'migrateEscalationDeposits' | 'startTruthAuction' | 'submitBid' | 'refundLosingBids' | 'finalizeTruthAuction' | 'claimAuctionProceeds'
+export type ForkAuctionAction = 'forkWithOwnEscalation' | 'initiateFork' | 'createChildUniverse' | 'migrateRepToZoltar' | 'migrateVault' | 'migrateEscalationDeposits' | 'startTruthAuction' | 'submitBid' | 'refundLosingBids' | 'finalizeTruthAuction' | 'claimAuctionProceeds' | 'forkUniverse' | 'withdrawBids'
 export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
 
 export type QuestionData = {
@@ -208,7 +208,7 @@ export type ForkAuctionDetails = {
 }
 
 export type ForkAuctionActionResult = {
-	action: ForkAuctionAction | 'forkUniverse' | 'withdrawBids'
+	action: ForkAuctionAction
 	hash: Hash
 	securityPoolAddress: Address
 	universeId: bigint

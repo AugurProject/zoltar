@@ -7,7 +7,6 @@ export type AccountState = {
 	address: Address | undefined
 	chainId: string | undefined
 	ethBalance: bigint | undefined
-	isMainnet: boolean
 	repBalance: bigint | undefined
 }
 

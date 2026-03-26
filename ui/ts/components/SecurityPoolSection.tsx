@@ -1,36 +1,38 @@
 import { formatTimestamp } from '../lib/formatters.js'
+import { isMainnetChain } from '../lib/network.js'
 import type { SecurityPoolSectionProps } from '../types/components.js'
 
 export function SecurityPoolSection({ accountState, deploymentStatuses, lastCreatedQuestionId, loadingMarketDetails, marketDetails, onCreateSecurityPool, onLoadLatestMarket, onLoadMarket, onSecurityPoolFormChange, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult }: SecurityPoolSectionProps) {
+	const isMainnet = isMainnetChain(accountState.chainId)
 	const securityPoolFactoryStatus = deploymentStatuses.find(step => step.id === 'securityPoolFactory')
 
 	return (
-		<section class="panel market-panel">
-			<div class="market-header">
+		<section className="panel market-panel">
+			<div className="market-header">
 				<div>
-					<p class="panel-label">Security Pool Creation</p>
+					<p className="panel-label">Security Pool Creation</p>
 					<h2>Deploy a security pool for a binary market</h2>
-					<p class="detail">Load a market by ID to inspect it before deploying. Only binary markets can have origin security pools.</p>
+					<p className="detail">Load a market by ID to inspect it before deploying. Only binary markets can have origin security pools.</p>
 				</div>
 			</div>
 
-			<div class="market-grid">
-				<div class="market-column">
-					<div class="status-card">
-						<p class="panel-label">Required Contract</p>
-						<ul class="status-list">
+			<div className="market-grid">
+				<div className="market-column">
+					<div className="status-card">
+						<p className="panel-label">Required Contract</p>
+						<ul className="status-list">
 							<li>
 								<span>SecurityPoolFactory</span>
 								<strong>{securityPoolFactoryStatus?.deployed ? 'Ready' : 'Missing'}</strong>
 							</li>
 						</ul>
-						<p class="detail">Security pool factory address: {securityPoolFactoryStatus?.address ?? 'Unavailable'}</p>
+						<p className="detail">Security pool factory address: {securityPoolFactoryStatus?.address ?? 'Unavailable'}</p>
 					</div>
 
 					{marketDetails === undefined ? undefined : (
-						<div class="status-card">
-							<p class="panel-label">Loaded Market</p>
-							<ul class="status-list hashes">
+						<div className="status-card">
+							<p className="panel-label">Loaded Market</p>
+							<ul className="status-list hashes">
 								<li>
 									<span>Market ID</span>
 									<strong>{marketDetails.questionId}</strong>
@@ -52,21 +54,21 @@ export function SecurityPoolSection({ accountState, deploymentStatuses, lastCrea
 									<strong>{formatTimestamp(marketDetails.endTime)}</strong>
 								</li>
 							</ul>
-							<p class="detail">{marketDetails.description === '' ? 'No description provided.' : marketDetails.description}</p>
+							<p className="detail">{marketDetails.description === '' ? 'No description provided.' : marketDetails.description}</p>
 							{marketDetails.marketType === 'scalar' ? (
-								<p class="detail">
+								<p className="detail">
 									Scalar range: {marketDetails.displayValueMin.toString()} to {marketDetails.displayValueMax.toString()} {marketDetails.answerUnit}
 								</p>
 							) : (
-								<p class="detail">Outcomes: {marketDetails.outcomeLabels.join(', ') || 'None'}</p>
+								<p className="detail">Outcomes: {marketDetails.outcomeLabels.join(', ') || 'None'}</p>
 							)}
 						</div>
 					)}
 
 					{securityPoolResult === undefined ? undefined : (
-						<div class="status-card">
-							<p class="panel-label">Latest Security Pool</p>
-							<ul class="status-list hashes">
+						<div className="status-card">
+							<p className="panel-label">Latest Security Pool</p>
+							<ul className="status-list hashes">
 								<li>
 									<span>Market ID</span>
 									<strong>{securityPoolResult.questionId}</strong>
@@ -88,46 +90,46 @@ export function SecurityPoolSection({ accountState, deploymentStatuses, lastCrea
 					)}
 				</div>
 
-				<div class="market-column">
-					<div class="form-grid">
-						<label class="field">
+				<div className="market-column">
+					<div className="form-grid">
+						<label className="field">
 							<span>Market ID</span>
 							<input value={securityPoolForm.marketId} onInput={event => onSecurityPoolFormChange({ marketId: event.currentTarget.value })} placeholder="0x..." />
 						</label>
 
-						<div class="actions">
-							<button class="secondary" onClick={onLoadMarket} disabled={loadingMarketDetails}>
+						<div className="actions">
+							<button className="secondary" onClick={onLoadMarket} disabled={loadingMarketDetails}>
 								{loadingMarketDetails ? 'Loading Market...' : 'Load Market'}
 							</button>
-							<button class="secondary" onClick={onLoadLatestMarket} disabled={lastCreatedQuestionId === undefined}>
+							<button className="secondary" onClick={onLoadLatestMarket} disabled={lastCreatedQuestionId === undefined}>
 								Use Latest Market
 							</button>
 						</div>
 
-						<label class="field">
+						<label className="field">
 							<span>Security Multiplier</span>
 							<input value={securityPoolForm.securityMultiplier} onInput={event => onSecurityPoolFormChange({ securityMultiplier: event.currentTarget.value })} />
 						</label>
 
-						<label class="field">
+						<label className="field">
 							<span>Current Retention Rate</span>
 							<input value={securityPoolForm.currentRetentionRate} onInput={event => onSecurityPoolFormChange({ currentRetentionRate: event.currentTarget.value })} />
 						</label>
 
-						<label class="field">
+						<label className="field">
 							<span>Starting REP / ETH Price</span>
 							<input value={securityPoolForm.startingRepEthPrice} onInput={event => onSecurityPoolFormChange({ startingRepEthPrice: event.currentTarget.value })} />
 						</label>
 
-						<div class="actions">
-							<button onClick={onCreateSecurityPool} disabled={accountState.address === undefined || !accountState.isMainnet || securityPoolCreating || marketDetails?.marketType !== 'binary'}>
+						<div className="actions">
+							<button onClick={onCreateSecurityPool} disabled={accountState.address === undefined || !isMainnet || securityPoolCreating || marketDetails?.marketType !== 'binary'}>
 								{securityPoolCreating ? 'Creating Security Pool...' : 'Create Security Pool'}
 							</button>
 						</div>
 					</div>
 
-					{lastCreatedQuestionId === undefined ? undefined : <p class="detail">Latest created market ID: {lastCreatedQuestionId}</p>}
-					{securityPoolError === undefined ? undefined : <p class="notice error">{securityPoolError}</p>}
+					{lastCreatedQuestionId === undefined ? undefined : <p className="detail">Latest created market ID: {lastCreatedQuestionId}</p>}
+					{securityPoolError === undefined ? undefined : <p className="notice error">{securityPoolError}</p>}
 				</div>
 			</div>
 		</section>

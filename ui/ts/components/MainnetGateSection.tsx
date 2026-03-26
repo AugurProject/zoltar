@@ -2,12 +2,12 @@ import type { MainnetGateSectionProps } from '../types/components.js'
 
 export function MainnetGateSection({ message }: MainnetGateSectionProps) {
 	return (
-		<section class="panel market-panel">
-			<div class="market-header">
+		<section className="panel market-panel">
+			<div className="market-header">
 				<div>
-					<p class="panel-label">Wrong Network</p>
+					<p className="panel-label">Wrong Network</p>
 					<h2>Switch to Ethereum mainnet</h2>
-					<p class="detail">{message}</p>
+					<p className="detail">{message}</p>
 				</div>
 			</div>
 		</section>

@@ -1,26 +1,28 @@
 import { parseMarketTypeInput } from '../lib/inputs.js'
+import { isMainnetChain } from '../lib/network.js'
 import type { MarketSectionProps } from '../types/components.js'
 
 export function MarketSection({ accountState, deploymentStatuses, marketForm, marketCreating, marketResult, marketError, onMarketFormChange, onCreateMarket, onResetMarket }: MarketSectionProps) {
+	const isMainnet = isMainnetChain(accountState.chainId)
 	const zoltarQuestionDataStatus = deploymentStatuses.find(step => step.id === 'zoltarQuestionData')
 	const securityPoolFactoryStatus = deploymentStatuses.find(step => step.id === 'securityPoolFactory')
 	const requiresSecurityPool = marketForm.marketType === 'binary'
 
 	return (
-		<section class="panel market-panel">
-			<div class="market-header">
+		<section className="panel market-panel">
+			<div className="market-header">
 				<div>
-					<p class="panel-label">Market Creation</p>
+					<p className="panel-label">Market Creation</p>
 					<h2>Create binary, categorical, or scalar markets</h2>
-					<p class="detail">Binary markets create the question and deploy a security pool. Categorical and scalar markets create the question only.</p>
+					<p className="detail">Binary markets create the question and deploy a security pool. Categorical and scalar markets create the question only.</p>
 				</div>
 			</div>
 
-			<div class="market-grid">
-				<div class="market-column">
-					<div class="status-card">
-						<p class="panel-label">Required Contracts</p>
-						<ul class="status-list">
+			<div className="market-grid">
+				<div className="market-column">
+					<div className="status-card">
+						<p className="panel-label">Required Contracts</p>
+						<ul className="status-list">
 							<li>
 								<span>ZoltarQuestionData</span>
 								<strong>{zoltarQuestionDataStatus?.deployed ? 'Ready' : 'Missing'}</strong>
@@ -30,14 +32,14 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 								<strong>{requiresSecurityPool ? (securityPoolFactoryStatus?.deployed ? 'Ready' : 'Missing') : 'Optional'}</strong>
 							</li>
 						</ul>
-						<p class="detail">Question data address: {zoltarQuestionDataStatus?.address ?? 'Unavailable'}</p>
-						<p class="detail">Security pool factory address: {securityPoolFactoryStatus?.address ?? 'Unavailable'}</p>
+						<p className="detail">Question data address: {zoltarQuestionDataStatus?.address ?? 'Unavailable'}</p>
+						<p className="detail">Security pool factory address: {securityPoolFactoryStatus?.address ?? 'Unavailable'}</p>
 					</div>
 
 					{marketResult === undefined ? undefined : (
-						<div class="status-card">
-							<p class="panel-label">Latest Market</p>
-							<ul class="status-list hashes">
+						<div className="status-card">
+							<p className="panel-label">Latest Market</p>
+							<ul className="status-list hashes">
 								<li>
 									<span>Type</span>
 									<strong>{marketResult.marketType}</strong>
@@ -51,14 +53,14 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 									<strong>{marketResult.createQuestionHash}</strong>
 								</li>
 							</ul>
-							<p class="detail">Created market ID: {marketResult.questionId}</p>
+							<p className="detail">Created market ID: {marketResult.questionId}</p>
 						</div>
 					)}
 				</div>
 
-				<div class="market-column">
-					<div class="form-grid">
-						<label class="field">
+				<div className="market-column">
+					<div className="form-grid">
+						<label className="field">
 							<span>Market Type</span>
 							<select value={marketForm.marketType} onInput={event => onMarketFormChange({ marketType: parseMarketTypeInput(event.currentTarget.value) })}>
 								<option value="binary">Binary</option>
@@ -67,29 +69,29 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 							</select>
 						</label>
 
-						<label class="field">
+						<label className="field">
 							<span>Title</span>
 							<input value={marketForm.title} onInput={event => onMarketFormChange({ title: event.currentTarget.value })} placeholder="Will event X happen?" />
 						</label>
 
-						<label class="field">
+						<label className="field">
 							<span>Description</span>
 							<textarea value={marketForm.description} onInput={event => onMarketFormChange({ description: event.currentTarget.value })} placeholder="Optional market context" />
 						</label>
 
-						<div class="field-row">
-							<label class="field">
+						<div className="field-row">
+							<label className="field">
 								<span>Start Time</span>
 								<input type="datetime-local" value={marketForm.startTime} onInput={event => onMarketFormChange({ startTime: event.currentTarget.value })} />
 							</label>
-							<label class="field">
+							<label className="field">
 								<span>End Time</span>
 								<input type="datetime-local" value={marketForm.endTime} onInput={event => onMarketFormChange({ endTime: event.currentTarget.value })} />
 							</label>
 						</div>
 
 						{marketForm.marketType === 'categorical' ? (
-							<label class="field">
+							<label className="field">
 								<span>Outcome Labels</span>
 								<textarea value={marketForm.categoricalOutcomes} onInput={event => onMarketFormChange({ categoricalOutcomes: event.currentTarget.value })} placeholder={'One outcome per line\nApple\nBanana\nCherry'} />
 							</label>
@@ -97,29 +99,29 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 
 						{marketForm.marketType === 'scalar' ? (
 							<>
-								<div class="field-row">
-									<label class="field">
+								<div className="field-row">
+									<label className="field">
 										<span>Number Of Ticks</span>
 										<input value={marketForm.numTicks} onInput={event => onMarketFormChange({ numTicks: event.currentTarget.value })} />
 									</label>
-									<label class="field">
+									<label className="field">
 										<span>Answer Unit</span>
 										<input value={marketForm.answerUnit} onInput={event => onMarketFormChange({ answerUnit: event.currentTarget.value })} placeholder="USD" />
 									</label>
 								</div>
 
-								<div class="field-row">
-									<label class="field">
+								<div className="field-row">
+									<label className="field">
 										<span>Display Value Min</span>
 										<input value={marketForm.displayValueMin} onInput={event => onMarketFormChange({ displayValueMin: event.currentTarget.value })} />
 									</label>
-									<label class="field">
+									<label className="field">
 										<span>Display Value Max</span>
 										<input value={marketForm.displayValueMax} onInput={event => onMarketFormChange({ displayValueMax: event.currentTarget.value })} />
 									</label>
 								</div>
 
-								<label class="field">
+								<label className="field">
 									<span>Initial Scalar Reference Value</span>
 									<input value={marketForm.scalarStartValue} onInput={event => onMarketFormChange({ scalarStartValue: event.currentTarget.value })} />
 								</label>
@@ -128,35 +130,35 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 
 						{marketForm.marketType === 'binary' ? (
 							<>
-								<div class="field-row">
-									<label class="field">
+								<div className="field-row">
+									<label className="field">
 										<span>Security Multiplier</span>
 										<input value={marketForm.securityMultiplier} onInput={event => onMarketFormChange({ securityMultiplier: event.currentTarget.value })} />
 									</label>
-									<label class="field">
+									<label className="field">
 										<span>Current Retention Rate</span>
 										<input value={marketForm.currentRetentionRate} onInput={event => onMarketFormChange({ currentRetentionRate: event.currentTarget.value })} />
 									</label>
 								</div>
 
-								<label class="field">
+								<label className="field">
 									<span>Starting REP / ETH Price</span>
 									<input value={marketForm.startingRepEthPrice} onInput={event => onMarketFormChange({ startingRepEthPrice: event.currentTarget.value })} />
 								</label>
 							</>
 						) : undefined}
 
-						<div class="actions">
-							<button onClick={onCreateMarket} disabled={accountState.address === undefined || !accountState.isMainnet || marketCreating}>
+						<div className="actions">
+							<button onClick={onCreateMarket} disabled={accountState.address === undefined || !isMainnet || marketCreating}>
 								{marketCreating ? 'Creating Market...' : marketForm.marketType === 'binary' ? 'Create Market And Pool' : 'Create Question'}
 							</button>
-							<button class="secondary" onClick={onResetMarket}>
+							<button className="secondary" onClick={onResetMarket}>
 								Reset
 							</button>
 						</div>
 					</div>
 
-					{marketError === undefined ? undefined : <p class="notice error">{marketError}</p>}
+					{marketError === undefined ? undefined : <p className="notice error">{marketError}</p>}
 				</div>
 			</div>
 		</section>

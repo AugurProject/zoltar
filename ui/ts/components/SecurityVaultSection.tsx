@@ -1,23 +1,25 @@
 import { formatAddress } from '../lib/formatters.js'
+import { isMainnetChain } from '../lib/network.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
 export function SecurityVaultSection({ accountState, loadingSecurityVault, onApproveRep, onDepositRep, onLoadSecurityVault, onRedeemFees, onRedeemRep, onSecurityVaultFormChange, onUpdateVaultFees, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult }: SecurityVaultSectionProps) {
+	const isMainnet = isMainnetChain(accountState.chainId)
 	return (
-		<section class="panel market-panel">
-			<div class="market-header">
+		<section className="panel market-panel">
+			<div className="market-header">
 				<div>
-					<p class="panel-label">Security Vault</p>
+					<p className="panel-label">Security Vault</p>
 					<h2>Create and operate a security vault</h2>
-					<p class="detail">A vault is your position inside a security pool. Deposit REP to create one, then manage fees and redemptions from the connected wallet.</p>
+					<p className="detail">A vault is your position inside a security pool. Deposit REP to create one, then manage fees and redemptions from the connected wallet.</p>
 				</div>
 			</div>
 
-			<div class="market-grid">
-				<div class="market-column">
+			<div className="market-grid">
+				<div className="market-column">
 					{securityVaultDetails === undefined ? undefined : (
-						<div class="status-card">
-							<p class="panel-label">Vault Details</p>
-							<ul class="status-list hashes">
+						<div className="status-card">
+							<p className="panel-label">Vault Details</p>
+							<ul className="status-list hashes">
 								<li>
 									<span>Security Pool</span>
 									<strong>{securityVaultDetails.securityPoolAddress}</strong>
@@ -55,62 +57,62 @@ export function SecurityVaultSection({ accountState, loadingSecurityVault, onApp
 					)}
 
 					{securityVaultResult === undefined ? undefined : (
-						<div class="status-card">
-							<p class="panel-label">Latest Vault Action</p>
-							<p class="detail">Action: {securityVaultResult.action}</p>
-							<p class="detail">Transaction: {securityVaultResult.hash}</p>
+						<div className="status-card">
+							<p className="panel-label">Latest Vault Action</p>
+							<p className="detail">Action: {securityVaultResult.action}</p>
+							<p className="detail">Transaction: {securityVaultResult.hash}</p>
 						</div>
 					)}
 				</div>
 
-				<div class="market-column">
-					<div class="form-grid">
-						<label class="field">
+				<div className="market-column">
+					<div className="form-grid">
+						<label className="field">
 							<span>Security Pool Address</span>
 							<input value={securityVaultForm.securityPoolAddress} onInput={event => onSecurityVaultFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder="0x..." />
 						</label>
 
-						<p class="detail">Connected vault address: {accountState.address === undefined ? 'Connect wallet' : formatAddress(accountState.address)}</p>
+						<p className="detail">Connected vault address: {accountState.address === undefined ? 'Connect wallet' : formatAddress(accountState.address)}</p>
 
-						<div class="actions">
-							<button class="secondary" onClick={onLoadSecurityVault} disabled={loadingSecurityVault}>
+						<div className="actions">
+							<button className="secondary" onClick={onLoadSecurityVault} disabled={loadingSecurityVault}>
 								{loadingSecurityVault ? 'Loading Vault...' : 'Load Vault'}
 							</button>
 						</div>
 
-						<label class="field">
+						<label className="field">
 							<span>REP Approval Amount</span>
 							<input value={securityVaultForm.repApprovalAmount} onInput={event => onSecurityVaultFormChange({ repApprovalAmount: event.currentTarget.value })} />
 						</label>
 
-						<label class="field">
+						<label className="field">
 							<span>REP Deposit Amount</span>
 							<input value={securityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} />
 						</label>
 
-						<div class="actions">
-							<button class="secondary" onClick={onApproveRep} disabled={accountState.address === undefined || !accountState.isMainnet}>
+						<div className="actions">
+							<button className="secondary" onClick={onApproveRep} disabled={accountState.address === undefined || !isMainnet}>
 								Approve REP
 							</button>
-							<button onClick={onDepositRep} disabled={accountState.address === undefined || !accountState.isMainnet}>
+							<button onClick={onDepositRep} disabled={accountState.address === undefined || !isMainnet}>
 								Deposit REP
 							</button>
 						</div>
 
-						<div class="actions">
-							<button class="secondary" onClick={onUpdateVaultFees} disabled={accountState.address === undefined || !accountState.isMainnet}>
+						<div className="actions">
+							<button className="secondary" onClick={onUpdateVaultFees} disabled={accountState.address === undefined || !isMainnet}>
 								Update Vault Fees
 							</button>
-							<button class="secondary" onClick={onRedeemFees} disabled={accountState.address === undefined || !accountState.isMainnet}>
+							<button className="secondary" onClick={onRedeemFees} disabled={accountState.address === undefined || !isMainnet}>
 								Redeem Fees
 							</button>
-							<button class="secondary" onClick={onRedeemRep} disabled={accountState.address === undefined || !accountState.isMainnet}>
+							<button className="secondary" onClick={onRedeemRep} disabled={accountState.address === undefined || !isMainnet}>
 								Redeem REP
 							</button>
 						</div>
 					</div>
 
-					{securityVaultError === undefined ? undefined : <p class="notice error">{securityVaultError}</p>}
+					{securityVaultError === undefined ? undefined : <p className="notice error">{securityVaultError}</p>}
 				</div>
 			</div>
 		</section>

@@ -11,81 +11,81 @@ import { TradingSection } from './TradingSection.js'
 import { assertNever } from '../lib/assert.js'
 import type { AppRouteContentProps } from '../types/components.js'
 
-export function AppRouteContent(props: AppRouteContentProps) {
-	if (props.wrongNetworkMessage !== undefined) {
-		return <MainnetGateSection message={props.wrongNetworkMessage} />
+export function AppRouteContent({ deployment, forkAuction, market, openOracle, reporting, route, securityPool, securityPoolsOverview, securityVault, trading, wrongNetworkMessage }: AppRouteContentProps) {
+	if (wrongNetworkMessage !== undefined) {
+		return <MainnetGateSection message={wrongNetworkMessage} />
 	}
 
-	switch (props.route) {
+	switch (route) {
 		case 'deploy':
 			return (
 				<>
-					{props.deploymentSections.map(section => (
-						<DeploymentSection key={section.title} title={section.title} steps={section.steps} allSteps={props.deploymentStatuses} accountAddress={props.accountState.address} isMainnet={props.accountState.isMainnet} busyStepId={props.busyStepId} onDeploy={props.deployStep} />
+					{deployment.deploymentSections.map(section => (
+						<DeploymentSection key={section.title} title={section.title} steps={section.steps} allSteps={deployment.deploymentStatuses} accountAddress={deployment.accountAddress} isMainnet={deployment.isMainnet} busyStepId={deployment.busyStepId} onDeploy={deployment.onDeploy} />
 					))}
 				</>
 			)
 		case 'markets':
-			return <MarketSection accountState={props.accountState} deploymentStatuses={props.deploymentStatuses} marketForm={props.marketForm} marketCreating={props.marketCreating} marketResult={props.marketResult} marketError={props.marketError} onMarketFormChange={props.onMarketFormChange} onCreateMarket={props.createMarket} onResetMarket={props.onResetMarket} />
+			return <MarketSection accountState={market.accountState} deploymentStatuses={market.deploymentStatuses} marketForm={market.marketForm} marketCreating={market.marketCreating} marketResult={market.marketResult} marketError={market.marketError} onMarketFormChange={market.onMarketFormChange} onCreateMarket={market.createMarket} onResetMarket={market.onResetMarket} />
 		case 'security-pools':
 			return (
 				<SecurityPoolSection
-					accountState={props.accountState}
-					deploymentStatuses={props.deploymentStatuses}
-					lastCreatedQuestionId={props.lastCreatedQuestionId}
-					marketDetails={props.marketDetails}
-					loadingMarketDetails={props.loadingMarketDetails}
-					securityPoolCreating={props.securityPoolCreating}
-					securityPoolError={props.securityPoolError}
-					securityPoolForm={props.securityPoolForm}
-					securityPoolResult={props.securityPoolResult}
+					accountState={securityPool.accountState}
+					deploymentStatuses={securityPool.deploymentStatuses}
+					lastCreatedQuestionId={securityPool.lastCreatedQuestionId}
+					marketDetails={securityPool.marketDetails}
+					loadingMarketDetails={securityPool.loadingMarketDetails}
+					securityPoolCreating={securityPool.securityPoolCreating}
+					securityPoolError={securityPool.securityPoolError}
+					securityPoolForm={securityPool.securityPoolForm}
+					securityPoolResult={securityPool.securityPoolResult}
 					onLoadLatestMarket={() => {
-						if (props.lastCreatedQuestionId === undefined) return
-						props.onSecurityPoolFormChange({ marketId: props.lastCreatedQuestionId })
-						void props.loadMarketById(props.lastCreatedQuestionId)
+						if (securityPool.lastCreatedQuestionId === undefined) return
+						securityPool.onSecurityPoolFormChange({ marketId: securityPool.lastCreatedQuestionId })
+						void securityPool.loadMarketById(securityPool.lastCreatedQuestionId)
 					}}
-					onLoadMarket={props.loadMarket}
-					onSecurityPoolFormChange={props.onSecurityPoolFormChange}
-					onCreateSecurityPool={props.createPool}
+					onLoadMarket={securityPool.loadMarket}
+					onSecurityPoolFormChange={securityPool.onSecurityPoolFormChange}
+					onCreateSecurityPool={securityPool.createPool}
 				/>
 			)
 		case 'security-pools-overview':
-			return <SecurityPoolsOverviewSection accountState={props.accountState} liquidationAmount={props.liquidationAmount} liquidationTargetVault={props.liquidationTargetVault} loadingSecurityPools={props.loadingSecurityPools} onLiquidationAmountChange={props.onLiquidationAmountChange} onLiquidationTargetVaultChange={props.onLiquidationTargetVaultChange} onLoadSecurityPools={props.loadSecurityPools} onQueueLiquidation={props.onQueueLiquidation} securityPoolOverviewError={props.securityPoolOverviewError} securityPoolOverviewResult={props.securityPoolOverviewResult} securityPools={props.securityPools} />
+			return <SecurityPoolsOverviewSection accountState={securityPoolsOverview.accountState} liquidationAmount={securityPoolsOverview.liquidationAmount} liquidationTargetVault={securityPoolsOverview.liquidationTargetVault} loadingSecurityPools={securityPoolsOverview.loadingSecurityPools} onLiquidationAmountChange={securityPoolsOverview.onLiquidationAmountChange} onLiquidationTargetVaultChange={securityPoolsOverview.onLiquidationTargetVaultChange} onLoadSecurityPools={securityPoolsOverview.onLoadSecurityPools} onQueueLiquidation={securityPoolsOverview.onQueueLiquidation} securityPoolOverviewError={securityPoolsOverview.securityPoolOverviewError} securityPoolOverviewResult={securityPoolsOverview.securityPoolOverviewResult} securityPools={securityPoolsOverview.securityPools} />
 		case 'security-vaults':
-			return <SecurityVaultSection accountState={props.accountState} loadingSecurityVault={props.loadingSecurityVault} onApproveRep={props.onApproveRep} onDepositRep={props.onDepositRep} onLoadSecurityVault={props.loadSecurityVault} onRedeemFees={props.onRedeemFees} onRedeemRep={props.onRedeemRep} onSecurityVaultFormChange={props.onSecurityVaultFormChange} onUpdateVaultFees={props.onUpdateVaultFees} securityVaultDetails={props.securityVaultDetails} securityVaultError={props.securityVaultError} securityVaultForm={props.securityVaultForm} securityVaultResult={props.securityVaultResult} />
+			return <SecurityVaultSection accountState={securityVault.accountState} loadingSecurityVault={securityVault.loadingSecurityVault} onApproveRep={securityVault.onApproveRep} onDepositRep={securityVault.onDepositRep} onLoadSecurityVault={securityVault.onLoadSecurityVault} onRedeemFees={securityVault.onRedeemFees} onRedeemRep={securityVault.onRedeemRep} onSecurityVaultFormChange={securityVault.onSecurityVaultFormChange} onUpdateVaultFees={securityVault.onUpdateVaultFees} securityVaultDetails={securityVault.securityVaultDetails} securityVaultError={securityVault.securityVaultError} securityVaultForm={securityVault.securityVaultForm} securityVaultResult={securityVault.securityVaultResult} />
 		case 'open-oracle':
-			return <OpenOracleSection accountState={props.accountState} loadingOracleManager={props.loadingOracleManager} onApproveToken1={props.onApproveToken1} onApproveToken2={props.onApproveToken2} onLoadOracleManager={props.loadOracleManager} onOpenOracleFormChange={props.onOpenOracleFormChange} onQueueOperation={props.onQueueOperation} onRequestPrice={props.onRequestPrice} onSettleReport={props.onSettleReport} onSubmitInitialReport={props.onSubmitInitialReport} openOracleError={props.openOracleError} openOracleForm={props.openOracleForm} openOracleResult={props.openOracleResult} oracleManagerDetails={props.oracleManagerDetails} />
+			return <OpenOracleSection accountState={openOracle.accountState} loadingOracleManager={openOracle.loadingOracleManager} onApproveToken1={openOracle.onApproveToken1} onApproveToken2={openOracle.onApproveToken2} onLoadOracleManager={openOracle.onLoadOracleManager} onOpenOracleFormChange={openOracle.onOpenOracleFormChange} onQueueOperation={openOracle.onQueueOperation} onRequestPrice={openOracle.onRequestPrice} onSettleReport={openOracle.onSettleReport} onSubmitInitialReport={openOracle.onSubmitInitialReport} openOracleError={openOracle.openOracleError} openOracleForm={openOracle.openOracleForm} openOracleResult={openOracle.openOracleResult} oracleManagerDetails={openOracle.oracleManagerDetails} />
 		case 'reporting':
-			return <ReportingSection accountState={props.accountState} loadingReportingDetails={props.loadingReportingDetails} onLoadReporting={props.loadReporting} onReportOutcome={props.onReportOutcome} onReportingFormChange={props.onReportingFormChange} onWithdrawEscalation={props.onWithdrawEscalation} reportingDetails={props.reportingDetails} reportingError={props.reportingError} reportingForm={props.reportingForm} reportingResult={props.reportingResult} />
+			return <ReportingSection accountState={reporting.accountState} loadingReportingDetails={reporting.loadingReportingDetails} onLoadReporting={reporting.onLoadReporting} onReportOutcome={reporting.onReportOutcome} onReportingFormChange={reporting.onReportingFormChange} onWithdrawEscalation={reporting.onWithdrawEscalation} reportingDetails={reporting.reportingDetails} reportingError={reporting.reportingError} reportingForm={reporting.reportingForm} reportingResult={reporting.reportingResult} />
 		case 'fork-auctions':
 			return (
 				<ForkAuctionSection
-					accountState={props.accountState}
-					forkAuctionDetails={props.forkAuctionDetails}
-					forkAuctionError={props.forkAuctionError}
-					forkAuctionForm={props.forkAuctionForm}
-					forkAuctionResult={props.forkAuctionResult}
-					loadingForkAuctionDetails={props.loadingForkAuctionDetails}
-					onClaimAuctionProceeds={props.onClaimAuctionProceeds}
-					onCreateChildUniverse={props.onCreateChildUniverse}
-					onFinalizeTruthAuction={props.onFinalizeTruthAuction}
-					onForkAuctionFormChange={props.onForkAuctionFormChange}
-					onForkUniverse={props.onForkUniverse}
-					onForkWithOwnEscalation={props.onForkWithOwnEscalation}
-					onInitiateFork={props.onInitiateFork}
-					onLoadForkAuction={props.loadForkAuction}
-					onMigrateEscalationDeposits={props.onMigrateEscalationDeposits}
-					onMigrateRepToZoltar={props.onMigrateRepToZoltar}
-					onMigrateVault={props.onMigrateVault}
-					onRefundLosingBids={props.onRefundLosingBids}
-					onStartTruthAuction={props.onStartTruthAuction}
-					onSubmitBid={props.onSubmitBid}
-					onWithdrawBids={props.onWithdrawBids}
+					accountState={forkAuction.accountState}
+					forkAuctionDetails={forkAuction.forkAuctionDetails}
+					forkAuctionError={forkAuction.forkAuctionError}
+					forkAuctionForm={forkAuction.forkAuctionForm}
+					forkAuctionResult={forkAuction.forkAuctionResult}
+					loadingForkAuctionDetails={forkAuction.loadingForkAuctionDetails}
+					onClaimAuctionProceeds={forkAuction.onClaimAuctionProceeds}
+					onCreateChildUniverse={forkAuction.onCreateChildUniverse}
+					onFinalizeTruthAuction={forkAuction.onFinalizeTruthAuction}
+					onForkAuctionFormChange={forkAuction.onForkAuctionFormChange}
+					onForkUniverse={forkAuction.onForkUniverse}
+					onForkWithOwnEscalation={forkAuction.onForkWithOwnEscalation}
+					onInitiateFork={forkAuction.onInitiateFork}
+					onLoadForkAuction={forkAuction.onLoadForkAuction}
+					onMigrateEscalationDeposits={forkAuction.onMigrateEscalationDeposits}
+					onMigrateRepToZoltar={forkAuction.onMigrateRepToZoltar}
+					onMigrateVault={forkAuction.onMigrateVault}
+					onRefundLosingBids={forkAuction.onRefundLosingBids}
+					onStartTruthAuction={forkAuction.onStartTruthAuction}
+					onSubmitBid={forkAuction.onSubmitBid}
+					onWithdrawBids={forkAuction.onWithdrawBids}
 				/>
 			)
 		case 'trading':
-			return <TradingSection accountState={props.accountState} onCreateCompleteSet={props.onCreateCompleteSet} onMigrateShares={props.onMigrateShares} onRedeemCompleteSet={props.onRedeemCompleteSet} onRedeemShares={props.onRedeemShares} onTradingFormChange={props.onTradingFormChange} tradingError={props.tradingError} tradingForm={props.tradingForm} tradingResult={props.tradingResult} />
+			return <TradingSection accountState={trading.accountState} onCreateCompleteSet={trading.onCreateCompleteSet} onMigrateShares={trading.onMigrateShares} onRedeemCompleteSet={trading.onRedeemCompleteSet} onRedeemShares={trading.onRedeemShares} onTradingFormChange={trading.onTradingFormChange} tradingError={trading.tradingError} tradingForm={trading.tradingForm} tradingResult={trading.tradingResult} />
 		default:
-			return assertNever(props.route)
+			return assertNever(route)
 	}
 }
