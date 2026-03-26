@@ -46,21 +46,21 @@ function getUniverseLabel(route: Route, securityPoolsUniverseIds: bigint[], repo
 
 export function App() {
 	const lastTransactionHash = useSignal<Hash | undefined>(undefined)
-	const transactionInFlight = useSignal(false)
+	const transactionInFlightCount = useSignal(0)
 	const transactionSubmitted = useSignal(false)
 	const transactionUrl = useSignal<string | undefined>(undefined)
 	const markTransactionRequested = () => {
-		transactionInFlight.value = true
+		transactionInFlightCount.value += 1
 		transactionSubmitted.value = false
 	}
 	const markTransactionSubmitted = (hash: Hash) => {
 		lastTransactionHash.value = hash
-		transactionInFlight.value = true
+		transactionInFlightCount.value += 1
 		transactionSubmitted.value = true
 		transactionUrl.value = `https://etherscan.io/tx/${ hash }`
 	}
 	const markTransactionFinished = () => {
-		transactionInFlight.value = false
+		transactionInFlightCount.value = Math.max(0, transactionInFlightCount.value - 1)
 	}
 	const { navigate, route } = useHashRoute()
 	const { accountState, connectWallet, deploymentStatuses, errorMessage: walletErrorMessage, hasInjectedWallet, isRefreshing, refreshState } = useOnchainState()
@@ -171,7 +171,7 @@ export function App() {
 
 			{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected. Open this page in a browser with MetaMask or another EIP-1193 wallet.</p>}
 			{errorMessage === undefined ? undefined : <p className='notice error'>{errorMessage}</p>}
-			{transactionInFlight.value ? (
+			{transactionInFlightCount.value > 0 ? (
 				<p className='notice success'>
 					<span className='spinner' aria-hidden='true' />
 					{transactionSubmitted.value ? 'Transaction submitted, waiting for confirmation.' : 'Awaiting wallet confirmation.'} <span>{lastTransactionHash.value ?? 'Pending wallet signature'}</span>
@@ -188,7 +188,7 @@ export function App() {
 
 			<TabNavigation route={route} deployRoute={DEPLOY_ROUTE} forkAuctionRoute={FORK_AUCTION_ROUTE} marketRoute={MARKET_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} reportingRoute={REPORTING_ROUTE} securityPoolRoute={SECURITY_POOL_ROUTE} securityPoolsOverviewRoute={SECURITY_POOLS_OVERVIEW_ROUTE} securityVaultRoute={SECURITY_VAULT_ROUTE} tradingRoute={TRADING_ROUTE} onRouteChange={navigate} />
 
-				<fieldset className='route-shell' disabled={transactionInFlight.value}>
+			<fieldset className='route-shell' disabled={transactionInFlightCount.value > 0}>
 					<AppRouteContent
 						deployment={{
 							accountAddress: accountState.address,

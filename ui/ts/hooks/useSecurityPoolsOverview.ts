@@ -62,11 +62,16 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 				securityPoolAddress,
 			}
 			onTransaction(hash)
-			await refreshState()
 		} catch (error) {
 			securityPoolOverviewError.value = getErrorMessage(error, 'Failed to queue liquidation')
 		} finally {
 			onTransactionFinished()
+		}
+
+		try {
+			await refreshState()
+		} catch (error) {
+			securityPoolOverviewError.value = getErrorMessage(error, 'Queued liquidation but failed to refresh state')
 		}
 	}
 

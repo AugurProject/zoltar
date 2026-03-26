@@ -5,6 +5,7 @@
 		"solidity/ts/tests/**/*.ts",
 		"solidity/ts/types/bun-test.d.ts",
 		"solidity/ts/types/index.d.ts",
+		"ui/ts/tests/**/*.ts",
 		"ui/ts/index.ts"
 	],
 	"project": [

@@ -1,5 +1,7 @@
 import type { ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
 
+const DEFAULT_CURRENT_RETENTION_RATE = '999999996848000000'
+
 function toDatetimeLocalValue(timestampMs: number) {
 	const date = new Date(timestampMs)
 	const offset = date.getTimezoneOffset()
@@ -11,7 +13,7 @@ export function getDefaultMarketFormState(): MarketFormState {
 	return {
 		answerUnit: '',
 		categoricalOutcomes: 'Yes\nNo',
-		currentRetentionRate: '999999996848000000',
+		currentRetentionRate: DEFAULT_CURRENT_RETENTION_RATE,
 		description: '',
 		displayValueMax: '100',
 		displayValueMin: '0',
@@ -28,7 +30,7 @@ export function getDefaultMarketFormState(): MarketFormState {
 
 export function getDefaultSecurityPoolFormState(): SecurityPoolFormState {
 	return {
-		currentRetentionRate: '999999996848000000',
+		currentRetentionRate: DEFAULT_CURRENT_RETENTION_RATE,
 		marketId: '',
 		securityMultiplier: '2',
 		startingRepEthPrice: '10',

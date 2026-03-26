@@ -39,7 +39,8 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		}
 	}
 
-	const runReportingAction = async (action: (walletAddress: Address, securityPoolAddress: Address) => Promise<ReportingActionResult>, errorFallback: string) => {
+	const runReportingAction = async (action: (walletAddress: Address, securityPoolAddress: Address, currentForm: ReportingFormState) => Promise<ReportingActionResult>, errorFallback: string) => {
+		const currentForm = reportingForm.value
 		try {
 			getRequiredInjectedEthereum()
 		} catch {
@@ -55,8 +56,8 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 			onTransactionRequested()
 			reportingError.value = undefined
 			reportingResult.value = undefined
-			const securityPoolAddress = parseAddressInput(reportingForm.value.securityPoolAddress, 'Security pool address')
-			const result = await action(accountAddress, securityPoolAddress)
+			const securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
+			const result = await action(accountAddress, securityPoolAddress, currentForm)
 			reportingResult.value = result
 			onTransaction(result.hash)
 			await refreshState()
@@ -69,18 +70,19 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		}
 	}
 
-	const reportOutcome = async () => await runReportingAction(async (walletAddress, securityPoolAddress) => await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, reportingForm.value.selectedOutcome, parseBigIntInput(reportingForm.value.reportAmount, 'Report amount')), 'Failed to report on outcome')
+	const reportOutcome = async () => await runReportingAction(async (walletAddress, securityPoolAddress, currentForm) => await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, parseBigIntInput(currentForm.reportAmount, 'Report amount')), 'Failed to report on outcome')
 
 	const withdrawEscalation = async () =>
-		await runReportingAction(async (walletAddress, securityPoolAddress) => {
-			const selectedSide = reportingDetails.value?.sides.find(side => side.key === reportingForm.value.selectedOutcome)
-			const depositIndexes = reportingForm.value.withdrawDepositIndexes.trim() === '' ? (selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []) : parseBigIntListInput(reportingForm.value.withdrawDepositIndexes, 'Deposit indexes')
+		await runReportingAction(async (walletAddress, securityPoolAddress, currentForm) => {
+			const latestDetails = await loadReportingDetails(createReadClient(), securityPoolAddress, walletAddress)
+			const selectedSide = latestDetails.sides.find(side => side.key === currentForm.selectedOutcome)
+			const depositIndexes = currentForm.withdrawDepositIndexes.trim() === '' ? (selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []) : parseBigIntListInput(currentForm.withdrawDepositIndexes, 'Deposit indexes')
 
 			if (depositIndexes.length === 0) {
 				throw new Error('No deposits available to withdraw for the selected side')
 			}
 
-			return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, reportingForm.value.selectedOutcome, depositIndexes)
+			return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, depositIndexes)
 		}, 'Failed to withdraw escalation deposits')
 
 	return {

@@ -20,6 +20,8 @@ type UseSecurityPoolCreationParameters = {
 
 export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolCreationParameters) {
 	const loadingMarketDetails = useSignal(false)
+	const marketDetailsLoadCount = useSignal(0)
+	const marketDetailsRequestId = useSignal(0)
 	const marketDetails = useSignal<MarketDetails | undefined>(undefined)
 	const securityPoolCreating = useSignal(false)
 	const securityPoolError = useSignal<string | undefined>(undefined)
@@ -32,6 +34,9 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 			return
 		}
 
+		const requestId = marketDetailsRequestId.value + 1
+		marketDetailsRequestId.value = requestId
+		marketDetailsLoadCount.value += 1
 		loadingMarketDetails.value = true
 		securityPoolError.value = undefined
 		try {
@@ -40,6 +45,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 				marketId,
 			})
 			const details = await loadMarketDetails(createReadClient(), questionId)
+			if (requestId !== marketDetailsRequestId.value) return
 			if (!details.exists) {
 				marketDetails.value = undefined
 				securityPoolError.value = 'No market found for that ID'
@@ -48,10 +54,12 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 
 			marketDetails.value = details
 		} catch (error) {
+			if (requestId !== marketDetailsRequestId.value) return
 			marketDetails.value = undefined
 			securityPoolError.value = getErrorMessage(error, 'Failed to load market')
 		} finally {
-			loadingMarketDetails.value = false
+			marketDetailsLoadCount.value = Math.max(0, marketDetailsLoadCount.value - 1)
+			loadingMarketDetails.value = marketDetailsLoadCount.value > 0
 		}
 	}
 
@@ -72,16 +80,8 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 			securityPoolError.value = 'Deploy SecurityPoolFactory before creating a security pool'
 			return
 		}
-
-		const parameters = createSecurityPoolParameters(securityPoolForm.value)
-		const details = marketDetails.value ?? (await loadMarketDetails(createReadClient(), parameters.questionId))
-		if (!details.exists) {
-			securityPoolError.value = 'No market found for that ID'
-			return
-		}
-		if (details.marketType !== 'binary') {
-			securityPoolError.value = 'Security pools can only be deployed for binary markets'
-			marketDetails.value = details
+		if (securityPoolCreating.value) {
+			securityPoolError.value = 'Security pool creation already in progress'
 			return
 		}
 
@@ -89,6 +89,18 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		securityPoolError.value = undefined
 		securityPoolResult.value = undefined
 		try {
+			const parameters = createSecurityPoolParameters(securityPoolForm.value)
+			const details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createReadClient(), parameters.questionId)
+			if (!details.exists) {
+				securityPoolError.value = 'No market found for that ID'
+				return
+			}
+			if (details.marketType !== 'binary') {
+				securityPoolError.value = 'Security pools can only be deployed for binary markets'
+				marketDetails.value = details
+				return
+			}
+
 			onTransactionRequested()
 			const result = await createSecurityPool(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), parameters)
 			marketDetails.value = details

@@ -4,9 +4,13 @@ export function getPrerequisiteLabel(steps: DeploymentStatus[], index: number) {
 	const currentStep = steps[index]
 	if (currentStep === undefined) return undefined
 
-	const missingDependency = currentStep.dependencies.map(dependencyId => steps.find(step => step.id === dependencyId)).find(step => step !== undefined && !step.deployed)
+	for (const dependencyId of currentStep.dependencies) {
+		const dependency = steps.find(step => step.id === dependencyId)
+		if (dependency === undefined) return dependencyId
+		if (!dependency.deployed) return dependency.label
+	}
 
-	return missingDependency?.label
+	return undefined
 }
 
 export function findNextDeployableStep(steps: DeploymentStatus[]) {

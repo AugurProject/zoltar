@@ -1,6 +1,6 @@
 export function getErrorMessage(error: unknown, fallbackMessage: string) {
 	if (error instanceof Error) {
-		const detail = error.message.trim()
+		const detail = typeof error.message === 'string' ? error.message.trim() : String(error.message).trim()
 		return detail === '' ? fallbackMessage : `${ fallbackMessage }: ${ detail }`
 	}
 
