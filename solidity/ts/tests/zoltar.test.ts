@@ -1,6 +1,6 @@
-import { test, beforeEach, describe } from 'bun:test'
+import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
-import { useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
@@ -13,6 +13,8 @@ import { keccak256, encodeAbiParameters } from 'viem'
 
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
 const FORKER_DEPOSIT_FRACTION = 20n
+
+setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Contract Test Suite', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()

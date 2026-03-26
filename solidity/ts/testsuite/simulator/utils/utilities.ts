@@ -22,13 +22,10 @@ function hexToBytes(value: string) {
 }
 
 const mintETH = async (anvilWindowEthereum: AnvilWindowEthereum, mintAmounts: { address: Address; amount: bigint }[]) => {
-	const stateOverrides = mintAmounts.reduce(
-		(acc, current) => {
-			acc[current.address] = { balance: current.amount }
-			return acc
-		},
-		{} as { [key: string]: { [key: string]: bigint } },
-	)
+	const stateOverrides: Record<string, { balance: bigint }> = {}
+	for (const current of mintAmounts) {
+		stateOverrides[current.address] = { balance: current.amount }
+	}
 	await anvilWindowEthereum.addStateOverrides(stateOverrides)
 }
 
@@ -37,13 +34,10 @@ const mintERC20 = async (anvilWindowEthereum: AnvilWindowEthereum, erc20Address:
 		const encodedKeySlotHash = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [mintAmount.address, balanceSlot]))
 		return { key: encodedKeySlotHash, value: mintAmount.amount }
 	})
-	const stateSets = overrides.reduce(
-		(acc, current) => {
-			acc[current.key] = current.value
-			return acc
-		},
-		{} as { [key: string]: bigint },
-	)
+	const stateSets: Record<string, bigint> = {}
+	for (const current of overrides) {
+		stateSets[current.key] = current.value
+	}
 	await anvilWindowEthereum.addStateOverrides({ [erc20Address]: { stateDiff: stateSets } })
 }
 

@@ -35,10 +35,10 @@ const isZoltarQuestionDataDeployed = async (client: ReadClient) => {
 	return deployedBytecode === expectedDeployedBytecode
 }
 
-const deployZoltarQuestionDataTransaction = () => {
-	const bytecode: `0x${ string }` = `0x${ ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object }`
-	return { to: addressString(PROXY_DEPLOYER_ADDRESS), data: bytecode } as const
-}
+const deployZoltarQuestionDataTransaction = () => ({
+		to: addressString(PROXY_DEPLOYER_ADDRESS),
+		data: `0x${ ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object }`,
+	})
 
 const ensureZoltarQuestionDataDeployed = async (client: WriteClient) => {
 	await ensureProxyDeployerDeployed(client)

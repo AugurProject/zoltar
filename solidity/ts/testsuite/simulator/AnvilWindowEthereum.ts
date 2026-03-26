@@ -1,7 +1,4 @@
-import { dateToBigintSeconds } from './utils/bigint'
-import { EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes } from './types/wire-types'
 import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types'
-import * as funtypes from 'funtypes'
 import { ensureDefined } from './utils/testUtils'
 import { ensureArray } from './utils/array-utils'
 
@@ -14,10 +11,62 @@ type AccountOverride = {
 	readonly code?: EthereumData
 }
 
-type GetBlockReturn = funtypes.Static<typeof GetBlockReturn>
-const GetBlockReturn = funtypes.Union(EthereumBlockHeader, EthereumBlockHeaderWithTransactionHashes)
+type GetBlockReturn = {
+	readonly timestamp: bigint
+}
 
 type StateOverrides = Readonly<Record<string, AccountOverride>>
+
+type JsonRpcSuccess = {
+	jsonrpc: string
+	id: number | string
+	result?: unknown
+	error?: { code: number; message: string; data?: unknown }
+}
+
+function isJsonRpcError(value: unknown): value is { code: number; message: string; data?: unknown } {
+	return typeof value === 'object' && value !== null && 'message' in value && typeof value.message === 'string'
+}
+
+function parseJsonRpcResponse(raw: unknown): JsonRpcSuccess {
+	if (typeof raw !== 'object' || raw === null) {
+		throw new Error('Invalid JSON-RPC response: not an object')
+	}
+	if (!('jsonrpc' in raw) || raw.jsonrpc !== '2.0') {
+		throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${ String('jsonrpc' in raw ? raw.jsonrpc : undefined) }'`)
+	}
+	if (!('id' in raw) || (typeof raw.id !== 'number' && typeof raw.id !== 'string')) {
+		throw new Error('Invalid JSON-RPC response: missing id field')
+	}
+	if ('error' in raw && raw.error !== undefined && !isJsonRpcError(raw.error)) {
+		throw new Error('Invalid JSON-RPC response: malformed error object')
+	}
+
+	return raw
+}
+
+function parseSnapshotId(value: unknown) {
+	if (typeof value !== 'string') {
+		throw new Error('Invalid anvil_snapshot response: expected string snapshot id')
+	}
+	return value
+}
+
+function parseBlock(value: unknown): GetBlockReturn {
+	if (typeof value !== 'object' || value === null) {
+		throw new Error('Invalid eth_getBlockByNumber response: block is not an object')
+	}
+	if (!('timestamp' in value) || typeof value.timestamp !== 'string') {
+		throw new Error('Invalid eth_getBlockByNumber response: missing timestamp')
+	}
+	if (!/^0x([a-fA-F0-9]{1,64})$/.test(value.timestamp)) {
+		throw new Error(`Invalid eth_getBlockByNumber response: invalid timestamp ${ value.timestamp }`)
+	}
+
+	return {
+		timestamp: BigInt(value.timestamp),
+	}
+}
 
 export interface AnvilWindowEthereum {
 	addStateOverrides: (stateOverrides: StateOverrides) => Promise<void>
@@ -71,6 +120,12 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				// Simulation failed, so the transaction would revert - throw the same error
 				throw simulationError
 			}
+
+			const latestBlock = parseBlock(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
+			await request({
+				method: 'evm_setNextBlockTimestamp',
+				params: [`0x${ (latestBlock.timestamp + 1n).toString(16) }`],
+			})
 		}
 
 		const response = await fetch(ANVIL_RPC, {
@@ -85,24 +140,9 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		})
 		if (!response.ok) throw new Error(`HTTP ${ response.status }: ${ response.statusText }`)
 		const raw = await response.json()
-		if (typeof raw !== 'object' || raw === null) {
-			throw new Error('Invalid JSON-RPC response: not an object')
-		}
-		const json = raw as {
-			jsonrpc: string
-			id: number | string
-			result?: unknown
-			error?: { code: number; message: string; data?: unknown }
-		}
+		const json = parseJsonRpcResponse(raw)
 
 		// Validate JSON-RPC response structure
-		if (json.jsonrpc !== '2.0') {
-			throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${ json.jsonrpc }'`)
-		}
-		if (json.id === undefined) {
-			throw new Error('Invalid JSON-RPC response: missing id field')
-		}
-
 		// Ensure exactly one of result or error is present (per JSON-RPC spec)
 		const hasResult = 'result' in json
 		const hasError = 'error' in json
@@ -174,27 +214,34 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			})
 			await request({ method: 'evm_mine', params: [] })
 		} else if (blockTimeManipulation.type === 'SetTimestamp') {
-			await request({
-				method: 'evm_setNextBlockTimestamp',
-				params: [`0x${ blockTimeManipulation.timeToSet.toString(16) }`],
-			})
+			const hexTimestamp = `0x${ blockTimeManipulation.timeToSet.toString(16) }`
+			try {
+				await request({
+					method: 'evm_setNextBlockTimestamp',
+					params: [hexTimestamp],
+				})
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error)
+				if (!errorMessage.includes('timestamp is too big')) {
+					throw error
+				}
+				await request({
+					method: 'evm_setNextBlockTimestamp',
+					params: [blockTimeManipulation.timeToSet.toString()],
+				})
+			}
 			await request({ method: 'evm_mine', params: [] })
 		}
 	}
 
 	const getTime = async (): Promise<bigint> => {
 		const block = await getBlock()
-		if (block === null) {
-			throw new Error('Failed to get block')
-		}
-		// block.timestamp is a Date after parsing
-		return dateToBigintSeconds(block.timestamp)
+		return block.timestamp
 	}
 
 	const getBlock = async (): Promise<GetBlockReturn> => {
 		const raw = await request({ method: 'eth_getBlockByNumber', params: ['latest', false] })
-		// Parse the raw JSON through GetBlockReturn parser to convert timestamps, etc.
-		return GetBlockReturn.parse(raw)
+		return parseBlock(raw)
 	}
 
 	const advanceTime = async (amountInSeconds: bigint) => {
@@ -224,7 +271,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 
 	const anvilSnapshot = async (): Promise<string> => {
 		const result = await request({ method: 'anvil_snapshot', params: [] })
-		return result as string
+		return parseSnapshotId(result)
 	}
 
 	const anvilRevert = async (snapshotId: string): Promise<void> => {

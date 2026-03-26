@@ -86,23 +86,19 @@ export function getInfraContractAddresses() {
 
 async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key in keyof ReturnType<typeof getInfraContractAddresses>]: boolean }> {
 	const contractAddresses = getInfraContractAddresses()
-	type ContractKeys = keyof typeof contractAddresses
-
-	const contractKeys = Object.keys(contractAddresses) as ContractKeys[]
-
-	const contractExistencePairs = await Promise.all(
-		contractKeys.map(async key => {
-			const doesExist = await contractExists(client, contractAddresses[key])
-			return [key, doesExist] as const
-		}),
-	)
-
-	const contractExistenceObject: { [key in ContractKeys]: boolean } = {} as { [key in ContractKeys]: boolean }
-	contractExistencePairs.forEach(([key, doesExist]) => {
-		contractExistenceObject[key] = doesExist
-	})
-
-	return contractExistenceObject
+	return {
+		securityPoolUtils: await contractExists(client, contractAddresses.securityPoolUtils),
+		openOracle: await contractExists(client, contractAddresses.openOracle),
+		zoltar: await contractExists(client, contractAddresses.zoltar),
+		shareTokenFactory: await contractExists(client, contractAddresses.shareTokenFactory),
+		priceOracleManagerAndOperatorQueuerFactory: await contractExists(client, contractAddresses.priceOracleManagerAndOperatorQueuerFactory),
+		securityPoolForker: await contractExists(client, contractAddresses.securityPoolForker),
+		escalationGameFactory: await contractExists(client, contractAddresses.escalationGameFactory),
+		zoltarQuestionData: await contractExists(client, contractAddresses.zoltarQuestionData),
+		scalarOutcomes: await contractExists(client, contractAddresses.scalarOutcomes),
+		uniformPriceDualCapBatchAuctionFactory: await contractExists(client, contractAddresses.uniformPriceDualCapBatchAuctionFactory),
+		securityPoolFactory: await contractExists(client, contractAddresses.securityPoolFactory),
+	}
 }
 export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	const contractAddresses = getInfraContractAddresses()
@@ -138,7 +134,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 }
 
 const computeSecurityPoolSalt = (parent: `0x${ string }`, universeId: bigint, questionId: bigint, securityMultiplier: bigint) => {
-	const values = [parent, universeId, questionId, securityMultiplier] as const
+	const values: readonly [`0x${ string }`, bigint, bigint, bigint] = [parent, universeId, questionId, securityMultiplier]
 	return keccak256(
 		encodeAbiParameters(
 			[
@@ -153,7 +149,7 @@ const computeSecurityPoolSalt = (parent: `0x${ string }`, universeId: bigint, qu
 }
 
 const computeShareTokenSalt = (securityMultiplier: bigint, questionId: bigint) => {
-	const values = [securityMultiplier, questionId] as const
+	const values: readonly [bigint, bigint] = [securityMultiplier, questionId]
 	return keccak256(
 		encodeAbiParameters(
 			[
@@ -210,7 +206,21 @@ export const getSecurityPoolAddresses = (parent: `0x${ string }`, universeId: bi
 		bytecode: encodeDeployData({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
-			args: [infraContracts.securityPoolForker, infraContracts.securityPoolFactory, infraContracts.zoltarQuestionData, infraContracts.escalationGameFactory, contracts.priceOracleManagerAndOperatorQueuer, contracts.shareToken, infraContracts.openOracle, parent, infraContracts.zoltar, universeId, questionId, securityMultiplier, contracts.truthAuction] as const,
+			args: [
+				infraContracts.securityPoolForker,
+				infraContracts.securityPoolFactory,
+				infraContracts.zoltarQuestionData,
+				infraContracts.escalationGameFactory,
+				contracts.priceOracleManagerAndOperatorQueuer,
+				contracts.shareToken,
+				infraContracts.openOracle,
+				parent,
+				infraContracts.zoltar,
+				universeId,
+				questionId,
+				securityMultiplier,
+				contracts.truthAuction,
+			],
 		}),
 		from: infraContracts.securityPoolFactory,
 		salt: numberToBytes(0, { size: 32 }),

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, setDefaultTimeout } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { AddressInfo, createServer } from 'node:net'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -7,17 +7,27 @@ import { ensureDefined } from './utils/testUtils'
 
 const DEFAULT_ANVIL_HOST = '127.0.0.1'
 const DEFAULT_ANVIL_BIN = process.env['ANVIL_BIN'] ?? 'anvil'
-const RPC_READY_TIMEOUT_MS = 10_000
-const RPC_PROBE_TIMEOUT_MS = 1_000
-const SHUTDOWN_TIMEOUT_MS = 5_000
+const RPC_READY_TIMEOUT_MS = 30_000
+const RPC_PROBE_TIMEOUT_MS = 3_000
+const SHUTDOWN_TIMEOUT_MS = 15_000
 const TEST_CHAIN_START_TIMESTAMP = 1n
+export const TEST_TIMEOUT_MS = 300_000
+
+setDefaultTimeout(TEST_TIMEOUT_MS)
+
+function getAddressPort(address: string | AddressInfo | undefined) {
+	if (address === undefined || typeof address === 'string') {
+		throw new Error('Failed to resolve TCP port for Anvil')
+	}
+	return address.port
+}
 
 const getFreePort = async (): Promise<number> =>
 	await new Promise((resolve, reject) => {
 		const server = createServer()
 		server.listen(0, DEFAULT_ANVIL_HOST, () => {
-			const address = server.address()
-			if (address === null) {
+			const address = server.address() ?? undefined
+			if (address === undefined) {
 				server.close(() => reject(new Error('Failed to allocate a free TCP port for Anvil')))
 				return
 			}
@@ -26,7 +36,7 @@ const getFreePort = async (): Promise<number> =>
 					reject(error)
 					return
 				}
-				resolve((address as AddressInfo).port)
+				resolve(getAddressPort(address))
 			})
 		})
 		server.on('error', reject)

@@ -4,6 +4,7 @@ node_modules/
 /solidity/js
 solidity/user-config.json
 solidity/ts/types/contractArtifact.ts
+solidity/types/contractArtifact.ts
 .tsbuildinfo
 /ui/js
 /ui/vendor

@@ -1,7 +1,7 @@
-import { test, beforeEach, describe } from 'bun:test'
+import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import { createWriteClient, WriteClient } from '../../testsuite/simulator/utils/viem'
 import { AnvilWindowEthereum } from '../../testsuite/simulator/AnvilWindowEthereum'
-import { useIsolatedAnvilNode } from '../../testsuite/simulator/useIsolatedAnvilNode'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../../testsuite/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../../testsuite/simulator/utils/utilities'
 import { Address } from 'viem'
@@ -24,6 +24,8 @@ const DEFAULT_TOLERANCE = 1000n
 
 const DEFAULT_ETH_RAISE_CAP = 200_000n
 const DEFAULT_MAX_REP = 100n
+
+setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Auction', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()

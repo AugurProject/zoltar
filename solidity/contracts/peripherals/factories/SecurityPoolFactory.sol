@@ -24,6 +24,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	EscalationGameFactory escalationGameFactory;
 	ZoltarQuestionData questionData;
 	ISecurityPoolForker securityPoolForker;
+	SecurityPoolDeployment[] private securityPoolDeployments;
 
 	event DeploySecurityPool(ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction, PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer, IShareToken shareToken, ISecurityPool parent, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount);
 
@@ -38,6 +39,19 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		questionData = _questionData;
 	}
 
+	function securityPoolDeploymentCount() external view returns (uint256) {
+		return securityPoolDeployments.length;
+	}
+
+	function securityPoolDeploymentsRange(uint256 startIndex, uint256 count) external view returns (SecurityPoolDeployment[] memory deployments) {
+		require(startIndex <= securityPoolDeployments.length, 'range start out of bounds');
+		require(count <= securityPoolDeployments.length - startIndex, 'range end out of bounds');
+		deployments = new SecurityPoolDeployment[](count);
+		for (uint256 index = 0; index < count; index++) {
+			deployments[index] = securityPoolDeployments[startIndex + index];
+		}
+	}
+
 	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
 		require(msg.sender == address(securityPoolForker), 'only securityPoolForker');
 		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, questionId, securityMultiplier));
@@ -50,6 +64,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
 		securityPool.setStartingParams(currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
+		securityPoolDeployments.push(SecurityPoolDeployment(securityPool, truthAuction, priceOracleManagerAndOperatorQueuer, shareToken, parent, universeId, questionId, securityMultiplier, currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount));
 
 		emit DeploySecurityPool(securityPool, truthAuction, priceOracleManagerAndOperatorQueuer, shareToken, parent, universeId, questionId, securityMultiplier, currentRetentionRate, startingRepEthPrice, completeSetCollateralAmount);
 	}
@@ -79,6 +94,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		securityPool.setStartingParams(currentRetentionRate, startingRepEthPrice, 0);
 
 		shareToken.authorize(securityPool);
+		securityPoolDeployments.push(SecurityPoolDeployment(securityPool, UniformPriceDualCapBatchAuction(address(0x0)), priceOracleManagerAndOperatorQueuer, shareToken, ISecurityPool(payable(0x0)), universeId, questionId, securityMultiplier, currentRetentionRate, startingRepEthPrice, 0));
 
 		emit DeploySecurityPool(securityPool, UniformPriceDualCapBatchAuction(address(0x0)), priceOracleManagerAndOperatorQueuer, shareToken, ISecurityPool(payable(0x0)), universeId, questionId, securityMultiplier, currentRetentionRate, startingRepEthPrice, 0);
 	}

@@ -24,6 +24,7 @@
 		"eslint-visitor-keys": "5.0.1"
 	},
 	"dependencies": {
+		"@preact/signals": "2.0.1",
 		"viem": "2.38.3"
 	},
 	"scripts": {

@@ -4,6 +4,18 @@ import { AccountAddress, QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { getInfraContractAddresses } from './deployPeripherals'
 
+function parseQuestionOutcome(value: unknown): QuestionOutcome {
+	switch (value) {
+		case QuestionOutcome.Invalid:
+		case QuestionOutcome.Yes:
+		case QuestionOutcome.No:
+		case QuestionOutcome.None:
+			return value
+		default:
+			throw new Error(`Unexpected question outcome: ${ String(value) }`)
+	}
+}
+
 export const getNonDecisionThreshold = async (client: ReadClient, escalationGame: AccountAddress) =>
 	await client.readContract({
 		abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -13,12 +25,12 @@ export const getNonDecisionThreshold = async (client: ReadClient, escalationGame
 	})
 
 export const getQuestionResolution = async (client: ReadClient, escalationGame: AccountAddress) =>
-	(await client.readContract({
+	parseQuestionOutcome(await client.readContract({
 		abi: peripherals_EscalationGame_EscalationGame.abi,
 		functionName: 'getQuestionResolution',
 		address: escalationGame,
 		args: [],
-	})) as QuestionOutcome
+	}))
 
 export const getStartBond = async (client: ReadClient, escalationGame: AccountAddress) =>
 	await client.readContract({

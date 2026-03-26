@@ -1,6 +1,6 @@
-import { test, beforeEach, describe } from 'bun:test'
+import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
-import { useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
@@ -9,6 +9,8 @@ import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/depl
 import assert from 'node:assert'
 import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { areEqualArrays } from '../testsuite/simulator/utils/array-utils'
+
+setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Question Data', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()

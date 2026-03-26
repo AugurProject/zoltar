@@ -7,6 +7,7 @@ import { createHash } from 'crypto'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const CONTRACT_PATH_APP = path.join(directoryOfThisFile, '..', 'ts', 'types', 'contractArtifact.ts')
+const CONTRACT_PATH_RUNTIME = path.join(directoryOfThisFile, '..', 'types', 'contractArtifact.ts')
 const HASH_CACHE_PATH = path.join(process.cwd(), '.contract-hash.json')
 const ARTIFACTS_DIR = path.join(process.cwd(), 'artifacts')
 const ARTIFACTS_JSON = path.join(ARTIFACTS_DIR, 'Contracts.json')
@@ -61,6 +62,10 @@ const CompileResult = funtypes.ReadonlyObject({
 	errors: funtypes.Union(funtypes.ReadonlyArray(CompileError), funtypes.Undefined),
 })
 
+const HashCache = funtypes.ReadonlyPartial({
+	hash: funtypes.String,
+})
+
 class CompilationError extends Error {
 	errors: string[]
 	constructor(errors: string[]) {
@@ -104,8 +109,10 @@ async function computeContractHash(sourceFiles: Map<string, string>): Promise<st
 	const hasher = createHash('sha256')
 
 	// Include compiler version to detect solc upgrades
-	const solcAny = solc as unknown as { version(): string }
-	hasher.update(solcAny.version())
+	if (!('version' in solc) || typeof solc.version !== 'function') {
+		throw new Error('solc.version is unavailable')
+	}
+	hasher.update(solc.version())
 	hasher.update('\n')
 
 	// Include compiler settings in the hash
@@ -123,19 +130,17 @@ async function computeContractHash(sourceFiles: Map<string, string>): Promise<st
 	return hasher.digest('hex')
 }
 
-async function loadHashCache(): Promise<{ hash: string | null }> {
+async function loadHashCache(): Promise<{ hash: string | undefined }> {
 	try {
 		if (await exists(HASH_CACHE_PATH)) {
 			const data = await fs.readFile(HASH_CACHE_PATH, 'utf8')
-			const parsed = JSON.parse(data) as { hash?: string } | undefined
-			if (parsed) {
-				return { hash: parsed.hash ?? null }
-			}
+			const parsed = HashCache.parse(JSON.parse(data))
+			return { hash: parsed.hash }
 		}
 	} catch {
 		// ignore
 	}
-	return { hash: null }
+	return { hash: undefined }
 }
 
 async function saveHashCache(contractHash: string): Promise<void> {
@@ -209,7 +214,9 @@ const copySolidityContractArtifact = async (contractLocation: string) => {
 	})
 	if (new Set(contracts.map(x => x.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
 	const typescriptString = contracts.map(contract => `export const ${ contract.contractName } = ${ JSON.stringify(contract.contractData, null, 4) } as const`).join('\r\n\r\n')
+	await fs.mkdir(path.dirname(CONTRACT_PATH_RUNTIME), { recursive: true })
 	await fs.writeFile(CONTRACT_PATH_APP, typescriptString)
+	await fs.writeFile(CONTRACT_PATH_RUNTIME, `${ typescriptString }\n`)
 }
 
 const compileContracts = async () => {

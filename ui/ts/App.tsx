@@ -1,338 +1,251 @@
-import { useEffect, useState } from 'preact/hooks'
-import { createPublicClient, createWalletClient, custom, formatEther, formatUnits, getAddress, http, publicActions, type Address, type Hash } from 'viem'
-import { mainnet } from 'viem/chains'
-import { ABIS } from './abis.js'
-import { GENESIS_REPUTATION_TOKEN, getDeploymentSteps, loadDeploymentStatuses, type DeploymentStatus } from './contracts.js'
-import { getInjectedEthereum, type InjectedEthereum } from './injectedEthereum.js'
+import { useSignal } from '@preact/signals'
+import type { Hash } from 'viem'
+import { AppRouteContent } from './components/AppRouteContent.js'
+import { HeroSection } from './components/HeroSection.js'
+import { OverviewPanels } from './components/OverviewPanels.js'
+import { TabNavigation } from './components/TabNavigation.js'
+import { useDeploymentFlow } from './hooks/useDeploymentFlow.js'
+import { useForkAuctionOperations } from './hooks/useForkAuctionOperations.js'
+import { useHashRoute } from './hooks/useHashRoute.js'
+import { useMarketCreation } from './hooks/useMarketCreation.js'
+import { useOnchainState } from './hooks/useOnchainState.js'
+import { useOpenOracleOperations } from './hooks/useOpenOracleOperations.js'
+import { useReportingOperations } from './hooks/useReportingOperations.js'
+import { useSecurityPoolCreation } from './hooks/useSecurityPoolCreation.js'
+import { useSecurityPoolsOverview } from './hooks/useSecurityPoolsOverview.js'
+import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.js'
+import { useTradingOperations } from './hooks/useTradingOperations.js'
+import { assertNever } from './lib/assert.js'
+import { getDeploymentSections } from './lib/deployment.js'
+import { isMainnetChain } from './lib/network.js'
+import { DEPLOY_ROUTE, FORK_AUCTION_ROUTE, MARKET_ROUTE, OPEN_ORACLE_ROUTE, REPORTING_ROUTE, SECURITY_POOLS_OVERVIEW_ROUTE, SECURITY_POOL_ROUTE, SECURITY_VAULT_ROUTE, TRADING_ROUTE } from './lib/routing.js'
+import { formatUniverseCollectionLabel } from './lib/universe.js'
+import type { Route } from './types/app.js'
 
-const DEFAULT_RPC_URL = 'https://ethereum.dark.florist'
-
-type AccountState = {
-	address: Address | null
-	chainId: string | null
-	ethBalance: bigint | null
-	repBalance: bigint | null
-}
-
-function createReadClient() {
-	const ethereum = getInjectedEthereum()
-
-	return createPublicClient({
-		chain: mainnet,
-		transport: ethereum === undefined ? http(DEFAULT_RPC_URL, { batch: { wait: 100 } }) : custom(ethereum),
-	})
-}
-
-function createWriteClient(ethereum: InjectedEthereum, accountAddress: Address) {
-	return createWalletClient({
-		account: accountAddress,
-		chain: mainnet,
-		transport: custom(ethereum),
-	}).extend(publicActions)
-}
-
-function normalizeAccount(value: unknown): Address | null {
-	if (typeof value !== 'string') return null
-	return getAddress(value)
-}
-
-function formatAddress(address: Address) {
-	return `${ address.slice(0, 6) }...${ address.slice(-4) }`
-}
-
-function formatCurrencyBalance(value: bigint | null, units: number = 18) {
-	if (value === null) return 'Unavailable'
-	return units === 18 ? Number(formatEther(value)).toLocaleString(undefined, { maximumFractionDigits: 6 }) : Number(formatUnits(value, units)).toLocaleString(undefined, { maximumFractionDigits: 6 })
-}
-
-function getPrerequisiteLabel(steps: DeploymentStatus[], index: number) {
-	const currentStep = steps[index]
-	if (currentStep === undefined) return null
-
-	const missingDependency = currentStep.dependencies.map(dependencyId => steps.find(step => step.id === dependencyId)).find(step => step !== undefined && !step.deployed)
-
-	return missingDependency?.label ?? null
-}
-
-function renderDeploymentSection({ title, steps, allSteps, accountAddress, busyStepId, onDeploy }: { title: string; steps: DeploymentStatus[]; allSteps: DeploymentStatus[]; accountAddress: Address | null; busyStepId: string | null; onDeploy: (stepId: string) => Promise<void> }) {
-	return (
-		<section class="panel contract-panel">
-			<div class="contract-panel-header">
-				<div>
-					<p class="panel-label">{title}</p>
-					<h2>{title}</h2>
-				</div>
-			</div>
-			<div class="contract-list">
-				{steps.map(step => {
-					const stepIndex = allSteps.findIndex(candidate => candidate.id === step.id)
-					const prerequisiteLabel = stepIndex === -1 ? null : getPrerequisiteLabel(allSteps, stepIndex)
-					const isBusy = busyStepId === step.id
-					const canDeploy = accountAddress !== null && prerequisiteLabel === null && !step.deployed && busyStepId === null
-
-					return (
-						<div class="contract-row" key={step.id}>
-							<div class="contract-copy">
-								<div class="contract-topline">
-									<span class={`badge ${ step.deployed ? 'ok' : prerequisiteLabel === null ? 'pending' : 'blocked' }`}>{step.deployed ? 'Deployed' : prerequisiteLabel === null ? 'Ready' : 'Blocked'}</span>
-									<h3>{step.label}</h3>
-								</div>
-								<p class="address">{step.address}</p>
-								<p class="detail">{step.deployed ? 'Code found at expected address.' : prerequisiteLabel === null ? 'Ready to deploy.' : `Waiting for ${ prerequisiteLabel }.`}</p>
-							</div>
-							<button onClick={() => void onDeploy(step.id)} disabled={!canDeploy}>
-								{step.deployed ? 'Deployed' : isBusy ? 'Deploying...' : 'Deploy'}
-							</button>
-						</div>
-					)
-				})}
-			</div>
-		</section>
-	)
+function getUniverseLabel(route: Route, securityPoolsUniverseIds: bigint[], reportingUniverseId: bigint | undefined, securityVaultUniverseId: bigint | undefined, tradingUniverseId: bigint | undefined, forkAuctionUniverseId: bigint | undefined) {
+	switch (route) {
+		case 'deploy':
+		case 'markets':
+		case 'security-pools':
+		case 'open-oracle':
+			return formatUniverseCollectionLabel([0n])
+		case 'security-pools-overview':
+			return formatUniverseCollectionLabel(securityPoolsUniverseIds)
+		case 'security-vaults':
+			return formatUniverseCollectionLabel(securityVaultUniverseId === undefined ? [] : [securityVaultUniverseId])
+		case 'reporting':
+			return formatUniverseCollectionLabel(reportingUniverseId === undefined ? [] : [reportingUniverseId])
+		case 'trading':
+			return formatUniverseCollectionLabel(tradingUniverseId === undefined ? [] : [tradingUniverseId])
+		case 'fork-auctions':
+			return formatUniverseCollectionLabel(forkAuctionUniverseId === undefined ? [] : [forkAuctionUniverseId])
+		default:
+			return assertNever(route)
+	}
 }
 
 export function App() {
-	const [accountState, setAccountState] = useState<AccountState>({
-		address: null,
-		chainId: null,
-		ethBalance: null,
-		repBalance: null,
-	})
-	const [deploymentStatuses, setDeploymentStatuses] = useState<DeploymentStatus[]>(() =>
-		getDeploymentSteps().map(step => ({
-			...step,
-			deployed: false,
-		})),
-	)
-	const [hasInjectedWallet, setHasInjectedWallet] = useState<boolean>(() => getInjectedEthereum() !== undefined)
-	const [isRefreshing, setIsRefreshing] = useState(false)
-	const [busyStepId, setBusyStepId] = useState<string | null>(null)
-	const [errorMessage, setErrorMessage] = useState<string | null>(null)
-	const [lastTransactionHash, setLastTransactionHash] = useState<Hash | null>(null)
-
-	const refreshState = async () => {
-		const ethereum = getInjectedEthereum()
-		setHasInjectedWallet(ethereum !== undefined)
-
-		setIsRefreshing(true)
-		try {
-			const readClient = createReadClient()
-			const accounts = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' })
-			const connectedAddress = normalizeAccount(accounts[0])
-			const chainId = ethereum === undefined ? `0x${ mainnet.id.toString(16) }` : await ethereum.request({ method: 'eth_chainId' })
-
-			const [statuses, ethBalance, repBalance] = await Promise.all([
-				loadDeploymentStatuses(readClient),
-				connectedAddress === null ? Promise.resolve(null) : readClient.getBalance({ address: connectedAddress }),
-				connectedAddress === null
-					? Promise.resolve(null)
-					: readClient
-							.readContract({
-								abi: ABIS.mainnet.erc20,
-								functionName: 'balanceOf',
-								address: GENESIS_REPUTATION_TOKEN,
-								args: [connectedAddress],
-							})
-							.then(result => result)
-							.catch(() => null),
-			])
-
-			setDeploymentStatuses(statuses)
-			setAccountState({
-				address: connectedAddress,
-				chainId,
-				ethBalance,
-				repBalance,
-			})
-		} catch (error) {
-			setErrorMessage(error instanceof Error ? error.message : 'Failed to refresh wallet state')
-		} finally {
-			setIsRefreshing(false)
-		}
+	const lastTransactionHash = useSignal<Hash | undefined>(undefined)
+	const transactionInFlightCount = useSignal(0)
+	const transactionSubmitted = useSignal(false)
+	const transactionUrl = useSignal<string | undefined>(undefined)
+	const onTransaction = (hash: Hash) => {
+		lastTransactionHash.value = hash
 	}
-
-	useEffect(() => {
-		void refreshState()
-
-		const ethereum = getInjectedEthereum()
-		if (ethereum === undefined) return
-
-		const handleAccountsChanged = () => {
-			void refreshState()
-		}
-		const handleChainChanged = () => {
-			void refreshState()
-		}
-
-		ethereum.on?.('accountsChanged', handleAccountsChanged)
-		ethereum.on?.('chainChanged', handleChainChanged)
-
-		const intervalId = window.setInterval(() => {
-			void refreshState()
-		}, 15_000)
-
-		return () => {
-			window.clearInterval(intervalId)
-			ethereum.removeListener?.('accountsChanged', handleAccountsChanged)
-			ethereum.removeListener?.('chainChanged', handleChainChanged)
-		}
-	}, [])
-
-	const connectWallet = async () => {
-		const ethereum = getInjectedEthereum()
-		if (ethereum === undefined) {
-			setErrorMessage('No injected wallet found')
-			return
-		}
-
-		try {
-			setErrorMessage(null)
-			await ethereum.request({ method: 'eth_requestAccounts' })
-			await refreshState()
-		} catch (error) {
-			setErrorMessage(error instanceof Error ? error.message : 'Wallet connection failed')
-		}
+	const markTransactionRequested = () => {
+		transactionInFlightCount.value += 1
+		transactionSubmitted.value = false
 	}
-
-	const deployStep = async (stepId: string) => {
-		const ethereum = getInjectedEthereum()
-		if (ethereum === undefined) {
-			setErrorMessage('No injected wallet found')
-			return
-		}
-		if (accountState.address === null) {
-			setErrorMessage('Connect a wallet before deploying')
-			return
-		}
-
-		const latestStatuses = await loadDeploymentStatuses(createReadClient())
-		const stepIndex = latestStatuses.findIndex(step => step.id === stepId)
-		if (stepIndex === -1) return
-
-		const prerequisiteLabel = getPrerequisiteLabel(latestStatuses, stepIndex)
-		if (prerequisiteLabel !== null) {
-			setErrorMessage(`Deploy ${ prerequisiteLabel } first`)
-			return
-		}
-
-		const step = latestStatuses[stepIndex]
-		if (step === undefined || step.deployed) {
-			await refreshState()
-			return
-		}
-
-		setBusyStepId(step.id)
-		setErrorMessage(null)
-
-		try {
-			const client = createWriteClient(ethereum, accountState.address)
-			const hash = await step.deploy(client)
-			setLastTransactionHash(hash)
-			await refreshState()
-		} catch (error) {
-			setErrorMessage(error instanceof Error ? error.message : `Failed to deploy ${ step.label }`)
-		} finally {
-			setBusyStepId(null)
-		}
+	const markTransactionSubmitted = (hash: Hash) => {
+		lastTransactionHash.value = hash
+		transactionInFlightCount.value += 1
+		transactionSubmitted.value = true
+		transactionUrl.value = `https://etherscan.io/tx/${ hash }`
 	}
-
-	const deployNextMissing = async () => {
-		const nextMissing = deploymentStatuses.find((step, index) => !step.deployed && getPrerequisiteLabel(deploymentStatuses, index) === null)
-		if (nextMissing === undefined) return
-		await deployStep(nextMissing.id)
+	const markTransactionFinished = () => {
+		transactionInFlightCount.value = Math.max(0, transactionInFlightCount.value - 1)
 	}
+	const { navigate, route } = useHashRoute()
+	const { accountState, connectWallet, deploymentStatuses, errorMessage: walletErrorMessage, hasInjectedWallet, isRefreshing, refreshState } = useOnchainState()
+	const baseHookConfig = {
+		accountAddress: accountState.address,
+		onTransaction,
+		onTransactionFinished: markTransactionFinished,
+		onTransactionRequested: markTransactionRequested,
+		onTransactionSubmitted: markTransactionSubmitted,
+		refreshState,
+	}
+	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses })
+	const { createMarket, marketCreating, marketError, marketForm, marketResult, resetMarket, setMarketForm } = useMarketCreation({ ...baseHookConfig, deploymentStatuses })
+	const { createPool, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({ ...baseHookConfig, deploymentStatuses })
+	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, redeemRep, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult, setSecurityVaultForm, updateVaultFees } = useSecurityVaultOperations(baseHookConfig)
+	const { approveToken1, approveToken2, loadOracleManager, loadingOracleManager, onQueueOperation, onRequestPrice, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails, setOpenOracleForm, settleReport, submitInitialReport } = useOpenOracleOperations(baseHookConfig)
+	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
+	const { liquidationAmount, liquidationTargetVault, loadingSecurityPools, queueLiquidation, securityPoolOverviewError, securityPoolOverviewResult, securityPools, setLiquidationAmount, setLiquidationTargetVault, loadSecurityPools } = useSecurityPoolsOverview(baseHookConfig)
+	const { createCompleteSet, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingError, tradingForm, tradingResult } = useTradingOperations(baseHookConfig)
+	const { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkAuctionDetails, forkAuctionError, forkAuctionForm, forkAuctionResult, forkUniverse, forkWithOwnEscalation, initiateFork, loadForkAuction, loadingForkAuctionDetails, migrateEscalation, migrateRepToZoltar, migrateVault, refundLosingBids, setForkAuctionForm, startTruthAuction, submitBid, withdrawBids } = useForkAuctionOperations(baseHookConfig)
 
-	const deployedCount = deploymentStatuses.filter(step => step.deployed).length
-	const nextMissingStep = deploymentStatuses.find((step, index) => !step.deployed && getPrerequisiteLabel(deploymentStatuses, index) === null) ?? null
-	const proxyDeployerSteps = deploymentStatuses.filter(step => step.id === 'proxyDeployer')
-	const zoltarSteps = deploymentStatuses.filter(step => step.id === 'scalarOutcomes' || step.id === 'zoltarQuestionData' || step.id === 'zoltar')
-	const augurPlaceholderSteps = deploymentStatuses.filter(step => step.id !== 'proxyDeployer' && step.id !== 'scalarOutcomes' && step.id !== 'zoltarQuestionData' && step.id !== 'zoltar')
+	const deploymentSections = getDeploymentSections(deploymentStatuses)
+	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
+	const lastCreatedQuestionId = marketResult?.questionId
+	const isMainnet = isMainnetChain(accountState.chainId)
+	const wrongNetworkMessage = accountState.address !== undefined && !isMainnet ? 'This application requires Ethereum mainnet. Switch your wallet to Ethereum mainnet before using deployment, market, oracle, reporting, vault, pool, or trading actions.' : undefined
+	const universeLabel = getUniverseLabel(route, securityPools.map(pool => pool.universeId), reportingDetails?.universeId, securityVaultDetails?.universeId, tradingResult?.universeId, forkAuctionDetails?.universeId)
 
 	return (
 		<main>
-			<section class="hero">
-				<div>
-					<p class="eyebrow">Wallet Dashboard</p>
-					<h1>Augur PLACEHOLDER deployment console</h1>
-					<p class="lede">Connect a wallet, inspect ETH and REP balances, then deploy the deterministic core contracts in the grouped order below.</p>
-				</div>
-				<div class="actions">
-					<button class="secondary" onClick={() => void refreshState()} disabled={isRefreshing}>
-						{isRefreshing ? 'Refreshing...' : 'Refresh'}
-					</button>
-					<button onClick={() => void connectWallet()}>{accountState.address === null ? 'Connect Wallet' : 'Reconnect Wallet'}</button>
-				</div>
-			</section>
+			<HeroSection accountAddress={accountState.address} isRefreshing={isRefreshing} onRefresh={() => void refreshState()} onConnect={() => void connectWallet()} />
 
-			{hasInjectedWallet ? null : <p class="notice warning">No injected wallet detected. Open this page in a browser with MetaMask or another EIP-1193 wallet.</p>}
-			{errorMessage === null ? null : <p class="notice error">{errorMessage}</p>}
-			{lastTransactionHash === null ? null : (
-				<p class="notice success">
-					Last transaction: <span>{lastTransactionHash}</span>
+			{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected. Open this page in a browser with MetaMask or another EIP-1193 wallet.</p>}
+			{errorMessage === undefined ? undefined : <p className='notice error'>{errorMessage}</p>}
+			{transactionInFlightCount.value > 0 ? (
+				<p className='notice success'>
+					<span className='spinner' aria-hidden='true' />
+					{transactionSubmitted.value ? 'Transaction submitted, waiting for confirmation.' : 'Awaiting wallet confirmation.'} <span>{lastTransactionHash.value ?? 'Pending wallet signature'}</span>
+					{transactionUrl.value === undefined ? undefined : <> <a href={transactionUrl.value} target='_blank' rel='noreferrer'>View on Etherscan</a></>}
+				</p>
+			) : lastTransactionHash.value === undefined ? undefined : (
+				<p className='notice success'>
+					Last transaction: <span>{lastTransactionHash.value}</span>
+					{transactionUrl.value === undefined ? undefined : <> <a href={transactionUrl.value} target='_blank' rel='noreferrer'>View on Etherscan</a></>}
 				</p>
 			)}
 
-			<section class="grid">
-				<article class="panel">
-					<p class="panel-label">Wallet</p>
-					<h2>{accountState.address === null ? 'Not Connected' : formatAddress(accountState.address)}</h2>
-					<p class="detail">{accountState.address ?? 'Connect a wallet to read balances and deploy contracts.'}</p>
-					<div class="metric-row">
-						<div>
-							<span class="metric-label">Network</span>
-							<strong>{accountState.chainId ?? 'Unknown'}</strong>
-						</div>
-						<div>
-							<span class="metric-label">ETH</span>
-							<strong>{formatCurrencyBalance(accountState.ethBalance)} ETH</strong>
-						</div>
-						<div>
-							<span class="metric-label">REP</span>
-							<strong>{formatCurrencyBalance(accountState.repBalance)} REP</strong>
-						</div>
-					</div>
-				</article>
+			<OverviewPanels accountState={accountState} deploymentStatuses={deploymentStatuses} busyStepId={busyStepId} onDeployNextMissing={() => void deployNextMissing()} universeLabel={universeLabel} />
 
-				<article class="panel">
-					<p class="panel-label">Deployment Progress</p>
-					<h2>
-						{deployedCount} / {deploymentStatuses.length} Ready
-					</h2>
-					<p class="detail">{nextMissingStep === null ? 'All deterministic contracts are deployed.' : `Next deployable contract: ${ nextMissingStep.label }`}</p>
-					<div class="actions">
-						<button onClick={() => void deployNextMissing()} disabled={accountState.address === null || nextMissingStep === null || busyStepId !== null}>
-							{busyStepId === null ? 'Deploy Next Missing' : 'Deployment In Progress'}
-						</button>
-					</div>
-				</article>
-			</section>
+			<TabNavigation route={route} deployRoute={DEPLOY_ROUTE} forkAuctionRoute={FORK_AUCTION_ROUTE} marketRoute={MARKET_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} reportingRoute={REPORTING_ROUTE} securityPoolRoute={SECURITY_POOL_ROUTE} securityPoolsOverviewRoute={SECURITY_POOLS_OVERVIEW_ROUTE} securityVaultRoute={SECURITY_VAULT_ROUTE} tradingRoute={TRADING_ROUTE} onRouteChange={navigate} />
 
-			{renderDeploymentSection({
-				title: 'Proxy Deployer',
-				steps: proxyDeployerSteps,
-				allSteps: deploymentStatuses,
-				accountAddress: accountState.address,
-				busyStepId,
-				onDeploy: deployStep,
-			})}
-
-			{renderDeploymentSection({
-				title: 'Zoltar',
-				steps: zoltarSteps,
-				allSteps: deploymentStatuses,
-				accountAddress: accountState.address,
-				busyStepId,
-				onDeploy: deployStep,
-			})}
-
-			{renderDeploymentSection({
-				title: 'Augur PlaceHolder',
-				steps: augurPlaceholderSteps,
-				allSteps: deploymentStatuses,
-				accountAddress: accountState.address,
-				busyStepId,
-				onDeploy: deployStep,
-			})}
+			<fieldset className='route-shell' disabled={transactionInFlightCount.value > 0}>
+					<AppRouteContent
+						deployment={{
+							accountAddress: accountState.address,
+							busyStepId,
+							deploymentSections,
+							deploymentStatuses,
+							isMainnet,
+							onDeploy: deployStep,
+							onDeployNextMissing: () => void deployNextMissing(),
+						}}
+						forkAuction={{
+							accountState,
+							forkAuctionDetails,
+							forkAuctionError,
+							forkAuctionForm,
+							forkAuctionResult,
+							loadingForkAuctionDetails,
+							onClaimAuctionProceeds: () => void claimAuctionProceeds(),
+							onCreateChildUniverse: () => void createChildUniverse(),
+							onFinalizeTruthAuction: () => void finalizeTruthAuction(),
+							onForkAuctionFormChange: update => setForkAuctionForm(current => ({ ...current, ...update })),
+							onForkUniverse: () => void forkUniverse(),
+							onForkWithOwnEscalation: () => void forkWithOwnEscalation(),
+							onInitiateFork: () => void initiateFork(),
+							onLoadForkAuction: () => void loadForkAuction(),
+							onMigrateEscalationDeposits: () => void migrateEscalation(),
+							onMigrateRepToZoltar: () => void migrateRepToZoltar(),
+							onMigrateVault: () => void migrateVault(),
+							onRefundLosingBids: () => void refundLosingBids(),
+							onStartTruthAuction: () => void startTruthAuction(),
+							onSubmitBid: () => void submitBid(),
+							onWithdrawBids: () => void withdrawBids(),
+						}}
+						market={{
+							accountState,
+							onCreateMarket: () => void createMarket(),
+							deploymentStatuses,
+							marketCreating,
+							marketError,
+							marketForm,
+							marketResult,
+							onMarketFormChange: update => setMarketForm(current => ({ ...current, ...update })),
+							onResetMarket: resetMarket,
+						}}
+						openOracle={{
+							accountState,
+							loadingOracleManager,
+							onApproveToken1: () => void approveToken1(),
+							onApproveToken2: () => void approveToken2(),
+							onLoadOracleManager: () => void loadOracleManager(),
+							onOpenOracleFormChange: update => setOpenOracleForm(current => ({ ...current, ...update })),
+							onQueueOperation: () => void onQueueOperation(),
+							onRequestPrice: () => void onRequestPrice(),
+							onSettleReport: () => void settleReport(),
+							onSubmitInitialReport: () => void submitInitialReport(),
+							openOracleError,
+							openOracleForm,
+							openOracleResult,
+							oracleManagerDetails,
+						}}
+						reporting={{
+							accountState,
+							loadingReportingDetails,
+							onLoadReporting: () => void loadReporting(),
+							onReportOutcome: () => void onReportOutcome(),
+							onReportingFormChange: update => setReportingForm(current => ({ ...current, ...update })),
+							onWithdrawEscalation: () => void withdrawEscalation(),
+							reportingDetails,
+							reportingError,
+							reportingForm,
+							reportingResult,
+						}}
+						route={route}
+						securityPool={{
+							accountState,
+							onCreateSecurityPool: () => void createPool(),
+							deploymentStatuses,
+							lastCreatedQuestionId,
+							onLoadMarket: () => void loadMarket(),
+							onLoadMarketById: loadMarketById,
+							loadingMarketDetails,
+							marketDetails,
+							onSecurityPoolFormChange: update => setSecurityPoolForm(current => ({ ...current, ...update })),
+							securityPoolCreating,
+							securityPoolError,
+							securityPoolForm,
+							securityPoolResult,
+						}}
+						securityPoolsOverview={{
+							accountState,
+							liquidationAmount,
+							liquidationTargetVault,
+							loadingSecurityPools,
+							onLiquidationAmountChange: setLiquidationAmount,
+							onLiquidationTargetVaultChange: setLiquidationTargetVault,
+							onLoadSecurityPools: () => void loadSecurityPools(),
+							onQueueLiquidation: (managerAddress, securityPoolAddress) => void queueLiquidation(managerAddress, securityPoolAddress),
+							securityPoolOverviewError,
+							securityPoolOverviewResult,
+							securityPools,
+						}}
+						securityVault={{
+							accountState,
+							loadingSecurityVault,
+							onApproveRep: () => void approveRep(),
+							onDepositRep: () => void depositRep(),
+							onLoadSecurityVault: () => void loadSecurityVault(),
+							onRedeemFees: () => void redeemFees(),
+							onRedeemRep: () => void redeemRep(),
+							onSecurityVaultFormChange: update => setSecurityVaultForm(current => ({ ...current, ...update })),
+							onUpdateVaultFees: () => void updateVaultFees(),
+							securityVaultDetails,
+							securityVaultError,
+							securityVaultForm,
+							securityVaultResult,
+						}}
+						trading={{
+							accountState,
+							onCreateCompleteSet: () => void createCompleteSet(),
+							onMigrateShares: () => void migrateShares(),
+							onRedeemCompleteSet: () => void redeemCompleteSet(),
+							onRedeemShares: () => void redeemShares(),
+							onTradingFormChange: update => setTradingForm(current => ({ ...current, ...update })),
+							tradingError,
+							tradingForm,
+							tradingResult,
+						}}
+						wrongNetworkMessage={wrongNetworkMessage}
+					/>
+				</fieldset>
 		</main>
 	)
 }
