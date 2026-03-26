@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { approveErc20, loadOracleManagerDetails, queueOracleManagerOperation, requestOraclePrice, settleOracleReport, submitInitialOracleReport } from '../contracts.js'
-import { createReadClient, createWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput, parseBytes32Input, parseOracleQueueOperationInput, parseReportIdInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
@@ -73,45 +73,33 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 
 	const approveToken1 = async () =>
 		await runOracleAction(async walletAddress => {
-			const ethereum = getRequiredInjectedEthereum()
 			const details = oracleManagerDetails.value
 			if (details?.token1 === undefined) throw new Error('Load an oracle report first')
-			return await approveErc20(createWriteClient(ethereum, walletAddress, { onTransactionSubmitted }), details.token1, details.openOracleAddress, parseBigIntInput(openOracleForm.value.amount1, 'Token1 amount'), 'approveToken1')
+			return await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.token1, details.openOracleAddress, parseBigIntInput(openOracleForm.value.amount1, 'Token1 amount'), 'approveToken1')
 		}, 'Failed to approve token1')
 
 	const approveToken2 = async () =>
 		await runOracleAction(async walletAddress => {
-			const ethereum = getRequiredInjectedEthereum()
 			const details = oracleManagerDetails.value
 			if (details?.token2 === undefined) throw new Error('Load an oracle report first')
-			return await approveErc20(createWriteClient(ethereum, walletAddress, { onTransactionSubmitted }), details.token2, details.openOracleAddress, parseBigIntInput(openOracleForm.value.amount2, 'Token2 amount'), 'approveToken2')
+			return await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.token2, details.openOracleAddress, parseBigIntInput(openOracleForm.value.amount2, 'Token2 amount'), 'approveToken2')
 		}, 'Failed to approve token2')
 
 	const requestPrice = async () =>
 		await runOracleAction(async walletAddress => {
-			const ethereum = getRequiredInjectedEthereum()
 			const details = oracleManagerDetails.value ?? (await loadOracleManagerDetails(createReadClient(), parseAddressInput(openOracleForm.value.managerAddress, 'Manager address')))
-			return await requestOraclePrice(createWriteClient(ethereum, walletAddress, { onTransactionSubmitted }), details.managerAddress, details.requestPriceEthCost)
+			return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.managerAddress, details.requestPriceEthCost)
 		}, 'Failed to request price')
 
 	const queueOperation = async () =>
 		await runOracleAction(async walletAddress => {
-			const ethereum = getRequiredInjectedEthereum()
 			const details = oracleManagerDetails.value ?? (await loadOracleManagerDetails(createReadClient(), parseAddressInput(openOracleForm.value.managerAddress, 'Manager address')))
-			return await queueOracleManagerOperation(createWriteClient(ethereum, walletAddress, { onTransactionSubmitted }), details.managerAddress, parseOracleQueueOperationInput(openOracleForm.value.queuedOperation), parseAddressInput(openOracleForm.value.operationTargetVault, 'Operation target vault'), parseBigIntInput(openOracleForm.value.operationAmount, 'Operation amount'), details.requestPriceEthCost)
+			return await queueOracleManagerOperation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.managerAddress, parseOracleQueueOperationInput(openOracleForm.value.queuedOperation), parseAddressInput(openOracleForm.value.operationTargetVault, 'Operation target vault'), parseBigIntInput(openOracleForm.value.operationAmount, 'Operation amount'), details.requestPriceEthCost)
 		}, 'Failed to queue oracle manager operation')
 
-	const submitInitialReport = async () =>
-		await runOracleAction(async walletAddress => {
-			const ethereum = getRequiredInjectedEthereum()
-			return await submitInitialOracleReport(createWriteClient(ethereum, walletAddress, { onTransactionSubmitted }), parseReportIdInput(openOracleForm.value.reportId), parseBigIntInput(openOracleForm.value.amount1, 'Token1 amount'), parseBigIntInput(openOracleForm.value.amount2, 'Token2 amount'), parseBytes32Input(openOracleForm.value.stateHash, 'State hash'))
-		}, 'Failed to submit initial report')
+	const submitInitialReport = async () => await runOracleAction(async walletAddress => await submitInitialOracleReport(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), parseReportIdInput(openOracleForm.value.reportId), parseBigIntInput(openOracleForm.value.amount1, 'Token1 amount'), parseBigIntInput(openOracleForm.value.amount2, 'Token2 amount'), parseBytes32Input(openOracleForm.value.stateHash, 'State hash')), 'Failed to submit initial report')
 
-	const settleReport = async () =>
-		await runOracleAction(async walletAddress => {
-			const ethereum = getRequiredInjectedEthereum()
-			return await settleOracleReport(createWriteClient(ethereum, walletAddress, { onTransactionSubmitted }), parseReportIdInput(openOracleForm.value.reportId))
-		}, 'Failed to settle report')
+	const settleReport = async () => await runOracleAction(async walletAddress => await settleOracleReport(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), parseReportIdInput(openOracleForm.value.reportId)), 'Failed to settle report')
 
 	return {
 		approveToken1,

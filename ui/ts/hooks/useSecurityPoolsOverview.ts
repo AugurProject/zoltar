@@ -2,7 +2,7 @@ import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { loadAllSecurityPools, loadOracleManagerDetails, queueSecurityPoolLiquidation } from '../contracts.js'
 import { getInjectedEthereum } from '../injectedEthereum.js'
-import { createReadClient, createWriteClient } from '../lib/clients.js'
+import { createReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
@@ -55,7 +55,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 			const targetVault = parseAddressInput(liquidationTargetVault.value, 'Target vault')
 			const amount = parseBigIntInput(liquidationAmount.value, 'Liquidation amount')
 			const oracleDetails = await loadOracleManagerDetails(createReadClient(), managerAddress)
-			const hash = await queueSecurityPoolLiquidation(createWriteClient(ethereum, accountAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount, oracleDetails.requestPriceEthCost)
+			const hash = await queueSecurityPoolLiquidation(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount, oracleDetails.requestPriceEthCost)
 			securityPoolOverviewResult.value = {
 				action: 'queueLiquidation',
 				hash,

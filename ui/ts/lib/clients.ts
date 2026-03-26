@@ -50,6 +50,10 @@ export function createWriteClient(ethereum: InjectedEthereum, accountAddress: Ad
 	}
 }
 
+export function createWalletWriteClient(accountAddress: Address, callbacks: CreateWriteClientCallbacks = {}) {
+	return createWriteClient(getRequiredInjectedEthereum(), accountAddress, callbacks)
+}
+
 export function getRequiredInjectedEthereum() {
 	const ethereum = getInjectedEthereum()
 	if (ethereum === undefined) throw new Error('No injected wallet found')

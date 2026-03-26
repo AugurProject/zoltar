@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool } from '../contracts.js'
-import { createReadClient, createWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput, parseBigIntListInput } from '../lib/inputs.js'
 import { getDefaultReportingFormState, parseBigIntInput } from '../lib/marketForm.js'
@@ -40,8 +40,9 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 	}
 
 	const runReportingAction = async (action: (walletAddress: Address, securityPoolAddress: Address) => Promise<ReportingActionResult>, errorFallback: string) => {
-		const ethereum = getRequiredInjectedEthereum()
-		if (ethereum === undefined) {
+		try {
+			getRequiredInjectedEthereum()
+		} catch {
 			reportingError.value = 'No injected wallet found'
 			return
 		}
@@ -68,7 +69,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		}
 	}
 
-	const reportOutcome = async () => await runReportingAction(async (walletAddress, securityPoolAddress) => await reportOutcomeInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress, reportingForm.value.selectedOutcome, parseBigIntInput(reportingForm.value.reportAmount, 'Report amount')), 'Failed to report on outcome')
+	const reportOutcome = async () => await runReportingAction(async (walletAddress, securityPoolAddress) => await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, reportingForm.value.selectedOutcome, parseBigIntInput(reportingForm.value.reportAmount, 'Report amount')), 'Failed to report on outcome')
 
 	const withdrawEscalation = async () =>
 		await runReportingAction(async (walletAddress, securityPoolAddress) => {
@@ -79,7 +80,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 				throw new Error('No deposits available to withdraw for the selected side')
 			}
 
-			return await withdrawEscalationFromSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress, reportingForm.value.selectedOutcome, depositIndexes)
+			return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, reportingForm.value.selectedOutcome, depositIndexes)
 		}, 'Failed to withdraw escalation deposits')
 
 	return {

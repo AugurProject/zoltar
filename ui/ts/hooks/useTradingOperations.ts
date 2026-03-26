@@ -1,10 +1,10 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { createCompleteSetInSecurityPool, migrateSharesFromUniverse, redeemCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '../contracts.js'
-import { createWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { createWalletWriteClient } from '../lib/clients.js'
 import { parseAddressInput, parseReportingOutcomeInput } from '../lib/inputs.js'
 import { getDefaultTradingFormState, parseBigIntInput } from '../lib/marketForm.js'
+import { runWriteAction } from '../lib/writeAction.js'
 import type { TradingFormState } from '../types/app.js'
 import type { TradingActionResult } from '../types/contracts.js'
 
@@ -21,41 +21,37 @@ export function useTradingOperations({ accountAddress, onTransaction, onTransact
 	const tradingError = useSignal<string | undefined>(undefined)
 	const tradingForm = useSignal<TradingFormState>(getDefaultTradingFormState())
 	const tradingResult = useSignal<TradingActionResult | undefined>(undefined)
+	const runTradingAction = async (action: (walletAddress: Address, securityPoolAddress: Address) => Promise<TradingActionResult>, errorFallback: string) =>
+		await runWriteAction(
+			{
+				accountAddress,
+				missingWalletMessage: 'Connect a wallet before trading',
+				onTransaction,
+				onTransactionFinished,
+				onTransactionRequested,
+				refreshState,
+				setErrorMessage: message => {
+					tradingError.value = message
+				},
+			},
+			async walletAddress => {
+				const securityPoolAddress = parseAddressInput(tradingForm.value.securityPoolAddress, 'Security pool address')
+				const result = await action(walletAddress, securityPoolAddress)
+				return result
+			},
+			errorFallback,
+			result => {
+				tradingResult.value = result
+			},
+		)
 
-	const runTradingAction = async (action: (walletAddress: Address, securityPoolAddress: Address) => Promise<TradingActionResult>, errorFallback: string) => {
-		const ethereum = getRequiredInjectedEthereum()
-		if (ethereum === undefined) {
-			tradingError.value = 'No injected wallet found'
-			return
-		}
-		if (accountAddress === undefined) {
-			tradingError.value = 'Connect a wallet before trading'
-			return
-		}
+	const createCompleteSet = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await createCompleteSetInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.completeSetAmount, 'Complete set amount')), 'Failed to mint complete sets')
 
-		try {
-			onTransactionRequested()
-			tradingError.value = undefined
-			tradingResult.value = undefined
-			const securityPoolAddress = parseAddressInput(tradingForm.value.securityPoolAddress, 'Security pool address')
-			const result = await action(accountAddress, securityPoolAddress)
-			tradingResult.value = result
-			onTransaction(result.hash)
-			await refreshState()
-		} catch (error) {
-			tradingError.value = getErrorMessage(error, errorFallback)
-		} finally {
-			onTransactionFinished()
-		}
-	}
+	const redeemCompleteSet = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemCompleteSetInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.redeemAmount, 'Redeem amount')), 'Failed to redeem complete sets')
 
-	const createCompleteSet = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await createCompleteSetInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.completeSetAmount, 'Complete set amount')), 'Failed to mint complete sets')
+	const redeemShares = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemSharesInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress), 'Failed to redeem shares')
 
-	const redeemCompleteSet = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemCompleteSetInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.redeemAmount, 'Redeem amount')), 'Failed to redeem complete sets')
-
-	const redeemShares = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemSharesInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress), 'Failed to redeem shares')
-
-	const migrateShares = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await migrateSharesFromUniverse(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.fromUniverseId, 'From universe ID'), parseReportingOutcomeInput(tradingForm.value.selectedOutcome)), 'Failed to migrate shares')
+	const migrateShares = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await migrateSharesFromUniverse(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.fromUniverseId, 'From universe ID'), parseReportingOutcomeInput(tradingForm.value.selectedOutcome)), 'Failed to migrate shares')
 
 	return {
 		createCompleteSet,

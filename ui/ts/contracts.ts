@@ -25,16 +25,6 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
 }
 
-function readOptionalBigint(record: Record<string, unknown>, key: string) {
-	const value = record[key]
-	return typeof value === 'bigint' ? value : undefined
-}
-
-function readOptionalAddress(record: Record<string, unknown>, key: string) {
-	const value = record[key]
-	return typeof value === 'string' ? getAddress(value) : undefined
-}
-
 function isStringArray(value: unknown): value is string[] {
 	return Array.isArray(value) && value.every(item => typeof item === 'string')
 }
@@ -87,6 +77,20 @@ function isForkDataTuple(value: unknown): value is [bigint, Address, bigint, big
 
 function hasTimestamp(value: unknown): value is { timestamp: bigint } {
 	return isObjectRecord(value) && typeof value['timestamp'] === 'bigint'
+}
+
+type SecurityPoolDeploymentQueryResult = {
+	completeSetCollateralAmount: bigint
+	currentRetentionRate: bigint
+	parent: Address
+	priceOracleManagerAndOperatorQueuer: Address
+	questionId: bigint
+	securityMultiplier: bigint
+	securityPool: Address
+	shareToken: Address
+	startingRepEthPrice: bigint
+	truthAuction: Address
+	universeId: bigint
 }
 
 const getSecurityPoolUtilsAddress = () =>
@@ -160,8 +164,6 @@ const getSecurityPoolFactoryByteCode = (securityPoolForker: Address, questionDat
 		args: [securityPoolForker, questionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory],
 	})
 
-const DEPLOY_SECURITY_POOL_EVENT = parseAbiItem('event DeploySecurityPool(address securityPool, address truthAuction, address priceOracleManagerAndOperatorQueuer, address shareToken, address parent, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount)')
-
 function applyLibraries(bytecode: string): Hex {
 	const librariesToReplace = [
 		{
@@ -218,6 +220,12 @@ async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 		to: PROXY_DEPLOYER_ADDRESS,
 		data: bytecode,
 	})
+	await client.waitForTransactionReceipt({ hash })
+	return hash
+}
+
+async function writeContractAndWait(client: WriteClient, write: () => Promise<Hash>) {
+	const hash = await write()
 	await client.waitForTransactionReceipt({ hash })
 	return hash
 }
@@ -777,24 +785,22 @@ export async function approveErc20<Action extends SecurityVaultActionResult['act
 	amount: bigint,
 	action: Action,
 ) {
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: tokenAddress,
 		abi: ABIS.mainnet.erc20,
 		functionName: 'approve',
 		args: [spenderAddress, amount],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return { action, hash }
 }
 
 export async function depositRepToSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'depositRep',
 		args: [amount],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'depositRep',
 		hash,
@@ -802,13 +808,12 @@ export async function depositRepToSecurityPool(client: WriteClient, securityPool
 }
 
 export async function updateSecurityVaultFees(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'updateVaultFees',
 		args: [vaultAddress],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'updateVaultFees',
 		hash,
@@ -816,13 +821,12 @@ export async function updateSecurityVaultFees(client: WriteClient, securityPoolA
 }
 
 export async function redeemSecurityVaultFees(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemFees',
 		args: [vaultAddress],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'redeemFees',
 		hash,
@@ -830,13 +834,12 @@ export async function redeemSecurityVaultFees(client: WriteClient, securityPoolA
 }
 
 export async function redeemSecurityVaultRep(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemRep',
 		args: [vaultAddress],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'redeemRep',
 		hash,
@@ -905,14 +908,13 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 }
 
 export async function requestOraclePrice(client: WriteClient, managerAddress: Address, ethCost: bigint) {
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: managerAddress,
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'requestPrice',
 		args: [],
 		value: ethCost,
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'requestPrice',
 		hash,
@@ -920,13 +922,12 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 }
 
 export async function submitInitialOracleReport(client: WriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: Hex) {
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: getInfraContractAddresses().openOracle,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'submitInitialReport',
 		args: [reportId, amount1, amount2, stateHash],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'submitInitialReport',
 		hash,
@@ -934,13 +935,12 @@ export async function submitInitialOracleReport(client: WriteClient, reportId: b
 }
 
 export async function settleOracleReport(client: WriteClient, reportId: bigint) {
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: getInfraContractAddresses().openOracle,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
 		args: [reportId],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'settle',
 		hash,
@@ -1235,26 +1235,28 @@ export async function claimSecurityPoolAuctionProceeds(client: WriteClient, secu
 }
 
 export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSecurityPool[]> {
-	const logs = await client.getLogs({
+	const deploymentCount = await client.readContract({
 		address: getInfraContractAddresses().securityPoolFactory,
-		event: DEPLOY_SECURITY_POOL_EVENT,
-		fromBlock: 0n,
-		toBlock: 'latest',
+		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+		functionName: 'securityPoolDeploymentCount',
+		args: [],
 	})
 
-	return await Promise.all(logs.map(async (log: { args: Record<string, unknown> }) => {
-		const args = isObjectRecord(log.args) ? log.args : {}
-		const securityPoolAddress = readOptionalAddress(args, 'securityPool') ?? zeroAddress
-		const [systemState, truthAuctionAddress, forkData] = await Promise.all([
+	const deployments: readonly SecurityPoolDeploymentQueryResult[] = deploymentCount === 0n
+		? []
+		: await client.readContract({
+				address: getInfraContractAddresses().securityPoolFactory,
+				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+				functionName: 'securityPoolDeploymentsRange',
+				args: [0n, deploymentCount],
+			})
+
+	return await Promise.all(deployments.map(async deployment => {
+		const { currentRetentionRate, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, startingRepEthPrice, truthAuction: truthAuctionAddress, universeId } = deployment
+		const [systemState, forkData] = await Promise.all([
 			client.readContract({
 				abi: peripherals_SecurityPool_SecurityPool.abi,
 				functionName: 'systemState',
-				address: securityPoolAddress,
-				args: [],
-			}),
-			client.readContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
-				functionName: 'truthAuction',
 				address: securityPoolAddress,
 				args: [],
 			}),
@@ -1269,33 +1271,32 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 		const [, , truthAuctionStartedAt, migratedRep, , forkOwnSecurityPool, forkOutcomeIndex] = forkData
 
 		return {
-			currentRetentionRate: readOptionalBigint(args, 'currentRetentionRate') ?? 0n,
+			currentRetentionRate,
 			forkOutcome: getReportingOutcomeKey(forkOutcomeIndex),
 			forkOwnSecurityPool,
-			managerAddress: readOptionalAddress(args, 'priceOracleManagerAndOperatorQueuer') ?? zeroAddress,
+			managerAddress,
 			migratedRep,
-			parent: readOptionalAddress(args, 'parent') ?? zeroAddress,
-			questionId: getQuestionIdHex(readOptionalBigint(args, 'questionId') ?? 0n),
-			securityMultiplier: readOptionalBigint(args, 'securityMultiplier') ?? 0n,
+			parent,
+			questionId: getQuestionIdHex(questionId),
+			securityMultiplier,
 			securityPoolAddress,
-			startingRepEthPrice: readOptionalBigint(args, 'startingRepEthPrice') ?? 0n,
+			startingRepEthPrice,
 			systemState: getSecurityPoolSystemState(systemState),
 			truthAuctionAddress,
 			truthAuctionStartedAt,
-			universeId: readOptionalBigint(args, 'universeId') ?? 0n,
+			universeId,
 		}
 	}))
 }
 
 export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, ethCost: bigint) {
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: managerAddress,
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'requestPriceIfNeededAndQueueOperation',
 		args: [LIQUIDATION_OPERATION_TYPE, targetVault, amount],
 		value: ethCost,
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return hash
 }
 
@@ -1331,14 +1332,13 @@ function getShareTokenId(universeId: bigint, outcome: ReportingOutcomeKey) {
 }
 
 export async function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint, ethCost: bigint) {
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: managerAddress,
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'requestPriceIfNeededAndQueueOperation',
 		args: [getOracleOperationType(operation), targetVault, amount],
 		value: ethCost,
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'queueOperation',
 		hash,
@@ -1352,13 +1352,12 @@ export async function redeemSharesInSecurityPool(client: WriteClient, securityPo
 		functionName: 'universeId',
 		args: [],
 	})
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemShares',
 		args: [],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'redeemShares',
 		hash,
@@ -1382,13 +1381,12 @@ export async function migrateSharesFromUniverse(client: WriteClient, securityPoo
 			args: [],
 		}),
 	])
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: shareTokenAddress,
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'migrate',
 		args: [getShareTokenId(fromUniverseId, outcome)],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'migrateShares',
 		hash,
@@ -1398,13 +1396,12 @@ export async function migrateSharesFromUniverse(client: WriteClient, securityPoo
 }
 
 export async function forkUniverseDirectly(client: WriteClient, universeId: bigint, questionId: bigint, securityPoolAddress: Address) {
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: getInfraContractAddresses().zoltar,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkUniverse',
 		args: [universeId, questionId],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'forkUniverse',
 		hash,
@@ -1414,13 +1411,12 @@ export async function forkUniverseDirectly(client: WriteClient, universeId: bigi
 }
 
 export async function withdrawTruthAuctionBids(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, withdrawFor: Address, tick: bigint, bidIndex: bigint) {
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: truthAuctionAddress,
 		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'withdrawBids',
 		args: [withdrawFor, [{ tick, bidIndex }]],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'withdrawBids',
 		hash,
@@ -1436,14 +1432,13 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 		functionName: 'universeId',
 		args: [],
 	})
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'createCompleteSet',
 		args: [],
 		value: amount,
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'createCompleteSet',
 		hash,
@@ -1459,13 +1454,12 @@ export async function redeemCompleteSetInSecurityPool(client: WriteClient, secur
 		functionName: 'universeId',
 		args: [],
 	})
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'redeemCompleteSet',
 		args: [amount],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'redeemCompleteSet',
 		hash,
@@ -1481,13 +1475,12 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 		functionName: 'universeId',
 		args: [],
 	})
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'depositToEscalationGame',
 		args: [getReportingOutcomeValue(outcome), amount],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'reportOutcome',
 		hash,
@@ -1504,13 +1497,12 @@ export async function withdrawEscalationFromSecurityPool(client: WriteClient, se
 		functionName: 'universeId',
 		args: [],
 	})
-	const hash = await client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'withdrawFromEscalationGame',
 		args: [getReportingOutcomeValue(outcome), depositIndexes],
-	})
-	await client.waitForTransactionReceipt({ hash })
+	}))
 	return {
 		action: 'withdrawEscalation',
 		hash,

@@ -19,7 +19,7 @@ import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMig
 import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getRepTokensMigratedRepBalance, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
-import { peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
+import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -121,6 +121,38 @@ describe('Peripherals Contract Test Suite', () => {
 
 		assert.strictEqual(name, `Shares-${ questionId }`, 'share token name should include the question id')
 		assert.strictEqual(symbol, `SHARE-${ questionId }`, 'share token symbol should include the question id')
+	})
+
+	test('security pool factory stores deployments for direct query', async () => {
+		const factoryAddress = getInfraContractAddresses().securityPoolFactory
+		const deploymentCount = await client.readContract({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'securityPoolDeploymentCount',
+			address: factoryAddress,
+			args: [],
+		})
+		const deployments = await client.readContract({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'securityPoolDeploymentsRange',
+			address: factoryAddress,
+			args: [0n, deploymentCount],
+		})
+		const deployment = ensureDefined(deployments[0], 'origin deployment missing')
+		const { completeSetCollateralAmount, currentRetentionRate: storedCurrentRetentionRate, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId: storedQuestionId, securityMultiplier: storedSecurityMultiplier, securityPool: securityPoolAddress, shareToken: shareTokenAddress, startingRepEthPrice: storedStartingRepEthPrice, truthAuction: truthAuctionAddress, universeId } = deployment
+		const expectedAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
+
+		strictEqualTypeSafe(deploymentCount, 1n, 'factory should know about the origin deployment')
+		strictEqualTypeSafe(securityPoolAddress, expectedAddresses.securityPool, 'stored security pool address should match')
+		strictEqualTypeSafe(truthAuctionAddress, expectedAddresses.truthAuction, 'stored truth auction address should match')
+		strictEqualTypeSafe(managerAddress, expectedAddresses.priceOracleManagerAndOperatorQueuer, 'stored manager address should match')
+		strictEqualTypeSafe(shareTokenAddress, expectedAddresses.shareToken, 'stored share token address should match')
+		strictEqualTypeSafe(parent, addressString(0x0n), 'stored parent should be zero for origin deployment')
+		strictEqualTypeSafe(universeId, genesisUniverse, 'stored universe should match')
+		strictEqualTypeSafe(storedQuestionId, questionId, 'stored question id should match')
+		strictEqualTypeSafe(storedSecurityMultiplier, securityMultiplier, 'stored security multiplier should match')
+		strictEqualTypeSafe(storedCurrentRetentionRate, MAX_RETENTION_RATE, 'stored retention rate should match')
+		strictEqualTypeSafe(storedStartingRepEthPrice, startingRepEthPrice, 'stored starting price should match')
+		strictEqualTypeSafe(completeSetCollateralAmount, 0n, 'origin deployments should not have complete set collateral')
 	})
 
 	test('withdrawal after question end releases escalation lock without changing ownership in single-sided case', async () => {
@@ -314,6 +346,41 @@ describe('Peripherals Contract Test Suite', () => {
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid)
+
+		const factoryAddress = getInfraContractAddresses().securityPoolFactory
+		const deploymentCount = await client.readContract({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'securityPoolDeploymentCount',
+			address: factoryAddress,
+			args: [],
+		})
+		const childUniverseId = getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid)
+		const expectedChildAddresses = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverseId, questionId, securityMultiplier)
+
+		const deployments = await client.readContract({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'securityPoolDeploymentsRange',
+			address: factoryAddress,
+			args: [0n, deploymentCount],
+		})
+		const matchingChildDeployment = ensureDefined(
+			deployments.find(deployment => deployment.parent === securityPoolAddresses.securityPool && deployment.universeId === childUniverseId),
+			'child deployment not found',
+		)
+		const { completeSetCollateralAmount: childCompleteSetCollateralAmount, currentRetentionRate: childCurrentRetentionRate, parent: childParent, priceOracleManagerAndOperatorQueuer: childManagerAddress, questionId: childStoredQuestionId, securityMultiplier: childStoredSecurityMultiplier, securityPool: childSecurityPoolAddress, shareToken: childShareTokenAddress, startingRepEthPrice: childStartingRepEthPrice, truthAuction: childTruthAuctionAddress, universeId: childStoredUniverseId } = matchingChildDeployment
+
+		strictEqualTypeSafe(deploymentCount > 1n, true, 'factory should track more than one deployment')
+		strictEqualTypeSafe(childSecurityPoolAddress, expectedChildAddresses.securityPool, 'child deployment should be queryable')
+		strictEqualTypeSafe(childTruthAuctionAddress, expectedChildAddresses.truthAuction, 'child truth auction should be queryable')
+		strictEqualTypeSafe(childManagerAddress, expectedChildAddresses.priceOracleManagerAndOperatorQueuer, 'child manager should be queryable')
+		strictEqualTypeSafe(childShareTokenAddress, expectedChildAddresses.shareToken, 'child share token should be queryable')
+		strictEqualTypeSafe(childParent, securityPoolAddresses.securityPool, 'child parent should match the origin security pool')
+		strictEqualTypeSafe(childStoredUniverseId, childUniverseId, 'child universe id should match')
+		strictEqualTypeSafe(childStoredQuestionId, questionId, 'child question id should match')
+		strictEqualTypeSafe(childStoredSecurityMultiplier, securityMultiplier, 'child multiplier should match')
+		strictEqualTypeSafe(childCurrentRetentionRate, MAX_RETENTION_RATE, 'child retention rate should match')
+		strictEqualTypeSafe(childStartingRepEthPrice > 0n, true, 'child starting price should be recorded')
+		strictEqualTypeSafe(childCompleteSetCollateralAmount, 0n, 'child complete set collateral should default to zero during fork')
 	})
 
 	test('Can Liquidate', async () => {

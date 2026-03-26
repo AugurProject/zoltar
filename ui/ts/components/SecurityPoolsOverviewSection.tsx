@@ -7,7 +7,7 @@ export function SecurityPoolsOverviewSection({ accountState, liquidationAmount, 
 				<div>
 					<p class="panel-label">Security Pools</p>
 					<h2>Review all deployed security pools</h2>
-					<p class="detail">This tab scans factory deployment logs, shows the pools currently known on-chain, and lets you queue liquidation against a target vault for any listed pool.</p>
+					<p class="detail">This tab reads the factory deployment registry, shows the pools currently known on-chain, and lets you queue liquidation against a target vault for any listed pool.</p>
 				</div>
 			</div>
 

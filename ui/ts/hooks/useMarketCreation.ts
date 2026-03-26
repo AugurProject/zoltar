@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { createMarket as createMarketTransaction } from '../contracts.js'
-import { createWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { createMarketParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultMarketFormState } from '../lib/marketForm.js'
@@ -25,9 +25,8 @@ export function useMarketCreation({ accountAddress, deploymentStatuses, onTransa
 	const marketError = useSignal<string | undefined>(undefined)
 
 	const createMarket = async () => {
-		let ethereum
 		try {
-			ethereum = getRequiredInjectedEthereum()
+			getRequiredInjectedEthereum()
 		} catch {
 			marketError.value = 'No injected wallet found'
 			return
@@ -48,7 +47,7 @@ export function useMarketCreation({ accountAddress, deploymentStatuses, onTransa
 
 		try {
 			onTransactionRequested()
-			const result = await createMarketTransaction(createWriteClient(ethereum, accountAddress, { onTransactionSubmitted }), marketParameters)
+			const result = await createMarketTransaction(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), marketParameters)
 			marketResult.value = result
 			onTransaction(result.createQuestionHash)
 			await refreshState()

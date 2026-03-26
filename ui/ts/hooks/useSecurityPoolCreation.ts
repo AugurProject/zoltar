@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { createSecurityPool, loadMarketDetails } from '../contracts.js'
-import { createReadClient, createWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultSecurityPoolFormState } from '../lib/marketForm.js'
@@ -58,9 +58,8 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 	const loadMarket = async () => await loadMarketById(securityPoolForm.value.marketId)
 
 	const createPool = async () => {
-		let ethereum
 		try {
-			ethereum = getRequiredInjectedEthereum()
+			getRequiredInjectedEthereum()
 		} catch {
 			securityPoolError.value = 'No injected wallet found'
 			return
@@ -91,7 +90,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		securityPoolResult.value = undefined
 		try {
 			onTransactionRequested()
-			const result = await createSecurityPool(createWriteClient(ethereum, accountAddress, { onTransactionSubmitted }), parameters)
+			const result = await createSecurityPool(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), parameters)
 			marketDetails.value = details
 			securityPoolResult.value = result
 			onTransaction(result.deployPoolHash)

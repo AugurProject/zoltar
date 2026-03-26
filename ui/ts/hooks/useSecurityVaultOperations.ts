@@ -1,11 +1,12 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { approveErc20, depositRepToSecurityPool, loadSecurityVaultDetails, redeemSecurityVaultFees, redeemSecurityVaultRep, updateSecurityVaultFees } from '../contracts.js'
-import { createReadClient, createWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import { getDefaultSecurityVaultFormState } from '../lib/marketForm.js'
+import { runWriteAction } from '../lib/writeAction.js'
 import type { SecurityVaultFormState } from '../types/app.js'
 import type { SecurityVaultActionResult, SecurityVaultDetails } from '../types/contracts.js'
 
@@ -24,6 +25,9 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 	const securityVaultError = useSignal<string | undefined>(undefined)
 	const securityVaultForm = useSignal<SecurityVaultFormState>(getDefaultSecurityVaultFormState())
 	const securityVaultResult = useSignal<SecurityVaultActionResult | undefined>(undefined)
+	const reloadSecurityVaultDetails = async (securityPoolAddress: Address, vaultAddress: Address) => {
+		securityVaultDetails.value = await loadSecurityVaultDetails(createReadClient(), securityPoolAddress, vaultAddress)
+	}
 
 	const loadSecurityVault = async () => {
 		if (accountAddress === undefined) {
@@ -45,48 +49,81 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 		}
 	}
 
-	const runVaultAction = async (action: (ethereumAddress: Address, securityPoolAddress: Address) => Promise<SecurityVaultActionResult>, errorFallback: string) => {
-		const ethereum = getRequiredInjectedEthereum()
-		if (ethereum === undefined) {
-			securityVaultError.value = 'No injected wallet found'
-			return
-		}
-		if (accountAddress === undefined) {
-			securityVaultError.value = 'Connect a wallet before operating a security vault'
-			return
-		}
-
-		try {
-			onTransactionRequested()
-			const securityPoolAddress = parseAddressInput(securityVaultForm.value.securityPoolAddress, 'Security pool address')
-			securityVaultError.value = undefined
-			securityVaultResult.value = undefined
-			const result = await action(accountAddress, securityPoolAddress)
-			securityVaultResult.value = result
-			onTransaction(result.hash)
-			const details = await loadSecurityVaultDetails(createReadClient(), securityPoolAddress, accountAddress)
-			securityVaultDetails.value = details
-			await refreshState()
-		} catch (error) {
-			securityVaultError.value = getErrorMessage(error, errorFallback)
-		} finally {
-			onTransactionFinished()
-		}
-	}
+	const runVaultAction = async (action: (ethereumAddress: Address, securityPoolAddress: Address) => Promise<SecurityVaultActionResult>, errorFallback: string, onSuccess?: (result: SecurityVaultActionResult, securityPoolAddress: Address, walletAddress: Address) => Promise<void> | void) =>
+		await runWriteAction(
+			{
+				accountAddress,
+				missingWalletMessage: 'Connect a wallet before operating a security vault',
+				onTransaction,
+				onTransactionFinished,
+				onTransactionRequested,
+				refreshState,
+				setErrorMessage: message => {
+					securityVaultError.value = message
+				},
+			},
+			async walletAddress => {
+				const securityPoolAddress = parseAddressInput(securityVaultForm.value.securityPoolAddress, 'Security pool address')
+				securityVaultError.value = undefined
+				securityVaultResult.value = undefined
+				const result = await action(walletAddress, securityPoolAddress)
+				return result
+			},
+			errorFallback,
+			async (result, walletAddress) => {
+				securityVaultResult.value = result
+				const securityPoolAddress = parseAddressInput(securityVaultForm.value.securityPoolAddress, 'Security pool address')
+				await onSuccess?.(result, securityPoolAddress, walletAddress)
+			},
+		)
 
 	const approveRep = async () =>
-		await runVaultAction(async (vaultAddress, securityPoolAddress) => {
-			const details = securityVaultDetails.value ?? (await loadSecurityVaultDetails(createReadClient(), securityPoolAddress, vaultAddress))
-			return await approveErc20(createWriteClient(getRequiredInjectedEthereum(), vaultAddress, { onTransactionSubmitted }), details.repToken, securityPoolAddress, parseBigIntInput(securityVaultForm.value.repApprovalAmount, 'REP approval amount'), 'approveRep')
-		}, 'Failed to approve REP')
+		await runVaultAction(
+			async (vaultAddress, securityPoolAddress) => {
+				const details = securityVaultDetails.value ?? (await loadSecurityVaultDetails(createReadClient(), securityPoolAddress, vaultAddress))
+				return await approveErc20(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.repToken, securityPoolAddress, parseBigIntInput(securityVaultForm.value.repApprovalAmount, 'REP approval amount'), 'approveRep')
+			},
+			'Failed to approve REP',
+			async (_result, securityPoolAddress, vaultAddress) => {
+				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
+			},
+		)
 
-	const depositRep = async () => await runVaultAction(async (vaultAddress, securityPoolAddress) => await depositRepToSecurityPool(createWriteClient(getRequiredInjectedEthereum(), vaultAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(securityVaultForm.value.depositAmount, 'REP deposit amount')), 'Failed to deposit REP')
+	const depositRep = async () =>
+		await runVaultAction(
+			async (vaultAddress, securityPoolAddress) => await depositRepToSecurityPool(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(securityVaultForm.value.depositAmount, 'REP deposit amount')),
+			'Failed to deposit REP',
+			async (_result, securityPoolAddress, vaultAddress) => {
+				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
+			},
+		)
 
-	const updateVaultFees = async () => await runVaultAction(async (vaultAddress, securityPoolAddress) => await updateSecurityVaultFees(createWriteClient(getRequiredInjectedEthereum(), vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress), 'Failed to update vault fees')
+	const updateVaultFees = async () =>
+		await runVaultAction(
+			async (vaultAddress, securityPoolAddress) => await updateSecurityVaultFees(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress),
+			'Failed to update vault fees',
+			async (_result, securityPoolAddress, vaultAddress) => {
+				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
+			},
+		)
 
-	const redeemFees = async () => await runVaultAction(async (vaultAddress, securityPoolAddress) => await redeemSecurityVaultFees(createWriteClient(getRequiredInjectedEthereum(), vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress), 'Failed to redeem fees')
+	const redeemFees = async () =>
+		await runVaultAction(
+			async (vaultAddress, securityPoolAddress) => await redeemSecurityVaultFees(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress),
+			'Failed to redeem fees',
+			async (_result, securityPoolAddress, vaultAddress) => {
+				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
+			},
+		)
 
-	const redeemRep = async () => await runVaultAction(async (vaultAddress, securityPoolAddress) => await redeemSecurityVaultRep(createWriteClient(getRequiredInjectedEthereum(), vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress), 'Failed to redeem REP')
+	const redeemRep = async () =>
+		await runVaultAction(
+			async (vaultAddress, securityPoolAddress) => await redeemSecurityVaultRep(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress),
+			'Failed to redeem REP',
+			async (_result, securityPoolAddress, vaultAddress) => {
+				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
+			},
+		)
 
 	return {
 		approveRep,
