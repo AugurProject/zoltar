@@ -12,10 +12,13 @@ import type { TradingActionResult } from '../types/contracts.js'
 type UseTradingOperationsParameters = {
 	accountAddress: Address | undefined
 	onTransaction: (hash: Hash) => void
+	onTransactionFinished: () => void
+	onTransactionRequested: () => void
+	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 }
 
-export function useTradingOperations({ accountAddress, onTransaction, refreshState }: UseTradingOperationsParameters) {
+export function useTradingOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseTradingOperationsParameters) {
 	const tradingError = useSignal<string | undefined>(undefined)
 	const tradingForm = useSignal<TradingFormState>(getDefaultTradingFormState())
 	const tradingResult = useSignal<TradingActionResult | undefined>(undefined)
@@ -32,6 +35,7 @@ export function useTradingOperations({ accountAddress, onTransaction, refreshSta
 		}
 
 		try {
+			onTransactionRequested()
 			setSignalValue(tradingError, undefined)
 			setSignalValue(tradingResult, undefined)
 			const securityPoolAddress = parseAddressInput(tradingForm.value.securityPoolAddress, 'Security pool address')
@@ -41,17 +45,19 @@ export function useTradingOperations({ accountAddress, onTransaction, refreshSta
 			await refreshState()
 		} catch (error) {
 			setSignalValue(tradingError, getErrorMessage(error, errorFallback))
+		} finally {
+			onTransactionFinished()
 		}
 	}
 
-	const createCompleteSet = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await createCompleteSetInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress), securityPoolAddress, parseBigIntInput(tradingForm.value.completeSetAmount, 'Complete set amount')), 'Failed to mint complete sets')
+	const createCompleteSet = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await createCompleteSetInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.completeSetAmount, 'Complete set amount')), 'Failed to mint complete sets')
 
-	const redeemCompleteSet = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemCompleteSetInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress), securityPoolAddress, parseBigIntInput(tradingForm.value.redeemAmount, 'Redeem amount')), 'Failed to redeem complete sets')
+	const redeemCompleteSet = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemCompleteSetInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.redeemAmount, 'Redeem amount')), 'Failed to redeem complete sets')
 
-	const redeemShares = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemSharesInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress), securityPoolAddress), 'Failed to redeem shares')
+	const redeemShares = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemSharesInSecurityPool(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress), 'Failed to redeem shares')
 
 	const migrateShares = async () =>
-		await runTradingAction(async (walletAddress, securityPoolAddress) => await migrateSharesFromUniverse(createWriteClient(getRequiredInjectedEthereum(), walletAddress), securityPoolAddress, parseBigIntInput(tradingForm.value.fromUniverseId, 'From universe ID'), parseReportingOutcomeInput(tradingForm.value.selectedOutcome)), 'Failed to migrate shares')
+		await runTradingAction(async (walletAddress, securityPoolAddress) => await migrateSharesFromUniverse(createWriteClient(getRequiredInjectedEthereum(), walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.fromUniverseId, 'From universe ID'), parseReportingOutcomeInput(tradingForm.value.selectedOutcome)), 'Failed to migrate shares')
 
 	return {
 		createCompleteSet,

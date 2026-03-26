@@ -12,7 +12,7 @@ function getTruthAuctionWindow(details: ForkAuctionSectionProps['forkAuctionDeta
 	}
 }
 
-export function ForkAuctionSection({ accountState, forkAuctionDetails, forkAuctionError, forkAuctionForm, forkAuctionResult, loadingForkAuctionDetails, onClaimAuctionProceeds, onCreateChildUniverse, onFinalizeTruthAuction, onForkAuctionFormChange, onForkWithOwnEscalation, onInitiateFork, onLoadForkAuction, onMigrateEscalationDeposits, onMigrateRepToZoltar, onMigrateVault, onRefundLosingBids, onStartTruthAuction, onSubmitBid }: ForkAuctionSectionProps) {
+export function ForkAuctionSection({ accountState, forkAuctionDetails, forkAuctionError, forkAuctionForm, forkAuctionResult, loadingForkAuctionDetails, onClaimAuctionProceeds, onCreateChildUniverse, onFinalizeTruthAuction, onForkAuctionFormChange, onForkUniverse, onForkWithOwnEscalation, onInitiateFork, onLoadForkAuction, onMigrateEscalationDeposits, onMigrateRepToZoltar, onMigrateVault, onRefundLosingBids, onStartTruthAuction, onSubmitBid, onWithdrawBids }: ForkAuctionSectionProps) {
 	const selectedAuctionPrice = forkAuctionDetails?.truthAuction?.clearingPrice
 	const estimatedRep = selectedAuctionPrice === undefined ? undefined : estimateRepPurchased(BigInt(forkAuctionForm.bidAmount || '0'), selectedAuctionPrice)
 	const migrationTimeRemaining = forkAuctionDetails === undefined ? undefined : getTimeRemaining(forkAuctionDetails.migrationEndsAt, forkAuctionDetails.currentTime)
@@ -213,6 +213,23 @@ export function ForkAuctionSection({ accountState, forkAuctionDetails, forkAucti
 							</button>
 						</div>
 
+						<div class="field-row">
+							<label class="field">
+								<span>Direct Fork Universe ID</span>
+								<input value={forkAuctionForm.directForkUniverseId} onInput={event => onForkAuctionFormChange({ directForkUniverseId: event.currentTarget.value })} />
+							</label>
+							<label class="field">
+								<span>Direct Fork Question ID</span>
+								<input value={forkAuctionForm.directForkQuestionId} onInput={event => onForkAuctionFormChange({ directForkQuestionId: event.currentTarget.value })} placeholder="0x..." />
+							</label>
+						</div>
+
+						<div class="actions">
+							<button class="secondary" onClick={onForkUniverse} disabled={accountState.address === undefined || !accountState.isMainnet}>
+								Fork Universe Directly
+							</button>
+						</div>
+
 						<div class="actions">
 							<button onClick={onCreateChildUniverse} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Create {getOutcomeActionLabel(forkAuctionForm.selectedOutcome)} Child Universe
@@ -272,6 +289,26 @@ export function ForkAuctionSection({ accountState, forkAuctionDetails, forkAucti
 						<div class="actions">
 							<button onClick={onClaimAuctionProceeds} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Claim Auction Proceeds
+							</button>
+						</div>
+
+						<div class="field-row">
+							<label class="field">
+								<span>Withdraw For Address</span>
+								<input value={forkAuctionForm.withdrawForAddress} onInput={event => onForkAuctionFormChange({ withdrawForAddress: event.currentTarget.value })} placeholder="Leave empty to use connected wallet" />
+							</label>
+							<label class="field">
+								<span>Withdraw Tick</span>
+								<input value={forkAuctionForm.withdrawTick} onInput={event => onForkAuctionFormChange({ withdrawTick: event.currentTarget.value })} />
+							</label>
+						</div>
+						<label class="field">
+							<span>Withdraw Bid Index</span>
+							<input value={forkAuctionForm.withdrawBidIndex} onInput={event => onForkAuctionFormChange({ withdrawBidIndex: event.currentTarget.value })} />
+						</label>
+						<div class="actions">
+							<button class="secondary" onClick={onWithdrawBids} disabled={accountState.address === undefined || !accountState.isMainnet}>
+								Withdraw Bids
 							</button>
 						</div>
 					</div>

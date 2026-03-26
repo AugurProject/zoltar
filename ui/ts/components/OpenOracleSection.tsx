@@ -1,6 +1,7 @@
+import { parseOracleQueueOperationInput } from '../lib/inputs.js'
 import type { OpenOracleSectionProps } from '../types/components.js'
 
-export function OpenOracleSection({ accountState, loadingOracleManager, onApproveToken1, onApproveToken2, onLoadOracleManager, onOpenOracleFormChange, onRequestPrice, onSettleReport, onSubmitInitialReport, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails }: OpenOracleSectionProps) {
+export function OpenOracleSection({ accountState, loadingOracleManager, onApproveToken1, onApproveToken2, onLoadOracleManager, onOpenOracleFormChange, onQueueOperation, onRequestPrice, onSettleReport, onSubmitInitialReport, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails }: OpenOracleSectionProps) {
 	return (
 		<section class="panel market-panel">
 			<div class="market-header">
@@ -69,6 +70,32 @@ export function OpenOracleSection({ accountState, loadingOracleManager, onApprov
 							</button>
 							<button onClick={onRequestPrice} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Request Price
+							</button>
+						</div>
+
+						<label class="field">
+							<span>Queued Operation</span>
+							<select value={openOracleForm.queuedOperation} onInput={event => onOpenOracleFormChange({ queuedOperation: parseOracleQueueOperationInput(event.currentTarget.value) })}>
+								<option value="liquidation">Liquidation</option>
+								<option value="withdrawRep">Withdraw REP</option>
+								<option value="setSecurityBondsAllowance">Set Security Bonds Allowance</option>
+							</select>
+						</label>
+
+						<div class="field-row">
+							<label class="field">
+								<span>Operation Target Vault</span>
+								<input value={openOracleForm.operationTargetVault} onInput={event => onOpenOracleFormChange({ operationTargetVault: event.currentTarget.value })} placeholder="0x..." />
+							</label>
+							<label class="field">
+								<span>Operation Amount</span>
+								<input value={openOracleForm.operationAmount} onInput={event => onOpenOracleFormChange({ operationAmount: event.currentTarget.value })} />
+							</label>
+						</div>
+
+						<div class="actions">
+							<button class="secondary" onClick={onQueueOperation} disabled={accountState.address === undefined || !accountState.isMainnet}>
+								Request Price If Needed & Queue Operation
 							</button>
 						</div>
 

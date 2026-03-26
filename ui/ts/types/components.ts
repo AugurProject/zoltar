@@ -92,6 +92,7 @@ export type OpenOracleSectionProps = {
 	onApproveToken2: () => void
 	onLoadOracleManager: () => void
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
+	onQueueOperation: () => void
 	onRequestPrice: () => void
 	onSettleReport: () => void
 	onSubmitInitialReport: () => void
@@ -118,7 +119,9 @@ export type SecurityPoolsOverviewSectionProps = {
 export type TradingSectionProps = {
 	accountState: AccountState
 	onCreateCompleteSet: () => void
+	onMigrateShares: () => void
 	onRedeemCompleteSet: () => void
+	onRedeemShares: () => void
 	onTradingFormChange: (update: Partial<TradingFormState>) => void
 	tradingError: string | undefined
 	tradingForm: TradingFormState
@@ -149,6 +152,7 @@ export type ForkAuctionSectionProps = {
 	onCreateChildUniverse: () => void
 	onFinalizeTruthAuction: () => void
 	onForkAuctionFormChange: (update: Partial<ForkAuctionFormState>) => void
+	onForkUniverse: () => void
 	onForkWithOwnEscalation: () => void
 	onInitiateFork: () => void
 	onLoadForkAuction: () => void
@@ -158,6 +162,7 @@ export type ForkAuctionSectionProps = {
 	onRefundLosingBids: () => void
 	onStartTruthAuction: () => void
 	onSubmitBid: () => void
+	onWithdrawBids: () => void
 }
 
 export type MainnetGateSectionProps = {
@@ -197,6 +202,7 @@ export type AppRouteContentProps = {
 	onApproveToken1: () => void
 	onApproveToken2: () => void
 	onCreateCompleteSet: () => void
+	onForkUniverse: () => void
 	onClaimAuctionProceeds: () => void
 	onCreateChildUniverse: () => void
 	onDeployNextMissing: () => void
@@ -213,6 +219,7 @@ export type AppRouteContentProps = {
 	onRedeemRep: () => void
 	onReportOutcome: () => void
 	onRequestPrice: () => void
+	onQueueOperation: () => void
 	onResetMarket: () => void
 	onRouteChange: (route: Route) => void
 	onSecurityPoolFormChange: (update: Partial<SecurityPoolFormState>) => void
@@ -224,12 +231,15 @@ export type AppRouteContentProps = {
 	onSettleReport: () => void
 	onStartTruthAuction: () => void
 	onSubmitBid: () => void
+	onWithdrawBids: () => void
 	onSubmitInitialReport: () => void
 	onUpdateVaultFees: () => void
 	onWithdrawEscalation: () => void
 	onMigrateEscalationDeposits: () => void
 	onMigrateRepToZoltar: () => void
 	onMigrateVault: () => void
+	onMigrateShares: () => void
+	onRedeemShares: () => void
 	onRefundLosingBids: () => void
 	openOracleError: string | undefined
 	openOracleForm: OpenOracleFormState

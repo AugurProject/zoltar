@@ -1,6 +1,8 @@
+import { parseReportingOutcomeInput } from '../lib/inputs.js'
+import { REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
 import type { TradingSectionProps } from '../types/components.js'
 
-export function TradingSection({ accountState, onCreateCompleteSet, onRedeemCompleteSet, onTradingFormChange, tradingError, tradingForm, tradingResult }: TradingSectionProps) {
+export function TradingSection({ accountState, onCreateCompleteSet, onMigrateShares, onRedeemCompleteSet, onRedeemShares, onTradingFormChange, tradingError, tradingForm, tradingResult }: TradingSectionProps) {
 	return (
 		<section class="panel market-panel">
 			<div class="market-header">
@@ -42,12 +44,35 @@ export function TradingSection({ accountState, onCreateCompleteSet, onRedeemComp
 							</label>
 						</div>
 
+						<div class="field-row">
+							<label class="field">
+								<span>From Universe ID</span>
+								<input value={tradingForm.fromUniverseId} onInput={event => onTradingFormChange({ fromUniverseId: event.currentTarget.value })} />
+							</label>
+							<label class="field">
+								<span>Outcome To Migrate</span>
+								<select value={tradingForm.selectedOutcome} onInput={event => onTradingFormChange({ selectedOutcome: parseReportingOutcomeInput(event.currentTarget.value) })}>
+									{REPORTING_OUTCOME_OPTIONS.map(option => (
+										<option key={option.key} value={option.key}>
+											{option.label}
+										</option>
+									))}
+								</select>
+							</label>
+						</div>
+
 						<div class="actions">
 							<button onClick={onCreateCompleteSet} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Mint Complete Sets
 							</button>
 							<button class="secondary" onClick={onRedeemCompleteSet} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Redeem Complete Sets
+							</button>
+							<button class="secondary" onClick={onMigrateShares} disabled={accountState.address === undefined || !accountState.isMainnet}>
+								Migrate Shares
+							</button>
+							<button class="secondary" onClick={onRedeemShares} disabled={accountState.address === undefined || !accountState.isMainnet}>
+								Redeem Shares
 							</button>
 						</div>
 					</div>

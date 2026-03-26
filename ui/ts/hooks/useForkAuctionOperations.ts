@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
-import { claimSecurityPoolAuctionProceeds, createChildUniverseFromSecurityPool, finalizeSecurityPoolTruthAuction, forkZoltarWithOwnEscalation, initiateSecurityPoolFork, loadForkAuctionDetails, migrateEscalationDeposits, migrateRepToZoltarFromSecurityPool, migrateSecurityVault, refundTruthAuctionBid, startTruthAuctionForSecurityPool, submitTruthAuctionBid } from '../contracts.js'
+import { claimSecurityPoolAuctionProceeds, createChildUniverseFromSecurityPool, finalizeSecurityPoolTruthAuction, forkUniverseDirectly, forkZoltarWithOwnEscalation, initiateSecurityPoolFork, loadForkAuctionDetails, migrateEscalationDeposits, migrateRepToZoltarFromSecurityPool, migrateSecurityVault, refundTruthAuctionBid, startTruthAuctionForSecurityPool, submitTruthAuctionBid, withdrawTruthAuctionBids } from '../contracts.js'
 import { createReadClient, createWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput } from '../lib/inputs.js'
@@ -101,6 +101,16 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, refres
 			return await claimSecurityPoolAuctionProceeds(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId, vaultAddress, parseBigIntInput(forkAuctionForm.value.bidTick, 'Bid tick'), parseBigIntInput(forkAuctionForm.value.bidIndex, 'Bid index'))
 		}, 'Failed to claim auction proceeds')
 
+	const forkUniverse = async () =>
+		await runForkAuctionAction(async (walletAddress, details) => await forkUniverseDirectly(createWriteClient(getRequiredInjectedEthereum(), walletAddress), parseBigIntInput(forkAuctionForm.value.directForkUniverseId, 'Fork universe ID'), parseBigIntInput(forkAuctionForm.value.directForkQuestionId, 'Fork question ID'), details.securityPoolAddress), 'Failed to fork universe directly')
+
+	const withdrawBids = async () =>
+		await runForkAuctionAction(async (walletAddress, details) => {
+			if (details.truthAuctionAddress === undefined) throw new Error('Truth auction not available')
+			const withdrawFor = forkAuctionForm.value.withdrawForAddress.trim() === '' ? walletAddress : parseAddressInput(forkAuctionForm.value.withdrawForAddress, 'Withdraw-for address')
+			return await withdrawTruthAuctionBids(createWriteClient(getRequiredInjectedEthereum(), walletAddress), details.securityPoolAddress, details.universeId, details.truthAuctionAddress, withdrawFor, parseBigIntInput(forkAuctionForm.value.withdrawTick, 'Withdraw tick'), parseBigIntInput(forkAuctionForm.value.withdrawBidIndex, 'Withdraw bid index'))
+		}, 'Failed to withdraw bids')
+
 	return {
 		claimAuctionProceeds,
 		createChildUniverse,
@@ -108,6 +118,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, refres
 		forkAuctionError: forkAuctionError.value,
 		forkAuctionForm: forkAuctionForm.value,
 		forkAuctionResult: forkAuctionResult.value,
+		forkUniverse,
 		forkWithOwnEscalation,
 		initiateFork,
 		loadForkAuction,
@@ -121,6 +132,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, refres
 		},
 		startTruthAuction,
 		submitBid,
+		withdrawBids,
 		finalizeTruthAuction,
 	}
 }

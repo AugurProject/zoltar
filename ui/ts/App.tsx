@@ -78,7 +78,7 @@ export function App() {
 		},
 		refreshState,
 	})
-	const { approveToken1, approveToken2, loadOracleManager, loadingOracleManager, onRequestPrice, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails, setOpenOracleForm, settleReport, submitInitialReport } = useOpenOracleOperations({
+	const { approveToken1, approveToken2, loadOracleManager, loadingOracleManager, onQueueOperation, onRequestPrice, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails, setOpenOracleForm, settleReport, submitInitialReport } = useOpenOracleOperations({
 		accountAddress: accountState.address,
 		onTransaction: hash => {
 			lastTransactionHash.value = hash
@@ -99,14 +99,14 @@ export function App() {
 		},
 		refreshState,
 	})
-	const { createCompleteSet, redeemCompleteSet, setTradingForm, tradingError, tradingForm, tradingResult } = useTradingOperations({
+	const { createCompleteSet, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingError, tradingForm, tradingResult } = useTradingOperations({
 		accountAddress: accountState.address,
 		onTransaction: hash => {
 			lastTransactionHash.value = hash
 		},
 		refreshState,
 	})
-	const { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkAuctionDetails, forkAuctionError, forkAuctionForm, forkAuctionResult, forkWithOwnEscalation, initiateFork, loadForkAuction, loadingForkAuctionDetails, migrateEscalation, migrateRepToZoltar, migrateVault, refundLosingBids, setForkAuctionForm, startTruthAuction, submitBid } = useForkAuctionOperations({
+	const { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkAuctionDetails, forkAuctionError, forkAuctionForm, forkAuctionResult, forkUniverse, forkWithOwnEscalation, initiateFork, loadForkAuction, loadingForkAuctionDetails, migrateEscalation, migrateRepToZoltar, migrateVault, refundLosingBids, setForkAuctionForm, startTruthAuction, submitBid, withdrawBids } = useForkAuctionOperations({
 		accountAddress: accountState.address,
 		onTransaction: hash => {
 			lastTransactionHash.value = hash
@@ -169,6 +169,7 @@ export function App() {
 				onApproveToken1={() => void approveToken1()}
 				onApproveToken2={() => void approveToken2()}
 				onCreateCompleteSet={() => void createCompleteSet()}
+				onForkUniverse={() => void forkUniverse()}
 				onClaimAuctionProceeds={() => void claimAuctionProceeds()}
 				onCreateChildUniverse={() => void createChildUniverse()}
 				onDeployNextMissing={() => void deployNextMissing()}
@@ -181,8 +182,10 @@ export function App() {
 				onLiquidationTargetVaultChange={setLiquidationTargetVault}
 				onQueueLiquidation={(managerAddress, securityPoolAddress) => void queueLiquidation(managerAddress, securityPoolAddress)}
 				onRedeemCompleteSet={() => void redeemCompleteSet()}
+				onRedeemShares={() => void redeemShares()}
 				onRedeemFees={() => void redeemFees()}
 				onRedeemRep={() => void redeemRep()}
+				onQueueOperation={() => void onQueueOperation()}
 				onReportOutcome={() => void onReportOutcome()}
 				onRequestPrice={() => void onRequestPrice()}
 				onResetMarket={resetMarket}
@@ -199,7 +202,9 @@ export function App() {
 				onSubmitInitialReport={() => void submitInitialReport()}
 				onUpdateVaultFees={() => void updateVaultFees()}
 				onWithdrawEscalation={() => void withdrawEscalation()}
+				onWithdrawBids={() => void withdrawBids()}
 				onMigrateEscalationDeposits={() => void migrateEscalation()}
+				onMigrateShares={() => void migrateShares()}
 				onMigrateRepToZoltar={() => void migrateRepToZoltar()}
 				onMigrateVault={() => void migrateVault()}
 				onRefundLosingBids={() => void refundLosingBids()}
