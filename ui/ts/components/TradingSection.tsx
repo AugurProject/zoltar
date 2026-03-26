@@ -13,7 +13,7 @@ export function TradingSection({ accountState, onCreateCompleteSet, onRedeemComp
 
 			<div class="market-grid">
 				<div class="market-column">
-					{tradingResult === null ? null : (
+					{tradingResult === undefined ? null : (
 						<div class="status-card">
 							<p class="panel-label">Latest Trading Action</p>
 							<p class="detail">Action: {tradingResult.action}</p>
@@ -42,16 +42,16 @@ export function TradingSection({ accountState, onCreateCompleteSet, onRedeemComp
 						</div>
 
 						<div class="actions">
-							<button onClick={onCreateCompleteSet} disabled={accountState.address === null}>
+							<button onClick={onCreateCompleteSet} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Mint Complete Sets
 							</button>
-							<button class="secondary" onClick={onRedeemCompleteSet} disabled={accountState.address === null}>
+							<button class="secondary" onClick={onRedeemCompleteSet} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Redeem Complete Sets
 							</button>
 						</div>
 					</div>
 
-					{tradingError === null ? null : <p class="notice error">{tradingError}</p>}
+					{tradingError === undefined ? null : <p class="notice error">{tradingError}</p>}
 				</div>
 			</div>
 		</section>

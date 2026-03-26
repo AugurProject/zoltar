@@ -323,6 +323,7 @@ button.secondary {
 }
 
 .field input,
+.field select,
 .field textarea {
 	width: 100%;
 	border: 1px solid rgba(36, 25, 15, 0.16);
@@ -336,6 +337,48 @@ button.secondary {
 .field textarea {
 	min-height: 8rem;
 	resize: vertical;
+}
+
+.escalation-metrics {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+	margin-top: 1rem;
+}
+
+.escalation-metrics strong {
+	display: block;
+	margin-top: 0.35rem;
+	font-size: 1.05rem;
+}
+
+.escalation-sides {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 1rem;
+}
+
+.escalation-side {
+	padding: 1rem;
+	border-radius: 1.15rem;
+	border: 1px solid rgba(36, 25, 15, 0.08);
+	background: rgba(255, 255, 255, 0.62);
+}
+
+.escalation-side.selected {
+	border-color: rgba(36, 25, 15, 0.32);
+	box-shadow: inset 0 0 0 1px rgba(36, 25, 15, 0.18);
+}
+
+.escalation-side.leading {
+	background: rgba(255, 250, 240, 0.9);
+}
+
+.escalation-side-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 0.75rem;
 }
 
 @media (max-width: 800px) {
@@ -352,6 +395,8 @@ button.secondary {
 
 	.grid,
 	.metric-row,
+	.escalation-metrics,
+	.escalation-sides,
 	.field-row,
 	.market-grid {
 		grid-template-columns: 1fr;

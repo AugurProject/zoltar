@@ -7,11 +7,12 @@ export type InjectedEthereum = EIP1193Provider & {
 	removeListener?: (eventName: string, handler: EthereumEventHandler) => void
 }
 
-type WindowWithEthereum = Window &
-	typeof globalThis & {
+declare global {
+	interface Window {
 		ethereum?: InjectedEthereum
 	}
+}
 
 export function getInjectedEthereum(): InjectedEthereum | undefined {
-	return (window as WindowWithEthereum).ethereum
+	return window.ethereum
 }

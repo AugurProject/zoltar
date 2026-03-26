@@ -1,8 +1,7 @@
 import { useState } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
 import { createSecurityPool, loadMarketDetails } from '../contracts.js'
-import { getInjectedEthereum } from '../injectedEthereum.js'
-import { createReadClient, createWriteClient } from '../lib/clients.js'
+import { createReadClient, createWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultSecurityPoolFormState } from '../lib/marketForm.js'
@@ -10,7 +9,7 @@ import type { SecurityPoolFormState } from '../types/app.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '../types/contracts.js'
 
 type UseSecurityPoolCreationParameters = {
-	accountAddress: Address | null
+	accountAddress: Address | undefined
 	deploymentStatuses: DeploymentStatus[]
 	onTransaction: (hash: Hash) => void
 	refreshState: () => Promise<void>
@@ -18,11 +17,11 @@ type UseSecurityPoolCreationParameters = {
 
 export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, onTransaction, refreshState }: UseSecurityPoolCreationParameters) {
 	const [loadingMarketDetails, setLoadingMarketDetails] = useState(false)
-	const [marketDetails, setMarketDetails] = useState<MarketDetails | null>(null)
+	const [marketDetails, setMarketDetails] = useState<MarketDetails | undefined>(undefined)
 	const [securityPoolCreating, setSecurityPoolCreating] = useState(false)
-	const [securityPoolError, setSecurityPoolError] = useState<string | null>(null)
+	const [securityPoolError, setSecurityPoolError] = useState<string | undefined>(undefined)
 	const [securityPoolForm, setSecurityPoolForm] = useState<SecurityPoolFormState>(() => getDefaultSecurityPoolFormState())
-	const [securityPoolResult, setSecurityPoolResult] = useState<SecurityPoolCreationResult | null>(null)
+	const [securityPoolResult, setSecurityPoolResult] = useState<SecurityPoolCreationResult | undefined>(undefined)
 
 	const loadMarketById = async (marketId: string) => {
 		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) {
@@ -31,7 +30,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		}
 
 		setLoadingMarketDetails(true)
-		setSecurityPoolError(null)
+		setSecurityPoolError(undefined)
 		try {
 			const { questionId } = createSecurityPoolParameters({
 				...securityPoolForm,
@@ -39,14 +38,14 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 			})
 			const details = await loadMarketDetails(createReadClient(), questionId)
 			if (!details.exists) {
-				setMarketDetails(null)
+				setMarketDetails(undefined)
 				setSecurityPoolError('No market found for that ID')
 				return
 			}
 
 			setMarketDetails(details)
 		} catch (error) {
-			setMarketDetails(null)
+			setMarketDetails(undefined)
 			setSecurityPoolError(getErrorMessage(error, 'Failed to load market'))
 		} finally {
 			setLoadingMarketDetails(false)
@@ -56,12 +55,14 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 	const loadMarket = async () => await loadMarketById(securityPoolForm.marketId)
 
 	const createPool = async () => {
-		const ethereum = getInjectedEthereum()
-		if (ethereum === undefined) {
+		let ethereum
+		try {
+			ethereum = getRequiredInjectedEthereum()
+		} catch {
 			setSecurityPoolError('No injected wallet found')
 			return
 		}
-		if (accountAddress === null) {
+		if (accountAddress === undefined) {
 			setSecurityPoolError('Connect a wallet before creating a security pool')
 			return
 		}
@@ -83,8 +84,8 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		}
 
 		setSecurityPoolCreating(true)
-		setSecurityPoolError(null)
-		setSecurityPoolResult(null)
+		setSecurityPoolError(undefined)
+		setSecurityPoolResult(undefined)
 		try {
 			const result = await createSecurityPool(createWriteClient(ethereum, accountAddress), parameters)
 			setMarketDetails(details)

@@ -1,7 +1,7 @@
 import { encodeAbiParameters, encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes, parseAbiItem, toHex, zeroAddress, type Address, type Hash, type Hex } from 'viem'
 import { ABIS } from './abis.js'
-import { ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from './contractArtifact.js'
-import type { BalanceReadClient, ContractReadClient, DeploymentClient, DeploymentReadClient, DeploymentStatus, DeploymentStep, DeploymentStepId, MarketCreationResult, MarketDetails, MarketType, MarketWriteClient, OpenOracleActionResult, OracleManagerDetails, QuestionData, SecurityPoolCreationResult, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult } from './types/contracts.js'
+import { ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_EscalationGame_EscalationGame, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from './contractArtifact.js'
+import type { BalanceReadClient, ContractReadClient, DeploymentClient, DeploymentReadClient, DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, MarketCreationResult, MarketDetails, MarketType, MarketWriteClient, OpenOracleActionResult, OracleManagerDetails, QuestionData, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult } from './types/contracts.js'
 
 const GENESIS_REPUTATION_TOKEN = bigintToAddress(0x221657776846890989a759ba2973e427dff5c9bbn)
 const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
@@ -9,7 +9,8 @@ const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
 const ZERO_SALT = numberToBytes(0, { size: 32 })
 const FUND_PROXY_DEPLOYER_SIGNER_AMOUNT = 10000000000000000n
-const LIQUIDATION_OPERATION_TYPE = 0n
+const LIQUIDATION_OPERATION_TYPE = 0
+const ESCALATION_TIME_LENGTH = 4_233_600n
 
 function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${ value.toString(16).padStart(40, '0') }`)
@@ -150,7 +151,7 @@ async function deployViaProxy(client: DeploymentClient, bytecode: Hex) {
 
 async function ensureProxyDeployerDeployed(client: DeploymentClient) {
 	const code = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
-	if (code !== undefined && code !== '0x') return null
+	if (code !== undefined && code !== '0x') return undefined
 
 	const fundHash = await client.sendTransaction({
 		to: PROXY_DEPLOYER_SIGNER,
@@ -319,6 +320,48 @@ function getQuestionIdHex(questionId: bigint) {
 	return `0x${ questionId.toString(16) }`
 }
 
+function getReportingOutcomeValue(outcome: ReportingOutcomeKey) {
+	switch (outcome) {
+		case 'invalid':
+			return 0
+		case 'yes':
+			return 1
+		case 'no':
+			return 2
+		default:
+			throw new Error(`Unhandled reporting outcome: ${ JSON.stringify(outcome) }`)
+	}
+}
+
+function getReportingOutcomeKey(outcome: bigint | number): ReportingOutcomeKey | 'none' {
+	switch (outcome) {
+		case 0:
+		case 0n:
+			return 'invalid'
+		case 1:
+		case 1n:
+			return 'yes'
+		case 2:
+		case 2n:
+			return 'no'
+		default:
+			return 'none'
+	}
+}
+
+function getEscalationSideLabel(key: ReportingOutcomeKey) {
+	switch (key) {
+		case 'invalid':
+			return 'Invalid'
+		case 'yes':
+			return 'Yes'
+		case 'no':
+			return 'No'
+		default:
+			throw new Error(`Unhandled escalation side: ${ JSON.stringify(key) }`)
+	}
+}
+
 function getMarketType(questionData: QuestionData, outcomeLabels: string[]): MarketType {
 	if (outcomeLabels.length === 0 && questionData.numTicks > 0n) return 'scalar'
 	if (outcomeLabels.length === 2 && outcomeLabels[0] === 'Yes' && outcomeLabels[1] === 'No') return 'binary'
@@ -347,6 +390,36 @@ async function loadOutcomeLabels(client: ContractReadClient, questionId: bigint)
 	return outcomeLabels
 }
 
+async function loadEscalationDeposits(client: ContractReadClient, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
+	let currentIndex = 0n
+	const pageSize = 30n
+	const deposits: EscalationDeposit[] = []
+
+	while (true) {
+		const page = (await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: escalationGameAddress,
+			functionName: 'getDepositsByOutcome',
+			args: [getReportingOutcomeValue(outcome), currentIndex, pageSize],
+		})) as readonly { amount: bigint; cumulativeAmount: bigint; depositor: Address }[]
+
+		const normalizedPage = page
+			.map((deposit, index) => ({
+				amount: deposit.amount,
+				cumulativeAmount: deposit.cumulativeAmount,
+				depositIndex: currentIndex + BigInt(index),
+				depositor: deposit.depositor,
+			}))
+			.filter(deposit => deposit.depositor !== zeroAddress)
+
+		deposits.push(...normalizedPage)
+		if (BigInt(normalizedPage.length) !== pageSize) break
+		currentIndex += pageSize
+	}
+
+	return deposits
+}
+
 export async function loadMarketDetails(client: ContractReadClient, questionId: bigint): Promise<MarketDetails> {
 	const [title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit] = (await client.readContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
@@ -373,14 +446,122 @@ export async function loadMarketDetails(client: ContractReadClient, questionId: 
 	}
 }
 
+export async function loadReportingDetails(client: ContractReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
+	const [questionId, escalationGameAddress, completeSetCollateralAmount] = await Promise.all([
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'questionId',
+			address: securityPoolAddress,
+			args: [],
+		}) as Promise<bigint>,
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'escalationGame',
+			address: securityPoolAddress,
+			args: [],
+		}) as Promise<Address>,
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'completeSetCollateralAmount',
+			address: securityPoolAddress,
+			args: [],
+		}) as Promise<bigint>,
+	])
+
+	const [
+		startBond,
+		nonDecisionThreshold,
+		startingTime,
+		totalCost,
+		bindingCapital,
+		balances,
+		resolution,
+		block,
+	] = await Promise.all([
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'startBond',
+			address: escalationGameAddress,
+			args: [],
+		}) as Promise<bigint>,
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'nonDecisionThreshold',
+			address: escalationGameAddress,
+			args: [],
+		}) as Promise<bigint>,
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'startingTime',
+			address: escalationGameAddress,
+			args: [],
+		}) as Promise<bigint>,
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'totalCost',
+			address: escalationGameAddress,
+			args: [],
+		}) as Promise<bigint>,
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getBindingCapital',
+			address: escalationGameAddress,
+			args: [],
+		}) as Promise<bigint>,
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getBalances',
+			address: escalationGameAddress,
+			args: [],
+		}) as Promise<[bigint, bigint, bigint]>,
+		client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getQuestionResolution',
+			address: escalationGameAddress,
+			args: [],
+		}) as Promise<number>,
+		client.getBlock() as Promise<{ timestamp: bigint }>,
+	])
+
+	const marketDetails = await loadMarketDetails(client, questionId)
+	const [invalidDeposits, yesDeposits, noDeposits] = await Promise.all([
+		loadEscalationDeposits(client, escalationGameAddress, 'invalid'),
+		loadEscalationDeposits(client, escalationGameAddress, 'yes'),
+		loadEscalationDeposits(client, escalationGameAddress, 'no'),
+	])
+
+	const sides: EscalationSide[] = [
+		{ balance: balances[0] ?? 0n, deposits: invalidDeposits, key: 'invalid', label: getEscalationSideLabel('invalid'), userDeposits: accountAddress === undefined ? [] : invalidDeposits.filter(deposit => deposit.depositor === accountAddress) },
+		{ balance: balances[1] ?? 0n, deposits: yesDeposits, key: 'yes', label: getEscalationSideLabel('yes'), userDeposits: accountAddress === undefined ? [] : yesDeposits.filter(deposit => deposit.depositor === accountAddress) },
+		{ balance: balances[2] ?? 0n, deposits: noDeposits, key: 'no', label: getEscalationSideLabel('no'), userDeposits: accountAddress === undefined ? [] : noDeposits.filter(deposit => deposit.depositor === accountAddress) },
+	]
+
+	return {
+		bindingCapital,
+		completeSetCollateralAmount,
+		currentRequiredBond: totalCost === 0n ? startBond : totalCost,
+		currentTime: block.timestamp,
+		escalationEndTime: startingTime + ESCALATION_TIME_LENGTH,
+		escalationGameAddress,
+		marketDetails,
+		nonDecisionThreshold,
+		resolution: getReportingOutcomeKey(resolution),
+		securityPoolAddress,
+		sides,
+		startBond,
+		startingTime,
+		totalCost,
+	}
+}
+
 export async function createMarket(
 	client: MarketWriteClient,
 	parameters: {
 		marketType: MarketType
 		outcomeLabels: string[]
 		questionData: QuestionData
-		currentRetentionRate: bigint | null
-		securityMultiplier: bigint | null
+		currentRetentionRate: bigint | undefined
+		securityMultiplier: bigint | undefined
 		startingRepEthPrice: bigint
 	},
 ) {
@@ -570,10 +751,10 @@ export async function loadOracleManagerDetails(client: ContractReadClient, manag
 		}) as Promise<bigint>,
 	])
 
-	let callbackStateHash: Hex | null = null
-	let exactToken1Report: bigint | null = null
-	let token1: Address | null = null
-	let token2: Address | null = null
+	let callbackStateHash: Hex | undefined
+	let exactToken1Report: bigint | undefined
+	let token1: Address | undefined
+	let token2: Address | undefined
 
 	if (pendingReportId > 0n) {
 		const extraData = (await client.readContract({
@@ -581,19 +762,19 @@ export async function loadOracleManagerDetails(client: ContractReadClient, manag
 			functionName: 'extraData',
 			address: getInfraContractAddresses().openOracle,
 			args: [pendingReportId],
-		})) as [Hex, Address, bigint, bigint, Hex, Address, boolean, boolean, boolean]
+		})) as readonly [Hex, Address, number, number, Hex, Address, boolean, boolean, boolean]
 
 		const reportMeta = (await client.readContract({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'reportMeta',
 			address: getInfraContractAddresses().openOracle,
 			args: [pendingReportId],
-		})) as readonly unknown[]
+		})) as readonly [bigint, bigint, bigint, bigint, Address, number, Address, boolean, number, number, number, number]
 
 		callbackStateHash = extraData[0]
-		exactToken1Report = reportMeta[0] as bigint
-		token1 = reportMeta[4] as Address
-		token2 = reportMeta[6] as Address
+		exactToken1Report = reportMeta[0]
+		token1 = reportMeta[4]
+		token2 = reportMeta[6]
 	}
 
 	return {
@@ -726,4 +907,36 @@ export async function redeemCompleteSetInSecurityPool(client: MarketWriteClient,
 		hash,
 		securityPoolAddress,
 	} satisfies TradingActionResult
+}
+
+export async function reportOutcomeInSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amount: bigint) {
+	const hash = await client.writeContract({
+		address: securityPoolAddress,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'depositToEscalationGame',
+		args: [getReportingOutcomeValue(outcome), amount],
+	})
+	await client.waitForTransactionReceipt({ hash })
+	return {
+		action: 'reportOutcome',
+		hash,
+		outcome,
+		securityPoolAddress,
+	} satisfies ReportingActionResult
+}
+
+export async function withdrawEscalationFromSecurityPool(client: MarketWriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
+	const hash = await client.writeContract({
+		address: securityPoolAddress,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'withdrawFromEscalationGame',
+		args: [getReportingOutcomeValue(outcome), depositIndexes],
+	})
+	await client.waitForTransactionReceipt({ hash })
+	return {
+		action: 'withdrawEscalation',
+		hash,
+		outcome,
+		securityPoolAddress,
+	} satisfies ReportingActionResult
 }

@@ -1,13 +1,14 @@
-import type { MarketType } from './contracts.js'
+import type { MarketType, ReportingOutcomeKey } from './contracts.js'
 import type { Address } from 'viem'
 
-export type Route = 'deploy' | 'markets' | 'security-pools' | 'security-pools-overview' | 'security-vaults' | 'open-oracle' | 'trading'
+export type Route = 'deploy' | 'markets' | 'security-pools' | 'security-pools-overview' | 'security-vaults' | 'open-oracle' | 'reporting' | 'trading'
 
 export type AccountState = {
-	address: Address | null
-	chainId: string | null
-	ethBalance: bigint | null
-	repBalance: bigint | null
+	address: Address | undefined
+	chainId: string | undefined
+	ethBalance: bigint | undefined
+	isMainnet: boolean
+	repBalance: bigint | undefined
 }
 
 export type MarketFormState = {
@@ -52,4 +53,11 @@ export type TradingFormState = {
 	completeSetAmount: string
 	redeemAmount: string
 	securityPoolAddress: string
+}
+
+export type ReportingFormState = {
+	reportAmount: string
+	securityPoolAddress: string
+	selectedOutcome: ReportingOutcomeKey
+	withdrawDepositIndexes: string
 }

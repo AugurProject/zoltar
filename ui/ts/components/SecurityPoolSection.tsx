@@ -27,7 +27,7 @@ export function SecurityPoolSection({ accountState, deploymentStatuses, lastCrea
 						<p class="detail">Security pool factory address: {securityPoolFactoryStatus?.address ?? 'Unavailable'}</p>
 					</div>
 
-					{marketDetails === null ? null : (
+					{marketDetails === undefined ? null : (
 						<div class="status-card">
 							<p class="panel-label">Loaded Market</p>
 							<ul class="status-list hashes">
@@ -63,7 +63,7 @@ export function SecurityPoolSection({ accountState, deploymentStatuses, lastCrea
 						</div>
 					)}
 
-					{securityPoolResult === null ? null : (
+					{securityPoolResult === undefined ? null : (
 						<div class="status-card">
 							<p class="panel-label">Latest Security Pool</p>
 							<ul class="status-list hashes">
@@ -95,7 +95,7 @@ export function SecurityPoolSection({ accountState, deploymentStatuses, lastCrea
 							<button class="secondary" onClick={onLoadMarket} disabled={loadingMarketDetails}>
 								{loadingMarketDetails ? 'Loading Market...' : 'Load Market'}
 							</button>
-							<button class="secondary" onClick={onLoadLatestMarket} disabled={lastCreatedQuestionId === null}>
+							<button class="secondary" onClick={onLoadLatestMarket} disabled={lastCreatedQuestionId === undefined}>
 								Use Latest Market
 							</button>
 						</div>
@@ -116,14 +116,14 @@ export function SecurityPoolSection({ accountState, deploymentStatuses, lastCrea
 						</label>
 
 						<div class="actions">
-							<button onClick={onCreateSecurityPool} disabled={accountState.address === null || securityPoolCreating || marketDetails?.marketType !== 'binary'}>
+							<button onClick={onCreateSecurityPool} disabled={accountState.address === undefined || !accountState.isMainnet || securityPoolCreating || marketDetails?.marketType !== 'binary'}>
 								{securityPoolCreating ? 'Creating Security Pool...' : 'Create Security Pool'}
 							</button>
 						</div>
 					</div>
 
-					{lastCreatedQuestionId === null ? null : <p class="detail">Latest created market ID: {lastCreatedQuestionId}</p>}
-					{securityPoolError === null ? null : <p class="notice error">{securityPoolError}</p>}
+					{lastCreatedQuestionId === undefined ? null : <p class="detail">Latest created market ID: {lastCreatedQuestionId}</p>}
+					{securityPoolError === undefined ? null : <p class="notice error">{securityPoolError}</p>}
 				</div>
 			</div>
 		</section>

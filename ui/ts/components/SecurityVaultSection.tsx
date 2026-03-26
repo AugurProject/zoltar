@@ -14,7 +14,7 @@ export function SecurityVaultSection({ accountState, loadingSecurityVault, onApp
 
 			<div class="market-grid">
 				<div class="market-column">
-					{securityVaultDetails === null ? null : (
+					{securityVaultDetails === undefined ? null : (
 						<div class="status-card">
 							<p class="panel-label">Vault Details</p>
 							<ul class="status-list hashes">
@@ -50,7 +50,7 @@ export function SecurityVaultSection({ accountState, loadingSecurityVault, onApp
 						</div>
 					)}
 
-					{securityVaultResult === null ? null : (
+					{securityVaultResult === undefined ? null : (
 						<div class="status-card">
 							<p class="panel-label">Latest Vault Action</p>
 							<p class="detail">Action: {securityVaultResult.action}</p>
@@ -66,7 +66,7 @@ export function SecurityVaultSection({ accountState, loadingSecurityVault, onApp
 							<input value={securityVaultForm.securityPoolAddress} onInput={event => onSecurityVaultFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder="0x..." />
 						</label>
 
-						<p class="detail">Connected vault address: {accountState.address === null ? 'Connect wallet' : formatAddress(accountState.address)}</p>
+						<p class="detail">Connected vault address: {accountState.address === undefined ? 'Connect wallet' : formatAddress(accountState.address)}</p>
 
 						<div class="actions">
 							<button class="secondary" onClick={onLoadSecurityVault} disabled={loadingSecurityVault}>
@@ -85,28 +85,28 @@ export function SecurityVaultSection({ accountState, loadingSecurityVault, onApp
 						</label>
 
 						<div class="actions">
-							<button class="secondary" onClick={onApproveRep} disabled={accountState.address === null}>
+							<button class="secondary" onClick={onApproveRep} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Approve REP
 							</button>
-							<button onClick={onDepositRep} disabled={accountState.address === null}>
+							<button onClick={onDepositRep} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Deposit REP
 							</button>
 						</div>
 
 						<div class="actions">
-							<button class="secondary" onClick={onUpdateVaultFees} disabled={accountState.address === null}>
+							<button class="secondary" onClick={onUpdateVaultFees} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Update Vault Fees
 							</button>
-							<button class="secondary" onClick={onRedeemFees} disabled={accountState.address === null}>
+							<button class="secondary" onClick={onRedeemFees} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Redeem Fees
 							</button>
-							<button class="secondary" onClick={onRedeemRep} disabled={accountState.address === null}>
+							<button class="secondary" onClick={onRedeemRep} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Redeem REP
 							</button>
 						</div>
 					</div>
 
-					{securityVaultError === null ? null : <p class="notice error">{securityVaultError}</p>}
+					{securityVaultError === undefined ? null : <p class="notice error">{securityVaultError}</p>}
 				</div>
 			</div>
 		</section>

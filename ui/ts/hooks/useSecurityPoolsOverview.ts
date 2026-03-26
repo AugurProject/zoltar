@@ -9,7 +9,7 @@ import { parseBigIntInput } from '../lib/marketForm.js'
 import type { ListedSecurityPool, SecurityPoolOverviewActionResult } from '../types/contracts.js'
 
 type UseSecurityPoolsOverviewParameters = {
-	accountAddress: Address | null
+	accountAddress: Address | undefined
 	onTransaction: (hash: Hash) => void
 	refreshState: () => Promise<void>
 }
@@ -18,13 +18,13 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, refres
 	const [liquidationAmount, setLiquidationAmount] = useState('0')
 	const [liquidationTargetVault, setLiquidationTargetVault] = useState('')
 	const [loadingSecurityPools, setLoadingSecurityPools] = useState(false)
-	const [securityPoolOverviewError, setSecurityPoolOverviewError] = useState<string | null>(null)
-	const [securityPoolOverviewResult, setSecurityPoolOverviewResult] = useState<SecurityPoolOverviewActionResult | null>(null)
+	const [securityPoolOverviewError, setSecurityPoolOverviewError] = useState<string | undefined>(undefined)
+	const [securityPoolOverviewResult, setSecurityPoolOverviewResult] = useState<SecurityPoolOverviewActionResult | undefined>(undefined)
 	const [securityPools, setSecurityPools] = useState<ListedSecurityPool[]>([])
 
 	const loadSecurityPools = async () => {
 		setLoadingSecurityPools(true)
-		setSecurityPoolOverviewError(null)
+		setSecurityPoolOverviewError(undefined)
 		try {
 			setSecurityPools(await loadAllSecurityPools(createReadClient()))
 		} catch (error) {
@@ -40,14 +40,14 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, refres
 			setSecurityPoolOverviewError('No injected wallet found')
 			return
 		}
-		if (accountAddress === null) {
+		if (accountAddress === undefined) {
 			setSecurityPoolOverviewError('Connect a wallet before queueing liquidation')
 			return
 		}
 
 		try {
-			setSecurityPoolOverviewError(null)
-			setSecurityPoolOverviewResult(null)
+			setSecurityPoolOverviewError(undefined)
+			setSecurityPoolOverviewResult(undefined)
 			const targetVault = parseAddressInput(liquidationTargetVault, 'Target vault')
 			const amount = parseBigIntInput(liquidationAmount, 'Liquidation amount')
 			const oracleDetails = await loadOracleManagerDetails(createReadClient(), managerAddress)

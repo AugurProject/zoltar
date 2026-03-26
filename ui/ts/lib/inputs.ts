@@ -1,3 +1,4 @@
+import type { MarketType, ReportingOutcomeKey } from '../types/contracts.js'
 import { getAddress, isHex, type Address, type Hex } from 'viem'
 import { parseBigIntInput } from './marketForm.js'
 
@@ -18,4 +19,37 @@ export function parseBytes32Input(value: string, label: string): Hex {
 
 export function parseReportIdInput(value: string) {
 	return parseBigIntInput(value, 'Report ID')
+}
+
+export function parseBigIntListInput(value: string, label: string) {
+	const values = value
+		.split(',')
+		.map(entry => entry.trim())
+		.filter(entry => entry !== '')
+
+	if (values.length === 0) throw new Error(`${ label } is required`)
+
+	return values.map((entry, index) => parseBigIntInput(entry, `${ label } #${ index + 1 }`))
+}
+
+export function parseMarketTypeInput(value: string): MarketType {
+	switch (value) {
+		case 'binary':
+		case 'categorical':
+		case 'scalar':
+			return value
+		default:
+			throw new Error(`Unknown market type: ${ value }`)
+	}
+}
+
+export function parseReportingOutcomeInput(value: string): ReportingOutcomeKey {
+	switch (value) {
+		case 'invalid':
+		case 'yes':
+		case 'no':
+			return value
+		default:
+			throw new Error(`Unknown reporting outcome: ${ value }`)
+	}
 }

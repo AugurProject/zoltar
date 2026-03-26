@@ -1,7 +1,9 @@
 import type { Address, Hash, Hex } from 'viem'
+import type { createReadClient, createWriteClient } from '../lib/clients.js'
 
 export type DeploymentStepId = 'proxyDeployer' | 'uniformPriceDualCapBatchAuctionFactory' | 'scalarOutcomes' | 'securityPoolUtils' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'priceOracleManagerAndOperatorQueuerFactory' | 'securityPoolForker' | 'escalationGameFactory' | 'securityPoolFactory'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
+export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
 
 export type QuestionData = {
 	title: string
@@ -14,22 +16,11 @@ export type QuestionData = {
 	answerUnit: string
 }
 
-// These aliases intentionally stay broad so the UI helpers can accept viem clients
-// without reproducing viem's full generic type surface locally.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type DeploymentClient = any
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type DeploymentReadClient = any
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type BalanceReadClient = any
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type ContractReadClient = any
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type MarketWriteClient = any
+export type DeploymentClient = ReturnType<typeof createWriteClient>
+export type DeploymentReadClient = ReturnType<typeof createReadClient>
+export type BalanceReadClient = ReturnType<typeof createReadClient>
+export type ContractReadClient = ReturnType<typeof createReadClient>
+export type MarketWriteClient = ReturnType<typeof createWriteClient>
 
 export type DeploymentStep = {
 	id: DeploymentStepId
@@ -88,15 +79,15 @@ export type SecurityVaultActionResult = {
 }
 
 export type OracleManagerDetails = {
-	callbackStateHash: Hex | null
-	exactToken1Report: bigint | null
+	callbackStateHash: Hex | undefined
+	exactToken1Report: bigint | undefined
 	lastPrice: bigint
 	managerAddress: Address
 	openOracleAddress: Address
 	pendingReportId: bigint
 	requestPriceEthCost: bigint
-	token1: Address | null
-	token2: Address | null
+	token1: Address | undefined
+	token2: Address | undefined
 }
 
 export type OpenOracleActionResult = {
@@ -124,5 +115,44 @@ export type SecurityPoolOverviewActionResult = {
 export type TradingActionResult = {
 	action: 'createCompleteSet' | 'redeemCompleteSet'
 	hash: Hash
+	securityPoolAddress: Address
+}
+
+export type EscalationDeposit = {
+	amount: bigint
+	cumulativeAmount: bigint
+	depositIndex: bigint
+	depositor: Address
+}
+
+export type EscalationSide = {
+	balance: bigint
+	deposits: EscalationDeposit[]
+	key: ReportingOutcomeKey
+	label: string
+	userDeposits: EscalationDeposit[]
+}
+
+export type ReportingDetails = {
+	bindingCapital: bigint
+	completeSetCollateralAmount: bigint
+	currentRequiredBond: bigint
+	currentTime: bigint
+	escalationEndTime: bigint
+	escalationGameAddress: Address
+	marketDetails: MarketDetails
+	nonDecisionThreshold: bigint
+	resolution: ReportingOutcomeKey | 'none'
+	securityPoolAddress: Address
+	sides: EscalationSide[]
+	startBond: bigint
+	startingTime: bigint
+	totalCost: bigint
+}
+
+export type ReportingActionResult = {
+	action: 'reportOutcome' | 'withdrawEscalation'
+	hash: Hash
+	outcome: ReportingOutcomeKey
 	securityPoolAddress: Address
 }

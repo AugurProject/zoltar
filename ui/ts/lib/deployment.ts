@@ -2,15 +2,15 @@ import type { DeploymentStatus } from '../types/contracts.js'
 
 export function getPrerequisiteLabel(steps: DeploymentStatus[], index: number) {
 	const currentStep = steps[index]
-	if (currentStep === undefined) return null
+	if (currentStep === undefined) return undefined
 
 	const missingDependency = currentStep.dependencies.map(dependencyId => steps.find(step => step.id === dependencyId)).find(step => step !== undefined && !step.deployed)
 
-	return missingDependency?.label ?? null
+	return missingDependency?.label
 }
 
 export function findNextDeployableStep(steps: DeploymentStatus[]) {
-	return steps.find((step, index) => !step.deployed && getPrerequisiteLabel(steps, index) === null) ?? null
+	return steps.find((step, index) => !step.deployed && getPrerequisiteLabel(steps, index) === undefined)
 }
 
 export function getDeploymentSections(steps: DeploymentStatus[]) {

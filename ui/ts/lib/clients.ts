@@ -21,7 +21,13 @@ export function createWriteClient(ethereum: InjectedEthereum, accountAddress: Ad
 	}).extend(publicActions)
 }
 
-export function normalizeAccount(value: unknown): Address | null {
-	if (typeof value !== 'string') return null
+export function getRequiredInjectedEthereum() {
+	const ethereum = getInjectedEthereum()
+	if (ethereum === undefined) throw new Error('No injected wallet found')
+	return ethereum
+}
+
+export function normalizeAccount(value: unknown): Address | undefined {
+	if (typeof value !== 'string') return undefined
 	return getAddress(value)
 }

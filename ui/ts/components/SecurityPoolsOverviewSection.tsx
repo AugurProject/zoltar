@@ -29,12 +29,12 @@ export function SecurityPoolsOverviewSection({ accountState, liquidationAmount, 
 					</label>
 				</div>
 
-				{securityPoolOverviewResult === null ? null : (
+				{securityPoolOverviewResult === undefined ? null : (
 					<p class="notice success">
 						Queued liquidation for {securityPoolOverviewResult.securityPoolAddress}: {securityPoolOverviewResult.hash}
 					</p>
 				)}
-				{securityPoolOverviewError === null ? null : <p class="notice error">{securityPoolOverviewError}</p>}
+				{securityPoolOverviewError === undefined ? null : <p class="notice error">{securityPoolOverviewError}</p>}
 
 				<div class="contract-list">
 					{securityPools.map(pool => (
@@ -49,7 +49,7 @@ export function SecurityPoolsOverviewSection({ accountState, liquidationAmount, 
 								<p class="detail">Security multiplier: {pool.securityMultiplier.toString()}</p>
 								<p class="detail">Retention rate: {pool.currentRetentionRate.toString()}</p>
 							</div>
-							<button onClick={() => onQueueLiquidation(pool.managerAddress, pool.securityPoolAddress)} disabled={accountState.address === null}>
+							<button onClick={() => onQueueLiquidation(pool.managerAddress, pool.securityPoolAddress)} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Queue Liquidation
 							</button>
 						</div>

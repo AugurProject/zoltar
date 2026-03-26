@@ -13,7 +13,7 @@ export function OpenOracleSection({ accountState, loadingOracleManager, onApprov
 
 			<div class="market-grid">
 				<div class="market-column">
-					{oracleManagerDetails === null ? null : (
+					{oracleManagerDetails === undefined ? null : (
 						<div class="status-card">
 							<p class="panel-label">Oracle Manager</p>
 							<ul class="status-list hashes">
@@ -47,7 +47,7 @@ export function OpenOracleSection({ accountState, loadingOracleManager, onApprov
 						</div>
 					)}
 
-					{openOracleResult === null ? null : (
+					{openOracleResult === undefined ? null : (
 						<div class="status-card">
 							<p class="panel-label">Latest Oracle Action</p>
 							<p class="detail">Action: {openOracleResult.action}</p>
@@ -67,7 +67,7 @@ export function OpenOracleSection({ accountState, loadingOracleManager, onApprov
 							<button class="secondary" onClick={onLoadOracleManager} disabled={loadingOracleManager}>
 								{loadingOracleManager ? 'Loading Oracle...' : 'Load Oracle Manager'}
 							</button>
-							<button onClick={onRequestPrice} disabled={accountState.address === null}>
+							<button onClick={onRequestPrice} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Request Price
 							</button>
 						</div>
@@ -94,25 +94,25 @@ export function OpenOracleSection({ accountState, loadingOracleManager, onApprov
 						</div>
 
 						<div class="actions">
-							<button class="secondary" onClick={onApproveToken1} disabled={accountState.address === null}>
+							<button class="secondary" onClick={onApproveToken1} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Approve Token1
 							</button>
-							<button class="secondary" onClick={onApproveToken2} disabled={accountState.address === null}>
+							<button class="secondary" onClick={onApproveToken2} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Approve Token2
 							</button>
 						</div>
 
 						<div class="actions">
-							<button onClick={onSubmitInitialReport} disabled={accountState.address === null}>
+							<button onClick={onSubmitInitialReport} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Submit Initial Report
 							</button>
-							<button class="secondary" onClick={onSettleReport} disabled={accountState.address === null}>
+							<button class="secondary" onClick={onSettleReport} disabled={accountState.address === undefined || !accountState.isMainnet}>
 								Settle Report
 							</button>
 						</div>
 					</div>
 
-					{openOracleError === null ? null : <p class="notice error">{openOracleError}</p>}
+					{openOracleError === undefined ? null : <p class="notice error">{openOracleError}</p>}
 				</div>
 			</div>
 		</section>

@@ -1,6 +1,6 @@
 import type { TabNavigationProps } from '../types/components.js'
 
-export function TabNavigation({ route, deployRoute, marketRoute, openOracleRoute, securityPoolRoute, securityPoolsOverviewRoute, securityVaultRoute, tradingRoute, onRouteChange }: TabNavigationProps) {
+export function TabNavigation({ route, deployRoute, marketRoute, openOracleRoute, reportingRoute, securityPoolRoute, securityPoolsOverviewRoute, securityVaultRoute, tradingRoute, onRouteChange }: TabNavigationProps) {
 	return (
 		<nav class="tab-nav" aria-label="Application sections">
 			<a class={`tab-link ${ route === 'deploy' ? 'active' : '' }`} href={deployRoute} onClick={() => onRouteChange('deploy')}>
@@ -20,6 +20,9 @@ export function TabNavigation({ route, deployRoute, marketRoute, openOracleRoute
 			</a>
 			<a class={`tab-link ${ route === 'open-oracle' ? 'active' : '' }`} href={openOracleRoute} onClick={() => onRouteChange('open-oracle')}>
 				Open Oracle
+			</a>
+			<a class={`tab-link ${ route === 'reporting' ? 'active' : '' }`} href={reportingRoute} onClick={() => onRouteChange('reporting')}>
+				Reporting & Escalation
 			</a>
 			<a class={`tab-link ${ route === 'trading' ? 'active' : '' }`} href={tradingRoute} onClick={() => onRouteChange('trading')}>
 				Trading

@@ -1,18 +1,18 @@
 import type { Address } from 'viem'
-import type { AccountState, MarketFormState, OpenOracleFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from './app.js'
-import type { DeploymentStatus, DeploymentStepId, ListedSecurityPool, MarketCreationResult, MarketDetails, OpenOracleActionResult, OracleManagerDetails, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult } from './contracts.js'
+import type { AccountState, MarketFormState, OpenOracleFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from './app.js'
+import type { DeploymentStatus, DeploymentStepId, ListedSecurityPool, MarketCreationResult, MarketDetails, OpenOracleActionResult, OracleManagerDetails, ReportingActionResult, ReportingDetails, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult } from './contracts.js'
 
 export type DeploymentSectionProps = {
 	title: string
 	steps: DeploymentStatus[]
 	allSteps: DeploymentStatus[]
-	accountAddress: Address | null
-	busyStepId: DeploymentStepId | null
+	accountAddress: Address | undefined
+	busyStepId: DeploymentStepId | undefined
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 }
 
 export type HeroSectionProps = {
-	accountAddress: Address | null
+	accountAddress: Address | undefined
 	isRefreshing: boolean
 	onRefresh: () => void
 	onConnect: () => void
@@ -23,8 +23,8 @@ export type MarketSectionProps = {
 	deploymentStatuses: DeploymentStatus[]
 	marketForm: MarketFormState
 	marketCreating: boolean
-	marketResult: MarketCreationResult | null
-	marketError: string | null
+	marketResult: MarketCreationResult | undefined
+	marketError: string | undefined
 	onMarketFormChange: (update: Partial<MarketFormState>) => void
 	onCreateMarket: () => void
 	onResetMarket: () => void
@@ -33,7 +33,7 @@ export type MarketSectionProps = {
 export type OverviewPanelsProps = {
 	accountState: AccountState
 	deploymentStatuses: DeploymentStatus[]
-	busyStepId: DeploymentStepId | null
+	busyStepId: DeploymentStepId | undefined
 	onDeployNextMissing: () => void
 }
 
@@ -42,6 +42,7 @@ export type TabNavigationProps = {
 	deployRoute: string
 	marketRoute: string
 	openOracleRoute: string
+	reportingRoute: string
 	securityPoolRoute: string
 	securityPoolsOverviewRoute: string
 	securityVaultRoute: string
@@ -52,13 +53,13 @@ export type TabNavigationProps = {
 export type SecurityPoolSectionProps = {
 	accountState: AccountState
 	deploymentStatuses: DeploymentStatus[]
-	lastCreatedQuestionId: string | null
-	marketDetails: MarketDetails | null
+	lastCreatedQuestionId: string | undefined
+	marketDetails: MarketDetails | undefined
 	loadingMarketDetails: boolean
 	securityPoolCreating: boolean
-	securityPoolError: string | null
+	securityPoolError: string | undefined
 	securityPoolForm: SecurityPoolFormState
-	securityPoolResult: SecurityPoolCreationResult | null
+	securityPoolResult: SecurityPoolCreationResult | undefined
 	onLoadLatestMarket: () => void
 	onLoadMarket: () => void
 	onSecurityPoolFormChange: (update: Partial<SecurityPoolFormState>) => void
@@ -75,10 +76,10 @@ export type SecurityVaultSectionProps = {
 	onRedeemRep: () => void
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
 	onUpdateVaultFees: () => void
-	securityVaultDetails: SecurityVaultDetails | null
-	securityVaultError: string | null
+	securityVaultDetails: SecurityVaultDetails | undefined
+	securityVaultError: string | undefined
 	securityVaultForm: SecurityVaultFormState
-	securityVaultResult: SecurityVaultActionResult | null
+	securityVaultResult: SecurityVaultActionResult | undefined
 }
 
 export type OpenOracleSectionProps = {
@@ -91,10 +92,10 @@ export type OpenOracleSectionProps = {
 	onRequestPrice: () => void
 	onSettleReport: () => void
 	onSubmitInitialReport: () => void
-	openOracleError: string | null
+	openOracleError: string | undefined
 	openOracleForm: OpenOracleFormState
-	openOracleResult: OpenOracleActionResult | null
-	oracleManagerDetails: OracleManagerDetails | null
+	openOracleResult: OpenOracleActionResult | undefined
+	oracleManagerDetails: OracleManagerDetails | undefined
 }
 
 export type SecurityPoolsOverviewSectionProps = {
@@ -106,8 +107,8 @@ export type SecurityPoolsOverviewSectionProps = {
 	onLiquidationTargetVaultChange: (value: string) => void
 	onLoadSecurityPools: () => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
-	securityPoolOverviewError: string | null
-	securityPoolOverviewResult: SecurityPoolOverviewActionResult | null
+	securityPoolOverviewError: string | undefined
+	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	securityPools: ListedSecurityPool[]
 }
 
@@ -116,7 +117,20 @@ export type TradingSectionProps = {
 	onCreateCompleteSet: () => void
 	onRedeemCompleteSet: () => void
 	onTradingFormChange: (update: Partial<TradingFormState>) => void
-	tradingError: string | null
+	tradingError: string | undefined
 	tradingForm: TradingFormState
-	tradingResult: TradingActionResult | null
+	tradingResult: TradingActionResult | undefined
+}
+
+export type ReportingSectionProps = {
+	accountState: AccountState
+	loadingReportingDetails: boolean
+	onLoadReporting: () => void
+	onReportOutcome: () => void
+	onReportingFormChange: (update: Partial<ReportingFormState>) => void
+	onWithdrawEscalation: () => void
+	reportingDetails: ReportingDetails | undefined
+	reportingError: string | undefined
+	reportingForm: ReportingFormState
+	reportingResult: ReportingActionResult | undefined
 }

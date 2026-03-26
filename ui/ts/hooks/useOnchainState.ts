@@ -11,14 +11,14 @@ const REFRESH_INTERVAL_MS = 15_000
 const DEFAULT_CHAIN_ID = `0x${ mainnet.id.toString(16) }`
 
 async function loadAccountBalances(readClient: ReturnType<typeof createReadClient>, connectedAddress: AccountState['address']) {
-	if (connectedAddress === null) {
+	if (connectedAddress === undefined) {
 		return {
-			ethBalance: null,
-			repBalance: null,
+			ethBalance: undefined,
+			repBalance: undefined,
 		}
 	}
 
-	const [ethBalance, repBalance] = await Promise.all([readClient.getBalance({ address: connectedAddress }), loadGenesisRepBalance(readClient, connectedAddress).catch(() => null)])
+	const [ethBalance, repBalance] = await Promise.all([readClient.getBalance({ address: connectedAddress }), loadGenesisRepBalance(readClient, connectedAddress).catch(() => undefined)])
 
 	return {
 		ethBalance,
@@ -28,10 +28,11 @@ async function loadAccountBalances(readClient: ReturnType<typeof createReadClien
 
 export function useOnchainState() {
 	const [accountState, setAccountState] = useState<AccountState>({
-		address: null,
-		chainId: null,
-		ethBalance: null,
-		repBalance: null,
+		address: undefined,
+		chainId: undefined,
+		ethBalance: undefined,
+		isMainnet: true,
+		repBalance: undefined,
 	})
 	const [deploymentStatuses, setDeploymentStatuses] = useState<DeploymentStatus[]>(() =>
 		getDeploymentSteps().map(step => ({
@@ -41,7 +42,7 @@ export function useOnchainState() {
 	)
 	const [hasInjectedWallet, setHasInjectedWallet] = useState<boolean>(() => getInjectedEthereum() !== undefined)
 	const [isRefreshing, setIsRefreshing] = useState(false)
-	const [errorMessage, setErrorMessage] = useState<string | null>(null)
+	const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined)
 
 	const refreshState = async () => {
 		const ethereum = getInjectedEthereum()
@@ -61,6 +62,7 @@ export function useOnchainState() {
 				address: connectedAddress,
 				chainId,
 				ethBalance: balances.ethBalance,
+				isMainnet: chainId === DEFAULT_CHAIN_ID,
 				repBalance: balances.repBalance,
 			})
 		} catch (error) {
@@ -78,7 +80,7 @@ export function useOnchainState() {
 		}
 
 		try {
-			setErrorMessage(null)
+			setErrorMessage(undefined)
 			await ethereum.request({ method: 'eth_requestAccounts' })
 			await refreshState()
 		} catch (error) {

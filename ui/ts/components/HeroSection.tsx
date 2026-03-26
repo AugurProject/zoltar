@@ -12,7 +12,7 @@ export function HeroSection({ accountAddress, isRefreshing, onRefresh, onConnect
 				<button class="secondary" onClick={onRefresh} disabled={isRefreshing}>
 					{isRefreshing ? 'Refreshing...' : 'Refresh'}
 				</button>
-				<button onClick={onConnect}>{accountAddress === null ? 'Connect Wallet' : 'Reconnect Wallet'}</button>
+				<button onClick={onConnect}>{accountAddress === undefined ? 'Connect Wallet' : 'Reconnect Wallet'}</button>
 			</div>
 		</section>
 	)

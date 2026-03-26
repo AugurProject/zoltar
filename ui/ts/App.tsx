@@ -4,6 +4,7 @@ import { DeploymentSection } from './components/DeploymentSection.js'
 import { HeroSection } from './components/HeroSection.js'
 import { MarketSection } from './components/MarketSection.js'
 import { OpenOracleSection } from './components/OpenOracleSection.js'
+import { ReportingSection } from './components/ReportingSection.js'
 import { OverviewPanels } from './components/OverviewPanels.js'
 import { SecurityPoolSection } from './components/SecurityPoolSection.js'
 import { SecurityPoolsOverviewSection } from './components/SecurityPoolsOverviewSection.js'
@@ -15,15 +16,16 @@ import { useHashRoute } from './hooks/useHashRoute.js'
 import { useMarketCreation } from './hooks/useMarketCreation.js'
 import { useOpenOracleOperations } from './hooks/useOpenOracleOperations.js'
 import { useOnchainState } from './hooks/useOnchainState.js'
+import { useReportingOperations } from './hooks/useReportingOperations.js'
 import { useSecurityPoolCreation } from './hooks/useSecurityPoolCreation.js'
 import { useSecurityPoolsOverview } from './hooks/useSecurityPoolsOverview.js'
 import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { getDeploymentSections } from './lib/deployment.js'
-import { DEPLOY_ROUTE, MARKET_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_OVERVIEW_ROUTE, SECURITY_POOL_ROUTE, SECURITY_VAULT_ROUTE, TRADING_ROUTE } from './lib/routing.js'
+import { DEPLOY_ROUTE, MARKET_ROUTE, OPEN_ORACLE_ROUTE, REPORTING_ROUTE, SECURITY_POOLS_OVERVIEW_ROUTE, SECURITY_POOL_ROUTE, SECURITY_VAULT_ROUTE, TRADING_ROUTE } from './lib/routing.js'
 
 export function App() {
-	const [lastTransactionHash, setLastTransactionHash] = useState<Hash | null>(null)
+	const [lastTransactionHash, setLastTransactionHash] = useState<Hash | undefined>(undefined)
 	const { navigate, route } = useHashRoute()
 	const { accountState, connectWallet, deploymentStatuses, errorMessage: walletErrorMessage, hasInjectedWallet, isRefreshing, refreshState } = useOnchainState()
 	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({
@@ -54,6 +56,11 @@ export function App() {
 		onTransaction: setLastTransactionHash,
 		refreshState,
 	})
+	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations({
+		accountAddress: accountState.address,
+		onTransaction: setLastTransactionHash,
+		refreshState,
+	})
 	const { liquidationAmount, liquidationTargetVault, loadingSecurityPools, queueLiquidation, securityPoolOverviewError, securityPoolOverviewResult, securityPools, setLiquidationAmount, setLiquidationTargetVault, loadSecurityPools } = useSecurityPoolsOverview({
 		accountAddress: accountState.address,
 		onTransaction: setLastTransactionHash,
@@ -66,15 +73,17 @@ export function App() {
 	})
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
-	const lastCreatedQuestionId = marketResult?.questionId ?? null
+	const lastCreatedQuestionId = marketResult?.questionId
+	const wrongNetworkMessage = accountState.address !== undefined && !accountState.isMainnet ? 'This application requires Ethereum mainnet. Switch your wallet to Ethereum mainnet before using deployment, market, oracle, reporting, vault, pool, or trading actions.' : undefined
 
 	return (
 		<main>
 			<HeroSection accountAddress={accountState.address} isRefreshing={isRefreshing} onRefresh={() => void refreshState()} onConnect={() => void connectWallet()} />
 
 			{hasInjectedWallet ? null : <p class='notice warning'>No injected wallet detected. Open this page in a browser with MetaMask or another EIP-1193 wallet.</p>}
-			{errorMessage === null ? null : <p class='notice error'>{errorMessage}</p>}
-			{lastTransactionHash === null ? null : (
+			{wrongNetworkMessage === undefined ? null : <p class='notice warning'>{wrongNetworkMessage}</p>}
+			{errorMessage === undefined ? null : <p class='notice error'>{errorMessage}</p>}
+			{lastTransactionHash === undefined ? null : (
 				<p class='notice success'>
 					Last transaction: <span>{lastTransactionHash}</span>
 				</p>
@@ -82,7 +91,7 @@ export function App() {
 
 			<OverviewPanels accountState={accountState} deploymentStatuses={deploymentStatuses} busyStepId={busyStepId} onDeployNextMissing={() => void deployNextMissing()} />
 
-			<TabNavigation route={route} deployRoute={DEPLOY_ROUTE} marketRoute={MARKET_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} securityPoolRoute={SECURITY_POOL_ROUTE} securityPoolsOverviewRoute={SECURITY_POOLS_OVERVIEW_ROUTE} securityVaultRoute={SECURITY_VAULT_ROUTE} tradingRoute={TRADING_ROUTE} onRouteChange={navigate} />
+			<TabNavigation route={route} deployRoute={DEPLOY_ROUTE} marketRoute={MARKET_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} reportingRoute={REPORTING_ROUTE} securityPoolRoute={SECURITY_POOL_ROUTE} securityPoolsOverviewRoute={SECURITY_POOLS_OVERVIEW_ROUTE} securityVaultRoute={SECURITY_VAULT_ROUTE} tradingRoute={TRADING_ROUTE} onRouteChange={navigate} />
 
 			{route === 'deploy' ? (
 				<>
@@ -122,7 +131,7 @@ export function App() {
 					securityPoolForm={securityPoolForm}
 					securityPoolResult={securityPoolResult}
 					onLoadLatestMarket={() => {
-						if (lastCreatedQuestionId === null) return
+						if (lastCreatedQuestionId === undefined) return
 						setSecurityPoolForm(current => ({ ...current, marketId: lastCreatedQuestionId }))
 						void loadMarketById(lastCreatedQuestionId)
 					}}
@@ -175,6 +184,19 @@ export function App() {
 					openOracleForm={openOracleForm}
 					openOracleResult={openOracleResult}
 					oracleManagerDetails={oracleManagerDetails}
+				/>
+			) : route === 'reporting' ? (
+				<ReportingSection
+					accountState={accountState}
+					loadingReportingDetails={loadingReportingDetails}
+					onLoadReporting={() => void loadReporting()}
+					onReportOutcome={() => void onReportOutcome()}
+					onReportingFormChange={update => setReportingForm(current => ({ ...current, ...update }))}
+					onWithdrawEscalation={() => void withdrawEscalation()}
+					reportingDetails={reportingDetails}
+					reportingError={reportingError}
+					reportingForm={reportingForm}
+					reportingResult={reportingResult}
 				/>
 			) : route === 'trading' ? (
 				<TradingSection

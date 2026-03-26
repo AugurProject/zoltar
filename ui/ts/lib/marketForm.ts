@@ -1,4 +1,4 @@
-import type { MarketFormState, OpenOracleFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
+import type { MarketFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
 
 function toDatetimeLocalValue(timestampMs: number) {
 	const date = new Date(timestampMs)
@@ -58,6 +58,15 @@ export function getDefaultTradingFormState(): TradingFormState {
 		completeSetAmount: '0',
 		redeemAmount: '0',
 		securityPoolAddress: '',
+	}
+}
+
+export function getDefaultReportingFormState(): ReportingFormState {
+	return {
+		reportAmount: '0',
+		securityPoolAddress: '',
+		selectedOutcome: 'yes',
+		withdrawDepositIndexes: '',
 	}
 }
 

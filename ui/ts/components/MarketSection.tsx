@@ -1,3 +1,4 @@
+import { parseMarketTypeInput } from '../lib/inputs.js'
 import type { MarketSectionProps } from '../types/components.js'
 
 export function MarketSection({ accountState, deploymentStatuses, marketForm, marketCreating, marketResult, marketError, onMarketFormChange, onCreateMarket, onResetMarket }: MarketSectionProps) {
@@ -33,7 +34,7 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 						<p class="detail">Security pool factory address: {securityPoolFactoryStatus?.address ?? 'Unavailable'}</p>
 					</div>
 
-					{marketResult === null ? null : (
+					{marketResult === undefined ? null : (
 						<div class="status-card">
 							<p class="panel-label">Latest Market</p>
 							<ul class="status-list hashes">
@@ -59,7 +60,7 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 					<div class="form-grid">
 						<label class="field">
 							<span>Market Type</span>
-							<select value={marketForm.marketType} onInput={event => onMarketFormChange({ marketType: event.currentTarget.value as typeof marketForm.marketType })}>
+							<select value={marketForm.marketType} onInput={event => onMarketFormChange({ marketType: parseMarketTypeInput(event.currentTarget.value) })}>
 								<option value="binary">Binary</option>
 								<option value="categorical">Categorical</option>
 								<option value="scalar">Scalar</option>
@@ -146,7 +147,7 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 						) : null}
 
 						<div class="actions">
-							<button onClick={onCreateMarket} disabled={accountState.address === null || marketCreating}>
+							<button onClick={onCreateMarket} disabled={accountState.address === undefined || !accountState.isMainnet || marketCreating}>
 								{marketCreating ? 'Creating Market...' : marketForm.marketType === 'binary' ? 'Create Market And Pool' : 'Create Question'}
 							</button>
 							<button class="secondary" onClick={onResetMarket}>
@@ -155,7 +156,7 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 						</div>
 					</div>
 
-					{marketError === null ? null : <p class="notice error">{marketError}</p>}
+					{marketError === undefined ? null : <p class="notice error">{marketError}</p>}
 				</div>
 			</div>
 		</section>
