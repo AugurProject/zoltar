@@ -76,7 +76,7 @@ export function App() {
 
 	return (
 		<main>
-			<HeroSection accountAddress={accountState.address} isRefreshing={isRefreshing} onRefresh={() => void refreshState()} onConnect={() => void connectWallet()} />
+			<HeroSection />
 
 			{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected. Open this page in a browser with MetaMask or another EIP-1193 wallet.</p>}
 			{errorMessage === undefined ? undefined : <p className='notice error'>{errorMessage}</p>}
@@ -93,7 +93,7 @@ export function App() {
 				</p>
 			)}
 
-			<OverviewPanels accountState={accountState} universeLabel={universeLabel} />
+			<OverviewPanels accountState={accountState} universeLabel={universeLabel} isRefreshing={isRefreshing} onRefresh={() => void refreshState()} onConnect={() => void connectWallet()} />
 
 			<TabNavigation route={route} deployRoute={DEPLOY_ROUTE} forkAuctionRoute={FORK_AUCTION_ROUTE} marketRoute={MARKET_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} reportingRoute={REPORTING_ROUTE} securityPoolRoute={SECURITY_POOL_ROUTE} securityPoolsOverviewRoute={SECURITY_POOLS_OVERVIEW_ROUTE} securityVaultRoute={SECURITY_VAULT_ROUTE} tradingRoute={TRADING_ROUTE} onRouteChange={navigate} />
 
