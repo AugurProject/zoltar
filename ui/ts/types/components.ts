@@ -12,16 +12,14 @@ export type DeploymentSectionProps = {
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 }
 
-export type HeroSectionProps = {
-	accountAddress: Address | undefined
-	isRefreshing: boolean
-	onRefresh: () => void
-	onConnect: () => void
-}
+export type HeroSectionProps = {}
 
 export type OverviewPanelsProps = {
 	accountState: AccountState
 	universeLabel: string
+	isRefreshing: boolean
+	onConnect: () => void
+	onRefresh: () => void
 }
 
 export type TabNavigationProps = {
