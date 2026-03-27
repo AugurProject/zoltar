@@ -88,6 +88,16 @@ async function exists(path: string) {
 	}
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null
+}
+
+function isCompileError(value: unknown): value is { severity: string; formattedMessage: string } {
+	return isObjectRecord(value)
+		&& typeof value['severity'] === 'string'
+		&& typeof value['formattedMessage'] === 'string'
+}
+
 // Compiler settings that affect output - must be included in hash
 const compilerSettings = {
 	viaIR: true,
@@ -201,7 +211,7 @@ const copySolidityContractArtifact = async (contractLocation: string) => {
 		throw new Error('No contracts compiled')
 	}
 	const contracts = Object.entries(solidityContract.contracts).flatMap(([filename, contract]) => {
-		if (contract === undefined) throw new Error('missing contract')
+		if (!isObjectRecord(contract)) throw new Error('missing contract')
 		return Object.entries(contract).map(([contractName, contractData]) => ({
 			contractName: `${ filename
 				.replace('contracts/', '')
@@ -268,12 +278,18 @@ const compileContracts = async () => {
 		const output = solc.compile(JSON.stringify(input))
 		console.timeEnd('solc compilation')
 
-		const result = CompileResult.parse(JSON.parse(output))
-		const errors = (result.errors || []).filter(x => x.severity === 'error').map(x => x.formattedMessage)
-		if (errors.length) throw new CompilationError(errors)
+			const result = CompileResult.parse(JSON.parse(output))
+			const diagnostics = Array.isArray(result.errors) ? result.errors : []
+			const errors: string[] = []
+			const warnings: string[] = []
+			for (const diagnostic of diagnostics) {
+				if (!isCompileError(diagnostic)) continue
+				if (diagnostic.severity === 'error') errors.push(diagnostic.formattedMessage)
+				if (diagnostic.severity === 'warning') warnings.push(diagnostic.formattedMessage)
+			}
+			if (errors.length) throw new CompilationError(errors)
 
-		const warnings = (result.errors || []).filter(x => x.severity === 'warning').map(x => x.formattedMessage)
-		if (warnings.length > 0) warnings.forEach(warning => console.warn(warning))
+			if (warnings.length > 0) warnings.forEach(warning => console.warn(warning))
 
 		if (!(await exists(ARTIFACTS_DIR))) await fs.mkdir(ARTIFACTS_DIR, { recursive: false })
 		await fs.writeFile(ARTIFACTS_JSON, output)

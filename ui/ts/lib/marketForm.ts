@@ -99,16 +99,16 @@ export function getDefaultForkAuctionFormState(): ForkAuctionFormState {
 
 export function parseBigIntInput(value: string, label: string) {
 	const trimmed = value.trim()
-	if (trimmed === '') throw new Error(`${label} is required`)
+	if (trimmed === '') throw new Error(`${ label } is required`)
 	try {
 		return BigInt(trimmed)
 	} catch {
-		throw new Error(`${label} must be a whole number`)
+		throw new Error(`${ label } must be a whole number`)
 	}
 }
 
 export function parseTimestampInput(value: string, label: string) {
 	const timestampMs = new Date(value).getTime()
-	if (Number.isNaN(timestampMs)) throw new Error(`${label} is invalid`)
+	if (Number.isNaN(timestampMs)) throw new Error(`${ label } is invalid`)
 	return BigInt(Math.floor(timestampMs / 1000))
 }

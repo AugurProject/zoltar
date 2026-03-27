@@ -24,7 +24,7 @@ const REP_TOTAL_SUPPLY_SLOT = '0x' + 5n.toString(16).padStart(64, '0')
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
-const getUserRepClaim = async (client: WriteClient, securityPoolAddress: `0x${string}`) => {
+const getUserRepClaim = async (client: WriteClient, securityPoolAddress: `0x${ string }`) => {
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
 	return await poolOwnershipToRep(client, securityPoolAddress, vault.repDepositShare)
 }
@@ -39,8 +39,8 @@ describe('Escalation Game Fork Threshold Test', () => {
 	const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
 	const questionEndDate = currentTimestamp + 365n * DAY
 	let securityPoolAddresses: {
-		securityPool: `0x${string}`
-		escalationGame: `0x${string}`
+		securityPool: `0x${ string }`
+		escalationGame: `0x${ string }`
 	}
 	let questionId: bigint
 

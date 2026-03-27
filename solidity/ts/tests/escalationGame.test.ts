@@ -22,7 +22,7 @@ describe('Escalation Game Test Suite', () => {
 	const reportBond = 1n * 10n ** 18n
 	const nonDecisionThreshold = 1000n * 10n ** 18n
 
-	const readIterativeAttritionCost = async (escalationGame: `0x${string}`, timeSinceStart: bigint) =>
+	const readIterativeAttritionCost = async (escalationGame: `0x${ string }`, timeSinceStart: bigint) =>
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'computeIterativeAttritionCost',
@@ -30,7 +30,7 @@ describe('Escalation Game Test Suite', () => {
 			args: [timeSinceStart],
 		})
 
-	const readTimeSinceStartFromAttritionCost = async (escalationGame: `0x${string}`, attritionCost: bigint) =>
+	const readTimeSinceStartFromAttritionCost = async (escalationGame: `0x${ string }`, attritionCost: bigint) =>
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'computeTimeSinceStartFromAttritionCost',
@@ -137,7 +137,7 @@ describe('Escalation Game Test Suite', () => {
 
 		// The binary search tolerance is 64 iterations → ~2^-64 precision on time
 		// In practice, observed error ≤20 seconds
-		assert.ok(maxError <= 20n, `max round‑trip error ${maxError}s ≤ 20s`)
+		assert.ok(maxError <= 20n, `max round‑trip error ${ maxError }s ≤ 20s`)
 	})
 
 	test('computeIterativeAttritionCost: monotonic increasing with loop', async () => {
@@ -149,10 +149,10 @@ describe('Escalation Game Test Suite', () => {
 			const cost = await readIterativeAttritionCost(escalationGame, t)
 
 			// Cost must always increase or stay same (should always increase for this function)
-			assert.ok(cost >= previousCost, `cost at time ${t} should be >= cost at time ${t - step}`)
+			assert.ok(cost >= previousCost, `cost at time ${ t } should be >= cost at time ${ t - step }`)
 
 			// Cost must never exceed nonDecisionThreshold
-			assert.ok(cost <= nonDecisionThreshold, `cost at time ${t} should not exceed nonDecisionThreshold`)
+			assert.ok(cost <= nonDecisionThreshold, `cost at time ${ t } should not exceed nonDecisionThreshold`)
 
 			previousCost = cost
 		}
@@ -167,9 +167,9 @@ describe('Escalation Game Test Suite', () => {
 		for (let t = 0n; t <= ESCALATION_TIME_LENGTH; t += step) {
 			const cost = await readIterativeAttritionCost(escalationGame, t)
 
-			assert.ok(cost >= lastCost, `Monotonicity violated at time ${t}: ${lastCost} -> ${cost}`)
-			assert.ok(cost >= reportBond, `cost below startBond at time ${t}`)
-			assert.ok(cost <= nonDecisionThreshold, `cost above threshold at time ${t}`)
+			assert.ok(cost >= lastCost, `Monotonicity violated at time ${ t }: ${ lastCost } -> ${ cost }`)
+			assert.ok(cost >= reportBond, `cost below startBond at time ${ t }`)
+			assert.ok(cost <= nonDecisionThreshold, `cost above threshold at time ${ t }`)
 
 			lastCost = cost
 		}
@@ -189,7 +189,7 @@ describe('Escalation Game Test Suite', () => {
 			// Allow some tolerance due to integer math and binary search termination
 			const tolerance = 10n // maximum allowed deviation (in time units)
 			const diff = t > recoveredTime ? t - recoveredTime : recoveredTime - t
-			assert.ok(diff <= tolerance, `Roundtrip error for time ${t}: recovered ${recoveredTime}, diff ${diff}`)
+			assert.ok(diff <= tolerance, `Roundtrip error for time ${ t }: recovered ${ recoveredTime }, diff ${ diff }`)
 		}
 	})
 
@@ -248,7 +248,7 @@ describe('Escalation Game Test Suite', () => {
 			// Due to binary search termination and fixed-point errors
 			const maxError = 20n // allow up to 20 time units error
 			const error = t > recoveredT ? t - recoveredT : recoveredT - t
-			assert.ok(error <= maxError, `Inverse error at t=${t}: cost=${cost}, recoveredT=${recoveredT}, error=${error}`)
+			assert.ok(error <= maxError, `Inverse error at t=${ t }: cost=${ cost }, recoveredT=${ recoveredT }, error=${ error }`)
 		}
 	})
 
@@ -267,9 +267,9 @@ describe('Escalation Game Test Suite', () => {
 			const prev = costs[i - 1]
 			const curr = costs[i]
 			if (prev === undefined || curr === undefined) {
-				throw new Error(`costs array element is undefined at index ${i}`)
+				throw new Error(`costs array element is undefined at index ${ i }`)
 			}
-			assert.ok(curr >= prev, `Costs should be non-decreasing: ${prev} vs ${curr}`)
+			assert.ok(curr >= prev, `Costs should be non-decreasing: ${ prev } vs ${ curr }`)
 		}
 
 		// Verify recovered times also non-decreasing
@@ -277,11 +277,11 @@ describe('Escalation Game Test Suite', () => {
 		for (let i = 0; i < costs.length; i++) {
 			const cost = costs[i]
 			if (cost === undefined) {
-				throw new Error(`costs array element is undefined at index ${i}`)
+				throw new Error(`costs array element is undefined at index ${ i }`)
 			}
 			const recoveredT = await readTimeSinceStartFromAttritionCost(escalationGame, cost)
 
-			assert.ok(recoveredT >= prevRecoveredT, `Recovered time should be non-decreasing with cost: ${prevRecoveredT} -> ${recoveredT}`)
+			assert.ok(recoveredT >= prevRecoveredT, `Recovered time should be non-decreasing with cost: ${ prevRecoveredT } -> ${ recoveredT }`)
 			prevRecoveredT = recoveredT
 		}
 	})
@@ -303,7 +303,7 @@ describe('Escalation Game Test Suite', () => {
 			const recoveredT = await readTimeSinceStartFromAttritionCost(escalationGame, targetCost)
 
 			// Recovered time should be within [0, ESCALATION_TIME_LENGTH]
-			assert.ok(recoveredT <= ESCALATION_TIME_LENGTH, `Recovered time ${recoveredT} <= max`)
+			assert.ok(recoveredT <= ESCALATION_TIME_LENGTH, `Recovered time ${ recoveredT } <= max`)
 
 			// Compute the expected cost at recoveredT and ensure it's close to targetCost
 			const computedCost = await readIterativeAttritionCost(escalationGame, recoveredT)
@@ -313,7 +313,7 @@ describe('Escalation Game Test Suite', () => {
 			const relErrorBps = (absError * 10000n) / nonDecisionThreshold // in basis points
 			assert.ok(
 				relErrorBps <= 500n, // 5% tolerance
-				`Cost mismatch for fraction ${fraction / 10000n}: target=${targetCost}, got=${computedCost}, relError=${relErrorBps / 10000n}`,
+				`Cost mismatch for fraction ${ fraction / 10000n }: target=${ targetCost }, got=${ computedCost }, relError=${ relErrorBps / 10000n }`,
 			)
 		}
 	})
