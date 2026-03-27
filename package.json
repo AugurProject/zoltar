@@ -30,6 +30,7 @@
 	},
 	"scripts": {
 		"setup": "bun install --ignore-scripts && bun run setup-contracts",
+		"tsc": "bun x tsc --noEmit",
 		"setup-contracts": "cd solidity && bun run setup",
 		"compile-contracts": "cd solidity && bun run compile-contracts",
 		"ui:setup": "bun install --ignore-scripts && cd solidity && bun install --ignore-scripts && cd .. && bun run compile-contracts && bun run ui:vendor && bun run ui:build",

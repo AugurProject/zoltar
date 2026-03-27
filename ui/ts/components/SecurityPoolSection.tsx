@@ -2,9 +2,8 @@ import { formatTimestamp } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import type { SecurityPoolSectionProps } from '../types/components.js'
 
-export function SecurityPoolSection({ accountState, deploymentStatuses, lastCreatedQuestionId, loadingMarketDetails, marketDetails, onCreateSecurityPool, onLoadLatestMarket, onLoadMarket, onSecurityPoolFormChange, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult }: SecurityPoolSectionProps) {
+export function SecurityPoolSection({ accountState, lastCreatedQuestionId, loadingMarketDetails, marketDetails, onCreateSecurityPool, onLoadLatestMarket, onLoadMarket, onSecurityPoolFormChange, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult }: SecurityPoolSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
-	const securityPoolFactoryStatus = deploymentStatuses.find(step => step.id === 'securityPoolFactory')
 	const isCreateDisabled = accountState.address === undefined || !isMainnet || securityPoolCreating || marketDetails?.marketType !== 'binary'
 
 	return (
@@ -19,17 +18,6 @@ export function SecurityPoolSection({ accountState, deploymentStatuses, lastCrea
 
 			<div className="market-grid">
 				<div className="market-column">
-					<div className="status-card">
-						<p className="panel-label">Required Contract</p>
-						<ul className="status-list">
-							<li>
-								<span>SecurityPoolFactory</span>
-								<strong>{securityPoolFactoryStatus?.deployed ? 'Ready' : 'Missing'}</strong>
-							</li>
-						</ul>
-						<p className="detail">Security pool factory address: {securityPoolFactoryStatus?.address ?? 'Unavailable'}</p>
-					</div>
-
 					{marketDetails === undefined ? undefined : (
 						<div className="status-card">
 							<p className="panel-label">Loaded Market</p>

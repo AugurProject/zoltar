@@ -8,8 +8,6 @@ import { MAINNET_CHAIN_ID } from '../lib/network.js'
 import type { AccountState } from '../types/app.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 
-const REFRESH_INTERVAL_MS = 15_000
-
 async function loadAccountBalances(readClient: ReturnType<typeof createReadClient>, connectedAddress: AccountState['address']) {
 	if (connectedAddress === undefined) {
 		return {
@@ -92,8 +90,6 @@ export function useOnchainState() {
 	}
 
 	useEffect(() => {
-		void refreshState()
-
 		const ethereum = getInjectedEthereum()
 		if (ethereum === undefined) return
 
@@ -104,12 +100,7 @@ export function useOnchainState() {
 		ethereum.on?.('accountsChanged', handleWalletChange)
 		ethereum.on?.('chainChanged', handleWalletChange)
 
-		const intervalId = window.setInterval(() => {
-			void refreshState()
-		}, REFRESH_INTERVAL_MS)
-
 		return () => {
-			window.clearInterval(intervalId)
 			ethereum.removeListener?.('accountsChanged', handleWalletChange)
 			ethereum.removeListener?.('chainChanged', handleWalletChange)
 		}

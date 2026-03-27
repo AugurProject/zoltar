@@ -21,9 +21,6 @@ export type HeroSectionProps = {
 
 export type OverviewPanelsProps = {
 	accountState: AccountState
-	deploymentStatuses: DeploymentStatus[]
-	busyStepId: DeploymentStepId | undefined
-	onDeployNextMissing: () => void
 	universeLabel: string
 }
 
@@ -58,7 +55,6 @@ export type DeploymentRouteContentProps = {
 export type MarketRouteContentProps = {
 	accountState: AccountState
 	onCreateMarket: () => void
-	deploymentStatuses: DeploymentStatus[]
 	marketCreating: boolean
 	marketError: string | undefined
 	marketForm: MarketFormState
@@ -70,7 +66,6 @@ export type MarketRouteContentProps = {
 export type SecurityPoolRouteContentProps = {
 	accountState: AccountState
 	onCreateSecurityPool: () => void
-	deploymentStatuses: DeploymentStatus[]
 	lastCreatedQuestionId: string | undefined
 	onLoadLatestMarket?: () => void
 	onLoadMarket: () => void
