@@ -38,7 +38,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 
 		const prerequisiteLabel = getPrerequisiteLabel(latestStatuses, stepIndex)
 		if (prerequisiteLabel !== undefined) {
-			errorMessage.value = `Deploy ${ prerequisiteLabel } first`
+			errorMessage.value = `Deploy ${prerequisiteLabel} first`
 			return
 		}
 
@@ -58,7 +58,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 			onTransaction(hash)
 			await refreshState()
 		} catch (error) {
-			errorMessage.value = getErrorMessage(error, `Failed to deploy ${ step.label }`)
+			errorMessage.value = getErrorMessage(error, `Failed to deploy ${step.label}`)
 		} finally {
 			busyStepId.value = undefined
 			onTransactionFinished()

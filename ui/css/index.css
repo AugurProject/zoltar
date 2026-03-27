@@ -322,14 +322,6 @@ button.destructive:hover:not(:disabled) {
 	gap: 0.95rem;
 }
 
-.overview-row {
-	display: grid;
-	grid-template-columns: minmax(0, 1.25fr) minmax(18rem, 0.75fr);
-	gap: 1rem;
-	padding: 0.2rem 0 0.65rem;
-	border-bottom: 1px solid var(--line);
-}
-
 .overview-panel {
 	padding: 1rem 0 0.5rem;
 }
@@ -352,6 +344,11 @@ button.destructive:hover:not(:disabled) {
 	align-items: start;
 }
 
+.overview-wallet-header {
+	grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) auto;
+	align-items: center;
+}
+
 .panel-copy {
 	display: grid;
 	gap: 0.4rem;
@@ -363,26 +360,18 @@ button.destructive:hover:not(:disabled) {
 	align-content: start;
 }
 
-.overview-network-panel {
+.overview-inline-metrics {
 	display: grid;
-	align-content: start;
-	gap: 0.3rem;
-}
-
-.metric-row {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	grid-template-columns: repeat(5, minmax(0, auto));
 	gap: 1rem;
-	margin-top: 1rem;
-}
-
-.metric-row > div {
 	min-width: 0;
-	padding-top: 0.75rem;
-	border-top: 1px solid var(--line);
 }
 
-.metric-row strong {
+.overview-inline-metrics > div {
+	min-width: 0;
+}
+
+.overview-inline-metrics strong {
 	display: block;
 	margin-top: 0.3rem;
 	font-size: 0.98rem;
@@ -713,8 +702,7 @@ button:focus-visible {
 	}
 
 	.grid,
-	.overview-row,
-	.metric-row,
+	.overview-inline-metrics,
 	.escalation-metrics,
 	.escalation-sides,
 	.field-row,
@@ -726,8 +714,16 @@ button:focus-visible {
 		grid-template-columns: 1fr;
 	}
 
+	.overview-wallet-header {
+		grid-template-columns: 1fr;
+	}
+
 	.overview-actions {
 		justify-content: flex-start;
+	}
+
+	.overview-inline-metrics {
+		grid-template-columns: 1fr;
 	}
 
 	.contract-row {
