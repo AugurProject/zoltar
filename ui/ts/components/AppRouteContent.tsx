@@ -1,5 +1,5 @@
+import { DeploymentRouteContent } from './DeploymentRouteContent.js'
 import { MainnetGateSection } from './MainnetGateSection.js'
-import { DeploymentSection } from './DeploymentSection.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
 import { MarketSection } from './MarketSection.js'
 import { OpenOracleSection } from './OpenOracleSection.js'
@@ -9,7 +9,6 @@ import { SecurityPoolsOverviewSection } from './SecurityPoolsOverviewSection.js'
 import { SecurityVaultSection } from './SecurityVaultSection.js'
 import { TradingSection } from './TradingSection.js'
 import { assertNever } from '../lib/assert.js'
-import { findNextDeployableStep } from '../lib/deployment.js'
 import type { AppRouteContentProps } from '../types/components.js'
 
 export function AppRouteContent({ deployment, forkAuction, market, openOracle, reporting, route, securityPool, securityPoolsOverview, securityVault, trading, wrongNetworkMessage }: AppRouteContentProps) {
@@ -19,27 +18,7 @@ export function AppRouteContent({ deployment, forkAuction, market, openOracle, r
 
 	switch (route) {
 		case 'deploy': {
-			const nextMissingStep = findNextDeployableStep(deployment.deploymentStatuses)
-			const deployedCount = deployment.deploymentStatuses.filter(step => step.deployed).length
-			return (
-				<>
-					<section className="panel">
-						<p className="panel-label">Deployment Progress</p>
-						<h2>
-							{deployedCount} / {deployment.deploymentStatuses.length} Ready
-						</h2>
-						<p className="detail">{nextMissingStep === undefined ? 'All deterministic contracts are deployed.' : `Next deployable contract: ${ nextMissingStep.label }`}</p>
-						<div className="actions">
-							<button onClick={deployment.onDeployNextMissing} disabled={deployment.accountAddress === undefined || !deployment.isMainnet || nextMissingStep === undefined || deployment.busyStepId !== undefined}>
-								{deployment.busyStepId === undefined ? 'Deploy Next Missing' : 'Deployment In Progress'}
-							</button>
-						</div>
-					</section>
-					{deployment.deploymentSections.map(section => (
-						<DeploymentSection key={section.title} title={section.title} steps={section.steps} allSteps={deployment.deploymentStatuses} accountAddress={deployment.accountAddress} isMainnet={deployment.isMainnet} busyStepId={deployment.busyStepId} onDeploy={deployment.onDeploy} />
-					))}
-				</>
-			)
+			return <DeploymentRouteContent accountAddress={deployment.accountAddress} busyStepId={deployment.busyStepId} deploymentSections={deployment.deploymentSections} deploymentStatuses={deployment.deploymentStatuses} isMainnet={deployment.isMainnet} onDeploy={deployment.onDeploy} onDeployNextMissing={deployment.onDeployNextMissing} />
 		}
 		case 'markets':
 			return <MarketSection accountState={market.accountState} marketForm={market.marketForm} marketCreating={market.marketCreating} marketResult={market.marketResult} marketError={market.marketError} onMarketFormChange={market.onMarketFormChange} onCreateMarket={market.onCreateMarket} onResetMarket={market.onResetMarket} />
