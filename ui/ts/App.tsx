@@ -18,39 +18,37 @@ import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.j
 import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { getDeploymentSections } from './lib/deployment.js'
 import { isMainnetChain } from './lib/network.js'
+import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
+import type { TransactionState } from './lib/transactionState.js'
 import { DEPLOY_ROUTE, FORK_AUCTION_ROUTE, MARKET_ROUTE, OPEN_ORACLE_ROUTE, REPORTING_ROUTE, SECURITY_POOLS_OVERVIEW_ROUTE, SECURITY_POOL_ROUTE, SECURITY_VAULT_ROUTE, TRADING_ROUTE } from './lib/routing.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
 import { readUniverseQueryParam, writeUniverseQueryParam } from './lib/urlParams.js'
 
 export function App() {
-	const lastTransactionHash = useSignal<Hash | undefined>(undefined)
-	const transactionInFlightCount = useSignal(0)
-	const transactionSubmitted = useSignal(false)
-	const transactionUrl = useSignal<string | undefined>(undefined)
+	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
 	const onTransaction = (hash: Hash) => {
-		lastTransactionHash.value = hash
+		transactionState.value = {
+			...transactionState.value,
+			lastTransactionHash: hash,
+		}
 	}
-	const markTransactionRequested = () => {
-		transactionInFlightCount.value += 1
-		transactionSubmitted.value = false
+	const onTransactionRequested = () => {
+		transactionState.value = markTransactionRequested(transactionState.value)
 	}
-	const markTransactionSubmitted = (hash: Hash) => {
-		lastTransactionHash.value = hash
-		transactionInFlightCount.value += 1
-		transactionSubmitted.value = true
-		transactionUrl.value = `https://etherscan.io/tx/${ hash }`
+	const onTransactionSubmitted = (hash: Hash) => {
+		transactionState.value = markTransactionSubmitted(transactionState.value, hash)
 	}
-	const markTransactionFinished = () => {
-		transactionInFlightCount.value = Math.max(0, transactionInFlightCount.value - 1)
+	const onTransactionFinished = () => {
+		transactionState.value = markTransactionFinished(transactionState.value)
 	}
 	const { navigate, route } = useHashRoute()
 	const { accountState, connectWallet, deploymentStatuses, errorMessage: walletErrorMessage, hasInjectedWallet, isRefreshing, refreshState } = useOnchainState()
 	const baseHookConfig = {
 		accountAddress: accountState.address,
 		onTransaction,
-		onTransactionFinished: markTransactionFinished,
-		onTransactionRequested: markTransactionRequested,
-		onTransactionSubmitted: markTransactionSubmitted,
+		onTransactionFinished,
+		onTransactionRequested,
+		onTransactionSubmitted,
 		refreshState,
 	}
 	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses })
@@ -82,16 +80,16 @@ export function App() {
 
 			{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected. Open this page in a browser with MetaMask or another EIP-1193 wallet.</p>}
 			{errorMessage === undefined ? undefined : <p className='notice error'>{errorMessage}</p>}
-			{transactionInFlightCount.value > 0 ? (
+			{transactionState.value.transactionInFlightCount > 0 ? (
 				<p className='notice success'>
 					<span className='spinner' aria-hidden='true' />
-					{transactionSubmitted.value ? 'Transaction submitted, waiting for confirmation.' : 'Awaiting wallet confirmation.'} <span>{lastTransactionHash.value ?? 'Pending wallet signature'}</span>
-					{transactionUrl.value === undefined ? undefined : <> <a href={transactionUrl.value} target='_blank' rel='noreferrer'>View on Etherscan</a></>}
+					{transactionState.value.transactionSubmitted ? 'Transaction submitted, waiting for confirmation.' : 'Awaiting wallet confirmation.'} <span>{transactionState.value.lastTransactionHash ?? 'Pending wallet signature'}</span>
+					{transactionState.value.transactionUrl === undefined ? undefined : <> <a href={transactionState.value.transactionUrl} target='_blank' rel='noreferrer'>View on Etherscan</a></>}
 				</p>
-			) : lastTransactionHash.value === undefined ? undefined : (
+			) : transactionState.value.lastTransactionHash === undefined ? undefined : (
 				<p className='notice success'>
-					Last transaction: <span>{lastTransactionHash.value}</span>
-					{transactionUrl.value === undefined ? undefined : <> <a href={transactionUrl.value} target='_blank' rel='noreferrer'>View on Etherscan</a></>}
+					Last transaction: <span>{transactionState.value.lastTransactionHash}</span>
+					{transactionState.value.transactionUrl === undefined ? undefined : <> <a href={transactionState.value.transactionUrl} target='_blank' rel='noreferrer'>View on Etherscan</a></>}
 				</p>
 			)}
 
@@ -99,7 +97,7 @@ export function App() {
 
 			<TabNavigation route={route} deployRoute={DEPLOY_ROUTE} forkAuctionRoute={FORK_AUCTION_ROUTE} marketRoute={MARKET_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} reportingRoute={REPORTING_ROUTE} securityPoolRoute={SECURITY_POOL_ROUTE} securityPoolsOverviewRoute={SECURITY_POOLS_OVERVIEW_ROUTE} securityVaultRoute={SECURITY_VAULT_ROUTE} tradingRoute={TRADING_ROUTE} onRouteChange={navigate} />
 
-			<fieldset className='route-shell' disabled={transactionInFlightCount.value > 0}>
+			<fieldset className='route-shell' disabled={transactionState.value.transactionInFlightCount > 0}>
 					<AppRouteContent
 						deployment={{
 							accountAddress: accountState.address,
