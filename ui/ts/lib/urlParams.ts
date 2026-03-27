@@ -20,5 +20,5 @@ export function writeUniverseQueryParam(search: string, universeId: bigint | und
 	}
 
 	const nextSearch = params.toString()
-	return nextSearch === '' ? '' : `?${nextSearch}`
+	return nextSearch === '' ? '' : `?${ nextSearch }`
 }

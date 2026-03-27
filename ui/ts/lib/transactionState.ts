@@ -29,7 +29,7 @@ export function markTransactionSubmitted(state: TransactionState, hash: Hash): T
 		...state,
 		lastTransactionHash: hash,
 		transactionSubmitted: true,
-		transactionUrl: `https://etherscan.io/tx/${hash}`,
+		transactionUrl: `https://etherscan.io/tx/${ hash }`,
 	}
 }
 

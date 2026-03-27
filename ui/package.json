@@ -19,8 +19,8 @@
 		"viem": "2.23.15"
 	},
 	"scripts": {
-		"contracts": "cd solidity && npm run contracts",
-		"setup": "npm ci --ignore-scripts && npm run contracts && npm run build",
+		"contracts": "cd ../solidity && bun run setup",
+		"setup": "bun install --frozen-lockfile --ignore-scripts && bun run contracts && bun run build",
 		"build": "tsc",
 		"watch": "tsc --watch",
 		"serve": "bun ./dev-server.mjs",

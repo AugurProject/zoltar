@@ -5,7 +5,7 @@ import type { OverviewPanelsProps } from '../types/components.js'
 export function OverviewPanels({ accountState, universeLabel, isRefreshing, onConnect, onRefresh }: OverviewPanelsProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const connectLabel = accountState.address === undefined ? 'Connect Wallet' : 'Reconnect Wallet'
-	const networkLabel = accountState.chainId === undefined ? 'Unknown' : isMainnet ? 'Ethereum Mainnet' : `${accountState.chainId} (Wrong Network)`
+	const networkLabel = accountState.chainId === undefined ? 'Unknown' : isMainnet ? 'Ethereum Mainnet' : `${ accountState.chainId } (Wrong Network)`
 
 	return (
 		<section className="overview-shell">

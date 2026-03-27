@@ -13,7 +13,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentS
 				<h2>
 					{deployedCount} / {deploymentStatuses.length} Ready
 				</h2>
-				<p className="detail">{nextMissingStep === undefined ? 'All deterministic contracts are deployed.' : `Next deployable contract: ${nextMissingStep.label}`}</p>
+				<p className="detail">{nextMissingStep === undefined ? 'All deterministic contracts are deployed.' : `Next deployable contract: ${ nextMissingStep.label }`}</p>
 				<div className="actions">
 					<button onClick={onDeployNextMissing} disabled={accountAddress === undefined || !isMainnet || nextMissingStep === undefined || busyStepId !== undefined}>
 						{busyStepId === undefined ? 'Deploy Next Missing' : 'Deployment In Progress'}
