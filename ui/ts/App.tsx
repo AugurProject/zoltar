@@ -1,5 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { Hash } from 'viem'
+import { useEffect } from 'preact/hooks'
 import { AppRouteContent } from './components/AppRouteContent.js'
 import { HeroSection } from './components/HeroSection.js'
 import { OverviewPanels } from './components/OverviewPanels.js'
@@ -15,34 +16,11 @@ import { useSecurityPoolCreation } from './hooks/useSecurityPoolCreation.js'
 import { useSecurityPoolsOverview } from './hooks/useSecurityPoolsOverview.js'
 import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from './hooks/useTradingOperations.js'
-import { assertNever } from './lib/assert.js'
 import { getDeploymentSections } from './lib/deployment.js'
 import { isMainnetChain } from './lib/network.js'
 import { DEPLOY_ROUTE, FORK_AUCTION_ROUTE, MARKET_ROUTE, OPEN_ORACLE_ROUTE, REPORTING_ROUTE, SECURITY_POOLS_OVERVIEW_ROUTE, SECURITY_POOL_ROUTE, SECURITY_VAULT_ROUTE, TRADING_ROUTE } from './lib/routing.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
-import type { Route } from './types/app.js'
-
-function getUniverseLabel(route: Route, securityPoolsUniverseIds: bigint[], reportingUniverseId: bigint | undefined, securityVaultUniverseId: bigint | undefined, tradingUniverseId: bigint | undefined, forkAuctionUniverseId: bigint | undefined) {
-	switch (route) {
-		case 'deploy':
-		case 'markets':
-		case 'security-pools':
-		case 'open-oracle':
-			return formatUniverseCollectionLabel([0n])
-		case 'security-pools-overview':
-			return formatUniverseCollectionLabel(securityPoolsUniverseIds)
-		case 'security-vaults':
-			return formatUniverseCollectionLabel(securityVaultUniverseId === undefined ? [] : [securityVaultUniverseId])
-		case 'reporting':
-			return formatUniverseCollectionLabel(reportingUniverseId === undefined ? [] : [reportingUniverseId])
-		case 'trading':
-			return formatUniverseCollectionLabel(tradingUniverseId === undefined ? [] : [tradingUniverseId])
-		case 'fork-auctions':
-			return formatUniverseCollectionLabel(forkAuctionUniverseId === undefined ? [] : [forkAuctionUniverseId])
-		default:
-			return assertNever(route)
-	}
-}
+import { readUniverseQueryParam, writeUniverseQueryParam } from './lib/urlParams.js'
 
 export function App() {
 	const lastTransactionHash = useSignal<Hash | undefined>(undefined)
@@ -90,7 +68,13 @@ export function App() {
 	const lastCreatedQuestionId = marketResult?.questionId
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const wrongNetworkMessage = accountState.address !== undefined && !isMainnet ? 'This application requires Ethereum mainnet. Switch your wallet to Ethereum mainnet before using deployment, market, oracle, reporting, vault, pool, or trading actions.' : undefined
-	const universeLabel = getUniverseLabel(route, securityPools.map(pool => pool.universeId), reportingDetails?.universeId, securityVaultDetails?.universeId, tradingResult?.universeId, forkAuctionDetails?.universeId)
+	const activeUniverseId = readUniverseQueryParam(window.location.search) ?? 0n
+	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
+
+	useEffect(() => {
+		const nextSearch = writeUniverseQueryParam(window.location.search, activeUniverseId)
+		window.history.replaceState({}, '', `${ window.location.pathname }${ nextSearch }${ window.location.hash }`)
+	}, [activeUniverseId])
 
 	return (
 		<main>
@@ -111,7 +95,7 @@ export function App() {
 				</p>
 			)}
 
-			<OverviewPanels accountState={accountState} deploymentStatuses={deploymentStatuses} busyStepId={busyStepId} onDeployNextMissing={() => void deployNextMissing()} universeLabel={universeLabel} />
+			<OverviewPanels accountState={accountState} universeLabel={universeLabel} />
 
 			<TabNavigation route={route} deployRoute={DEPLOY_ROUTE} forkAuctionRoute={FORK_AUCTION_ROUTE} marketRoute={MARKET_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} reportingRoute={REPORTING_ROUTE} securityPoolRoute={SECURITY_POOL_ROUTE} securityPoolsOverviewRoute={SECURITY_POOLS_OVERVIEW_ROUTE} securityVaultRoute={SECURITY_VAULT_ROUTE} tradingRoute={TRADING_ROUTE} onRouteChange={navigate} />
 
@@ -152,7 +136,6 @@ export function App() {
 						market={{
 							accountState,
 							onCreateMarket: () => void createMarket(),
-							deploymentStatuses,
 							marketCreating,
 							marketError,
 							marketForm,
@@ -192,7 +175,6 @@ export function App() {
 						securityPool={{
 							accountState,
 							onCreateSecurityPool: () => void createPool(),
-							deploymentStatuses,
 							lastCreatedQuestionId,
 							onLoadMarket: () => void loadMarket(),
 							onLoadMarketById: loadMarketById,

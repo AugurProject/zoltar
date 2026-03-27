@@ -2,11 +2,8 @@ import { parseMarketTypeInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import type { MarketSectionProps } from '../types/components.js'
 
-export function MarketSection({ accountState, deploymentStatuses, marketForm, marketCreating, marketResult, marketError, onMarketFormChange, onCreateMarket, onResetMarket }: MarketSectionProps) {
+export function MarketSection({ accountState, marketForm, marketCreating, marketResult, marketError, onMarketFormChange, onCreateMarket, onResetMarket }: MarketSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
-	const zoltarQuestionDataStatus = deploymentStatuses.find(step => step.id === 'zoltarQuestionData')
-	const securityPoolFactoryStatus = deploymentStatuses.find(step => step.id === 'securityPoolFactory')
-	const requiresSecurityPool = marketForm.marketType === 'binary'
 
 	return (
 		<section className="panel market-panel">
@@ -20,22 +17,6 @@ export function MarketSection({ accountState, deploymentStatuses, marketForm, ma
 
 			<div className="market-grid">
 				<div className="market-column">
-					<div className="status-card">
-						<p className="panel-label">Required Contracts</p>
-						<ul className="status-list">
-							<li>
-								<span>ZoltarQuestionData</span>
-								<strong>{zoltarQuestionDataStatus?.deployed ? 'Ready' : 'Missing'}</strong>
-							</li>
-							<li>
-								<span>SecurityPoolFactory</span>
-								<strong>{requiresSecurityPool ? (securityPoolFactoryStatus?.deployed ? 'Ready' : 'Missing') : 'Optional'}</strong>
-							</li>
-						</ul>
-						<p className="detail">Question data address: {zoltarQuestionDataStatus?.address ?? 'Unavailable'}</p>
-						<p className="detail">Security pool factory address: {securityPoolFactoryStatus?.address ?? 'Unavailable'}</p>
-					</div>
-
 					{marketResult === undefined ? undefined : (
 						<div className="status-card">
 							<p className="panel-label">Latest Market</p>
