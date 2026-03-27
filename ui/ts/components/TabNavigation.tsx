@@ -4,28 +4,28 @@ export function TabNavigation({ route, deployRoute, forkAuctionRoute, marketRout
 	return (
 		<nav className="tab-nav" aria-label="Application sections">
 			<a className={`tab-link ${ route === 'deploy' ? 'active' : '' }`} href={deployRoute} onClick={() => onRouteChange('deploy')}>
-				Contract Deployment
+				Deploy
 			</a>
 			<a className={`tab-link ${ route === 'markets' ? 'active' : '' }`} href={marketRoute} onClick={() => onRouteChange('markets')}>
-				Market Creation
+				Markets
 			</a>
 			<a className={`tab-link ${ route === 'security-pools' ? 'active' : '' }`} href={securityPoolRoute} onClick={() => onRouteChange('security-pools')}>
-				Security Pool Creation
+				Pools
 			</a>
 			<a className={`tab-link ${ route === 'security-pools-overview' ? 'active' : '' }`} href={securityPoolsOverviewRoute} onClick={() => onRouteChange('security-pools-overview')}>
-				Security Pools Overview
+				Pools Overview
 			</a>
 			<a className={`tab-link ${ route === 'security-vaults' ? 'active' : '' }`} href={securityVaultRoute} onClick={() => onRouteChange('security-vaults')}>
-				Security Vault
+				Vault
 			</a>
 			<a className={`tab-link ${ route === 'open-oracle' ? 'active' : '' }`} href={openOracleRoute} onClick={() => onRouteChange('open-oracle')}>
 				Open Oracle
 			</a>
 			<a className={`tab-link ${ route === 'reporting' ? 'active' : '' }`} href={reportingRoute} onClick={() => onRouteChange('reporting')}>
-				Reporting & Escalation
+				Reporting
 			</a>
 			<a className={`tab-link ${ route === 'fork-auctions' ? 'active' : '' }`} href={forkAuctionRoute} onClick={() => onRouteChange('fork-auctions')}>
-				Fork & Truth Auction
+				Fork Auctions
 			</a>
 			<a className={`tab-link ${ route === 'trading' ? 'active' : '' }`} href={tradingRoute} onClick={() => onRouteChange('trading')}>
 				Trading

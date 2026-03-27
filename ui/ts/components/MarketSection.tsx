@@ -133,7 +133,7 @@ export function MarketSection({ accountState, marketForm, marketCreating, market
 							<button onClick={onCreateMarket} disabled={accountState.address === undefined || !isMainnet || marketCreating}>
 								{marketCreating ? 'Creating Market...' : marketForm.marketType === 'binary' ? 'Create Market And Pool' : 'Create Question'}
 							</button>
-							<button className="secondary" onClick={onResetMarket}>
+							<button className="quiet" onClick={onResetMarket}>
 								Reset
 							</button>
 						</div>
