@@ -1,5 +1,5 @@
 function formatUniverseLabel(universeId: bigint) {
-	return universeId === 0n ? 'Genesis (0)' : `Universe ${ universeId.toString() }`
+	return universeId === 0n ? 'Genesis (0)' : `Universe ${universeId.toString()}`
 }
 
 export function formatUniverseCollectionLabel(universeIds: bigint[]) {
@@ -10,5 +10,5 @@ export function formatUniverseCollectionLabel(universeIds: bigint[]) {
 		if (universeId === undefined) return formatUniverseLabel(0n)
 		return formatUniverseLabel(universeId)
 	}
-	return `Multiple (${ uniqueUniverseIds.map(universeId => universeId.toString()).join(', ') })`
+	return `Multiple (${uniqueUniverseIds.map(universeId => universeId.toString()).join(', ')})`
 }
