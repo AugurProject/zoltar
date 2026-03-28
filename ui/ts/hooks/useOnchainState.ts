@@ -8,6 +8,11 @@ import { MAINNET_CHAIN_ID } from '../lib/network.js'
 import type { AccountState } from '../types/app.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 
+type RefreshStateOptions = {
+	loadDeploymentStatuses?: boolean
+	loadWalletState?: boolean
+}
+
 async function loadAccountBalances(readClient: ReturnType<typeof createReadClient>, connectedAddress: AccountState['address']) {
 	if (connectedAddress === undefined) {
 		return {
@@ -38,38 +43,111 @@ export function useOnchainState() {
 		})),
 	)
 	const hasInjectedWallet = useSignal(getInjectedEthereum() !== undefined)
-	const refreshLoadCount = useSignal(0)
+	const walletLoadCount = useSignal(0)
+	const deploymentStatusLoadCount = useSignal(0)
+	const walletBootstrapComplete = useSignal(false)
 	const refreshRequestId = useSignal(0)
 	const errorMessage = useSignal<string | undefined>(undefined)
+	const setDeploymentStatuses = (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => {
+		deploymentStatuses.value = update(deploymentStatuses.value)
+	}
 
-	const refreshState = async () => {
+	const refreshState = async (options: RefreshStateOptions = {}) => {
+		const shouldLoadDeploymentStatuses = options.loadDeploymentStatuses ?? true
+		const shouldLoadWalletState = options.loadWalletState ?? true
 		const requestId = refreshRequestId.value + 1
 		refreshRequestId.value = requestId
-		refreshLoadCount.value += 1
+		if (shouldLoadWalletState) {
+			walletLoadCount.value += 1
+		}
+		if (shouldLoadDeploymentStatuses) {
+			deploymentStatusLoadCount.value += 1
+		}
 		const ethereum = getInjectedEthereum()
+		const readClient = createReadClient()
 		try {
-			const readClient = createReadClient()
-			const accounts = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' })
-			const connectedAddress = normalizeAccount(accounts[0])
-			const chainId = ethereum === undefined ? MAINNET_CHAIN_ID : await ethereum.request({ method: 'eth_chainId' })
-
-			const [statuses, balances] = await Promise.all([loadDeploymentStatuses(readClient), loadAccountBalances(readClient, connectedAddress)])
-			if (requestId !== refreshRequestId.value) return
-
-			deploymentStatuses.value = statuses
-			accountState.value = {
-				address: connectedAddress,
-				chainId,
-				ethBalance: balances.ethBalance,
-				repBalance: balances.repBalance,
-			}
 			hasInjectedWallet.value = ethereum !== undefined
-			errorMessage.value = undefined
+
+			if (shouldLoadWalletState) {
+				const accounts = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' })
+				const connectedAddress = normalizeAccount(accounts[0])
+				if (requestId !== refreshRequestId.value) return
+
+				accountState.value = {
+					address: connectedAddress,
+					chainId: accountState.value.chainId,
+					ethBalance: connectedAddress === accountState.value.address ? accountState.value.ethBalance : undefined,
+					repBalance: connectedAddress === accountState.value.address ? accountState.value.repBalance : undefined,
+				}
+				errorMessage.value = undefined
+
+				const pendingWalletTasks: Promise<void>[] = []
+
+				if (ethereum !== undefined) {
+					pendingWalletTasks.push(
+						ethereum
+							.request({ method: 'eth_chainId' })
+							.then(chainId => {
+								if (requestId !== refreshRequestId.value) return
+								accountState.value = {
+									...accountState.value,
+									chainId,
+								}
+							})
+							.catch(error => {
+								if (requestId !== refreshRequestId.value) return
+								errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet network')
+							}),
+					)
+				} else {
+					accountState.value = {
+						...accountState.value,
+						chainId: MAINNET_CHAIN_ID,
+					}
+				}
+
+				pendingWalletTasks.push(
+					loadAccountBalances(readClient, connectedAddress)
+						.then(balances => {
+							if (requestId !== refreshRequestId.value) return
+							accountState.value = {
+								...accountState.value,
+								ethBalance: balances.ethBalance,
+								repBalance: balances.repBalance,
+							}
+						})
+						.catch(error => {
+							if (requestId !== refreshRequestId.value) return
+							errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet balances')
+						}),
+				)
+
+				await Promise.allSettled(pendingWalletTasks)
+			}
+
+			if (shouldLoadDeploymentStatuses) {
+				try {
+					const statuses = await loadDeploymentStatuses(readClient)
+					if (requestId !== refreshRequestId.value) return
+					deploymentStatuses.value = statuses
+				} catch (error) {
+					if (requestId !== refreshRequestId.value) return
+					errorMessage.value = getErrorMessage(error, 'Failed to refresh deployment status')
+				}
+			}
 		} catch (error) {
 			if (requestId !== refreshRequestId.value) return
 			errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
 		} finally {
-			refreshLoadCount.value = Math.max(0, refreshLoadCount.value - 1)
+			if (shouldLoadWalletState) {
+				walletLoadCount.value = Math.max(0, walletLoadCount.value - 1)
+				if (requestId === refreshRequestId.value) {
+					walletBootstrapComplete.value = true
+				}
+			}
+			if (shouldLoadDeploymentStatuses) {
+				deploymentStatusLoadCount.value = Math.max(0, deploymentStatusLoadCount.value - 1)
+			}
 		}
 	}
 
@@ -88,6 +166,10 @@ export function useOnchainState() {
 			errorMessage.value = getErrorMessage(error, 'Wallet connection failed')
 		}
 	}
+
+	useEffect(() => {
+		void refreshState({ loadDeploymentStatuses: false })
+	}, [])
 
 	useEffect(() => {
 		const ethereum = getInjectedEthereum()
@@ -112,7 +194,10 @@ export function useOnchainState() {
 		deploymentStatuses: deploymentStatuses.value,
 		errorMessage: errorMessage.value,
 		hasInjectedWallet: hasInjectedWallet.value,
-		isRefreshing: refreshLoadCount.value > 0,
+		isLoadingDeploymentStatuses: deploymentStatusLoadCount.value > 0,
+		isRefreshing: walletLoadCount.value > 0,
+		setDeploymentStatuses,
+		walletBootstrapComplete: walletBootstrapComplete.value,
 		refreshState,
 	}
 }

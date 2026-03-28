@@ -23,7 +23,7 @@
 		"setup": "npm ci --ignore-scripts && npm run contracts && npm run build",
 		"build": "tsc",
 		"watch": "tsc --watch",
-		"serve": "bun ./dev-server.mjs",
+		"serve": "bun x tsc --project tsconfig.json && bun ./dev-server.mjs",
 		"vendor": "bun --tsconfig-override=tsconfig.vendor.json ./build/vendor.mts"
 	}
 }

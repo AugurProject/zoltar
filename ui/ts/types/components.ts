@@ -1,6 +1,6 @@
 import type { Address } from 'viem'
 import type { AccountState, ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from './app.js'
-import type { DeploymentStatus, DeploymentStepId, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, OpenOracleActionResult, OracleManagerDetails, ReportingActionResult, ReportingDetails, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult } from './contracts.js'
+import type { DeploymentStatus, DeploymentStepId, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, OpenOracleActionResult, OracleManagerDetails, ReportingActionResult, ReportingDetails, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, ZoltarForkActionResult, ZoltarUniverseSummary } from './contracts.js'
 
 export type DeploymentSectionProps = {
 	title: string
@@ -24,16 +24,12 @@ export type OverviewPanelsProps = {
 
 export type TabNavigationProps = {
 	route: Route
+	showDeployTab?: boolean
 	deployRoute: string
-	forkAuctionRoute: string
 	marketRoute: string
 	openOracleRoute: string
-	reportingRoute: string
-	securityPoolRoute: string
-	securityPoolsOverviewRoute: string
-	securityVaultRoute: string
-	tradingRoute: string
-	onRouteChange: (route: Route) => void
+	securityPoolsRoute: string
+	onRouteChange: (route: Exclude<Route, 'not-found'>) => void
 }
 
 export type MainnetGateSectionProps = {
@@ -45,24 +41,47 @@ export type DeploymentRouteContentProps = {
 	busyStepId: DeploymentStepId | undefined
 	deploymentSections: { title: string; steps: DeploymentStatus[] }[]
 	deploymentStatuses: DeploymentStatus[]
+	isLoadingDeploymentStatuses: boolean
 	isMainnet: boolean
+	deployNextMissingPending: boolean
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 	onDeployNextMissing: () => void
 }
 
 export type MarketRouteContentProps = {
 	accountState: AccountState
+	onApproveZoltarForkRep: () => void
 	onCreateMarket: () => void
+	onForkZoltar: () => void
 	marketCreating: boolean
 	marketError: string | undefined
 	marketForm: MarketFormState
 	marketResult: MarketCreationResult | undefined
+	loadingZoltarQuestionCount: boolean
+	loadingZoltarQuestions: boolean
+	loadingZoltarUniverse: boolean
+	onLoadZoltarQuestions: () => void
+	onLoadZoltarUniverse: () => void
 	onMarketFormChange: (update: Partial<MarketFormState>) => void
-	onResetMarket: () => void
+	onUseQuestionForFork: (questionId: string) => void
+	onUseQuestionForPool: (questionId: string) => void
+	zoltarQuestionCount: bigint | undefined
+	zoltarForkAllowance: bigint | undefined
+	zoltarForkError: string | undefined
+	loadingZoltarForkAccess: boolean
+	zoltarForkPending: boolean
+	zoltarForkQuestionId: string
+	zoltarForkRepBalance: bigint | undefined
+	zoltarForkResult: ZoltarForkActionResult | undefined
+	zoltarQuestions: MarketDetails[]
+	zoltarUniverse: ZoltarUniverseSummary | undefined
+	onZoltarForkQuestionIdChange: (questionId: string) => void
 }
 
 export type SecurityPoolRouteContentProps = {
 	accountState: AccountState
+	checkingDuplicateOriginPool: boolean
+	duplicateOriginPoolExists: boolean
 	onCreateSecurityPool: () => void
 	lastCreatedQuestionId: string | undefined
 	onLoadLatestMarket?: () => void
@@ -71,6 +90,7 @@ export type SecurityPoolRouteContentProps = {
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
 	onSecurityPoolFormChange: (update: Partial<SecurityPoolFormState>) => void
+	securityPools: ListedSecurityPool[]
 	securityPoolCreating: boolean
 	securityPoolError: string | undefined
 	securityPoolForm: SecurityPoolFormState
@@ -78,23 +98,63 @@ export type SecurityPoolRouteContentProps = {
 }
 
 export type MarketSectionProps = MarketRouteContentProps
-export type SecurityPoolSectionProps = SecurityPoolRouteContentProps
+export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
+	showHeader?: boolean
+}
+
+type LiquidationControlsProps = {
+	closeLiquidationModal: () => void
+	liquidationAmount: string
+	liquidationManagerAddress: Address | undefined
+	liquidationModalOpen: boolean
+	liquidationSecurityPoolAddress: Address | undefined
+	liquidationTargetVault: string
+	onLiquidationAmountChange: (value: string) => void
+	onLiquidationTargetVaultChange: (value: string) => void
+	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => void
+	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
+}
 
 export type SecurityPoolsOverviewRouteContentProps = {
 	accountState: AccountState
-	liquidationAmount: string
-	liquidationTargetVault: string
 	loadingSecurityPools: boolean
-	onLiquidationAmountChange: (value: string) => void
-	onLiquidationTargetVaultChange: (value: string) => void
+	onSelectSecurityPool?: (securityPoolAddress: string) => void
 	onLoadSecurityPools: () => void
-	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 	securityPoolOverviewError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	securityPools: ListedSecurityPool[]
+} & LiquidationControlsProps
+
+export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps & {
+	showHeader?: boolean
 }
 
-export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
+export type SecurityPoolWorkflowRouteContentProps = {
+	accountState: AccountState
+	closeLiquidationModal: () => void
+	forkAuction: ForkAuctionRouteContentProps
+	liquidationAmount: string
+	liquidationManagerAddress: Address | undefined
+	liquidationModalOpen: boolean
+	liquidationSecurityPoolAddress: Address | undefined
+	liquidationTargetVault: string
+	onLiquidationAmountChange: (value: string) => void
+	onLiquidationTargetVaultChange: (value: string) => void
+	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => void
+	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
+	securityPoolAddress: string
+	onSecurityPoolAddressChange: (value: string) => void
+	reporting: ReportingRouteContentProps
+	securityPools: ListedSecurityPool[]
+	securityVault: SecurityVaultRouteContentProps
+	trading: TradingRouteContentProps
+}
+
+export type SecurityPoolsSectionProps = {
+	createPool: SecurityPoolRouteContentProps
+	overview: SecurityPoolsOverviewRouteContentProps
+	workflow: SecurityPoolWorkflowRouteContentProps
+}
 
 export type SecurityVaultRouteContentProps = {
 	accountState: AccountState
@@ -112,7 +172,10 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultResult: SecurityVaultActionResult | undefined
 }
 
-export type SecurityVaultSectionProps = SecurityVaultRouteContentProps
+export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
+	showSecurityPoolAddressInput?: boolean
+	showHeader?: boolean
+}
 
 export type OpenOracleRouteContentProps = {
 	accountState: AccountState
@@ -146,7 +209,10 @@ export type ReportingRouteContentProps = {
 	reportingResult: ReportingActionResult | undefined
 }
 
-export type ReportingSectionProps = ReportingRouteContentProps
+export type ReportingSectionProps = ReportingRouteContentProps & {
+	showHeader?: boolean
+	showSecurityPoolAddressInput?: boolean
+}
 
 export type TradingRouteContentProps = {
 	accountState: AccountState
@@ -160,7 +226,10 @@ export type TradingRouteContentProps = {
 	tradingResult: TradingActionResult | undefined
 }
 
-export type TradingSectionProps = TradingRouteContentProps
+export type TradingSectionProps = TradingRouteContentProps & {
+	showSecurityPoolAddressInput?: boolean
+	showHeader?: boolean
+}
 
 export type ForkAuctionRouteContentProps = {
 	accountState: AccountState
@@ -186,18 +255,18 @@ export type ForkAuctionRouteContentProps = {
 	onWithdrawBids: () => void
 }
 
-export type ForkAuctionSectionProps = ForkAuctionRouteContentProps
+export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
+	showSecurityPoolAddressInput?: boolean
+	showHeader?: boolean
+}
 
 export type AppRouteContentProps = {
 	deployment: DeploymentRouteContentProps
-	forkAuction: ForkAuctionRouteContentProps
 	market: MarketRouteContentProps
 	openOracle: OpenOracleRouteContentProps
-	reporting: ReportingRouteContentProps
 	route: Route
 	securityPool: SecurityPoolRouteContentProps
+	securityPoolWorkflow: SecurityPoolWorkflowRouteContentProps
 	securityPoolsOverview: SecurityPoolsOverviewRouteContentProps
-	securityVault: SecurityVaultRouteContentProps
-	trading: TradingRouteContentProps
 	wrongNetworkMessage: string | undefined
 }

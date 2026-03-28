@@ -1,35 +1,27 @@
+import { EntityCard } from './EntityCard.js'
+import { LiquidationModal } from './LiquidationModal.js'
+import { formatAddress, formatCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
+import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 
-export function SecurityPoolsOverviewSection({ accountState, liquidationAmount, liquidationTargetVault, loadingSecurityPools, onLiquidationAmountChange, onLiquidationTargetVaultChange, onLoadSecurityPools, onQueueLiquidation, securityPoolOverviewError, securityPoolOverviewResult, securityPools }: SecurityPoolsOverviewSectionProps) {
+export function SecurityPoolsOverviewSection({ accountState, closeLiquidationModal, liquidationAmount, liquidationManagerAddress, liquidationModalOpen, liquidationSecurityPoolAddress, liquidationTargetVault, loadingSecurityPools, onLiquidationAmountChange, onLiquidationTargetVaultChange, onLoadSecurityPools, onOpenLiquidationModal, onQueueLiquidation, onSelectSecurityPool, securityPoolOverviewError, securityPoolOverviewResult, securityPools }: SecurityPoolsOverviewSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
+
 	return (
 		<section className="panel market-panel">
-			<div className="market-header">
-				<div>
-					<p className="panel-label">Security Pools</p>
-					<h2>Review all deployed security pools</h2>
-					<p className="detail">This tab reads the factory deployment registry, shows the pools currently known on-chain, and lets you queue liquidation against a target vault for any listed pool.</p>
-				</div>
-			</div>
-
-			<div className="form-grid">
-				<div className="actions">
-					<button className="secondary" onClick={onLoadSecurityPools} disabled={loadingSecurityPools}>
-						{loadingSecurityPools ? 'Loading Pools...' : 'Load All Security Pools'}
-					</button>
-				</div>
-
-				<div className="field-row">
-					<label className="field">
-						<span>Target Vault</span>
-						<input value={liquidationTargetVault} onInput={event => onLiquidationTargetVaultChange(event.currentTarget.value)} placeholder="0x..." />
-					</label>
-					<label className="field">
-						<span>Liquidation Amount</span>
-						<input value={liquidationAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} />
-					</label>
-				</div>
+			<div className="workflow-stack">
+				<EntityCard
+					title="Pool Registry"
+					badge={<span className="badge muted">{securityPools.length} loaded</span>}
+					actions={
+						<button className="secondary" onClick={onLoadSecurityPools} disabled={loadingSecurityPools}>
+							{loadingSecurityPools ? 'Loading Pools...' : 'Refresh Pool Registry'}
+						</button>
+					}
+				>
+					<></>
+				</EntityCard>
 
 				{securityPoolOverviewResult === undefined ? undefined : (
 					<p className="notice success">
@@ -38,33 +30,133 @@ export function SecurityPoolsOverviewSection({ accountState, liquidationAmount, 
 				)}
 				{securityPoolOverviewError === undefined ? undefined : <p className="notice error">{securityPoolOverviewError}</p>}
 
-				<div className="contract-list">
-					{securityPools.map(pool => (
-						<div className="contract-row" key={pool.securityPoolAddress}>
-							<div className="contract-copy">
-								<div className="contract-topline">
-									<span className="badge ok">Deployed</span>
-									<h3>{pool.securityPoolAddress}</h3>
+				{securityPools.length === 0 ? (
+					<EntityCard title="No pools loaded" badge={<span className="badge pending">Registry empty</span>}>
+						<p className="detail">Use Refresh Pool Registry.</p>
+					</EntityCard>
+				) : (
+					<div className="entity-card-list">
+						{securityPools.map(pool => (
+							<EntityCard
+								key={pool.securityPoolAddress}
+								title={pool.marketDetails.title === '' ? pool.questionId : pool.marketDetails.title}
+								badge={<span className="badge ok">{pool.systemState}</span>}
+								actions={
+									onSelectSecurityPool === undefined ? undefined : (
+										<button className="secondary" onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
+											Open Pool
+										</button>
+									)
+								}
+							>
+								<div className="entity-card-subsection">
+									<div className="entity-card-subsection-header">
+										<h4>Question</h4>
+										<span className="badge muted">{pool.marketDetails.marketType}</span>
+									</div>
+									<div className="workflow-question-grid">
+										<div>
+											<span className="metric-label">Question ID</span>
+											<strong>{pool.questionId}</strong>
+										</div>
+										<div>
+											<span className="metric-label">Created</span>
+											<strong>{formatTimestamp(pool.marketDetails.createdAt)}</strong>
+										</div>
+										<div>
+											<span className="metric-label">End Time</span>
+											<strong>{formatTimestamp(pool.marketDetails.endTime)}</strong>
+										</div>
+										<div>
+											<span className="metric-label">Outcomes</span>
+											<strong>{pool.marketDetails.outcomeLabels.length === 0 ? 'Scalar' : pool.marketDetails.outcomeLabels.join(', ')}</strong>
+										</div>
+									</div>
 								</div>
-								<p className="detail">Question ID: {pool.questionId}</p>
-								<p className="detail">Universe: {pool.universeId.toString()}</p>
-								<p className="detail">Manager: {pool.managerAddress}</p>
-								<p className="detail">System state: {pool.systemState}</p>
-								<p className="detail">Truth auction: {pool.truthAuctionAddress}</p>
-								<p className="detail">Truth auction started: {pool.truthAuctionStartedAt === 0n ? 'Not started' : pool.truthAuctionStartedAt.toString()}</p>
-								<p className="detail">Fork mode: {pool.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent/Zoltar fork'}</p>
-								<p className="detail">Fork outcome: {pool.forkOutcome}</p>
-								<p className="detail">Migrated REP: {pool.migratedRep.toString()}</p>
-								<p className="detail">Security multiplier: {pool.securityMultiplier.toString()}</p>
-								<p className="detail">Retention rate: {pool.currentRetentionRate.toString()}</p>
-							</div>
-							<button onClick={() => onQueueLiquidation(pool.managerAddress, pool.securityPoolAddress)} disabled={accountState.address === undefined || !isMainnet}>
-								Queue Liquidation
-							</button>
-						</div>
-					))}
-				</div>
+
+								<div className="entity-card-subsection">
+									<div className="entity-card-subsection-header">
+										<h4>Pool</h4>
+										<span className="badge muted">{pool.vaultCount.toString()} vaults</span>
+									</div>
+									<div className="workflow-metric-grid">
+										<div>
+											<span className="metric-label">Pool Address</span>
+											<strong>{formatAddress(pool.securityPoolAddress)}</strong>
+										</div>
+										<div>
+											<span className="metric-label">Universe</span>
+											<strong>{pool.universeId.toString()}</strong>
+										</div>
+										<div>
+											<span className="metric-label">Security Multiplier</span>
+											<strong>{pool.securityMultiplier.toString()}</strong>
+										</div>
+										<div>
+											<span className="metric-label">Open Interest Fee / Year</span>
+											<strong>{formatOpenInterestFeePerYearPercent(pool.currentRetentionRate)}</strong>
+										</div>
+										<div>
+											<span className="metric-label">Manager</span>
+											<strong>{formatAddress(pool.managerAddress)}</strong>
+										</div>
+										<div>
+											<span className="metric-label">Truth Auction</span>
+											<strong>{formatAddress(pool.truthAuctionAddress)}</strong>
+										</div>
+									</div>
+								</div>
+
+								<div className="entity-card-subsection">
+									<div className="entity-card-subsection-header">
+										<h4>Vaults</h4>
+									</div>
+									{pool.vaults.length === 0 ? (
+										<p className="detail">No vaults</p>
+									) : (
+										<div className="entity-card-list">
+											{pool.vaults.map(vault => (
+												<EntityCard
+													key={`${ pool.securityPoolAddress }-${ vault.vaultAddress }`}
+													className="compact"
+													title={formatAddress(vault.vaultAddress)}
+													badge={<span className="badge muted">Vault</span>}
+													actions={
+														<button className="secondary" onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
+															Liquidate Vault
+														</button>
+													}
+												>
+													<div className="workflow-vault-grid">
+														<div>
+															<span className="metric-label">REP Deposit Share</span>
+															<strong>{formatCurrencyBalance(vault.repDepositShare)}</strong>
+														</div>
+														<div>
+															<span className="metric-label">Pool Ownership</span>
+															<strong>{vault.poolOwnership.toString()}</strong>
+														</div>
+														<div>
+															<span className="metric-label">Security Bond Allowance</span>
+															<strong>{formatCurrencyBalance(vault.securityBondAllowance)}</strong>
+														</div>
+														<div>
+															<span className="metric-label">Unpaid ETH Fees</span>
+															<strong>{formatCurrencyBalance(vault.unpaidEthFees)}</strong>
+														</div>
+													</div>
+												</EntityCard>
+											))}
+										</div>
+									)}
+								</div>
+							</EntityCard>
+						))}
+					</div>
+				)}
 			</div>
+
+			<LiquidationModal accountAddress={accountState.address} closeLiquidationModal={closeLiquidationModal} isMainnet={isMainnet} liquidationAmount={liquidationAmount} liquidationManagerAddress={liquidationManagerAddress} liquidationModalOpen={liquidationModalOpen} liquidationSecurityPoolAddress={liquidationSecurityPoolAddress} liquidationTargetVault={liquidationTargetVault} onLiquidationAmountChange={onLiquidationAmountChange} onLiquidationTargetVaultChange={onLiquidationTargetVaultChange} onQueueLiquidation={onQueueLiquidation} />
 		</section>
 	)
 }

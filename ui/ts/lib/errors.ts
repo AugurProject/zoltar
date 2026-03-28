@@ -13,5 +13,5 @@ export function getErrorMessage(error: unknown, fallbackMessage: string) {
 		}
 	}
 
-	return detail === undefined || detail === '' ? fallbackMessage : `${fallbackMessage}: ${detail}`
+	return detail === undefined || detail === '' ? fallbackMessage : `${ fallbackMessage }: ${ detail }`
 }

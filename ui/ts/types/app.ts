@@ -1,7 +1,7 @@
 import type { MarketType, ReportingOutcomeKey } from './contracts.js'
 import type { Address } from 'viem'
 
-export type Route = 'deploy' | 'markets' | 'security-pools' | 'security-pools-overview' | 'security-vaults' | 'open-oracle' | 'reporting' | 'trading' | 'fork-auctions'
+export type Route = 'deploy' | 'zoltar' | 'security-pools' | 'open-oracle' | 'not-found'
 
 export type AccountState = {
 	address: Address | undefined
@@ -13,7 +13,6 @@ export type AccountState = {
 export type MarketFormState = {
 	answerUnit: string
 	categoricalOutcomes: string
-	currentRetentionRate: string
 	description: string
 	displayValueMax: string
 	displayValueMin: string
@@ -21,10 +20,7 @@ export type MarketFormState = {
 	endTime: string
 	marketType: MarketType
 	numTicks: string
-	scalarStartValue: string
 	startTime: string
-	securityMultiplier: string
-	startingRepEthPrice: string
 }
 
 export type SecurityPoolFormState = {

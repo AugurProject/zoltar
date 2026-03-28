@@ -20,12 +20,13 @@ import { getDeploymentSections } from './lib/deployment.js'
 import { isMainnetChain } from './lib/network.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
 import type { TransactionState } from './lib/transactionState.js'
-import { DEPLOY_ROUTE, FORK_AUCTION_ROUTE, MARKET_ROUTE, OPEN_ORACLE_ROUTE, REPORTING_ROUTE, SECURITY_POOLS_OVERVIEW_ROUTE, SECURITY_POOL_ROUTE, SECURITY_VAULT_ROUTE, TRADING_ROUTE } from './lib/routing.js'
+import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
-import { readUniverseQueryParam, writeUniverseQueryParam } from './lib/urlParams.js'
+import { readSecurityPoolQueryParam, readUniverseQueryParam, writeSecurityPoolQueryParam, writeUniverseQueryParam } from './lib/urlParams.js'
 
 export function App() {
 	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
+	const deployNextMissingPending = useSignal(false)
 	const onTransaction = (hash: Hash) => {
 		transactionState.value = {
 			...transactionState.value,
@@ -42,7 +43,7 @@ export function App() {
 		transactionState.value = markTransactionFinished(transactionState.value)
 	}
 	const { navigate, route } = useHashRoute()
-	const { accountState, connectWallet, deploymentStatuses, errorMessage: walletErrorMessage, hasInjectedWallet, isRefreshing, refreshState } = useOnchainState()
+	const { accountState, connectWallet, deploymentStatuses, errorMessage: walletErrorMessage, hasInjectedWallet, isLoadingDeploymentStatuses, isRefreshing, refreshState, setDeploymentStatuses, walletBootstrapComplete } = useOnchainState()
 	const baseHookConfig = {
 		accountAddress: accountState.address,
 		onTransaction,
@@ -51,34 +52,100 @@ export function App() {
 		onTransactionSubmitted,
 		refreshState,
 	}
-	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses })
-	const { createMarket, marketCreating, marketError, marketForm, marketResult, resetMarket, setMarketForm } = useMarketCreation({ ...baseHookConfig, deploymentStatuses })
-	const { createPool, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({ ...baseHookConfig, deploymentStatuses })
+	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
+	const { approveZoltarForkRep, createMarket, forkZoltar, loadingZoltarForkAccess, loadingZoltarQuestionCount, loadingZoltarQuestions, loadingZoltarUniverse, loadZoltarQuestions, loadZoltarUniverse, marketCreating, marketError, marketForm, marketResult, setMarketForm, setZoltarForkQuestionId, zoltarForkAllowance, zoltarForkError, zoltarForkPending, zoltarForkQuestionId, zoltarForkRepBalance, zoltarForkResult, zoltarQuestionCount, zoltarQuestions, zoltarUniverse } = useMarketCreation({ ...baseHookConfig, accountRepBalance: accountState.repBalance, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
+	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({ ...baseHookConfig, deploymentStatuses })
 	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, redeemRep, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult, setSecurityVaultForm, updateVaultFees } = useSecurityVaultOperations(baseHookConfig)
 	const { approveToken1, approveToken2, loadOracleManager, loadingOracleManager, onQueueOperation, onRequestPrice, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails, setOpenOracleForm, settleReport, submitInitialReport } = useOpenOracleOperations(baseHookConfig)
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
-	const { liquidationAmount, liquidationTargetVault, loadingSecurityPools, queueLiquidation, securityPoolOverviewError, securityPoolOverviewResult, securityPools, setLiquidationAmount, setLiquidationTargetVault, loadSecurityPools } = useSecurityPoolsOverview(baseHookConfig)
+	const {
+		closeLiquidationModal,
+		liquidationAmount,
+		liquidationManagerAddress,
+		liquidationModalOpen,
+		liquidationSecurityPoolAddress,
+		liquidationTargetVault,
+		loadingSecurityPools,
+		loadSecurityPools,
+		openLiquidationModal,
+		queueLiquidation,
+		securityPoolOverviewError,
+		securityPoolOverviewResult,
+		securityPools,
+		setLiquidationAmount,
+		setLiquidationTargetVault,
+	} = useSecurityPoolsOverview(baseHookConfig)
 	const { createCompleteSet, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingError, tradingForm, tradingResult } = useTradingOperations(baseHookConfig)
 	const { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkAuctionDetails, forkAuctionError, forkAuctionForm, forkAuctionResult, forkUniverse, forkWithOwnEscalation, initiateFork, loadForkAuction, loadingForkAuctionDetails, migrateEscalation, migrateRepToZoltar, migrateVault, refundLosingBids, setForkAuctionForm, startTruthAuction, submitBid, withdrawBids } = useForkAuctionOperations(baseHookConfig)
+	const securityPoolAddress = useSignal(readSecurityPoolQueryParam(window.location.search) ?? '')
 
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
+	const deploymentComplete = deploymentStatuses.length > 0 && deploymentStatuses.every(step => step.deployed)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
 	const lastCreatedQuestionId = marketResult?.questionId
 	const isMainnet = isMainnetChain(accountState.chainId)
-	const wrongNetworkMessage = accountState.address !== undefined && !isMainnet ? 'This application requires Ethereum mainnet. Switch your wallet to Ethereum mainnet before using deployment, market, oracle, reporting, vault, pool, or trading actions.' : undefined
+	const wrongNetworkMessage = accountState.address !== undefined && !isMainnet ? 'Switch your wallet to Ethereum mainnet.' : undefined
 	const activeUniverseId = readUniverseQueryParam(window.location.search) ?? 0n
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
+	const activeSecurityPoolAddress = securityPoolAddress.value
+
+	useEffect(() => {
+		if (!walletBootstrapComplete) return
+		void refreshState({ loadDeploymentStatuses: true, loadWalletState: false })
+	}, [walletBootstrapComplete])
 
 	useEffect(() => {
 		const nextSearch = writeUniverseQueryParam(window.location.search, activeUniverseId)
 		window.history.replaceState({}, '', `${ window.location.pathname }${ nextSearch }${ window.location.hash }`)
 	}, [activeUniverseId])
 
+	useEffect(() => {
+		const nextSearch = writeSecurityPoolQueryParam(window.location.search, activeSecurityPoolAddress === '' ? undefined : activeSecurityPoolAddress)
+		window.history.replaceState({}, '', `${ window.location.pathname }${ nextSearch }${ window.location.hash }`)
+	}, [activeSecurityPoolAddress])
+
+	useEffect(() => {
+		setSecurityVaultForm(current => current.securityPoolAddress === activeSecurityPoolAddress ? current : { ...current, securityPoolAddress: activeSecurityPoolAddress })
+		setTradingForm(current => current.securityPoolAddress === activeSecurityPoolAddress ? current : { ...current, securityPoolAddress: activeSecurityPoolAddress })
+		setForkAuctionForm(current => current.securityPoolAddress === activeSecurityPoolAddress ? current : { ...current, securityPoolAddress: activeSecurityPoolAddress })
+		setReportingForm(current => current.securityPoolAddress === activeSecurityPoolAddress ? current : { ...current, securityPoolAddress: activeSecurityPoolAddress })
+		if (!walletBootstrapComplete) return
+		if (!activeSecurityPoolAddress.startsWith('0x') || activeSecurityPoolAddress.length !== 42) return
+		void loadSecurityPools()
+		void loadReporting()
+		void loadForkAuction()
+	}, [activeSecurityPoolAddress, walletBootstrapComplete])
+
+	useEffect(() => {
+		if (securityPoolResult === undefined) return
+		void loadSecurityPools()
+	}, [securityPoolResult?.deployPoolHash])
+
+	const onDeployNextMissing = async () => {
+		if (deployNextMissingPending.value) return
+		deployNextMissingPending.value = true
+		try {
+			await deployNextMissing()
+		} finally {
+			deployNextMissingPending.value = false
+		}
+	}
+
+	const onUseQuestionForPool = (questionId: string) => {
+		setSecurityPoolForm(current => ({
+			...current,
+			marketId: questionId,
+		}))
+		navigate('security-pools')
+	}
+
 	return (
 		<main>
+			<OverviewPanels accountState={accountState} universeLabel={universeLabel} isRefreshing={isRefreshing} onRefresh={() => void refreshState()} onConnect={() => void connectWallet()} />
+
 			<HeroSection />
 
-			{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected. Open this page in a browser with MetaMask or another EIP-1193 wallet.</p>}
+			{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected.</p>}
 			{errorMessage === undefined ? undefined : <p className='notice error'>{errorMessage}</p>}
 			{transactionState.value.transactionInFlightCount > 0 ? (
 				<p className='notice success'>
@@ -93,53 +160,50 @@ export function App() {
 				</p>
 			)}
 
-			<OverviewPanels accountState={accountState} universeLabel={universeLabel} isRefreshing={isRefreshing} onRefresh={() => void refreshState()} onConnect={() => void connectWallet()} />
+			<TabNavigation route={route} showDeployTab={!deploymentComplete} deployRoute={DEPLOY_ROUTE} marketRoute={ZOLTAR_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} securityPoolsRoute={SECURITY_POOLS_ROUTE} onRouteChange={navigate} />
 
-			<TabNavigation route={route} deployRoute={DEPLOY_ROUTE} forkAuctionRoute={FORK_AUCTION_ROUTE} marketRoute={MARKET_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} reportingRoute={REPORTING_ROUTE} securityPoolRoute={SECURITY_POOL_ROUTE} securityPoolsOverviewRoute={SECURITY_POOLS_OVERVIEW_ROUTE} securityVaultRoute={SECURITY_VAULT_ROUTE} tradingRoute={TRADING_ROUTE} onRouteChange={navigate} />
-
-			<fieldset className='route-shell' disabled={transactionState.value.transactionInFlightCount > 0}>
+			{walletBootstrapComplete ? (
+				<fieldset className='route-shell' disabled={transactionState.value.transactionInFlightCount > 0}>
 					<AppRouteContent
-						deployment={{
-							accountAddress: accountState.address,
-							busyStepId,
-							deploymentSections,
-							deploymentStatuses,
-							isMainnet,
-							onDeploy: deployStep,
-							onDeployNextMissing: () => void deployNextMissing(),
-						}}
-						forkAuction={{
-							accountState,
-							forkAuctionDetails,
-							forkAuctionError,
-							forkAuctionForm,
-							forkAuctionResult,
-							loadingForkAuctionDetails,
-							onClaimAuctionProceeds: () => void claimAuctionProceeds(),
-							onCreateChildUniverse: () => void createChildUniverse(),
-							onFinalizeTruthAuction: () => void finalizeTruthAuction(),
-							onForkAuctionFormChange: update => setForkAuctionForm(current => ({ ...current, ...update })),
-							onForkUniverse: () => void forkUniverse(),
-							onForkWithOwnEscalation: () => void forkWithOwnEscalation(),
-							onInitiateFork: () => void initiateFork(),
-							onLoadForkAuction: () => void loadForkAuction(),
-							onMigrateEscalationDeposits: () => void migrateEscalation(),
-							onMigrateRepToZoltar: () => void migrateRepToZoltar(),
-							onMigrateVault: () => void migrateVault(),
-							onRefundLosingBids: () => void refundLosingBids(),
-							onStartTruthAuction: () => void startTruthAuction(),
-							onSubmitBid: () => void submitBid(),
-							onWithdrawBids: () => void withdrawBids(),
-						}}
+				deployment={{
+					accountAddress: accountState.address,
+					busyStepId,
+					deployNextMissingPending: deployNextMissingPending.value,
+					deploymentSections,
+					deploymentStatuses,
+					isLoadingDeploymentStatuses,
+					isMainnet,
+					onDeploy: deployStep,
+					onDeployNextMissing: () => void onDeployNextMissing(),
+				}}
 						market={{
 							accountState,
+							onApproveZoltarForkRep: () => void approveZoltarForkRep(),
+							loadingZoltarQuestionCount,
+							loadingZoltarQuestions,
+							loadingZoltarUniverse,
+							onForkZoltar: () => void forkZoltar(),
 							onCreateMarket: () => void createMarket(),
+							onLoadZoltarQuestions: () => void loadZoltarQuestions(),
+							onLoadZoltarUniverse: () => void loadZoltarUniverse(),
 							marketCreating,
 							marketError,
 							marketForm,
 							marketResult,
 							onMarketFormChange: update => setMarketForm(current => ({ ...current, ...update })),
-							onResetMarket: resetMarket,
+							onUseQuestionForFork: questionId => setZoltarForkQuestionId(questionId),
+							onUseQuestionForPool,
+							zoltarQuestionCount,
+							zoltarForkAllowance,
+							zoltarForkError,
+							loadingZoltarForkAccess,
+							zoltarForkPending,
+							zoltarForkQuestionId,
+							zoltarForkRepBalance,
+							zoltarForkResult,
+							zoltarQuestions,
+							zoltarUniverse,
+							onZoltarForkQuestionIdChange: questionId => setZoltarForkQuestionId(questionId),
 						}}
 						openOracle={{
 							accountState,
@@ -157,21 +221,11 @@ export function App() {
 							openOracleResult,
 							oracleManagerDetails,
 						}}
-						reporting={{
-							accountState,
-							loadingReportingDetails,
-							onLoadReporting: () => void loadReporting(),
-							onReportOutcome: () => void onReportOutcome(),
-							onReportingFormChange: update => setReportingForm(current => ({ ...current, ...update })),
-							onWithdrawEscalation: () => void withdrawEscalation(),
-							reportingDetails,
-							reportingError,
-							reportingForm,
-							reportingResult,
-						}}
 						route={route}
 						securityPool={{
 							accountState,
+							checkingDuplicateOriginPool,
+							duplicateOriginPoolExists,
 							onCreateSecurityPool: () => void createPool(),
 							lastCreatedQuestionId,
 							onLoadMarket: () => void loadMarket(),
@@ -179,53 +233,118 @@ export function App() {
 							loadingMarketDetails,
 							marketDetails,
 							onSecurityPoolFormChange: update => setSecurityPoolForm(current => ({ ...current, ...update })),
+							securityPools,
 							securityPoolCreating,
 							securityPoolError,
 							securityPoolForm,
 							securityPoolResult,
 						}}
+						securityPoolWorkflow={{
+							accountState,
+							closeLiquidationModal: () => closeLiquidationModal(),
+							forkAuction: {
+								accountState,
+								forkAuctionDetails,
+								forkAuctionError,
+								forkAuctionForm,
+								forkAuctionResult,
+								loadingForkAuctionDetails,
+								onClaimAuctionProceeds: () => void claimAuctionProceeds(),
+								onCreateChildUniverse: () => void createChildUniverse(),
+								onFinalizeTruthAuction: () => void finalizeTruthAuction(),
+								onForkAuctionFormChange: update => setForkAuctionForm(current => ({ ...current, ...update })),
+								onForkUniverse: () => void forkUniverse(),
+								onForkWithOwnEscalation: () => void forkWithOwnEscalation(),
+								onInitiateFork: () => void initiateFork(),
+								onLoadForkAuction: () => void loadForkAuction(),
+								onMigrateEscalationDeposits: () => void migrateEscalation(),
+								onMigrateRepToZoltar: () => void migrateRepToZoltar(),
+								onMigrateVault: () => void migrateVault(),
+								onRefundLosingBids: () => void refundLosingBids(),
+								onStartTruthAuction: () => void startTruthAuction(),
+								onSubmitBid: () => void submitBid(),
+								onWithdrawBids: () => void withdrawBids(),
+							},
+							liquidationAmount,
+							liquidationManagerAddress,
+							liquidationModalOpen,
+							liquidationSecurityPoolAddress,
+							liquidationTargetVault,
+							onLiquidationAmountChange: setLiquidationAmount,
+							onLiquidationTargetVaultChange: setLiquidationTargetVault,
+							onOpenLiquidationModal: (managerAddress, securityPoolAddress, vaultAddress) => openLiquidationModal(managerAddress, securityPoolAddress, vaultAddress),
+							onQueueLiquidation: (managerAddress, securityPoolAddress) => void queueLiquidation(managerAddress, securityPoolAddress),
+							onSecurityPoolAddressChange: value => {
+								securityPoolAddress.value = value
+							},
+							reporting: {
+								accountState,
+								loadingReportingDetails,
+								onLoadReporting: () => void loadReporting(),
+								onReportOutcome: () => void onReportOutcome(),
+								onReportingFormChange: update => setReportingForm(current => ({ ...current, ...update })),
+								onWithdrawEscalation: () => void withdrawEscalation(),
+								reportingDetails,
+								reportingError,
+								reportingForm,
+								reportingResult,
+							},
+							securityPoolAddress: activeSecurityPoolAddress,
+							securityPools,
+							securityVault: {
+								accountState,
+								loadingSecurityVault,
+								onApproveRep: () => void approveRep(),
+								onDepositRep: () => void depositRep(),
+								onLoadSecurityVault: () => void loadSecurityVault(),
+								onRedeemFees: () => void redeemFees(),
+								onRedeemRep: () => void redeemRep(),
+								onSecurityVaultFormChange: update => setSecurityVaultForm(current => ({ ...current, ...update })),
+								onUpdateVaultFees: () => void updateVaultFees(),
+								securityVaultDetails,
+								securityVaultError,
+								securityVaultForm,
+								securityVaultResult,
+							},
+							trading: {
+								accountState,
+								onCreateCompleteSet: () => void createCompleteSet(),
+								onMigrateShares: () => void migrateShares(),
+								onRedeemCompleteSet: () => void redeemCompleteSet(),
+								onRedeemShares: () => void redeemShares(),
+								onTradingFormChange: update => setTradingForm(current => ({ ...current, ...update })),
+								tradingError,
+								tradingForm,
+								tradingResult,
+							},
+						}}
 						securityPoolsOverview={{
 							accountState,
+							closeLiquidationModal: () => closeLiquidationModal(),
 							liquidationAmount,
+							liquidationManagerAddress,
+							liquidationModalOpen,
+							liquidationSecurityPoolAddress,
 							liquidationTargetVault,
 							loadingSecurityPools,
 							onLiquidationAmountChange: setLiquidationAmount,
 							onLiquidationTargetVaultChange: setLiquidationTargetVault,
+							onOpenLiquidationModal: (managerAddress, securityPoolAddress, vaultAddress) => openLiquidationModal(managerAddress, securityPoolAddress, vaultAddress),
 							onLoadSecurityPools: () => void loadSecurityPools(),
 							onQueueLiquidation: (managerAddress, securityPoolAddress) => void queueLiquidation(managerAddress, securityPoolAddress),
 							securityPoolOverviewError,
 							securityPoolOverviewResult,
 							securityPools,
 						}}
-						securityVault={{
-							accountState,
-							loadingSecurityVault,
-							onApproveRep: () => void approveRep(),
-							onDepositRep: () => void depositRep(),
-							onLoadSecurityVault: () => void loadSecurityVault(),
-							onRedeemFees: () => void redeemFees(),
-							onRedeemRep: () => void redeemRep(),
-							onSecurityVaultFormChange: update => setSecurityVaultForm(current => ({ ...current, ...update })),
-							onUpdateVaultFees: () => void updateVaultFees(),
-							securityVaultDetails,
-							securityVaultError,
-							securityVaultForm,
-							securityVaultResult,
-						}}
-						trading={{
-							accountState,
-							onCreateCompleteSet: () => void createCompleteSet(),
-							onMigrateShares: () => void migrateShares(),
-							onRedeemCompleteSet: () => void redeemCompleteSet(),
-							onRedeemShares: () => void redeemShares(),
-							onTradingFormChange: update => setTradingForm(current => ({ ...current, ...update })),
-							tradingError,
-							tradingForm,
-							tradingResult,
-						}}
 						wrongNetworkMessage={wrongNetworkMessage}
 					/>
 				</fieldset>
+			) : (
+				<p className='notice'>
+					<span className='spinner' aria-hidden='true' />
+					Loading wallet...
+				</p>
+			)}
 		</main>
 	)
 }

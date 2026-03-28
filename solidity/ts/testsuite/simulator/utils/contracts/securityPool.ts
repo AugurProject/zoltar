@@ -88,6 +88,22 @@ export const getSecurityVault = async (client: ReadClient, securityPoolAddress: 
 	return { repDepositShare, securityBondAllowance, unpaidEthFees, feeIndex, lockedRepInEscalationGame }
 }
 
+export const getVaultCount = async (client: ReadClient, securityPoolAddress: `0x${ string }`) =>
+	await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'getVaultCount',
+		address: securityPoolAddress,
+		args: [],
+	})
+
+export const getVaults = async (client: ReadClient, securityPoolAddress: `0x${ string }`, startIndex: bigint, count: bigint) =>
+	await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'getVaults',
+		address: securityPoolAddress,
+		args: [startIndex, count],
+	})
+
 export const getSecurityPoolsEscalationGame = async (client: ReadClient, securityPoolAddress: `0x${ string }`) =>
 	await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,

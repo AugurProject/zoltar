@@ -1,65 +1,106 @@
+import { EntityCard } from './EntityCard.js'
 import { formatTimestamp } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
+import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import type { SecurityPoolSectionProps } from '../types/components.js'
 
-export function SecurityPoolSection({ accountState, lastCreatedQuestionId, loadingMarketDetails, marketDetails, onCreateSecurityPool, onLoadLatestMarket, onLoadMarket, onSecurityPoolFormChange, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult }: SecurityPoolSectionProps) {
+export function SecurityPoolSection({ accountState, checkingDuplicateOriginPool, duplicateOriginPoolExists, lastCreatedQuestionId, loadingMarketDetails, marketDetails, onCreateSecurityPool, onLoadLatestMarket, onLoadMarket, onSecurityPoolFormChange, securityPools, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, showHeader = true }: SecurityPoolSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
-	const isCreateDisabled = accountState.address === undefined || !isMainnet || securityPoolCreating || marketDetails?.marketType !== 'binary'
+	const isCreateDisabled = accountState.address === undefined || !isMainnet || securityPoolCreating || checkingDuplicateOriginPool || duplicateOriginPoolExists || marketDetails?.marketType !== 'binary'
+	const matchingPools = marketDetails === undefined ? [] : securityPools.filter(pool => pool.questionId.toLowerCase() === marketDetails.questionId.toLowerCase())
+	const hasMatchingSecurityMultiplier = matchingPools.some(pool => pool.securityMultiplier.toString() === securityPoolForm.securityMultiplier.trim())
 
 	return (
 		<section className="panel market-panel">
-			<div className="market-header">
-				<div>
-					<p className="panel-label">Security Pool Creation</p>
-					<h2>Deploy a security pool for a binary market</h2>
-					<p className="detail">Load a market by ID to inspect it before deploying. Only binary markets can have origin security pools.</p>
+			{showHeader ? (
+				<div className="market-header">
+					<div>
+						<h2>Create Pool</h2>
+					</div>
 				</div>
-			</div>
+			) : undefined}
 
 			<div className="market-grid">
 				<div className="market-column">
 					{marketDetails === undefined ? undefined : (
-						<div className="status-card">
-							<p className="panel-label">Loaded Market</p>
-							<ul className="status-list hashes">
-								<li>
-									<span>Market ID</span>
+						<EntityCard
+							title={marketDetails.title === '' ? 'Untitled question' : marketDetails.title}
+							badge={<span className="badge ok">{marketDetails.marketType}</span>}
+							actions={
+								<div className="actions">
+									<button className="secondary" onClick={onLoadMarket} disabled={loadingMarketDetails}>
+										{loadingMarketDetails ? 'Loading Question...' : 'Reload Question'}
+									</button>
+									<button className="secondary" onClick={onLoadLatestMarket} disabled={lastCreatedQuestionId === undefined}>
+										Use Latest Question
+									</button>
+								</div>
+							}
+						>
+							<div className="question-preview-body">
+								<div>
+									<span className="metric-label">Question ID</span>
 									<strong>{marketDetails.questionId}</strong>
-								</li>
-								<li>
-									<span>Type</span>
-									<strong>{marketDetails.marketType}</strong>
-								</li>
-								<li>
-									<span>Title</span>
-									<strong>{marketDetails.title}</strong>
-								</li>
-								<li>
-									<span>Starts</span>
+								</div>
+								<div>
+									<span className="metric-label">Created</span>
+									<strong>{formatTimestamp(marketDetails.createdAt)}</strong>
+								</div>
+								<div>
+									<span className="metric-label">Start</span>
 									<strong>{formatTimestamp(marketDetails.startTime)}</strong>
-								</li>
-								<li>
-									<span>Ends</span>
+								</div>
+								<div>
+									<span className="metric-label">End</span>
 									<strong>{formatTimestamp(marketDetails.endTime)}</strong>
-								</li>
-							</ul>
-							<p className="detail">{marketDetails.description === '' ? 'No description provided.' : marketDetails.description}</p>
-							{marketDetails.marketType === 'scalar' ? (
-								<p className="detail">
-									Scalar range: {marketDetails.displayValueMin.toString()} to {marketDetails.displayValueMax.toString()} {marketDetails.answerUnit}
-								</p>
-							) : (
-								<p className="detail">Outcomes: {marketDetails.outcomeLabels.join(', ') || 'None'}</p>
+								</div>
+								{marketDetails.marketType === 'scalar' ? (
+									<div>
+										<span className="metric-label">Range</span>
+										<strong>
+											{marketDetails.displayValueMin.toString()} to {marketDetails.displayValueMax.toString()} {marketDetails.answerUnit}
+										</strong>
+									</div>
+								) : undefined}
+							</div>
+							{marketDetails.marketType === 'scalar' ? undefined : (
+								<div className="question-chip-row">
+									{marketDetails.outcomeLabels.map(label => (
+										<span key={label} className="status-chip muted">
+											{label}
+										</span>
+									))}
+								</div>
 							)}
-						</div>
+						</EntityCard>
+					)}
+
+					{matchingPools.length === 0 ? undefined : (
+						<EntityCard title="Existing Pools For This Question" badge={<span className="badge muted">{matchingPools.length} existing</span>}>
+							<div className="entity-card-list">
+								{matchingPools.map(pool => (
+									<EntityCard key={pool.securityPoolAddress} className="compact" title={pool.securityPoolAddress} badge={<span className="badge ok">{pool.systemState}</span>}>
+										<div className="workflow-vault-grid">
+											<div>
+												<span className="metric-label">Security Multiplier</span>
+												<strong>{pool.securityMultiplier.toString()}</strong>
+											</div>
+											<div>
+												<span className="metric-label">Open Interest Fee / Year</span>
+												<strong>{formatOpenInterestFeePerYearPercent(pool.currentRetentionRate)}</strong>
+											</div>
+										</div>
+									</EntityCard>
+								))}
+							</div>
+						</EntityCard>
 					)}
 
 					{securityPoolResult === undefined ? undefined : (
-						<div className="status-card">
-							<p className="panel-label">Latest Security Pool</p>
+						<EntityCard title="Pool created" badge={<span className="badge ok">Deployed</span>}>
 							<ul className="status-list hashes">
 								<li>
-									<span>Market ID</span>
+									<span>Question ID</span>
 									<strong>{securityPoolResult.questionId}</strong>
 								</li>
 								<li>
@@ -75,23 +116,23 @@ export function SecurityPoolSection({ accountState, lastCreatedQuestionId, loadi
 									<strong>{securityPoolResult.deployPoolHash}</strong>
 								</li>
 							</ul>
-						</div>
+						</EntityCard>
 					)}
 				</div>
 
 				<div className="market-column">
 					<div className="form-grid">
 						<label className="field">
-							<span>Market ID</span>
+							<span>Question ID</span>
 							<input value={securityPoolForm.marketId} onInput={event => onSecurityPoolFormChange({ marketId: event.currentTarget.value })} placeholder="0x..." />
 						</label>
 
 						<div className="actions">
 							<button className="secondary" onClick={onLoadMarket} disabled={loadingMarketDetails}>
-								{loadingMarketDetails ? 'Loading Market...' : 'Load Market'}
+								{loadingMarketDetails ? 'Loading Question...' : 'Load Question'}
 							</button>
 							<button className="secondary" onClick={onLoadLatestMarket} disabled={lastCreatedQuestionId === undefined}>
-								Use Latest Market
+								Use Latest Question
 							</button>
 						</div>
 
@@ -101,8 +142,8 @@ export function SecurityPoolSection({ accountState, lastCreatedQuestionId, loadi
 						</label>
 
 						<label className="field">
-							<span>Current Retention Rate</span>
-							<input value={securityPoolForm.currentRetentionRate} onInput={event => onSecurityPoolFormChange({ currentRetentionRate: event.currentTarget.value })} />
+							<span>Open Interest Fee / Year (%)</span>
+							<input value={securityPoolForm.currentRetentionRate} onInput={event => onSecurityPoolFormChange({ currentRetentionRate: event.currentTarget.value })} placeholder={formatOpenInterestFeePerYearPercent(999999996848000000n)} />
 						</label>
 
 						<label className="field">
@@ -112,12 +153,12 @@ export function SecurityPoolSection({ accountState, lastCreatedQuestionId, loadi
 
 						<div className="actions">
 							<button onClick={onCreateSecurityPool} disabled={isCreateDisabled}>
-								{securityPoolCreating ? 'Creating Security Pool...' : 'Create Security Pool'}
+								{securityPoolCreating ? 'Creating Pool...' : checkingDuplicateOriginPool ? 'Checking Duplicate...' : duplicateOriginPoolExists ? 'Pool Already Exists' : matchingPools.length > 0 ? 'Create Another Pool' : 'Create Pool'}
 							</button>
 						</div>
 					</div>
 
-					{lastCreatedQuestionId === undefined ? undefined : <p className="detail">Latest created market ID: {lastCreatedQuestionId}</p>}
+					{!duplicateOriginPoolExists && !hasMatchingSecurityMultiplier ? undefined : <p className="detail">A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.</p>}
 					{securityPoolError === undefined ? undefined : <p className="notice error">{securityPoolError}</p>}
 				</div>
 			</div>

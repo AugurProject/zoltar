@@ -47,6 +47,8 @@ contract SecurityPool is ISecurityPool {
 	uint256 public currentRetentionRate;
 
 	mapping(address => SecurityVault) public securityVaults;
+	address[] private vaults;
+	mapping(address => uint256) private vaultIndexesPlusOne;
 
 	SystemState public systemState;
 
@@ -100,6 +102,21 @@ contract SecurityPool is ISecurityPool {
 		shareToken = _shareToken;
 		repToken = zoltar.getRepToken(universeId);
 		repToken.approve(address(zoltar), type(uint256).max);
+	}
+
+	function getVaultCount() external view returns (uint256) {
+		return vaults.length;
+	}
+
+	function getVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaultRange) {
+		if (startIndex >= vaults.length || count == 0) return new address[](0);
+
+		uint256 availableCount = vaults.length - startIndex;
+		uint256 resultCount = count < availableCount ? count : availableCount;
+		vaultRange = new address[](resultCount);
+		for (uint256 index = 0; index < resultCount; index++) {
+			vaultRange[index] = vaults[startIndex + index];
+		}
 	}
 
 	function setStartingParams(uint256 _currentRetentionRate, uint256 _repEthPrice, uint256 _completeSetCollateralAmount) external {
@@ -193,6 +210,7 @@ contract SecurityPool is ISecurityPool {
 	function depositRep(uint256 repAmount) external isOperational {
 		uint256 poolOwnership = repToPoolOwnership(repAmount);
 		repToken.transferFrom(msg.sender, address(this), repAmount);
+		_trackVault(msg.sender);
 		securityVaults[msg.sender].poolOwnership += poolOwnership;
 		poolOwnershipDenominator += poolOwnership;
 		require(poolOwnershipToRep(securityVaults[msg.sender].poolOwnership) >= SecurityPoolUtils.MIN_REP_DEPOSIT, 'min deposit requirement');
@@ -215,6 +233,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 snapshotTotalRep,
 		uint256 snapshotDenominator
 	) external isOperational onlyValidOracle {
+		_trackVault(callerVault);
 		updateVaultFees(targetVaultAddress);
 		updateVaultFees(callerVault);
 
@@ -388,9 +407,17 @@ contract SecurityPool is ISecurityPool {
 
 	function configureVault(address vault, uint256 poolOwnership, uint256 securityBondAllowance, uint256 feeIndex) external onlyForker {
 		require(vault != address(0x0), 'invalid vault');
+		_trackVault(vault);
 		securityVaults[vault].poolOwnership = poolOwnership;
 		securityVaults[vault].securityBondAllowance = securityBondAllowance;
 		securityVaults[vault].feeIndex = feeIndex;
+	}
+
+	function _trackVault(address vault) private {
+		require(vault != address(0x0), 'invalid vault');
+		if (vaultIndexesPlusOne[vault] != 0) return;
+		vaults.push(vault);
+		vaultIndexesPlusOne[vault] = vaults.length;
 	}
 
 	function setOwnershipDenominator(uint256 newDenominator) external onlyForker {

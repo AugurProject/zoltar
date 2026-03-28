@@ -1,10 +1,12 @@
 import { useSignal } from '@preact/signals'
+import { useEffect } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
-import { createSecurityPool, loadMarketDetails } from '../contracts.js'
+import { createSecurityPool, loadMarketDetails, originSecurityPoolExists } from '../contracts.js'
 import { createReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultSecurityPoolFormState } from '../lib/marketForm.js'
+import { parseBigIntInput } from '../lib/marketForm.js'
 import type { SecurityPoolFormState } from '../types/app.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '../types/contracts.js'
 
@@ -27,6 +29,47 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 	const securityPoolError = useSignal<string | undefined>(undefined)
 	const securityPoolForm = useSignal<SecurityPoolFormState>(getDefaultSecurityPoolFormState())
 	const securityPoolResult = useSignal<SecurityPoolCreationResult | undefined>(undefined)
+	const duplicateOriginPoolExists = useSignal(false)
+	const checkingDuplicateOriginPool = useSignal(false)
+	const duplicateOriginPoolCheckRequestId = useSignal(0)
+
+	const loadDuplicateOriginPoolState = async () => {
+		const marketId = securityPoolForm.value.marketId.trim()
+		const securityMultiplierInput = securityPoolForm.value.securityMultiplier.trim()
+		if (marketId === '' || securityMultiplierInput === '') {
+			duplicateOriginPoolExists.value = false
+			checkingDuplicateOriginPool.value = false
+			return
+		}
+
+		let questionId: bigint
+		let securityMultiplier: bigint
+		try {
+			questionId = BigInt(marketId)
+			securityMultiplier = parseBigIntInput(securityMultiplierInput, 'Security multiplier')
+		} catch {
+			duplicateOriginPoolExists.value = false
+			checkingDuplicateOriginPool.value = false
+			return
+		}
+
+		const requestId = duplicateOriginPoolCheckRequestId.value + 1
+		duplicateOriginPoolCheckRequestId.value = requestId
+		checkingDuplicateOriginPool.value = true
+
+		try {
+			const exists = await originSecurityPoolExists(createReadClient(), questionId, securityMultiplier)
+			if (requestId !== duplicateOriginPoolCheckRequestId.value) return
+			duplicateOriginPoolExists.value = exists
+		} catch {
+			if (requestId !== duplicateOriginPoolCheckRequestId.value) return
+			duplicateOriginPoolExists.value = false
+		} finally {
+			if (requestId === duplicateOriginPoolCheckRequestId.value) {
+				checkingDuplicateOriginPool.value = false
+			}
+		}
+	}
 
 	const loadMarketById = async (marketId: string) => {
 		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) {
@@ -100,6 +143,11 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 				marketDetails.value = details
 				return
 			}
+			if (await originSecurityPoolExists(createReadClient(), parameters.questionId, parameters.securityMultiplier)) {
+				securityPoolError.value = 'A security pool for this question and security multiplier already exists. Change the security multiplier to create a different pool.'
+				marketDetails.value = details
+				return
+			}
 
 			onTransactionRequested()
 			const result = await createSecurityPool(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), parameters)
@@ -115,7 +163,13 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		}
 	}
 
+	useEffect(() => {
+		void loadDuplicateOriginPoolState()
+	}, [securityPoolForm.value.marketId, securityPoolForm.value.securityMultiplier])
+
 	return {
+		checkingDuplicateOriginPool: checkingDuplicateOriginPool.value,
+		duplicateOriginPoolExists: duplicateOriginPoolExists.value,
 		loadMarketById,
 		loadMarket,
 		loadingMarketDetails: loadingMarketDetails.value,

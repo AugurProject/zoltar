@@ -8,8 +8,7 @@ export function OpenOracleSection({ accountState, loadingOracleManager, onApprov
 		<section className="panel market-panel">
 			<div className="market-header">
 				<div>
-					<p className="panel-label">Open Oracle</p>
-					<h2>Operate price requests and reports</h2>
+					<h2>Open Oracle</h2>
 					<p className="detail">Load a price-oracle manager to request pricing, inspect pending report state, approve tokens for OpenOracle, submit a report, and settle it.</p>
 				</div>
 			</div>

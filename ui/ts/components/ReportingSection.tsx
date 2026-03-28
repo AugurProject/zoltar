@@ -13,7 +13,7 @@ function parseOptionalBigInt(value: string) {
 	}
 }
 
-export function ReportingSection({ accountState, loadingReportingDetails, onLoadReporting, onReportOutcome, onReportingFormChange, onWithdrawEscalation, reportingDetails, reportingError, reportingForm, reportingResult }: ReportingSectionProps) {
+export function ReportingSection({ accountState, loadingReportingDetails, onLoadReporting, onReportOutcome, onReportingFormChange, onWithdrawEscalation, reportingDetails, reportingError, reportingForm, reportingResult, showHeader = true, showSecurityPoolAddressInput = true }: ReportingSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedAmount = parseOptionalBigInt(reportingForm.reportAmount)
 	const totalBalance = reportingDetails === undefined ? 0n : reportingDetails.sides.reduce((sum, side) => sum + side.balance, 0n)
@@ -23,13 +23,14 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 
 	return (
 		<section className="panel market-panel">
-			<div className="market-header">
-				<div>
-					<p className="panel-label">Reporting & Escalation</p>
-					<h2>Report a market outcome and participate in escalation</h2>
-					<p className="detail">Load a binary market’s security pool after the market has ended. Reporting is done by staking REP on Invalid, Yes, or No through the pool’s escalation game.</p>
+			{showHeader ? (
+				<div className="market-header">
+					<div>
+						<h2>Reporting & Escalation</h2>
+						<p className="detail">Load a binary market’s security pool after the market has ended. Reporting is done by staking REP on Invalid, Yes, or No through the pool’s escalation game.</p>
+					</div>
 				</div>
-			</div>
+			) : undefined}
 
 			<div className="market-grid">
 				<div className="market-column">
@@ -103,7 +104,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 									const estimate = calculateEstimatedEscalationReturn(side.balance, totalBalance, selectedAmount)
 									const userStake = side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n)
 									return (
-										<div key={side.key} className={`escalation-side ${reportingForm.selectedOutcome === side.key ? 'selected' : ''} ${leadingOutcome === side.key ? 'leading' : ''}`}>
+										<div key={side.key} className={`escalation-side ${ reportingForm.selectedOutcome === side.key ? 'selected' : '' } ${ leadingOutcome === side.key ? 'leading' : '' }`}>
 											<div className="escalation-side-header">
 												<p className="panel-label">{side.label}</p>
 												{leadingOutcome === side.key ? <span className="badge ok">Leading</span> : undefined}
@@ -134,10 +135,12 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 
 				<div className="market-column">
 					<div className="form-grid">
-						<label className="field">
-							<span>Security Pool Address</span>
-							<input value={reportingForm.securityPoolAddress} onInput={event => onReportingFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder="0x..." />
-						</label>
+						{showSecurityPoolAddressInput ? (
+							<label className="field">
+								<span>Security Pool Address</span>
+								<input value={reportingForm.securityPoolAddress} onInput={event => onReportingFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder="0x..." />
+							</label>
+						) : undefined}
 
 						<div className="actions">
 							<button className="secondary" onClick={onLoadReporting} disabled={loadingReportingDetails}>

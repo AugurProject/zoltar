@@ -18,6 +18,8 @@ import { ScalarOutcomes } from './ScalarOutcomes.sol';
 	mapping(uint256 => uint256) public questionCreatedTimestamp;
 	mapping(uint256 => string[]) public outcomeLabels;
 	mapping(uint256 => QuestionData) public questions;
+	uint256[] public questionIds;
+	mapping(uint256 => uint256) public questionIndexPlusOne;
 
 	function getQuestionId(QuestionData memory questionData, string[] calldata outcomeOptions) public pure returns (uint256) {
 		return uint256(keccak256(abi.encode(questionData, outcomeOptions)));
@@ -44,8 +46,24 @@ import { ScalarOutcomes } from './ScalarOutcomes.sol';
 		}
 		questions[questionId] = questionData;
 		questionCreatedTimestamp[questionId] = block.timestamp;
+		if (questionIndexPlusOne[questionId] == 0) {
+			questionIds.push(questionId);
+			questionIndexPlusOne[questionId] = questionIds.length;
+		}
 
 		return questionId;
+	}
+
+	function getQuestionCount() external view returns (uint256) {
+		return questionIds.length;
+	}
+
+	function getQuestions(uint256 startIndex, uint256 numberOfEntries) external view returns (uint256[] memory returnQuestionIds) {
+		returnQuestionIds = new uint256[](numberOfEntries);
+		uint256 iterateUntil = startIndex + numberOfEntries > questionIds.length ? questionIds.length : startIndex + numberOfEntries;
+		for (uint256 i = startIndex; i < iterateUntil; i++) {
+			returnQuestionIds[i - startIndex] = questionIds[i];
+		}
 	}
 
 	function getQuestionEndDate(uint256 questionId) external view returns (uint256) {

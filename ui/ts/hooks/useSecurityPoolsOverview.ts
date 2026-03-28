@@ -20,6 +20,9 @@ type UseSecurityPoolsOverviewParameters = {
 export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters) {
 	const liquidationAmount = useSignal('0')
 	const liquidationTargetVault = useSignal('')
+	const liquidationManagerAddress = useSignal<Address | undefined>(undefined)
+	const liquidationSecurityPoolAddress = useSignal<Address | undefined>(undefined)
+	const liquidationModalOpen = useSignal(false)
 	const loadingSecurityPools = useSignal(false)
 	const securityPoolOverviewError = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewResult = useSignal<SecurityPoolOverviewActionResult | undefined>(undefined)
@@ -35,6 +38,17 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 		} finally {
 			loadingSecurityPools.value = false
 		}
+	}
+
+	const openLiquidationModal = (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => {
+		liquidationManagerAddress.value = managerAddress
+		liquidationSecurityPoolAddress.value = securityPoolAddress
+		liquidationTargetVault.value = vaultAddress
+		liquidationModalOpen.value = true
+	}
+
+	const closeLiquidationModal = () => {
+		liquidationModalOpen.value = false
 	}
 
 	const queueLiquidation = async (managerAddress: Address, securityPoolAddress: Address) => {
@@ -77,8 +91,13 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 
 	return {
 		liquidationAmount: liquidationAmount.value,
+		liquidationManagerAddress: liquidationManagerAddress.value,
+		liquidationModalOpen: liquidationModalOpen.value,
 		liquidationTargetVault: liquidationTargetVault.value,
+		liquidationSecurityPoolAddress: liquidationSecurityPoolAddress.value,
 		loadingSecurityPools: loadingSecurityPools.value,
+		closeLiquidationModal,
+		openLiquidationModal,
 		queueLiquidation,
 		securityPoolOverviewError: securityPoolOverviewError.value,
 		securityPoolOverviewResult: securityPoolOverviewResult.value,
