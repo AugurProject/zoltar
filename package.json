@@ -29,6 +29,7 @@
 		"viem": "2.38.3"
 	},
 	"scripts": {
+		"install:anvil": "bash -lc 'if ! command -v anvil >/dev/null 2>&1; then curl -L https://foundry.paradigm.xyz | bash && export PATH=\"$HOME/.foundry/bin:$PATH\" && foundryup; fi'",
 		"setup": "bun install --frozen-lockfile --ignore-scripts && bun run setup-contracts && bun run ui:vendor",
 		"setup-contracts": "cd solidity && bun run setup",
 		"compile-contracts": "cd solidity && bun install --frozen-lockfile --ignore-scripts && bun x tsc --project tsconfig-compile.json && bun run ./js/compile.js",
@@ -48,7 +49,7 @@
 		"lint": "bun x eslint . --config eslint.config.js",
 		"lint:fix": "bun x eslint . --config eslint.config.js --fix",
 		"format": "bun x prettier --write solidity/ts/**/*.ts ui/ts/**/*.ts ui/ts/**/*.tsx ui/css/**/*.css && bun x eslint . --config eslint.config.js --fix",
-		"knip": "bun run generate && bun x knip",
+		"knip": "bun x knip",
 		"knip:fix": "bun x knip --fix"
 	}
 }

@@ -1,7 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
-import { loadDeploymentStatuses } from '../contracts.js'
-import { createReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { findNextDeployableStep, getPrerequisiteLabel } from '../lib/deployment.js'
 import { getErrorMessage } from '../lib/errors.js'
 import type { DeploymentStatus, DeploymentStepId } from '../types/contracts.js'
@@ -9,14 +8,15 @@ import type { DeploymentStatus, DeploymentStepId } from '../types/contracts.js'
 type UseDeploymentFlowParameters = {
 	accountAddress: Address | undefined
 	deploymentStatuses: DeploymentStatus[]
+	setDeploymentStatuses: (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => void
 	onTransaction: (hash: Hash) => void
 	onTransactionFinished: () => void
 	onTransactionRequested: () => void
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
+	refreshState: (options?: { loadDeploymentStatuses?: boolean }) => Promise<void>
 }
 
-export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseDeploymentFlowParameters) {
+export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, setDeploymentStatuses }: UseDeploymentFlowParameters) {
 	const busyStepId = useSignal<DeploymentStepId | undefined>(undefined)
 	const errorMessage = useSignal<string | undefined>(undefined)
 
@@ -32,19 +32,17 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 			return
 		}
 
-		const latestStatuses = await loadDeploymentStatuses(createReadClient())
-		const stepIndex = latestStatuses.findIndex(step => step.id === stepId)
+		const stepIndex = deploymentStatuses.findIndex(step => step.id === stepId)
 		if (stepIndex === -1) return
 
-		const prerequisiteLabel = getPrerequisiteLabel(latestStatuses, stepIndex)
+		const prerequisiteLabel = getPrerequisiteLabel(deploymentStatuses, stepIndex)
 		if (prerequisiteLabel !== undefined) {
 			errorMessage.value = `Deploy ${ prerequisiteLabel } first`
 			return
 		}
 
-		const step = latestStatuses[stepIndex]
+		const step = deploymentStatuses[stepIndex]
 		if (step === undefined || step.deployed) {
-			await refreshState()
 			return
 		}
 
@@ -56,7 +54,8 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 			const client = createWalletWriteClient(accountAddress, { onTransactionSubmitted })
 			const hash = await step.deploy(client)
 			onTransaction(hash)
-			await refreshState()
+			setDeploymentStatuses(current => current.map(currentStep => (currentStep.id === step.id ? { ...currentStep, deployed: true } : currentStep)))
+			await refreshState({ loadDeploymentStatuses: false })
 		} catch (error) {
 			errorMessage.value = getErrorMessage(error, `Failed to deploy ${ step.label }`)
 		} finally {

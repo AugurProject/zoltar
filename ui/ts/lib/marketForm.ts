@@ -1,30 +1,19 @@
 import type { ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
 
-const DEFAULT_CURRENT_RETENTION_RATE = '999999996848000000'
-
-function toDatetimeLocalValue(timestampMs: number) {
-	const date = new Date(timestampMs)
-	const offset = date.getTimezoneOffset()
-	const localDate = new Date(date.getTime() - offset * 60 * 1000)
-	return localDate.toISOString().slice(0, 16)
-}
+const DEFAULT_CURRENT_RETENTION_RATE = '10'
 
 export function getDefaultMarketFormState(): MarketFormState {
 	return {
 		answerUnit: '',
 		categoricalOutcomes: 'Yes\nNo',
-		currentRetentionRate: DEFAULT_CURRENT_RETENTION_RATE,
 		description: '',
 		displayValueMax: '100',
 		displayValueMin: '0',
-		endTime: toDatetimeLocalValue(Date.now() + 24 * 60 * 60 * 1000),
+		endTime: '',
 		marketType: 'binary',
 		numTicks: '100',
-		scalarStartValue: '10',
 		title: '',
 		startTime: '',
-		securityMultiplier: '2',
-		startingRepEthPrice: '10',
 	}
 }
 

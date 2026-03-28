@@ -40,7 +40,6 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, isMa
 		<section className="panel contract-panel">
 			<div className="contract-panel-header">
 				<div>
-					<p className="panel-label">{title}</p>
 					<h2>{title}</h2>
 				</div>
 			</div>

@@ -20,6 +20,28 @@ export type QuestionData = {
 	answerUnit: string
 }
 
+export type ZoltarChildUniverseSummary = {
+	exists: boolean
+	forkTime: bigint
+	outcomeIndex: bigint
+	outcomeLabel: string
+	parentUniverseId: bigint
+	reputationToken: Address
+	universeId: bigint
+}
+
+export type ZoltarUniverseSummary = {
+	childUniverses: ZoltarChildUniverseSummary[]
+	forkThreshold: bigint
+	forkQuestionId: bigint
+	forkTime: bigint
+	forkingOutcomeIndex: bigint
+	hasForked: boolean
+	parentUniverseId: bigint
+	reputationToken: Address
+	universeId: bigint
+}
+
 export type DeploymentStep = {
 	id: DeploymentStepId
 	label: string
@@ -38,8 +60,16 @@ export type MarketCreationResult = {
 	marketType: MarketType
 }
 
+export type ZoltarForkActionResult = {
+	action: 'approveForkRep' | 'forkZoltar'
+	hash: Hash
+	questionId: string
+	universeId: bigint
+}
+
 export type MarketDetails = {
 	answerUnit: string
+	createdAt: bigint
 	description: string
 	displayValueMax: bigint
 	displayValueMin: bigint
@@ -100,6 +130,7 @@ export type ListedSecurityPool = {
 	forkOutcome: ReportingOutcomeKey | 'none'
 	forkOwnSecurityPool: boolean
 	managerAddress: Address
+	marketDetails: MarketDetails
 	migratedRep: bigint
 	parent: Address
 	questionId: string
@@ -110,6 +141,18 @@ export type ListedSecurityPool = {
 	truthAuctionAddress: Address
 	truthAuctionStartedAt: bigint
 	universeId: bigint
+	vaultCount: bigint
+	vaults: SecurityPoolVaultSummary[]
+}
+
+export type SecurityPoolVaultSummary = {
+	feeIndex: bigint
+	lockedRepInEscalationGame: bigint
+	poolOwnership: bigint
+	repDepositShare: bigint
+	securityBondAllowance: bigint
+	unpaidEthFees: bigint
+	vaultAddress: Address
 }
 
 export type SecurityPoolOverviewActionResult = {

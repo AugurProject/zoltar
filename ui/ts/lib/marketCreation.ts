@@ -1,8 +1,9 @@
 import { keccak256, toHex } from 'viem'
 import type { MarketFormState, SecurityPoolFormState } from '../types/app.js'
-import type { DeploymentStatus, MarketType, QuestionData } from '../types/contracts.js'
+import type { DeploymentStatus, QuestionData } from '../types/contracts.js'
 import { assertNever } from './assert.js'
 import { parseBigIntInput, parseTimestampInput } from './marketForm.js'
+import { parseOpenInterestFeePerYearPercentInput } from './retentionRate.js'
 
 export function hasDeployedStep(steps: DeploymentStatus[], stepId: DeploymentStatus['id']) {
 	return steps.some(step => step.id === stepId && step.deployed)
@@ -88,51 +89,28 @@ function getOutcomeLabels(form: MarketFormState) {
 	}
 }
 
-function getMarketSpecificParameters(form: MarketFormState, marketType: MarketType) {
-	switch (marketType) {
-		case 'binary':
-			return {
-				currentRetentionRate: parseBigIntInput(form.currentRetentionRate, 'Current retention rate'),
-				securityMultiplier: parseBigIntInput(form.securityMultiplier, 'Security multiplier'),
-				startingRepEthPrice: parseBigIntInput(form.startingRepEthPrice, 'Starting REP/ETH price'),
-			}
-		case 'categorical':
-		case 'scalar':
-			return {
-				currentRetentionRate: undefined,
-				securityMultiplier: undefined,
-				startingRepEthPrice: parseBigIntInput(form.scalarStartValue, 'Initial scalar reference value'),
-			}
-		default:
-			return assertNever(marketType)
-	}
-}
-
 export function createMarketParameters(form: MarketFormState) {
-	const marketSpecificParameters = getMarketSpecificParameters(form, form.marketType)
-
 	return {
 		marketType: form.marketType,
 		outcomeLabels: getOutcomeLabels(form),
 		questionData: createQuestionData(form),
-		...marketSpecificParameters,
 	}
 }
 
 function parseQuestionIdInput(value: string) {
 	const trimmed = value.trim()
-	if (trimmed === '') throw new Error('Market ID is required')
+	if (trimmed === '') throw new Error('Question ID is required')
 
 	try {
 		return BigInt(trimmed)
 	} catch {
-		throw new Error('Market ID must be a valid decimal or hex bigint')
+		throw new Error('Question ID must be a valid decimal or hex bigint')
 	}
 }
 
 export function createSecurityPoolParameters(form: SecurityPoolFormState) {
 	return {
-		currentRetentionRate: parseBigIntInput(form.currentRetentionRate, 'Current retention rate'),
+		currentRetentionRate: parseOpenInterestFeePerYearPercentInput(form.currentRetentionRate, 'Open interest fee per year'),
 		questionId: parseQuestionIdInput(form.marketId),
 		securityMultiplier: parseBigIntInput(form.securityMultiplier, 'Security multiplier'),
 		startingRepEthPrice: parseBigIntInput(form.startingRepEthPrice, 'Starting REP/ETH price'),

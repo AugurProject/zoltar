@@ -3,18 +3,19 @@ import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
 import type { TradingSectionProps } from '../types/components.js'
 
-export function TradingSection({ accountState, onCreateCompleteSet, onMigrateShares, onRedeemCompleteSet, onRedeemShares, onTradingFormChange, tradingError, tradingForm, tradingResult }: TradingSectionProps) {
+export function TradingSection({ accountState, onCreateCompleteSet, onMigrateShares, onRedeemCompleteSet, onRedeemShares, onTradingFormChange, tradingError, tradingForm, tradingResult, showHeader = true, showSecurityPoolAddressInput = true }: TradingSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const isTradingDisabled = accountState.address === undefined || !isMainnet
 	return (
 		<section className="panel market-panel">
-			<div className="market-header">
-				<div>
-					<p className="panel-label">Trading</p>
-					<h2>Mint and redeem complete sets</h2>
-					<p className="detail">Use a security pool address to create complete sets with collateral or redeem complete sets back out of the pool.</p>
+			{showHeader ? (
+				<div className="market-header">
+					<div>
+						<h2>Trading</h2>
+						<p className="detail">Use a security pool address to create complete sets with collateral or redeem complete sets back out of the pool.</p>
+					</div>
 				</div>
-			</div>
+			) : undefined}
 
 			<div className="market-grid">
 				<div className="market-column">
@@ -31,10 +32,12 @@ export function TradingSection({ accountState, onCreateCompleteSet, onMigrateSha
 
 				<div className="market-column">
 					<div className="form-grid">
-						<label className="field">
-							<span>Security Pool Address</span>
-							<input value={tradingForm.securityPoolAddress} onInput={event => onTradingFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder="0x..." />
-						</label>
+						{showSecurityPoolAddressInput ? (
+							<label className="field">
+								<span>Security Pool Address</span>
+								<input value={tradingForm.securityPoolAddress} onInput={event => onTradingFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder="0x..." />
+							</label>
+						) : undefined}
 
 						<div className="field-row">
 							<label className="field">

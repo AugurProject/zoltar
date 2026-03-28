@@ -1,82 +1,90 @@
-import { formatAddress } from '../lib/formatters.js'
+import { EntityCard } from './EntityCard.js'
+import { formatAddress, formatCurrencyBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
-export function SecurityVaultSection({ accountState, loadingSecurityVault, onApproveRep, onDepositRep, onLoadSecurityVault, onRedeemFees, onRedeemRep, onSecurityVaultFormChange, onUpdateVaultFees, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult }: SecurityVaultSectionProps) {
+export function SecurityVaultSection({ accountState, loadingSecurityVault, onApproveRep, onDepositRep, onLoadSecurityVault, onRedeemFees, onRedeemRep, onSecurityVaultFormChange, onUpdateVaultFees, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult, showHeader = true, showSecurityPoolAddressInput = true }: SecurityVaultSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	return (
 		<section className="panel market-panel">
-			<div className="market-header">
-				<div>
-					<p className="panel-label">Security Vault</p>
-					<h2>Create and operate a security vault</h2>
-					<p className="detail">A vault is your position inside a security pool. Deposit REP to create one, then manage fees and redemptions from the connected wallet.</p>
+			{showHeader ? (
+				<div className="market-header">
+					<div>
+						<h2>Security Vault</h2>
+						<p className="detail">Deposit REP to create your own vault, then manage fees and redemptions from the connected wallet.</p>
+					</div>
 				</div>
-			</div>
+			) : undefined}
 
 			<div className="market-grid">
 				<div className="market-column">
 					{securityVaultDetails === undefined ? undefined : (
-						<div className="status-card">
-							<p className="panel-label">Vault Details</p>
-							<ul className="status-list hashes">
-								<li>
-									<span>Security Pool</span>
-									<strong>{securityVaultDetails.securityPoolAddress}</strong>
-								</li>
-								<li>
-									<span>Vault</span>
-									<strong>{securityVaultDetails.vaultAddress}</strong>
-								</li>
-								<li>
-									<span>REP Token</span>
-									<strong>{securityVaultDetails.repToken}</strong>
-								</li>
-								<li>
-									<span>Universe</span>
+						<EntityCard title={formatAddress(securityVaultDetails.vaultAddress)} badge={<span className="badge ok">Your Vault</span>}>
+							<div className="entity-metric-grid">
+								<div className="entity-metric">
+									<span className="metric-label">Security Pool</span>
+									<strong>{formatAddress(securityVaultDetails.securityPoolAddress)}</strong>
+								</div>
+								<div className="entity-metric">
+									<span className="metric-label">REP Token</span>
+									<strong>{formatAddress(securityVaultDetails.repToken)}</strong>
+								</div>
+								<div className="entity-metric">
+									<span className="metric-label">Universe</span>
 									<strong>{securityVaultDetails.universeId.toString()}</strong>
-								</li>
-								<li>
-									<span>REP Deposit Share</span>
-									<strong>{securityVaultDetails.repDepositShare.toString()}</strong>
-								</li>
-								<li>
-									<span>Security Bond Allowance</span>
-									<strong>{securityVaultDetails.securityBondAllowance.toString()}</strong>
-								</li>
-								<li>
-									<span>Unpaid ETH Fees</span>
-									<strong>{securityVaultDetails.unpaidEthFees.toString()}</strong>
-								</li>
-								<li>
-									<span>Locked REP</span>
-									<strong>{securityVaultDetails.lockedRepInEscalationGame.toString()}</strong>
-								</li>
-							</ul>
-						</div>
+								</div>
+								<div className="entity-metric">
+									<span className="metric-label">REP Deposit Share</span>
+									<strong>{formatCurrencyBalance(securityVaultDetails.repDepositShare)}</strong>
+								</div>
+								<div className="entity-metric">
+									<span className="metric-label">Security Bond Allowance</span>
+									<strong>{formatCurrencyBalance(securityVaultDetails.securityBondAllowance)}</strong>
+								</div>
+								<div className="entity-metric">
+									<span className="metric-label">Unpaid ETH Fees</span>
+									<strong>{formatCurrencyBalance(securityVaultDetails.unpaidEthFees)}</strong>
+								</div>
+								<div className="entity-metric">
+									<span className="metric-label">Locked REP</span>
+									<strong>{formatCurrencyBalance(securityVaultDetails.lockedRepInEscalationGame)}</strong>
+								</div>
+								<div className="entity-metric">
+									<span className="metric-label">Total Bond Allowance</span>
+									<strong>{formatCurrencyBalance(securityVaultDetails.totalSecurityBondAllowance)}</strong>
+								</div>
+							</div>
+						</EntityCard>
 					)}
 
 					{securityVaultResult === undefined ? undefined : (
-						<div className="status-card">
-							<p className="panel-label">Latest Vault Action</p>
-							<p className="detail">Action: {securityVaultResult.action}</p>
-							<p className="detail">Transaction: {securityVaultResult.hash}</p>
-						</div>
+						<EntityCard title="Latest Vault Action" badge={<span className="badge muted">{securityVaultResult.action}</span>}>
+							<div className="entity-metric-grid">
+								<div className="entity-metric">
+									<span className="metric-label">Action</span>
+									<strong>{securityVaultResult.action}</strong>
+								</div>
+								<div className="entity-metric">
+									<span className="metric-label">Transaction</span>
+									<strong>{securityVaultResult.hash}</strong>
+								</div>
+							</div>
+						</EntityCard>
 					)}
 				</div>
 
 				<div className="market-column">
 					<div className="form-grid">
-						<label className="field">
-							<span>Security Pool Address</span>
-							<input value={securityVaultForm.securityPoolAddress} onInput={event => onSecurityVaultFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder="0x..." />
-						</label>
-
-						<p className="detail">Connected vault address: {accountState.address === undefined ? 'Connect wallet' : formatAddress(accountState.address)}</p>
+						{showSecurityPoolAddressInput ? (
+							<label className="field">
+								<span>Security Pool Address</span>
+								<input value={securityVaultForm.securityPoolAddress} onInput={event => onSecurityVaultFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder="0x..." />
+							</label>
+						) : undefined}
 
 						<div className="actions">
 							<button className="secondary" onClick={onLoadSecurityVault} disabled={loadingSecurityVault}>
-								{loadingSecurityVault ? 'Loading Vault...' : 'Load Vault'}
+								{loadingSecurityVault ? 'Loading Vault...' : 'Load My Vault'}
 							</button>
 						</div>
 
@@ -95,7 +103,7 @@ export function SecurityVaultSection({ accountState, loadingSecurityVault, onApp
 								Approve REP
 							</button>
 							<button onClick={onDepositRep} disabled={accountState.address === undefined || !isMainnet}>
-								Deposit REP
+								Create / Deposit REP
 							</button>
 						</div>
 

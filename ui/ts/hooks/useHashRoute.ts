@@ -6,7 +6,7 @@ import type { Route } from '../types/app.js'
 export function useHashRoute() {
 	const route = useSignal<Route>(getCurrentRoute())
 
-	const navigate = (nextRoute: Route) => {
+	const navigate = (nextRoute: Exclude<Route, 'not-found'>) => {
 		window.location.hash = getRouteHash(nextRoute)
 	}
 

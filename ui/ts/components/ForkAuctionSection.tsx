@@ -13,7 +13,7 @@ function getTruthAuctionWindow(details: ForkAuctionSectionProps['forkAuctionDeta
 	}
 }
 
-export function ForkAuctionSection({ accountState, forkAuctionDetails, forkAuctionError, forkAuctionForm, forkAuctionResult, loadingForkAuctionDetails, onClaimAuctionProceeds, onCreateChildUniverse, onFinalizeTruthAuction, onForkAuctionFormChange, onForkUniverse, onForkWithOwnEscalation, onInitiateFork, onLoadForkAuction, onMigrateEscalationDeposits, onMigrateRepToZoltar, onMigrateVault, onRefundLosingBids, onStartTruthAuction, onSubmitBid, onWithdrawBids }: ForkAuctionSectionProps) {
+export function ForkAuctionSection({ accountState, forkAuctionDetails, forkAuctionError, forkAuctionForm, forkAuctionResult, loadingForkAuctionDetails, onClaimAuctionProceeds, onCreateChildUniverse, onFinalizeTruthAuction, onForkAuctionFormChange, onForkUniverse, onForkWithOwnEscalation, onInitiateFork, onLoadForkAuction, onMigrateEscalationDeposits, onMigrateRepToZoltar, onMigrateVault, onRefundLosingBids, onStartTruthAuction, onSubmitBid, onWithdrawBids, showHeader = true, showSecurityPoolAddressInput = true }: ForkAuctionSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedAuctionPrice = forkAuctionDetails?.truthAuction?.clearingPrice
 	const estimatedRep = selectedAuctionPrice === undefined ? undefined : estimateRepPurchased(BigInt(forkAuctionForm.bidAmount || '0'), selectedAuctionPrice)
@@ -22,13 +22,14 @@ export function ForkAuctionSection({ accountState, forkAuctionDetails, forkAucti
 
 	return (
 		<section className="panel market-panel">
-			<div className="market-header">
-				<div>
-					<p className="panel-label">Fork & Truth Auction</p>
-					<h2>Operate child universes and truth auctions</h2>
-					<p className="detail">Load any security pool to inspect its universe, fork state, migration timer, truth auction progress, and the actions needed to move REP, vaults, and auction proceeds through the fork flow.</p>
+			{showHeader ? (
+				<div className="market-header">
+					<div>
+						<h2>Fork & Truth Auction</h2>
+						<p className="detail">Load any security pool to inspect its universe, fork state, migration timer, truth auction progress, and the actions needed to move REP, vaults, and auction proceeds through the fork flow.</p>
+					</div>
 				</div>
-			</div>
+			) : undefined}
 
 			<div className="market-grid">
 				<div className="market-column">
@@ -169,10 +170,12 @@ export function ForkAuctionSection({ accountState, forkAuctionDetails, forkAucti
 
 				<div className="market-column">
 					<div className="form-grid">
-						<label className="field">
-							<span>Security Pool Address</span>
-							<input value={forkAuctionForm.securityPoolAddress} onInput={event => onForkAuctionFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder="0x..." />
-						</label>
+						{showSecurityPoolAddressInput ? (
+							<label className="field">
+								<span>Security Pool Address</span>
+								<input value={forkAuctionForm.securityPoolAddress} onInput={event => onForkAuctionFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder="0x..." />
+							</label>
+						) : undefined}
 
 						<div className="actions">
 							<button className="secondary" onClick={onLoadForkAuction} disabled={loadingForkAuctionDetails}>

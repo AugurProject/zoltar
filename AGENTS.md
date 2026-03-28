@@ -80,6 +80,7 @@ This test-driven approach ensures:
 ## Key Principles
 
 - **Always run the full test suite**: `bun test` runs all tests and catches cross-module issues.
+  - **UI-only work**: When the change only affects `ui/`, you do not need to run `bun test`; the test suite here applies to Solidity and shared code paths, not UI-only edits.
 
 ## Commands
 

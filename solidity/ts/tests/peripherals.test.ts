@@ -18,7 +18,7 @@ import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTyp
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMigratedRep, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getRepTokensMigratedRepBalance, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
-import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
+import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, getVaultCount, getVaults, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
 import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -153,6 +153,25 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(storedCurrentRetentionRate, MAX_RETENTION_RATE, 'stored retention rate should match')
 		strictEqualTypeSafe(storedStartingRepEthPrice, startingRepEthPrice, 'stored starting price should match')
 		strictEqualTypeSafe(completeSetCollateralAmount, 0n, 'origin deployments should not have complete set collateral')
+	})
+
+	test('security pool exposes vault paging without duplicate entries', async () => {
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const thirdClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+		await approveAndDepositRep(thirdClient, repDeposit, questionId)
+		await depositRep(client, securityPoolAddresses.securityPool, repDeposit)
+
+		const vaultCount = await getVaultCount(client, securityPoolAddresses.securityPool)
+		const firstPage = await getVaults(client, securityPoolAddresses.securityPool, 0n, 2n)
+		const secondPage = await getVaults(client, securityPoolAddresses.securityPool, 2n, 2n)
+		const emptyPage = await getVaults(client, securityPoolAddresses.securityPool, 3n, 1n)
+
+		strictEqualTypeSafe(vaultCount, 3n, 'vault count should track unique vault addresses')
+		assert.deepStrictEqual(firstPage, [client.account.address, attackerClient.account.address], 'first page should include the first two vaults in insertion order')
+		assert.deepStrictEqual(secondPage, [thirdClient.account.address], 'second page should include the remaining vault')
+		assert.deepStrictEqual(emptyPage, [], 'out of range paging should return an empty array')
 	})
 
 	test('withdrawal after question end releases escalation lock without changing ownership in single-sided case', async () => {

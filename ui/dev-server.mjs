@@ -9,8 +9,9 @@ const rootDirectory = directoryOfThisFile
 const server = http.createServer()
 server.on('request', async (request, response) => {
 	try {
-		const requestUrl = request.url === undefined ? '/' : request.url
-		const urlPath = requestUrl.endsWith('/') ? `${ requestUrl }index.html` : requestUrl
+		const requestUrl = new URL(request.url === undefined ? '/' : request.url, 'http://localhost')
+		const requestPath = requestUrl.pathname
+		const urlPath = requestPath.endsWith('/') ? `${ requestPath }index.html` : requestPath
 		const relativeFilePath = decodeURI(urlPath).replace(/^\/+/, '')
 		const filePath = path.resolve(rootDirectory, relativeFilePath)
 		if (!filePath.startsWith(rootDirectory)) {
