@@ -157,8 +157,6 @@ export function App() {
 				</p>
 			)}
 
-			<TabNavigation route={route} showDeployTab={!deploymentComplete} deployRoute={DEPLOY_ROUTE} marketRoute={ZOLTAR_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} securityPoolsRoute={SECURITY_POOLS_ROUTE} onRouteChange={navigate} />
-
 			{walletBootstrapComplete ? (
 				<fieldset className='route-shell' disabled={transactionState.value.transactionInFlightCount > 0}>
 					<AppRouteContent

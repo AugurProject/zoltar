@@ -7,8 +7,7 @@ export function OpenOracleSection({ accountState, loadingOracleManager, onApprov
 	return (
 		<section className="panel market-panel">
 			<div className="market-header">
-				<div>
-				</div>
+				<div></div>
 			</div>
 
 			<div className="market-grid">
