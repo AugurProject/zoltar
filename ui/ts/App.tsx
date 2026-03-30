@@ -52,7 +52,7 @@ export function App() {
 		refreshState,
 	}
 	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
-	const { approveZoltarForkRep, createMarket, forkZoltar, loadingZoltarForkAccess, loadingZoltarQuestionCount, loadingZoltarQuestions, loadingZoltarUniverse, loadZoltarQuestions, loadZoltarUniverse, marketCreating, marketError, marketForm, marketResult, setMarketForm, setZoltarForkQuestionId, zoltarForkAllowance, zoltarForkError, zoltarForkPending, zoltarForkQuestionId, zoltarForkRepBalance, zoltarForkResult, zoltarQuestionCount, zoltarQuestions, zoltarUniverse } = useMarketCreation({ ...baseHookConfig, accountRepBalance: accountState.repBalance, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
+	const { approveZoltarForkRep, createChildUniverse: createZoltarChildUniverse, createMarket, forkZoltar, loadingZoltarForkAccess, loadingZoltarQuestionCount, loadingZoltarQuestions, loadingZoltarUniverse, loadZoltarQuestions, loadZoltarUniverse, marketCreating, marketError, marketForm, marketResult, setMarketForm, setZoltarForkQuestionId, zoltarChildUniverseError, zoltarForkAllowance, zoltarForkError, zoltarForkPending, zoltarForkQuestionId, zoltarForkRepBalance, zoltarQuestionCount, zoltarQuestions, zoltarUniverse } = useMarketCreation({ ...baseHookConfig, accountRepBalance: accountState.repBalance, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({ ...baseHookConfig, deploymentStatuses })
 	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, redeemRep, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult, setSecurityVaultForm, updateVaultFees } = useSecurityVaultOperations(baseHookConfig)
 	const { approveToken1, approveToken2, loadOracleManager, loadingOracleManager, onQueueOperation, onRequestPrice, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails, setOpenOracleForm, settleReport, submitInitialReport } = useOpenOracleOperations(baseHookConfig)
@@ -142,7 +142,7 @@ export function App() {
 		<main>
 			<div className='top-shell'>
 				<OverviewPanels accountState={accountState} universeLabel={universeLabel} isRefreshing={isRefreshing} onRefresh={() => void refreshState()} onConnect={() => void connectWallet()} />
-				<TabNavigation route={route} showDeployTab={!deploymentComplete} deployRoute={DEPLOY_ROUTE} marketRoute={ZOLTAR_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} securityPoolsRoute={SECURITY_POOLS_ROUTE} onRouteChange={navigate} />
+				<TabNavigation route={route} showDeployTab={showDeployTab} deployRoute={DEPLOY_ROUTE} marketRoute={ZOLTAR_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} securityPoolsRoute={SECURITY_POOLS_ROUTE} onRouteChange={navigate} />
 			</div>
 
 			{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected.</p>}
@@ -180,6 +180,7 @@ export function App() {
 							loadingZoltarQuestionCount,
 							loadingZoltarQuestions,
 							loadingZoltarUniverse,
+							onCreateChildUniverse: outcomeIndex => void createZoltarChildUniverse(outcomeIndex),
 							onForkZoltar: () => void forkZoltar(),
 							onCreateMarket: () => void createMarket(),
 							onLoadZoltarQuestions: () => void loadZoltarQuestions(),
@@ -194,11 +195,11 @@ export function App() {
 							zoltarQuestionCount,
 							zoltarForkAllowance,
 							zoltarForkError,
+							zoltarChildUniverseError,
 							loadingZoltarForkAccess,
 							zoltarForkPending,
 							zoltarForkQuestionId,
 							zoltarForkRepBalance,
-							zoltarForkResult,
 							zoltarQuestions,
 							zoltarUniverse,
 							onZoltarForkQuestionIdChange: questionId => setZoltarForkQuestionId(questionId),
@@ -248,7 +249,7 @@ export function App() {
 								forkAuctionResult,
 								loadingForkAuctionDetails,
 								onClaimAuctionProceeds: () => void claimAuctionProceeds(),
-								onCreateChildUniverse: () => void createChildUniverse(),
+								onCreateChildUniverse: () => void createChildUniverse(forkAuctionForm.selectedOutcome),
 								onFinalizeTruthAuction: () => void finalizeTruthAuction(),
 								onForkAuctionFormChange: update => setForkAuctionForm(current => ({ ...current, ...update })),
 								onForkUniverse: () => void forkUniverse(),

@@ -16,6 +16,11 @@ const ESCALATION_TIME_LENGTH = 4_233_600n
 const MIGRATION_TIME_LENGTH = 4_838_400n
 const TRUTH_AUCTION_TIME_LENGTH = 604_800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
+const ANSWER_OPTION_ABI = [parseAbiItem('function getAnswerOptionName(uint256 questionId, uint256 answer) view returns (string memory)')]
+const CHILD_UNIVERSE_PAGE_SIZE = 30n
+
+type UniverseTuple = [bigint, bigint, bigint, Address, bigint]
+type DeployedChildUniversesTuple = [bigint[], bigint[], UniverseTuple[]]
 
 function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${ value.toString(16).padStart(40, '0') }`)
@@ -83,6 +88,20 @@ function isUniverseTuple(value: unknown): value is [bigint, bigint, bigint, Addr
 		&& typeof value[2] === 'bigint'
 		&& typeof value[3] === 'string'
 		&& typeof value[4] === 'bigint'
+}
+
+function isUniverseTupleArray(value: unknown): value is UniverseTuple[] {
+	return Array.isArray(value) && value.every(item => isUniverseTuple(item))
+}
+
+function isDeployedChildUniversesTuple(value: unknown): value is DeployedChildUniversesTuple {
+	return Array.isArray(value)
+		&& value.length === 3
+		&& Array.isArray(value[0])
+		&& value[0].every(item => typeof item === 'bigint')
+		&& Array.isArray(value[1])
+		&& value[1].every(item => typeof item === 'bigint')
+		&& isUniverseTupleArray(value[2])
 }
 
 function hasTimestamp(value: unknown): value is { timestamp: bigint } {
@@ -507,7 +526,6 @@ function getMarketType(questionData: QuestionData, outcomeLabels: string[]): Mar
 
 async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
 	let currentIndex = 0n
-	const pageSize = 30n
 	const outcomeLabels: string[] = []
 
 	while (true) {
@@ -515,14 +533,14 @@ async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'getOutcomeLabels',
 			address: getDeploymentStep('zoltarQuestionData').address,
-			args: [questionId, currentIndex, pageSize],
+			args: [questionId, currentIndex, CHILD_UNIVERSE_PAGE_SIZE],
 		})
 		if (!isStringArray(page)) throw new Error('Unexpected outcome labels response')
 
 		const labels = page.filter(label => label.length > 0)
 		outcomeLabels.push(...labels)
-		if (BigInt(labels.length) !== pageSize) break
-		currentIndex += pageSize
+		if (BigInt(labels.length) !== CHILD_UNIVERSE_PAGE_SIZE) break
+		currentIndex += CHILD_UNIVERSE_PAGE_SIZE
 	}
 
 	return outcomeLabels
@@ -530,7 +548,6 @@ async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
 
 async function loadEscalationDeposits(client: ReadClient, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
 	let currentIndex = 0n
-	const pageSize = 30n
 	const deposits: EscalationDeposit[] = []
 
 	while (true) {
@@ -538,7 +555,7 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getDepositsByOutcome',
-			args: [getReportingOutcomeValue(outcome), currentIndex, pageSize],
+			args: [getReportingOutcomeValue(outcome), currentIndex, CHILD_UNIVERSE_PAGE_SIZE],
 		})
 		if (!isEscalationDepositPage(page)) throw new Error('Unexpected escalation deposits response')
 
@@ -552,8 +569,8 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 			.filter(deposit => deposit.depositor !== zeroAddress)
 
 		deposits.push(...normalizedPage)
-		if (BigInt(normalizedPage.length) !== pageSize) break
-		currentIndex += pageSize
+		if (BigInt(normalizedPage.length) !== CHILD_UNIVERSE_PAGE_SIZE) break
+		currentIndex += CHILD_UNIVERSE_PAGE_SIZE
 	}
 
 	return deposits
@@ -590,6 +607,7 @@ export async function loadMarketDetails(client: ReadClient, questionId: bigint):
 		exists,
 		marketType: getMarketType({ title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit }, outcomeLabels),
 		outcomeLabels,
+		numTicks,
 		questionId: getQuestionIdHex(questionId),
 		startTime,
 		title,
@@ -668,39 +686,84 @@ export async function loadZoltarUniverseSummary(client: ReadClient): Promise<Zol
 	const hasForked = forkTime > 0n || storedForkTime > 0n
 
 	let childUniverses: ZoltarUniverseSummary['childUniverses'] = []
+	let forkQuestionMarketType: MarketType | undefined = undefined
 	if (hasForked && forkQuestionId > 0n) {
 		const marketDetails = await loadMarketDetails(client, forkQuestionId)
-		childUniverses = await Promise.all(marketDetails.outcomeLabels.map(async (outcomeLabel, outcomeIndex) => {
-			const childUniverseId = await client.readContract({
-				abi: Zoltar_Zoltar.abi,
-				functionName: 'getChildUniverseId',
-				address: getDeploymentStep('zoltar').address,
-				args: [universeId, BigInt(outcomeIndex)],
-			})
-			const childUniverse = await client.readContract({
-				abi: Zoltar_Zoltar.abi,
-				functionName: 'universes',
-				address: getDeploymentStep('zoltar').address,
-				args: [childUniverseId],
-			})
-			if (!isUniverseTuple(childUniverse)) throw new Error('Unexpected child universe response')
-			const [childForkTime, , , childReputationToken, childParentUniverseId] = childUniverse
-			return {
-				exists: childReputationToken !== zeroAddress,
-				forkTime: childForkTime,
-				outcomeIndex: BigInt(outcomeIndex),
-				outcomeLabel,
-				parentUniverseId: childParentUniverseId,
-				reputationToken: childReputationToken,
-				universeId: childUniverseId,
+		forkQuestionMarketType = marketDetails.marketType
+		if (marketDetails.marketType === 'scalar') {
+			const deployedChildUniverses: ZoltarUniverseSummary['childUniverses'] = []
+			let currentIndex = 0n
+			while (true) {
+				const page = await client.readContract({
+					abi: Zoltar_Zoltar.abi,
+					functionName: 'getDeployedChildUniverses',
+					address: getDeploymentStep('zoltar').address,
+					args: [universeId, currentIndex, CHILD_UNIVERSE_PAGE_SIZE],
+				})
+				if (!isDeployedChildUniversesTuple(page)) throw new Error('Unexpected deployed child universe response')
+				const [outcomeIndexes, childUniverseIds, childUniverseTuples] = page
+				const pageChildren = await Promise.all(outcomeIndexes.map(async (outcomeIndex, index) => {
+					const childUniverse = childUniverseTuples[index]
+					if (childUniverse === undefined) throw new Error('Unexpected deployed child universe response')
+					const [childForkTime, , , childReputationToken, childParentUniverseId] = childUniverse
+					const outcomeLabel = await client.readContract({
+						abi: ANSWER_OPTION_ABI,
+						functionName: 'getAnswerOptionName',
+						address: getDeploymentStep('zoltarQuestionData').address,
+						args: [forkQuestionId, outcomeIndex],
+					})
+					if (typeof outcomeLabel !== 'string') throw new Error('Unexpected scalar outcome label response')
+					const childUniverseId = childUniverseIds[index]
+					if (childUniverseId === undefined) throw new Error('Unexpected deployed child universe response')
+					return {
+						exists: childReputationToken !== zeroAddress,
+						forkTime: childForkTime,
+						outcomeIndex,
+						outcomeLabel,
+						parentUniverseId: childParentUniverseId,
+						reputationToken: childReputationToken,
+						universeId: childUniverseId,
+					}
+				}))
+				deployedChildUniverses.push(...pageChildren)
+				if (BigInt(pageChildren.length) !== CHILD_UNIVERSE_PAGE_SIZE) break
+				currentIndex += CHILD_UNIVERSE_PAGE_SIZE
 			}
-		}))
+			childUniverses = deployedChildUniverses
+		} else {
+			childUniverses = await Promise.all(marketDetails.outcomeLabels.map(async (outcomeLabel, outcomeIndex) => {
+				const childUniverseId = await client.readContract({
+					abi: Zoltar_Zoltar.abi,
+					functionName: 'getChildUniverseId',
+					address: getDeploymentStep('zoltar').address,
+					args: [universeId, BigInt(outcomeIndex)],
+				})
+				const childUniverse = await client.readContract({
+					abi: Zoltar_Zoltar.abi,
+					functionName: 'universes',
+					address: getDeploymentStep('zoltar').address,
+					args: [childUniverseId],
+				})
+				if (!isUniverseTuple(childUniverse)) throw new Error('Unexpected child universe response')
+				const [childForkTime, , , childReputationToken, childParentUniverseId] = childUniverse
+				return {
+					exists: childReputationToken !== zeroAddress,
+					forkTime: childForkTime,
+					outcomeIndex: BigInt(outcomeIndex),
+					outcomeLabel,
+					parentUniverseId: childParentUniverseId,
+					reputationToken: childReputationToken,
+					universeId: childUniverseId,
+				}
+			}))
+		}
 	}
 
 	return {
 		childUniverses,
 		forkThreshold,
 		forkQuestionId,
+		forkQuestionMarketType,
 		forkTime,
 		forkingOutcomeIndex,
 		hasForked,
@@ -1382,6 +1445,15 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 		functionName: 'createChildUniverse',
 		args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
 	})))
+}
+
+export async function createZoltarChildUniverse(client: WriteClient, universeId: bigint, outcomeIndex: bigint) {
+	return await writeContractAndWait(client, () => client.writeContract({
+		address: getDeploymentStep('zoltar').address,
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'migrateInternalRep',
+		args: [universeId, 0n, [outcomeIndex]],
+	}))
 }
 
 export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {

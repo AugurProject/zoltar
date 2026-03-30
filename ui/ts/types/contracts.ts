@@ -34,6 +34,7 @@ export type ZoltarUniverseSummary = {
 	childUniverses: ZoltarChildUniverseSummary[]
 	forkThreshold: bigint
 	forkQuestionId: bigint
+	forkQuestionMarketType: MarketType | undefined
 	forkTime: bigint
 	forkingOutcomeIndex: bigint
 	hasForked: boolean
@@ -78,6 +79,7 @@ export type MarketDetails = {
 	marketType: MarketType
 	outcomeLabels: string[]
 	questionId: string
+	numTicks: bigint
 	startTime: bigint
 	title: string
 }

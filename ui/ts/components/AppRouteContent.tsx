@@ -24,6 +24,7 @@ export function AppRouteContent({ deployment, market, openOracle, route, securit
 					loadingZoltarQuestionCount={market.loadingZoltarQuestionCount}
 					loadingZoltarQuestions={market.loadingZoltarQuestions}
 					loadingZoltarUniverse={market.loadingZoltarUniverse}
+					onCreateChildUniverse={market.onCreateChildUniverse}
 					marketForm={market.marketForm}
 					marketCreating={market.marketCreating}
 					marketError={market.marketError}
@@ -38,11 +39,11 @@ export function AppRouteContent({ deployment, market, openOracle, route, securit
 					onUseQuestionForPool={market.onUseQuestionForPool}
 					onZoltarForkQuestionIdChange={market.onZoltarForkQuestionIdChange}
 					zoltarForkAllowance={market.zoltarForkAllowance}
+					zoltarChildUniverseError={market.zoltarChildUniverseError}
 					zoltarForkError={market.zoltarForkError}
 					zoltarForkPending={market.zoltarForkPending}
 					zoltarForkQuestionId={market.zoltarForkQuestionId}
 					zoltarForkRepBalance={market.zoltarForkRepBalance}
-					zoltarForkResult={market.zoltarForkResult}
 					zoltarQuestionCount={market.zoltarQuestionCount}
 					zoltarQuestions={market.zoltarQuestions}
 					zoltarUniverse={market.zoltarUniverse}

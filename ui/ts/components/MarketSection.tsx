@@ -3,7 +3,9 @@ import { EntityCard } from './EntityCard.js'
 import { LoadableValue } from './LoadableValue.js'
 import { formatAddress, formatCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
 import { parseMarketTypeInput } from '../lib/inputs.js'
+import { parseBigIntInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
+import { formatUniverseCollectionLabel } from '../lib/universe.js'
 import { readZoltarViewQueryParam, writeZoltarViewQueryParam } from '../lib/urlParams.js'
 import type { MarketSectionProps } from '../types/components.js'
 
@@ -20,16 +22,20 @@ function getZoltarView(value: string | undefined): ZoltarView {
 	}
 }
 
-export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZoltarQuestionCount, loadingZoltarQuestions, loadingZoltarUniverse, marketForm, marketCreating, marketError, marketResult, onApproveZoltarForkRep, onCreateMarket, onForkZoltar, onLoadZoltarQuestions, onLoadZoltarUniverse, onMarketFormChange, onUseQuestionForFork, onUseQuestionForPool, onZoltarForkQuestionIdChange, zoltarForkAllowance, zoltarForkError, zoltarForkPending, zoltarForkQuestionId, zoltarForkRepBalance, zoltarForkResult, zoltarQuestionCount, zoltarQuestions, zoltarUniverse }: MarketSectionProps) {
+export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZoltarQuestionCount, loadingZoltarQuestions, loadingZoltarUniverse, marketForm, marketCreating, marketError, marketResult, onApproveZoltarForkRep, onCreateChildUniverse, onCreateMarket, onForkZoltar, onLoadZoltarQuestions, onLoadZoltarUniverse, onMarketFormChange, onUseQuestionForFork, onUseQuestionForPool, onZoltarForkQuestionIdChange, zoltarChildUniverseError, zoltarForkAllowance, zoltarForkError, zoltarForkPending, zoltarForkQuestionId, zoltarForkRepBalance, zoltarQuestionCount, zoltarQuestions, zoltarUniverse }: MarketSectionProps) {
 	const [view, setView] = useState<ZoltarView>(() => getZoltarView(readZoltarViewQueryParam(window.location.search)))
+	const [scalarOutcomeIndex, setScalarOutcomeIndex] = useState('')
+	const [scalarDeployError, setScalarDeployError] = useState<string | undefined>(undefined)
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const rootUniverse = zoltarUniverse
+	const isScalarFork = rootUniverse?.forkQuestionMarketType === 'scalar'
 	const hasForked = rootUniverse?.hasForked === true
-	const universeLabel = rootUniverse === undefined ? 'Loading...' : rootUniverse.universeId.toString()
+	const currentUniverseName = rootUniverse === undefined ? 'Loading...' : formatUniverseCollectionLabel([rootUniverse.universeId])
 	const forkQuestionLabel = rootUniverse === undefined || rootUniverse.forkQuestionId === 0n ? 'Not forked yet' : rootUniverse.forkQuestionId.toString()
 	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= rootUniverse.forkThreshold
 	const hasEnoughApproval = rootUniverse !== undefined && zoltarForkAllowance !== undefined && zoltarForkAllowance >= rootUniverse.forkThreshold
 	const canFork = accountState.address !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && zoltarForkQuestionId.trim() !== '' && hasEnoughRep && hasEnoughApproval
+	const canDeployScalarChild = accountState.address !== undefined && isMainnet && rootUniverse !== undefined && hasForked && isScalarFork && scalarOutcomeIndex.trim() !== ''
 
 	useEffect(() => {
 		const nextSearch = writeZoltarViewQueryParam(window.location.search, view)
@@ -40,7 +46,8 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 		<section className="panel market-panel">
 			<div className="workflow-stack">
 				<EntityCard
-					title="Zoltar"
+					className="market-overview-card"
+					title={`Zoltar universe ${ currentUniverseName }`}
 					badge={<span className="badge ok">{rootUniverse === undefined ? 'Loading...' : hasForked ? 'Forked' : 'Unforked'}</span>}
 					actions={
 						<button className="secondary" onClick={onLoadZoltarUniverse} disabled={loadingZoltarUniverse}>
@@ -48,73 +55,130 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 						</button>
 					}
 				>
-					<div className="workflow-question-grid">
-						<div>
-							<span className="metric-label">Universe ID</span>
-							<strong>{universeLabel}</strong>
-						</div>
-						<div>
-							<span className="metric-label">Has Forked</span>
-							<strong>{rootUniverse === undefined ? 'Loading...' : hasForked ? 'Yes' : 'No'}</strong>
-						</div>
-						<div>
-							<span className="metric-label">Fork Question</span>
-							<strong>{forkQuestionLabel}</strong>
-						</div>
-						<div>
-							<span className="metric-label">Fork Time</span>
-							<strong>
-								<LoadableValue loading={loadingZoltarUniverse} placeholder="Loading...">
-									{rootUniverse === undefined ? 'Loading...' : rootUniverse.forkTime === 0n ? 'Not forked yet' : formatTimestamp(rootUniverse.forkTime)}
-								</LoadableValue>
-							</strong>
-						</div>
-						<div>
-							<span className="metric-label">Fork Threshold</span>
-							<strong>{rootUniverse === undefined ? 'Loading...' : `${ formatCurrencyBalance(rootUniverse.forkThreshold) } REP`}</strong>
-						</div>
+					<div className="workflow-question-grid market-overview-grid">
+						{rootUniverse === undefined ? undefined : hasForked ? (
+							<>
+								<div>
+									<span className="metric-label">Fork Question</span>
+									<strong>{forkQuestionLabel}</strong>
+								</div>
+								<div>
+									<span className="metric-label">Fork Time</span>
+									<strong>
+										<LoadableValue loading={loadingZoltarUniverse} placeholder="Loading...">
+											{formatTimestamp(rootUniverse.forkTime)}
+										</LoadableValue>
+									</strong>
+								</div>
+								<div>
+									<span className="metric-label">Fork Threshold</span>
+									<strong>{`${ formatCurrencyBalance(rootUniverse.forkThreshold) } REP`}</strong>
+								</div>
+							</>
+						) : undefined}
 						<div>
 							<span className="metric-label">Reputation Token</span>
 							<strong>{rootUniverse === undefined ? 'Loading...' : formatAddress(rootUniverse.reputationToken)}</strong>
 						</div>
-						<div>
-							<span className="metric-label">Question Registry</span>
-							<strong>ZoltarQuestionData</strong>
-						</div>
-						<div>
-							<span className="metric-label">Known Questions</span>
-							<strong>
-								<LoadableValue loading={loadingZoltarQuestionCount} placeholder="Loading...">
-									{zoltarQuestionCount === undefined ? 'Loading...' : zoltarQuestionCount.toString()}
-								</LoadableValue>
-							</strong>
-						</div>
 					</div>
-					<div className="entity-card-subsection">
-						<div className="entity-card-subsection-header">
-							<h4>Forked universes</h4>
-						</div>
-						{rootUniverse === undefined ? (
+					{rootUniverse === undefined ? (
+						<div className="entity-card-subsection market-overview-subsection">
+							<div className="entity-card-subsection-header">
+								<h4>Child universes</h4>
+							</div>
 							<p className="detail">Loading...</p>
-						) : rootUniverse.childUniverses.length === 0 ? (
-							<p className="detail">No child universes</p>
-						) : (
+						</div>
+					) : isScalarFork ? (
+						<div className="entity-card-subsection market-overview-subsection">
+							<div className="entity-card-subsection-header">
+								<h4>Child universes</h4>
+							</div>
+							{rootUniverse.childUniverses.length === 0 ? (
+								<p className="detail">No deployed child universes yet.</p>
+							) : (
+								<div className="entity-card-list">
+									{rootUniverse.childUniverses.map(child => (
+										<EntityCard key={child.universeId.toString()} className="compact" title={`Universe ${ child.universeId.toString() }`} badge={<span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}>
+											<div className="workflow-vault-grid">
+												<div>
+													<span className="metric-label">Outcome</span>
+													<strong>{child.outcomeLabel}</strong>
+												</div>
+												<div>
+													<span className="metric-label">Reputation Token</span>
+													<strong>{formatAddress(child.reputationToken)}</strong>
+												</div>
+												<div>
+													<span className="metric-label">Fork Time</span>
+													<strong>{child.forkTime === 0n ? 'Not forked yet' : formatTimestamp(child.forkTime)}</strong>
+												</div>
+											</div>
+										</EntityCard>
+									))}
+								</div>
+							)}
+							<div className="market-scalar-deploy">
+								<label className="field">
+									<span>Deploy New Child Universe</span>
+									<input
+										value={scalarOutcomeIndex}
+										onInput={event => {
+											setScalarDeployError(undefined)
+											setScalarOutcomeIndex(event.currentTarget.value)
+										}}
+										placeholder="Outcome index"
+										inputMode="numeric"
+									/>
+								</label>
+								<div className="actions">
+									<button
+										className="secondary"
+										onClick={() => {
+											try {
+												setScalarDeployError(undefined)
+												onCreateChildUniverse(parseBigIntInput(scalarOutcomeIndex, 'Outcome index'))
+											} catch (error) {
+												setScalarDeployError(error instanceof Error ? error.message : 'Outcome index is invalid')
+											}
+										}}
+										disabled={!canDeployScalarChild}
+									>
+										Deploy Universe
+									</button>
+								</div>
+								{scalarDeployError === undefined ? undefined : <p className="notice error">{scalarDeployError}</p>}
+							</div>
+							{zoltarChildUniverseError === undefined ? undefined : <p className="notice error">{zoltarChildUniverseError}</p>}
+						</div>
+					) : rootUniverse.childUniverses.length === 0 ? undefined : (
+						<div className="entity-card-subsection market-overview-subsection">
+							<div className="entity-card-subsection-header">
+								<h4>Child universes</h4>
+							</div>
 							<div className="entity-card-list">
 								{rootUniverse.childUniverses.map(child => (
-									<EntityCard key={child.universeId.toString()} className="compact" title={`Universe ${ child.universeId.toString() }`} badge={<span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}>
+									<EntityCard
+										key={child.universeId.toString()}
+										className="compact"
+										title={`Universe ${ child.universeId.toString() }`}
+										badge={<span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
+										actions={
+											<button className="secondary" onClick={() => onCreateChildUniverse(child.outcomeIndex)} disabled={accountState.address === undefined || !isMainnet || child.exists}>
+												{child.exists ? 'Deployed' : 'Deploy Universe'}
+											</button>
+										}
+									>
 										<div className="workflow-vault-grid">
 											<div>
 												<span className="metric-label">Outcome</span>
 												<strong>{child.outcomeLabel}</strong>
 											</div>
-											<div>
-												<span className="metric-label">Parent Universe</span>
-												<strong>{child.parentUniverseId.toString()}</strong>
-											</div>
-											<div>
-												<span className="metric-label">Reputation Token</span>
-												<strong>{formatAddress(child.reputationToken)}</strong>
-											</div>
+											{child.exists ? (
+												<div>
+													<span className="metric-label">Reputation Token</span>
+													<strong>{formatAddress(child.reputationToken)}</strong>
+												</div>
+											) : undefined}
 											<div>
 												<span className="metric-label">Fork Time</span>
 												<strong>{child.forkTime === 0n ? 'Not forked yet' : formatTimestamp(child.forkTime)}</strong>
@@ -123,12 +187,13 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 									</EntityCard>
 								))}
 							</div>
-						)}
-					</div>
+							{zoltarChildUniverseError === undefined ? undefined : <p className="notice error">{zoltarChildUniverseError}</p>}
+						</div>
+					)}
 				</EntityCard>
 			</div>
 
-			<div className="subtab-nav" role="tablist" aria-label="Zoltar views">
+			<div className="subtab-nav market-subtab-nav" role="tablist" aria-label="Zoltar views">
 				<button className={`subtab-link ${ view === 'questions' ? 'active' : '' }`} type="button" onClick={() => setView('questions')} aria-pressed={view === 'questions'}>
 					Questions
 				</button>
@@ -175,7 +240,7 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 												>
 													Use For Fork
 												</button>
-												<button className="secondary" onClick={() => onUseQuestionForPool(question.questionId)}>
+												<button className="secondary" onClick={() => onUseQuestionForPool(question.questionId)} disabled={question.marketType !== 'binary'}>
 													Use For Create Pool
 												</button>
 											</div>
@@ -198,6 +263,22 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 												<span className="metric-label">Outcomes</span>
 												<strong>{question.outcomeLabels.length === 0 ? 'Scalar' : question.outcomeLabels.join(', ')}</strong>
 											</div>
+											{question.marketType === 'scalar' ? (
+												<>
+													<div>
+														<span className="metric-label">Ticks</span>
+														<strong>{question.numTicks.toString()}</strong>
+													</div>
+													<div>
+														<span className="metric-label">Display Range</span>
+														<strong>{question.answerUnit === '' ? `${ question.displayValueMin.toString() } to ${ question.displayValueMax.toString() }` : `${ question.displayValueMin.toString() } to ${ question.displayValueMax.toString() } ${ question.answerUnit }`}</strong>
+													</div>
+													<div>
+														<span className="metric-label">Answer Unit</span>
+														<strong>{question.answerUnit === '' ? 'None' : question.answerUnit}</strong>
+													</div>
+												</>
+											) : undefined}
 										</div>
 									</EntityCard>
 								))}
@@ -223,7 +304,7 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 										>
 											Use For Fork
 										</button>
-										<button className="secondary" onClick={() => onUseQuestionForPool(marketResult.questionId)}>
+										<button className="secondary" onClick={() => onUseQuestionForPool(marketResult.questionId)} disabled={marketResult.marketType !== 'binary'}>
 											Use For Create Pool
 										</button>
 									</div>
@@ -340,6 +421,14 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 									</strong>
 								</div>
 								<div>
+									<span className="metric-label">Fork Threshold</span>
+									<strong>
+										<LoadableValue loading={loadingZoltarForkAccess} placeholder="Loading...">
+											{rootUniverse === undefined ? 'Loading...' : `${ formatCurrencyBalance(rootUniverse.forkThreshold) } REP`}
+										</LoadableValue>
+									</strong>
+								</div>
+								<div>
 									<span className="metric-label">REP Approved To Zoltar</span>
 									<strong>
 										<LoadableValue loading={loadingZoltarForkAccess} placeholder="Loading...">
@@ -352,11 +441,11 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 							<div className="form-grid">
 								<label className="field">
 									<span>Fork Question ID</span>
-									<input value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder="0x..." />
+									{hasForked ? <strong>{zoltarForkQuestionId === '' ? 'Already forked' : zoltarForkQuestionId}</strong> : <input value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder="0x..." disabled={zoltarForkPending} />}
 								</label>
 
 								<div className="actions">
-									<button className="secondary" onClick={onApproveZoltarForkRep} disabled={accountState.address === undefined || !isMainnet || rootUniverse === undefined || zoltarForkPending || hasEnoughApproval}>
+									<button className="secondary" onClick={onApproveZoltarForkRep} disabled={accountState.address === undefined || !isMainnet || rootUniverse === undefined || zoltarForkPending || hasEnoughApproval || hasForked}>
 										{zoltarForkPending ? 'Waiting...' : hasEnoughApproval ? 'Threshold Approved' : 'Approve REP Threshold'}
 									</button>
 									<button onClick={onForkZoltar} disabled={!canFork}>
@@ -364,28 +453,9 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 									</button>
 								</div>
 
-								{rootUniverse === undefined ? undefined : !hasEnoughRep ? <p className="detail">Need {formatCurrencyBalance(rootUniverse.forkThreshold)} REP.</p> : !hasEnoughApproval ? <p className="detail">Approve {formatCurrencyBalance(rootUniverse.forkThreshold)} REP first.</p> : undefined}
+								{rootUniverse === undefined ? undefined : hasForked ? <p className="detail">Zoltar has already forked. The fork action is disabled.</p> : !hasEnoughRep ? <p className="detail">Need {formatCurrencyBalance(rootUniverse.forkThreshold)} REP.</p> : !hasEnoughApproval ? <p className="detail">Approve {formatCurrencyBalance(rootUniverse.forkThreshold)} REP first.</p> : undefined}
 							</div>
 						</EntityCard>
-
-						{zoltarForkResult === undefined ? undefined : (
-							<EntityCard title="Latest Zoltar Fork Action" badge={<span className="badge ok">{zoltarForkResult.action}</span>}>
-								<div className="question-preview-body">
-									<div>
-										<span className="metric-label">Question ID</span>
-										<strong>{zoltarForkResult.questionId}</strong>
-									</div>
-									<div>
-										<span className="metric-label">Universe</span>
-										<strong>{zoltarForkResult.universeId.toString()}</strong>
-									</div>
-									<div>
-										<span className="metric-label">Transaction</span>
-										<strong>{zoltarForkResult.hash}</strong>
-									</div>
-								</div>
-							</EntityCard>
-						)}
 
 						{zoltarForkError === undefined ? undefined : <p className="notice error">{zoltarForkError}</p>}
 					</>

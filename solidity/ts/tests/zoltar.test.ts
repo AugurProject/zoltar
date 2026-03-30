@@ -10,6 +10,7 @@ import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoret
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureDefined } from '../testsuite/simulator/utils/testUtils'
 import { keccak256, encodeAbiParameters } from 'viem'
+import { Zoltar_Zoltar } from '../types/contractArtifact'
 
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
 const FORKER_DEPOSIT_FRACTION = 20n
@@ -142,6 +143,87 @@ describe('Contract Test Suite', () => {
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, priorSplitBalance + priorBalance, 'after split balance mismatch')
 		}
+	})
+
+	test('getDeployedChildUniverses pages deployed child universes', async () => {
+		const zoltar = getZoltarAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		const questionData = {
+			title: 'paged child universes',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'])
+		await createQuestion(client, questionData, outcomes)
+		const questionId = BigInt(
+			keccak256(
+				encodeAbiParameters(
+					[
+						{
+							name: 'questionData',
+							type: 'tuple',
+							components: [
+								{ name: 'title', type: 'string' },
+								{ name: 'description', type: 'string' },
+								{ name: 'startTime', type: 'uint256' },
+								{ name: 'endTime', type: 'uint256' },
+								{ name: 'numTicks', type: 'uint256' },
+								{ name: 'displayValueMin', type: 'int256' },
+								{ name: 'displayValueMax', type: 'int256' },
+								{ name: 'answerUnit', type: 'string' },
+							],
+						},
+						{ name: 'outcomeOptions', type: 'string[]' },
+					],
+					[questionData, outcomes],
+				),
+			),
+		)
+
+		await forkUniverse(client, genesisUniverse, questionId)
+		const balance = await getRepTokensMigratedRepBalance(client, genesisUniverse, client.account.address)
+		await migrateInternalRep(client, genesisUniverse, balance, [0, 1, 3])
+
+		const firstPage = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'getDeployedChildUniverses',
+			address: getZoltarAddress(),
+			args: [genesisUniverse, 0n, 2n],
+		})
+		const secondPage = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'getDeployedChildUniverses',
+			address: getZoltarAddress(),
+			args: [genesisUniverse, 2n, 2n],
+		})
+		const emptyPage = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'getDeployedChildUniverses',
+			address: getZoltarAddress(),
+			args: [genesisUniverse, 4n, 2n],
+		})
+
+		assert.deepStrictEqual(firstPage[0], [0n, 1n], 'first page should include the first two child outcomes')
+		assert.deepStrictEqual(firstPage[1], [getChildUniverseId(genesisUniverse, 0), getChildUniverseId(genesisUniverse, 1)], 'first page child ids should match deployed children')
+		assert.deepStrictEqual(
+			firstPage[2].map(child => child.parentUniverseId),
+			[genesisUniverse, genesisUniverse],
+			'first page child universes should point back to genesis',
+		)
+
+		assert.deepStrictEqual(secondPage[0], [3n], 'second page should include the remaining child outcome')
+		assert.deepStrictEqual(secondPage[1], [getChildUniverseId(genesisUniverse, 3)], 'second page child id should match the deployed child')
+		assert.strictEqual(secondPage[2][0]?.forkingOutcomeIndex, 3n, 'second page child universe should retain the outcome index')
+
+		assert.deepStrictEqual(emptyPage[0], [], 'out of range paging should return no outcome indexes')
+		assert.deepStrictEqual(emptyPage[1], [], 'out of range paging should return no child universe ids')
+		assert.deepStrictEqual(emptyPage[2], [], 'out of range paging should return no child universes')
 	})
 
 	test('forkUniverse fails for non-existent question', async () => {

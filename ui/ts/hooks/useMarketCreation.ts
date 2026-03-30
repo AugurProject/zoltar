@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
-import { approveErc20, createMarket as createMarketTransaction, forkZoltarUniverse, getDeploymentSteps, loadAllZoltarQuestions, loadErc20Allowance, loadErc20Balance, loadZoltarQuestionCount, loadZoltarUniverseSummary } from '../contracts.js'
+import { approveErc20, createMarket as createMarketTransaction, createZoltarChildUniverse, forkZoltarUniverse, getDeploymentSteps, loadAllZoltarQuestions, loadErc20Allowance, loadErc20Balance, loadZoltarQuestionCount, loadZoltarUniverseSummary } from '../contracts.js'
 import { createReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { createMarketParameters, hasDeployedStep } from '../lib/marketCreation.js'
@@ -49,6 +49,7 @@ export function useMarketCreation({ accountAddress, accountRepBalance, autoLoadI
 	const zoltarForkAllowance = useSignal<bigint | undefined>(undefined)
 	const zoltarForkRepBalance = useSignal<bigint | undefined>(undefined)
 	const loadingZoltarForkAccess = useSignal(false)
+	const zoltarChildUniverseError = useSignal<string | undefined>(undefined)
 
 	const ensureZoltarUniverse = async () => {
 		if (zoltarUniverse.value !== undefined) return zoltarUniverse.value
@@ -72,6 +73,37 @@ export function useMarketCreation({ accountAddress, accountRepBalance, autoLoadI
 			zoltarForkRepBalance.value = balance
 		} finally {
 			loadingZoltarForkAccess.value = false
+		}
+	}
+
+	const createChildUniverse = async (outcomeIndex: bigint) => {
+		try {
+			getRequiredInjectedEthereum()
+		} catch {
+			zoltarChildUniverseError.value = 'No injected wallet found'
+			return
+		}
+		if (accountAddress === undefined) {
+			zoltarChildUniverseError.value = 'Connect a wallet before deploying a child universe'
+			return
+		}
+
+		zoltarChildUniverseError.value = undefined
+		try {
+			onTransactionRequested()
+			const universe = await ensureZoltarUniverse()
+			if (!universe.hasForked) {
+				throw new Error('Zoltar needs to fork before child universes can be deployed')
+			}
+			const hash = await createZoltarChildUniverse(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), universe.universeId, outcomeIndex)
+			onTransaction(hash)
+			await refreshState()
+			await loadZoltarUniverse()
+			await loadZoltarForkAccess()
+		} catch (error) {
+			zoltarChildUniverseError.value = getErrorMessage(error, 'Failed to deploy child universe')
+		} finally {
+			onTransactionFinished()
 		}
 	}
 
@@ -103,6 +135,7 @@ export function useMarketCreation({ accountAddress, accountRepBalance, autoLoadI
 			zoltarForkQuestionId.value = result.questionId
 			onTransaction(result.createQuestionHash)
 			await refreshState()
+			await loadQuestions()
 		} catch (error) {
 			marketError.value = getErrorMessage(error, 'Failed to create question')
 		} finally {
@@ -223,6 +256,7 @@ export function useMarketCreation({ accountAddress, accountRepBalance, autoLoadI
 	return {
 		approveZoltarForkRep,
 		createMarket,
+		createChildUniverse,
 		forkZoltar,
 		marketCreating: marketCreating.value,
 		marketError: marketError.value,
@@ -241,6 +275,7 @@ export function useMarketCreation({ accountAddress, accountRepBalance, autoLoadI
 		zoltarForkQuestionId: zoltarForkQuestionId.value,
 		zoltarForkRepBalance: zoltarForkRepBalance.value,
 		zoltarForkResult: zoltarForkResult.value,
+		zoltarChildUniverseError: zoltarChildUniverseError.value,
 		zoltarQuestions: zoltarQuestions.value,
 		zoltarUniverse: zoltarUniverse.value,
 		loadingZoltarForkAccess: loadingZoltarForkAccess.value,

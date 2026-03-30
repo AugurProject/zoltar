@@ -1,6 +1,6 @@
 import type { Address } from 'viem'
 import type { AccountState, ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from './app.js'
-import type { DeploymentStatus, DeploymentStepId, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, OpenOracleActionResult, OracleManagerDetails, ReportingActionResult, ReportingDetails, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, ZoltarForkActionResult, ZoltarUniverseSummary } from './contracts.js'
+import type { DeploymentStatus, DeploymentStepId, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, OpenOracleActionResult, OracleManagerDetails, ReportingActionResult, ReportingDetails, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, ZoltarUniverseSummary } from './contracts.js'
 
 export type DeploymentSectionProps = {
 	title: string
@@ -49,6 +49,7 @@ export type DeploymentRouteContentProps = {
 export type MarketRouteContentProps = {
 	accountState: AccountState
 	onApproveZoltarForkRep: () => void
+	onCreateChildUniverse: (outcomeIndex: bigint) => void
 	onCreateMarket: () => void
 	onForkZoltar: () => void
 	marketCreating: boolean
@@ -67,10 +68,10 @@ export type MarketRouteContentProps = {
 	zoltarForkAllowance: bigint | undefined
 	zoltarForkError: string | undefined
 	loadingZoltarForkAccess: boolean
+	zoltarChildUniverseError: string | undefined
 	zoltarForkPending: boolean
 	zoltarForkQuestionId: string
 	zoltarForkRepBalance: bigint | undefined
-	zoltarForkResult: ZoltarForkActionResult | undefined
 	zoltarQuestions: MarketDetails[]
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	onZoltarForkQuestionIdChange: (questionId: string) => void
