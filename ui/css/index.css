@@ -61,6 +61,11 @@ main {
 	gap: 1.25rem;
 }
 
+.top-shell {
+	display: grid;
+	gap: 0;
+}
+
 h1 {
 	margin: 0;
 	font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
@@ -513,7 +518,7 @@ button.destructive:hover:not(:disabled) {
 	align-items: center;
 	gap: 0.5rem;
 	padding: 0.5rem 0.25rem 0.75rem 0;
-	margin-top: 0.75rem;
+	margin-top: 0;
 	border: 0;
 	border-bottom: 1px solid var(--panel-rule);
 	border-radius: 0;
@@ -718,6 +723,10 @@ button.destructive:hover:not(:disabled) {
 	display: grid;
 	gap: 1.25rem;
 	margin-top: 1.25rem;
+}
+
+.subtab-nav + .workflow-stack {
+	margin-top: 0.5rem;
 }
 
 .workflow-section {

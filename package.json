@@ -34,7 +34,7 @@
 		"setup-contracts": "cd solidity && bun run setup",
 		"compile-contracts": "cd solidity && bun install --frozen-lockfile --ignore-scripts && bun x tsc --project tsconfig-compile.json && bun run ./js/compile.js",
 		"generate": "bun run compile-contracts && bun run ui:vendor",
-		"tsc": "bun run generate && bun x tsc --noEmit",
+		"tsc": "bun x tsc --noEmit",
 		"ui:setup": "bun install --frozen-lockfile --ignore-scripts && cd solidity && bun install --frozen-lockfile --ignore-scripts && cd .. && bun run generate && cd ui && bun install --frozen-lockfile --ignore-scripts && bun run build",
 		"ui:build": "bun run generate && cd ui && bun install --frozen-lockfile --ignore-scripts && bun run build",
 		"ui:serve": "bun ./ui/dev-server.mjs",

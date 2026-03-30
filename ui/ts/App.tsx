@@ -141,8 +141,10 @@ export function App() {
 
 	return (
 		<main>
-			<OverviewPanels accountState={accountState} universeLabel={universeLabel} isRefreshing={isRefreshing} onRefresh={() => void refreshState()} onConnect={() => void connectWallet()} />
-
+			<div className='top-shell'>
+				<OverviewPanels accountState={accountState} universeLabel={universeLabel} isRefreshing={isRefreshing} onRefresh={() => void refreshState()} onConnect={() => void connectWallet()} />
+				<TabNavigation route={route} showDeployTab={!deploymentComplete} deployRoute={DEPLOY_ROUTE} marketRoute={ZOLTAR_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} securityPoolsRoute={SECURITY_POOLS_ROUTE} onRouteChange={navigate} />
+			</div>
 			<HeroSection />
 
 			{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected.</p>}
@@ -159,8 +161,6 @@ export function App() {
 					{transactionState.value.transactionUrl === undefined ? undefined : <> <a href={transactionState.value.transactionUrl} target='_blank' rel='noreferrer'>View on Etherscan</a></>}
 				</p>
 			)}
-
-			<TabNavigation route={route} showDeployTab={!deploymentComplete} deployRoute={DEPLOY_ROUTE} marketRoute={ZOLTAR_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} securityPoolsRoute={SECURITY_POOLS_ROUTE} onRouteChange={navigate} />
 
 			{walletBootstrapComplete ? (
 				<fieldset className='route-shell' disabled={transactionState.value.transactionInFlightCount > 0}>
