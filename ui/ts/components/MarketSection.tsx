@@ -97,172 +97,171 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 						</button>
 					}
 				>
-					<div className="workflow-question-grid market-overview-grid">
-						{rootUniverse === undefined ? undefined : hasForked ? (
-							<>
-								<div className="market-overview-question-summary">
-									<span className="metric-label">Fork Question</span>
-									{forkQuestionLabel === 'Not forked yet' ? <strong>{forkQuestionLabel}</strong> : <QuestionSummaryHeader description={rootUniverse.forkQuestionDetails === undefined ? 'Loading question details...' : rootUniverse.forkQuestionDetails.description.trim() === '' ? 'No description provided.' : rootUniverse.forkQuestionDetails.description} questionId={forkQuestionLabel} title={rootUniverse.forkQuestionDetails === undefined ? 'Question details' : rootUniverse.forkQuestionDetails.title.trim() === '' ? 'Untitled question' : rootUniverse.forkQuestionDetails.title} />}
-								</div>
-								<div>
-									<span className="metric-label">Fork Time</span>
-									<strong>
-										<LoadableValue loading={loadingZoltarUniverse} placeholder="Loading...">
-											{formatTimestamp(rootUniverse.forkTime)}
-										</LoadableValue>
-									</strong>
-								</div>
-								<div>
-									<span className="metric-label">Fork Threshold</span>
-									<strong>{`${ formatCurrencyBalance(rootUniverse.forkThreshold) } REP`}</strong>
-								</div>
-							</>
-						) : undefined}
-						<div>
-							<span className="metric-label">Reputation Token</span>
-							<strong>{rootUniverse === undefined ? 'Loading...' : formatAddress(rootUniverse.reputationToken)}</strong>
-						</div>
-					</div>
 					{rootUniverse === undefined ? (
-						<div className="entity-card-subsection market-overview-subsection">
-							<div className="entity-card-subsection-header">
-								<h4>Child universes</h4>
-							</div>
-							<p className="detail">Loading...</p>
-						</div>
-					) : isScalarFork ? (
-						<div className="entity-card-subsection market-overview-subsection">
-							<div className="entity-card-subsection-header">
-								<h4>Child universes</h4>
-							</div>
-							{rootUniverse.childUniverses.length === 0 ? (
-								<p className="detail">No deployed child universes yet.</p>
-							) : (
-								<div className="entity-card-list">
-									{rootUniverse.childUniverses.map(child => (
-										<EntityCard key={child.universeId.toString()} className="compact" title={<UniverseLink universeId={child.universeId} />} badge={<span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}>
-											<div className="workflow-vault-grid">
-												<div>
-													<span className="metric-label">Outcome</span>
-													<strong>{child.outcomeLabel}</strong>
-												</div>
-												<div>
-													<span className="metric-label">Reputation Token</span>
-													<strong>{formatAddress(child.reputationToken)}</strong>
-												</div>
-												<div>
-													<span className="metric-label">Fork Time</span>
-													<strong>{child.forkTime === 0n ? 'Not forked yet' : formatTimestamp(child.forkTime)}</strong>
-												</div>
-											</div>
-										</EntityCard>
-									))}
-								</div>
-							)}
-							<div className="market-scalar-deploy">
-								{scalarQuestionDetails === undefined ? (
-									<p className="detail">Loading scalar range...</p>
-								) : (
+						<p className="detail market-overview-loading">Loading Zoltar universe...</p>
+					) : (
+						<>
+							<div className="workflow-question-grid market-overview-grid">
+								{hasForked ? (
 									<>
-										<label className="field scalar-slider-field">
-											<span>Select Child Universe</span>
-											<div className="scalar-slider-rail">
-												<div className="scalar-slider-track" />
-												<div className="scalar-slider-fill" style={{ width: `${ selectedScalarProgress }%` }} />
-												<input
-													type="range"
-													min="0"
-													max={scalarQuestionDetails.numTicks.toString()}
-													step="1"
-													value={scalarOutcomeTick}
-													aria-valuetext={selectedScalarOutcomeLabel}
-													onInput={event => {
-														setScalarDeployError(undefined)
-														setScalarOutcomeTick(event.currentTarget.value)
-													}}
-												/>
-											</div>
-										</label>
-										<div className="workflow-question-grid market-scalar-deploy-grid scalar-slider-stats">
-											<div>
-												<span className="metric-label">Min Value</span>
-												<strong>{formatScalarOutcomeLabel(scalarQuestionDetails, 0n)}</strong>
-											</div>
-											<div>
-												<span className="metric-label">Selected Tick</span>
-												<strong>{`${ scalarOutcomeTick } / ${ scalarQuestionDetails.numTicks.toString() }`}</strong>
-											</div>
-											<div>
-												<span className="metric-label">Selected Value</span>
-												<strong>{selectedScalarOutcomeLabel}</strong>
-											</div>
-											<div>
-												<span className="metric-label">Max Value</span>
-												<strong>{formatScalarOutcomeLabel(scalarQuestionDetails, scalarQuestionDetails.numTicks)}</strong>
-											</div>
+										<div className="market-overview-question-summary">
+											<span className="metric-label">Fork Question</span>
+											{forkQuestionLabel === 'Not forked yet' ? <strong>{forkQuestionLabel}</strong> : <QuestionSummaryHeader description={rootUniverse.forkQuestionDetails === undefined ? 'Loading question details...' : rootUniverse.forkQuestionDetails.description.trim() === '' ? 'No description provided.' : rootUniverse.forkQuestionDetails.description} loading={rootUniverse.forkQuestionDetails === undefined} questionId={forkQuestionLabel} title={rootUniverse.forkQuestionDetails === undefined ? 'Question details' : rootUniverse.forkQuestionDetails.title.trim() === '' ? 'Untitled question' : rootUniverse.forkQuestionDetails.title} />}
 										</div>
-										<div className="actions">
-											<button
-												className="secondary"
-												onClick={() => {
-													try {
-														if (selectedScalarOutcomeIndex === undefined) throw new Error('Selected tick is invalid')
-														setScalarDeployError(undefined)
-														onCreateChildUniverse(selectedScalarOutcomeIndex)
-													} catch (error) {
-														setScalarDeployError(error instanceof Error ? error.message : 'Selected tick is invalid')
-													}
-												}}
-												disabled={!canDeployScalarChild}
-											>
-												Deploy Universe
-											</button>
+										<div>
+											<span className="metric-label">Fork Time</span>
+											<strong>
+												<LoadableValue loading={loadingZoltarUniverse} placeholder="Loading...">
+													{formatTimestamp(rootUniverse.forkTime)}
+												</LoadableValue>
+											</strong>
+										</div>
+										<div>
+											<span className="metric-label">Fork Threshold</span>
+											<strong>{`${ formatCurrencyBalance(rootUniverse.forkThreshold) } REP`}</strong>
 										</div>
 									</>
-								)}
-								{scalarDeployError === undefined ? undefined : <p className="notice error">{scalarDeployError}</p>}
+								) : undefined}
+								<div>
+									<span className="metric-label">Reputation Token</span>
+									<strong>{formatAddress(rootUniverse.reputationToken)}</strong>
+								</div>
 							</div>
-							{zoltarChildUniverseError === undefined ? undefined : <p className="notice error">{zoltarChildUniverseError}</p>}
-						</div>
-					) : rootUniverse.childUniverses.length === 0 ? undefined : (
-						<div className="entity-card-subsection market-overview-subsection">
-							<div className="entity-card-subsection-header">
-								<h4>Child universes</h4>
-							</div>
-							<div className="entity-card-list">
-								{rootUniverse.childUniverses.map(child => (
-									<EntityCard
-										key={child.universeId.toString()}
-										className="compact"
-										title={<UniverseLink universeId={child.universeId} />}
-										badge={<span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
-										actions={
-											<button className="secondary" onClick={() => onCreateChildUniverse(child.outcomeIndex)} disabled={accountState.address === undefined || !isMainnet || child.exists}>
-												{child.exists ? 'Deployed' : 'Deploy Universe'}
-											</button>
-										}
-									>
-										<div className="workflow-vault-grid">
-											<div>
-												<span className="metric-label">Outcome</span>
-												<strong>{child.outcomeLabel}</strong>
-											</div>
-											{child.exists ? (
-												<div>
-													<span className="metric-label">Reputation Token</span>
-													<strong>{formatAddress(child.reputationToken)}</strong>
-												</div>
-											) : undefined}
-											<div>
-												<span className="metric-label">Fork Time</span>
-												<strong>{child.forkTime === 0n ? 'Not forked yet' : formatTimestamp(child.forkTime)}</strong>
-											</div>
+							{isScalarFork ? (
+								<div className="entity-card-subsection market-overview-subsection">
+									<div className="entity-card-subsection-header">
+										<h4>Child universes</h4>
+									</div>
+									{rootUniverse.childUniverses.length === 0 ? (
+										<p className="detail">No deployed child universes yet.</p>
+									) : (
+										<div className="entity-card-list">
+											{rootUniverse.childUniverses.map(child => (
+												<EntityCard key={child.universeId.toString()} className="compact" title={<UniverseLink universeId={child.universeId} />} badge={<span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}>
+													<div className="workflow-vault-grid">
+														<div>
+															<span className="metric-label">Outcome</span>
+															<strong>{child.outcomeLabel}</strong>
+														</div>
+														<div>
+															<span className="metric-label">Reputation Token</span>
+															<strong>{formatAddress(child.reputationToken)}</strong>
+														</div>
+														<div>
+															<span className="metric-label">Fork Time</span>
+															<strong>{child.forkTime === 0n ? 'Not forked yet' : formatTimestamp(child.forkTime)}</strong>
+														</div>
+													</div>
+												</EntityCard>
+											))}
 										</div>
-									</EntityCard>
-								))}
-							</div>
-							{zoltarChildUniverseError === undefined ? undefined : <p className="notice error">{zoltarChildUniverseError}</p>}
-						</div>
+									)}
+									<div className="market-scalar-deploy">
+										{scalarQuestionDetails === undefined ? (
+											<p className="detail">Loading scalar range...</p>
+										) : (
+											<>
+												<label className="field scalar-slider-field">
+													<span>Select Child Universe</span>
+													<div className="scalar-slider-rail">
+														<div className="scalar-slider-track" />
+														<div className="scalar-slider-fill" style={{ width: `${ selectedScalarProgress }%` }} />
+														<input
+															type="range"
+															min="0"
+															max={scalarQuestionDetails.numTicks.toString()}
+															step="1"
+															value={scalarOutcomeTick}
+															aria-valuetext={selectedScalarOutcomeLabel}
+															onInput={event => {
+																setScalarDeployError(undefined)
+																setScalarOutcomeTick(event.currentTarget.value)
+															}}
+														/>
+													</div>
+												</label>
+												<div className="workflow-question-grid market-scalar-deploy-grid scalar-slider-stats">
+													<div>
+														<span className="metric-label">Min Value</span>
+														<strong>{formatScalarOutcomeLabel(scalarQuestionDetails, 0n)}</strong>
+													</div>
+													<div>
+														<span className="metric-label">Selected Tick</span>
+														<strong>{`${ scalarOutcomeTick } / ${ scalarQuestionDetails.numTicks.toString() }`}</strong>
+													</div>
+													<div>
+														<span className="metric-label">Selected Value</span>
+														<strong>{selectedScalarOutcomeLabel}</strong>
+													</div>
+													<div>
+														<span className="metric-label">Max Value</span>
+														<strong>{formatScalarOutcomeLabel(scalarQuestionDetails, scalarQuestionDetails.numTicks)}</strong>
+													</div>
+												</div>
+												<div className="actions">
+													<button
+														className="secondary"
+														onClick={() => {
+															try {
+																if (selectedScalarOutcomeIndex === undefined) throw new Error('Selected tick is invalid')
+																setScalarDeployError(undefined)
+																onCreateChildUniverse(selectedScalarOutcomeIndex)
+															} catch (error) {
+																setScalarDeployError(error instanceof Error ? error.message : 'Selected tick is invalid')
+															}
+														}}
+														disabled={!canDeployScalarChild}
+													>
+														Deploy Universe
+													</button>
+												</div>
+											</>
+										)}
+										{scalarDeployError === undefined ? undefined : <p className="notice error">{scalarDeployError}</p>}
+									</div>
+									{zoltarChildUniverseError === undefined ? undefined : <p className="notice error">{zoltarChildUniverseError}</p>}
+								</div>
+							) : rootUniverse.childUniverses.length === 0 ? undefined : (
+								<div className="entity-card-subsection market-overview-subsection">
+									<div className="entity-card-subsection-header">
+										<h4>Child universes</h4>
+									</div>
+									<div className="entity-card-list">
+										{rootUniverse.childUniverses.map(child => (
+											<EntityCard
+												key={child.universeId.toString()}
+												className="compact"
+												title={<UniverseLink universeId={child.universeId} />}
+												badge={<span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
+												actions={
+													<button className="secondary" onClick={() => onCreateChildUniverse(child.outcomeIndex)} disabled={accountState.address === undefined || !isMainnet || child.exists}>
+														{child.exists ? 'Deployed' : 'Deploy Universe'}
+													</button>
+												}
+											>
+												<div className="workflow-vault-grid">
+													<div>
+														<span className="metric-label">Outcome</span>
+														<strong>{child.outcomeLabel}</strong>
+													</div>
+													{child.exists ? (
+														<div>
+															<span className="metric-label">Reputation Token</span>
+															<strong>{formatAddress(child.reputationToken)}</strong>
+														</div>
+													) : undefined}
+													<div>
+														<span className="metric-label">Fork Time</span>
+														<strong>{child.forkTime === 0n ? 'Not forked yet' : formatTimestamp(child.forkTime)}</strong>
+													</div>
+												</div>
+											</EntityCard>
+										))}
+									</div>
+									{zoltarChildUniverseError === undefined ? undefined : <p className="notice error">{zoltarChildUniverseError}</p>}
+								</div>
+							)}
+						</>
 					)}
 				</EntityCard>
 			</div>

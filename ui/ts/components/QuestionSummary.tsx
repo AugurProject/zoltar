@@ -4,12 +4,14 @@ import type { MarketDetails } from '../types/contracts.js'
 type QuestionSummaryHeaderProps = {
 	className?: string
 	description: string
+	loading?: boolean
 	questionId: string
 	title: string
 }
 
 type QuestionSummaryProps = {
 	className?: string
+	loading?: boolean
 	question: MarketDetails | undefined
 	questionId: string
 }
@@ -22,7 +24,15 @@ function getQuestionDescription(question: MarketDetails | undefined) {
 	return question === undefined ? 'Loading question details...' : question.description.trim() === '' ? 'No description provided.' : question.description
 }
 
-export function QuestionSummaryHeader({ className = '', description, questionId, title }: QuestionSummaryHeaderProps) {
+export function QuestionSummaryHeader({ className = '', description, loading = false, questionId, title }: QuestionSummaryHeaderProps) {
+	if (loading) {
+		return (
+			<div className={`question-summary question-summary-header ${ className }`}>
+				<p className="detail question-summary-loading">Loading question details...</p>
+			</div>
+		)
+	}
+
 	return (
 		<div className={`question-summary question-summary-header ${ className }`}>
 			<div className="question-summary-heading">
@@ -34,7 +44,15 @@ export function QuestionSummaryHeader({ className = '', description, questionId,
 	)
 }
 
-export function QuestionSummary({ className = '', question, questionId }: QuestionSummaryProps) {
+export function QuestionSummary({ className = '', loading = false, question, questionId }: QuestionSummaryProps) {
+	if (loading || question === undefined) {
+		return (
+			<div className={`question-summary ${ className }`}>
+				<p className="detail question-summary-loading">Loading question details...</p>
+			</div>
+		)
+	}
+
 	const title = getQuestionTitle(question)
 	const description = getQuestionDescription(question)
 
