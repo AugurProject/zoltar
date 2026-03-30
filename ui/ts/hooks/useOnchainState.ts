@@ -45,6 +45,7 @@ export function useOnchainState() {
 	const hasInjectedWallet = useSignal(getInjectedEthereum() !== undefined)
 	const walletLoadCount = useSignal(0)
 	const deploymentStatusLoadCount = useSignal(0)
+	const deploymentStatusesLoaded = useSignal(false)
 	const walletBootstrapComplete = useSignal(false)
 	const refreshRequestId = useSignal(0)
 	const errorMessage = useSignal<string | undefined>(undefined)
@@ -130,6 +131,7 @@ export function useOnchainState() {
 					const statuses = await loadDeploymentStatuses(readClient)
 					if (requestId !== refreshRequestId.value) return
 					deploymentStatuses.value = statuses
+					deploymentStatusesLoaded.value = true
 				} catch (error) {
 					if (requestId !== refreshRequestId.value) return
 					errorMessage.value = getErrorMessage(error, 'Failed to refresh deployment status')
@@ -194,6 +196,7 @@ export function useOnchainState() {
 		deploymentStatuses: deploymentStatuses.value,
 		errorMessage: errorMessage.value,
 		hasInjectedWallet: hasInjectedWallet.value,
+		hasLoadedDeploymentStatuses: deploymentStatusesLoaded.value,
 		isLoadingDeploymentStatuses: deploymentStatusLoadCount.value > 0,
 		isRefreshing: walletLoadCount.value > 0,
 		setDeploymentStatuses,
