@@ -1,6 +1,8 @@
 import { EntityCard } from './EntityCard.js'
 import { LiquidationModal } from './LiquidationModal.js'
-import { formatAddress, formatCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
+import { QuestionSummaryHeader } from './QuestionSummary.js'
+import { UniverseLink } from './UniverseLink.js'
+import { formatAddress, formatCurrencyBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
@@ -54,24 +56,7 @@ export function SecurityPoolsOverviewSection({ accountState, closeLiquidationMod
 										<h4>Question</h4>
 										<span className="badge muted">{pool.marketDetails.marketType}</span>
 									</div>
-									<div className="workflow-question-grid">
-										<div>
-											<span className="metric-label">Question ID</span>
-											<strong>{pool.questionId}</strong>
-										</div>
-										<div>
-											<span className="metric-label">Created</span>
-											<strong>{formatTimestamp(pool.marketDetails.createdAt)}</strong>
-										</div>
-										<div>
-											<span className="metric-label">End Time</span>
-											<strong>{formatTimestamp(pool.marketDetails.endTime)}</strong>
-										</div>
-										<div>
-											<span className="metric-label">Outcomes</span>
-											<strong>{pool.marketDetails.outcomeLabels.length === 0 ? 'Scalar' : pool.marketDetails.outcomeLabels.join(', ')}</strong>
-										</div>
-									</div>
+									<QuestionSummaryHeader description={pool.marketDetails.description.trim() === '' ? 'No description provided.' : pool.marketDetails.description} questionId={pool.questionId} title={pool.marketDetails.title.trim() === '' ? 'Untitled question' : pool.marketDetails.title} />
 								</div>
 
 								<div className="entity-card-subsection">
@@ -86,7 +71,9 @@ export function SecurityPoolsOverviewSection({ accountState, closeLiquidationMod
 										</div>
 										<div>
 											<span className="metric-label">Universe</span>
-											<strong>{pool.universeId.toString()}</strong>
+											<strong>
+												<UniverseLink universeId={pool.universeId} />
+											</strong>
 										</div>
 										<div>
 											<span className="metric-label">Security Multiplier</span>

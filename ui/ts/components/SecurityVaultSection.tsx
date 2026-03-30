@@ -1,4 +1,5 @@
 import { EntityCard } from './EntityCard.js'
+import { UniverseLink } from './UniverseLink.js'
 import { formatAddress, formatCurrencyBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
@@ -31,7 +32,9 @@ export function SecurityVaultSection({ accountState, loadingSecurityVault, onApp
 								</div>
 								<div className="entity-metric">
 									<span className="metric-label">Universe</span>
-									<strong>{securityVaultDetails.universeId.toString()}</strong>
+									<strong>
+										<UniverseLink universeId={securityVaultDetails.universeId} />
+									</strong>
 								</div>
 								<div className="entity-metric">
 									<span className="metric-label">REP Deposit Share</span>

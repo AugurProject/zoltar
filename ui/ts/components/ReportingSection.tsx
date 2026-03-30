@@ -1,3 +1,5 @@
+import { QuestionSummaryHeader } from './QuestionSummary.js'
+import { UniverseLink } from './UniverseLink.js'
 import { formatCurrencyBalance, formatDuration, formatTimestamp } from '../lib/formatters.js'
 import { parseReportingOutcomeInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -48,16 +50,10 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 										<strong>{reportingDetails.escalationGameAddress}</strong>
 									</li>
 									<li>
-										<span>Market ID</span>
-										<strong>{reportingDetails.marketDetails.questionId}</strong>
-									</li>
-									<li>
-										<span>Market Title</span>
-										<strong>{reportingDetails.marketDetails.title}</strong>
-									</li>
-									<li>
 										<span>Universe</span>
-										<strong>{reportingDetails.universeId.toString()}</strong>
+										<strong>
+											<UniverseLink universeId={reportingDetails.universeId} />
+										</strong>
 									</li>
 									<li>
 										<span>Market End</span>
@@ -72,6 +68,13 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 										<strong>{getReportingOutcomeLabel(reportingDetails.resolution)}</strong>
 									</li>
 								</ul>
+								<div className="entity-card-subsection">
+									<div className="entity-card-subsection-header">
+										<h4>Question</h4>
+										<span className="badge muted">{reportingDetails.marketDetails.marketType}</span>
+									</div>
+									<QuestionSummaryHeader description={reportingDetails.marketDetails.description.trim() === '' ? 'No description provided.' : reportingDetails.marketDetails.description} questionId={reportingDetails.marketDetails.questionId} title={reportingDetails.marketDetails.title.trim() === '' ? 'Untitled question' : reportingDetails.marketDetails.title} />
+								</div>
 							</div>
 
 							<div className="status-card">
@@ -127,7 +130,9 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 							<p className="detail">Action: {reportingResult.action}</p>
 							<p className="detail">Outcome: {getReportingOutcomeLabel(reportingResult.outcome)}</p>
 							<p className="detail">Pool: {reportingResult.securityPoolAddress}</p>
-							<p className="detail">Universe: {reportingResult.universeId.toString()}</p>
+							<p className="detail">
+								Universe: <UniverseLink universeId={reportingResult.universeId} />
+							</p>
 							<p className="detail">Transaction: {reportingResult.hash}</p>
 						</div>
 					)}

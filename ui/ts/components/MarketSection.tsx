@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'preact/hooks'
 import { EntityCard } from './EntityCard.js'
 import { LoadableValue } from './LoadableValue.js'
+import { QuestionSummaryHeader } from './QuestionSummary.js'
+import { QuestionSummary } from './QuestionSummary.js'
+import { UniverseLink } from './UniverseLink.js'
 import { formatAddress, formatCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
 import { parseMarketTypeInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
+import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
 import { formatUniverseCollectionLabel } from '../lib/universe.js'
 import { readZoltarViewQueryParam, writeZoltarViewQueryParam } from '../lib/urlParams.js'
 import type { MarketSectionProps } from '../types/components.js'
@@ -22,20 +26,58 @@ function getZoltarView(value: string | undefined): ZoltarView {
 	}
 }
 
+function getScalarSliderProgress(tickIndex: bigint, numTicks: bigint) {
+	if (numTicks <= 0n) return 0
+	return Number((tickIndex * 100n) / numTicks)
+}
+
 export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZoltarQuestionCount, loadingZoltarQuestions, loadingZoltarUniverse, marketForm, marketCreating, marketError, marketResult, onApproveZoltarForkRep, onCreateChildUniverse, onCreateMarket, onForkZoltar, onLoadZoltarQuestions, onLoadZoltarUniverse, onMarketFormChange, onUseQuestionForFork, onUseQuestionForPool, onZoltarForkQuestionIdChange, zoltarChildUniverseError, zoltarForkAllowance, zoltarForkError, zoltarForkPending, zoltarForkQuestionId, zoltarForkRepBalance, zoltarQuestionCount, zoltarQuestions, zoltarUniverse }: MarketSectionProps) {
 	const [view, setView] = useState<ZoltarView>(() => getZoltarView(readZoltarViewQueryParam(window.location.search)))
-	const [scalarOutcomeIndex, setScalarOutcomeIndex] = useState('')
+	const [scalarOutcomeTick, setScalarOutcomeTick] = useState('0')
+	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
 	const [scalarDeployError, setScalarDeployError] = useState<string | undefined>(undefined)
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const rootUniverse = zoltarUniverse
 	const isScalarFork = rootUniverse?.forkQuestionMarketType === 'scalar'
+	const scalarQuestionDetails = rootUniverse?.forkQuestionDetails
 	const hasForked = rootUniverse?.hasForked === true
 	const currentUniverseName = rootUniverse === undefined ? 'Loading...' : formatUniverseCollectionLabel([rootUniverse.universeId])
 	const forkQuestionLabel = rootUniverse === undefined || rootUniverse.forkQuestionId === 0n ? 'Not forked yet' : rootUniverse.forkQuestionId.toString()
 	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= rootUniverse.forkThreshold
 	const hasEnoughApproval = rootUniverse !== undefined && zoltarForkAllowance !== undefined && zoltarForkAllowance >= rootUniverse.forkThreshold
 	const canFork = accountState.address !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && zoltarForkQuestionId.trim() !== '' && hasEnoughRep && hasEnoughApproval
-	const canDeployScalarChild = accountState.address !== undefined && isMainnet && rootUniverse !== undefined && hasForked && isScalarFork && scalarOutcomeIndex.trim() !== ''
+	const canDeployScalarChild = accountState.address !== undefined && isMainnet && rootUniverse !== undefined && hasForked && isScalarFork && scalarQuestionDetails !== undefined
+	const selectedQuestionDetails = marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)
+	let scalarCreatePreviewDetails:
+		| {
+				answerUnit: string
+				displayValueMax: bigint
+				displayValueMin: bigint
+				numTicks: bigint
+		  }
+		| undefined = undefined
+	if (marketForm.marketType === 'scalar') {
+		try {
+			const numTicks = parseBigIntInput(marketForm.numTicks, 'Number of ticks')
+			const displayValueMin = parseBigIntInput(marketForm.displayValueMin, 'Display value min')
+			const displayValueMax = parseBigIntInput(marketForm.displayValueMax, 'Display value max')
+			if (numTicks <= 0n || displayValueMax <= displayValueMin) throw new Error('Invalid scalar parameters')
+			scalarCreatePreviewDetails = {
+				answerUnit: marketForm.answerUnit.trim(),
+				displayValueMax,
+				displayValueMin,
+				numTicks,
+			}
+		} catch {
+			scalarCreatePreviewDetails = undefined
+		}
+	}
+
+	const selectedScalarTick = scalarQuestionDetails === undefined ? 0n : BigInt(scalarOutcomeTick)
+	const selectedScalarOutcomeLabel = scalarQuestionDetails === undefined ? undefined : formatScalarOutcomeLabel(scalarQuestionDetails, selectedScalarTick)
+	const selectedScalarOutcomeIndex = scalarQuestionDetails === undefined ? undefined : getScalarOutcomeIndex(scalarQuestionDetails, selectedScalarTick)
+	const selectedScalarProgress = scalarQuestionDetails === undefined ? 0 : getScalarSliderProgress(selectedScalarTick, scalarQuestionDetails.numTicks)
+	const createScalarProgress = scalarCreatePreviewDetails === undefined ? 0 : getScalarSliderProgress(BigInt(scalarCreatePreviewTick), scalarCreatePreviewDetails.numTicks)
 
 	useEffect(() => {
 		const nextSearch = writeZoltarViewQueryParam(window.location.search, view)
@@ -58,9 +100,9 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 					<div className="workflow-question-grid market-overview-grid">
 						{rootUniverse === undefined ? undefined : hasForked ? (
 							<>
-								<div>
+								<div className="market-overview-question-summary">
 									<span className="metric-label">Fork Question</span>
-									<strong>{forkQuestionLabel}</strong>
+									{forkQuestionLabel === 'Not forked yet' ? <strong>{forkQuestionLabel}</strong> : <QuestionSummaryHeader description={rootUniverse.forkQuestionDetails === undefined ? 'Loading question details...' : rootUniverse.forkQuestionDetails.description.trim() === '' ? 'No description provided.' : rootUniverse.forkQuestionDetails.description} questionId={forkQuestionLabel} title={rootUniverse.forkQuestionDetails === undefined ? 'Question details' : rootUniverse.forkQuestionDetails.title.trim() === '' ? 'Untitled question' : rootUniverse.forkQuestionDetails.title} />}
 								</div>
 								<div>
 									<span className="metric-label">Fork Time</span>
@@ -98,7 +140,7 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 							) : (
 								<div className="entity-card-list">
 									{rootUniverse.childUniverses.map(child => (
-										<EntityCard key={child.universeId.toString()} className="compact" title={`Universe ${ child.universeId.toString() }`} badge={<span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}>
+										<EntityCard key={child.universeId.toString()} className="compact" title={<UniverseLink universeId={child.universeId} />} badge={<span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}>
 											<div className="workflow-vault-grid">
 												<div>
 													<span className="metric-label">Outcome</span>
@@ -118,34 +160,66 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 								</div>
 							)}
 							<div className="market-scalar-deploy">
-								<label className="field">
-									<span>Deploy New Child Universe</span>
-									<input
-										value={scalarOutcomeIndex}
-										onInput={event => {
-											setScalarDeployError(undefined)
-											setScalarOutcomeIndex(event.currentTarget.value)
-										}}
-										placeholder="Outcome index"
-										inputMode="numeric"
-									/>
-								</label>
-								<div className="actions">
-									<button
-										className="secondary"
-										onClick={() => {
-											try {
-												setScalarDeployError(undefined)
-												onCreateChildUniverse(parseBigIntInput(scalarOutcomeIndex, 'Outcome index'))
-											} catch (error) {
-												setScalarDeployError(error instanceof Error ? error.message : 'Outcome index is invalid')
-											}
-										}}
-										disabled={!canDeployScalarChild}
-									>
-										Deploy Universe
-									</button>
-								</div>
+								{scalarQuestionDetails === undefined ? (
+									<p className="detail">Loading scalar range...</p>
+								) : (
+									<>
+										<label className="field scalar-slider-field">
+											<span>Select Child Universe</span>
+											<div className="scalar-slider-rail">
+												<div className="scalar-slider-track" />
+												<div className="scalar-slider-fill" style={{ width: `${ selectedScalarProgress }%` }} />
+												<input
+													type="range"
+													min="0"
+													max={scalarQuestionDetails.numTicks.toString()}
+													step="1"
+													value={scalarOutcomeTick}
+													aria-valuetext={selectedScalarOutcomeLabel}
+													onInput={event => {
+														setScalarDeployError(undefined)
+														setScalarOutcomeTick(event.currentTarget.value)
+													}}
+												/>
+											</div>
+										</label>
+										<div className="workflow-question-grid market-scalar-deploy-grid scalar-slider-stats">
+											<div>
+												<span className="metric-label">Min Value</span>
+												<strong>{formatScalarOutcomeLabel(scalarQuestionDetails, 0n)}</strong>
+											</div>
+											<div>
+												<span className="metric-label">Selected Tick</span>
+												<strong>{`${ scalarOutcomeTick } / ${ scalarQuestionDetails.numTicks.toString() }`}</strong>
+											</div>
+											<div>
+												<span className="metric-label">Selected Value</span>
+												<strong>{selectedScalarOutcomeLabel}</strong>
+											</div>
+											<div>
+												<span className="metric-label">Max Value</span>
+												<strong>{formatScalarOutcomeLabel(scalarQuestionDetails, scalarQuestionDetails.numTicks)}</strong>
+											</div>
+										</div>
+										<div className="actions">
+											<button
+												className="secondary"
+												onClick={() => {
+													try {
+														if (selectedScalarOutcomeIndex === undefined) throw new Error('Selected tick is invalid')
+														setScalarDeployError(undefined)
+														onCreateChildUniverse(selectedScalarOutcomeIndex)
+													} catch (error) {
+														setScalarDeployError(error instanceof Error ? error.message : 'Selected tick is invalid')
+													}
+												}}
+												disabled={!canDeployScalarChild}
+											>
+												Deploy Universe
+											</button>
+										</div>
+									</>
+								)}
 								{scalarDeployError === undefined ? undefined : <p className="notice error">{scalarDeployError}</p>}
 							</div>
 							{zoltarChildUniverseError === undefined ? undefined : <p className="notice error">{zoltarChildUniverseError}</p>}
@@ -160,7 +234,7 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 									<EntityCard
 										key={child.universeId.toString()}
 										className="compact"
-										title={`Universe ${ child.universeId.toString() }`}
+										title={<UniverseLink universeId={child.universeId} />}
 										badge={<span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
 										actions={
 											<button className="secondary" onClick={() => onCreateChildUniverse(child.outcomeIndex)} disabled={accountState.address === undefined || !isMainnet || child.exists}>
@@ -233,12 +307,14 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 											<div className="actions">
 												<button
 													className="secondary"
+													disabled={hasForked}
 													onClick={() => {
+														if (hasForked) return
 														onUseQuestionForFork(question.questionId)
 														setView('fork')
 													}}
 												>
-													Use For Fork
+													{hasForked ? 'Already Forked' : 'Use For Fork'}
 												</button>
 												<button className="secondary" onClick={() => onUseQuestionForPool(question.questionId)} disabled={question.marketType !== 'binary'}>
 													Use For Create Pool
@@ -246,40 +322,7 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 											</div>
 										}
 									>
-										<div className="workflow-question-grid">
-											<div>
-												<span className="metric-label">Question ID</span>
-												<strong>{question.questionId}</strong>
-											</div>
-											<div>
-												<span className="metric-label">Created</span>
-												<strong>{formatTimestamp(question.createdAt)}</strong>
-											</div>
-											<div>
-												<span className="metric-label">End Time</span>
-												<strong>{formatTimestamp(question.endTime)}</strong>
-											</div>
-											<div>
-												<span className="metric-label">Outcomes</span>
-												<strong>{question.outcomeLabels.length === 0 ? 'Scalar' : question.outcomeLabels.join(', ')}</strong>
-											</div>
-											{question.marketType === 'scalar' ? (
-												<>
-													<div>
-														<span className="metric-label">Ticks</span>
-														<strong>{question.numTicks.toString()}</strong>
-													</div>
-													<div>
-														<span className="metric-label">Display Range</span>
-														<strong>{question.answerUnit === '' ? `${ question.displayValueMin.toString() } to ${ question.displayValueMax.toString() }` : `${ question.displayValueMin.toString() } to ${ question.displayValueMax.toString() } ${ question.answerUnit }`}</strong>
-													</div>
-													<div>
-														<span className="metric-label">Answer Unit</span>
-														<strong>{question.answerUnit === '' ? 'None' : question.answerUnit}</strong>
-													</div>
-												</>
-											) : undefined}
-										</div>
+										<QuestionSummary question={question} questionId={question.questionId} />
 									</EntityCard>
 								))}
 							</div>
@@ -297,12 +340,14 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 									<div className="actions">
 										<button
 											className="secondary"
+											disabled={hasForked}
 											onClick={() => {
+												if (hasForked) return
 												onUseQuestionForFork(marketResult.questionId)
 												setView('fork')
 											}}
 										>
-											Use For Fork
+											{hasForked ? 'Already Forked' : 'Use For Fork'}
 										</button>
 										<button className="secondary" onClick={() => onUseQuestionForPool(marketResult.questionId)} disabled={marketResult.marketType !== 'binary'}>
 											Use For Create Pool
@@ -311,10 +356,7 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 								}
 							>
 								<div className="question-preview-body">
-									<div>
-										<span className="metric-label">Question ID</span>
-										<strong>{marketResult.questionId}</strong>
-									</div>
+									<QuestionSummary question={selectedQuestionDetails} questionId={marketResult.questionId} />
 									<div>
 										<span className="metric-label">Creation Tx</span>
 										<strong>{marketResult.createQuestionHash}</strong>
@@ -388,6 +430,41 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 									</div>
 								) : undefined}
 
+								{marketForm.marketType === 'scalar' ? (
+									scalarCreatePreviewDetails === undefined ? (
+										<p className="detail">Enter valid scalar parameters to preview the tick slider.</p>
+									) : (
+										<div className="market-scalar-deploy">
+											<label className="field scalar-slider-field">
+												<span>Scalar Preview</span>
+												<div className="scalar-slider-rail">
+													<div className="scalar-slider-track" />
+													<div className="scalar-slider-fill" style={{ width: `${ createScalarProgress }%` }} />
+													<input type="range" min="0" max={scalarCreatePreviewDetails.numTicks.toString()} step="1" value={scalarCreatePreviewTick} aria-valuetext={formatScalarOutcomeLabel(scalarCreatePreviewDetails, BigInt(scalarCreatePreviewTick))} onInput={event => setScalarCreatePreviewTick(event.currentTarget.value)} />
+												</div>
+											</label>
+											<div className="workflow-question-grid market-scalar-deploy-grid scalar-slider-stats">
+												<div>
+													<span className="metric-label">Min Value</span>
+													<strong>{formatScalarOutcomeLabel(scalarCreatePreviewDetails, 0n)}</strong>
+												</div>
+												<div>
+													<span className="metric-label">Selected Tick</span>
+													<strong>{`${ scalarCreatePreviewTick } / ${ scalarCreatePreviewDetails.numTicks.toString() }`}</strong>
+												</div>
+												<div>
+													<span className="metric-label">Selected Value</span>
+													<strong>{formatScalarOutcomeLabel(scalarCreatePreviewDetails, BigInt(scalarCreatePreviewTick))}</strong>
+												</div>
+												<div>
+													<span className="metric-label">Max Value</span>
+													<strong>{formatScalarOutcomeLabel(scalarCreatePreviewDetails, scalarCreatePreviewDetails.numTicks)}</strong>
+												</div>
+											</div>
+										</div>
+									)
+								) : undefined}
+
 								<div className="actions">
 									<button onClick={onCreateMarket} disabled={accountState.address === undefined || !isMainnet || marketCreating}>
 										{marketCreating ? 'Creating Question...' : 'Create Question'}
@@ -445,9 +522,11 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 								</label>
 
 								<div className="actions">
-									<button className="secondary" onClick={onApproveZoltarForkRep} disabled={accountState.address === undefined || !isMainnet || rootUniverse === undefined || zoltarForkPending || hasEnoughApproval || hasForked}>
-										{zoltarForkPending ? 'Waiting...' : hasEnoughApproval ? 'Threshold Approved' : 'Approve REP Threshold'}
-									</button>
+									{hasForked ? undefined : (
+										<button className="secondary" onClick={onApproveZoltarForkRep} disabled={accountState.address === undefined || !isMainnet || rootUniverse === undefined || zoltarForkPending || hasEnoughApproval}>
+											{zoltarForkPending ? 'Waiting...' : hasEnoughApproval ? 'Threshold Approved' : 'Approve REP Threshold'}
+										</button>
+									)}
 									<button onClick={onForkZoltar} disabled={!canFork}>
 										{zoltarForkPending ? 'Waiting...' : 'Fork Zoltar'}
 									</button>

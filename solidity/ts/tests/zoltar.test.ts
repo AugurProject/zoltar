@@ -7,10 +7,11 @@ import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, c
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, isZoltarDeployed, getRepTokensMigratedRepBalance, migrateInternalRep, prepareRepForMigration } from '../testsuite/simulator/utils/contracts/zoltar'
-import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion, getAnswerOptionName, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureDefined } from '../testsuite/simulator/utils/testUtils'
 import { keccak256, encodeAbiParameters } from 'viem'
 import { Zoltar_Zoltar } from '../types/contractArtifact'
+import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../../../ui/ts/lib/scalarOutcome.js'
 
 // Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
 const FORKER_DEPOSIT_FRACTION = 20n
@@ -224,6 +225,28 @@ describe('Contract Test Suite', () => {
 		assert.deepStrictEqual(emptyPage[0], [], 'out of range paging should return no outcome indexes')
 		assert.deepStrictEqual(emptyPage[1], [], 'out of range paging should return no child universe ids')
 		assert.deepStrictEqual(emptyPage[2], [], 'out of range paging should return no child universes')
+	})
+
+	test('scalar slider values match the contract', async () => {
+		const questionData = {
+			title: 'scalar slider preview',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 1000n,
+			displayValueMin: -500n * 10n ** 18n,
+			displayValueMax: 500n * 10n ** 18n,
+			answerUnit: 'km',
+		}
+		await createQuestion(client, questionData, [])
+		const questionId = getQuestionId(questionData, [])
+
+		for (const tickIndex of [0n, 250n, 500n, 750n, 1000n]) {
+			const outcomeIndex = getScalarOutcomeIndex(questionData, tickIndex)
+			const helperLabel = formatScalarOutcomeLabel(questionData, tickIndex)
+			const contractLabel = await getAnswerOptionName(client, questionId, outcomeIndex)
+			assert.strictEqual(helperLabel, contractLabel, `tick ${ tickIndex.toString() } should match the contract`)
+		}
 	})
 
 	test('forkUniverse fails for non-existent question', async () => {

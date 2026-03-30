@@ -1,3 +1,5 @@
+import { QuestionSummaryHeader } from './QuestionSummary.js'
+import { UniverseLink } from './UniverseLink.js'
 import { formatCurrencyBalance, formatDuration, formatTimestamp } from '../lib/formatters.js'
 import { AUCTION_TIME_SECONDS, estimateRepPurchased, getForkStageDescription, getOutcomeActionLabel, getSystemStateLabel, getTimeRemaining, MIGRATION_TIME_SECONDS } from '../lib/forkAuction.js'
 import { parseReportingOutcomeInput } from '../lib/inputs.js'
@@ -44,19 +46,13 @@ export function ForkAuctionSection({ accountState, forkAuctionDetails, forkAucti
 									</li>
 									<li>
 										<span>Universe</span>
-										<strong>{forkAuctionDetails.universeId.toString()}</strong>
+										<strong>
+											<UniverseLink universeId={forkAuctionDetails.universeId} />
+										</strong>
 									</li>
 									<li>
 										<span>Parent Pool</span>
 										<strong>{forkAuctionDetails.parentSecurityPoolAddress}</strong>
-									</li>
-									<li>
-										<span>Question ID</span>
-										<strong>{forkAuctionDetails.marketDetails.questionId}</strong>
-									</li>
-									<li>
-										<span>Market Title</span>
-										<strong>{forkAuctionDetails.marketDetails.title}</strong>
 									</li>
 									<li>
 										<span>System State</span>
@@ -71,6 +67,13 @@ export function ForkAuctionSection({ accountState, forkAuctionDetails, forkAucti
 										<strong>{getReportingOutcomeLabel(forkAuctionDetails.forkOutcome)}</strong>
 									</li>
 								</ul>
+								<div className="entity-card-subsection">
+									<div className="entity-card-subsection-header">
+										<h4>Question</h4>
+										<span className="badge muted">{forkAuctionDetails.marketDetails.marketType}</span>
+									</div>
+									<QuestionSummaryHeader description={forkAuctionDetails.marketDetails.description.trim() === '' ? 'No description provided.' : forkAuctionDetails.marketDetails.description} questionId={forkAuctionDetails.marketDetails.questionId} title={forkAuctionDetails.marketDetails.title.trim() === '' ? 'Untitled question' : forkAuctionDetails.marketDetails.title} />
+								</div>
 								<p className="detail">{getForkStageDescription(forkAuctionDetails)}</p>
 							</div>
 
@@ -160,7 +163,9 @@ export function ForkAuctionSection({ accountState, forkAuctionDetails, forkAucti
 									<p className="panel-label">Latest Fork / Auction Action</p>
 									<p className="detail">Action: {forkAuctionResult.action}</p>
 									<p className="detail">Pool: {forkAuctionResult.securityPoolAddress}</p>
-									<p className="detail">Universe: {forkAuctionResult.universeId.toString()}</p>
+									<p className="detail">
+										Universe: <UniverseLink universeId={forkAuctionResult.universeId} />
+									</p>
 									<p className="detail">Transaction: {forkAuctionResult.hash}</p>
 								</div>
 							)}

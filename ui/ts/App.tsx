@@ -25,6 +25,7 @@ import { readSecurityPoolQueryParam, readUniverseQueryParam, writeSecurityPoolQu
 
 export function App() {
 	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
+	const locationRevision = useSignal(0)
 	const deployNextMissingPending = useSignal(false)
 	const onTransaction = (hash: Hash) => {
 		transactionState.value = {
@@ -52,7 +53,7 @@ export function App() {
 		refreshState,
 	}
 	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
-	const { approveZoltarForkRep, createChildUniverse: createZoltarChildUniverse, createMarket, forkZoltar, loadingZoltarForkAccess, loadingZoltarQuestionCount, loadingZoltarQuestions, loadingZoltarUniverse, loadZoltarQuestions, loadZoltarUniverse, marketCreating, marketError, marketForm, marketResult, setMarketForm, setZoltarForkQuestionId, zoltarChildUniverseError, zoltarForkAllowance, zoltarForkError, zoltarForkPending, zoltarForkQuestionId, zoltarForkRepBalance, zoltarQuestionCount, zoltarQuestions, zoltarUniverse } = useMarketCreation({ ...baseHookConfig, accountRepBalance: accountState.repBalance, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
+	const { approveZoltarForkRep, createChildUniverse: createZoltarChildUniverse, createMarket, forkZoltar, loadingZoltarForkAccess, loadingZoltarQuestionCount, loadingZoltarQuestions, loadingZoltarUniverse, loadZoltarQuestions, loadZoltarUniverse, marketCreating, marketError, marketForm, marketResult, setMarketForm, setZoltarForkQuestionId, zoltarChildUniverseError, zoltarForkAllowance, zoltarForkError, zoltarForkPending, zoltarForkQuestionId, zoltarForkRepBalance, zoltarQuestionCount, zoltarQuestions, zoltarUniverse } = useMarketCreation({ ...baseHookConfig, activeUniverseId: readUniverseQueryParam(window.location.search) ?? 0n, accountRepBalance: accountState.repBalance, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({ ...baseHookConfig, deploymentStatuses })
 	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, redeemRep, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult, setSecurityVaultForm, updateVaultFees } = useSecurityVaultOperations(baseHookConfig)
 	const { approveToken1, approveToken2, loadOracleManager, loadingOracleManager, onQueueOperation, onRequestPrice, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails, setOpenOracleForm, settleReport, submitInitialReport } = useOpenOracleOperations(baseHookConfig)
@@ -87,6 +88,7 @@ export function App() {
 	const activeUniverseId = readUniverseQueryParam(window.location.search) ?? 0n
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const activeSecurityPoolAddress = securityPoolAddress.value
+	void locationRevision.value
 
 	useEffect(() => {
 		if (!walletBootstrapComplete) return
@@ -102,6 +104,17 @@ export function App() {
 		const nextSearch = writeSecurityPoolQueryParam(window.location.search, activeSecurityPoolAddress === '' ? undefined : activeSecurityPoolAddress)
 		window.history.replaceState({}, '', `${ window.location.pathname }${ nextSearch }${ window.location.hash }`)
 	}, [activeSecurityPoolAddress])
+
+	useEffect(() => {
+		const onPopState = () => {
+			locationRevision.value += 1
+		}
+
+		window.addEventListener('popstate', onPopState)
+		return () => {
+			window.removeEventListener('popstate', onPopState)
+		}
+	}, [])
 
 	useEffect(() => {
 		setSecurityVaultForm(current => current.securityPoolAddress === activeSecurityPoolAddress ? current : { ...current, securityPoolAddress: activeSecurityPoolAddress })
