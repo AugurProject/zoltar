@@ -42,7 +42,7 @@ export function App() {
 		transactionState.value = markTransactionFinished(transactionState.value)
 	}
 	const { navigate, route } = useHashRoute()
-	const { accountState, connectWallet, deploymentStatuses, errorMessage: walletErrorMessage, hasInjectedWallet, isLoadingDeploymentStatuses, isRefreshing, refreshState, setDeploymentStatuses, walletBootstrapComplete } = useOnchainState()
+	const { accountState, connectWallet, deploymentStatuses, errorMessage: walletErrorMessage, hasInjectedWallet, hasLoadedDeploymentStatuses, isLoadingDeploymentStatuses, isRefreshing, refreshState, setDeploymentStatuses, walletBootstrapComplete } = useOnchainState()
 	const baseHookConfig = {
 		accountAddress: accountState.address,
 		onTransaction,
@@ -79,11 +79,11 @@ export function App() {
 	const securityPoolAddress = useSignal(readSecurityPoolQueryParam(window.location.search) ?? '')
 
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
-	const deploymentComplete = deploymentStatuses.length > 0 && deploymentStatuses.every(step => step.deployed)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
 	const lastCreatedQuestionId = marketResult?.questionId
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const wrongNetworkMessage = accountState.address !== undefined && !isMainnet ? 'Switch your wallet to Ethereum mainnet.' : undefined
+	const showDeployTab = hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed)
 	const activeUniverseId = readUniverseQueryParam(window.location.search) ?? 0n
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const activeSecurityPoolAddress = securityPoolAddress.value
@@ -140,7 +140,18 @@ export function App() {
 
 	return (
 		<main>
-			<OverviewPanels accountState={accountState} universeLabel={universeLabel} isRefreshing={isRefreshing} onRefresh={() => void refreshState()} onConnect={() => void connectWallet()} />
+			<div className='top-shell'>
+				<OverviewPanels accountState={accountState} universeLabel={universeLabel} isRefreshing={isRefreshing} onRefresh={() => void refreshState()} onConnect={() => void connectWallet()} />
+				<TabNavigation
+					showDeployTab={showDeployTab}
+					route={route}
+					deployRoute={DEPLOY_ROUTE}
+					marketRoute={ZOLTAR_ROUTE}
+					securityPoolsRoute={SECURITY_POOLS_ROUTE}
+					openOracleRoute={OPEN_ORACLE_ROUTE}
+					onRouteChange={nextRoute => navigate(nextRoute)}
+				/>
+			</div>
 
 			{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected.</p>}
 			{errorMessage === undefined ? undefined : <p className='notice error'>{errorMessage}</p>}

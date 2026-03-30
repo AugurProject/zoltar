@@ -64,6 +64,11 @@ main {
 .top-shell {
 	display: grid;
 	gap: 0;
+	border: 1px solid rgba(96, 165, 250, 0.22);
+	background: linear-gradient(180deg, rgba(11, 25, 44, 0.88) 0%, rgba(7, 14, 26, 0.94) 100%);
+	box-shadow:
+		0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+		0 18px 40px rgba(0, 0, 0, 0.18);
 }
 
 h1 {
@@ -375,11 +380,9 @@ button.destructive:hover:not(:disabled) {
 
 .overview-wallet-panel {
 	padding: 0;
-	border: 1px solid rgba(96, 165, 250, 0.22);
-	background: linear-gradient(180deg, rgba(11, 25, 44, 0.88) 0%, rgba(7, 14, 26, 0.94) 100%);
-	box-shadow:
-		0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-		0 18px 40px rgba(0, 0, 0, 0.18);
+	border: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .grid {
@@ -504,9 +507,9 @@ button.destructive:hover:not(:disabled) {
 	justify-content: flex-start;
 	align-items: center;
 	gap: 0.5rem;
-	padding: 0.5rem 0.25rem 0.75rem 0;
+	padding: 0.7rem 1.1rem 0.85rem;
 	margin-top: 0;
-	border: 1px solid rgba(96, 165, 250, 0.18);
+	border-top: 1px solid var(--panel-rule);
 	border-radius: 0;
 	background: rgba(5, 11, 21, 0.86);
 	backdrop-filter: blur(14px);
