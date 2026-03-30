@@ -2,7 +2,6 @@ import { useSignal } from '@preact/signals'
 import type { Hash } from 'viem'
 import { useEffect } from 'preact/hooks'
 import { AppRouteContent } from './components/AppRouteContent.js'
-import { HeroSection } from './components/HeroSection.js'
 import { OverviewPanels } from './components/OverviewPanels.js'
 import { TabNavigation } from './components/TabNavigation.js'
 import { useDeploymentFlow } from './hooks/useDeploymentFlow.js'
@@ -142,8 +141,6 @@ export function App() {
 	return (
 		<main>
 			<OverviewPanels accountState={accountState} universeLabel={universeLabel} isRefreshing={isRefreshing} onRefresh={() => void refreshState()} onConnect={() => void connectWallet()} />
-
-			<HeroSection />
 
 			{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected.</p>}
 			{errorMessage === undefined ? undefined : <p className='notice error'>{errorMessage}</p>}

@@ -10,6 +10,11 @@ Run each command individually and address any issues before proceeding to the ne
    ```bash
    bun tsc
    ```
+   - **UI-only exception**: If the change only affects `ui/` and does not touch `solidity/`, generated contract artifacts, or anything that depends on refreshed contract output, run:
+     ```bash
+     bun x tsc --noEmit
+     ```
+   - **Contract exception**: If contracts or generated contract outputs changed, run the full `bun tsc`.
 
 2. **Tests**: Run all tests
     ```bash
@@ -81,6 +86,7 @@ This test-driven approach ensures:
 
 - **Always run the full test suite**: `bun test` runs all tests and catches cross-module issues.
   - **UI-only work**: When the change only affects `ui/`, you do not need to run `bun test`; the test suite here applies to Solidity and shared code paths, not UI-only edits.
+- **Prefer the fast UI typecheck when eligible**: For `ui/`-only changes, use `bun x tsc --noEmit`. If `solidity/` or generated contract outputs changed, use the full `bun tsc`.
 
 ## Commands
 
@@ -88,5 +94,7 @@ This test-driven approach ensures:
 
 ## Notes
 
+- This is a TypeScript project. Do not inspect or work from `js/` files anywhere in the repository when there is a corresponding TypeScript source file.
 - The project compiles TypeScript sources to JavaScript before testing (`bun tsc`). This happens automatically via the test scripts.
-- If you edit files directly in the `js/` directory, changes may be overwritten by TypeScript compilation. Always edit the corresponding `.ts` files in the `ts/` directory.
+- The root `bun tsc` runs the full generation pipeline before type-checking. Use `bun x tsc --noEmit` only for `ui/`-only changes that do not require regenerated contract outputs.
+- Never edit files directly in any `js/` directory. Changes may be overwritten by TypeScript compilation. Always use the corresponding `.ts` or `.tsx` source files.

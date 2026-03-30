@@ -12,8 +12,6 @@ export type DeploymentSectionProps = {
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 }
 
-export type HeroSectionProps = {}
-
 export type OverviewPanelsProps = {
 	accountState: AccountState
 	universeLabel: string
