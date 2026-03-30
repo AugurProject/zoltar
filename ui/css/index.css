@@ -54,11 +54,11 @@ body::before {
 }
 
 main {
-	width: min(74rem, 100%);
+	width: min(88rem, 100%);
 	margin: 0 auto;
-	padding: 2rem 1.25rem 3.25rem;
+	padding: 1.25rem 1.25rem 3rem;
 	display: grid;
-	gap: 1.25rem;
+	gap: 1rem;
 }
 
 h1 {
@@ -225,29 +225,6 @@ button.destructive:hover:not(:disabled) {
 	border-color: rgba(255, 112, 143, 0.42);
 }
 
-.hero {
-	position: relative;
-	min-width: 0;
-	display: grid;
-	grid-template-columns: minmax(0, 1.45fr) minmax(14rem, 0.85fr);
-	gap: 1.25rem;
-	align-items: end;
-	padding: 1.5rem 0 1.25rem 1rem;
-	border-bottom: 1px solid var(--panel-rule);
-	background: transparent;
-	box-shadow: none;
-}
-
-.hero::before {
-	content: '';
-	position: absolute;
-	left: 0;
-	top: 1.7rem;
-	bottom: 1rem;
-	width: 2px;
-	background: linear-gradient(180deg, var(--accent), rgba(124, 108, 255, 0.2));
-}
-
 .panel {
 	min-width: 0;
 	padding: 1rem 0 0.25rem;
@@ -255,24 +232,6 @@ button.destructive:hover:not(:disabled) {
 	border-radius: 0;
 	background: transparent;
 	box-shadow: none;
-}
-
-.hero-copy {
-	display: grid;
-	gap: 0.5rem;
-	min-width: 0;
-	max-width: 48rem;
-}
-
-.hero-actions {
-	display: grid;
-	gap: 0.5rem;
-	justify-items: start;
-	justify-self: end;
-	max-width: 18rem;
-	align-content: end;
-	padding-bottom: 0.25rem;
-	padding-right: 0.25rem;
 }
 
 .hero-status {
@@ -319,15 +278,9 @@ button.destructive:hover:not(:disabled) {
 	color: var(--muted);
 }
 
-.lede,
 .detail {
 	line-height: 1.6;
 	color: var(--muted);
-}
-
-.lede {
-	font-size: 1.06rem;
-	max-width: 44rem;
 }
 
 .actions {
@@ -338,7 +291,7 @@ button.destructive:hover:not(:disabled) {
 }
 
 .notice {
-	margin-top: 1rem;
+	margin-top: 0;
 	padding: 0.75rem 0;
 	border-radius: 0;
 	line-height: 1.5;
@@ -396,7 +349,7 @@ button.destructive:hover:not(:disabled) {
 .route-shell {
 	min-width: 0;
 	margin: 0;
-	padding: 0;
+	padding: 0.25rem 0 0;
 	border: 0;
 }
 
@@ -408,7 +361,7 @@ button.destructive:hover:not(:disabled) {
 
 .overview-shell {
 	display: grid;
-	gap: 1rem;
+	gap: 0.75rem;
 }
 
 .overview-panel {
@@ -416,8 +369,12 @@ button.destructive:hover:not(:disabled) {
 }
 
 .overview-wallet-panel {
-	padding-top: 0.5rem;
-	padding-bottom: 0.25rem;
+	padding: 0;
+	border: 1px solid rgba(96, 165, 250, 0.22);
+	background: linear-gradient(180deg, rgba(11, 25, 44, 0.88) 0%, rgba(7, 14, 26, 0.94) 100%);
+	box-shadow:
+		0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+		0 18px 40px rgba(0, 0, 0, 0.18);
 }
 
 .grid {
@@ -442,9 +399,11 @@ button.destructive:hover:not(:disabled) {
 
 .overview-wallet-header {
 	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: center;
+	align-items: start;
 	column-gap: 1rem;
-	padding-top: 0.25rem;
+	row-gap: 1rem;
+	padding: 1rem 1.1rem;
+	border-bottom: 0;
 }
 
 .panel-copy {
@@ -467,23 +426,46 @@ button.destructive:hover:not(:disabled) {
 	max-width: 32rem;
 }
 
+.overview-wallet-summary {
+	display: grid;
+	gap: 1rem;
+	min-width: 0;
+}
+
+.overview-brand-lockup {
+	display: grid;
+	gap: 0;
+	min-width: 0;
+}
+
+.overview-app-title {
+	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-size: clamp(0.95rem, 1vw, 1.1rem);
+	line-height: 1.15;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
 .overview-actions {
 	justify-content: flex-end;
 	align-content: start;
+	padding-top: 0.2rem;
 }
 
 .overview-inline-metrics {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 1rem;
+	gap: 0.85rem 1.25rem;
 	overflow-x: visible;
 	min-width: 0;
-	padding-bottom: 0.25rem;
+	padding-bottom: 0;
 }
 
 .overview-inline-metrics > div {
 	flex: 0 0 auto;
 	min-width: max-content;
+	padding-top: 0.55rem;
+	border-top: 1px solid rgba(96, 165, 250, 0.14);
 }
 
 .overview-inline-metrics strong {
@@ -500,24 +482,29 @@ button.destructive:hover:not(:disabled) {
 	letter-spacing: -0.01em;
 }
 
+.overview-address-metric {
+	flex-basis: min(24rem, 100%);
+}
+
 .contract-panel {
 	margin-top: 1.25rem;
 }
 
 .tab-nav {
-	position: static;
-	z-index: 10;
+	position: sticky;
+	top: 0.75rem;
+	z-index: 20;
 	display: flex;
 	flex-wrap: nowrap;
 	justify-content: flex-start;
 	align-items: center;
 	gap: 0.5rem;
-	padding: 0.5rem 0.25rem 0.75rem 0;
-	margin-top: 0.75rem;
-	border: 0;
-	border-bottom: 1px solid var(--panel-rule);
+	padding: 0.75rem 0.85rem;
+	margin-top: 0;
+	border: 1px solid rgba(96, 165, 250, 0.18);
 	border-radius: 0;
-	background: transparent;
+	background: rgba(5, 11, 21, 0.86);
+	backdrop-filter: blur(14px);
 	overflow-x: auto;
 	scrollbar-width: thin;
 }
@@ -1255,20 +1242,7 @@ button:focus-visible {
 		padding: 1.5rem 0.9rem 2.5rem;
 	}
 
-	.hero {
-		grid-template-columns: 1fr;
-		padding-left: 0.85rem;
-		padding-top: 1rem;
-	}
-
-	.hero-actions {
-		justify-self: start;
-		max-width: none;
-		padding-right: 0;
-	}
-
 	.grid,
-	.overview-inline-metrics,
 	.escalation-metrics,
 	.escalation-sides,
 	.field-row,
@@ -1286,7 +1260,17 @@ button:focus-visible {
 	}
 
 	.overview-inline-metrics {
-		grid-template-columns: 1fr;
+		gap: 0.75rem;
+	}
+
+	.overview-inline-metrics > div {
+		flex: 1 1 100%;
+		min-width: 0;
+	}
+
+	.tab-nav {
+		top: 0.5rem;
+		padding: 0.65rem 0.75rem;
 	}
 
 	.contract-row {
