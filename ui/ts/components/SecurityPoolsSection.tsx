@@ -19,7 +19,7 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 		<section className="panel market-panel">
 			<div className="market-header">
 				<div>
-					<h2>Security Pools</h2>
+					<h2></h2>
 				</div>
 			</div>
 
