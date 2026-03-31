@@ -52,6 +52,7 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 	const zoltarForkAllowance = useSignal<bigint | undefined>(undefined)
 	const zoltarForkRepBalance = useSignal<bigint | undefined>(undefined)
 	const loadingZoltarForkAccess = useSignal(false)
+	const zoltarForkAccessLoadRequestId = useSignal(0)
 	const zoltarChildUniverseError = useSignal<string | undefined>(undefined)
 
 	useEffect(
@@ -80,15 +81,17 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 			return
 		}
 
+		const requestId = zoltarForkAccessLoadRequestId.value + 1
+		zoltarForkAccessLoadRequestId.value = requestId
 		loadingZoltarForkAccess.value = true
 		try {
 			const readClient = createReadClient()
 			const [allowance, balance] = await Promise.all([loadErc20Allowance(readClient, zoltarUniverse.value.reputationToken, accountAddress, getZoltarAddress()), loadErc20Balance(readClient, zoltarUniverse.value.reputationToken, accountAddress)])
-			if (!isMounted.value) return
+			if (!isMounted.value || requestId !== zoltarForkAccessLoadRequestId.value) return
 			zoltarForkAllowance.value = allowance
 			zoltarForkRepBalance.value = balance
 		} finally {
-			if (isMounted.value) {
+			if (isMounted.value && requestId === zoltarForkAccessLoadRequestId.value) {
 				loadingZoltarForkAccess.value = false
 			}
 		}

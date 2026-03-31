@@ -29,11 +29,13 @@ function formatSignedDecimal(value: bigint) {
 }
 
 function validateTickIndex(question: ScalarQuestionDetails, tickIndex: bigint) {
+	if (question.numTicks <= 0n) throw new Error('Scalar question numTicks must be positive')
 	if (tickIndex < 0n || tickIndex > question.numTicks) throw new Error('Tick index is out of range')
 }
 
 export function getScalarSliderProgress(tickIndex: bigint, numTicks: bigint) {
-	if (numTicks <= 0n) return 0
+	if (numTicks <= 0n) throw new Error('Scalar question numTicks must be positive')
+	if (tickIndex < 0n || tickIndex > numTicks) throw new Error('Tick index is out of range')
 	return Number((tickIndex * 100n) / numTicks)
 }
 

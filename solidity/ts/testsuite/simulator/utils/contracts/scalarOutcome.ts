@@ -29,6 +29,7 @@ function formatSignedDecimal(value: bigint) {
 }
 
 function validateTickIndex(question: ScalarQuestionDetails, tickIndex: bigint) {
+	if (question.numTicks <= 0n) throw new Error('Scalar question numTicks must be positive')
 	if (tickIndex < 0n || tickIndex > question.numTicks) throw new Error('Tick index is out of range')
 }
 

@@ -34,7 +34,6 @@ export type ZoltarUniverseSummary = {
 	childUniverses: ZoltarChildUniverseSummary[]
 	forkThreshold: bigint
 	forkQuestionDetails: MarketDetails | undefined
-	forkQuestionId: bigint
 	forkTime: bigint
 	forkingOutcomeIndex: bigint
 	hasForked: boolean

@@ -709,7 +709,6 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 		childUniverses,
 		forkThreshold,
 		forkQuestionDetails,
-		forkQuestionId,
 		forkTime,
 		forkingOutcomeIndex,
 		hasForked,

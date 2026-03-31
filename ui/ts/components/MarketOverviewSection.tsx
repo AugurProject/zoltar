@@ -22,7 +22,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 	const rootUniverse = zoltarUniverse
 	const hasForked = rootUniverse?.hasForked === true
 	const currentUniverseName = rootUniverse === undefined ? 'Loading...' : formatUniverseCollectionLabel([rootUniverse.universeId])
-	const forkQuestionLabel = rootUniverse === undefined || rootUniverse.forkQuestionId === 0n ? 'Not forked yet' : rootUniverse.forkQuestionId.toString()
+	const forkQuestionLabel = rootUniverse === undefined ? 'Loading...' : (rootUniverse.forkQuestionDetails?.questionId ?? 'Loading question details...')
 	const isScalarFork = rootUniverse?.forkQuestionDetails?.marketType === 'scalar'
 	const scalarQuestionDetails = rootUniverse?.forkQuestionDetails
 
@@ -46,7 +46,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 							<>
 								<div className="market-overview-question-summary">
 									<span className="metric-label">Fork Question</span>
-									{forkQuestionLabel === 'Not forked yet' ? <strong>{forkQuestionLabel}</strong> : <QuestionSummaryHeader description={rootUniverse.forkQuestionDetails === undefined ? 'Loading question details...' : rootUniverse.forkQuestionDetails.description.trim() === '' ? 'No description provided.' : rootUniverse.forkQuestionDetails.description} loading={rootUniverse.forkQuestionDetails === undefined} questionId={forkQuestionLabel} title={rootUniverse.forkQuestionDetails === undefined ? 'Question details' : rootUniverse.forkQuestionDetails.title.trim() === '' ? 'Untitled question' : rootUniverse.forkQuestionDetails.title} />}
+									<QuestionSummaryHeader description={rootUniverse.forkQuestionDetails === undefined ? 'Loading question details...' : rootUniverse.forkQuestionDetails.description.trim() === '' ? 'No description provided.' : rootUniverse.forkQuestionDetails.description} loading={rootUniverse.forkQuestionDetails === undefined} questionId={forkQuestionLabel} title={rootUniverse.forkQuestionDetails === undefined ? 'Question details' : rootUniverse.forkQuestionDetails.title.trim() === '' ? 'Untitled question' : rootUniverse.forkQuestionDetails.title} />
 								</div>
 								<div>
 									<span className="metric-label">Fork Time</span>

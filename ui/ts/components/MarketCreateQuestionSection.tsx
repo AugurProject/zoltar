@@ -1,19 +1,12 @@
-import { useState } from 'preact/hooks'
+import { useMemo, useState } from 'preact/hooks'
 import type { Address } from 'viem'
 import { EntityCard } from './EntityCard.js'
 import { QuestionSummary } from './QuestionSummary.js'
-import { formatScalarOutcomeLabel, getScalarSliderProgress } from '../lib/scalarOutcome.js'
 import { parseMarketTypeInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import type { MarketFormState } from '../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../types/contracts.js'
-
-type ScalarCreatePreviewDetails = {
-	answerUnit: string
-	displayValueMax: bigint
-	displayValueMin: bigint
-	numTicks: bigint
-}
+import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
 
 type MarketCreateQuestionSectionProps = {
 	accountAddress: Address | undefined
@@ -51,9 +44,8 @@ function getScalarCreatePreviewDetails(marketForm: MarketFormState): ScalarCreat
 
 export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainnet, marketCreating, marketError, marketForm, marketResult, onCreateMarket, onMarketFormChange, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestions }: MarketCreateQuestionSectionProps) {
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
+	const selectedQuestionDetails = useMemo(() => (marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)), [marketResult?.questionId, zoltarQuestions])
 	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(marketForm)
-	const createScalarProgress = scalarCreatePreviewDetails === undefined ? 0 : getScalarSliderProgress(BigInt(scalarCreatePreviewTick), scalarCreatePreviewDetails.numTicks)
-	const selectedQuestionDetails = marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)
 
 	return (
 		<>
@@ -155,40 +147,7 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 						</div>
 					) : undefined}
 
-					{marketForm.marketType === 'scalar' ? (
-						scalarCreatePreviewDetails === undefined ? (
-							<p className="detail">Enter valid scalar parameters to preview the tick slider.</p>
-						) : (
-							<div className="market-scalar-deploy">
-								<label className="field scalar-slider-field">
-									<span>Scalar Preview</span>
-									<div className="scalar-slider-rail">
-										<div className="scalar-slider-track" />
-										<div className="scalar-slider-fill" style={{ width: `${ createScalarProgress }%` }} />
-										<input type="range" min="0" max={scalarCreatePreviewDetails.numTicks.toString()} step="1" value={scalarCreatePreviewTick} aria-valuetext={formatScalarOutcomeLabel(scalarCreatePreviewDetails, BigInt(scalarCreatePreviewTick))} onInput={event => setScalarCreatePreviewTick(event.currentTarget.value)} />
-									</div>
-								</label>
-								<div className="workflow-question-grid market-scalar-deploy-grid scalar-slider-stats">
-									<div>
-										<span className="metric-label">Min Value</span>
-										<strong>{formatScalarOutcomeLabel(scalarCreatePreviewDetails, 0n)}</strong>
-									</div>
-									<div>
-										<span className="metric-label">Selected Tick</span>
-										<strong>{`${ scalarCreatePreviewTick } / ${ scalarCreatePreviewDetails.numTicks.toString() }`}</strong>
-									</div>
-									<div>
-										<span className="metric-label">Selected Value</span>
-										<strong>{formatScalarOutcomeLabel(scalarCreatePreviewDetails, BigInt(scalarCreatePreviewTick))}</strong>
-									</div>
-									<div>
-										<span className="metric-label">Max Value</span>
-										<strong>{formatScalarOutcomeLabel(scalarCreatePreviewDetails, scalarCreatePreviewDetails.numTicks)}</strong>
-									</div>
-								</div>
-							</div>
-						)
-					) : undefined}
+					{marketForm.marketType === 'scalar' ? scalarCreatePreviewDetails === undefined ? <p className="detail">Enter valid scalar parameters to preview the tick slider.</p> : <ScalarCreatePreview details={scalarCreatePreviewDetails} selectedTick={scalarCreatePreviewTick} onSelectedTickChange={setScalarCreatePreviewTick} /> : undefined}
 
 					<div className="actions">
 						<button onClick={onCreateMarket} disabled={accountAddress === undefined || !isMainnet || marketCreating}>
