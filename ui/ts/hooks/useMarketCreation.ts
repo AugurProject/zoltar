@@ -42,6 +42,8 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 	const zoltarUniverseLoadedId = useSignal<bigint | undefined>(undefined)
 	const loadingZoltarQuestionCount = useSignal(false)
 	const loadingZoltarQuestions = useSignal(false)
+	const zoltarQuestionCountLoadRequestId = useSignal(0)
+	const zoltarQuestionsLoadRequestId = useSignal(0)
 	const zoltarQuestionCount = useSignal<bigint | undefined>(undefined)
 	const zoltarQuestions = useSignal<MarketDetails[]>([])
 	const zoltarUniverse = useSignal<ZoltarUniverseSummary | undefined>(undefined)
@@ -206,30 +208,40 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 	}
 
 	const loadZoltarQuestionCountData = async () => {
+		const requestId = zoltarQuestionCountLoadRequestId.value + 1
+		zoltarQuestionCountLoadRequestId.value = requestId
 		loadingZoltarQuestionCount.value = true
 		try {
 			const questionCount = await loadZoltarQuestionCount(createReadClient())
-			if (!isMounted.value) return
+			if (!isMounted.value || requestId !== zoltarQuestionCountLoadRequestId.value) return
 			zoltarQuestionCount.value = questionCount
 		} finally {
-			if (isMounted.value) {
+			if (isMounted.value && requestId === zoltarQuestionCountLoadRequestId.value) {
 				loadingZoltarQuestionCount.value = false
 			}
 		}
 	}
 
 	const loadQuestions = async () => {
+		const questionCountRequestId = zoltarQuestionCountLoadRequestId.value + 1
+		zoltarQuestionCountLoadRequestId.value = questionCountRequestId
+		const questionsRequestId = zoltarQuestionsLoadRequestId.value + 1
+		zoltarQuestionsLoadRequestId.value = questionsRequestId
 		loadingZoltarQuestions.value = true
 		loadingZoltarQuestionCount.value = true
 		try {
 			const readClient = createReadClient()
 			const [questions, questionCount] = await Promise.all([loadAllZoltarQuestions(readClient), loadZoltarQuestionCount(readClient)])
-			if (!isMounted.value) return
+			if (!isMounted.value || questionsRequestId !== zoltarQuestionsLoadRequestId.value) return
 			zoltarQuestions.value = questions
-			zoltarQuestionCount.value = questionCount
+			if (questionCountRequestId === zoltarQuestionCountLoadRequestId.value) {
+				zoltarQuestionCount.value = questionCount
+			}
 		} finally {
-			if (isMounted.value) {
+			if (isMounted.value && questionsRequestId === zoltarQuestionsLoadRequestId.value) {
 				loadingZoltarQuestions.value = false
+			}
+			if (isMounted.value && questionCountRequestId === zoltarQuestionCountLoadRequestId.value) {
 				loadingZoltarQuestionCount.value = false
 			}
 		}

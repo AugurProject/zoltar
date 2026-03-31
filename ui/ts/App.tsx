@@ -15,19 +15,18 @@ import { useSecurityPoolCreation } from './hooks/useSecurityPoolCreation.js'
 import { useSecurityPoolsOverview } from './hooks/useSecurityPoolsOverview.js'
 import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from './hooks/useTradingOperations.js'
+import { useUrlState } from './hooks/useUrlState.js'
 import { getDeploymentSections } from './lib/deployment.js'
 import { isMainnetChain } from './lib/network.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
 import type { TransactionState } from './lib/transactionState.js'
 import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
-import { readSecurityPoolQueryParam, readUniverseQueryParam, writeSecurityPoolQueryParam, writeUniverseQueryParam } from './lib/urlParams.js'
 
 export function App() {
 	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
-	const locationRevision = useSignal(0)
-	const activeUniverseId = readUniverseQueryParam(window.location.search) ?? 0n
 	const deployNextMissingPending = useSignal(false)
+	const { activeUniverseId, securityPoolAddress, setSecurityPoolAddress } = useUrlState()
 	const onTransaction = (hash: Hash) => {
 		transactionState.value = {
 			...transactionState.value,
@@ -85,29 +84,11 @@ export function App() {
 	const wrongNetworkMessage = accountState.address !== undefined && !isMainnet ? 'Switch your wallet to Ethereum mainnet.' : undefined
 	const showDeployTab = hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed)
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
-	const securityPoolAddress = readSecurityPoolQueryParam(window.location.search) ?? ''
-	void locationRevision.value
 
 	useEffect(() => {
 		if (!walletBootstrapComplete) return
 		void refreshState({ loadDeploymentStatuses: true, loadWalletState: false })
 	}, [walletBootstrapComplete])
-
-	useEffect(() => {
-		const nextSearch = writeUniverseQueryParam(window.location.search, activeUniverseId)
-		window.history.replaceState({}, '', `${ window.location.pathname }${ nextSearch }${ window.location.hash }`)
-	}, [activeUniverseId])
-
-	useEffect(() => {
-		const onPopState = () => {
-			locationRevision.value += 1
-		}
-
-		window.addEventListener('popstate', onPopState)
-		return () => {
-			window.removeEventListener('popstate', onPopState)
-		}
-	}, [])
 
 	useEffect(() => {
 		setSecurityVaultForm(current => current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress })
@@ -280,9 +261,7 @@ export function App() {
 						onOpenLiquidationModal: (managerAddress, securityPoolAddress, vaultAddress) => openLiquidationModal(managerAddress, securityPoolAddress, vaultAddress),
 						onQueueLiquidation: (managerAddress, securityPoolAddress) => void queueLiquidation(managerAddress, securityPoolAddress),
 						onSecurityPoolAddressChange: value => {
-							const nextSearch = writeSecurityPoolQueryParam(window.location.search, value === '' ? undefined : value)
-							window.history.replaceState({}, '', `${ window.location.pathname }${ nextSearch }${ window.location.hash }`)
-							locationRevision.value += 1
+							setSecurityPoolAddress(value)
 						},
 							reporting: {
 								accountState,

@@ -47,6 +47,8 @@ library ScalarOutcomes {
 	function mulDiv(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256 result) {
 		require(denominator > 0, 'denominator=0');
 		unchecked {
+			// Compute the 512-bit product x * y as prod1:prod0, matching the standard
+			// full-precision mulDiv pattern used by Uniswap-style implementations.
 			uint256 prod0;
 			uint256 prod1;
 			assembly {
@@ -64,6 +66,8 @@ library ScalarOutcomes {
 				prod1 := sub(prod1, gt(remainder, prod0))
 				prod0 := sub(prod0, remainder)
 			}
+			// Remove the powers of two from the denominator so the modular inverse
+			// can be computed on an odd number.
 			uint256 twos = denominator & (~denominator + 1);
 			assembly {
 				denominator := div(denominator, twos)
@@ -71,6 +75,8 @@ library ScalarOutcomes {
 				twos := add(div(sub(0, twos), twos), 1)
 			}
 			prod0 |= prod1 * twos;
+			// Seed the Newton-Raphson iteration with the standard xor-based
+			// approximation. The `^` is bitwise XOR, not exponentiation.
 			uint256 inverse = (3 * denominator) ^ 2;
 			inverse *= 2 - denominator * inverse;
 			inverse *= 2 - denominator * inverse;
@@ -84,8 +90,7 @@ library ScalarOutcomes {
 
 	function intToDecimalString(int256 value, uint256 decimals) internal pure returns (string memory) {
 		bool isNegative = value < 0;
-		require(value != type(int256).min, 'int256 min');
-		uint256 absoluteValue = value < 0 ? uint256(-value) : uint256(value);
+		uint256 absoluteValue = absoluteInt256(value);
 		uint256 base = 10 ** decimals;
 		uint256 integerPart = absoluteValue / base;
 		uint256 fractionalPart = absoluteValue % base;
