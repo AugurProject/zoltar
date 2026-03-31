@@ -19,6 +19,7 @@ contract Zoltar {
 	}
 
 	mapping(uint248 => Universe) public universes;
+	mapping(uint248 => uint256[]) public deployedChildOutcomeIndexes;
 
 	struct AddressRepMigration {
 		uint256 repBalance;
@@ -91,7 +92,25 @@ contract Zoltar {
 		ReputationToken childReputationToken = new ReputationToken{ salt: bytes32(uint256(childUniverseId)) }(address(this));
 		childReputationToken.setMaxTheoreticalSupply(universe.reputationToken.getTotalTheoreticalSupply());
 		universes[childUniverseId] = Universe(0, universe.forkQuestionId, outcomeIndex, childReputationToken, universeId);
+		deployedChildOutcomeIndexes[universeId].push(outcomeIndex);
 		emit DeployChild(msg.sender, universeId, outcomeIndex, childUniverseId, childReputationToken);
+	}
+
+	function getDeployedChildUniverses(uint248 universeId, uint256 startIndex, uint256 count) external view returns (uint256[] memory outcomeIndexes, uint248[] memory childUniverseIds, Universe[] memory childUniverses) {
+		uint256[] storage deployedOutcomeIndexes = deployedChildOutcomeIndexes[universeId];
+		uint256 iterateUntil = startIndex + count > deployedOutcomeIndexes.length ? deployedOutcomeIndexes.length : startIndex + count;
+		if (iterateUntil <= startIndex) return (new uint256[](0), new uint248[](0), new Universe[](0));
+		uint256 resultLength = iterateUntil - startIndex;
+		outcomeIndexes = new uint256[](resultLength);
+		childUniverseIds = new uint248[](resultLength);
+		childUniverses = new Universe[](resultLength);
+		for (uint256 i = startIndex; i < iterateUntil; i++) {
+			uint256 resultIndex = i - startIndex;
+			uint248 childUniverseId = getChildUniverseId(universeId, deployedOutcomeIndexes[i]);
+			outcomeIndexes[resultIndex] = deployedOutcomeIndexes[i];
+			childUniverseIds[resultIndex] = childUniverseId;
+			childUniverses[resultIndex] = universes[childUniverseId];
+		}
 	}
 
 	// stores rep to universe that can then be migrated with internal REP migration
@@ -120,4 +139,3 @@ contract Zoltar {
 		}
 	}
 }
-

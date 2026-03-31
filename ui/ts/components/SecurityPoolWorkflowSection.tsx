@@ -2,10 +2,12 @@ import { useEffect, useState } from 'preact/hooks'
 import { EntityCard } from './EntityCard.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
 import { LiquidationModal } from './LiquidationModal.js'
+import { QuestionSummaryHeader } from './QuestionSummary.js'
 import { ReportingSection } from './ReportingSection.js'
 import { SecurityVaultSection } from './SecurityVaultSection.js'
 import { TradingSection } from './TradingSection.js'
-import { formatAddress, formatCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
+import { UniverseLink } from './UniverseLink.js'
+import { formatAddress, formatCurrencyBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import { readSelectedPoolViewQueryParam, writeSelectedPoolViewQueryParam } from '../lib/urlParams.js'
@@ -78,7 +80,9 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 									</div>
 									<div>
 										<span className="metric-label">Universe</span>
-										<strong>{selectedPool.universeId.toString()}</strong>
+										<strong>
+											<UniverseLink universeId={selectedPool.universeId} />
+										</strong>
 									</div>
 									<div>
 										<span className="metric-label">Security Multiplier</span>
@@ -121,34 +125,7 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 										<h4>Question</h4>
 										<span className="badge muted">{marketDetails.marketType}</span>
 									</div>
-									<div className="workflow-question-grid">
-										<div>
-											<span className="metric-label">Question ID</span>
-											<strong>{marketDetails.questionId}</strong>
-										</div>
-										<div>
-											<span className="metric-label">Created</span>
-											<strong>{formatTimestamp(marketDetails.createdAt)}</strong>
-										</div>
-										<div>
-											<span className="metric-label">Start Time</span>
-											<strong>{formatTimestamp(marketDetails.startTime)}</strong>
-										</div>
-										<div>
-											<span className="metric-label">End Time</span>
-											<strong>{formatTimestamp(marketDetails.endTime)}</strong>
-										</div>
-										{marketDetails.answerUnit === '' ? undefined : (
-											<div>
-												<span className="metric-label">Answer Unit</span>
-												<strong>{marketDetails.answerUnit}</strong>
-											</div>
-										)}
-										<div>
-											<span className="metric-label">Outcomes</span>
-											<strong>{marketDetails.outcomeLabels.length === 0 ? 'Scalar' : marketDetails.outcomeLabels.join(', ')}</strong>
-										</div>
-									</div>
+									<QuestionSummaryHeader description={marketDetails.description.trim() === '' ? 'No description provided.' : marketDetails.description} questionId={marketDetails.questionId} title={marketDetails.title.trim() === '' ? 'Untitled question' : marketDetails.title} />
 								</div>
 							)}
 						</>

@@ -6,7 +6,7 @@ import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput } from '../lib/inputs.js'
 import { getDefaultForkAuctionFormState, parseBigIntInput } from '../lib/marketForm.js'
 import type { ForkAuctionFormState } from '../types/app.js'
-import type { ForkAuctionActionResult, ForkAuctionDetails } from '../types/contracts.js'
+import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
 type UseForkAuctionOperationsParameters = {
 	accountAddress: Address | undefined
@@ -15,6 +15,20 @@ type UseForkAuctionOperationsParameters = {
 	onTransactionRequested: () => void
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
+}
+
+function getReportingOutcomeKey(outcome: ReportingOutcomeKey | bigint): ReportingOutcomeKey {
+	if (typeof outcome !== 'bigint') return outcome
+	switch (outcome) {
+		case 0n:
+			return 'invalid'
+		case 1n:
+			return 'yes'
+		case 2n:
+			return 'no'
+		default:
+			throw new Error(`Unsupported child universe outcome index: ${ outcome.toString() }`)
+	}
 }
 
 export function useForkAuctionOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseForkAuctionOperationsParameters) {
@@ -73,7 +87,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 
 	const initiateFork = async () => await runForkAuctionAction(async (walletAddress, details) => await initiateSecurityPoolFork(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId), 'Failed to initiate security pool fork')
 
-	const createChildUniverse = async () => await runForkAuctionAction(async (walletAddress, details) => await createChildUniverseFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome)), 'Failed to create child universe')
+	const createChildUniverse = async (outcome: ReportingOutcomeKey | bigint) => await runForkAuctionAction(async (walletAddress, details) => await createChildUniverseFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, getReportingOutcomeKey(outcome)), 'Failed to create child universe')
 
 	const migrateRepToZoltar = async () => await runForkAuctionAction(async (walletAddress, details) => await migrateRepToZoltarFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, parseReportingOutcomeListInput(forkAuctionForm.value.repMigrationOutcomes, 'REP migration outcomes')), 'Failed to migrate REP to Zoltar')
 

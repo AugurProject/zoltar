@@ -3,6 +3,7 @@ import { peripherals_EscalationGame_EscalationGame, peripherals_factories_Escala
 import { AccountAddress, QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { getInfraContractAddresses } from './deployPeripherals'
+import { CONTRACT_PAGE_SIZE } from './pagination'
 
 function parseQuestionOutcome(value: unknown): QuestionOutcome {
 	switch (value) {
@@ -42,7 +43,6 @@ export const getStartBond = async (client: ReadClient, escalationGame: AccountAd
 
 export const getEscalationGameDeposits = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) => {
 	let currentIndex = 0n
-	const numberOfEntries = 30n
 	type Pages = {
 		depositIndex: bigint
 		depositor: AccountAddress
@@ -56,14 +56,14 @@ export const getEscalationGameDeposits = async (client: ReadClient, escalationGa
 				abi: peripherals_EscalationGame_EscalationGame.abi,
 				functionName: 'getDepositsByOutcome',
 				address: escalationGame,
-				args: [outcome, currentIndex, numberOfEntries],
+				args: [outcome, currentIndex, CONTRACT_PAGE_SIZE],
 			})
-		)
+			)
 			.map((deposit, index) => ({ ...deposit, depositIndex: currentIndex + BigInt(index) }))
 			.filter(deposit => BigInt(deposit.depositor) !== 0x0n)
 		pages.push(...newDeposits)
-		if (BigInt(newDeposits.length) !== numberOfEntries) break
-		currentIndex += numberOfEntries
+		if (BigInt(newDeposits.length) !== CONTRACT_PAGE_SIZE) break
+		currentIndex += CONTRACT_PAGE_SIZE
 	} while (true)
 	return pages
 }

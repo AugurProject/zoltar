@@ -1,5 +1,20 @@
-function formatUniverseLabel(universeId: bigint) {
+import { readUniverseQueryParam, writeUniverseQueryParam } from './urlParams.js'
+
+export function formatUniverseLabel(universeId: bigint) {
 	return universeId === 0n ? 'Genesis (0)' : `Universe ${ universeId.toString() }`
+}
+
+export function getUniverseLinkHref(universeId: bigint) {
+	const nextSearch = writeUniverseQueryParam(window.location.search, universeId)
+	return `${ window.location.pathname }${ nextSearch }${ window.location.hash }`
+}
+
+export function navigateToUniverse(universeId: bigint) {
+	const currentUniverseId = readUniverseQueryParam(window.location.search)
+	if (currentUniverseId === universeId) return
+
+	window.history.pushState({}, '', getUniverseLinkHref(universeId))
+	window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
 export function formatUniverseCollectionLabel(universeIds: bigint[]) {

@@ -33,7 +33,7 @@ export type ZoltarChildUniverseSummary = {
 export type ZoltarUniverseSummary = {
 	childUniverses: ZoltarChildUniverseSummary[]
 	forkThreshold: bigint
-	forkQuestionId: bigint
+	forkQuestionDetails: MarketDetails | undefined
 	forkTime: bigint
 	forkingOutcomeIndex: bigint
 	hasForked: boolean
@@ -67,19 +67,19 @@ export type ZoltarForkActionResult = {
 	universeId: bigint
 }
 
-export type MarketDetails = {
-	answerUnit: string
+export type ZoltarChildUniverseActionResult = {
+	action: 'createChildUniverse'
+	hash: Hash
+	outcomeIndex: bigint
+	universeId: bigint
+}
+
+export type MarketDetails = QuestionData & {
 	createdAt: bigint
-	description: string
-	displayValueMax: bigint
-	displayValueMin: bigint
-	endTime: bigint
 	exists: boolean
 	marketType: MarketType
 	outcomeLabels: string[]
 	questionId: string
-	startTime: bigint
-	title: string
 }
 
 export type SecurityPoolCreationResult = {

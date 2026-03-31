@@ -224,6 +224,25 @@ describe('Question Data', () => {
 		assert.ok(name !== 'Malformed' && name !== 'Invalid', 'should return valid outcome name')
 	})
 
+	test('getScalarOutcomeName handles int256 min without reverting', async () => {
+		const int256Min = -(1n << 255n)
+		const question = {
+			title: 'int256 min',
+			description: '',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: 1000n,
+			displayValueMin: int256Min,
+			displayValueMax: int256Min + 1000n,
+			answerUnit: '',
+		}
+		await createQuestion(client, question, [])
+		const questionId = getQuestionId(question, [])
+		const answer = combineUint256FromTwoWithInvalid(false, question.numTicks, 0n)
+		const name = await getAnswerOptionName(client, questionId, answer)
+		assert.ok(name.length > 0, 'should return a formatted scalar outcome')
+	})
+
 	test('createQuestion rejects duplicate outcome options', async () => {
 		const question = {
 			title: 'Test Duplicates',

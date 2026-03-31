@@ -2,6 +2,7 @@ import { encodeAbiParameters, keccak256 } from 'viem'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { getInfraContractAddresses } from './deployPeripherals'
+import { CONTRACT_PAGE_SIZE } from './pagination'
 
 type QuestionData = {
 	title: string
@@ -16,7 +17,6 @@ type QuestionData = {
 
 export const getOutcomeLabels = async (client: ReadClient, questionId: bigint) => {
 	let currentIndex = 0n
-	const numberOfEntries = 30n
 	const pages: string[] = []
 	do {
 		const newLabels = (
@@ -24,12 +24,12 @@ export const getOutcomeLabels = async (client: ReadClient, questionId: bigint) =
 				abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 				functionName: 'getOutcomeLabels',
 				address: getInfraContractAddresses().zoltarQuestionData,
-				args: [questionId, currentIndex, numberOfEntries],
+				args: [questionId, currentIndex, CONTRACT_PAGE_SIZE],
 			})
 		).filter(outcome => outcome.length > 0)
 		pages.push(...newLabels)
-		if (BigInt(newLabels.length) !== numberOfEntries) break
-		currentIndex += numberOfEntries
+		if (BigInt(newLabels.length) !== CONTRACT_PAGE_SIZE) break
+		currentIndex += CONTRACT_PAGE_SIZE
 	} while (true)
 	return pages
 }

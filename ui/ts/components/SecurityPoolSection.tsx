@@ -1,5 +1,6 @@
 import { EntityCard } from './EntityCard.js'
-import { formatTimestamp } from '../lib/formatters.js'
+import { QuestionSummaryHeader } from './QuestionSummary.js'
+import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import type { SecurityPoolSectionProps } from '../types/components.js'
@@ -9,6 +10,7 @@ export function SecurityPoolSection({ accountState, checkingDuplicateOriginPool,
 	const isCreateDisabled = accountState.address === undefined || !isMainnet || securityPoolCreating || checkingDuplicateOriginPool || duplicateOriginPoolExists || marketDetails?.marketType !== 'binary'
 	const matchingPools = marketDetails === undefined ? [] : securityPools.filter(pool => pool.questionId.toLowerCase() === marketDetails.questionId.toLowerCase())
 	const hasMatchingSecurityMultiplier = matchingPools.some(pool => pool.securityMultiplier.toString() === securityPoolForm.securityMultiplier.trim())
+	const marketTitle = marketDetails === undefined ? undefined : marketDetails.title.trim() === '' ? 'Untitled question' : marketDetails.title
 
 	return (
 		<section className="panel market-panel">
@@ -24,7 +26,7 @@ export function SecurityPoolSection({ accountState, checkingDuplicateOriginPool,
 				<div className="market-column">
 					{marketDetails === undefined ? undefined : (
 						<EntityCard
-							title={marketDetails.title === '' ? 'Untitled question' : marketDetails.title}
+							title={marketTitle}
 							badge={<span className="badge ok">{marketDetails.marketType}</span>}
 							actions={
 								<div className="actions">
@@ -37,32 +39,7 @@ export function SecurityPoolSection({ accountState, checkingDuplicateOriginPool,
 								</div>
 							}
 						>
-							<div className="question-preview-body">
-								<div>
-									<span className="metric-label">Question ID</span>
-									<strong>{marketDetails.questionId}</strong>
-								</div>
-								<div>
-									<span className="metric-label">Created</span>
-									<strong>{formatTimestamp(marketDetails.createdAt)}</strong>
-								</div>
-								<div>
-									<span className="metric-label">Start</span>
-									<strong>{formatTimestamp(marketDetails.startTime)}</strong>
-								</div>
-								<div>
-									<span className="metric-label">End</span>
-									<strong>{formatTimestamp(marketDetails.endTime)}</strong>
-								</div>
-								{marketDetails.marketType === 'scalar' ? (
-									<div>
-										<span className="metric-label">Range</span>
-										<strong>
-											{marketDetails.displayValueMin.toString()} to {marketDetails.displayValueMax.toString()} {marketDetails.answerUnit}
-										</strong>
-									</div>
-								) : undefined}
-							</div>
+							<QuestionSummaryHeader description={marketDetails.description.trim() === '' ? 'No description provided.' : marketDetails.description} questionId={marketDetails.questionId} title={marketTitle === undefined ? 'Untitled question' : marketTitle} />
 							{marketDetails.marketType === 'scalar' ? undefined : (
 								<div className="question-chip-row">
 									{marketDetails.outcomeLabels.map(label => (
@@ -109,7 +86,9 @@ export function SecurityPoolSection({ accountState, checkingDuplicateOriginPool,
 								</li>
 								<li>
 									<span>Universe</span>
-									<strong>{securityPoolResult.universeId.toString()}</strong>
+									<strong>
+										<UniverseLink universeId={securityPoolResult.universeId} />
+									</strong>
 								</li>
 								<li>
 									<span>Deploy Pool Tx</span>

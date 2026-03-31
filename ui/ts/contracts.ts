@@ -2,7 +2,7 @@ import { encodeAbiParameters, encodeDeployData, getAddress, getContractAddress, 
 import { ABIS } from './abis.js'
 import { ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_EscalationGame_EscalationGame, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from './contractArtifact.js'
 import { assertNever } from './lib/assert.js'
-import type { DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, ForkAuctionAction, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, MarketType, OpenOracleActionResult, OracleManagerDetails, OracleQueueOperation, QuestionData, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityPoolSystemState, SecurityPoolVaultSummary, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, TruthAuctionMetrics, WriteClient, ZoltarForkActionResult, ZoltarUniverseSummary } from './types/contracts.js'
+import type { DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, ForkAuctionAction, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, MarketType, OpenOracleActionResult, OracleManagerDetails, OracleQueueOperation, QuestionData, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityPoolSystemState, SecurityPoolVaultSummary, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, TruthAuctionMetrics, WriteClient, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarUniverseSummary } from './types/contracts.js'
 
 const GENESIS_REPUTATION_TOKEN = bigintToAddress(0x221657776846890989a759ba2973e427dff5c9bbn)
 const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
@@ -16,6 +16,22 @@ const ESCALATION_TIME_LENGTH = 4_233_600n
 const MIGRATION_TIME_LENGTH = 4_838_400n
 const TRUTH_AUCTION_TIME_LENGTH = 604_800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
+const ANSWER_OPTION_ABI = [parseAbiItem('function getAnswerOptionName(uint256 questionId, uint256 answer) view returns (string memory)')]
+const CONTRACT_PAGE_SIZE = 30n
+
+type DeployedChildUniverseRecord = {
+	forkQuestionId: bigint
+	forkTime: bigint
+	forkingOutcomeIndex: bigint
+	parentUniverseId: bigint
+	reputationToken: Address
+}
+type DeployedChildUniversesPage = readonly [readonly bigint[], readonly bigint[], readonly DeployedChildUniverseRecord[]]
+type QuestionTuple = readonly [string, string, bigint, bigint, bigint, bigint, bigint, string]
+type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint, bigint]
+type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
+type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
+type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 
 function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${ value.toString(16).padStart(40, '0') }`)
@@ -33,56 +49,8 @@ function isEscalationDepositPage(value: unknown): value is readonly { amount: bi
 	return Array.isArray(value) && value.every(item => isObjectRecord(item) && typeof item['amount'] === 'bigint' && typeof item['cumulativeAmount'] === 'bigint' && typeof item['depositor'] === 'string')
 }
 
-function isQuestionTuple(value: unknown): value is [string, string, bigint, bigint, bigint, bigint, bigint, string] {
-	return Array.isArray(value)
-		&& value.length === 8
-		&& typeof value[0] === 'string'
-		&& typeof value[1] === 'string'
-		&& typeof value[2] === 'bigint'
-		&& typeof value[3] === 'bigint'
-		&& typeof value[4] === 'bigint'
-		&& typeof value[5] === 'bigint'
-		&& typeof value[6] === 'bigint'
-		&& typeof value[7] === 'string'
-}
-
 function isBigintTriple(value: unknown): value is [bigint, bigint, bigint] {
 	return Array.isArray(value) && value.length === 3 && value.every(item => typeof item === 'bigint')
-}
-
-function isBigintQuintuple(value: unknown): value is [bigint, bigint, bigint, bigint, bigint] {
-	return Array.isArray(value) && value.length === 5 && value.every(item => typeof item === 'bigint')
-}
-
-function isAuctionClearingTuple(value: unknown): value is [boolean, bigint, bigint, bigint] {
-	return Array.isArray(value)
-		&& value.length === 4
-		&& typeof value[0] === 'boolean'
-		&& typeof value[1] === 'bigint'
-		&& typeof value[2] === 'bigint'
-		&& typeof value[3] === 'bigint'
-}
-
-function isForkDataTuple(value: unknown): value is [bigint, Address, bigint, bigint, bigint, boolean, number] {
-	return Array.isArray(value)
-		&& value.length === 7
-		&& typeof value[0] === 'bigint'
-		&& typeof value[1] === 'string'
-		&& typeof value[2] === 'bigint'
-		&& typeof value[3] === 'bigint'
-		&& typeof value[4] === 'bigint'
-		&& typeof value[5] === 'boolean'
-		&& typeof value[6] === 'number'
-}
-
-function isUniverseTuple(value: unknown): value is [bigint, bigint, bigint, Address, bigint] {
-	return Array.isArray(value)
-		&& value.length === 5
-		&& typeof value[0] === 'bigint'
-		&& typeof value[1] === 'bigint'
-		&& typeof value[2] === 'bigint'
-		&& typeof value[3] === 'string'
-		&& typeof value[4] === 'bigint'
 }
 
 function hasTimestamp(value: unknown): value is { timestamp: bigint } {
@@ -507,7 +475,6 @@ function getMarketType(questionData: QuestionData, outcomeLabels: string[]): Mar
 
 async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
 	let currentIndex = 0n
-	const pageSize = 30n
 	const outcomeLabels: string[] = []
 
 	while (true) {
@@ -515,14 +482,14 @@ async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'getOutcomeLabels',
 			address: getDeploymentStep('zoltarQuestionData').address,
-			args: [questionId, currentIndex, pageSize],
+			args: [questionId, currentIndex, CONTRACT_PAGE_SIZE],
 		})
 		if (!isStringArray(page)) throw new Error('Unexpected outcome labels response')
 
 		const labels = page.filter(label => label.length > 0)
 		outcomeLabels.push(...labels)
-		if (BigInt(labels.length) !== pageSize) break
-		currentIndex += pageSize
+		if (BigInt(labels.length) !== CONTRACT_PAGE_SIZE) break
+		currentIndex += CONTRACT_PAGE_SIZE
 	}
 
 	return outcomeLabels
@@ -530,7 +497,6 @@ async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
 
 async function loadEscalationDeposits(client: ReadClient, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
 	let currentIndex = 0n
-	const pageSize = 30n
 	const deposits: EscalationDeposit[] = []
 
 	while (true) {
@@ -538,7 +504,7 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getDepositsByOutcome',
-			args: [getReportingOutcomeValue(outcome), currentIndex, pageSize],
+			args: [getReportingOutcomeValue(outcome), currentIndex, CONTRACT_PAGE_SIZE],
 		})
 		if (!isEscalationDepositPage(page)) throw new Error('Unexpected escalation deposits response')
 
@@ -552,8 +518,8 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 			.filter(deposit => deposit.depositor !== zeroAddress)
 
 		deposits.push(...normalizedPage)
-		if (BigInt(normalizedPage.length) !== pageSize) break
-		currentIndex += pageSize
+		if (BigInt(normalizedPage.length) !== CONTRACT_PAGE_SIZE) break
+		currentIndex += CONTRACT_PAGE_SIZE
 	}
 
 	return deposits
@@ -574,8 +540,8 @@ export async function loadMarketDetails(client: ReadClient, questionId: bigint):
 			args: [questionId],
 		}),
 	])
-	if (!isQuestionTuple(question)) throw new Error('Unexpected question data response')
-	const [title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit] = question
+	const questionData: QuestionTuple = question
+	const [title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit] = questionData
 
 	const exists = createdAt > 0n || title !== '' || description !== '' || startTime !== 0n || endTime !== 0n || numTicks !== 0n
 	const outcomeLabels = exists ? await loadOutcomeLabels(client, questionId) : []
@@ -590,6 +556,7 @@ export async function loadMarketDetails(client: ReadClient, questionId: bigint):
 		exists,
 		marketType: getMarketType({ title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit }, outcomeLabels),
 		outcomeLabels,
+		numTicks,
 		questionId: getQuestionIdHex(questionId),
 		startTime,
 		title,
@@ -605,23 +572,22 @@ async function loadQuestionIds(client: ReadClient): Promise<bigint[]> {
 	})
 
 	let currentIndex = 0n
-	const pageSize = 30n
 	const questionIds: bigint[] = []
 	while (currentIndex < questionCount) {
 		const page = await client.readContract({
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'getQuestions',
 			address: getDeploymentStep('zoltarQuestionData').address,
-			args: [currentIndex, pageSize],
+			args: [currentIndex, CONTRACT_PAGE_SIZE],
 		})
 		if (!Array.isArray(page)) throw new Error('Unexpected question id page response')
 
 		const normalizedPage = page
 			.filter(questionId => typeof questionId === 'bigint' && questionId !== 0n)
-			.slice(0, Number(pageSize))
+			.slice(0, Number(CONTRACT_PAGE_SIZE))
 		questionIds.push(...normalizedPage)
-		if (BigInt(normalizedPage.length) !== pageSize) break
-		currentIndex += pageSize
+		if (BigInt(normalizedPage.length) !== CONTRACT_PAGE_SIZE) break
+		currentIndex += CONTRACT_PAGE_SIZE
 	}
 
 	return questionIds
@@ -641,8 +607,7 @@ export async function loadZoltarQuestionCount(client: ReadClient) {
 	})
 }
 
-export async function loadZoltarUniverseSummary(client: ReadClient): Promise<ZoltarUniverseSummary> {
-	const universeId = 0n
+export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint): Promise<ZoltarUniverseSummary> {
 	const [universe, forkTime, forkThreshold] = await Promise.all([
 		client.readContract({
 			abi: Zoltar_Zoltar.abi,
@@ -663,44 +628,86 @@ export async function loadZoltarUniverseSummary(client: ReadClient): Promise<Zol
 			args: [universeId],
 		}),
 	])
-	if (!isUniverseTuple(universe)) throw new Error('Unexpected Zoltar universe response')
-	const [storedForkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId] = universe
+	const universeData: UniverseTuple = universe
+	const [storedForkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId] = universeData
 	const hasForked = forkTime > 0n || storedForkTime > 0n
 
 	let childUniverses: ZoltarUniverseSummary['childUniverses'] = []
+	let forkQuestionDetails: MarketDetails | undefined = undefined
 	if (hasForked && forkQuestionId > 0n) {
 		const marketDetails = await loadMarketDetails(client, forkQuestionId)
-		childUniverses = await Promise.all(marketDetails.outcomeLabels.map(async (outcomeLabel, outcomeIndex) => {
-			const childUniverseId = await client.readContract({
-				abi: Zoltar_Zoltar.abi,
-				functionName: 'getChildUniverseId',
-				address: getDeploymentStep('zoltar').address,
-				args: [universeId, BigInt(outcomeIndex)],
-			})
-			const childUniverse = await client.readContract({
-				abi: Zoltar_Zoltar.abi,
-				functionName: 'universes',
-				address: getDeploymentStep('zoltar').address,
-				args: [childUniverseId],
-			})
-			if (!isUniverseTuple(childUniverse)) throw new Error('Unexpected child universe response')
-			const [childForkTime, , , childReputationToken, childParentUniverseId] = childUniverse
-			return {
-				exists: childReputationToken !== zeroAddress,
-				forkTime: childForkTime,
-				outcomeIndex: BigInt(outcomeIndex),
-				outcomeLabel,
-				parentUniverseId: childParentUniverseId,
-				reputationToken: childReputationToken,
-				universeId: childUniverseId,
+		forkQuestionDetails = marketDetails
+		if (marketDetails.marketType === 'scalar') {
+			const deployedChildUniverses: ZoltarUniverseSummary['childUniverses'] = []
+			let currentIndex = 0n
+			while (true) {
+				const page: DeployedChildUniversesPage = await client.readContract({
+					abi: Zoltar_Zoltar.abi,
+					functionName: 'getDeployedChildUniverses',
+					address: getDeploymentStep('zoltar').address,
+					args: [universeId, currentIndex, CONTRACT_PAGE_SIZE],
+				})
+				const [outcomeIndexes, childUniverseIds, childUniverseTuples] = page
+				const pageChildren = await Promise.all(outcomeIndexes.map(async (outcomeIndex, index) => {
+					const childUniverse = childUniverseTuples[index]
+					if (childUniverse === undefined) throw new Error('Unexpected deployed child universe response')
+					const { forkTime: childForkTime, parentUniverseId: childParentUniverseId, reputationToken: childReputationToken } = childUniverse
+					const outcomeLabel = await client.readContract({
+						abi: ANSWER_OPTION_ABI,
+						functionName: 'getAnswerOptionName',
+						address: getDeploymentStep('zoltarQuestionData').address,
+						args: [forkQuestionId, outcomeIndex],
+					})
+					const childUniverseId = childUniverseIds[index]
+					if (childUniverseId === undefined) throw new Error('Unexpected deployed child universe response')
+					return {
+						exists: childReputationToken !== zeroAddress,
+						forkTime: childForkTime,
+						outcomeIndex,
+						outcomeLabel,
+						parentUniverseId: childParentUniverseId,
+						reputationToken: childReputationToken,
+						universeId: childUniverseId,
+					}
+				}))
+				deployedChildUniverses.push(...pageChildren)
+				if (BigInt(pageChildren.length) !== CONTRACT_PAGE_SIZE) break
+				currentIndex += CONTRACT_PAGE_SIZE
 			}
-		}))
+			childUniverses = deployedChildUniverses
+		} else {
+				childUniverses = await Promise.all(marketDetails.outcomeLabels.map(async (outcomeLabel, outcomeIndex) => {
+					const childUniverseId = await client.readContract({
+						abi: Zoltar_Zoltar.abi,
+						functionName: 'getChildUniverseId',
+						address: getDeploymentStep('zoltar').address,
+						args: [universeId, BigInt(outcomeIndex)],
+					})
+					const childUniverse = await client.readContract({
+						abi: Zoltar_Zoltar.abi,
+						functionName: 'universes',
+						address: getDeploymentStep('zoltar').address,
+						args: [childUniverseId],
+					})
+				const childUniverseData: UniverseTuple = childUniverse
+				const [childForkTime, , , childReputationToken, childParentUniverseId] = childUniverseData
+					return {
+						exists: childReputationToken !== zeroAddress,
+						forkTime: childForkTime,
+					outcomeIndex: BigInt(outcomeIndex),
+					outcomeLabel,
+					parentUniverseId: childParentUniverseId,
+					reputationToken: childReputationToken,
+					universeId: childUniverseId,
+				}
+			}))
+		}
 	}
 
 	return {
 		childUniverses,
 		forkThreshold,
-		forkQuestionId,
+		forkQuestionDetails,
 		forkTime,
 		forkingOutcomeIndex,
 		hasForked,
@@ -934,9 +941,8 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 			args: [vaultAddress],
 		}),
 	])
-	if (!isBigintQuintuple(vaultData)) throw new Error('Unexpected security vault response')
-
-	const [repDepositShare, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = vaultData
+	const vaultDataTuple: SecurityVaultTuple = vaultData
+	const [repDepositShare, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = vaultDataTuple
 
 	return {
 		currentRetentionRate: currentRetentionRate,
@@ -984,13 +990,12 @@ async function loadSecurityPoolVaultSummaries(client: ReadClient, securityPoolAd
 	const vaultCount = await getSecurityPoolVaultCount(client, securityPoolAddress)
 	const vaultAddresses = vaultCount === 0n ? [] : await getSecurityPoolVaults(client, securityPoolAddress, 0n, vaultCount)
 	const vaults = await Promise.all(vaultAddresses.map(async vaultAddress => {
-		const vaultData = await client.readContract({
+		const vaultData: SecurityVaultTuple = await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'securityVaults',
 			address: securityPoolAddress,
 			args: [vaultAddress],
 		})
-		if (!isBigintQuintuple(vaultData)) throw new Error('Unexpected security vault response')
 		const [poolOwnership, securityBondAllowance, unpaidEthFees, feeIndex, lockedRepInEscalationGame] = vaultData
 		const repDepositShare = await poolOwnershipToRep(client, securityPoolAddress, poolOwnership)
 		return {
@@ -1232,10 +1237,10 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			args: [securityPoolAddress],
 		}),
 	])
-	if (!isForkDataTuple(forkData)) throw new Error('Unexpected fork data response')
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	const marketDetails = await loadMarketDetails(client, questionId)
-	const [repAtFork, , truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, forkOwnSecurityPool, forkOutcomeIndex] = forkData
+	const forkDataTuple: ForkDataTuple = forkData
+	const [repAtFork, , truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const migrationEndsAt = truthAuctionStartedAt > 0n ? undefined : (await client.readContract({
 		abi: Zoltar_Zoltar.abi,
@@ -1296,8 +1301,8 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 				args: [],
 			}),
 		])
-		if (!isAuctionClearingTuple(computeClearingResult)) throw new Error('Unexpected auction clearing response')
-		const [hitCap, clearingTick, accumulatedEth, ethAtClearingTick] = computeClearingResult
+		const computeClearingTuple: AuctionClearingTuple = computeClearingResult
+		const [hitCap, clearingTick, accumulatedEth, ethAtClearingTick] = computeClearingTuple
 		const clearingPrice = clearingTick === 0n && accumulatedEth === 0n ? undefined : await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'tickToPrice',
@@ -1384,6 +1389,21 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 	})))
 }
 
+export async function createZoltarChildUniverse(client: WriteClient, universeId: bigint, outcomeIndex: bigint) {
+	const hash = await writeContractAndWait(client, () => client.writeContract({
+		address: getDeploymentStep('zoltar').address,
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'migrateInternalRep',
+		args: [universeId, 0n, [outcomeIndex]],
+	}))
+	return {
+		action: 'createChildUniverse',
+		hash,
+		outcomeIndex,
+		universeId,
+	} satisfies ZoltarChildUniverseActionResult
+}
+
 export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
 	return await executeForkAuctionAction(client, 'migrateRepToZoltar', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
 		address: getInfraContractAddresses().securityPoolForker,
@@ -1402,12 +1422,29 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 	})))
 }
 
+function toUint8(value: bigint) {
+	if (value < 0n || value > 255n) {
+		throw new Error(`Deposit index out of range: ${ value.toString() }`)
+	}
+
+	const numberValue = Number(value)
+	if (!Number.isInteger(numberValue) || numberValue < 0 || numberValue > 255) {
+		throw new Error(`Deposit index out of range: ${ value.toString() }`)
+	}
+
+	return numberValue
+}
+
+function toUint8Array(values: bigint[]) {
+	return values.map(value => toUint8(value))
+}
+
 export async function migrateEscalationDeposits(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
 	return await executeForkAuctionAction(client, 'migrateEscalationDeposits', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
 		address: getInfraContractAddresses().securityPoolForker,
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'migrateFromEscalationGame',
-		args: [securityPoolAddress, vaultAddress, getReportingOutcomeValue(outcome), depositIndexes.map(value => Number(value))],
+		args: [securityPoolAddress, vaultAddress, getReportingOutcomeValue(outcome), toUint8Array(depositIndexes)],
 	})))
 }
 
@@ -1491,8 +1528,8 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 			}),
 			loadMarketDetails(client, questionId),
 		])
-		if (!isForkDataTuple(forkData)) throw new Error('Unexpected fork data response')
-		const [, , truthAuctionStartedAt, migratedRep, , forkOwnSecurityPool, forkOutcomeIndex] = forkData
+		const forkDataTuple: ForkDataTuple = forkData
+		const [ , , truthAuctionStartedAt, migratedRep, , forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
 
 		const { vaultCount, vaults } = await loadSecurityPoolVaultSummaries(client, securityPoolAddress)
 		return {

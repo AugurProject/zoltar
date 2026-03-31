@@ -1,3 +1,4 @@
+import { UniverseLink } from './UniverseLink.js'
 import { parseReportingOutcomeInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
@@ -24,7 +25,9 @@ export function TradingSection({ accountState, onCreateCompleteSet, onMigrateSha
 							<p className="panel-label">Latest Trading Action</p>
 							<p className="detail">Action: {tradingResult.action}</p>
 							<p className="detail">Pool: {tradingResult.securityPoolAddress}</p>
-							<p className="detail">Universe: {tradingResult.universeId.toString()}</p>
+							<p className="detail">
+								Universe: <UniverseLink universeId={tradingResult.universeId} />
+							</p>
 							<p className="detail">Transaction: {tradingResult.hash}</p>
 						</div>
 					)}
