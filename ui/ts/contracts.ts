@@ -2,7 +2,7 @@ import { encodeAbiParameters, encodeDeployData, getAddress, getContractAddress, 
 import { ABIS } from './abis.js'
 import { ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_EscalationGame_EscalationGame, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from './contractArtifact.js'
 import { assertNever } from './lib/assert.js'
-import type { DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, ForkAuctionAction, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, MarketType, OpenOracleActionResult, OracleManagerDetails, OracleQueueOperation, QuestionData, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityPoolSystemState, SecurityPoolVaultSummary, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, TruthAuctionMetrics, WriteClient, ZoltarForkActionResult, ZoltarUniverseSummary } from './types/contracts.js'
+import type { DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, ForkAuctionAction, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, MarketType, OpenOracleActionResult, OracleManagerDetails, OracleQueueOperation, QuestionData, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityPoolSystemState, SecurityPoolVaultSummary, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, TruthAuctionMetrics, WriteClient, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarUniverseSummary } from './types/contracts.js'
 
 const GENESIS_REPUTATION_TOKEN = bigintToAddress(0x221657776846890989a759ba2973e427dff5c9bbn)
 const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
@@ -635,11 +635,9 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 
 	let childUniverses: ZoltarUniverseSummary['childUniverses'] = []
 	let forkQuestionDetails: MarketDetails | undefined = undefined
-	let forkQuestionMarketType: MarketType | undefined = undefined
 	if (hasForked && forkQuestionId > 0n) {
 		const marketDetails = await loadMarketDetails(client, forkQuestionId)
 		forkQuestionDetails = marketDetails
-		forkQuestionMarketType = marketDetails.marketType
 		if (marketDetails.marketType === 'scalar') {
 			const deployedChildUniverses: ZoltarUniverseSummary['childUniverses'] = []
 			let currentIndex = 0n
@@ -712,7 +710,6 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 		forkThreshold,
 		forkQuestionDetails,
 		forkQuestionId,
-		forkQuestionMarketType,
 		forkTime,
 		forkingOutcomeIndex,
 		hasForked,
@@ -1395,12 +1392,18 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 }
 
 export async function createZoltarChildUniverse(client: WriteClient, universeId: bigint, outcomeIndex: bigint) {
-	return await writeContractAndWait(client, () => client.writeContract({
+	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: getDeploymentStep('zoltar').address,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'migrateInternalRep',
 		args: [universeId, 0n, [outcomeIndex]],
 	}))
+	return {
+		action: 'createChildUniverse',
+		hash,
+		outcomeIndex,
+		universeId,
+	} satisfies ZoltarChildUniverseActionResult
 }
 
 export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
@@ -1421,12 +1424,29 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 	})))
 }
 
+function toUint8(value: bigint) {
+	if (value < 0n || value > 255n) {
+		throw new Error(`Deposit index out of range: ${ value.toString() }`)
+	}
+
+	const numberValue = Number(value)
+	if (!Number.isInteger(numberValue) || numberValue < 0 || numberValue > 255) {
+		throw new Error(`Deposit index out of range: ${ value.toString() }`)
+	}
+
+	return numberValue
+}
+
+function toUint8Array(values: bigint[]) {
+	return values.map(value => toUint8(value))
+}
+
 export async function migrateEscalationDeposits(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
 	return await executeForkAuctionAction(client, 'migrateEscalationDeposits', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
 		address: getInfraContractAddresses().securityPoolForker,
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'migrateFromEscalationGame',
-		args: [securityPoolAddress, vaultAddress, getReportingOutcomeValue(outcome), depositIndexes.map(value => Number(value))],
+		args: [securityPoolAddress, vaultAddress, getReportingOutcomeValue(outcome), toUint8Array(depositIndexes)],
 	})))
 }
 

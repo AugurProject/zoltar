@@ -4,37 +4,82 @@ pragma solidity 0.8.33;
 library ScalarOutcomes {
 	uint256 internal constant DECIMALS = 18;
 
-	function getTradeInterval(int256 minValue, int256 maxValue, uint256 numTicks) internal pure returns (int256) {
+	function getScalarOutcomeName(uint120[2] memory payoutNumerators, string memory unit, uint256 numTicks, int256 minValue, int256 maxValue) internal pure returns (string memory) {
 		require(numTicks > 0, 'numTicks=0');
 		require(maxValue > minValue, 'invalid range');
-		// Compute the difference as an unsigned integer using unchecked arithmetic.
-		// This works for all signed combinations without overflow.
+		uint256 payout = uint256(payoutNumerators[1]);
 		uint256 diffU;
 		unchecked {
 			diffU = uint256(maxValue) - uint256(minValue);
 		}
-		uint256 tradeIntervalU = diffU / numTicks;
-		// Ensure the trade interval fits in an int256.
-		require(tradeIntervalU <= uint256(type(int256).max), 'trade interval overflow');
-		return int256(tradeIntervalU);
-	}
-
-	function getScalarOutcomeName(uint120[2] memory payoutNumerators, string memory unit, uint256 numTicks, int256 minValue, int256 maxValue) internal pure returns (string memory) {
-		int256 tradeInterval = getTradeInterval(minValue, maxValue, numTicks);
-		// Perform multiplication and addition in uint256 to avoid overflow, with proper checks.
-		uint256 payout = uint256(payoutNumerators[1]);
-		uint256 tradeIntervalU = uint256(tradeInterval);
-		uint256 productU = payout * tradeIntervalU;
-		// Ensure the product can be represented as int256.
-		require(productU <= uint256(type(int256).max), 'product overflow');
-		// Ensure adding minValue does not overflow int256 when minValue > 0.
-		if (minValue > 0) {
-			require(productU <= uint256(type(int256).max) - uint256(minValue), 'scalarValue overflow');
-		}
-		int256 scalarValue = minValue + int256(productU);
+		uint256 scalarValueU = mulDiv(payout, diffU, numTicks);
+		int256 scalarValue = addInt256Uint256(minValue, scalarValueU);
 		string memory decimalString = intToDecimalString(scalarValue, DECIMALS);
 		if (bytes(unit).length == 0) return decimalString;
 		return string.concat(decimalString, ' ', unit);
+	}
+
+	function addInt256Uint256(int256 value, uint256 addend) internal pure returns (int256) {
+		if (value >= 0) {
+			uint256 valueU = uint256(value);
+			require(addend <= uint256(type(int256).max) - valueU, 'scalarValue overflow');
+			return int256(valueU + addend);
+		}
+		uint256 absoluteValue = absoluteInt256(value);
+		if (addend >= absoluteValue) {
+			uint256 positiveValue = addend - absoluteValue;
+			require(positiveValue <= uint256(type(int256).max), 'scalarValue overflow');
+			return int256(positiveValue);
+		}
+		uint256 negativeValue = absoluteValue - addend;
+		require(negativeValue <= uint256(type(int256).max) + 1, 'scalarValue overflow');
+		if (negativeValue == uint256(type(int256).max) + 1) return type(int256).min;
+		return -int256(negativeValue);
+	}
+
+	function absoluteInt256(int256 value) internal pure returns (uint256) {
+		if (value >= 0) return uint256(value);
+		unchecked {
+			return uint256(-(value + 1)) + 1;
+		}
+	}
+
+	function mulDiv(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256 result) {
+		require(denominator > 0, 'denominator=0');
+		unchecked {
+			uint256 prod0;
+			uint256 prod1;
+			assembly {
+				let mm := mulmod(x, y, not(0))
+				prod0 := mul(x, y)
+				prod1 := sub(sub(mm, prod0), lt(mm, prod0))
+			}
+			if (prod1 == 0) {
+				return prod0 / denominator;
+			}
+			require(denominator > prod1, 'mulDiv overflow');
+			uint256 remainder;
+			assembly {
+				remainder := mulmod(x, y, denominator)
+				prod1 := sub(prod1, gt(remainder, prod0))
+				prod0 := sub(prod0, remainder)
+			}
+			uint256 twos = denominator & (~denominator + 1);
+			assembly {
+				denominator := div(denominator, twos)
+				prod0 := div(prod0, twos)
+				twos := add(div(sub(0, twos), twos), 1)
+			}
+			prod0 |= prod1 * twos;
+			uint256 inverse = (3 * denominator) ^ 2;
+			inverse *= 2 - denominator * inverse;
+			inverse *= 2 - denominator * inverse;
+			inverse *= 2 - denominator * inverse;
+			inverse *= 2 - denominator * inverse;
+			inverse *= 2 - denominator * inverse;
+			inverse *= 2 - denominator * inverse;
+			result = prod0 * inverse;
+		}
 	}
 
 	function intToDecimalString(int256 value, uint256 decimals) internal pure returns (string memory) {

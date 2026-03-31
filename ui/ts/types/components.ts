@@ -49,7 +49,7 @@ export type DeploymentRouteContentProps = {
 export type MarketRouteContentProps = {
 	accountState: AccountState
 	onApproveZoltarForkRep: () => void
-	onCreateChildUniverse: (outcomeIndex: bigint) => void
+	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	onCreateMarket: () => void
 	onForkZoltar: () => void
 	marketCreating: boolean

@@ -24,7 +24,7 @@ export function AppRouteContent({ deployment, market, openOracle, route, securit
 					loadingZoltarQuestionCount={market.loadingZoltarQuestionCount}
 					loadingZoltarQuestions={market.loadingZoltarQuestions}
 					loadingZoltarUniverse={market.loadingZoltarUniverse}
-					onCreateChildUniverse={market.onCreateChildUniverse}
+					onCreateChildUniverseForOutcomeIndex={market.onCreateChildUniverseForOutcomeIndex}
 					marketForm={market.marketForm}
 					marketCreating={market.marketCreating}
 					marketError={market.marketError}

@@ -13,15 +13,37 @@ type QuestionSummaryProps = {
 	className?: string
 	loading?: boolean
 	question: MarketDetails | undefined
-	questionId: string
 }
 
-function getQuestionTitle(question: MarketDetails | undefined) {
-	return question === undefined ? 'Question details' : question.title.trim() === '' ? 'Untitled question' : question.title
+function getQuestionTitle(question: MarketDetails) {
+	return question.title.trim() === '' ? 'Untitled question' : question.title
 }
 
-function getQuestionDescription(question: MarketDetails | undefined) {
-	return question === undefined ? 'Loading question details...' : question.description.trim() === '' ? 'No description provided.' : question.description
+function getQuestionDescription(question: MarketDetails) {
+	return question.description.trim() === '' ? 'No description provided.' : question.description
+}
+
+function getDisplayRange(question: MarketDetails) {
+	return question.answerUnit === '' ? `${ question.displayValueMin.toString() } to ${ question.displayValueMax.toString() }` : `${ question.displayValueMin.toString() } to ${ question.displayValueMax.toString() } ${ question.answerUnit }`
+}
+
+function renderScalarQuestionFields(question: MarketDetails) {
+	return (
+		<>
+			<div>
+				<span className="metric-label">Ticks</span>
+				<strong>{question.numTicks.toString()}</strong>
+			</div>
+			<div>
+				<span className="metric-label">Display Range</span>
+				<strong>{getDisplayRange(question)}</strong>
+			</div>
+			<div>
+				<span className="metric-label">Answer Unit</span>
+				<strong>{question.answerUnit === '' ? 'None' : question.answerUnit}</strong>
+			</div>
+		</>
+	)
 }
 
 export function QuestionSummaryHeader({ className = '', description, loading = false, questionId, title }: QuestionSummaryHeaderProps) {
@@ -44,7 +66,7 @@ export function QuestionSummaryHeader({ className = '', description, loading = f
 	)
 }
 
-export function QuestionSummary({ className = '', loading = false, question, questionId }: QuestionSummaryProps) {
+export function QuestionSummary({ className = '', loading = false, question }: QuestionSummaryProps) {
 	if (loading || question === undefined) {
 		return (
 			<div className={`question-summary ${ className }`}>
@@ -65,44 +87,25 @@ export function QuestionSummary({ className = '', loading = false, question, que
 			<div className="question-summary-grid">
 				<div>
 					<span className="metric-label">Question ID</span>
-					<strong>{questionId}</strong>
+					<strong>{question.questionId}</strong>
 				</div>
 				<div>
 					<span className="metric-label">Type</span>
-					<strong>{question === undefined ? 'Loading...' : question.marketType}</strong>
+					<strong>{question.marketType}</strong>
 				</div>
-				{question === undefined ? undefined : (
-					<>
-						<div>
-							<span className="metric-label">Created</span>
-							<strong>{formatTimestamp(question.createdAt)}</strong>
-						</div>
-						<div>
-							<span className="metric-label">End Time</span>
-							<strong>{formatTimestamp(question.endTime)}</strong>
-						</div>
-						<div>
-							<span className="metric-label">Outcomes</span>
-							<strong>{question.outcomeLabels.length === 0 ? 'Scalar' : question.outcomeLabels.join(', ')}</strong>
-						</div>
-						{question.marketType === 'scalar' ? (
-							<>
-								<div>
-									<span className="metric-label">Ticks</span>
-									<strong>{question.numTicks.toString()}</strong>
-								</div>
-								<div>
-									<span className="metric-label">Display Range</span>
-									<strong>{question.answerUnit === '' ? `${ question.displayValueMin.toString() } to ${ question.displayValueMax.toString() }` : `${ question.displayValueMin.toString() } to ${ question.displayValueMax.toString() } ${ question.answerUnit }`}</strong>
-								</div>
-								<div>
-									<span className="metric-label">Answer Unit</span>
-									<strong>{question.answerUnit === '' ? 'None' : question.answerUnit}</strong>
-								</div>
-							</>
-						) : undefined}
-					</>
-				)}
+				<div>
+					<span className="metric-label">Created</span>
+					<strong>{formatTimestamp(question.createdAt)}</strong>
+				</div>
+				<div>
+					<span className="metric-label">End Time</span>
+					<strong>{formatTimestamp(question.endTime)}</strong>
+				</div>
+				<div>
+					<span className="metric-label">Outcomes</span>
+					<strong>{question.outcomeLabels.length === 0 ? 'Scalar' : question.outcomeLabels.join(', ')}</strong>
+				</div>
+				{question.marketType === 'scalar' ? renderScalarQuestionFields(question) : undefined}
 			</div>
 		</div>
 	)

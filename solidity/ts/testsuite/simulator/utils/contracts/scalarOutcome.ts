@@ -32,11 +32,6 @@ function validateTickIndex(question: ScalarQuestionDetails, tickIndex: bigint) {
 	if (tickIndex < 0n || tickIndex > question.numTicks) throw new Error('Tick index is out of range')
 }
 
-export function getScalarSliderProgress(tickIndex: bigint, numTicks: bigint) {
-	if (numTicks <= 0n) return 0
-	return Number((tickIndex * 100n) / numTicks)
-}
-
 export function getScalarOutcomeIndex(question: ScalarQuestionDetails, tickIndex: bigint) {
 	validateTickIndex(question, tickIndex)
 	return combineUint256FromTwoWithInvalid(false, question.numTicks - tickIndex, tickIndex)
