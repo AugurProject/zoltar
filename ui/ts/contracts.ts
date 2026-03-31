@@ -17,7 +17,7 @@ const MIGRATION_TIME_LENGTH = 4_838_400n
 const TRUTH_AUCTION_TIME_LENGTH = 604_800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
 const ANSWER_OPTION_ABI = [parseAbiItem('function getAnswerOptionName(uint256 questionId, uint256 answer) view returns (string memory)')]
-const CHILD_UNIVERSE_PAGE_SIZE = 30n
+const CONTRACT_PAGE_SIZE = 30n
 
 type DeployedChildUniverseRecord = {
 	forkQuestionId: bigint
@@ -482,14 +482,14 @@ async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'getOutcomeLabels',
 			address: getDeploymentStep('zoltarQuestionData').address,
-			args: [questionId, currentIndex, CHILD_UNIVERSE_PAGE_SIZE],
+			args: [questionId, currentIndex, CONTRACT_PAGE_SIZE],
 		})
 		if (!isStringArray(page)) throw new Error('Unexpected outcome labels response')
 
 		const labels = page.filter(label => label.length > 0)
 		outcomeLabels.push(...labels)
-		if (BigInt(labels.length) !== CHILD_UNIVERSE_PAGE_SIZE) break
-		currentIndex += CHILD_UNIVERSE_PAGE_SIZE
+		if (BigInt(labels.length) !== CONTRACT_PAGE_SIZE) break
+		currentIndex += CONTRACT_PAGE_SIZE
 	}
 
 	return outcomeLabels
@@ -504,7 +504,7 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
 			functionName: 'getDepositsByOutcome',
-			args: [getReportingOutcomeValue(outcome), currentIndex, CHILD_UNIVERSE_PAGE_SIZE],
+			args: [getReportingOutcomeValue(outcome), currentIndex, CONTRACT_PAGE_SIZE],
 		})
 		if (!isEscalationDepositPage(page)) throw new Error('Unexpected escalation deposits response')
 
@@ -518,8 +518,8 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 			.filter(deposit => deposit.depositor !== zeroAddress)
 
 		deposits.push(...normalizedPage)
-		if (BigInt(normalizedPage.length) !== CHILD_UNIVERSE_PAGE_SIZE) break
-		currentIndex += CHILD_UNIVERSE_PAGE_SIZE
+		if (BigInt(normalizedPage.length) !== CONTRACT_PAGE_SIZE) break
+		currentIndex += CONTRACT_PAGE_SIZE
 	}
 
 	return deposits
@@ -572,23 +572,22 @@ async function loadQuestionIds(client: ReadClient): Promise<bigint[]> {
 	})
 
 	let currentIndex = 0n
-	const pageSize = 30n
 	const questionIds: bigint[] = []
 	while (currentIndex < questionCount) {
 		const page = await client.readContract({
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'getQuestions',
 			address: getDeploymentStep('zoltarQuestionData').address,
-			args: [currentIndex, pageSize],
+			args: [currentIndex, CONTRACT_PAGE_SIZE],
 		})
 		if (!Array.isArray(page)) throw new Error('Unexpected question id page response')
 
 		const normalizedPage = page
 			.filter(questionId => typeof questionId === 'bigint' && questionId !== 0n)
-			.slice(0, Number(pageSize))
+			.slice(0, Number(CONTRACT_PAGE_SIZE))
 		questionIds.push(...normalizedPage)
-		if (BigInt(normalizedPage.length) !== pageSize) break
-		currentIndex += pageSize
+		if (BigInt(normalizedPage.length) !== CONTRACT_PAGE_SIZE) break
+		currentIndex += CONTRACT_PAGE_SIZE
 	}
 
 	return questionIds
@@ -646,7 +645,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 					abi: Zoltar_Zoltar.abi,
 					functionName: 'getDeployedChildUniverses',
 					address: getDeploymentStep('zoltar').address,
-					args: [universeId, currentIndex, CHILD_UNIVERSE_PAGE_SIZE],
+					args: [universeId, currentIndex, CONTRACT_PAGE_SIZE],
 				})
 				const [outcomeIndexes, childUniverseIds, childUniverseTuples] = page
 				const pageChildren = await Promise.all(outcomeIndexes.map(async (outcomeIndex, index) => {
@@ -672,8 +671,8 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 					}
 				}))
 				deployedChildUniverses.push(...pageChildren)
-				if (BigInt(pageChildren.length) !== CHILD_UNIVERSE_PAGE_SIZE) break
-				currentIndex += CHILD_UNIVERSE_PAGE_SIZE
+				if (BigInt(pageChildren.length) !== CONTRACT_PAGE_SIZE) break
+				currentIndex += CONTRACT_PAGE_SIZE
 			}
 			childUniverses = deployedChildUniverses
 		} else {
