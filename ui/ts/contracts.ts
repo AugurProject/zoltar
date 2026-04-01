@@ -1,10 +1,9 @@
 import { encodeAbiParameters, encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes, parseAbiItem, toHex, zeroAddress, type Address, type Hash, type Hex } from 'viem'
 import { ABIS } from './abis.js'
-import { ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_EscalationGame_EscalationGame, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from './contractArtifact.js'
+import { ReputationToken_ReputationToken, ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_EscalationGame_EscalationGame, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from './contractArtifact.js'
 import { assertNever } from './lib/assert.js'
-import type { DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, ForkAuctionAction, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, MarketType, OpenOracleActionResult, OracleManagerDetails, OracleQueueOperation, QuestionData, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityPoolSystemState, SecurityPoolVaultSummary, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, TruthAuctionMetrics, WriteClient, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarUniverseSummary } from './types/contracts.js'
+import type { DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, ForkAuctionAction, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, MarketType, OpenOracleActionResult, OracleManagerDetails, OracleQueueOperation, QuestionData, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityPoolSystemState, SecurityPoolVaultSummary, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, TruthAuctionMetrics, WriteClient, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult, ZoltarUniverseSummary } from './types/contracts.js'
 
-const GENESIS_REPUTATION_TOKEN = bigintToAddress(0x221657776846890989a759ba2973e427dff5c9bbn)
 const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
@@ -204,7 +203,10 @@ async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 
 async function writeContractAndWait(client: WriteClient, write: () => Promise<Hash>) {
 	const hash = await write()
-	await client.waitForTransactionReceipt({ hash })
+	const receipt = await client.waitForTransactionReceipt({ hash })
+	if (receipt.status === 'reverted') {
+		throw new Error('Transaction reverted')
+	}
 	return hash
 }
 
@@ -343,13 +345,12 @@ export async function loadDeploymentStatuses(client: ReadClient): Promise<Deploy
 	}))
 }
 
-export async function loadGenesisRepBalance(client: ReadClient, address: Address) {
-	return (await client.readContract({
-		abi: ABIS.mainnet.erc20,
-		functionName: 'balanceOf',
-		address: GENESIS_REPUTATION_TOKEN,
-		args: [address],
-	}))
+export async function loadZoltarDeploymentStatus(client: Pick<ReadClient, 'getCode'>) {
+	const zoltarStep = getDeploymentSteps().find(step => step.id === 'zoltar')
+	if (zoltarStep === undefined) throw new Error('Missing Zoltar deployment step')
+
+	const code = await client.getCode({ address: zoltarStep.address })
+	return code !== undefined && code !== '0x'
 }
 
 export async function loadErc20Balance(client: ReadClient, tokenAddress: Address, ownerAddress: Address) {
@@ -367,6 +368,15 @@ export async function loadErc20Allowance(client: ReadClient, tokenAddress: Addre
 		functionName: 'allowance',
 		address: tokenAddress,
 		args: [ownerAddress, spenderAddress],
+	})
+}
+
+export async function loadRepTokensMigratedRepBalance(client: ReadClient, universeId: bigint, address: Address) {
+	return await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'repTokensMigrated',
+		address: getDeploymentStep('zoltar').address,
+		args: [address, universeId],
 	})
 }
 
@@ -607,8 +617,16 @@ export async function loadZoltarQuestionCount(client: ReadClient) {
 	})
 }
 
-export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint): Promise<ZoltarUniverseSummary> {
-	const [universe, forkTime, forkThreshold] = await Promise.all([
+export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint): Promise<ZoltarUniverseSummary | undefined> {
+	const repToken = await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'getRepToken',
+		address: getDeploymentStep('zoltar').address,
+		args: [universeId],
+	})
+	if (repToken === zeroAddress) return undefined
+
+	const [universe, forkTime, forkThreshold, totalTheoreticalSupply] = await Promise.all([
 		client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'universes',
@@ -627,9 +645,15 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 			address: getDeploymentStep('zoltar').address,
 			args: [universeId],
 		}),
+		client.readContract({
+			abi: ReputationToken_ReputationToken.abi,
+			functionName: 'getTotalTheoreticalSupply',
+			address: repToken,
+			args: [],
+		}),
 	])
 	const universeData: UniverseTuple = universe
-	const [storedForkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId] = universeData
+	const [storedForkTime, forkQuestionId, forkingOutcomeIndex, , parentUniverseId] = universeData
 	const hasForked = forkTime > 0n || storedForkTime > 0n
 
 	let childUniverses: ZoltarUniverseSummary['childUniverses'] = []
@@ -712,7 +736,8 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 		forkingOutcomeIndex,
 		hasForked,
 		parentUniverseId,
-		reputationToken,
+		reputationToken: repToken,
+		totalTheoreticalSupply,
 		universeId,
 	}
 }
@@ -1402,6 +1427,39 @@ export async function createZoltarChildUniverse(client: WriteClient, universeId:
 		outcomeIndex,
 		universeId,
 	} satisfies ZoltarChildUniverseActionResult
+}
+
+async function executeZoltarMigrationAction(client: WriteClient, action: ZoltarMigrationActionResult['action'], universeId: bigint, amount: bigint, outcomeIndexes: bigint[], request: () => Promise<Hash>) {
+	const hash = await request()
+	const receipt = await client.waitForTransactionReceipt({ hash })
+	if (receipt.status === 'reverted') {
+		throw new Error('Transaction reverted')
+	}
+	return {
+		action,
+		amount,
+		hash,
+		outcomeIndexes,
+		universeId,
+	} satisfies ZoltarMigrationActionResult
+}
+
+export async function prepareRepForMigrationInZoltar(client: WriteClient, universeId: bigint, amount: bigint) {
+	return await executeZoltarMigrationAction(client, 'prepareRepForMigration', universeId, amount, [], async () => await writeContractAndWait(client, () => client.writeContract({
+		address: getDeploymentStep('zoltar').address,
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'prepareRepForMigration',
+		args: [universeId, amount],
+	})))
+}
+
+export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) {
+	return await executeZoltarMigrationAction(client, 'migrateInternalRep', universeId, amount, outcomeIndexes, async () => await writeContractAndWait(client, () => client.writeContract({
+		address: getDeploymentStep('zoltar').address,
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'migrateInternalRep',
+		args: [universeId, amount, outcomeIndexes],
+	})))
 }
 
 export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {

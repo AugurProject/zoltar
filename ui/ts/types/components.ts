@@ -1,6 +1,6 @@
 import type { Address } from 'viem'
-import type { AccountState, ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from './app.js'
-import type { DeploymentStatus, DeploymentStepId, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, OpenOracleActionResult, OracleManagerDetails, ReportingActionResult, ReportingDetails, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, ZoltarUniverseSummary } from './contracts.js'
+import type { AccountState, ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from './app.js'
+import type { DeploymentStatus, DeploymentStepId, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, OpenOracleActionResult, OracleManagerDetails, ReportingActionResult, ReportingDetails, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, ZoltarMigrationActionResult, ZoltarUniverseSummary } from './contracts.js'
 
 export type DeploymentSectionProps = {
 	title: string
@@ -14,15 +14,20 @@ export type DeploymentSectionProps = {
 
 export type OverviewPanelsProps = {
 	accountState: AccountState
+	universeRepBalance: bigint | undefined
+	isLoadingUniverseRepBalance: boolean
+	universeErrorMessage: string | undefined
 	universeLabel: string
 	isRefreshing: boolean
 	onConnect: () => void
+	onGoToGenesisUniverse: () => void
 	onRefresh: () => void
 }
 
 export type TabNavigationProps = {
 	route: Route
 	showDeployTab?: boolean
+	augurPlaceHolderDeployed: boolean
 	deployRoute: string
 	marketRoute: string
 	openOracleRoute: string
@@ -52,6 +57,8 @@ export type MarketRouteContentProps = {
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	onCreateMarket: () => void
 	onForkZoltar: () => void
+	onMigrateInternalRep: () => void
+	onPrepareRepForMigration: () => void
 	marketCreating: boolean
 	marketError: string | undefined
 	marketForm: MarketFormState
@@ -59,11 +66,12 @@ export type MarketRouteContentProps = {
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestions: boolean
 	loadingZoltarUniverse: boolean
+	zoltarUniverseMissing: boolean
 	onLoadZoltarQuestions: () => void
-	onLoadZoltarUniverse: () => void
 	onMarketFormChange: (update: Partial<MarketFormState>) => void
 	onUseQuestionForFork: (questionId: string) => void
 	onUseQuestionForPool: (questionId: string) => void
+	onZoltarMigrationFormChange: (update: Partial<ZoltarMigrationFormState>) => void
 	zoltarQuestionCount: bigint | undefined
 	zoltarForkAllowance: bigint | undefined
 	zoltarForkError: string | undefined
@@ -72,6 +80,11 @@ export type MarketRouteContentProps = {
 	zoltarForkPending: boolean
 	zoltarForkQuestionId: string
 	zoltarForkRepBalance: bigint | undefined
+	zoltarMigrationError: string | undefined
+	zoltarMigrationForm: ZoltarMigrationFormState
+	zoltarMigrationPending: boolean
+	zoltarMigrationPreparedRepBalance: bigint | undefined
+	zoltarMigrationResult: ZoltarMigrationActionResult | undefined
 	zoltarQuestions: MarketDetails[]
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	onZoltarForkQuestionIdChange: (questionId: string) => void

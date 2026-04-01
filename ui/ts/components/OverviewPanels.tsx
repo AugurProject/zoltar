@@ -2,7 +2,7 @@ import { LoadableValue } from './LoadableValue.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 
-export function OverviewPanels({ accountState, universeLabel, isRefreshing, onConnect, onRefresh }: OverviewPanelsProps) {
+export function OverviewPanels({ accountState, isLoadingUniverseRepBalance, onConnect, onGoToGenesisUniverse, onRefresh, universeErrorMessage, universeLabel, universeRepBalance, isRefreshing }: OverviewPanelsProps) {
 	return (
 		<section className="overview-shell">
 			<article className="panel overview-panel overview-wallet-panel">
@@ -27,14 +27,21 @@ export function OverviewPanels({ accountState, universeLabel, isRefreshing, onCo
 							<div>
 								<span className="metric-label">REP</span>
 								<strong>
-									<LoadableValue loading={isRefreshing && accountState.repBalance === undefined} placeholder="Loading...">
-										{formatCurrencyBalance(accountState.repBalance)} REP
+									<LoadableValue loading={isLoadingUniverseRepBalance} placeholder="Loading...">
+										{formatCurrencyBalance(universeRepBalance)} REP
 									</LoadableValue>
 								</strong>
 							</div>
 							<div>
 								<span className="metric-label">Universe</span>
-								<strong>{universeLabel}</strong>
+								<strong className={universeErrorMessage === undefined ? undefined : 'overview-universe-error'}>{universeErrorMessage ?? universeLabel}</strong>
+								{universeErrorMessage === undefined ? undefined : (
+									<div className="overview-universe-actions">
+										<button className="secondary" onClick={onGoToGenesisUniverse}>
+											Go to Genesis universe
+										</button>
+									</div>
+								)}
 							</div>
 						</div>
 					</div>

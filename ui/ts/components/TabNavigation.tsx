@@ -1,22 +1,44 @@
 import type { TabNavigationProps } from '../types/components.js'
 
-export function TabNavigation({ route, showDeployTab = true, deployRoute, marketRoute, openOracleRoute, securityPoolsRoute, onRouteChange }: TabNavigationProps) {
+function renderTabLink(route: Exclude<TabNavigationProps['route'], 'not-found'>, label: string, href: string, activeRoute: TabNavigationProps['route'], disabled: boolean, onRouteChange: TabNavigationProps['onRouteChange']) {
+	const isActive = activeRoute === route
+
+	return (
+		<a
+			className={`tab-link ${ isActive ? 'active' : '' }${ disabled ? ' disabled' : '' }`}
+			href={href}
+			aria-disabled={disabled ? 'true' : undefined}
+			tabIndex={disabled ? -1 : undefined}
+			title={disabled ? 'Deploy Augur PLACEHOLDER contracts before using this tab' : undefined}
+			onClick={event => {
+				event.preventDefault()
+				if (disabled) return
+				onRouteChange(route)
+			}}
+		>
+			{label}
+		</a>
+	)
+}
+
+export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDeployed, deployRoute, marketRoute, openOracleRoute, securityPoolsRoute, onRouteChange }: TabNavigationProps) {
 	return (
 		<nav className="tab-nav" aria-label="Application sections">
 			{showDeployTab ? (
-				<a className={`tab-link ${ route === 'deploy' ? 'active' : '' }`} href={deployRoute} onClick={() => onRouteChange('deploy')}>
+				<a
+					className={`tab-link ${ route === 'deploy' ? 'active' : '' }`}
+					href={deployRoute}
+					onClick={event => {
+						event.preventDefault()
+						onRouteChange('deploy')
+					}}
+				>
 					Deploy
 				</a>
 			) : undefined}
-			<a className={`tab-link ${ route === 'zoltar' ? 'active' : '' }`} href={marketRoute} onClick={() => onRouteChange('zoltar')}>
-				Zoltar
-			</a>
-			<a className={`tab-link ${ route === 'security-pools' ? 'active' : '' }`} href={securityPoolsRoute} onClick={() => onRouteChange('security-pools')}>
-				Security Pools
-			</a>
-			<a className={`tab-link ${ route === 'open-oracle' ? 'active' : '' }`} href={openOracleRoute} onClick={() => onRouteChange('open-oracle')}>
-				Open Oracle
-			</a>
+			{renderTabLink('zoltar', 'Zoltar', marketRoute, route, !augurPlaceHolderDeployed, onRouteChange)}
+			{renderTabLink('security-pools', 'Security Pools', securityPoolsRoute, route, !augurPlaceHolderDeployed, onRouteChange)}
+			{renderTabLink('open-oracle', 'Open Oracle', openOracleRoute, route, !augurPlaceHolderDeployed, onRouteChange)}
 		</nav>
 	)
 }

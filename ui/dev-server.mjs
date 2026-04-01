@@ -5,12 +5,48 @@ import * as url from 'node:url'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const rootDirectory = directoryOfThisFile
+const liveReloadClients = new Set()
+
+const sendLiveReloadEvent = reason => {
+	for (const client of liveReloadClients) {
+		try {
+			client.write(`event: reload\ndata: ${ JSON.stringify({ reason }) }\n\n`)
+		} catch {
+			liveReloadClients.delete(client)
+		}
+	}
+}
 
 const server = http.createServer()
 server.on('request', async (request, response) => {
 	try {
 		const requestUrl = new URL(request.url === undefined ? '/' : request.url, 'http://localhost')
 		const requestPath = requestUrl.pathname
+		if (requestPath === '/__live-reload') {
+			if (request.method === 'GET') {
+				response.writeHead(200, {
+					'Cache-Control': 'no-cache',
+					'Connection': 'keep-alive',
+					'Content-Type': 'text/event-stream',
+					'X-Accel-Buffering': 'no',
+				})
+				response.write('retry: 1000\n\n')
+				liveReloadClients.add(response)
+				request.on('close', () => {
+					liveReloadClients.delete(response)
+				})
+				return
+			}
+			if (request.method === 'POST') {
+				sendLiveReloadEvent(requestUrl.searchParams.get('reason') ?? 'ui update')
+				response.writeHead(204)
+				response.end()
+				return
+			}
+			response.writeHead(405)
+			response.end()
+			return
+		}
 		const urlPath = requestPath.endsWith('/') ? `${ requestPath }index.html` : requestPath
 		const relativeFilePath = decodeURI(urlPath).replace(/^\/+/, '')
 		const filePath = path.resolve(rootDirectory, relativeFilePath)

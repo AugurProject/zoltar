@@ -1,12 +1,18 @@
 import { useMemo, useState } from 'preact/hooks'
 import type { Address } from 'viem'
+import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { EntityCard } from './EntityCard.js'
 import { QuestionSummary } from './QuestionSummary.js'
-import { parseMarketTypeInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import type { MarketFormState } from '../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../types/contracts.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
+
+const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
+	{ value: 'binary', label: 'Binary' },
+	{ value: 'categorical', label: 'Categorical' },
+	{ value: 'scalar', label: 'Scalar' },
+]
 
 type MarketCreateQuestionSectionProps = {
 	accountAddress: Address | undefined
@@ -86,11 +92,7 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 				<div className="form-grid">
 					<label className="field">
 						<span>Question Type</span>
-						<select value={marketForm.marketType} onInput={event => onMarketFormChange({ marketType: parseMarketTypeInput(event.currentTarget.value) })}>
-							<option value="binary">Binary</option>
-							<option value="categorical">Categorical</option>
-							<option value="scalar">Scalar</option>
-						</select>
+						<EnumDropdown options={MARKET_TYPE_OPTIONS} value={marketForm.marketType} onChange={marketType => onMarketFormChange({ marketType })} />
 					</label>
 
 					<label className="field">

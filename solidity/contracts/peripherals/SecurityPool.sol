@@ -405,12 +405,12 @@ contract SecurityPool is ISecurityPool {
 		systemState = newState;
 	}
 
-	function configureVault(address vault, uint256 poolOwnership, uint256 securityBondAllowance, uint256 feeIndex) external onlyForker {
+	function configureVault(address vault, uint256 poolOwnership, uint256 securityBondAllowance, uint256 vaultFeeIndex) external onlyForker {
 		require(vault != address(0x0), 'invalid vault');
 		_trackVault(vault);
 		securityVaults[vault].poolOwnership = poolOwnership;
 		securityVaults[vault].securityBondAllowance = securityBondAllowance;
-		securityVaults[vault].feeIndex = feeIndex;
+		securityVaults[vault].feeIndex = vaultFeeIndex;
 	}
 
 	function _trackVault(address vault) private {

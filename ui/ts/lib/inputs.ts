@@ -1,4 +1,4 @@
-import type { MarketType, OracleQueueOperation, ReportingOutcomeKey } from '../types/contracts.js'
+import type { OracleQueueOperation, ReportingOutcomeKey } from '../types/contracts.js'
 import { getAddress, isHex, type Address, type Hex } from 'viem'
 import { parseBigIntInput } from './marketForm.js'
 
@@ -30,17 +30,6 @@ export function parseBigIntListInput(value: string, label: string) {
 	if (values.length === 0) throw new Error(`${ label } is required`)
 
 	return values.map((entry, index) => parseBigIntInput(entry, `${ label } #${ index + 1 }`))
-}
-
-export function parseMarketTypeInput(value: string): MarketType {
-	switch (value) {
-		case 'binary':
-		case 'categorical':
-		case 'scalar':
-			return value
-		default:
-			throw new Error(`Unknown market type: ${ value }`)
-	}
 }
 
 export function parseReportingOutcomeInput(value: string): ReportingOutcomeKey {

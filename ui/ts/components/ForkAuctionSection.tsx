@@ -1,8 +1,8 @@
+import { EnumDropdown } from './EnumDropdown.js'
 import { QuestionSummaryHeader } from './QuestionSummary.js'
 import { UniverseLink } from './UniverseLink.js'
 import { formatCurrencyBalance, formatDuration, formatTimestamp } from '../lib/formatters.js'
 import { AUCTION_TIME_SECONDS, estimateRepPurchased, getForkStageDescription, getOutcomeActionLabel, getSystemStateLabel, getTimeRemaining, MIGRATION_TIME_SECONDS } from '../lib/forkAuction.js'
-import { parseReportingOutcomeInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
@@ -190,13 +190,7 @@ export function ForkAuctionSection({ accountState, forkAuctionDetails, forkAucti
 
 						<label className="field">
 							<span>Outcome</span>
-							<select value={forkAuctionForm.selectedOutcome} onInput={event => onForkAuctionFormChange({ selectedOutcome: parseReportingOutcomeInput(event.currentTarget.value) })}>
-								{REPORTING_OUTCOME_OPTIONS.map(option => (
-									<option key={option.key} value={option.key}>
-										{option.label}
-									</option>
-								))}
-							</select>
+							<EnumDropdown options={REPORTING_OUTCOME_OPTIONS.map(option => ({ value: option.key, label: option.label }))} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
 						</label>
 
 						<label className="field">

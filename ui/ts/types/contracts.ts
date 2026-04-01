@@ -39,6 +39,7 @@ export type ZoltarUniverseSummary = {
 	hasForked: boolean
 	parentUniverseId: bigint
 	reputationToken: Address
+	totalTheoreticalSupply: bigint
 	universeId: bigint
 }
 
@@ -71,6 +72,14 @@ export type ZoltarChildUniverseActionResult = {
 	action: 'createChildUniverse'
 	hash: Hash
 	outcomeIndex: bigint
+	universeId: bigint
+}
+
+export type ZoltarMigrationActionResult = {
+	action: 'prepareRepForMigration' | 'migrateInternalRep'
+	amount: bigint
+	hash: Hash
+	outcomeIndexes: bigint[]
 	universeId: bigint
 }
 

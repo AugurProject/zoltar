@@ -1,4 +1,5 @@
-import type { ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
+import { parseUnits } from 'viem'
+import type { ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
 
 const DEFAULT_CURRENT_RETENTION_RATE = '10'
 
@@ -83,6 +84,26 @@ export function getDefaultForkAuctionFormState(): ForkAuctionFormState {
 		withdrawBidIndex: '0',
 		withdrawForAddress: '',
 		withdrawTick: '0',
+	}
+}
+
+export function getDefaultZoltarMigrationFormState(): ZoltarMigrationFormState {
+	return {
+		amount: '0.0',
+		outcomeIndexes: '0',
+	}
+}
+
+export function parseRepAmountInput(value: string, label: string) {
+	const trimmed = value.trim()
+	if (trimmed === '') throw new Error(`${ label } is required`)
+
+	const normalized = trimmed.startsWith('.') ? `0${ trimmed }` : trimmed.endsWith('.') ? `${ trimmed }0` : trimmed
+
+	try {
+		return parseUnits(normalized, 18)
+	} catch {
+		throw new Error(`${ label } must be a decimal number`)
 	}
 }
 

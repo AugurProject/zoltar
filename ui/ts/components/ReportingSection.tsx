@@ -1,7 +1,7 @@
+import { EnumDropdown } from './EnumDropdown.js'
 import { QuestionSummaryHeader } from './QuestionSummary.js'
 import { UniverseLink } from './UniverseLink.js'
 import { formatCurrencyBalance, formatDuration, formatTimestamp } from '../lib/formatters.js'
-import { parseReportingOutcomeInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome } from '../lib/reportingDomain.js'
@@ -155,13 +155,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 
 						<label className="field">
 							<span>Outcome Side</span>
-							<select value={reportingForm.selectedOutcome} onInput={event => onReportingFormChange({ selectedOutcome: parseReportingOutcomeInput(event.currentTarget.value) })}>
-								{REPORTING_OUTCOME_OPTIONS.map(option => (
-									<option key={option.key} value={option.key}>
-										{option.label}
-									</option>
-								))}
-							</select>
+							<EnumDropdown options={REPORTING_OUTCOME_OPTIONS.map(option => ({ value: option.key, label: option.label }))} value={reportingForm.selectedOutcome} onChange={selectedOutcome => onReportingFormChange({ selectedOutcome })} />
 						</label>
 
 						<label className="field">
