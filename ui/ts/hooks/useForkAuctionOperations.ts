@@ -1,8 +1,9 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { claimSecurityPoolAuctionProceeds, createChildUniverseFromSecurityPool, finalizeSecurityPoolTruthAuction, forkUniverseDirectly, forkZoltarWithOwnEscalation, initiateSecurityPoolFork, loadForkAuctionDetails, migrateEscalationDeposits, migrateRepToZoltarFromSecurityPool, migrateSecurityVault, refundTruthAuctionBid, startTruthAuctionForSecurityPool, submitTruthAuctionBid, withdrawTruthAuctionBids } from '../contracts.js'
-import { createReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput } from '../lib/inputs.js'
 import { getDefaultForkAuctionFormState, parseBigIntInput } from '../lib/marketForm.js'
 import type { ForkAuctionFormState } from '../types/app.js'
@@ -53,35 +54,30 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 		}
 	}
 
-	const runForkAuctionAction = async (action: (walletAddress: Address, details: ForkAuctionDetails) => Promise<ForkAuctionActionResult>, errorFallback: string) => {
-		try {
-			getRequiredInjectedEthereum()
-		} catch {
-			forkAuctionError.value = 'No injected wallet found'
-			return
-		}
-		if (accountAddress === undefined) {
-			forkAuctionError.value = 'Connect a wallet before using fork or truth auction actions'
-			return
-		}
-
-		try {
-			onTransactionRequested()
-			forkAuctionError.value = undefined
-			forkAuctionResult.value = undefined
-			const details = forkAuctionDetails.value ?? (await loadForkAuctionDetails(createReadClient(), parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address')))
-			const result = await action(accountAddress, details)
-			forkAuctionResult.value = result
-			onTransaction(result.hash)
-			await refreshState()
-			const updatedDetails = await loadForkAuctionDetails(createReadClient(), details.securityPoolAddress)
-			forkAuctionDetails.value = updatedDetails
-		} catch (error) {
-			forkAuctionError.value = getErrorMessage(error, errorFallback)
-		} finally {
-			onTransactionFinished()
-		}
-	}
+	const runForkAuctionAction = async (action: (walletAddress: Address, details: ForkAuctionDetails) => Promise<ForkAuctionActionResult>, errorFallback: string) =>
+		await runWriteAction(
+			{
+				accountAddress,
+				missingWalletMessage: 'Connect a wallet before using fork or truth auction actions',
+				onTransaction,
+				onTransactionFinished,
+				onTransactionRequested,
+				refreshState,
+				setErrorMessage: message => {
+					forkAuctionError.value = message
+				},
+			},
+			async walletAddress => {
+				forkAuctionResult.value = undefined
+				const details = forkAuctionDetails.value ?? await loadForkAuctionDetails(createReadClient(), parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address'))
+				return await action(walletAddress, details)
+			},
+			errorFallback,
+			async result => {
+				forkAuctionResult.value = result
+				forkAuctionDetails.value = await loadForkAuctionDetails(createReadClient(), result.securityPoolAddress)
+			},
+		)
 
 	const forkWithOwnEscalation = async () => await runForkAuctionAction(async (walletAddress, details) => await forkZoltarWithOwnEscalation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId), 'Failed to fork with own escalation game')
 

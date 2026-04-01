@@ -3,6 +3,7 @@ import type { Address, Hash } from 'viem'
 import { approveErc20, loadOracleManagerDetails, queueOracleManagerOperation, requestOraclePrice, settleOracleReport, submitInitialOracleReport } from '../contracts.js'
 import { createReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput, parseBytes32Input, parseOracleQueueOperationInput, parseReportIdInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import { getDefaultOpenOracleFormState } from '../lib/marketForm.js'
@@ -47,29 +48,31 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		}
 	}
 
-	const runOracleAction = async (action: (walletAddress: Address) => Promise<OpenOracleActionResult>, errorFallback: string) => {
-		if (accountAddress === undefined) {
-			openOracleError.value = 'Connect a wallet before operating open oracle'
-			return
-		}
-
-		try {
-			onTransactionRequested()
-			openOracleError.value = undefined
-			openOracleResult.value = undefined
-			const result = await action(accountAddress)
-			openOracleResult.value = result
-			onTransaction(result.hash)
-			await refreshState()
-			if (openOracleForm.value.managerAddress.trim() !== '') {
-				await loadOracleManager()
-			}
-		} catch (error) {
-			openOracleError.value = getErrorMessage(error, errorFallback)
-		} finally {
-			onTransactionFinished()
-		}
-	}
+	const runOracleAction = async (action: (walletAddress: Address) => Promise<OpenOracleActionResult>, errorFallback: string) =>
+		await runWriteAction(
+			{
+				accountAddress,
+				missingWalletMessage: 'Connect a wallet before operating open oracle',
+				onTransaction,
+				onTransactionFinished,
+				onTransactionRequested,
+				refreshState,
+				setErrorMessage: message => {
+					openOracleError.value = message
+				},
+			},
+			async walletAddress => {
+				openOracleResult.value = undefined
+				return await action(walletAddress)
+			},
+			errorFallback,
+			async result => {
+				openOracleResult.value = result
+				if (openOracleForm.value.managerAddress.trim() !== '') {
+					await loadOracleManager()
+				}
+			},
+		)
 
 	const approveToken1 = async () =>
 		await runOracleAction(async walletAddress => {

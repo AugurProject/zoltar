@@ -6,7 +6,7 @@ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint'
-import { addRepToMigrationBalance, ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, isZoltarDeployed, splitMigrationRep } from '../testsuite/simulator/utils/contracts/zoltar'
+import { addRepToMigrationBalance, deployChild, ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, isZoltarDeployed, splitMigrationRep } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getAnswerOptionName, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureDefined } from '../testsuite/simulator/utils/testUtils'
 import { Zoltar_Zoltar } from '../types/contractArtifact'
@@ -119,6 +119,44 @@ describe('Contract Test Suite', () => {
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, priorSplitBalance + priorBalance, 'after split balance mismatch')
 		}
+	})
+
+	test('deployChild creates a child universe without requiring migration balance', async () => {
+		const zoltar = getZoltarAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		const questionData = {
+			title: 'deploy child test',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getQuestionId(questionData, outcomes)
+		await forkUniverse(client, genesisUniverse, questionId)
+
+		// Use a second account that has no migration balance to call deployChild.
+		// This verifies the property createZoltarChildUniverse in the UI relies on:
+		// any caller can deploy a child universe regardless of migration balance.
+		const deployer = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const deployerMigrationBalance = await getMigrationRepBalance(deployer, genesisUniverse, deployer.account.address)
+		assert.strictEqual(deployerMigrationBalance, 0n, 'deployer should have no migration balance')
+
+		const outcomeIndex = 0n
+		await deployChild(deployer, genesisUniverse, outcomeIndex)
+
+		const childUniverseId = getChildUniverseId(genesisUniverse, outcomeIndex)
+		const childRepToken = getRepTokenAddress(childUniverseId)
+		assert.ok(await contractExists(deployer, childRepToken), 'child universe rep token should be deployed after deployChild')
+
+		const childUniverseData = await getUniverseData(deployer, childUniverseId)
+		assert.strictEqual(childUniverseData.forkingOutcomeIndex, outcomeIndex, 'child universe should record the correct outcome index')
+		assert.strictEqual(childUniverseData.parentUniverseId, genesisUniverse, 'child universe should point back to the parent')
 	})
 
 	test('getDeployedChildUniverses pages deployed child universes', async () => {

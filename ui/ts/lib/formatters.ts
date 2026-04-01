@@ -1,13 +1,10 @@
-import { formatEther, formatUnits, type Address } from 'viem'
+import { formatEther, formatUnits } from 'viem'
 
 const MILLISECONDS_PER_SECOND = 1000
 const SECONDS_PER_MINUTE = 60n
 const SECONDS_PER_HOUR = 60n * SECONDS_PER_MINUTE
 const SECONDS_PER_DAY = 24n * SECONDS_PER_HOUR
 
-export function formatAddress(address: Address) {
-	return address
-}
 
 function formatDecimalString(value: string) {
 	const isNegative = value.startsWith('-')

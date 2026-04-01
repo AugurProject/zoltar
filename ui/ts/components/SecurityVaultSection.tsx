@@ -1,6 +1,6 @@
 import { EntityCard } from './EntityCard.js'
 import { UniverseLink } from './UniverseLink.js'
-import { formatAddress, formatCurrencyBalance } from '../lib/formatters.js'
+import { formatCurrencyBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
@@ -20,15 +20,15 @@ export function SecurityVaultSection({ accountState, loadingSecurityVault, onApp
 			<div className="market-grid">
 				<div className="market-column">
 					{securityVaultDetails === undefined ? undefined : (
-						<EntityCard title={formatAddress(securityVaultDetails.vaultAddress)} badge={<span className="badge ok">Your Vault</span>}>
+						<EntityCard title={securityVaultDetails.vaultAddress} badge={<span className="badge ok">Your Vault</span>}>
 							<div className="entity-metric-grid">
 								<div className="entity-metric">
 									<span className="metric-label">Security Pool</span>
-									<strong>{formatAddress(securityVaultDetails.securityPoolAddress)}</strong>
+									<strong>{securityVaultDetails.securityPoolAddress}</strong>
 								</div>
 								<div className="entity-metric">
 									<span className="metric-label">REP Token</span>
-									<strong>{formatAddress(securityVaultDetails.repToken)}</strong>
+									<strong>{securityVaultDetails.repToken}</strong>
 								</div>
 								<div className="entity-metric">
 									<span className="metric-label">Universe</span>

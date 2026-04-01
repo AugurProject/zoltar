@@ -5,7 +5,7 @@ import { ChildUniversesSection } from './ChildUniversesSection.js'
 import { LoadableValue } from './LoadableValue.js'
 import { QuestionSummaryHeader } from './QuestionSummary.js'
 import { ScalarDeploymentSection } from './ScalarDeploymentSection.js'
-import { formatAddress, formatCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
+import { formatCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
 import { formatUniverseCollectionLabel } from '../lib/universe.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -65,7 +65,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 						) : undefined}
 						<div>
 							<span className="metric-label">Reputation Token</span>
-							<strong>{formatAddress(rootUniverse.reputationToken)}</strong>
+							<strong>{rootUniverse.reputationToken}</strong>
 						</div>
 						<div>
 							<span className="metric-label">Total Theoretical Supply</span>

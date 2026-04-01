@@ -1,8 +1,9 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool } from '../contracts.js'
-import { createReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput, parseBigIntListInput } from '../lib/inputs.js'
 import { getDefaultReportingFormState, parseBigIntInput } from '../lib/marketForm.js'
 import type { ReportingFormState } from '../types/app.js'
@@ -41,33 +42,31 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 
 	const runReportingAction = async (action: (walletAddress: Address, securityPoolAddress: Address, currentForm: ReportingFormState) => Promise<ReportingActionResult>, errorFallback: string) => {
 		const currentForm = reportingForm.value
-		try {
-			getRequiredInjectedEthereum()
-		} catch {
-			reportingError.value = 'No injected wallet found'
-			return
-		}
-		if (accountAddress === undefined) {
-			reportingError.value = 'Connect a wallet before reporting on a market'
-			return
-		}
-
-		try {
-			onTransactionRequested()
-			reportingError.value = undefined
-			reportingResult.value = undefined
-			const securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
-			const result = await action(accountAddress, securityPoolAddress, currentForm)
-			reportingResult.value = result
-			onTransaction(result.hash)
-			await refreshState()
-			const details = await loadReportingDetails(createReadClient(), securityPoolAddress, accountAddress)
-			reportingDetails.value = details
-		} catch (error) {
-			reportingError.value = getErrorMessage(error, errorFallback)
-		} finally {
-			onTransactionFinished()
-		}
+		await runWriteAction(
+			{
+				accountAddress,
+				missingWalletMessage: 'Connect a wallet before reporting on a market',
+				onTransaction,
+				onTransactionFinished,
+				onTransactionRequested,
+				refreshState,
+				setErrorMessage: message => {
+					reportingError.value = message
+				},
+			},
+			async walletAddress => {
+				reportingResult.value = undefined
+				const securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
+				return await action(walletAddress, securityPoolAddress, currentForm)
+			},
+			errorFallback,
+			async (result) => {
+				reportingResult.value = result
+				const securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
+				const details = await loadReportingDetails(createReadClient(), securityPoolAddress, accountAddress)
+				reportingDetails.value = details
+			},
+		)
 	}
 
 	const reportOutcome = async () => await runReportingAction(async (walletAddress, securityPoolAddress, currentForm) => await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, parseBigIntInput(currentForm.reportAmount, 'Report amount')), 'Failed to report on outcome')
