@@ -41,6 +41,23 @@ function getMigrationAmountSource(preparedRepBalance: bigint | undefined, repBal
 	return (preparedRepBalance ?? 0n) + (repBalance ?? 0n)
 }
 
+function getMigrationGuardMessage(
+	accountAddress: Address | undefined,
+	isMainnet: boolean,
+	rootUniverse: ZoltarUniverseSummary | undefined,
+	loadingZoltarForkAccess: boolean,
+	hasForked: boolean,
+	loadingZoltarUniverse: boolean,
+	notForkedAction: string,
+): string | undefined {
+	if (accountAddress === undefined) return 'Connect a wallet before using REP migration actions.'
+	if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
+	if (rootUniverse === undefined) return loadingZoltarUniverse ? 'Loading universe...' : 'Load the universe first.'
+	if (loadingZoltarForkAccess) return 'Loading REP balances...'
+	if (!hasForked) return notForkedAction
+	return undefined
+}
+
 function getMissingPreparationAmount(targetAmount: bigint, preparedRepBalance: bigint | undefined) {
 	const currentPreparedBalance = preparedRepBalance ?? 0n
 	return targetAmount > currentPreparedBalance ? targetAmount - currentPreparedBalance : 0n
@@ -77,11 +94,8 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 	const canSplit = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && hasPreparedBalance && hasValidOutcomeIndexes
 	const migrationAmountSource = getMigrationAmountSource(zoltarMigrationPreparedRepBalance, zoltarForkRepBalance)
 	const prepareHintMessage = (() => {
-		if (accountAddress === undefined) return 'Connect a wallet before using REP migration actions.'
-		if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
-		if (rootUniverse === undefined) return loadingZoltarUniverse ? 'Loading universe...' : 'Load the universe first.'
-		if (loadingZoltarForkAccess) return 'Loading REP balances...'
-		if (!hasForked) return 'Fork Zoltar before preparing REP.'
+		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before preparing REP.')
+		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return 'Enter an amount greater than zero.'
 		if (missingPreparationAmount === undefined) return 'Enter a valid amount.'
 		if (missingPreparationAmount === 0n) return 'This amount is already in your migration balance. Split REP when ready.'
@@ -91,11 +105,8 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 		return `Add ${ formatCurrencyBalance(missingPreparationAmount) } REP to your migration balance from this universe, then split it across the selected universes.`
 	})()
 	const splitHintMessage = (() => {
-		if (accountAddress === undefined) return 'Connect a wallet before using REP migration actions.'
-		if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
-		if (rootUniverse === undefined) return loadingZoltarUniverse ? 'Loading universe...' : 'Load the universe first.'
-		if (loadingZoltarForkAccess) return 'Loading REP balances...'
-		if (!hasForked) return 'Fork Zoltar before migrating REP.'
+		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before migrating REP.')
+		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return 'Enter an amount greater than zero.'
 		if (!hasPreparedBalance) {
 			return `Add ${ formatCurrencyBalance(missingPreparationAmount ?? 0n) } REP to your migration balance first, then split it across the selected universes.`
@@ -104,11 +115,8 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 		return 'Split the migration REP across the selected universes.'
 	})()
 	const migrationAmountHintMessage = (() => {
-		if (accountAddress === undefined) return 'Connect a wallet before using REP migration actions.'
-		if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
-		if (rootUniverse === undefined) return loadingZoltarUniverse ? 'Loading universe...' : 'Load the universe first.'
-		if (loadingZoltarForkAccess) return 'Loading REP balances...'
-		if (!hasForked) return 'Fork Zoltar before migrating REP.'
+		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before migrating REP.')
+		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return undefined
 		if (amountExceedsAvailableRep) {
 			return `You only have ${ formatCurrencyBalance(totalRepAvailable) } REP available for migration in this universe (${ formatCurrencyBalance(zoltarMigrationPreparedRepBalance) } in your migration balance and ${ formatCurrencyBalance(zoltarForkRepBalance) } wallet REP).`
@@ -126,24 +134,16 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 		toggleOutcomeIndex(nextOutcome.outcomeIndex)
 	}
 	const toggleOutcomeIndex = (outcomeIndex: bigint) => {
-		const currentIndexes = (() => {
-			try {
-				return getMigrationOutcomeIndexes(zoltarMigrationForm.outcomeIndexes)
-			} catch {
-				return []
-			}
-		})()
-		const currentIndexStrings = new Set(currentIndexes.map(index => index.toString()))
-		if (currentIndexStrings.has(outcomeIndex.toString())) {
+		if (selectedOutcomeIndexSet.has(outcomeIndex.toString())) {
 			onZoltarMigrationFormChange({
-				outcomeIndexes: currentIndexes
-					.filter(index => index !== outcomeIndex)
-					.map(index => index.toString())
+				outcomeIndexes: selectedOutcomeIndexes
+					.filter((index: bigint) => index !== outcomeIndex)
+					.map((index: bigint) => index.toString())
 					.join(', '),
 			})
 			return
 		}
-		onZoltarMigrationFormChange({ outcomeIndexes: [...currentIndexes, outcomeIndex].map(index => index.toString()).join(', ') })
+		onZoltarMigrationFormChange({ outcomeIndexes: [...selectedOutcomeIndexes, outcomeIndex].map((index: bigint) => index.toString()).join(', ') })
 	}
 
 	if (universeMissing) {

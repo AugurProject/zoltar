@@ -1,6 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
+import { useRequestGuard } from '../lib/requestGuard.js'
 import { approveErc20, createMarket as createMarketTransaction, createZoltarChildUniverse, forkZoltarUniverse, getDeploymentSteps, loadAllZoltarQuestions, loadErc20Allowance, loadErc20Balance, loadRepTokensMigratedRepBalance, loadZoltarQuestionCount, loadZoltarUniverseSummary, migrateInternalRepInZoltar, prepareRepForMigrationInZoltar } from '../contracts.js'
 import { createReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
@@ -37,15 +38,11 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 	const marketCreating = useSignal(false)
 	const marketResult = useSignal<MarketCreationResult | undefined>(undefined)
 	const marketError = useSignal<string | undefined>(undefined)
-	const isMounted = useSignal(true)
 	const loadingZoltarUniverse = useSignal(false)
 	const zoltarUniverseMissing = useSignal(false)
-	const zoltarUniverseLoadRequestId = useSignal(0)
 	const zoltarUniverseLoadedId = useSignal<bigint | undefined>(undefined)
 	const loadingZoltarQuestionCount = useSignal(false)
 	const loadingZoltarQuestions = useSignal(false)
-	const zoltarQuestionCountLoadRequestId = useSignal(0)
-	const zoltarQuestionsLoadRequestId = useSignal(0)
 	const zoltarQuestionCount = useSignal<bigint | undefined>(undefined)
 	const zoltarQuestions = useSignal<MarketDetails[]>([])
 	const zoltarUniverse = useSignal<ZoltarUniverseSummary | undefined>(undefined)
@@ -58,19 +55,15 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 	const zoltarMigrationPreparedRepBalance = useSignal<bigint | undefined>(undefined)
 	const zoltarMigrationChildRepBalances = useSignal<Record<string, bigint | undefined>>({})
 	const loadingZoltarForkAccess = useSignal(false)
-	const zoltarForkAccessLoadRequestId = useSignal(0)
+	const nextUniverseLoad = useRequestGuard()
+	const nextForkAccessLoad = useRequestGuard()
+	const nextQuestionCountLoad = useRequestGuard()
+	const nextQuestionsLoad = useRequestGuard()
 	const zoltarChildUniverseError = useSignal<string | undefined>(undefined)
 	const zoltarMigrationError = useSignal<string | undefined>(undefined)
 	const zoltarMigrationPending = useSignal(false)
 	const zoltarMigrationResult = useSignal<ZoltarMigrationActionResult | undefined>(undefined)
 	const zoltarMigrationForm = useSignal<ZoltarMigrationFormState>(getDefaultZoltarMigrationFormState())
-
-	useEffect(
-		() => () => {
-			isMounted.value = false
-		},
-		[],
-	)
 
 	const ensureZoltarUniverse = async (): Promise<ZoltarUniverseSummary> => {
 		if (zoltarUniverse.value !== undefined && zoltarUniverseLoadedId.value === activeUniverseId) return zoltarUniverse.value
@@ -91,13 +84,12 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 			return
 		}
 
-		const requestId = zoltarForkAccessLoadRequestId.value + 1
-		zoltarForkAccessLoadRequestId.value = requestId
+		const isCurrent = nextForkAccessLoad()
 		loadingZoltarForkAccess.value = true
 		try {
 			const readClient = createReadClient()
 			const [allowance, balance, preparedRepBalance, childRepBalances] = await Promise.all([loadErc20Allowance(readClient, zoltarUniverse.value.reputationToken, accountAddress, getZoltarAddress()), loadErc20Balance(readClient, zoltarUniverse.value.reputationToken, accountAddress), loadRepTokensMigratedRepBalance(readClient, zoltarUniverse.value.universeId, accountAddress), Promise.all(zoltarUniverse.value.childUniverses.map(async child => [child.universeId.toString(), await loadErc20Balance(readClient, child.reputationToken, accountAddress)] as const))])
-			if (!isMounted.value || requestId !== zoltarForkAccessLoadRequestId.value) return
+			if (!isCurrent()) return
 			zoltarForkAllowance.value = allowance
 			zoltarForkRepBalance.value = balance
 			zoltarMigrationPreparedRepBalance.value = preparedRepBalance
@@ -107,7 +99,7 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 			}
 			zoltarMigrationChildRepBalances.value = nextChildRepBalances
 		} finally {
-			if (isMounted.value && requestId === zoltarForkAccessLoadRequestId.value) {
+			if (isCurrent()) {
 				loadingZoltarForkAccess.value = false
 			}
 		}
@@ -129,22 +121,17 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 		try {
 			onTransactionRequested()
 			const universe = await ensureZoltarUniverse()
-			if (!isMounted.value) return
 			if (!universe.hasForked) {
 				throw new Error('Zoltar needs to fork before child universes can be deployed')
 			}
 			const result = await createZoltarChildUniverse(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), universe.universeId, outcomeIndex)
-			if (!isMounted.value) return
 			onTransaction(result.hash)
 			await loadZoltarUniverse()
-			if (!isMounted.value) return
 			await loadZoltarForkAccess()
 		} catch (error) {
 			zoltarChildUniverseError.value = getErrorMessage(error, 'Failed to deploy child universe')
 		} finally {
-			if (isMounted.value) {
-				onTransactionFinished()
-			}
+			onTransactionFinished()
 		}
 	}
 
@@ -172,26 +159,21 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 		try {
 			onTransactionRequested()
 			const result = await createMarketTransaction(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), marketParameters)
-			if (!isMounted.value) return
 			marketResult.value = result
 			zoltarForkQuestionId.value = result.questionId
 			onTransaction(result.createQuestionHash)
 			await refreshState()
-			if (!isMounted.value) return
 			await loadQuestions()
 		} catch (error) {
 			marketError.value = getErrorMessage(error, 'Failed to create question')
 		} finally {
-			if (isMounted.value) {
-				marketCreating.value = false
-				onTransactionFinished()
-			}
+			marketCreating.value = false
+			onTransactionFinished()
 		}
 	}
 
 	const loadZoltarUniverse = async () => {
-		const requestId = zoltarUniverseLoadRequestId.value + 1
-		zoltarUniverseLoadRequestId.value = requestId
+		const isCurrent = nextUniverseLoad()
 		const requestedUniverseId = activeUniverseId
 		zoltarUniverseMissing.value = false
 		loadingZoltarUniverse.value = true
@@ -210,9 +192,8 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 		zoltarForkQuestionId.value = ''
 		try {
 			const universe = await loadZoltarUniverseSummary(createReadClient(), requestedUniverseId)
-			if (requestId !== zoltarUniverseLoadRequestId.value) return undefined
+			if (!isCurrent()) return undefined
 			if (requestedUniverseId !== activeUniverseId) return undefined
-			if (!isMounted.value) return undefined
 			if (universe === undefined) {
 				zoltarUniverseMissing.value = true
 				return undefined
@@ -221,49 +202,44 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 			zoltarUniverseLoadedId.value = requestedUniverseId
 			return universe
 		} finally {
-			if (requestId === zoltarUniverseLoadRequestId.value) {
-				if (isMounted.value) {
-					loadingZoltarUniverse.value = false
-				}
+			if (isCurrent()) {
+				loadingZoltarUniverse.value = false
 			}
 		}
 	}
 
 	const loadZoltarQuestionCountData = async () => {
-		const requestId = zoltarQuestionCountLoadRequestId.value + 1
-		zoltarQuestionCountLoadRequestId.value = requestId
+		const isCurrent = nextQuestionCountLoad()
 		loadingZoltarQuestionCount.value = true
 		try {
 			const questionCount = await loadZoltarQuestionCount(createReadClient())
-			if (!isMounted.value || requestId !== zoltarQuestionCountLoadRequestId.value) return
+			if (!isCurrent()) return
 			zoltarQuestionCount.value = questionCount
 		} finally {
-			if (isMounted.value && requestId === zoltarQuestionCountLoadRequestId.value) {
+			if (isCurrent()) {
 				loadingZoltarQuestionCount.value = false
 			}
 		}
 	}
 
 	const loadQuestions = async () => {
-		const questionCountRequestId = zoltarQuestionCountLoadRequestId.value + 1
-		zoltarQuestionCountLoadRequestId.value = questionCountRequestId
-		const questionsRequestId = zoltarQuestionsLoadRequestId.value + 1
-		zoltarQuestionsLoadRequestId.value = questionsRequestId
+		const isCountCurrent = nextQuestionCountLoad()
+		const isQuestionsCurrent = nextQuestionsLoad()
 		loadingZoltarQuestions.value = true
 		loadingZoltarQuestionCount.value = true
 		try {
 			const readClient = createReadClient()
 			const [questions, questionCount] = await Promise.all([loadAllZoltarQuestions(readClient), loadZoltarQuestionCount(readClient)])
-			if (!isMounted.value || questionsRequestId !== zoltarQuestionsLoadRequestId.value) return
+			if (!isQuestionsCurrent()) return
 			zoltarQuestions.value = questions
-			if (questionCountRequestId === zoltarQuestionCountLoadRequestId.value) {
+			if (isCountCurrent()) {
 				zoltarQuestionCount.value = questionCount
 			}
 		} finally {
-			if (isMounted.value && questionsRequestId === zoltarQuestionsLoadRequestId.value) {
+			if (isQuestionsCurrent()) {
 				loadingZoltarQuestions.value = false
 			}
-			if (isMounted.value && questionCountRequestId === zoltarQuestionCountLoadRequestId.value) {
+			if (isCountCurrent()) {
 				loadingZoltarQuestionCount.value = false
 			}
 		}
@@ -289,25 +265,19 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 			onTransactionRequested()
 			const questionId = parseBigIntInput(zoltarForkQuestionId.value, 'Fork question ID')
 			const universe = await ensureZoltarUniverse()
-			if (!isMounted.value) return
 			const result = await action(accountAddress, universe, questionId)
-			if (!isMounted.value) return
 			zoltarForkResult.value = result
 			onTransaction(result.hash)
 			if (refreshAfter) {
 				await refreshState()
-				if (!isMounted.value) return
 				await loadZoltarUniverse()
 			}
-			if (!isMounted.value) return
 			await loadZoltarForkAccess()
 		} catch (error) {
 			zoltarForkError.value = getErrorMessage(error, errorFallback)
 		} finally {
-			if (isMounted.value) {
-				zoltarForkPending.value = false
-				onTransactionFinished()
-			}
+			zoltarForkPending.value = false
+			onTransactionFinished()
 		}
 	}
 
@@ -357,7 +327,6 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 		try {
 			onTransactionRequested()
 			const universe = await ensureZoltarUniverse()
-			if (!isMounted.value) return
 			if (!universe.hasForked) {
 				throw new Error('Zoltar has not forked yet')
 			}
@@ -371,23 +340,18 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 			}
 			const outcomeIndexes = requiresOutcomeIndexes ? parseBigIntListInput(zoltarMigrationForm.value.outcomeIndexes, 'Outcome indexes') : []
 			const result = await action(accountAddress, universe, resolvedAmount, outcomeIndexes)
-			if (!isMounted.value) return
 			zoltarMigrationResult.value = result
 			onTransaction(result.hash)
 			if (refreshAfter) {
 				await refreshState()
-				if (!isMounted.value) return
 				await loadZoltarUniverse()
 			}
-			if (!isMounted.value) return
 			await loadZoltarForkAccess()
 		} catch (error) {
 			zoltarMigrationError.value = getErrorMessage(error, errorFallback)
 		} finally {
-			if (isMounted.value) {
-				zoltarMigrationPending.value = false
-				onTransactionFinished()
-			}
+			zoltarMigrationPending.value = false
+			onTransactionFinished()
 		}
 	}
 
@@ -433,7 +397,6 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 		createChildUniverse,
 		createMarket,
 		forkZoltar,
-		loadZoltarForkAccess: loadingZoltarForkAccess.value,
 		loadZoltarQuestionCount: loadZoltarQuestionCountData,
 		loadZoltarQuestions: loadQuestions,
 		loadZoltarUniverse,

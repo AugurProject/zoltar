@@ -374,7 +374,7 @@ export async function loadErc20Allowance(client: ReadClient, tokenAddress: Addre
 export async function loadRepTokensMigratedRepBalance(client: ReadClient, universeId: bigint, address: Address) {
 	return await client.readContract({
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'repTokensMigrated',
+		functionName: 'getMigrationRepBalance',
 		address: getDeploymentStep('zoltar').address,
 		args: [address, universeId],
 	})
@@ -593,7 +593,7 @@ async function loadQuestionIds(client: ReadClient): Promise<bigint[]> {
 		if (!Array.isArray(page)) throw new Error('Unexpected question id page response')
 
 		const normalizedPage = page
-			.filter(questionId => typeof questionId === 'bigint' && questionId !== 0n)
+			.filter((questionId): questionId is bigint => typeof questionId === 'bigint' && questionId !== 0n)
 			.slice(0, Number(CONTRACT_PAGE_SIZE))
 		questionIds.push(...normalizedPage)
 		if (BigInt(normalizedPage.length) !== CONTRACT_PAGE_SIZE) break
@@ -1014,7 +1014,7 @@ async function poolOwnershipToRep(client: ReadClient, securityPoolAddress: Addre
 async function loadSecurityPoolVaultSummaries(client: ReadClient, securityPoolAddress: Address): Promise<{ vaultCount: bigint; vaults: SecurityPoolVaultSummary[] }> {
 	const vaultCount = await getSecurityPoolVaultCount(client, securityPoolAddress)
 	const vaultAddresses = vaultCount === 0n ? [] : await getSecurityPoolVaults(client, securityPoolAddress, 0n, vaultCount)
-	const vaults = await Promise.all(vaultAddresses.map(async vaultAddress => {
+	const vaults = await Promise.all(vaultAddresses.map(async (vaultAddress: Address) => {
 		const vaultData: SecurityVaultTuple = await client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'securityVaults',
@@ -1418,8 +1418,8 @@ export async function createZoltarChildUniverse(client: WriteClient, universeId:
 	const hash = await writeContractAndWait(client, () => client.writeContract({
 		address: getDeploymentStep('zoltar').address,
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'migrateInternalRep',
-		args: [universeId, 0n, [outcomeIndex]],
+		functionName: 'deployChild',
+		args: [universeId, outcomeIndex],
 	}))
 	return {
 		action: 'createChildUniverse',
@@ -1445,19 +1445,19 @@ async function executeZoltarMigrationAction(client: WriteClient, action: ZoltarM
 }
 
 export async function prepareRepForMigrationInZoltar(client: WriteClient, universeId: bigint, amount: bigint) {
-	return await executeZoltarMigrationAction(client, 'prepareRepForMigration', universeId, amount, [], async () => await writeContractAndWait(client, () => client.writeContract({
+	return await executeZoltarMigrationAction(client, 'addRepToMigrationBalance', universeId, amount, [],async () => await writeContractAndWait(client, () => client.writeContract({
 		address: getDeploymentStep('zoltar').address,
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'prepareRepForMigration',
+		functionName: 'addRepToMigrationBalance',
 		args: [universeId, amount],
 	})))
 }
 
 export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) {
-	return await executeZoltarMigrationAction(client, 'migrateInternalRep', universeId, amount, outcomeIndexes, async () => await writeContractAndWait(client, () => client.writeContract({
+	return await executeZoltarMigrationAction(client, 'splitMigrationRep', universeId, amount, outcomeIndexes,async () => await writeContractAndWait(client, () => client.writeContract({
 		address: getDeploymentStep('zoltar').address,
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'migrateInternalRep',
+		functionName: 'splitMigrationRep',
 		args: [universeId, amount, outcomeIndexes],
 	})))
 }

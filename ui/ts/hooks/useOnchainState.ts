@@ -5,6 +5,7 @@ import { getInjectedEthereum } from '../injectedEthereum.js'
 import { createReadClient, normalizeAccount } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { MAINNET_CHAIN_ID } from '../lib/network.js'
+import { useRequestGuard } from '../lib/requestGuard.js'
 import type { AccountState } from '../types/app.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 
@@ -45,7 +46,7 @@ export function useOnchainState() {
 	const deploymentStatusesLoaded = useSignal(false)
 	const augurPlaceHolderDeployed = useSignal<boolean | undefined>(undefined)
 	const walletBootstrapComplete = useSignal(false)
-	const refreshRequestId = useSignal(0)
+	const nextRefresh = useRequestGuard()
 	const errorMessage = useSignal<string | undefined>(undefined)
 	const setDeploymentStatuses = (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => {
 		deploymentStatuses.value = update(deploymentStatuses.value)
@@ -56,11 +57,10 @@ export function useOnchainState() {
 		const shouldLoadWalletState = options.loadWalletState ?? true
 		const ethereum = getInjectedEthereum()
 		const readClient = createReadClient()
-		const requestId = refreshRequestId.value + 1
-		refreshRequestId.value = requestId
+		const isCurrent = nextRefresh()
 		void loadZoltarDeploymentStatus(readClient)
 			.then(isDeployed => {
-				if (requestId !== refreshRequestId.value) return
+				if (!isCurrent()) return
 				augurPlaceHolderDeployed.value = isDeployed
 			})
 			.catch(() => undefined)
@@ -76,7 +76,7 @@ export function useOnchainState() {
 			if (shouldLoadWalletState) {
 				const accounts = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' })
 				const connectedAddress = normalizeAccount(accounts[0])
-				if (requestId !== refreshRequestId.value) return
+				if (!isCurrent()) return
 
 				accountState.value = {
 					address: connectedAddress,
@@ -92,14 +92,14 @@ export function useOnchainState() {
 						ethereum
 							.request({ method: 'eth_chainId' })
 							.then(chainId => {
-								if (requestId !== refreshRequestId.value) return
+								if (!isCurrent()) return
 								accountState.value = {
 									...accountState.value,
 									chainId,
 								}
 							})
 							.catch(error => {
-								if (requestId !== refreshRequestId.value) return
+								if (!isCurrent()) return
 								errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet network')
 							}),
 					)
@@ -113,14 +113,14 @@ export function useOnchainState() {
 				pendingWalletTasks.push(
 					loadAccountBalances(readClient, connectedAddress)
 						.then(balances => {
-							if (requestId !== refreshRequestId.value) return
+							if (!isCurrent()) return
 							accountState.value = {
 								...accountState.value,
 								ethBalance: balances.ethBalance,
 							}
 						})
 						.catch(error => {
-							if (requestId !== refreshRequestId.value) return
+							if (!isCurrent()) return
 							errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet balances')
 						}),
 				)
@@ -131,21 +131,21 @@ export function useOnchainState() {
 			if (shouldLoadDeploymentStatuses) {
 				try {
 					const statuses = await loadDeploymentStatuses(readClient)
-					if (requestId !== refreshRequestId.value) return
+					if (!isCurrent()) return
 					deploymentStatuses.value = statuses
 					deploymentStatusesLoaded.value = true
 				} catch (error) {
-					if (requestId !== refreshRequestId.value) return
+					if (!isCurrent()) return
 					errorMessage.value = getErrorMessage(error, 'Failed to refresh deployment status')
 				}
 			}
 		} catch (error) {
-			if (requestId !== refreshRequestId.value) return
+			if (!isCurrent()) return
 			errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
 		} finally {
 			if (shouldLoadWalletState) {
 				walletLoadCount.value = Math.max(0, walletLoadCount.value - 1)
-				if (requestId === refreshRequestId.value) {
+				if (isCurrent()) {
 					walletBootstrapComplete.value = true
 				}
 			}

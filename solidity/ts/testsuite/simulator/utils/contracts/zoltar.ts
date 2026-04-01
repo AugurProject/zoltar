@@ -128,6 +128,14 @@ export const getZoltarForkThreshold = async (client: ReadClient, universeId: big
 		args: [universeId],
 	})
 
+export const deployChild = async (client: WriteClient, universeId: bigint, outcomeIndex: bigint) =>
+	await writeContractAndWait(client, () => client.writeContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'deployChild',
+		address: getZoltarAddress(),
+		args: [universeId, outcomeIndex],
+	}))
+
 export const getMigrationRepBalance = async (client: ReadClient, universeId: bigint, address: `0x${ string }`) => {
 	const repBalance = await client.readContract({
 		abi: Zoltar_Zoltar.abi,

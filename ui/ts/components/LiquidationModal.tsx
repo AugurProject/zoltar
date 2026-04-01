@@ -1,5 +1,4 @@
 import type { Address } from 'viem'
-import { formatAddress } from '../lib/formatters.js'
 
 type LiquidationModalProps = {
 	accountAddress: Address | undefined
@@ -34,11 +33,11 @@ export function LiquidationModal({ accountAddress, closeLiquidationModal, isMain
 				<div className="modal-summary-grid">
 					<div>
 						<span className="metric-label">Security Pool</span>
-						<strong>{liquidationSecurityPoolAddress === undefined ? 'Unknown' : formatAddress(liquidationSecurityPoolAddress)}</strong>
+						<strong>{liquidationSecurityPoolAddress === undefined ? 'Unknown' : liquidationSecurityPoolAddress}</strong>
 					</div>
 					<div>
 						<span className="metric-label">Manager</span>
-						<strong>{liquidationManagerAddress === undefined ? 'Unknown' : formatAddress(liquidationManagerAddress)}</strong>
+						<strong>{liquidationManagerAddress === undefined ? 'Unknown' : liquidationManagerAddress}</strong>
 					</div>
 				</div>
 				<div className="form-grid">

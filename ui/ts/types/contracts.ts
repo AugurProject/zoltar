@@ -76,7 +76,7 @@ export type ZoltarChildUniverseActionResult = {
 }
 
 export type ZoltarMigrationActionResult = {
-	action: 'prepareRepForMigration' | 'migrateInternalRep'
+	action: 'addRepToMigrationBalance' | 'splitMigrationRep'
 	amount: bigint
 	hash: Hash
 	outcomeIndexes: bigint[]

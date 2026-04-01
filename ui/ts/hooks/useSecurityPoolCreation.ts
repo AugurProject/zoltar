@@ -3,10 +3,10 @@ import { useEffect } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
 import { createSecurityPool, loadMarketDetails, originSecurityPoolExists } from '../contracts.js'
 import { createReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { useRequestGuard } from '../lib/requestGuard.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
-import { getDefaultSecurityPoolFormState } from '../lib/marketForm.js'
-import { parseBigIntInput } from '../lib/marketForm.js'
+import { getDefaultSecurityPoolFormState, parseBigIntInput } from '../lib/marketForm.js'
 import type { SecurityPoolFormState } from '../types/app.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '../types/contracts.js'
 
@@ -22,8 +22,6 @@ type UseSecurityPoolCreationParameters = {
 
 export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolCreationParameters) {
 	const loadingMarketDetails = useSignal(false)
-	const marketDetailsLoadCount = useSignal(0)
-	const marketDetailsRequestId = useSignal(0)
 	const marketDetails = useSignal<MarketDetails | undefined>(undefined)
 	const securityPoolCreating = useSignal(false)
 	const securityPoolError = useSignal<string | undefined>(undefined)
@@ -31,7 +29,8 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 	const securityPoolResult = useSignal<SecurityPoolCreationResult | undefined>(undefined)
 	const duplicateOriginPoolExists = useSignal(false)
 	const checkingDuplicateOriginPool = useSignal(false)
-	const duplicateOriginPoolCheckRequestId = useSignal(0)
+	const nextMarketDetailsLoad = useRequestGuard()
+	const nextDuplicateCheck = useRequestGuard()
 
 	const loadDuplicateOriginPoolState = async () => {
 		const marketId = securityPoolForm.value.marketId.trim()
@@ -53,19 +52,18 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 			return
 		}
 
-		const requestId = duplicateOriginPoolCheckRequestId.value + 1
-		duplicateOriginPoolCheckRequestId.value = requestId
+		const isCurrent = nextDuplicateCheck()
 		checkingDuplicateOriginPool.value = true
 
 		try {
 			const exists = await originSecurityPoolExists(createReadClient(), questionId, securityMultiplier)
-			if (requestId !== duplicateOriginPoolCheckRequestId.value) return
+			if (!isCurrent()) return
 			duplicateOriginPoolExists.value = exists
 		} catch {
-			if (requestId !== duplicateOriginPoolCheckRequestId.value) return
+			if (!isCurrent()) return
 			duplicateOriginPoolExists.value = false
 		} finally {
-			if (requestId === duplicateOriginPoolCheckRequestId.value) {
+			if (isCurrent()) {
 				checkingDuplicateOriginPool.value = false
 			}
 		}
@@ -77,9 +75,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 			return
 		}
 
-		const requestId = marketDetailsRequestId.value + 1
-		marketDetailsRequestId.value = requestId
-		marketDetailsLoadCount.value += 1
+		const isCurrent = nextMarketDetailsLoad()
 		loadingMarketDetails.value = true
 		securityPoolError.value = undefined
 		try {
@@ -88,7 +84,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 				marketId,
 			})
 			const details = await loadMarketDetails(createReadClient(), questionId)
-			if (requestId !== marketDetailsRequestId.value) return
+			if (!isCurrent()) return
 			if (!details.exists) {
 				marketDetails.value = undefined
 				securityPoolError.value = 'No market found for that ID'
@@ -97,12 +93,13 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 
 			marketDetails.value = details
 		} catch (error) {
-			if (requestId !== marketDetailsRequestId.value) return
+			if (!isCurrent()) return
 			marketDetails.value = undefined
 			securityPoolError.value = getErrorMessage(error, 'Failed to load market')
 		} finally {
-			marketDetailsLoadCount.value = Math.max(0, marketDetailsLoadCount.value - 1)
-			loadingMarketDetails.value = marketDetailsLoadCount.value > 0
+			if (isCurrent()) {
+				loadingMarketDetails.value = false
+			}
 		}
 	}
 

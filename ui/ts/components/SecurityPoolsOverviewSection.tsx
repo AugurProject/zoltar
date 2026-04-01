@@ -2,7 +2,7 @@ import { EntityCard } from './EntityCard.js'
 import { LiquidationModal } from './LiquidationModal.js'
 import { QuestionSummaryHeader } from './QuestionSummary.js'
 import { UniverseLink } from './UniverseLink.js'
-import { formatAddress, formatCurrencyBalance } from '../lib/formatters.js'
+import { formatCurrencyBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
@@ -67,7 +67,7 @@ export function SecurityPoolsOverviewSection({ accountState, closeLiquidationMod
 									<div className="workflow-metric-grid">
 										<div>
 											<span className="metric-label">Pool Address</span>
-											<strong>{formatAddress(pool.securityPoolAddress)}</strong>
+											<strong>{pool.securityPoolAddress}</strong>
 										</div>
 										<div>
 											<span className="metric-label">Universe</span>
@@ -85,11 +85,11 @@ export function SecurityPoolsOverviewSection({ accountState, closeLiquidationMod
 										</div>
 										<div>
 											<span className="metric-label">Manager</span>
-											<strong>{formatAddress(pool.managerAddress)}</strong>
+											<strong>{pool.managerAddress}</strong>
 										</div>
 										<div>
 											<span className="metric-label">Truth Auction</span>
-											<strong>{formatAddress(pool.truthAuctionAddress)}</strong>
+											<strong>{pool.truthAuctionAddress}</strong>
 										</div>
 									</div>
 								</div>
@@ -106,7 +106,7 @@ export function SecurityPoolsOverviewSection({ accountState, closeLiquidationMod
 												<EntityCard
 													key={`${ pool.securityPoolAddress }-${ vault.vaultAddress }`}
 													className="compact"
-													title={formatAddress(vault.vaultAddress)}
+													title={vault.vaultAddress}
 													badge={<span className="badge muted">Vault</span>}
 													actions={
 														<button className="secondary" onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>

@@ -1,4 +1,4 @@
-import { formatAddress, formatTimestamp } from '../lib/formatters.js'
+import { formatTimestamp } from '../lib/formatters.js'
 import type { ZoltarChildUniverseSummary } from '../types/contracts.js'
 
 type ChildUniverseDetailsProps = {
@@ -22,7 +22,7 @@ export function ChildUniverseDetails({ child, showOutcomeIndex = false }: ChildU
 			{child.exists ? (
 				<div>
 					<span className="metric-label">Reputation Token</span>
-					<strong>{formatAddress(child.reputationToken)}</strong>
+					<strong>{child.reputationToken}</strong>
 				</div>
 			) : undefined}
 			<div>

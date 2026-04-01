@@ -7,7 +7,7 @@ import { ReportingSection } from './ReportingSection.js'
 import { SecurityVaultSection } from './SecurityVaultSection.js'
 import { TradingSection } from './TradingSection.js'
 import { UniverseLink } from './UniverseLink.js'
-import { formatAddress, formatCurrencyBalance } from '../lib/formatters.js'
+import { formatCurrencyBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import { readSelectedPoolViewQueryParam, writeSelectedPoolViewQueryParam } from '../lib/urlParams.js'
@@ -102,11 +102,11 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 									</div>
 									<div>
 										<span className="metric-label">Manager</span>
-										<strong>{formatAddress(selectedPool.managerAddress)}</strong>
+										<strong>{selectedPool.managerAddress}</strong>
 									</div>
 									<div>
 										<span className="metric-label">Truth Auction</span>
-										<strong>{formatAddress(selectedPool.truthAuctionAddress)}</strong>
+										<strong>{selectedPool.truthAuctionAddress}</strong>
 									</div>
 									<div>
 										<span className="metric-label">Fork Mode</span>
@@ -175,7 +175,7 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 												<EntityCard
 													key={`${ selectedPool.securityPoolAddress }-${ vault.vaultAddress }`}
 													className="compact"
-													title={formatAddress(vault.vaultAddress)}
+													title={vault.vaultAddress}
 													badge={<span className="badge muted">Vault</span>}
 													actions={
 														<button className="secondary" onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
