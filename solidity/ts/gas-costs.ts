@@ -227,18 +227,18 @@ const deployChildTx = async (universeId: bigint, outcomeIndex: bigint) =>
 		args: [universeId, outcomeIndex],
 	}))
 
-const prepareRepForMigrationTx = async (universeId: bigint, amount: bigint) =>
+const addRepToMigrationBalanceTx = async (universeId: bigint, amount: bigint) =>
 	await writeContractAndWait(alice, () => alice.writeContract({
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'prepareRepForMigration',
+		functionName: 'addRepToMigrationBalance',
 		address: getZoltarAddress(),
 		args: [universeId, amount],
 	}))
 
-const migrateInternalRepTx = async (universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) =>
+const splitMigrationRepTx = async (universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) =>
 	await writeContractAndWait(alice, () => alice.writeContract({
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'migrateInternalRep',
+		functionName: 'splitMigrationRep',
 		address: getZoltarAddress(),
 		args: [universeId, amount, outcomeIndexes],
 	}))
@@ -495,7 +495,7 @@ const scenarios: Scenario[] = [
 	},
 	{
 		section: '14. Forking',
-		label: 'prepare REP for fork migration',
+		label: 'add REP to migration balance for fork migration',
 		run: async () => {
 			const questionData = await buildQuestionData('Gas prepare migration')
 			const questionId = getQuestionId(questionData, questionOutcomes)
@@ -503,12 +503,12 @@ const scenarios: Scenario[] = [
 			await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress()))
 			await anvil.setTime(questionData.endTime + 10_000n)
 			await confirmTx(alice, forkUniverse(alice, genesisUniverse, questionId))
-			return await waitForGas(alice, prepareRepForMigrationTx(genesisUniverse, repDepositAmount))
+			return await waitForGas(alice, addRepToMigrationBalanceTx(genesisUniverse, repDepositAmount))
 		},
 	},
 	{
 		section: '14. Forking',
-		label: 'migrate internal REP across all fork outcomes',
+		label: 'split migration REP across all fork outcomes',
 		run: async () => {
 			const questionData = await buildQuestionData('Gas migrate internal rep')
 			const questionId = getQuestionId(questionData, questionOutcomes)
@@ -516,8 +516,8 @@ const scenarios: Scenario[] = [
 			await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress()))
 			await anvil.setTime(questionData.endTime + 10_000n)
 			await confirmTx(alice, forkUniverse(alice, genesisUniverse, questionId))
-			await confirmTx(alice, prepareRepForMigrationTx(genesisUniverse, repDepositAmount))
-			return await waitForGas(alice, migrateInternalRepTx(genesisUniverse, repDepositAmount, [0n, 1n, 2n]))
+			await confirmTx(alice, addRepToMigrationBalanceTx(genesisUniverse, repDepositAmount))
+			return await waitForGas(alice, splitMigrationRepTx(genesisUniverse, repDepositAmount, [0n, 1n, 2n]))
 		},
 	},
 	{

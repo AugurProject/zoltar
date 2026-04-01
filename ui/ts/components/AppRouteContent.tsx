@@ -49,6 +49,7 @@ export function AppRouteContent({ deployment, market, openOracle, route, securit
 					zoltarForkRepBalance={market.zoltarForkRepBalance}
 					zoltarMigrationError={market.zoltarMigrationError}
 					zoltarMigrationForm={market.zoltarMigrationForm}
+					zoltarMigrationChildRepBalances={market.zoltarMigrationChildRepBalances}
 					zoltarMigrationPending={market.zoltarMigrationPending}
 					zoltarMigrationPreparedRepBalance={market.zoltarMigrationPreparedRepBalance}
 					zoltarMigrationResult={market.zoltarMigrationResult}

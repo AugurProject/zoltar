@@ -735,10 +735,10 @@ button.destructive:hover:not(:disabled) {
 }
 
 .migration-outcome-row {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	gap: 1rem;
-	align-items: center;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.35rem;
 	width: 100%;
 	padding: 0.8rem 0.95rem;
 	border: 1px solid var(--control-border);
@@ -760,6 +760,25 @@ button.destructive:hover:not(:disabled) {
 	min-width: 0;
 	font-weight: 600;
 	overflow-wrap: anywhere;
+}
+
+.migration-outcome-copy {
+	display: grid;
+	gap: 0.35rem;
+	width: 100%;
+}
+
+.migration-outcome-metrics {
+	display: grid;
+	gap: 0.12rem;
+	color: var(--muted);
+	font-size: 0.82rem;
+	line-height: 1.35;
+}
+
+.migration-outcome-metrics strong {
+	color: var(--text);
+	font-weight: 600;
 }
 
 .status-list span,

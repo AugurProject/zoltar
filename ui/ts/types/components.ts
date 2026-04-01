@@ -82,6 +82,7 @@ export type MarketRouteContentProps = {
 	zoltarForkRepBalance: bigint | undefined
 	zoltarMigrationError: string | undefined
 	zoltarMigrationForm: ZoltarMigrationFormState
+	zoltarMigrationChildRepBalances: Record<string, bigint | undefined>
 	zoltarMigrationPending: boolean
 	zoltarMigrationPreparedRepBalance: bigint | undefined
 	zoltarMigrationResult: ZoltarMigrationActionResult | undefined

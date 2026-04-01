@@ -19,6 +19,7 @@ type ZoltarMigrationSectionProps = {
 	onPrepareRepForMigration: () => void
 	onZoltarMigrationFormChange: (update: Partial<ZoltarMigrationFormState>) => void
 	zoltarForkRepBalance: bigint | undefined
+	zoltarMigrationChildRepBalances: Record<string, bigint | undefined>
 	zoltarMigrationError: string | undefined
 	zoltarMigrationForm: ZoltarMigrationFormState
 	zoltarMigrationPending: boolean
@@ -45,7 +46,7 @@ function getMissingPreparationAmount(targetAmount: bigint, preparedRepBalance: b
 	return targetAmount > currentPreparedBalance ? targetAmount - currentPreparedBalance : 0n
 }
 
-export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZoltarForkAccess, loadingZoltarUniverse, onMigrateInternalRep, onPrepareRepForMigration, onZoltarMigrationFormChange, zoltarForkRepBalance, zoltarMigrationError, zoltarMigrationForm, zoltarMigrationPending, zoltarMigrationPreparedRepBalance, zoltarMigrationResult, zoltarUniverse, zoltarUniverseMissing }: ZoltarMigrationSectionProps) {
+export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZoltarForkAccess, loadingZoltarUniverse, onMigrateInternalRep, onPrepareRepForMigration, onZoltarMigrationFormChange, zoltarForkRepBalance, zoltarMigrationChildRepBalances, zoltarMigrationError, zoltarMigrationForm, zoltarMigrationPending, zoltarMigrationPreparedRepBalance, zoltarMigrationResult, zoltarUniverse, zoltarUniverseMissing }: ZoltarMigrationSectionProps) {
 	const rootUniverse = zoltarUniverse
 	const universeMissing = rootUniverse === undefined && zoltarUniverseMissing && !loadingZoltarUniverse
 	const hasForked = rootUniverse?.hasForked === true
@@ -83,15 +84,11 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 		if (!hasForked) return 'Fork Zoltar before preparing REP.'
 		if (!hasValidAmount || migrationAmount === undefined) return 'Enter an amount greater than zero.'
 		if (missingPreparationAmount === undefined) return 'Enter a valid amount.'
-		if (missingPreparationAmount === 0n) return 'This amount is already prepared. Split REP when ready.'
+		if (missingPreparationAmount === 0n) return 'This amount is already in your migration balance. Split REP when ready.'
 		if (zoltarForkRepBalance === undefined || zoltarForkRepBalance < missingPreparationAmount) {
 			return `Need ${ formatCurrencyBalance(missingPreparationAmount) } more REP in this universe to prepare the selected amount.`
 		}
-		return `Prepare ${ formatCurrencyBalance(missingPreparationAmount) } REP from this universe, then split it across the selected universes.`
-	})()
-	const prepareButtonMessage = (() => {
-		if (!canPrepare && migrationAmount !== undefined && migrationAmount <= 0n) return undefined
-		return prepareHintMessage
+		return `Add ${ formatCurrencyBalance(missingPreparationAmount) } REP to your migration balance from this universe, then split it across the selected universes.`
 	})()
 	const splitHintMessage = (() => {
 		if (accountAddress === undefined) return 'Connect a wallet before using REP migration actions.'
@@ -101,14 +98,10 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 		if (!hasForked) return 'Fork Zoltar before migrating REP.'
 		if (!hasValidAmount || migrationAmount === undefined) return 'Enter an amount greater than zero.'
 		if (!hasPreparedBalance) {
-			return `Prepare ${ formatCurrencyBalance(missingPreparationAmount ?? 0n) } REP first, then split it across the selected universes.`
+			return `Add ${ formatCurrencyBalance(missingPreparationAmount ?? 0n) } REP to your migration balance first, then split it across the selected universes.`
 		}
 		if (!hasValidOutcomeIndexes) return 'Select at least one outcome universe.'
-		return 'Split the prepared REP across the selected universes.'
-	})()
-	const splitButtonMessage = (() => {
-		if (!canSplit && migrationAmount !== undefined && migrationAmount <= 0n) return undefined
-		return splitHintMessage
+		return 'Split the migration REP across the selected universes.'
 	})()
 	const migrationAmountHintMessage = (() => {
 		if (accountAddress === undefined) return 'Connect a wallet before using REP migration actions.'
@@ -118,11 +111,11 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 		if (!hasForked) return 'Fork Zoltar before migrating REP.'
 		if (!hasValidAmount || migrationAmount === undefined) return undefined
 		if (amountExceedsAvailableRep) {
-			return `You only have ${ formatCurrencyBalance(totalRepAvailable) } REP available in this universe (${ formatCurrencyBalance(zoltarMigrationPreparedRepBalance) } prepared and ${ formatCurrencyBalance(zoltarForkRepBalance) } wallet REP).`
+			return `You only have ${ formatCurrencyBalance(totalRepAvailable) } REP available for migration in this universe (${ formatCurrencyBalance(zoltarMigrationPreparedRepBalance) } in your migration balance and ${ formatCurrencyBalance(zoltarForkRepBalance) } wallet REP).`
 		}
 		if (missingPreparationAmount === undefined) return 'Enter a valid amount.'
-		if (missingPreparationAmount === 0n) return 'This amount is already prepared. Split REP when ready.'
-		return `Prepare ${ formatCurrencyBalance(missingPreparationAmount) } REP from this universe, then split it across the selected universes.`
+		if (missingPreparationAmount === 0n) return 'This amount is already in your migration balance. Split REP when ready.'
+		return `Add ${ formatCurrencyBalance(missingPreparationAmount) } REP to your migration balance from this universe, then split it across the selected universes.`
 	})()
 	const selectAllAmount = () => {
 		onZoltarMigrationFormChange({ amount: formatCurrencyBalance(migrationAmountSource) })
@@ -177,7 +170,7 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 						</strong>
 					</div>
 					<div>
-						<span className="metric-label">Prepared REP Balance</span>
+						<span className="metric-label">Migration REP Balance</span>
 						<strong>
 							<LoadableValue loading={loadingZoltarForkAccess} placeholder="Loading...">
 								{zoltarMigrationPreparedRepBalance === undefined ? 'Loading...' : `${ formatCurrencyBalance(zoltarMigrationPreparedRepBalance) } REP`}
@@ -202,20 +195,16 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 						{migrationAmountHintMessage === undefined ? undefined : <p className="detail">{migrationAmountHintMessage}</p>}
 					</div>
 
-					{rootUniverse === undefined ? undefined : <MigrationOutcomeUniversesSection childUniverses={rootUniverse.childUniverses} disabled={zoltarMigrationPending} isScalarFork={rootUniverse.forkQuestionDetails?.marketType === 'scalar'} onAddNextOutcome={addNextOutcome} onToggleOutcomeIndex={toggleOutcomeIndex} selectedOutcomeIndexSet={selectedOutcomeIndexSet} />}
+					{rootUniverse === undefined ? undefined : <MigrationOutcomeUniversesSection childUniverseRepBalances={zoltarMigrationChildRepBalances} childUniverses={rootUniverse.childUniverses} disabled={zoltarMigrationPending} isScalarFork={rootUniverse.forkQuestionDetails?.marketType === 'scalar'} migrationBalance={zoltarMigrationPreparedRepBalance} onAddNextOutcome={addNextOutcome} onToggleOutcomeIndex={toggleOutcomeIndex} selectedOutcomeIndexSet={selectedOutcomeIndexSet} />}
 
 					<div className="actions">
-						<button className="secondary" title={prepareButtonMessage} onClick={onPrepareRepForMigration} disabled={!canPrepare}>
-							{zoltarMigrationPending ? 'Waiting...' : prepareButtonMessage === undefined ? 'Prepare REP' : `Prepare REP${ canPrepare ? '' : `: ${ prepareButtonMessage }` }`}
+						<button className="secondary" title={prepareHintMessage} onClick={onPrepareRepForMigration} disabled={!canPrepare}>
+							{zoltarMigrationPending ? 'Waiting...' : 'Prepare REP'}
 						</button>
-						<button title={splitButtonMessage} onClick={onMigrateInternalRep} disabled={!canSplit}>
-							{zoltarMigrationPending ? 'Waiting...' : splitButtonMessage === undefined ? 'Split REP' : `Split REP${ canSplit ? '' : `: ${ splitButtonMessage }` }`}
+						<button title={splitHintMessage} onClick={onMigrateInternalRep} disabled={!canSplit}>
+							{zoltarMigrationPending ? 'Waiting...' : 'Split REP'}
 						</button>
 					</div>
-
-					<p className="detail">{prepareHintMessage}</p>
-
-					{rootUniverse === undefined ? undefined : hasForked ? <p className="detail">Prepare REP first, then split it across the selected universes.</p> : <p className="detail">Fork Zoltar before migrating REP.</p>}
 				</div>
 			</EntityCard>
 

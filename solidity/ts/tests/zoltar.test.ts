@@ -6,7 +6,7 @@ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint'
-import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, isZoltarDeployed, getRepTokensMigratedRepBalance, migrateInternalRep, prepareRepForMigration } from '../testsuite/simulator/utils/contracts/zoltar'
+import { addRepToMigrationBalance, ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, isZoltarDeployed, splitMigrationRep } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getAnswerOptionName, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureDefined } from '../testsuite/simulator/utils/testUtils'
 import { Zoltar_Zoltar } from '../types/contractArtifact'
@@ -85,8 +85,8 @@ describe('Contract Test Suite', () => {
 
 		// forker claim balance
 		const outcomeIndexes = [0, 1, 3]
-		const balance = await getRepTokensMigratedRepBalance(client, genesisUniverse, client.account.address)
-		await migrateInternalRep(client, genesisUniverse, balance, outcomeIndexes)
+		const balance = await getMigrationRepBalance(client, genesisUniverse, client.account.address)
+		await splitMigrationRep(client, genesisUniverse, balance, outcomeIndexes)
 
 		assert.strictEqual(await getERC20Balance(client, genesisRepToken, zoltar), 0n, "forker's deposit should be burned")
 		for (const index of outcomeIndexes) {
@@ -94,7 +94,7 @@ describe('Contract Test Suite', () => {
 			const repForIndex = getRepTokenAddress(indexUniverse)
 			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ index } exists`)
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
-			assert.strictEqual(ourBalance, await getRepTokensMigratedRepBalance(client, genesisUniverse, client.account.address))
+			assert.strictEqual(ourBalance, await getMigrationRepBalance(client, genesisUniverse, client.account.address))
 		}
 
 		// split rest of the rep
@@ -107,8 +107,8 @@ describe('Contract Test Suite', () => {
 			}),
 		)
 		const priorSplitBalance = await getERC20Balance(client, genesisRepToken, client.account.address)
-		await prepareRepForMigration(client, genesisUniverse, priorSplitBalance)
-		await migrateInternalRep(client, genesisUniverse, priorSplitBalance, splitOutcomeIndexes)
+		await addRepToMigrationBalance(client, genesisUniverse, priorSplitBalance)
+		await splitMigrationRep(client, genesisUniverse, priorSplitBalance, splitOutcomeIndexes)
 
 		assert.strictEqual(await getERC20Balance(client, genesisRepToken, client.account.address), 0n, "splitter's rep should be gone")
 		for (const [index, outcomeIndex] of splitOutcomeIndexes.entries()) {
@@ -140,8 +140,8 @@ describe('Contract Test Suite', () => {
 		const questionId = getQuestionId(questionData, outcomes)
 
 		await forkUniverse(client, genesisUniverse, questionId)
-		const balance = await getRepTokensMigratedRepBalance(client, genesisUniverse, client.account.address)
-		await migrateInternalRep(client, genesisUniverse, balance, [0, 1, 3])
+		const balance = await getMigrationRepBalance(client, genesisUniverse, client.account.address)
+		await splitMigrationRep(client, genesisUniverse, balance, [0, 1, 3])
 
 		const firstPage = await client.readContract({
 			abi: Zoltar_Zoltar.abi,
@@ -301,7 +301,7 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(universeData.forkQuestionId, questionId, 'Fork questionId mismatch')
 	})
 
-	test('migrateInternalRep fails for malformed outcome index', async () => {
+	test('splitMigrationRep fails for malformed outcome index', async () => {
 		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const zoltar = getZoltarAddress()
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
@@ -326,10 +326,10 @@ describe('Contract Test Suite', () => {
 		await forkUniverse(client, genesisUniverse, questionId)
 
 		// Get the balance available for migration
-		const balance = await getRepTokensMigratedRepBalance(client, genesisUniverse, client.account.address)
+		const balance = await getMigrationRepBalance(client, genesisUniverse, client.account.address)
 
 		// Try to migrate with a malformed outcome index (5 is > 4 outcomes)
 		const malformedOutcomeIndex = 5n
-		await assert.rejects(migrateInternalRep(client, genesisUniverse, balance, [malformedOutcomeIndex]), /Malformed/)
+		await assert.rejects(splitMigrationRep(client, genesisUniverse, balance, [malformedOutcomeIndex]), /Malformed/)
 	})
 })
