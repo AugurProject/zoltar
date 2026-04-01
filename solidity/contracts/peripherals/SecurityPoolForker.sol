@@ -87,15 +87,15 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		securityPool.activateForkMode();
 		ReputationToken rep = securityPool.repToken();
 		rep.approve(address(zoltar), type(uint256).max);
-		zoltar.prepareRepForMigration(universe, rep.balanceOf(address(this)));
-		forkDataByPool[securityPool].repAtFork = zoltar.repTokensMigrated(address(this), universe);
+		zoltar.addRepToMigrationBalance(universe, rep.balanceOf(address(this)));
+		forkDataByPool[securityPool].repAtFork = zoltar.getMigrationRepBalance(address(this), universe);
 		emit InitiateSecurityPoolFork(forkDataByPool[securityPool].repAtFork);
 		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
 	}
 
 	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] memory outcomeIndices) public {
 		uint248 universe = securityPool.universeId();
-		zoltar.migrateInternalRep(universe, forkDataByPool[securityPool].repAtFork, outcomeIndices);
+		zoltar.splitMigrationRep(universe, forkDataByPool[securityPool].repAtFork, outcomeIndices);
 	}
 
 	function createChildUniverse(ISecurityPool parent, uint8 outcomeIndex) public {

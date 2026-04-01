@@ -83,19 +83,19 @@ export const forkUniverse = async (client: WriteClient, universeId: bigint, ques
 		args: [universeId, questionId],
 	}))
 
-export const prepareRepForMigration = async (client: WriteClient, universeId: bigint, amount: bigint) =>
+export const addRepToMigrationBalance = async (client: WriteClient, universeId: bigint, amount: bigint) =>
 	await writeContractAndWait(client, () => client.writeContract({
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'prepareRepForMigration',
+		functionName: 'addRepToMigrationBalance',
 		address: getZoltarAddress(),
 		args: [universeId, amount],
 	}))
 
-export const migrateInternalRep = async (client: WriteClient, universeId: bigint, amount: bigint, outcomeIndexes: (number | bigint)[]) => {
+export const splitMigrationRep = async (client: WriteClient, universeId: bigint, amount: bigint, outcomeIndexes: (number | bigint)[]) => {
 	const bigintIndices = outcomeIndexes.map(x => BigInt(x))
 	await writeContractAndWait(client, () => client.writeContract({
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'migrateInternalRep',
+		functionName: 'splitMigrationRep',
 		address: getZoltarAddress(),
 		args: [universeId, amount, bigintIndices],
 	}))
@@ -128,10 +128,10 @@ export const getZoltarForkThreshold = async (client: ReadClient, universeId: big
 		args: [universeId],
 	})
 
-export const getRepTokensMigratedRepBalance = async (client: ReadClient, universeId: bigint, address: `0x${ string }`) => {
+export const getMigrationRepBalance = async (client: ReadClient, universeId: bigint, address: `0x${ string }`) => {
 	const repBalance = await client.readContract({
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'repTokensMigrated',
+		functionName: 'getMigrationRepBalance',
 		address: getZoltarAddress(),
 		args: [address, universeId],
 	})

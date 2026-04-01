@@ -9,12 +9,14 @@ const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
 const REPOSITORY_ROOT_PATH = path.join(UI_ROOT_PATH, '..')
 const DEV_SERVER_PATH = path.join(UI_ROOT_PATH, 'dev-server.mjs')
+const INDEX_HTML_PATH = path.join(UI_ROOT_PATH, 'index.html')
 const VENDOR_INPUT_PATHS = [
 	path.join(UI_ROOT_PATH, 'build', 'vendor.mts'),
 	path.join(UI_ROOT_PATH, 'package.json'),
 	path.join(UI_ROOT_PATH, 'tsconfig.vendor.json'),
 	path.join(UI_ROOT_PATH, 'bun.lock'),
 ]
+const LIVE_RELOAD_ENDPOINT = 'http://127.0.0.1:12345/__live-reload'
 
 type ManagedProcess = ReturnType<typeof spawn>
 
@@ -24,6 +26,9 @@ let serverProcess: ManagedProcess | undefined
 let typeScriptWatchProcess: ManagedProcess | undefined
 let vendorBuildRunning = false
 let vendorBuildQueued = false
+let liveReloadQueued = false
+let liveReloadTimeout: NodeJS.Timeout | undefined
+let typeScriptWatchStdoutBuffer = ''
 
 const unwatchCallbacks: Array<() => void> = []
 
@@ -48,6 +53,41 @@ const stopProcess = async (childProcess: ManagedProcess | undefined) => {
 	}
 }
 
+const getAllFiles = async (dirPath: string, fileList: string[] = []) => {
+	const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
+	for (const entry of entries) {
+		const entryPath = path.join(dirPath, entry.name)
+		if (entry.isDirectory()) {
+			await getAllFiles(entryPath, fileList)
+		} else {
+			fileList.push(entryPath)
+		}
+	}
+	return fileList
+}
+
+const queueLiveReload = (reason: string) => {
+	if (shuttingDown) return
+	if (liveReloadTimeout !== undefined) clearTimeout(liveReloadTimeout)
+	liveReloadQueued = true
+	liveReloadTimeout = setTimeout(() => {
+		liveReloadTimeout = undefined
+		void sendLiveReload(reason)
+	}, 250)
+}
+
+const sendLiveReload = async (reason: string) => {
+	if (shuttingDown) return
+	if (!liveReloadQueued) return
+	liveReloadQueued = false
+	try {
+		await fetch(`${ LIVE_RELOAD_ENDPOINT }?reason=${ encodeURIComponent(reason) }`, { method: 'POST' })
+	} catch (error) {
+		console.error(`[ui:watch] Failed to signal browser reload because ${ reason } changed`)
+		console.error(error)
+	}
+}
+
 const spawnServer = () => {
 	console.log('[ui:watch] Starting ui:serve')
 	serverProcess = spawn('bun', ['./ui/dev-server.mjs'], {
@@ -60,6 +100,25 @@ const spawnServer = () => {
 		console.error(`[ui:watch] ui:serve exited unexpectedly (${ signalCode ?? failureCode })`)
 		void shutdown(failureCode)
 	})
+}
+
+const onTypeScriptWatchStdout = (chunk: Buffer) => {
+	const output = chunk.toString('utf8')
+	process.stdout.write(output)
+	typeScriptWatchStdoutBuffer += output
+	let newlineIndex = typeScriptWatchStdoutBuffer.indexOf('\n')
+	while (newlineIndex !== -1) {
+		const line = typeScriptWatchStdoutBuffer.slice(0, newlineIndex).trim()
+		typeScriptWatchStdoutBuffer = typeScriptWatchStdoutBuffer.slice(newlineIndex + 1)
+		if (line.includes('Found 0 errors')) {
+			queueLiveReload('TypeScript rebuild')
+		}
+		newlineIndex = typeScriptWatchStdoutBuffer.indexOf('\n')
+	}
+}
+
+const onTypeScriptWatchStderr = (chunk: Buffer) => {
+	process.stderr.write(chunk)
 }
 
 const restartServer = async (reason: string) => {
@@ -98,6 +157,7 @@ const runVendorBuild = async (reason: string) => {
 		vendorBuildQueued = false
 		await runVendorBuild('queued vendor input')
 	}
+	queueLiveReload(reason)
 }
 
 const watchFile = (filePath: string, onChange: (relativePath: string) => void) => {
@@ -133,8 +193,13 @@ const main = () => {
 	console.log('[ui:watch] Watching UI TypeScript output and serving static assets')
 	typeScriptWatchProcess = spawn('bun', ['x', 'tsc', '--project', 'tsconfig.json', '--watch', '--preserveWatchOutput'], {
 		cwd: UI_ROOT_PATH,
-		stdio: 'inherit',
+		stdio: ['inherit', 'pipe', 'pipe'],
 	})
+	if (typeScriptWatchProcess.stdout === null || typeScriptWatchProcess.stderr === null) {
+		throw new Error('TypeScript watch streams are unavailable')
+	}
+	typeScriptWatchProcess.stdout.on('data', onTypeScriptWatchStdout)
+	typeScriptWatchProcess.stderr.on('data', onTypeScriptWatchStderr)
 	typeScriptWatchProcess.on('exit', (exitCode, signalCode) => {
 		if (shuttingDown) return
 		const failureCode = exitCode ?? 1
@@ -147,12 +212,24 @@ const main = () => {
 	watchFile(DEV_SERVER_PATH, relativePath => {
 		void restartServer(relativePath)
 	})
+	watchFile(INDEX_HTML_PATH, relativePath => {
+		queueLiveReload(relativePath)
+	})
 
 	for (const inputPath of VENDOR_INPUT_PATHS) {
 		watchFile(inputPath, relativePath => {
 			void runVendorBuild(relativePath)
 		})
 	}
+
+	void (async () => {
+		const cssFiles = await getAllFiles(path.join(UI_ROOT_PATH, 'css'))
+		for (const cssFile of cssFiles) {
+			watchFile(cssFile, relativePath => {
+				queueLiveReload(relativePath)
+			})
+		}
+	})()
 
 	process.on('SIGINT', () => {
 		void shutdown(0)

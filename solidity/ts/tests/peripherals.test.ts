@@ -17,7 +17,7 @@ import { SystemState } from '../testsuite/simulator/types/peripheralTypes'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMigratedRep, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
-import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getRepTokensMigratedRepBalance, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, getVaultCount, getVaults, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
 import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
 
@@ -592,7 +592,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const burnAmount = zoltarForkThreshold / 5n
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		const forkerRepBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), getInfraContractAddresses().securityPoolForker)
-		const forkerRepDeposit = await getRepTokensMigratedRepBalance(client, genesisUniverse, getInfraContractAddresses().securityPoolForker)
+		const forkerRepDeposit = await getMigrationRepBalance(client, genesisUniverse, getInfraContractAddresses().securityPoolForker)
 		strictEqualTypeSafe(forkerRepDeposit + forkerRepBalance + burnAmount, repBalance, 'forkerRepDeposit + forkerRepBalance + burnAmount should equal deposit')
 
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)

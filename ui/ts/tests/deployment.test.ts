@@ -1,8 +1,10 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
+import { zeroAddress } from 'viem'
 import { findNextDeployableStep, getPrerequisiteLabel } from '../lib/deployment.js'
-import type { DeploymentStatus } from '../types/contracts.js'
+import { getDeploymentSteps, loadZoltarDeploymentStatus, loadZoltarUniverseSummary } from '../contracts.js'
+import type { DeploymentStatus, ReadClient } from '../types/contracts.js'
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
@@ -28,5 +30,38 @@ void describe('deployment helpers', () => {
 		const steps = [createStep('zoltar', false, ['securityPoolFactory'])]
 
 		expect(findNextDeployableStep(steps)).toBe(undefined)
+	})
+
+	void test('loadZoltarDeploymentStatus checks only the Zoltar contract', async () => {
+		const zoltarAddress = getDeploymentSteps().find(step => step.id === 'zoltar')?.address
+		if (zoltarAddress === undefined) throw new Error('Missing Zoltar deployment address')
+
+		let callCount = 0
+		const deployed = await loadZoltarDeploymentStatus({
+			getCode: async ({ address }) => {
+				callCount += 1
+				expect(address).toBe(zoltarAddress)
+				return '0x1234'
+			},
+		})
+
+		expect(deployed).toBe(true)
+		expect(callCount).toBe(1)
+	})
+
+	void test('loadZoltarUniverseSummary returns undefined for an unknown universe id', async () => {
+		let callCount = 0
+		const mockReadClient = {
+			readContract: async ({ functionName }: { functionName: string }) => {
+				callCount += 1
+				expect(functionName).toBe('getRepToken')
+				return zeroAddress
+			},
+		} as unknown as ReadClient
+
+		const universe = await loadZoltarUniverseSummary(mockReadClient, 123456789n)
+
+		expect(universe).toBe(undefined)
+		expect(callCount).toBe(1)
 	})
 })

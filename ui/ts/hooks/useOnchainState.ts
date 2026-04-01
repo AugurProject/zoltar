@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { getDeploymentSteps, loadDeploymentStatuses, loadGenesisRepBalance } from '../contracts.js'
+import { getDeploymentSteps, loadDeploymentStatuses, loadZoltarDeploymentStatus } from '../contracts.js'
 import { getInjectedEthereum } from '../injectedEthereum.js'
 import { createReadClient, normalizeAccount } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
@@ -17,15 +17,13 @@ async function loadAccountBalances(readClient: ReturnType<typeof createReadClien
 	if (connectedAddress === undefined) {
 		return {
 			ethBalance: undefined,
-			repBalance: undefined,
 		}
 	}
 
-	const [ethBalance, repBalance] = await Promise.all([readClient.getBalance({ address: connectedAddress }), loadGenesisRepBalance(readClient, connectedAddress).catch(() => undefined)])
+	const ethBalance = await readClient.getBalance({ address: connectedAddress })
 
 	return {
 		ethBalance,
-		repBalance,
 	}
 }
 
@@ -34,7 +32,6 @@ export function useOnchainState() {
 		address: undefined,
 		chainId: undefined,
 		ethBalance: undefined,
-		repBalance: undefined,
 	})
 	const deploymentStatuses = useSignal<DeploymentStatus[]>(
 		getDeploymentSteps().map(step => ({
@@ -46,6 +43,7 @@ export function useOnchainState() {
 	const walletLoadCount = useSignal(0)
 	const deploymentStatusLoadCount = useSignal(0)
 	const deploymentStatusesLoaded = useSignal(false)
+	const augurPlaceHolderDeployed = useSignal<boolean | undefined>(undefined)
 	const walletBootstrapComplete = useSignal(false)
 	const refreshRequestId = useSignal(0)
 	const errorMessage = useSignal<string | undefined>(undefined)
@@ -56,16 +54,22 @@ export function useOnchainState() {
 	const refreshState = async (options: RefreshStateOptions = {}) => {
 		const shouldLoadDeploymentStatuses = options.loadDeploymentStatuses ?? true
 		const shouldLoadWalletState = options.loadWalletState ?? true
+		const ethereum = getInjectedEthereum()
+		const readClient = createReadClient()
 		const requestId = refreshRequestId.value + 1
 		refreshRequestId.value = requestId
+		void loadZoltarDeploymentStatus(readClient)
+			.then(isDeployed => {
+				if (requestId !== refreshRequestId.value) return
+				augurPlaceHolderDeployed.value = isDeployed
+			})
+			.catch(() => undefined)
 		if (shouldLoadWalletState) {
 			walletLoadCount.value += 1
 		}
 		if (shouldLoadDeploymentStatuses) {
 			deploymentStatusLoadCount.value += 1
 		}
-		const ethereum = getInjectedEthereum()
-		const readClient = createReadClient()
 		try {
 			hasInjectedWallet.value = ethereum !== undefined
 
@@ -78,7 +82,6 @@ export function useOnchainState() {
 					address: connectedAddress,
 					chainId: accountState.value.chainId,
 					ethBalance: connectedAddress === accountState.value.address ? accountState.value.ethBalance : undefined,
-					repBalance: connectedAddress === accountState.value.address ? accountState.value.repBalance : undefined,
 				}
 				errorMessage.value = undefined
 
@@ -114,7 +117,6 @@ export function useOnchainState() {
 							accountState.value = {
 								...accountState.value,
 								ethBalance: balances.ethBalance,
-								repBalance: balances.repBalance,
 							}
 						})
 						.catch(error => {
@@ -199,6 +201,7 @@ export function useOnchainState() {
 		hasLoadedDeploymentStatuses: deploymentStatusesLoaded.value,
 		isLoadingDeploymentStatuses: deploymentStatusLoadCount.value > 0,
 		isRefreshing: walletLoadCount.value > 0,
+		augurPlaceHolderDeployed: augurPlaceHolderDeployed.value,
 		setDeploymentStatuses,
 		walletBootstrapComplete: walletBootstrapComplete.value,
 		refreshState,

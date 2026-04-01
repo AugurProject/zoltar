@@ -1,5 +1,5 @@
+import { EnumDropdown } from './EnumDropdown.js'
 import { UniverseLink } from './UniverseLink.js'
-import { parseReportingOutcomeInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
 import type { TradingSectionProps } from '../types/components.js'
@@ -60,13 +60,7 @@ export function TradingSection({ accountState, onCreateCompleteSet, onMigrateSha
 							</label>
 							<label className="field">
 								<span>Outcome To Migrate</span>
-								<select value={tradingForm.selectedOutcome} onInput={event => onTradingFormChange({ selectedOutcome: parseReportingOutcomeInput(event.currentTarget.value) })}>
-									{REPORTING_OUTCOME_OPTIONS.map(option => (
-										<option key={option.key} value={option.key}>
-											{option.label}
-										</option>
-									))}
-								</select>
+								<EnumDropdown options={REPORTING_OUTCOME_OPTIONS.map(option => ({ value: option.key, label: option.label }))} value={tradingForm.selectedOutcome} onChange={selectedOutcome => onTradingFormChange({ selectedOutcome })} />
 							</label>
 						</div>
 

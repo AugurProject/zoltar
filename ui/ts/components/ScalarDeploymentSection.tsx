@@ -1,9 +1,8 @@
 import { useState } from 'preact/hooks'
 import type { Address } from 'viem'
-import { EntityCard } from './EntityCard.js'
-import { formatAddress, formatTimestamp } from '../lib/formatters.js'
+import { ChildUniversesSection } from './ChildUniversesSection.js'
+import { ChildUniverseDetails } from './ChildUniverseDetails.js'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarSliderProgress } from '../lib/scalarOutcome.js'
-import { UniverseLink } from './UniverseLink.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../types/contracts.js'
 
 type ScalarDeploymentSectionProps = {
@@ -41,35 +40,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 
 	return (
 		<div className="entity-card-subsection market-overview-subsection">
-			<div className="entity-card-subsection-header">
-				<h4>Child universes</h4>
-			</div>
-			{childUniverses.length === 0 ? (
-				<p className="detail">No deployed child universes yet.</p>
-			) : (
-				<div className="entity-card-list">
-					{childUniverses.map(child => (
-						<EntityCard key={child.universeId.toString()} className="compact" title={<UniverseLink universeId={child.universeId} />} badge={<span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}>
-							<div className="workflow-vault-grid">
-								<div>
-									<span className="metric-label">Outcome</span>
-									<strong>{child.outcomeLabel}</strong>
-								</div>
-								{child.exists ? (
-									<div>
-										<span className="metric-label">Reputation Token</span>
-										<strong>{formatAddress(child.reputationToken)}</strong>
-									</div>
-								) : undefined}
-								<div>
-									<span className="metric-label">Fork Time</span>
-									<strong>{child.forkTime === 0n ? 'Not forked yet' : formatTimestamp(child.forkTime)}</strong>
-								</div>
-							</div>
-						</EntityCard>
-					))}
-				</div>
-			)}
+			<ChildUniversesSection childUniverses={childUniverses} emptyMessage="No deployed child universes yet." headerTitle="Child universes" renderBadge={child => <span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>} renderBody={child => <ChildUniverseDetails child={child} />} />
 			<div className="market-scalar-deploy">
 				<div className="field scalar-slider-field">
 					<span>Select Child Universe</span>

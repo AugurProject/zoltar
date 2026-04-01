@@ -7,7 +7,6 @@ export type AccountState = {
 	address: Address | undefined
 	chainId: string | undefined
 	ethBalance: bigint | undefined
-	repBalance: bigint | undefined
 }
 
 export type MarketFormState = {
@@ -78,4 +77,9 @@ export type ForkAuctionFormState = {
 	withdrawBidIndex: string
 	withdrawForAddress: string
 	withdrawTick: string
+}
+
+export type ZoltarMigrationFormState = {
+	amount: string
+	outcomeIndexes: string
 }

@@ -11,7 +11,6 @@ type ForkZoltarSectionProps = {
 	loadingZoltarUniverse: boolean
 	onApproveZoltarForkRep: () => void
 	onForkZoltar: () => void
-	onLoadZoltarUniverse: () => void
 	onZoltarForkQuestionIdChange: (questionId: string) => void
 	zoltarForkAllowance: bigint | undefined
 	zoltarForkError: string | undefined
@@ -19,26 +18,31 @@ type ForkZoltarSectionProps = {
 	zoltarForkQuestionId: string
 	zoltarForkRepBalance: bigint | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
+	zoltarUniverseMissing: boolean
 }
 
-export function ForkZoltarSection({ accountAddress, isMainnet, loadingZoltarForkAccess, loadingZoltarUniverse, onApproveZoltarForkRep, onForkZoltar, onLoadZoltarUniverse, onZoltarForkQuestionIdChange, zoltarForkAllowance, zoltarForkError, zoltarForkPending, zoltarForkQuestionId, zoltarForkRepBalance, zoltarUniverse }: ForkZoltarSectionProps) {
+export function ForkZoltarSection({ accountAddress, isMainnet, loadingZoltarForkAccess, loadingZoltarUniverse, onApproveZoltarForkRep, onForkZoltar, onZoltarForkQuestionIdChange, zoltarForkAllowance, zoltarForkError, zoltarForkPending, zoltarForkQuestionId, zoltarForkRepBalance, zoltarUniverse, zoltarUniverseMissing }: ForkZoltarSectionProps) {
 	const rootUniverse = zoltarUniverse
+	const universeMissing = rootUniverse === undefined && zoltarUniverseMissing && !loadingZoltarUniverse
 	const hasForked = rootUniverse?.hasForked === true
 	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= rootUniverse.forkThreshold
 	const hasEnoughApproval = rootUniverse !== undefined && zoltarForkAllowance !== undefined && zoltarForkAllowance >= rootUniverse.forkThreshold
 	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && zoltarForkQuestionId.trim() !== '' && hasEnoughRep && hasEnoughApproval
 
+	if (universeMissing) {
+		return (
+			<>
+				<EntityCard title="Fork Zoltar" badge={<span className="badge blocked">Missing</span>}>
+					<p className="notice error">The universe does not exist.</p>
+				</EntityCard>
+				{zoltarForkError === undefined ? undefined : <p className="notice error">{zoltarForkError}</p>}
+			</>
+		)
+	}
+
 	return (
 		<>
-			<EntityCard
-				title="Fork Zoltar"
-				badge={<span className={`badge ${ hasForked ? 'blocked' : 'ok' }`}>{hasForked ? 'Already forked' : 'Ready'}</span>}
-				actions={
-					<button className="secondary" onClick={onLoadZoltarUniverse} disabled={loadingZoltarUniverse}>
-						{loadingZoltarUniverse ? 'Loading Universe...' : 'Refresh Fork State'}
-					</button>
-				}
-			>
+			<EntityCard title="Fork Zoltar" badge={<span className={`badge ${ hasForked ? 'blocked' : 'ok' }`}>{hasForked ? 'Already forked' : 'Ready'}</span>}>
 				<div className="workflow-metric-grid">
 					<div>
 						<span className="metric-label">Your REP Balance</span>
@@ -83,7 +87,17 @@ export function ForkZoltarSection({ accountAddress, isMainnet, loadingZoltarFork
 						</button>
 					</div>
 
-					{rootUniverse === undefined ? undefined : hasForked ? <p className="detail">Zoltar has already forked. The fork action is disabled.</p> : !hasEnoughRep ? <p className="detail">Need {formatCurrencyBalance(rootUniverse.forkThreshold)} REP.</p> : !hasEnoughApproval ? <p className="detail">Approve {formatCurrencyBalance(rootUniverse.forkThreshold)} REP first.</p> : undefined}
+					{rootUniverse === undefined ? undefined : hasForked ? (
+						<p className="detail">Zoltar has already forked. The fork action is disabled.</p>
+					) : !hasEnoughRep ? (
+						<p className="detail">
+							Need REP threshold: <strong>{formatCurrencyBalance(rootUniverse.forkThreshold)} REP</strong>.
+						</p>
+					) : !hasEnoughApproval ? (
+						<p className="detail">
+							Approve REP threshold: <strong>{formatCurrencyBalance(rootUniverse.forkThreshold)} REP</strong>.
+						</p>
+					) : undefined}
 				</div>
 			</EntityCard>
 

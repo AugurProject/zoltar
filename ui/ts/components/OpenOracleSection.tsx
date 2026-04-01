@@ -1,6 +1,13 @@
-import { parseOracleQueueOperationInput } from '../lib/inputs.js'
+import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { isMainnetChain } from '../lib/network.js'
+import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleSectionProps } from '../types/components.js'
+
+const OPEN_ORACLE_OPERATION_OPTIONS: EnumDropdownOption<OpenOracleFormState['queuedOperation']>[] = [
+	{ value: 'liquidation', label: 'Liquidation' },
+	{ value: 'withdrawRep', label: 'Withdraw REP' },
+	{ value: 'setSecurityBondsAllowance', label: 'Set Security Bonds Allowance' },
+]
 
 export function OpenOracleSection({ accountState, loadingOracleManager, onApproveToken1, onApproveToken2, onLoadOracleManager, onOpenOracleFormChange, onQueueOperation, onRequestPrice, onSettleReport, onSubmitInitialReport, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails }: OpenOracleSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
@@ -73,11 +80,7 @@ export function OpenOracleSection({ accountState, loadingOracleManager, onApprov
 
 						<label className="field">
 							<span>Queued Operation</span>
-							<select value={openOracleForm.queuedOperation} onInput={event => onOpenOracleFormChange({ queuedOperation: parseOracleQueueOperationInput(event.currentTarget.value) })}>
-								<option value="liquidation">Liquidation</option>
-								<option value="withdrawRep">Withdraw REP</option>
-								<option value="setSecurityBondsAllowance">Set Security Bonds Allowance</option>
-							</select>
+							<EnumDropdown options={OPEN_ORACLE_OPERATION_OPTIONS} value={openOracleForm.queuedOperation} onChange={queuedOperation => onOpenOracleFormChange({ queuedOperation })} />
 						</label>
 
 						<div className="field-row">
