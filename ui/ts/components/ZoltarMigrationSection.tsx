@@ -1,7 +1,8 @@
 import { useMemo } from 'preact/hooks'
 import type { Address } from 'viem'
+import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
-import { LoadableValue } from './LoadableValue.js'
+import { LoadingText } from './LoadingText.js'
 import { UniverseLink } from './UniverseLink.js'
 import { MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
@@ -20,6 +21,7 @@ type ZoltarMigrationSectionProps = {
 	onZoltarMigrationFormChange: (update: Partial<ZoltarMigrationFormState>) => void
 	zoltarForkRepBalance: bigint | undefined
 	zoltarMigrationChildRepBalances: Record<string, bigint | undefined>
+	zoltarMigrationActiveAction: 'prepare' | 'split' | undefined
 	zoltarMigrationError: string | undefined
 	zoltarMigrationForm: ZoltarMigrationFormState
 	zoltarMigrationPending: boolean
@@ -44,7 +46,7 @@ function getMigrationAmountSource(preparedRepBalance: bigint | undefined, repBal
 function getMigrationGuardMessage(accountAddress: Address | undefined, isMainnet: boolean, rootUniverse: ZoltarUniverseSummary | undefined, loadingZoltarForkAccess: boolean, hasForked: boolean, loadingZoltarUniverse: boolean, notForkedAction: string): string | undefined {
 	if (accountAddress === undefined) return 'Connect a wallet before using REP migration actions.'
 	if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
-	if (rootUniverse === undefined) return loadingZoltarUniverse ? 'Loading universe...' : 'Load the universe first.'
+	if (rootUniverse === undefined) return loadingZoltarUniverse ? 'Loading Universe Data...' : 'Load the universe first.'
 	if (loadingZoltarForkAccess) return 'Loading REP balances...'
 	if (!hasForked) return notForkedAction
 	return undefined
@@ -65,6 +67,7 @@ export function ZoltarMigrationSection({
 	onZoltarMigrationFormChange,
 	zoltarForkRepBalance,
 	zoltarMigrationChildRepBalances,
+	zoltarMigrationActiveAction,
 	zoltarMigrationError,
 	zoltarMigrationForm,
 	zoltarMigrationPending,
@@ -173,22 +176,18 @@ export function ZoltarMigrationSection({
 					<div>
 						<span className='metric-label'>Your REP Balance</span>
 						<strong>
-							<LoadableValue loading={loadingZoltarForkAccess} placeholder='Loading...'>
-								{zoltarForkRepBalance === undefined ? 'Loading...' : `${formatCurrencyBalance(zoltarForkRepBalance)} REP`}
-							</LoadableValue>
+							<CurrencyValue loading={loadingZoltarForkAccess} value={zoltarForkRepBalance} suffix='REP' />
 						</strong>
 					</div>
 					<div>
 						<span className='metric-label'>Migration REP Balance</span>
 						<strong>
-							<LoadableValue loading={loadingZoltarForkAccess} placeholder='Loading...'>
-								{zoltarMigrationPreparedRepBalance === undefined ? 'Loading...' : `${formatCurrencyBalance(zoltarMigrationPreparedRepBalance)} REP`}
-							</LoadableValue>
+							<CurrencyValue loading={loadingZoltarForkAccess} value={zoltarMigrationPreparedRepBalance} suffix='REP' />
 						</strong>
 					</div>
 					<div>
 						<span className='metric-label'>Universe</span>
-						<strong>{rootUniverse === undefined ? 'Loading...' : <UniverseLink universeId={rootUniverse.universeId} />}</strong>
+						<strong>{rootUniverse === undefined ? <LoadingText>Loading Universe Data...</LoadingText> : <UniverseLink universeId={rootUniverse.universeId} />}</strong>
 					</div>
 				</div>
 
@@ -219,10 +218,10 @@ export function ZoltarMigrationSection({
 
 					<div className='actions'>
 						<button className='secondary' title={prepareHintMessage} onClick={onPrepareRepForMigration} disabled={!canPrepare}>
-							{zoltarMigrationPending ? 'Waiting...' : 'Prepare REP'}
+							{zoltarMigrationActiveAction === 'prepare' ? <LoadingText>Prepare REP</LoadingText> : 'Prepare REP'}
 						</button>
 						<button title={splitHintMessage} onClick={onMigrateInternalRep} disabled={!canSplit}>
-							{zoltarMigrationPending ? 'Waiting...' : 'Split REP'}
+							{zoltarMigrationActiveAction === 'split' ? <LoadingText>Split REP</LoadingText> : 'Split REP'}
 						</button>
 					</div>
 				</div>
@@ -237,7 +236,9 @@ export function ZoltarMigrationSection({
 						</div>
 						<div className='entity-metric'>
 							<span className='metric-label'>Amount</span>
-							<strong>{formatCurrencyBalance(zoltarMigrationResult.amount)}</strong>
+							<strong>
+								<CurrencyValue value={zoltarMigrationResult.amount} suffix='REP' />
+							</strong>
 						</div>
 						<div className='entity-metric'>
 							<span className='metric-label'>Outcome Indexes</span>

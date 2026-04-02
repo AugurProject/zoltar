@@ -3,6 +3,7 @@ import type { Address } from 'viem'
 import { ChildUniversesSection } from './ChildUniversesSection.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
 import { useEffect } from 'preact/hooks'
+import { LoadingText } from './LoadingText.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarSliderProgress } from '../lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../types/contracts.js'
 
@@ -26,7 +27,9 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				<div className='entity-card-subsection-header'>
 					<h4>Child universes</h4>
 				</div>
-				<p className='detail'>Loading scalar range...</p>
+				<p className='detail'>
+					<LoadingText>Loading scalar range...</LoadingText>
+				</p>
 			</div>
 		)
 	}

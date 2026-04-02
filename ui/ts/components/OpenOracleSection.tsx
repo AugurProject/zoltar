@@ -1,4 +1,6 @@
+import { AddressValue } from './AddressValue.js'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
+import { LoadingText } from './LoadingText.js'
 import { isMainnetChain } from '../lib/network.js'
 import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleSectionProps } from '../types/components.js'
@@ -40,11 +42,15 @@ export function OpenOracleSection({
 							<ul className='status-list hashes'>
 								<li>
 									<span>Manager</span>
-									<strong>{oracleManagerDetails.managerAddress}</strong>
+									<strong>
+										<AddressValue address={oracleManagerDetails.managerAddress} />
+									</strong>
 								</li>
 								<li>
 									<span>OpenOracle</span>
-									<strong>{oracleManagerDetails.openOracleAddress}</strong>
+									<strong>
+										<AddressValue address={oracleManagerDetails.openOracleAddress} />
+									</strong>
 								</li>
 								<li>
 									<span>Pending Report ID</span>
@@ -86,7 +92,7 @@ export function OpenOracleSection({
 
 						<div className='actions'>
 							<button className='secondary' onClick={onLoadOracleManager} disabled={loadingOracleManager}>
-								{loadingOracleManager ? 'Loading Oracle...' : 'Load Oracle Manager'}
+								{loadingOracleManager ? <LoadingText>Loading Oracle...</LoadingText> : 'Load Oracle Manager'}
 							</button>
 							<button onClick={onRequestPrice} disabled={accountState.address === undefined || !isMainnet}>
 								Request Price

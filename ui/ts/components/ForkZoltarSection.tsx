@@ -1,8 +1,9 @@
 import type { Address } from 'viem'
+import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
-import { LoadableValue } from './LoadableValue.js'
-import { formatCurrencyBalance } from '../lib/formatters.js'
-import type { ZoltarUniverseSummary } from '../types/contracts.js'
+import { LoadingText } from './LoadingText.js'
+import { Question } from './Question.js'
+import type { MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type ForkZoltarSectionProps = {
 	accountAddress: Address | undefined
@@ -12,11 +13,13 @@ type ForkZoltarSectionProps = {
 	onApproveZoltarForkRep: () => void
 	onForkZoltar: () => void
 	onZoltarForkQuestionIdChange: (questionId: string) => void
+	zoltarForkActiveAction: 'approve' | 'fork' | undefined
 	zoltarForkAllowance: bigint | undefined
 	zoltarForkError: string | undefined
 	zoltarForkPending: boolean
 	zoltarForkQuestionId: string
 	zoltarForkRepBalance: bigint | undefined
+	zoltarQuestions: MarketDetails[]
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseMissing: boolean
 }
@@ -29,11 +32,13 @@ export function ForkZoltarSection({
 	onApproveZoltarForkRep,
 	onForkZoltar,
 	onZoltarForkQuestionIdChange,
+	zoltarForkActiveAction,
 	zoltarForkAllowance,
 	zoltarForkError,
 	zoltarForkPending,
 	zoltarForkQuestionId,
 	zoltarForkRepBalance,
+	zoltarQuestions,
 	zoltarUniverse,
 	zoltarUniverseMissing,
 }: ForkZoltarSectionProps) {
@@ -42,6 +47,8 @@ export function ForkZoltarSection({
 	const hasForked = rootUniverse?.hasForked === true
 	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= rootUniverse.forkThreshold
 	const hasEnoughApproval = rootUniverse !== undefined && zoltarForkAllowance !== undefined && zoltarForkAllowance >= rootUniverse.forkThreshold
+	const selectedQuestionId = zoltarForkQuestionId.trim()
+	const selectedQuestion = selectedQuestionId === '' ? undefined : zoltarQuestions.find(question => question.questionId.toLowerCase() === selectedQuestionId.toLowerCase())
 	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && zoltarForkQuestionId.trim() !== '' && hasEnoughRep && hasEnoughApproval
 
 	if (universeMissing) {
@@ -57,30 +64,18 @@ export function ForkZoltarSection({
 
 	return (
 		<>
-			<EntityCard title='Fork Zoltar' badge={<span className={`badge ${hasForked ? 'blocked' : 'ok'}`}>{hasForked ? 'Already forked' : 'Ready'}</span>}>
+			<EntityCard title='Fork Zoltar' badge={hasForked ? <span className='badge blocked'>Forked</span> : undefined}>
 				<div className='workflow-metric-grid'>
-					<div>
-						<span className='metric-label'>Your REP Balance</span>
-						<strong>
-							<LoadableValue loading={loadingZoltarForkAccess} placeholder='Loading...'>
-								{zoltarForkRepBalance === undefined ? 'Loading...' : `${formatCurrencyBalance(zoltarForkRepBalance)} REP`}
-							</LoadableValue>
-						</strong>
-					</div>
 					<div>
 						<span className='metric-label'>Fork Threshold</span>
 						<strong>
-							<LoadableValue loading={loadingZoltarForkAccess} placeholder='Loading...'>
-								{rootUniverse === undefined ? 'Loading...' : `${formatCurrencyBalance(rootUniverse.forkThreshold)} REP`}
-							</LoadableValue>
+							<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThreshold} suffix='REP' />
 						</strong>
 					</div>
 					<div>
 						<span className='metric-label'>REP Approved To Zoltar</span>
 						<strong>
-							<LoadableValue loading={loadingZoltarForkAccess} placeholder='Loading...'>
-								{zoltarForkAllowance === undefined ? 'Loading...' : `${formatCurrencyBalance(zoltarForkAllowance)} REP`}
-							</LoadableValue>
+							<CurrencyValue loading={loadingZoltarForkAccess} value={zoltarForkAllowance} suffix='REP' />
 						</strong>
 					</div>
 				</div>
@@ -88,31 +83,30 @@ export function ForkZoltarSection({
 				<div className='form-grid'>
 					<label className='field'>
 						<span>Fork Question ID</span>
-						{hasForked ? <strong>{zoltarForkQuestionId === '' ? 'Already forked' : zoltarForkQuestionId}</strong> : <input value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder='0x...' disabled={zoltarForkPending} />}
+						<input value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder='0x...' disabled={hasForked || zoltarForkPending} />
 					</label>
+
+					{selectedQuestion === undefined ? undefined : (
+						<div className='entity-card-subsection'>
+							<div className='entity-card-subsection-header'>
+								<h4>Question</h4>
+								<span className='badge muted'>{selectedQuestion.marketType}</span>
+							</div>
+							<Question question={selectedQuestion} />
+						</div>
+					)}
+					{selectedQuestionId === '' || selectedQuestion !== undefined ? undefined : <p className='detail'>No loaded question matches this ID.</p>}
 
 					<div className='actions'>
 						{hasForked ? undefined : (
 							<button className='secondary' onClick={onApproveZoltarForkRep} disabled={accountAddress === undefined || !isMainnet || rootUniverse === undefined || zoltarForkPending || hasEnoughApproval}>
-								{zoltarForkPending ? 'Waiting...' : hasEnoughApproval ? 'Threshold Approved' : 'Approve REP Threshold'}
+								{zoltarForkActiveAction === 'approve' ? <LoadingText>Approve REP Threshold</LoadingText> : hasEnoughApproval ? 'Threshold Approved' : 'Approve REP Threshold'}
 							</button>
 						)}
 						<button onClick={onForkZoltar} disabled={!canFork}>
-							{zoltarForkPending ? 'Waiting...' : 'Fork Zoltar'}
+							{zoltarForkActiveAction === 'fork' ? <LoadingText>Fork Zoltar</LoadingText> : 'Fork Zoltar'}
 						</button>
 					</div>
-
-					{rootUniverse === undefined ? undefined : hasForked ? (
-						<p className='detail'>Zoltar has already forked. The fork action is disabled.</p>
-					) : !hasEnoughRep ? (
-						<p className='detail'>
-							Need REP threshold: <strong>{formatCurrencyBalance(rootUniverse.forkThreshold)} REP</strong>.
-						</p>
-					) : !hasEnoughApproval ? (
-						<p className='detail'>
-							Approve REP threshold: <strong>{formatCurrencyBalance(rootUniverse.forkThreshold)} REP</strong>.
-						</p>
-					) : undefined}
 				</div>
 			</EntityCard>
 

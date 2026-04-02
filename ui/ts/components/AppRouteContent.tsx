@@ -32,7 +32,9 @@ export function AppRouteContent({ deployment, market, openOracle, route, securit
 			return (
 				<MarketSection
 					accountState={market.accountState}
+					hasLoadedZoltarQuestions={market.hasLoadedZoltarQuestions}
 					loadingZoltarForkAccess={market.loadingZoltarForkAccess}
+					zoltarForkActiveAction={market.zoltarForkActiveAction}
 					loadingZoltarQuestionCount={market.loadingZoltarQuestionCount}
 					loadingZoltarQuestions={market.loadingZoltarQuestions}
 					loadingZoltarUniverse={market.loadingZoltarUniverse}
@@ -49,6 +51,7 @@ export function AppRouteContent({ deployment, market, openOracle, route, securit
 					onMigrateInternalRep={market.onMigrateInternalRep}
 					onMarketFormChange={market.onMarketFormChange}
 					onPrepareRepForMigration={market.onPrepareRepForMigration}
+					onResetMarket={market.onResetMarket}
 					onUseQuestionForFork={market.onUseQuestionForFork}
 					onUseQuestionForPool={market.onUseQuestionForPool}
 					onZoltarForkQuestionIdChange={market.onZoltarForkQuestionIdChange}
@@ -62,6 +65,7 @@ export function AppRouteContent({ deployment, market, openOracle, route, securit
 					zoltarMigrationError={market.zoltarMigrationError}
 					zoltarMigrationForm={market.zoltarMigrationForm}
 					zoltarMigrationChildRepBalances={market.zoltarMigrationChildRepBalances}
+					zoltarMigrationActiveAction={market.zoltarMigrationActiveAction}
 					zoltarMigrationPending={market.zoltarMigrationPending}
 					zoltarMigrationPreparedRepBalance={market.zoltarMigrationPreparedRepBalance}
 					zoltarMigrationResult={market.zoltarMigrationResult}

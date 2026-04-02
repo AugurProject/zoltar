@@ -5,14 +5,15 @@ import type { DeploymentRouteContentProps } from '../types/components.js'
 
 export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isMainnet, onDeploy, onDeployNextMissing }: DeploymentRouteContentProps) {
 	const nextMissingStep = findNextDeployableStep(deploymentStatuses)
-	const deployedCount = deploymentStatuses.filter(step => step.deployed).length
+	const deployedContractCount = deploymentStatuses.filter(step => step.deployed).length
+	const totalContractCount = deploymentStatuses.length
 
 	return (
 		<>
 			<section className='panel'>
 				<h2>
 					<LoadableValue loading={isLoadingDeploymentStatuses} placeholder='Loading deployment status...'>
-						{deployedCount} / {deploymentStatuses.length} Ready
+						{deployedContractCount} contracts deployed / {totalContractCount} total
 					</LoadableValue>
 				</h2>
 				<p className='detail'>
@@ -21,7 +22,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 					</LoadableValue>
 				</p>
 				<div className='actions'>
-					<button onClick={onDeployNextMissing} disabled={accountAddress === undefined || !isMainnet || nextMissingStep === undefined || busyStepId !== undefined || deployNextMissingPending}>
+					<button className='primary' onClick={onDeployNextMissing} disabled={accountAddress === undefined || !isMainnet || nextMissingStep === undefined || busyStepId !== undefined || deployNextMissingPending}>
 						{deployNextMissingPending ? (
 							<>
 								<span className='spinner' aria-hidden='true' />

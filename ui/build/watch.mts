@@ -10,12 +10,7 @@ const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
 const REPOSITORY_ROOT_PATH = path.join(UI_ROOT_PATH, '..')
 const DEV_SERVER_PATH = path.join(UI_ROOT_PATH, 'dev-server.mjs')
 const INDEX_HTML_PATH = path.join(UI_ROOT_PATH, 'index.html')
-const VENDOR_INPUT_PATHS = [
-	path.join(UI_ROOT_PATH, 'build', 'vendor.mts'),
-	path.join(UI_ROOT_PATH, 'package.json'),
-	path.join(UI_ROOT_PATH, 'tsconfig.vendor.json'),
-	path.join(UI_ROOT_PATH, 'bun.lock'),
-]
+const VENDOR_INPUT_PATHS = [path.join(UI_ROOT_PATH, 'build', 'vendor.mts'), path.join(UI_ROOT_PATH, 'package.json'), path.join(UI_ROOT_PATH, 'tsconfig.vendor.json'), path.join(UI_ROOT_PATH, 'bun.lock')]
 const LIVE_RELOAD_ENDPOINT = 'http://127.0.0.1:12345/__live-reload'
 
 type ManagedProcess = ReturnType<typeof spawn>
@@ -33,7 +28,7 @@ let typeScriptWatchStdoutBuffer = ''
 const unwatchCallbacks: Array<() => void> = []
 
 const waitForProcessExit = async (childProcess: ManagedProcess) => {
-	const [exitCode, signalCode] = await once(childProcess, 'exit') as [number | null, NodeJS.Signals | null]
+	const [exitCode, signalCode] = (await once(childProcess, 'exit')) as [number | null, NodeJS.Signals | null]
 	return { exitCode, signalCode }
 }
 
@@ -81,9 +76,9 @@ const sendLiveReload = async (reason: string) => {
 	if (!liveReloadQueued) return
 	liveReloadQueued = false
 	try {
-		await fetch(`${ LIVE_RELOAD_ENDPOINT }?reason=${ encodeURIComponent(reason) }`, { method: 'POST' })
+		await fetch(`${LIVE_RELOAD_ENDPOINT}?reason=${encodeURIComponent(reason)}`, { method: 'POST' })
 	} catch (error) {
-		console.error(`[ui:watch] Failed to signal browser reload because ${ reason } changed`)
+		console.error(`[ui:watch] Failed to signal browser reload because ${reason} changed`)
 		console.error(error)
 	}
 }
@@ -97,7 +92,7 @@ const spawnServer = () => {
 	serverProcess.on('exit', (exitCode, signalCode) => {
 		if (shuttingDown || restartingServer) return
 		const failureCode = exitCode ?? 1
-		console.error(`[ui:watch] ui:serve exited unexpectedly (${ signalCode ?? failureCode })`)
+		console.error(`[ui:watch] ui:serve exited unexpectedly (${signalCode ?? failureCode})`)
 		void shutdown(failureCode)
 	})
 }
@@ -123,7 +118,7 @@ const onTypeScriptWatchStderr = (chunk: Buffer) => {
 
 const restartServer = async (reason: string) => {
 	if (shuttingDown) return
-	console.log(`[ui:watch] Restarting ui:serve because ${ reason } changed`)
+	console.log(`[ui:watch] Restarting ui:serve because ${reason} changed`)
 	restartingServer = true
 	try {
 		await stopProcess(serverProcess)
@@ -140,7 +135,7 @@ const runVendorBuild = async (reason: string) => {
 		return
 	}
 	vendorBuildRunning = true
-	console.log(`[ui:watch] Rebuilding UI vendor assets because ${ reason } changed`)
+	console.log(`[ui:watch] Rebuilding UI vendor assets because ${reason} changed`)
 	const childProcess = spawn('bun', ['./build/vendor.mts'], {
 		cwd: UI_ROOT_PATH,
 		stdio: 'inherit',
@@ -149,7 +144,7 @@ const runVendorBuild = async (reason: string) => {
 	vendorBuildRunning = false
 	if (exitCode !== 0) {
 		const failureCode = exitCode ?? 1
-		console.error(`[ui:watch] Vendor rebuild failed (${ signalCode ?? failureCode })`)
+		console.error(`[ui:watch] Vendor rebuild failed (${signalCode ?? failureCode})`)
 		await shutdown(failureCode)
 		return
 	}
@@ -203,7 +198,7 @@ const main = () => {
 	typeScriptWatchProcess.on('exit', (exitCode, signalCode) => {
 		if (shuttingDown) return
 		const failureCode = exitCode ?? 1
-		console.error(`[ui:watch] TypeScript watch exited unexpectedly (${ signalCode ?? failureCode })`)
+		console.error(`[ui:watch] TypeScript watch exited unexpectedly (${signalCode ?? failureCode})`)
 		void shutdown(failureCode)
 	})
 

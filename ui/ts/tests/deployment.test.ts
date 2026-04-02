@@ -87,9 +87,25 @@ void describe('deployment helpers', () => {
 			deployed: false,
 		}))
 		const sections = getDeploymentSections(deploymentStatuses)
-		const proxyDeployerSection = sections.find(section => section.title === 'Proxy Deployer')
+		const proxyDeployerSection = sections.find(section => section.title === 'Utilities')
 
 		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle'])
+	})
+
+	void test('loadZoltarUniverseSummary skips the Zoltar code probe when deployment status is already known', async () => {
+		const mockReadClient = {
+			getCode: async () => {
+				throw new Error('getCode should not be called when the deployment status is already known')
+			},
+			readContract: async ({ functionName }: { functionName: string }) => {
+				expect(functionName).toBe('getRepToken')
+				return zeroAddress
+			},
+		} as unknown as ReadClient
+
+		const universe = await loadZoltarUniverseSummary(mockReadClient, 0n, true)
+
+		expect(universe).toBe(undefined)
 	})
 
 	void test('loadDeploymentStatusOracleSnapshot returns the proxy deployer when the oracle is missing', async () => {
@@ -117,7 +133,7 @@ void describe('deployment helpers', () => {
 		expect(callCount).toBe(1)
 	})
 
-	void test('loadZoltarUniverseSummary returns undefined when the Zoltar contract is not deployed', async () => {
+	void test('loadZoltarUniverseSummary falls back to getCode when reading Zoltar state fails', async () => {
 		let getCodeCallCount = 0
 		let readContractCallCount = 0
 		const mockReadClient = {
@@ -127,7 +143,7 @@ void describe('deployment helpers', () => {
 			},
 			readContract: async () => {
 				readContractCallCount += 1
-				throw new Error('readContract should not be called when Zoltar is missing')
+				throw new Error('readContract failed because Zoltar is missing')
 			},
 		} as unknown as ReadClient
 
@@ -135,6 +151,6 @@ void describe('deployment helpers', () => {
 
 		expect(universe).toBe(undefined)
 		expect(getCodeCallCount).toBe(1)
-		expect(readContractCallCount).toBe(0)
+		expect(readContractCallCount).toBe(1)
 	})
 })

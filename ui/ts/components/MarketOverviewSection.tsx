@@ -1,11 +1,14 @@
 import type { Address } from 'viem'
+import { AddressValue } from './AddressValue.js'
+import { CurrencyValue } from './CurrencyValue.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
 import { EntityCard } from './EntityCard.js'
 import { ChildUniversesSection } from './ChildUniversesSection.js'
+import { LoadingText } from './LoadingText.js'
 import { LoadableValue } from './LoadableValue.js'
-import { QuestionSummaryHeader } from './QuestionSummary.js'
+import { Question } from './Question.js'
 import { ScalarDeploymentSection } from './ScalarDeploymentSection.js'
-import { formatCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
+import { formatTimestamp } from '../lib/formatters.js'
 import { formatUniverseCollectionLabel } from '../lib/universe.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -23,8 +26,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 	const rootUniverse = zoltarUniverse
 	const universeMissing = rootUniverse === undefined && zoltarUniverseMissing && !loadingZoltarUniverse
 	const hasForked = rootUniverse?.hasForked === true
-	const currentUniverseName = rootUniverse === undefined ? (universeMissing ? 'Missing' : 'Loading...') : formatUniverseCollectionLabel([rootUniverse.universeId])
-	const forkQuestionLabel = rootUniverse === undefined ? 'Loading...' : (rootUniverse.forkQuestionDetails?.questionId ?? 'Loading question details...')
+	const currentUniverseName = rootUniverse === undefined ? undefined : formatUniverseCollectionLabel([rootUniverse.universeId])
 	const isScalarFork = rootUniverse?.forkQuestionDetails?.marketType === 'scalar'
 	const scalarQuestionDetails = rootUniverse?.forkQuestionDetails
 
@@ -37,23 +39,21 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 	}
 
 	return (
-		<EntityCard className='market-overview-card' title={`Zoltar universe ${currentUniverseName}`} badge={<span className='badge ok'>{rootUniverse === undefined ? 'Loading...' : hasForked ? 'Forked' : 'Unforked'}</span>}>
+		<EntityCard className='market-overview-card' title={rootUniverse === undefined ? 'Zoltar universe' : `Zoltar universe ${currentUniverseName}`} badge={rootUniverse === undefined ? undefined : <span className='badge ok'>{hasForked ? 'Forked' : 'Unforked'}</span>}>
 			{rootUniverse === undefined ? (
-				<p className='detail market-overview-loading'>Loading Zoltar universe...</p>
+				<p className='detail market-overview-loading'>
+					<LoadingText>Loading Universe Data...</LoadingText>
+				</p>
 			) : (
 				<>
+					{hasForked ? (
+						<EntityCard title='Fork Question' badge={<span className='badge muted'>{rootUniverse.forkQuestionDetails?.marketType ?? 'Loading'}</span>}>
+							<Question question={rootUniverse.forkQuestionDetails} loading={rootUniverse.forkQuestionDetails === undefined} />
+						</EntityCard>
+					) : undefined}
 					<div className='workflow-question-grid market-overview-grid'>
 						{hasForked ? (
 							<>
-								<div className='market-overview-question-summary'>
-									<span className='metric-label'>Fork Question</span>
-									<QuestionSummaryHeader
-										description={rootUniverse.forkQuestionDetails === undefined ? 'Loading question details...' : rootUniverse.forkQuestionDetails.description.trim() === '' ? 'No description provided.' : rootUniverse.forkQuestionDetails.description}
-										loading={rootUniverse.forkQuestionDetails === undefined}
-										questionId={forkQuestionLabel}
-										title={rootUniverse.forkQuestionDetails === undefined ? 'Question details' : rootUniverse.forkQuestionDetails.title.trim() === '' ? 'Untitled question' : rootUniverse.forkQuestionDetails.title}
-									/>
-								</div>
 								<div>
 									<span className='metric-label'>Fork Time</span>
 									<strong>
@@ -64,17 +64,23 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 								</div>
 								<div>
 									<span className='metric-label'>Fork Threshold</span>
-									<strong>{`${formatCurrencyBalance(rootUniverse.forkThreshold)} REP`}</strong>
+									<strong>
+										<CurrencyValue value={rootUniverse.forkThreshold} suffix='REP' />
+									</strong>
 								</div>
 							</>
 						) : undefined}
 						<div>
 							<span className='metric-label'>Reputation Token</span>
-							<strong>{rootUniverse.reputationToken}</strong>
+							<strong>
+								<AddressValue address={rootUniverse.reputationToken} />
+							</strong>
 						</div>
 						<div>
 							<span className='metric-label'>Total Theoretical Supply</span>
-							<strong>{`${formatCurrencyBalance(rootUniverse.totalTheoreticalSupply)} REP`}</strong>
+							<strong>
+								<CurrencyValue value={rootUniverse.totalTheoreticalSupply} suffix='REP' />
+							</strong>
 						</div>
 					</div>
 					{isScalarFork ? (

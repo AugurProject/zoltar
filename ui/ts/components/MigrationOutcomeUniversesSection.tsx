@@ -1,5 +1,4 @@
-import { LoadableValue } from './LoadableValue.js'
-import { formatCurrencyBalance } from '../lib/formatters.js'
+import { CurrencyValue } from './CurrencyValue.js'
 import type { ZoltarChildUniverseSummary } from '../types/contracts.js'
 
 type MigrationOutcomeUniversesSectionProps = {
@@ -42,17 +41,13 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 										<span>
 											Held here:{' '}
 											<strong>
-												<LoadableValue loading={heldBalance === undefined || migrationBalance === undefined} placeholder='Loading...'>
-													{heldBalance === undefined ? 'Loading...' : `${formatCurrencyBalance(heldBalance)} REP`}
-												</LoadableValue>
+												<CurrencyValue copyable={false} loading={heldBalance === undefined || migrationBalance === undefined} value={heldBalance} suffix='REP' />
 											</strong>
 										</span>
 										<span>
 											Still migratable:{' '}
 											<strong>
-												<LoadableValue loading={remainingBalance === undefined} placeholder='Loading...'>
-													{remainingBalance === undefined ? 'Loading...' : `${formatCurrencyBalance(remainingBalance)} REP`}
-												</LoadableValue>
+												<CurrencyValue copyable={false} loading={remainingBalance === undefined} value={remainingBalance} suffix='REP' />
 											</strong>
 										</span>
 									</span>

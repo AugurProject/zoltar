@@ -24,7 +24,7 @@ type CompiledContractsJson = {
 	readonly contracts?: Record<string, Record<string, CompiledContract | undefined> | undefined>
 }
 
-type Dependency = { packageName: string, packageToVendor?: string, subfolderToVendor: string, mainEntrypointFile: string, alternateEntrypoints: Record<string, string> }
+type Dependency = { packageName: string; packageToVendor?: string; subfolderToVendor: string; mainEntrypointFile: string; alternateEntrypoints: Record<string, string> }
 const dependencyPaths: Dependency[] = [
 	{ packageName: 'preact', subfolderToVendor: 'dist', mainEntrypointFile: 'preact.module.js', alternateEntrypoints: {} },
 	{ packageName: 'preact/jsx-runtime', subfolderToVendor: 'dist', mainEntrypointFile: 'jsxRuntime.module.js', alternateEntrypoints: {} },
@@ -36,10 +36,10 @@ const dependencyPaths: Dependency[] = [
 	{ packageName: 'viem/window', packageToVendor: 'viem/_esm', subfolderToVendor: 'window', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
 	{ packageName: 'viem/actions', packageToVendor: 'viem/_esm', subfolderToVendor: 'actions', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
 	{ packageName: 'abitype', subfolderToVendor: 'dist/esm', mainEntrypointFile: 'exports/index.js', alternateEntrypoints: {} },
-	{ packageName: '@noble/hashes', subfolderToVendor: 'esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'crypto': 'crypto.js', 'sha3': 'sha3.js', 'utils': 'utils.js', '_assert': '_assert.js', 'sha256': 'sha256.js', 'sha512': 'sha512.js', 'pbkdf2': 'pbkdf2.js', 'hmac': 'hmac.js', 'ripemd160': 'ripemd160.js' } },
-	{ packageName: '@noble/curves', subfolderToVendor: 'esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'secp256k1': 'secp256k1.js', 'abstract/modular': 'abstract/modular.js', 'abstract/utils': 'abstract/utils.js' } },
+	{ packageName: '@noble/hashes', subfolderToVendor: 'esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { crypto: 'crypto.js', sha3: 'sha3.js', utils: 'utils.js', _assert: '_assert.js', sha256: 'sha256.js', sha512: 'sha512.js', pbkdf2: 'pbkdf2.js', hmac: 'hmac.js', ripemd160: 'ripemd160.js' } },
+	{ packageName: '@noble/curves', subfolderToVendor: 'esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { secp256k1: 'secp256k1.js', 'abstract/modular': 'abstract/modular.js', 'abstract/utils': 'abstract/utils.js' } },
 	{ packageName: 'funtypes', subfolderToVendor: 'lib', mainEntrypointFile: 'index.mjs', alternateEntrypoints: {} },
-	{ packageName: 'ox', subfolderToVendor: '_esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'BlockOverrides': 'core/BlockOverrides.js', 'AbiConstructor': 'core/AbiConstructor.js' , 'AbiFunction': 'core/AbiFunction.js' } },
+	{ packageName: 'ox', subfolderToVendor: '_esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { BlockOverrides: 'core/BlockOverrides.js', AbiConstructor: 'core/AbiConstructor.js', AbiFunction: 'core/AbiFunction.js' } },
 ]
 
 async function vendorDependencies() {
@@ -61,15 +61,17 @@ async function vendorDependencies() {
 	}
 
 	const oldIndexHtml = await fs.readFile(INDEX_HTML_PATH, 'utf8')
-	const importmap = dependencyPaths.reduce((importmap, { packageName, mainEntrypointFile, alternateEntrypoints }) => {
-		importmap.imports[packageName] = `./vendor/${packageName}/${mainEntrypointFile}`
-		for (const [alternateEntrypointName, alternateEntrypointFile] of Object.entries(alternateEntrypoints)) {
-			importmap.imports[`${packageName}/${alternateEntrypointName}`] = `./vendor/${packageName}/${alternateEntrypointFile}`
-		}
-		return importmap
-	}, { imports: {} as Record<string, string> })
-	const importmapJson = JSON.stringify(importmap, undefined, '\t')
-		.replace(/^/mg, '\t\t')
+	const importmap = dependencyPaths.reduce(
+		(importmap, { packageName, mainEntrypointFile, alternateEntrypoints }) => {
+			importmap.imports[packageName] = `./vendor/${packageName}/${mainEntrypointFile}`
+			for (const [alternateEntrypointName, alternateEntrypointFile] of Object.entries(alternateEntrypoints)) {
+				importmap.imports[`${packageName}/${alternateEntrypointName}`] = `./vendor/${packageName}/${alternateEntrypointFile}`
+			}
+			return importmap
+		},
+		{ imports: {} as Record<string, string> },
+	)
+	const importmapJson = JSON.stringify(importmap, undefined, '\t').replace(/^/gm, '\t\t')
 	const newIndexHtml = oldIndexHtml.replace(/<script type='importmap'>[\s\S]*?<\/script>/m, `<script type='importmap'>\n${importmapJson}\n\t</script>`)
 	await fs.writeFile(INDEX_HTML_PATH, newIndexHtml)
 }
@@ -82,20 +84,20 @@ const copyProjectArtifacts = async () => {
 	if (compiledArtifacts.contracts === undefined) throw new Error('No compiled contracts found in Contracts.json')
 
 	const contracts = Object.entries(compiledArtifacts.contracts).flatMap(([filename, contractFile]) => {
-		if (contractFile === undefined) throw new Error(`missing compiled contract file for ${ filename }`)
+		if (contractFile === undefined) throw new Error(`missing compiled contract file for ${filename}`)
 		return Object.entries(contractFile).map(([contractName, contractData]) => {
-			if (contractData === undefined) throw new Error(`missing compiled contract ${ contractName } in ${ filename }`)
-			const normalizedName = `${ filename
+			if (contractData === undefined) throw new Error(`missing compiled contract ${contractName} in ${filename}`)
+			const normalizedName = `${filename
 				.replace('contracts/', '')
 				.replace(/-/g, '')
 				.replace(/\//g, '_')
 				.replace(/\\/g, '_')
-				.replace(/\.sol$/, '') }_${ contractName }`
-			return `export const ${ normalizedName } = ${ JSON.stringify(contractData, null, 4) } as const`
+				.replace(/\.sol$/, '')}_${contractName}`
+			return `export const ${normalizedName} = ${JSON.stringify(contractData, null, 4)} as const`
 		})
 	})
 
-	await fs.writeFile(CONTRACT_ARTIFACT_OUTPUT_PATH, `${ contracts.join('\n\n') }\n`)
+	await fs.writeFile(CONTRACT_ARTIFACT_OUTPUT_PATH, `${contracts.join('\n\n')}\n`)
 }
 
 // rewrite the source paths in sourcemap files so they show up in the debugger in a reasonable location and if two source maps refer to the same (relative) path, we end up with them distinguished in the browser debugger
@@ -119,17 +121,17 @@ async function bundleViem() {
 
 	await esbuild.build({
 		entryPoints: {
-			'index': path.join(viemSrcDir, 'index.js'),
+			index: path.join(viemSrcDir, 'index.js'),
 			'chains/index': path.join(viemSrcDir, 'chains', 'index.js'),
 			'window/index': path.join(viemSrcDir, 'window', 'index.js'),
-			'actions/index': path.join(viemSrcDir, 'actions', 'index.js')
+			'actions/index': path.join(viemSrcDir, 'actions', 'index.js'),
 		},
 		format: 'esm',
 		outdir: viemTmpOut,
 		bundle: true,
 		platform: 'browser',
 		sourcemap: true,
-		target: 'esnext'
+		target: 'esnext',
 	})
 
 	await fs.rm(viemSrcDir, { recursive: true, force: true })

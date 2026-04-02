@@ -33,6 +33,8 @@ export type DeploymentSectionProps = {
 
 export type OverviewPanelsProps = {
 	accountState: AccountState
+	isConnectingWallet: boolean
+	walletBootstrapComplete: boolean
 	universeRepBalance: bigint | undefined
 	isLoadingUniverseRepBalance: boolean
 	universeErrorMessage: string | undefined
@@ -82,8 +84,11 @@ export type MarketRouteContentProps = {
 	marketError: string | undefined
 	marketForm: MarketFormState
 	marketResult: MarketCreationResult | undefined
+	onResetMarket: () => void
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestions: boolean
+	hasLoadedZoltarQuestions: boolean
+	zoltarForkActiveAction: 'approve' | 'fork' | undefined
 	loadingZoltarUniverse: boolean
 	zoltarUniverseMissing: boolean
 	onLoadZoltarQuestions: () => void
@@ -106,6 +111,7 @@ export type MarketRouteContentProps = {
 	zoltarMigrationPreparedRepBalance: bigint | undefined
 	zoltarMigrationResult: ZoltarMigrationActionResult | undefined
 	zoltarQuestions: MarketDetails[]
+	zoltarMigrationActiveAction: 'prepare' | 'split' | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	onZoltarForkQuestionIdChange: (questionId: string) => void
 }

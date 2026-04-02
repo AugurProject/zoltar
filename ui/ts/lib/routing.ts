@@ -19,12 +19,12 @@ const ROUTE_BY_HASH = ROUTE_NAMES.reduce<Partial<Record<string, Route>>>((routeB
 
 export function ensureRouteHash() {
 	if (window.location.hash === '') {
-		window.location.hash = ROUTE_HASHES.deploy
+		window.location.hash = ROUTE_HASHES.zoltar
 	}
 }
 
 export function getCurrentRoute() {
-	return ROUTE_BY_HASH[window.location.hash] ?? (window.location.hash === '' ? 'deploy' : 'not-found')
+	return ROUTE_BY_HASH[window.location.hash] ?? (window.location.hash === '' ? 'zoltar' : 'not-found')
 }
 
 export function getRouteHash(route: Exclude<Route, 'not-found'>) {

@@ -1,6 +1,8 @@
+import { AddressValue } from './AddressValue.js'
+import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
+import { LoadingText } from './LoadingText.js'
 import { UniverseLink } from './UniverseLink.js'
-import { formatCurrencyBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
@@ -36,15 +38,19 @@ export function SecurityVaultSection({
 			<div className='market-grid'>
 				<div className='market-column'>
 					{securityVaultDetails === undefined ? undefined : (
-						<EntityCard title={securityVaultDetails.vaultAddress} badge={<span className='badge ok'>Your Vault</span>}>
+						<EntityCard title={<AddressValue address={securityVaultDetails.vaultAddress} />} badge={<span className='badge ok'>Your Vault</span>}>
 							<div className='entity-metric-grid'>
 								<div className='entity-metric'>
 									<span className='metric-label'>Security Pool</span>
-									<strong>{securityVaultDetails.securityPoolAddress}</strong>
+									<strong>
+										<AddressValue address={securityVaultDetails.securityPoolAddress} />
+									</strong>
 								</div>
 								<div className='entity-metric'>
 									<span className='metric-label'>REP Token</span>
-									<strong>{securityVaultDetails.repToken}</strong>
+									<strong>
+										<AddressValue address={securityVaultDetails.repToken} />
+									</strong>
 								</div>
 								<div className='entity-metric'>
 									<span className='metric-label'>Universe</span>
@@ -54,23 +60,33 @@ export function SecurityVaultSection({
 								</div>
 								<div className='entity-metric'>
 									<span className='metric-label'>REP Deposit Share</span>
-									<strong>{formatCurrencyBalance(securityVaultDetails.repDepositShare)}</strong>
+									<strong>
+										<CurrencyValue value={securityVaultDetails.repDepositShare} />
+									</strong>
 								</div>
 								<div className='entity-metric'>
 									<span className='metric-label'>Security Bond Allowance</span>
-									<strong>{formatCurrencyBalance(securityVaultDetails.securityBondAllowance)}</strong>
+									<strong>
+										<CurrencyValue value={securityVaultDetails.securityBondAllowance} />
+									</strong>
 								</div>
 								<div className='entity-metric'>
 									<span className='metric-label'>Unpaid ETH Fees</span>
-									<strong>{formatCurrencyBalance(securityVaultDetails.unpaidEthFees)}</strong>
+									<strong>
+										<CurrencyValue value={securityVaultDetails.unpaidEthFees} suffix='ETH' />
+									</strong>
 								</div>
 								<div className='entity-metric'>
 									<span className='metric-label'>Locked REP</span>
-									<strong>{formatCurrencyBalance(securityVaultDetails.lockedRepInEscalationGame)}</strong>
+									<strong>
+										<CurrencyValue value={securityVaultDetails.lockedRepInEscalationGame} />
+									</strong>
 								</div>
 								<div className='entity-metric'>
 									<span className='metric-label'>Total Bond Allowance</span>
-									<strong>{formatCurrencyBalance(securityVaultDetails.totalSecurityBondAllowance)}</strong>
+									<strong>
+										<CurrencyValue value={securityVaultDetails.totalSecurityBondAllowance} />
+									</strong>
 								</div>
 							</div>
 						</EntityCard>
@@ -103,7 +119,7 @@ export function SecurityVaultSection({
 
 						<div className='actions'>
 							<button className='secondary' onClick={onLoadSecurityVault} disabled={loadingSecurityVault}>
-								{loadingSecurityVault ? 'Loading Vault...' : 'Load My Vault'}
+								{loadingSecurityVault ? <LoadingText>Loading Vault...</LoadingText> : 'Load My Vault'}
 							</button>
 						</div>
 

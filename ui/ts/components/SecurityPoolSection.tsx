@@ -1,5 +1,7 @@
+import { AddressValue } from './AddressValue.js'
 import { EntityCard } from './EntityCard.js'
-import { QuestionSummaryHeader } from './QuestionSummary.js'
+import { LoadingText } from './LoadingText.js'
+import { Question } from './Question.js'
 import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
@@ -24,10 +26,12 @@ export function SecurityPoolSection({
 	showHeader = true,
 }: SecurityPoolSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
-	const isCreateDisabled = accountState.address === undefined || !isMainnet || securityPoolCreating || checkingDuplicateOriginPool || duplicateOriginPoolExists || marketDetails?.marketType !== 'binary'
+	const isPoolActionPending = securityPoolCreating || checkingDuplicateOriginPool
+	const isCreateDisabled = accountState.address === undefined || !isMainnet || isPoolActionPending || duplicateOriginPoolExists || marketDetails?.marketType !== 'binary'
 	const matchingPools = marketDetails === undefined ? [] : securityPools.filter(pool => pool.questionId.toLowerCase() === marketDetails.questionId.toLowerCase())
 	const hasMatchingSecurityMultiplier = matchingPools.some(pool => pool.securityMultiplier.toString() === securityPoolForm.securityMultiplier.trim())
-	const marketTitle = marketDetails === undefined ? undefined : marketDetails.title.trim() === '' ? 'Untitled question' : marketDetails.title
+	const createdQuestionDetails = securityPoolResult === undefined ? undefined : marketDetails?.questionId === securityPoolResult.questionId ? marketDetails : undefined
+	const createButtonLabel = securityPoolCreating ? <LoadingText>Creating Pool...</LoadingText> : checkingDuplicateOriginPool ? <LoadingText>Checking Duplicate...</LoadingText> : duplicateOriginPoolExists ? 'Pool Already Exists' : matchingPools.length > 0 ? 'Create Another Pool' : 'Create Pool'
 
 	return (
 		<section className='panel market-panel'>
@@ -43,20 +47,20 @@ export function SecurityPoolSection({
 				<div className='market-column'>
 					{marketDetails === undefined ? undefined : (
 						<EntityCard
-							title={marketTitle}
+							title='Question'
 							badge={<span className='badge ok'>{marketDetails.marketType}</span>}
 							actions={
 								<div className='actions'>
-									<button className='secondary' onClick={onLoadMarket} disabled={loadingMarketDetails}>
-										{loadingMarketDetails ? 'Loading Question...' : 'Reload Question'}
+									<button className='secondary' onClick={onLoadMarket} disabled={loadingMarketDetails || isPoolActionPending}>
+										{loadingMarketDetails ? <LoadingText>Loading Question...</LoadingText> : 'Reload Question'}
 									</button>
-									<button className='secondary' onClick={onLoadLatestMarket} disabled={lastCreatedQuestionId === undefined}>
+									<button className='secondary' onClick={onLoadLatestMarket} disabled={lastCreatedQuestionId === undefined || isPoolActionPending}>
 										Use Latest Question
 									</button>
 								</div>
 							}
 						>
-							<QuestionSummaryHeader description={marketDetails.description.trim() === '' ? 'No description provided.' : marketDetails.description} questionId={marketDetails.questionId} title={marketTitle === undefined ? 'Untitled question' : marketTitle} />
+							<Question question={marketDetails} />
 							{marketDetails.marketType === 'scalar' ? undefined : (
 								<div className='question-chip-row'>
 									{marketDetails.outcomeLabels.map(label => (
@@ -73,7 +77,7 @@ export function SecurityPoolSection({
 						<EntityCard title='Existing Pools For This Question' badge={<span className='badge muted'>{matchingPools.length} existing</span>}>
 							<div className='entity-card-list'>
 								{matchingPools.map(pool => (
-									<EntityCard key={pool.securityPoolAddress} className='compact' title={pool.securityPoolAddress} badge={<span className='badge ok'>{pool.systemState}</span>}>
+									<EntityCard key={pool.securityPoolAddress} className='compact' title={<AddressValue address={pool.securityPoolAddress} />} badge={<span className='badge ok'>{pool.systemState}</span>}>
 										<div className='workflow-vault-grid'>
 											<div>
 												<span className='metric-label'>Security Multiplier</span>
@@ -92,11 +96,8 @@ export function SecurityPoolSection({
 
 					{securityPoolResult === undefined ? undefined : (
 						<EntityCard title='Pool created' badge={<span className='badge ok'>Deployed</span>}>
+							<Question question={createdQuestionDetails} loading={createdQuestionDetails === undefined} />
 							<ul className='status-list hashes'>
-								<li>
-									<span>Question ID</span>
-									<strong>{securityPoolResult.questionId}</strong>
-								</li>
 								<li>
 									<span>Security Multiplier</span>
 									<strong>{securityPoolResult.securityMultiplier.toString()}</strong>
@@ -124,10 +125,10 @@ export function SecurityPoolSection({
 						</label>
 
 						<div className='actions'>
-							<button className='secondary' onClick={onLoadMarket} disabled={loadingMarketDetails}>
-								{loadingMarketDetails ? 'Loading Question...' : 'Load Question'}
+							<button className='secondary' onClick={onLoadMarket} disabled={loadingMarketDetails || isPoolActionPending}>
+								{loadingMarketDetails ? <LoadingText>Loading Question...</LoadingText> : 'Load Question'}
 							</button>
-							<button className='secondary' onClick={onLoadLatestMarket} disabled={lastCreatedQuestionId === undefined}>
+							<button className='secondary' onClick={onLoadLatestMarket} disabled={lastCreatedQuestionId === undefined || isPoolActionPending}>
 								Use Latest Question
 							</button>
 						</div>
@@ -149,7 +150,7 @@ export function SecurityPoolSection({
 
 						<div className='actions'>
 							<button onClick={onCreateSecurityPool} disabled={isCreateDisabled}>
-								{securityPoolCreating ? 'Creating Pool...' : checkingDuplicateOriginPool ? 'Checking Duplicate...' : duplicateOriginPoolExists ? 'Pool Already Exists' : matchingPools.length > 0 ? 'Create Another Pool' : 'Create Pool'}
+								{createButtonLabel}
 							</button>
 						</div>
 					</div>

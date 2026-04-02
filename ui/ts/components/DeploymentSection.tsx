@@ -21,8 +21,8 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	if (prerequisiteLabel === undefined) {
 		return {
 			badgeClass: 'pending',
-			detail: 'Ready to deploy.',
-			label: isBusy ? 'Deploying...' : 'Ready',
+			detail: 'Can deploy now.',
+			label: isBusy ? 'Deploying...' : 'Deploy',
 			buttonLabel: isBusy ? 'Deploying...' : 'Deploy',
 		}
 	}

@@ -5,11 +5,15 @@ const SECONDS_PER_MINUTE = 60n
 const SECONDS_PER_HOUR = 60n * SECONDS_PER_MINUTE
 const SECONDS_PER_DAY = 24n * SECONDS_PER_HOUR
 
+function formatGroupedInteger(value: bigint) {
+	return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+}
+
 function formatDecimalString(value: string) {
 	const isNegative = value.startsWith('-')
 	const unsignedValue = isNegative ? value.slice(1) : value
 	const [integerPart = '0', fractionalPart] = unsignedValue.split('.')
-	const formattedIntegerPart = BigInt(integerPart).toLocaleString()
+	const formattedIntegerPart = formatGroupedInteger(BigInt(integerPart))
 
 	return `${isNegative ? '-' : ''}${formattedIntegerPart}${fractionalPart === undefined ? '' : `.${fractionalPart}`}`
 }
@@ -18,6 +22,18 @@ export function formatCurrencyBalance(value: bigint | undefined, units: number =
 	if (value === undefined) return 'Unavailable'
 	const formattedValue = units === 18 ? formatEther(value) : formatUnits(value, units)
 	return formatDecimalString(formattedValue)
+}
+
+export function formatRoundedCurrencyBalance(value: bigint | undefined, units: number = 18, decimals: number = 2) {
+	if (value === undefined) return 'Unavailable'
+	if (decimals < 0) return formatCurrencyBalance(value, units)
+
+	const scale = 10n ** BigInt(decimals)
+	const base = 10n ** BigInt(units)
+	const rounded = (value * scale + base / 2n) / base
+	const integerPart = rounded / scale
+	const fractionalPart = rounded % scale
+	return `${formatGroupedInteger(integerPart)}.${fractionalPart.toString().padStart(decimals, '0')}`
 }
 
 export function formatTimestamp(timestamp: bigint) {

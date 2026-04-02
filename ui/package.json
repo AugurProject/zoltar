@@ -19,6 +19,7 @@
 		"viem": "2.23.15"
 	},
 	"scripts": {
+		"preinstall": "bun ./scripts/link-node-modules.mjs",
 		"link:shared-modules": "bun ./scripts/link-node-modules.mjs",
 		"contracts": "cd ../solidity && bun run setup",
 		"setup": "bun install --frozen-lockfile && bun run contracts && bun run build",
