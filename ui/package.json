@@ -19,13 +19,12 @@
 		"viem": "2.23.15"
 	},
 	"scripts": {
-		"link:shared-modules": "bun run preinstall",
-		"preinstall": "bun ./scripts/link-node-modules.mjs",
+		"link:shared-modules": "bun ./scripts/link-node-modules.mjs",
 		"contracts": "cd ../solidity && bun run setup",
-		"setup": "bun install --frozen-lockfile && bun run contracts && bun run build",
+		"setup": "bun install --frozen-lockfile && bun run link:shared-modules && bun run contracts && bun run build",
 		"build": "tsc",
 		"watch": "tsc --watch",
 		"serve": "bun x tsc --project tsconfig.json && bun ./dev-server.mjs",
-		"vendor": "bun install --frozen-lockfile && bun --tsconfig-override=tsconfig.vendor.json ./build/vendor.mts"
+		"vendor": "bun install --frozen-lockfile && bun run link:shared-modules && bun --tsconfig-override=tsconfig.vendor.json ./build/vendor.mts"
 	}
 }
