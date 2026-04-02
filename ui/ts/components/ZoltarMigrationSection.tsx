@@ -55,7 +55,24 @@ function getMissingPreparationAmount(targetAmount: bigint, preparedRepBalance: b
 	return targetAmount > currentPreparedBalance ? targetAmount - currentPreparedBalance : 0n
 }
 
-export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZoltarForkAccess, loadingZoltarUniverse, onMigrateInternalRep, onPrepareRepForMigration, onZoltarMigrationFormChange, zoltarForkRepBalance, zoltarMigrationChildRepBalances, zoltarMigrationError, zoltarMigrationForm, zoltarMigrationPending, zoltarMigrationPreparedRepBalance, zoltarMigrationResult, zoltarUniverse, zoltarUniverseMissing }: ZoltarMigrationSectionProps) {
+export function ZoltarMigrationSection({
+	accountAddress,
+	isMainnet,
+	loadingZoltarForkAccess,
+	loadingZoltarUniverse,
+	onMigrateInternalRep,
+	onPrepareRepForMigration,
+	onZoltarMigrationFormChange,
+	zoltarForkRepBalance,
+	zoltarMigrationChildRepBalances,
+	zoltarMigrationError,
+	zoltarMigrationForm,
+	zoltarMigrationPending,
+	zoltarMigrationPreparedRepBalance,
+	zoltarMigrationResult,
+	zoltarUniverse,
+	zoltarUniverseMissing,
+}: ZoltarMigrationSectionProps) {
 	const rootUniverse = zoltarUniverse
 	const universeMissing = rootUniverse === undefined && zoltarUniverseMissing && !loadingZoltarUniverse
 	const hasForked = rootUniverse?.hasForked === true
@@ -141,56 +158,67 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 	if (universeMissing) {
 		return (
 			<>
-				<EntityCard title="Migrate REP" badge={<span className="badge blocked">Missing</span>}>
-					<p className="notice error">The universe does not exist.</p>
+				<EntityCard title='Migrate REP' badge={<span className='badge blocked'>Missing</span>}>
+					<p className='notice error'>The universe does not exist.</p>
 				</EntityCard>
-				{zoltarMigrationError === undefined ? undefined : <p className="notice error">{zoltarMigrationError}</p>}
+				{zoltarMigrationError === undefined ? undefined : <p className='notice error'>{zoltarMigrationError}</p>}
 			</>
 		)
 	}
 
 	return (
 		<>
-			<EntityCard title="Migrate REP">
-				<div className="workflow-metric-grid">
+			<EntityCard title='Migrate REP'>
+				<div className='workflow-metric-grid'>
 					<div>
-						<span className="metric-label">Your REP Balance</span>
+						<span className='metric-label'>Your REP Balance</span>
 						<strong>
-							<LoadableValue loading={loadingZoltarForkAccess} placeholder="Loading...">
+							<LoadableValue loading={loadingZoltarForkAccess} placeholder='Loading...'>
 								{zoltarForkRepBalance === undefined ? 'Loading...' : `${formatCurrencyBalance(zoltarForkRepBalance)} REP`}
 							</LoadableValue>
 						</strong>
 					</div>
 					<div>
-						<span className="metric-label">Migration REP Balance</span>
+						<span className='metric-label'>Migration REP Balance</span>
 						<strong>
-							<LoadableValue loading={loadingZoltarForkAccess} placeholder="Loading...">
+							<LoadableValue loading={loadingZoltarForkAccess} placeholder='Loading...'>
 								{zoltarMigrationPreparedRepBalance === undefined ? 'Loading...' : `${formatCurrencyBalance(zoltarMigrationPreparedRepBalance)} REP`}
 							</LoadableValue>
 						</strong>
 					</div>
 					<div>
-						<span className="metric-label">Universe</span>
+						<span className='metric-label'>Universe</span>
 						<strong>{rootUniverse === undefined ? 'Loading...' : <UniverseLink universeId={rootUniverse.universeId} />}</strong>
 					</div>
 				</div>
 
-				<div className="form-grid">
-					<div className="field">
-						<div className="field-header">
+				<div className='form-grid'>
+					<div className='field'>
+						<div className='field-header'>
 							<span>Migration Amount</span>
-							<button className="quiet" type="button" onClick={selectAllAmount} disabled={zoltarMigrationPending || !hasForked || migrationAmountSource <= 0n}>
+							<button className='quiet' type='button' onClick={selectAllAmount} disabled={zoltarMigrationPending || !hasForked || migrationAmountSource <= 0n}>
 								All
 							</button>
 						</div>
-						<input inputMode="decimal" value={zoltarMigrationForm.amount} onInput={event => onZoltarMigrationFormChange({ amount: event.currentTarget.value })} placeholder="0.0" disabled={zoltarMigrationPending || !hasForked} />
-						{migrationAmountHintMessage === undefined ? undefined : <p className="detail">{migrationAmountHintMessage}</p>}
+						<input inputMode='decimal' value={zoltarMigrationForm.amount} onInput={event => onZoltarMigrationFormChange({ amount: event.currentTarget.value })} placeholder='0.0' disabled={zoltarMigrationPending || !hasForked} />
+						{migrationAmountHintMessage === undefined ? undefined : <p className='detail'>{migrationAmountHintMessage}</p>}
 					</div>
 
-					{rootUniverse === undefined ? undefined : <MigrationOutcomeUniversesSection childUniverseRepBalances={zoltarMigrationChildRepBalances} childUniverses={rootUniverse.childUniverses} disabled={zoltarMigrationPending} isScalarFork={rootUniverse.forkQuestionDetails?.marketType === 'scalar'} migrationBalance={zoltarMigrationPreparedRepBalance} onAddNextOutcome={addNextOutcome} onToggleOutcomeIndex={toggleOutcomeIndex} selectedOutcomeIndexSet={selectedOutcomeIndexSet} />}
+					{rootUniverse === undefined ? undefined : (
+						<MigrationOutcomeUniversesSection
+							childUniverseRepBalances={zoltarMigrationChildRepBalances}
+							childUniverses={rootUniverse.childUniverses}
+							disabled={zoltarMigrationPending}
+							isScalarFork={rootUniverse.forkQuestionDetails?.marketType === 'scalar'}
+							migrationBalance={zoltarMigrationPreparedRepBalance}
+							onAddNextOutcome={addNextOutcome}
+							onToggleOutcomeIndex={toggleOutcomeIndex}
+							selectedOutcomeIndexSet={selectedOutcomeIndexSet}
+						/>
+					)}
 
-					<div className="actions">
-						<button className="secondary" title={prepareHintMessage} onClick={onPrepareRepForMigration} disabled={!canPrepare}>
+					<div className='actions'>
+						<button className='secondary' title={prepareHintMessage} onClick={onPrepareRepForMigration} disabled={!canPrepare}>
 							{zoltarMigrationPending ? 'Waiting...' : 'Prepare REP'}
 						</button>
 						<button title={splitHintMessage} onClick={onMigrateInternalRep} disabled={!canSplit}>
@@ -201,29 +229,29 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 			</EntityCard>
 
 			{zoltarMigrationResult === undefined ? undefined : (
-				<EntityCard title="Latest Migration Action" badge={<span className="badge muted">{zoltarMigrationResult.action}</span>}>
-					<div className="entity-metric-grid">
-						<div className="entity-metric">
-							<span className="metric-label">Action</span>
+				<EntityCard title='Latest Migration Action' badge={<span className='badge muted'>{zoltarMigrationResult.action}</span>}>
+					<div className='entity-metric-grid'>
+						<div className='entity-metric'>
+							<span className='metric-label'>Action</span>
 							<strong>{zoltarMigrationResult.action}</strong>
 						</div>
-						<div className="entity-metric">
-							<span className="metric-label">Amount</span>
+						<div className='entity-metric'>
+							<span className='metric-label'>Amount</span>
 							<strong>{formatCurrencyBalance(zoltarMigrationResult.amount)}</strong>
 						</div>
-						<div className="entity-metric">
-							<span className="metric-label">Outcome Indexes</span>
+						<div className='entity-metric'>
+							<span className='metric-label'>Outcome Indexes</span>
 							<strong>{zoltarMigrationResult.outcomeIndexes.length === 0 ? 'None' : zoltarMigrationResult.outcomeIndexes.join(', ')}</strong>
 						</div>
-						<div className="entity-metric">
-							<span className="metric-label">Transaction</span>
+						<div className='entity-metric'>
+							<span className='metric-label'>Transaction</span>
 							<strong>{zoltarMigrationResult.hash}</strong>
 						</div>
 					</div>
 				</EntityCard>
 			)}
 
-			{zoltarMigrationError === undefined ? undefined : <p className="notice error">{zoltarMigrationError}</p>}
+			{zoltarMigrationError === undefined ? undefined : <p className='notice error'>{zoltarMigrationError}</p>}
 		</>
 	)
 }

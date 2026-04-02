@@ -27,30 +27,30 @@ export function ScalarCreatePreview({ details, selectedTick, onSelectedTickChang
 	}, [clampedSelectedTick, onSelectedTickChange, selectedTick])
 
 	return (
-		<div className="market-scalar-deploy">
-			<label className="field scalar-slider-field">
+		<div className='market-scalar-deploy'>
+			<label className='field scalar-slider-field'>
 				<span>Scalar Preview</span>
-				<div className="scalar-slider-rail">
-					<div className="scalar-slider-track" />
-					<div className="scalar-slider-fill" style={{ width: `${selectedProgress}%` }} />
-					<input aria-valuetext={formatScalarOutcomeLabel(details, clampedSelectedTickValue)} max={details.numTicks.toString()} min="0" step="1" type="range" value={clampedSelectedTick} onInput={event => onSelectedTickChange(event.currentTarget.value)} />
+				<div className='scalar-slider-rail'>
+					<div className='scalar-slider-track' />
+					<div className='scalar-slider-fill' style={{ width: `${selectedProgress}%` }} />
+					<input aria-valuetext={formatScalarOutcomeLabel(details, clampedSelectedTickValue)} max={details.numTicks.toString()} min='0' step='1' type='range' value={clampedSelectedTick} onInput={event => onSelectedTickChange(event.currentTarget.value)} />
 				</div>
 			</label>
-			<div className="workflow-question-grid market-scalar-deploy-grid scalar-slider-stats">
+			<div className='workflow-question-grid market-scalar-deploy-grid scalar-slider-stats'>
 				<div>
-					<span className="metric-label">Min Value</span>
+					<span className='metric-label'>Min Value</span>
 					<strong>{formatScalarOutcomeLabel(details, 0n)}</strong>
 				</div>
 				<div>
-					<span className="metric-label">Selected Tick</span>
+					<span className='metric-label'>Selected Tick</span>
 					<strong>{`${clampedSelectedTick} / ${details.numTicks.toString()}`}</strong>
 				</div>
 				<div>
-					<span className="metric-label">Selected Value</span>
+					<span className='metric-label'>Selected Value</span>
 					<strong>{formatScalarOutcomeLabel(details, clampedSelectedTickValue)}</strong>
 				</div>
 				<div>
-					<span className="metric-label">Max Value</span>
+					<span className='metric-label'>Max Value</span>
 					<strong>{formatScalarOutcomeLabel(details, details.numTicks)}</strong>
 				</div>
 			</div>

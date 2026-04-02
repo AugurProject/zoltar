@@ -91,7 +91,7 @@
 }
 
 html {
-	font-family: 'Aptos', 'Segoe UI', 'Helvetica Neue', sans-serif;
+	font-family: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
 	background-color: var(--bg);
 	color: var(--text);
 	overflow-x: clip;
@@ -128,12 +128,14 @@ body {
 }
 
 body::before {
-	content: '';
+	content: "";
 	position: fixed;
 	inset: 0;
 	z-index: -1;
 	pointer-events: none;
-	background: radial-gradient(circle at 18% 8%, rgba(56, 213, 255, 0.18), transparent 22%), radial-gradient(circle at 82% 0%, rgba(124, 108, 255, 0.16), transparent 20%), radial-gradient(circle at 52% 118%, rgba(66, 232, 194, 0.1), transparent 34%), linear-gradient(180deg, #0b1728 0%, #081220 34%, #09111c 64%, var(--bg-deep) 100%);
+	background:
+		radial-gradient(circle at 18% 8%, rgba(56, 213, 255, 0.18), transparent 22%), radial-gradient(circle at 82% 0%, rgba(124, 108, 255, 0.16), transparent 20%), radial-gradient(circle at 52% 118%, rgba(66, 232, 194, 0.1), transparent 34%),
+		linear-gradient(180deg, #0b1728 0%, #081220 34%, #09111c 64%, var(--bg-deep) 100%);
 }
 
 main {
@@ -166,7 +168,7 @@ main {
 
 h1 {
 	margin: 0;
-	font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+	font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 	font-size: var(--font-h1);
 	line-height: 0.92;
 	letter-spacing: -0.055em;
@@ -175,7 +177,7 @@ h1 {
 
 h2 {
 	margin: 0;
-	font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+	font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 	font-size: var(--font-h2);
 	line-height: 1.06;
 	letter-spacing: -0.04em;
@@ -351,7 +353,7 @@ button.destructive:hover:not(:disabled) {
 	gap: 0.4rem;
 	border-radius: 3px;
 	padding: 0.46rem 0.74rem;
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-chip);
 	letter-spacing: 0.07em;
 	text-transform: uppercase;
@@ -374,7 +376,7 @@ button.destructive:hover:not(:disabled) {
 .panel-label,
 .metric-label,
 .workflow-section-label {
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	text-transform: uppercase;
 	letter-spacing: 0.09em;
 	font-size: var(--font-label);
@@ -462,7 +464,7 @@ button.destructive:hover:not(:disabled) {
 }
 
 .notice span {
-	font-family: 'Courier New', monospace;
+	font-family: "Courier New", monospace;
 	overflow-wrap: anywhere;
 	word-break: normal;
 }
@@ -580,7 +582,7 @@ button.destructive:hover:not(:disabled) {
 }
 
 .overview-app-title {
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-app-title);
 	line-height: 1.15;
 	letter-spacing: 0.1em;
@@ -612,7 +614,7 @@ button.destructive:hover:not(:disabled) {
 .overview-inline-metrics strong {
 	display: block;
 	margin-top: 0.15rem;
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -622,7 +624,7 @@ button.destructive:hover:not(:disabled) {
 }
 
 .overview-address-metric strong {
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-address);
 	letter-spacing: -0.01em;
 }
@@ -887,7 +889,7 @@ button.destructive:hover:not(:disabled) {
 	align-items: center;
 	border-radius: 3px;
 	padding: 0.32rem 0.68rem;
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-label);
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
@@ -916,7 +918,7 @@ button.destructive:hover:not(:disabled) {
 
 .address {
 	margin-top: 0.55rem;
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	word-break: break-all;
 	color: var(--text);
 }
@@ -1013,7 +1015,7 @@ button.destructive:hover:not(:disabled) {
 .workflow-vault-grid strong {
 	display: block;
 	margin-top: 0.15rem;
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -1054,7 +1056,7 @@ button.destructive:hover:not(:disabled) {
 }
 
 .question-summary-id {
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-xs);
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
@@ -1077,7 +1079,7 @@ button.destructive:hover:not(:disabled) {
 .question-summary-grid strong {
 	display: block;
 	margin-top: 0.15rem;
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-value);
 	font-variant-numeric: tabular-nums;
 	color: var(--value);
@@ -1254,7 +1256,7 @@ button.destructive:hover:not(:disabled) {
 	pointer-events: none;
 }
 
-.scalar-slider-field input[type='range'] {
+.scalar-slider-field input[type="range"] {
 	position: relative;
 	z-index: 1;
 	width: 100%;
@@ -1268,19 +1270,19 @@ button.destructive:hover:not(:disabled) {
 	cursor: pointer;
 }
 
-.scalar-slider-field input[type='range']::-webkit-slider-runnable-track {
+.scalar-slider-field input[type="range"]::-webkit-slider-runnable-track {
 	height: 0.4rem;
 	background: transparent;
 	border: 0;
 }
 
-.scalar-slider-field input[type='range']::-moz-range-track {
+.scalar-slider-field input[type="range"]::-moz-range-track {
 	height: 0.4rem;
 	background: transparent;
 	border: 0;
 }
 
-.scalar-slider-field input[type='range']::-webkit-slider-thumb {
+.scalar-slider-field input[type="range"]::-webkit-slider-thumb {
 	width: 1rem;
 	height: 1rem;
 	margin-top: -0.3rem;
@@ -1294,7 +1296,7 @@ button.destructive:hover:not(:disabled) {
 	-webkit-appearance: none;
 }
 
-.scalar-slider-field input[type='range']::-moz-range-thumb {
+.scalar-slider-field input[type="range"]::-moz-range-thumb {
 	width: 1rem;
 	height: 1rem;
 	border: 1px solid rgba(233, 246, 255, 0.8);
@@ -1403,7 +1405,7 @@ button.destructive:hover:not(:disabled) {
 .question-preview-body strong {
 	display: block;
 	margin-top: 0.15rem;
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -1430,7 +1432,7 @@ button.destructive:hover:not(:disabled) {
 }
 
 .entity-card::before {
-	content: '';
+	content: "";
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
@@ -1488,7 +1490,7 @@ button.destructive:hover:not(:disabled) {
 .entity-metric strong {
 	display: block;
 	margin-top: 0.15rem;
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -1591,7 +1593,7 @@ button.destructive:hover:not(:disabled) {
 .modal-summary-grid strong {
 	display: block;
 	margin-top: 0.15rem;
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -1617,7 +1619,7 @@ button.destructive:hover:not(:disabled) {
 }
 
 .field span {
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
 	font-size: var(--font-label);
@@ -1795,7 +1797,7 @@ button:focus-visible {
 .escalation-metrics strong {
 	display: block;
 	margin-top: 0.15rem;
-	font-family: 'IBM Plex Mono', 'Courier New', monospace;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;

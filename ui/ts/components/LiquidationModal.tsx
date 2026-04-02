@@ -18,42 +18,42 @@ export function LiquidationModal({ accountAddress, closeLiquidationModal, isMain
 	if (!liquidationModalOpen) return undefined
 
 	return (
-		<div className="modal-backdrop" role="presentation" onClick={closeLiquidationModal}>
-			<section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="liquidation-modal-title" onClick={event => event.stopPropagation()}>
-				<div className="modal-header">
+		<div className='modal-backdrop' role='presentation' onClick={closeLiquidationModal}>
+			<section className='modal-panel' role='dialog' aria-modal='true' aria-labelledby='liquidation-modal-title' onClick={event => event.stopPropagation()}>
+				<div className='modal-header'>
 					<div>
-						<p className="panel-label">Liquidation</p>
-						<h3 id="liquidation-modal-title">Queue a vault liquidation</h3>
+						<p className='panel-label'>Liquidation</p>
+						<h3 id='liquidation-modal-title'>Queue a vault liquidation</h3>
 					</div>
-					<button className="quiet" onClick={closeLiquidationModal}>
+					<button className='quiet' onClick={closeLiquidationModal}>
 						Close
 					</button>
 				</div>
-				<p className="detail">The selected vault is prefilled here. Adjust the target or amount if needed, then queue the liquidation transaction.</p>
-				<div className="modal-summary-grid">
+				<p className='detail'>The selected vault is prefilled here. Adjust the target or amount if needed, then queue the liquidation transaction.</p>
+				<div className='modal-summary-grid'>
 					<div>
-						<span className="metric-label">Security Pool</span>
+						<span className='metric-label'>Security Pool</span>
 						<strong>{liquidationSecurityPoolAddress === undefined ? 'Unknown' : liquidationSecurityPoolAddress}</strong>
 					</div>
 					<div>
-						<span className="metric-label">Manager</span>
+						<span className='metric-label'>Manager</span>
 						<strong>{liquidationManagerAddress === undefined ? 'Unknown' : liquidationManagerAddress}</strong>
 					</div>
 				</div>
-				<div className="form-grid">
-					<div className="field-row">
-						<label className="field">
+				<div className='form-grid'>
+					<div className='field-row'>
+						<label className='field'>
 							<span>Target Vault</span>
-							<input value={liquidationTargetVault} onInput={event => onLiquidationTargetVaultChange(event.currentTarget.value)} placeholder="0x..." />
+							<input value={liquidationTargetVault} onInput={event => onLiquidationTargetVaultChange(event.currentTarget.value)} placeholder='0x...' />
 						</label>
-						<label className="field">
+						<label className='field'>
 							<span>Liquidation Amount</span>
 							<input value={liquidationAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} />
 						</label>
 					</div>
 				</div>
-				<div className="actions">
-					<button className="secondary" onClick={closeLiquidationModal}>
+				<div className='actions'>
+					<button className='secondary' onClick={closeLiquidationModal}>
 						Cancel
 					</button>
 					<button

@@ -55,7 +55,6 @@ const ContractData = funtypes.ReadonlyPartial({
 	}),
 })
 
-type CompileResult = funtypes.Static<typeof CompileResult>
 const CompileResult = funtypes.ReadonlyObject({
 	contracts: funtypes.Union(funtypes.Record(funtypes.String, funtypes.Record(funtypes.String, ContractData)), funtypes.Undefined),
 	sources: funtypes.Union(funtypes.Unknown, funtypes.Undefined),
@@ -75,7 +74,7 @@ class CompilationError extends Error {
 	}
 	override toString() {
 		const unescape = (str: string) => str.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
-		return `${ this.name }: ${ this.message }\n errors:\n${ this.errors.map((e, i) => `  [${ i }] ${ unescape(e) }`).join('\n') }`
+		return `${this.name}: ${this.message}\n errors:\n${this.errors.map((e, i) => `  [${i}] ${unescape(e)}`).join('\n')}`
 	}
 }
 
@@ -93,9 +92,7 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isCompileError(value: unknown): value is { severity: string; formattedMessage: string } {
-	return isObjectRecord(value)
-		&& typeof value['severity'] === 'string'
-		&& typeof value['formattedMessage'] === 'string'
+	return isObjectRecord(value) && typeof value['severity'] === 'string' && typeof value['formattedMessage'] === 'string'
 }
 
 // Compiler settings that affect output - must be included in hash
@@ -192,7 +189,7 @@ const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[]
 		// Security check: ensure targetPath is within baseDir
 		const relative = path.relative(baseDir, targetPath)
 		if (relative.startsWith('..') || path.isAbsolute(relative)) {
-			throw new Error(`Path traversal detected: ${ filePath } resolves outside allowed directory`)
+			throw new Error(`Path traversal detected: ${filePath} resolves outside allowed directory`)
 		}
 
 		// Recurse into directories (including symlinked directories that passed the check)
@@ -213,20 +210,20 @@ const copySolidityContractArtifact = async (contractLocation: string) => {
 	const contracts = Object.entries(solidityContract.contracts).flatMap(([filename, contract]) => {
 		if (!isObjectRecord(contract)) throw new Error('missing contract')
 		return Object.entries(contract).map(([contractName, contractData]) => ({
-			contractName: `${ filename
+			contractName: `${filename
 				.replace('contracts/', '')
 				.replace(/-/g, '')
 				.replace(/\//g, '_')
 				.replace(/\\/g, '_')
-				.replace(/\.sol$/, '') }_${ contractName }`,
+				.replace(/\.sol$/, '')}_${contractName}`,
 			contractData,
 		}))
 	})
 	if (new Set(contracts.map(x => x.contractName)).size !== contracts.length) throw new Error('duplicated contract name!')
-	const typescriptString = contracts.map(contract => `export const ${ contract.contractName } = ${ JSON.stringify(contract.contractData, null, 4) } as const`).join('\r\n\r\n')
+	const typescriptString = contracts.map(contract => `export const ${contract.contractName} = ${JSON.stringify(contract.contractData, null, 4)} as const`).join('\r\n\r\n')
 	await fs.mkdir(path.dirname(CONTRACT_PATH_RUNTIME), { recursive: true })
 	await fs.writeFile(CONTRACT_PATH_APP, typescriptString)
-	await fs.writeFile(CONTRACT_PATH_RUNTIME, `${ typescriptString }\n`)
+	await fs.writeFile(CONTRACT_PATH_RUNTIME, `${typescriptString}\n`)
 }
 
 const compileContracts = async () => {
@@ -278,18 +275,18 @@ const compileContracts = async () => {
 		const output = solc.compile(JSON.stringify(input))
 		console.timeEnd('solc compilation')
 
-			const result = CompileResult.parse(JSON.parse(output))
-			const diagnostics = Array.isArray(result.errors) ? result.errors : []
-			const errors: string[] = []
-			const warnings: string[] = []
-			for (const diagnostic of diagnostics) {
-				if (!isCompileError(diagnostic)) continue
-				if (diagnostic.severity === 'error') errors.push(diagnostic.formattedMessage)
-				if (diagnostic.severity === 'warning') warnings.push(diagnostic.formattedMessage)
-			}
-			if (errors.length) throw new CompilationError(errors)
+		const result = CompileResult.parse(JSON.parse(output))
+		const diagnostics = Array.isArray(result.errors) ? result.errors : []
+		const errors: string[] = []
+		const warnings: string[] = []
+		for (const diagnostic of diagnostics) {
+			if (!isCompileError(diagnostic)) continue
+			if (diagnostic.severity === 'error') errors.push(diagnostic.formattedMessage)
+			if (diagnostic.severity === 'warning') warnings.push(diagnostic.formattedMessage)
+		}
+		if (errors.length) throw new CompilationError(errors)
 
-			if (warnings.length > 0) warnings.forEach(warning => console.warn(warning))
+		if (warnings.length > 0) warnings.forEach(warning => console.warn(warning))
 
 		if (!(await exists(ARTIFACTS_DIR))) await fs.mkdir(ARTIFACTS_DIR, { recursive: false })
 		await fs.writeFile(ARTIFACTS_JSON, output)

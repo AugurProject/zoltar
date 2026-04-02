@@ -21,7 +21,22 @@ type ForkZoltarSectionProps = {
 	zoltarUniverseMissing: boolean
 }
 
-export function ForkZoltarSection({ accountAddress, isMainnet, loadingZoltarForkAccess, loadingZoltarUniverse, onApproveZoltarForkRep, onForkZoltar, onZoltarForkQuestionIdChange, zoltarForkAllowance, zoltarForkError, zoltarForkPending, zoltarForkQuestionId, zoltarForkRepBalance, zoltarUniverse, zoltarUniverseMissing }: ForkZoltarSectionProps) {
+export function ForkZoltarSection({
+	accountAddress,
+	isMainnet,
+	loadingZoltarForkAccess,
+	loadingZoltarUniverse,
+	onApproveZoltarForkRep,
+	onForkZoltar,
+	onZoltarForkQuestionIdChange,
+	zoltarForkAllowance,
+	zoltarForkError,
+	zoltarForkPending,
+	zoltarForkQuestionId,
+	zoltarForkRepBalance,
+	zoltarUniverse,
+	zoltarUniverseMissing,
+}: ForkZoltarSectionProps) {
 	const rootUniverse = zoltarUniverse
 	const universeMissing = rootUniverse === undefined && zoltarUniverseMissing && !loadingZoltarUniverse
 	const hasForked = rootUniverse?.hasForked === true
@@ -32,53 +47,53 @@ export function ForkZoltarSection({ accountAddress, isMainnet, loadingZoltarFork
 	if (universeMissing) {
 		return (
 			<>
-				<EntityCard title="Fork Zoltar" badge={<span className="badge blocked">Missing</span>}>
-					<p className="notice error">The universe does not exist.</p>
+				<EntityCard title='Fork Zoltar' badge={<span className='badge blocked'>Missing</span>}>
+					<p className='notice error'>The universe does not exist.</p>
 				</EntityCard>
-				{zoltarForkError === undefined ? undefined : <p className="notice error">{zoltarForkError}</p>}
+				{zoltarForkError === undefined ? undefined : <p className='notice error'>{zoltarForkError}</p>}
 			</>
 		)
 	}
 
 	return (
 		<>
-			<EntityCard title="Fork Zoltar" badge={<span className={`badge ${hasForked ? 'blocked' : 'ok'}`}>{hasForked ? 'Already forked' : 'Ready'}</span>}>
-				<div className="workflow-metric-grid">
+			<EntityCard title='Fork Zoltar' badge={<span className={`badge ${hasForked ? 'blocked' : 'ok'}`}>{hasForked ? 'Already forked' : 'Ready'}</span>}>
+				<div className='workflow-metric-grid'>
 					<div>
-						<span className="metric-label">Your REP Balance</span>
+						<span className='metric-label'>Your REP Balance</span>
 						<strong>
-							<LoadableValue loading={loadingZoltarForkAccess} placeholder="Loading...">
+							<LoadableValue loading={loadingZoltarForkAccess} placeholder='Loading...'>
 								{zoltarForkRepBalance === undefined ? 'Loading...' : `${formatCurrencyBalance(zoltarForkRepBalance)} REP`}
 							</LoadableValue>
 						</strong>
 					</div>
 					<div>
-						<span className="metric-label">Fork Threshold</span>
+						<span className='metric-label'>Fork Threshold</span>
 						<strong>
-							<LoadableValue loading={loadingZoltarForkAccess} placeholder="Loading...">
+							<LoadableValue loading={loadingZoltarForkAccess} placeholder='Loading...'>
 								{rootUniverse === undefined ? 'Loading...' : `${formatCurrencyBalance(rootUniverse.forkThreshold)} REP`}
 							</LoadableValue>
 						</strong>
 					</div>
 					<div>
-						<span className="metric-label">REP Approved To Zoltar</span>
+						<span className='metric-label'>REP Approved To Zoltar</span>
 						<strong>
-							<LoadableValue loading={loadingZoltarForkAccess} placeholder="Loading...">
+							<LoadableValue loading={loadingZoltarForkAccess} placeholder='Loading...'>
 								{zoltarForkAllowance === undefined ? 'Loading...' : `${formatCurrencyBalance(zoltarForkAllowance)} REP`}
 							</LoadableValue>
 						</strong>
 					</div>
 				</div>
 
-				<div className="form-grid">
-					<label className="field">
+				<div className='form-grid'>
+					<label className='field'>
 						<span>Fork Question ID</span>
-						{hasForked ? <strong>{zoltarForkQuestionId === '' ? 'Already forked' : zoltarForkQuestionId}</strong> : <input value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder="0x..." disabled={zoltarForkPending} />}
+						{hasForked ? <strong>{zoltarForkQuestionId === '' ? 'Already forked' : zoltarForkQuestionId}</strong> : <input value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder='0x...' disabled={zoltarForkPending} />}
 					</label>
 
-					<div className="actions">
+					<div className='actions'>
 						{hasForked ? undefined : (
-							<button className="secondary" onClick={onApproveZoltarForkRep} disabled={accountAddress === undefined || !isMainnet || rootUniverse === undefined || zoltarForkPending || hasEnoughApproval}>
+							<button className='secondary' onClick={onApproveZoltarForkRep} disabled={accountAddress === undefined || !isMainnet || rootUniverse === undefined || zoltarForkPending || hasEnoughApproval}>
 								{zoltarForkPending ? 'Waiting...' : hasEnoughApproval ? 'Threshold Approved' : 'Approve REP Threshold'}
 							</button>
 						)}
@@ -88,20 +103,20 @@ export function ForkZoltarSection({ accountAddress, isMainnet, loadingZoltarFork
 					</div>
 
 					{rootUniverse === undefined ? undefined : hasForked ? (
-						<p className="detail">Zoltar has already forked. The fork action is disabled.</p>
+						<p className='detail'>Zoltar has already forked. The fork action is disabled.</p>
 					) : !hasEnoughRep ? (
-						<p className="detail">
+						<p className='detail'>
 							Need REP threshold: <strong>{formatCurrencyBalance(rootUniverse.forkThreshold)} REP</strong>.
 						</p>
 					) : !hasEnoughApproval ? (
-						<p className="detail">
+						<p className='detail'>
 							Approve REP threshold: <strong>{formatCurrencyBalance(rootUniverse.forkThreshold)} REP</strong>.
 						</p>
 					) : undefined}
 				</div>
 			</EntityCard>
 
-			{zoltarForkError === undefined ? undefined : <p className="notice error">{zoltarForkError}</p>}
+			{zoltarForkError === undefined ? undefined : <p className='notice error'>{zoltarForkError}</p>}
 		</>
 	)
 }

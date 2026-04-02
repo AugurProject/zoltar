@@ -3,13 +3,13 @@ export function bigintToDecimalString(value: bigint, power: bigint): string {
 	const magnitude = abs(value)
 	const integerPart = magnitude / 10n ** power
 	const fractionalPart = magnitude % 10n ** power
-	if (fractionalPart === 0n) return `${ sign }${ integerPart.toString(10) }`
-	return `${ sign }${ integerPart.toString(10) }.${ fractionalPart.toString(10).padStart(Number(power), '0').replace(/0+$/, '') }`
+	if (fractionalPart === 0n) return `${sign}${integerPart.toString(10)}`
+	return `${sign}${integerPart.toString(10)}.${fractionalPart.toString(10).padStart(Number(power), '0').replace(/0+$/, '')}`
 }
 
-export const addressString = (address: bigint): `0x${ string }` => `0x${ address.toString(16).padStart(40, '0') }`
+export const addressString = (address: bigint): `0x${string}` => `0x${address.toString(16).padStart(40, '0')}`
 
-export const bytes32String = (bytes32: bigint): `0x${ string }` => `0x${ bytes32.toString(16).padStart(64, '0') }`
+export const bytes32String = (bytes32: bigint): `0x${string}` => `0x${bytes32.toString(16).padStart(64, '0')}`
 
 export const abs = (x: bigint) => (x < 0n ? -1n * x : x)
 

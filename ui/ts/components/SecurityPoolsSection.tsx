@@ -16,21 +16,21 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 	const [view, setView] = useState<SecurityPoolsView>(() => getInitialSecurityPoolsView({ createPool, overview, workflow }))
 
 	return (
-		<section className="panel market-panel">
-			<div className="market-header">
+		<section className='panel market-panel'>
+			<div className='market-header'>
 				<div>
 					<h2></h2>
 				</div>
 			</div>
 
-			<div className="subtab-nav" role="tablist" aria-label="Security Pools views">
-				<button className={`subtab-link ${view === 'browse' ? 'active' : ''}`} type="button" onClick={() => setView('browse')} aria-pressed={view === 'browse'}>
+			<div className='subtab-nav' role='tablist' aria-label='Security Pools views'>
+				<button className={`subtab-link ${view === 'browse' ? 'active' : ''}`} type='button' onClick={() => setView('browse')} aria-pressed={view === 'browse'}>
 					Browse Pools
 				</button>
-				<button className={`subtab-link ${view === 'create' ? 'active' : ''}`} type="button" onClick={() => setView('create')} aria-pressed={view === 'create'}>
+				<button className={`subtab-link ${view === 'create' ? 'active' : ''}`} type='button' onClick={() => setView('create')} aria-pressed={view === 'create'}>
 					Create Pool
 				</button>
-				<button className={`subtab-link ${view === 'operate' ? 'active' : ''}`} type="button" onClick={() => setView('operate')} aria-pressed={view === 'operate'}>
+				<button className={`subtab-link ${view === 'operate' ? 'active' : ''}`} type='button' onClick={() => setView('operate')} aria-pressed={view === 'operate'}>
 					Selected Pool
 				</button>
 			</div>

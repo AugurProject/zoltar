@@ -2,7 +2,21 @@ import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
 import { useRequestGuard } from '../lib/requestGuard.js'
-import { approveErc20, createMarket as createMarketTransaction, createZoltarChildUniverse, forkZoltarUniverse, getDeploymentSteps, loadAllZoltarQuestions, loadErc20Allowance, loadErc20Balance, loadRepTokensMigratedRepBalance, loadZoltarQuestionCount, loadZoltarUniverseSummary, migrateInternalRepInZoltar, prepareRepForMigrationInZoltar } from '../contracts.js'
+import {
+	approveErc20,
+	createMarket as createMarketTransaction,
+	createZoltarChildUniverse,
+	forkZoltarUniverse,
+	getDeploymentSteps,
+	loadAllZoltarQuestions,
+	loadErc20Allowance,
+	loadErc20Balance,
+	loadRepTokensMigratedRepBalance,
+	loadZoltarQuestionCount,
+	loadZoltarUniverseSummary,
+	migrateInternalRepInZoltar,
+	prepareRepForMigrationInZoltar,
+} from '../contracts.js'
 import { createReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseBigIntListInput } from '../lib/inputs.js'
@@ -88,7 +102,12 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 		loadingZoltarForkAccess.value = true
 		try {
 			const readClient = createReadClient()
-			const [allowance, balance, preparedRepBalance, childRepBalances] = await Promise.all([loadErc20Allowance(readClient, zoltarUniverse.value.reputationToken, accountAddress, getZoltarAddress()), loadErc20Balance(readClient, zoltarUniverse.value.reputationToken, accountAddress), loadRepTokensMigratedRepBalance(readClient, zoltarUniverse.value.universeId, accountAddress), Promise.all(zoltarUniverse.value.childUniverses.map(async child => [child.universeId.toString(), await loadErc20Balance(readClient, child.reputationToken, accountAddress)] as const))])
+			const [allowance, balance, preparedRepBalance, childRepBalances] = await Promise.all([
+				loadErc20Allowance(readClient, zoltarUniverse.value.reputationToken, accountAddress, getZoltarAddress()),
+				loadErc20Balance(readClient, zoltarUniverse.value.reputationToken, accountAddress),
+				loadRepTokensMigratedRepBalance(readClient, zoltarUniverse.value.universeId, accountAddress),
+				Promise.all(zoltarUniverse.value.childUniverses.map(async child => [child.universeId.toString(), await loadErc20Balance(readClient, child.reputationToken, accountAddress)] as const)),
+			])
 			if (!isCurrent()) return
 			zoltarForkAllowance.value = allowance
 			zoltarForkRepBalance.value = balance
@@ -308,7 +327,13 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 
 	type MigrationAmountResolver = (amount: bigint, preparedRepBalance: bigint | undefined, repBalance: bigint | undefined) => bigint
 
-	const runZoltarMigrationAction = async (action: (walletAddress: Address, universe: ZoltarUniverseSummary, amount: bigint, outcomeIndexes: bigint[]) => Promise<ZoltarMigrationActionResult>, errorFallback: string, refreshAfter: boolean, requiresOutcomeIndexes: boolean, resolveAmount: MigrationAmountResolver = amount => amount) => {
+	const runZoltarMigrationAction = async (
+		action: (walletAddress: Address, universe: ZoltarUniverseSummary, amount: bigint, outcomeIndexes: bigint[]) => Promise<ZoltarMigrationActionResult>,
+		errorFallback: string,
+		refreshAfter: boolean,
+		requiresOutcomeIndexes: boolean,
+		resolveAmount: MigrationAmountResolver = amount => amount,
+	) => {
 		try {
 			getRequiredInjectedEthereum()
 		} catch {

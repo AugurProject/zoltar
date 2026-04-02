@@ -13,7 +13,7 @@ function parseQuestionOutcome(value: unknown): QuestionOutcome {
 		case QuestionOutcome.None:
 			return value
 		default:
-			throw new Error(`Unexpected question outcome: ${ String(value) }`)
+			throw new Error(`Unexpected question outcome: ${String(value)}`)
 	}
 }
 
@@ -26,12 +26,14 @@ export const getNonDecisionThreshold = async (client: ReadClient, escalationGame
 	})
 
 export const getQuestionResolution = async (client: ReadClient, escalationGame: AccountAddress) =>
-	parseQuestionOutcome(await client.readContract({
-		abi: peripherals_EscalationGame_EscalationGame.abi,
-		functionName: 'getQuestionResolution',
-		address: escalationGame,
-		args: [],
-	}))
+	parseQuestionOutcome(
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getQuestionResolution',
+			address: escalationGame,
+			args: [],
+		}),
+	)
 
 export const getStartBond = async (client: ReadClient, escalationGame: AccountAddress) =>
 	await client.readContract({
@@ -58,7 +60,7 @@ export const getEscalationGameDeposits = async (client: ReadClient, escalationGa
 				address: escalationGame,
 				args: [outcome, currentIndex, CONTRACT_PAGE_SIZE],
 			})
-			)
+		)
 			.map((deposit, index) => ({ ...deposit, depositIndex: currentIndex + BigInt(index) }))
 			.filter(deposit => BigInt(deposit.depositor) !== 0x0n)
 		pages.push(...newDeposits)
@@ -69,16 +71,18 @@ export const getEscalationGameDeposits = async (client: ReadClient, escalationGa
 }
 
 export const deployEscalationGame = async (writeClient: WriteClient, startBond: bigint, nonDecisionThreshold: bigint) => {
-	await writeContractAndWait(writeClient, () => writeClient.writeContract({
-		abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
-		functionName: 'deployEscalationGame',
-		address: getInfraContractAddresses().escalationGameFactory,
-		args: [startBond, nonDecisionThreshold],
-	}))
+	await writeContractAndWait(writeClient, () =>
+		writeClient.writeContract({
+			abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
+			functionName: 'deployEscalationGame',
+			address: getInfraContractAddresses().escalationGameFactory,
+			args: [startBond, nonDecisionThreshold],
+		}),
+	)
 	return getCreate2Address({
 		bytecode: encodeDeployData({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			bytecode: `0x${ peripherals_EscalationGame_EscalationGame.evm.bytecode.object }`,
+			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
 			args: [writeClient.account.address],
 		}),
 		from: getInfraContractAddresses().escalationGameFactory,
@@ -105,10 +109,12 @@ export const getStartingTime = async (client: ReadClient, escalationGame: Accoun
 	})
 
 export const depositOnOutcome = async (writeClient: WriteClient, escalationGame: AccountAddress, depositor: AccountAddress, outcome: QuestionOutcome, amount: bigint) => {
-	await writeContractAndWait(writeClient, () => writeClient.writeContract({
-		abi: peripherals_EscalationGame_EscalationGame.abi,
-		functionName: 'depositOnOutcome',
-		address: escalationGame,
-		args: [depositor, outcome, amount],
-	}))
+	await writeContractAndWait(writeClient, () =>
+		writeClient.writeContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'depositOnOutcome',
+			address: escalationGame,
+			args: [depositor, outcome, amount],
+		}),
+	)
 }

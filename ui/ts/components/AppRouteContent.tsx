@@ -14,7 +14,19 @@ export function AppRouteContent({ deployment, market, openOracle, route, securit
 
 	switch (route) {
 		case 'deploy': {
-			return <DeploymentRouteContent accountAddress={deployment.accountAddress} busyStepId={deployment.busyStepId} deployNextMissingPending={deployment.deployNextMissingPending} deploymentSections={deployment.deploymentSections} deploymentStatuses={deployment.deploymentStatuses} isLoadingDeploymentStatuses={deployment.isLoadingDeploymentStatuses} isMainnet={deployment.isMainnet} onDeploy={deployment.onDeploy} onDeployNextMissing={deployment.onDeployNextMissing} />
+			return (
+				<DeploymentRouteContent
+					accountAddress={deployment.accountAddress}
+					busyStepId={deployment.busyStepId}
+					deployNextMissingPending={deployment.deployNextMissingPending}
+					deploymentSections={deployment.deploymentSections}
+					deploymentStatuses={deployment.deploymentStatuses}
+					isLoadingDeploymentStatuses={deployment.isLoadingDeploymentStatuses}
+					isMainnet={deployment.isMainnet}
+					onDeploy={deployment.onDeploy}
+					onDeployNextMissing={deployment.onDeployNextMissing}
+				/>
+			)
 		}
 		case 'zoltar':
 			return (
@@ -88,7 +100,24 @@ export function AppRouteContent({ deployment, market, openOracle, route, securit
 				/>
 			)
 		case 'open-oracle':
-			return <OpenOracleSection accountState={openOracle.accountState} loadingOracleManager={openOracle.loadingOracleManager} onApproveToken1={openOracle.onApproveToken1} onApproveToken2={openOracle.onApproveToken2} onLoadOracleManager={openOracle.onLoadOracleManager} onOpenOracleFormChange={openOracle.onOpenOracleFormChange} onQueueOperation={openOracle.onQueueOperation} onRequestPrice={openOracle.onRequestPrice} onSettleReport={openOracle.onSettleReport} onSubmitInitialReport={openOracle.onSubmitInitialReport} openOracleError={openOracle.openOracleError} openOracleForm={openOracle.openOracleForm} openOracleResult={openOracle.openOracleResult} oracleManagerDetails={openOracle.oracleManagerDetails} />
+			return (
+				<OpenOracleSection
+					accountState={openOracle.accountState}
+					loadingOracleManager={openOracle.loadingOracleManager}
+					onApproveToken1={openOracle.onApproveToken1}
+					onApproveToken2={openOracle.onApproveToken2}
+					onLoadOracleManager={openOracle.onLoadOracleManager}
+					onOpenOracleFormChange={openOracle.onOpenOracleFormChange}
+					onQueueOperation={openOracle.onQueueOperation}
+					onRequestPrice={openOracle.onRequestPrice}
+					onSettleReport={openOracle.onSettleReport}
+					onSubmitInitialReport={openOracle.onSubmitInitialReport}
+					openOracleError={openOracle.openOracleError}
+					openOracleForm={openOracle.openOracleForm}
+					openOracleResult={openOracle.openOracleResult}
+					oracleManagerDetails={openOracle.oracleManagerDetails}
+				/>
+			)
 		case 'not-found':
 			return <NotFoundSection />
 		default:

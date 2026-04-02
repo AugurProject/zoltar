@@ -22,11 +22,11 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 
 	if (questionDetails === undefined) {
 		return (
-			<div className="entity-card-subsection market-overview-subsection">
-				<div className="entity-card-subsection-header">
+			<div className='entity-card-subsection market-overview-subsection'>
+				<div className='entity-card-subsection-header'>
 					<h4>Child universes</h4>
 				</div>
-				<p className="detail">Loading scalar range...</p>
+				<p className='detail'>Loading scalar range...</p>
 			</div>
 		)
 	}
@@ -48,19 +48,25 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	}, [questionDetails.numTicks, scalarOutcomeTick, selectedScalarTick])
 
 	return (
-		<div className="entity-card-subsection market-overview-subsection">
-			<ChildUniversesSection childUniverses={childUniverses} emptyMessage="No deployed child universes yet." headerTitle="Child universes" renderBadge={child => <span className={`badge ${child.exists ? 'ok' : 'pending'}`}>{child.exists ? 'Exists' : 'Not deployed'}</span>} renderBody={child => <ChildUniverseDetails child={child} />} />
-			<div className="market-scalar-deploy">
-				<div className="field scalar-slider-field">
+		<div className='entity-card-subsection market-overview-subsection'>
+			<ChildUniversesSection
+				childUniverses={childUniverses}
+				emptyMessage='No deployed child universes yet.'
+				headerTitle='Child universes'
+				renderBadge={child => <span className={`badge ${child.exists ? 'ok' : 'pending'}`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
+				renderBody={child => <ChildUniverseDetails child={child} />}
+			/>
+			<div className='market-scalar-deploy'>
+				<div className='field scalar-slider-field'>
 					<span>Select Child Universe</span>
-					<div className="scalar-slider-rail">
-						<div className="scalar-slider-track" />
-						<div className="scalar-slider-fill" style={{ width: `${selectedScalarProgress}%` }} />
+					<div className='scalar-slider-rail'>
+						<div className='scalar-slider-track' />
+						<div className='scalar-slider-fill' style={{ width: `${selectedScalarProgress}%` }} />
 						<input
-							type="range"
-							min="0"
+							type='range'
+							min='0'
 							max={questionDetails.numTicks.toString()}
-							step="1"
+							step='1'
 							value={clampedScalarOutcomeTick}
 							aria-valuetext={selectedScalarOutcomeLabel}
 							onInput={event => {
@@ -70,27 +76,27 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 						/>
 					</div>
 				</div>
-				<div className="workflow-question-grid market-scalar-deploy-grid scalar-slider-stats">
+				<div className='workflow-question-grid market-scalar-deploy-grid scalar-slider-stats'>
 					<div>
-						<span className="metric-label">Min Value</span>
+						<span className='metric-label'>Min Value</span>
 						<strong>{formatScalarOutcomeLabel(questionDetails, 0n)}</strong>
 					</div>
 					<div>
-						<span className="metric-label">Selected Tick</span>
+						<span className='metric-label'>Selected Tick</span>
 						<strong>{`${clampedScalarOutcomeTick} / ${questionDetails.numTicks.toString()}`}</strong>
 					</div>
 					<div>
-						<span className="metric-label">Selected Value</span>
+						<span className='metric-label'>Selected Value</span>
 						<strong>{selectedScalarOutcomeLabel}</strong>
 					</div>
 					<div>
-						<span className="metric-label">Max Value</span>
+						<span className='metric-label'>Max Value</span>
 						<strong>{formatScalarOutcomeLabel(questionDetails, questionDetails.numTicks)}</strong>
 					</div>
 				</div>
-				<div className="actions">
+				<div className='actions'>
 					<button
-						className="secondary"
+						className='secondary'
 						onClick={() => {
 							try {
 								setScalarDeployError(undefined)
@@ -104,9 +110,9 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 						{selectedScalarChildExists ? 'Deployed' : 'Deploy Universe'}
 					</button>
 				</div>
-				{scalarDeployError === undefined ? undefined : <p className="notice error">{scalarDeployError}</p>}
+				{scalarDeployError === undefined ? undefined : <p className='notice error'>{scalarDeployError}</p>}
 			</div>
-			{zoltarChildUniverseError === undefined ? undefined : <p className="notice error">{zoltarChildUniverseError}</p>}
+			{zoltarChildUniverseError === undefined ? undefined : <p className='notice error'>{zoltarChildUniverseError}</p>}
 		</div>
 	)
 }

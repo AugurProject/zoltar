@@ -33,7 +33,7 @@ function parseJsonRpcResponse(raw: unknown): JsonRpcSuccess {
 		throw new Error('Invalid JSON-RPC response: not an object')
 	}
 	if (!('jsonrpc' in raw) || raw.jsonrpc !== '2.0') {
-		throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${ String('jsonrpc' in raw ? raw.jsonrpc : undefined) }'`)
+		throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${String('jsonrpc' in raw ? raw.jsonrpc : undefined)}'`)
 	}
 	if (!('id' in raw) || (typeof raw.id !== 'number' && typeof raw.id !== 'string')) {
 		throw new Error('Invalid JSON-RPC response: missing id field')
@@ -60,7 +60,7 @@ function parseBlock(value: unknown): GetBlockReturn {
 		throw new Error('Invalid eth_getBlockByNumber response: missing timestamp')
 	}
 	if (!/^0x([a-fA-F0-9]{1,64})$/.test(value.timestamp)) {
-		throw new Error(`Invalid eth_getBlockByNumber response: invalid timestamp ${ value.timestamp }`)
+		throw new Error(`Invalid eth_getBlockByNumber response: invalid timestamp ${value.timestamp}`)
 	}
 
 	return {
@@ -84,8 +84,7 @@ export interface AnvilWindowEthereum {
 	removeListener: () => void
 }
 
-export const getDefaultAnvilRpcUrl = (): string =>
-	process.platform === 'win32' ? 'http://127.0.0.1:8545' : 'http://host.docker.internal:8545'
+export const getDefaultAnvilRpcUrl = (): string => (process.platform === 'win32' ? 'http://127.0.0.1:8545' : 'http://host.docker.internal:8545')
 
 export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promise<AnvilWindowEthereum> => {
 	const ANVIL_RPC = rpcUrl ?? process.env['ANVIL_RPC'] ?? getDefaultAnvilRpcUrl()
@@ -96,13 +95,13 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			const parsed = new URL(url)
 			const allowedHosts = ['localhost', '127.0.0.1', '::1', 'host.docker.internal']
 			if (!allowedHosts.includes(parsed.hostname)) {
-				throw new Error(`ANVIL_RPC points to unauthorized host '${ parsed.hostname }'. ` + `Test RPC endpoints must be localhost (localhost, 127.0.0.1, ::1, host.docker.internal). ` + `Set ANVIL_RPC to a local Anvil instance.`)
+				throw new Error(`ANVIL_RPC points to unauthorized host '${parsed.hostname}'. ` + `Test RPC endpoints must be localhost (localhost, 127.0.0.1, ::1, host.docker.internal). ` + `Set ANVIL_RPC to a local Anvil instance.`)
 			}
 		} catch (error) {
 			if (error instanceof Error && error.message.includes('unauthorized')) {
 				throw error
 			}
-			throw new Error(`Invalid ANVIL_RPC URL: ${ url }. Must be a valid HTTP URL.`)
+			throw new Error(`Invalid ANVIL_RPC URL: ${url}. Must be a valid HTTP URL.`)
 		}
 	}
 	validateLocalhostUrl(ANVIL_RPC)
@@ -124,7 +123,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			const latestBlock = parseBlock(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
 			await request({
 				method: 'evm_setNextBlockTimestamp',
-				params: [`0x${ (latestBlock.timestamp + 1n).toString(16) }`],
+				params: [`0x${(latestBlock.timestamp + 1n).toString(16)}`],
 			})
 		}
 
@@ -138,7 +137,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				params: args.params || [],
 			}),
 		})
-		if (!response.ok) throw new Error(`HTTP ${ response.status }: ${ response.statusText }`)
+		if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
 		const raw = await response.json()
 		const json = parseJsonRpcResponse(raw)
 
@@ -180,14 +179,14 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				for (const [keyHex, value] of Object.entries(override.stateDiff)) {
 					await request({
 						method: 'anvil_setStorageAt',
-						params: [address, keyHex, `0x${ value.toString(16).padStart(64, '0') }`],
+						params: [address, keyHex, `0x${value.toString(16).padStart(64, '0')}`],
 					})
 				}
 			}
 			if (override.balance !== undefined) {
 				await request({
 					method: 'anvil_setBalance',
-					params: [address, `0x${ override.balance.toString(16) }`],
+					params: [address, `0x${override.balance.toString(16)}`],
 				})
 			}
 			if (override.code !== undefined) {
@@ -199,7 +198,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			if (override.nonce !== undefined) {
 				await request({
 					method: 'anvil_setNonce',
-					params: [address, `0x${ override.nonce.toString(16) }`],
+					params: [address, `0x${override.nonce.toString(16)}`],
 				})
 			}
 		}
@@ -210,11 +209,11 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		if (blockTimeManipulation.type === 'AddToTimestamp') {
 			await request({
 				method: 'evm_increaseTime',
-				params: [`0x${ blockTimeManipulation.deltaToAdd.toString(16) }`],
+				params: [`0x${blockTimeManipulation.deltaToAdd.toString(16)}`],
 			})
 			await request({ method: 'evm_mine', params: [] })
 		} else if (blockTimeManipulation.type === 'SetTimestamp') {
-			const hexTimestamp = `0x${ blockTimeManipulation.timeToSet.toString(16) }`
+			const hexTimestamp = `0x${blockTimeManipulation.timeToSet.toString(16)}`
 			try {
 				await request({
 					method: 'evm_setNextBlockTimestamp',
@@ -265,7 +264,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		}
 		await request({
 			method: 'anvil_setBalance',
-			params: [address, `0x${ amount.toString(16) }`],
+			params: [address, `0x${amount.toString(16)}`],
 		})
 	}
 
