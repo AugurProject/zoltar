@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { getDeploymentSteps, loadDeploymentStatuses, loadZoltarDeploymentStatus } from '../contracts.js'
+import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot } from '../contracts.js'
 import { getInjectedEthereum } from '../injectedEthereum.js'
 import { createReadClient, normalizeAccount } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
@@ -10,7 +10,6 @@ import type { AccountState } from '../types/app.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 
 type RefreshStateOptions = {
-	loadDeploymentStatuses?: boolean
 	loadWalletState?: boolean
 }
 
@@ -53,25 +52,22 @@ export function useOnchainState() {
 	}
 
 	const refreshState = async (options: RefreshStateOptions = {}) => {
-		const shouldLoadDeploymentStatuses = options.loadDeploymentStatuses ?? true
 		const shouldLoadWalletState = options.loadWalletState ?? true
 		const ethereum = getInjectedEthereum()
 		const readClient = createReadClient()
 		const isCurrent = nextRefresh()
-		void loadZoltarDeploymentStatus(readClient)
-			.then(isDeployed => {
-				if (!isCurrent()) return
-				augurPlaceHolderDeployed.value = isDeployed
-			})
-			.catch(() => undefined)
 		if (shouldLoadWalletState) {
 			walletLoadCount.value += 1
 		}
-		if (shouldLoadDeploymentStatuses) {
-			deploymentStatusLoadCount.value += 1
-		}
+		deploymentStatusLoadCount.value += 1
 		try {
 			hasInjectedWallet.value = ethereum !== undefined
+
+			const deploymentStatusSnapshot = await loadDeploymentStatusOracleSnapshot(readClient)
+			if (!isCurrent()) return
+			augurPlaceHolderDeployed.value = deploymentStatusSnapshot.augurPlaceHolderDeployed
+			deploymentStatuses.value = deploymentStatusSnapshot.deploymentStatuses
+			deploymentStatusesLoaded.value = true
 
 			if (shouldLoadWalletState) {
 				const accounts = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' })
@@ -127,18 +123,6 @@ export function useOnchainState() {
 
 				await Promise.allSettled(pendingWalletTasks)
 			}
-
-			if (shouldLoadDeploymentStatuses) {
-				try {
-					const statuses = await loadDeploymentStatuses(readClient)
-					if (!isCurrent()) return
-					deploymentStatuses.value = statuses
-					deploymentStatusesLoaded.value = true
-				} catch (error) {
-					if (!isCurrent()) return
-					errorMessage.value = getErrorMessage(error, 'Failed to refresh deployment status')
-				}
-			}
 		} catch (error) {
 			if (!isCurrent()) return
 			errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
@@ -149,9 +133,7 @@ export function useOnchainState() {
 					walletBootstrapComplete.value = true
 				}
 			}
-			if (shouldLoadDeploymentStatuses) {
-				deploymentStatusLoadCount.value = Math.max(0, deploymentStatusLoadCount.value - 1)
-			}
+			deploymentStatusLoadCount.value = Math.max(0, deploymentStatusLoadCount.value - 1)
 		}
 	}
 
@@ -172,7 +154,7 @@ export function useOnchainState() {
 	}
 
 	useEffect(() => {
-		void refreshState({ loadDeploymentStatuses: false })
+		refreshState({ loadWalletState: false })
 	}, [])
 
 	useEffect(() => {

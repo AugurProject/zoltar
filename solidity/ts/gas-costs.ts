@@ -98,8 +98,7 @@ const measureActionGas = async (client: WriteClient, action: () => Promise<void>
 }
 
 const initializeChain = async ({ deployZoltar, deployInfra }: { deployZoltar: boolean; deployInfra: boolean }) => {
-	await anvil.request({ method: 'anvil_reset', params: [] })
-	await anvil.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
+	await anvil.resetToCleanState()
 	await setupTestAccounts(anvil)
 	if (deployZoltar || deployInfra) await ensureZoltarDeployed(alice)
 	if (deployInfra) await ensureInfraDeployed(alice)

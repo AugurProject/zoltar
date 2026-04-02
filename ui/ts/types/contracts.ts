@@ -4,6 +4,7 @@ export type { ReadClient, WriteClient } from '../lib/clients.js'
 
 export type DeploymentStepId =
 	| 'proxyDeployer'
+	| 'deploymentStatusOracle'
 	| 'uniformPriceDualCapBatchAuctionFactory'
 	| 'scalarOutcomes'
 	| 'securityPoolUtils'
@@ -65,6 +66,11 @@ export type DeploymentStep = {
 
 export type DeploymentStatus = DeploymentStep & {
 	deployed: boolean
+}
+
+export type DeploymentStatusSnapshot = {
+	augurPlaceHolderDeployed: boolean
+	deploymentStatuses: DeploymentStatus[]
 }
 
 export type MarketCreationResult = {

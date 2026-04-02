@@ -168,10 +168,7 @@ export const useIsolatedAnvilNode = () => {
 			await Promise.race([waitForRpcReady(rpcUrl), spawnErrorPromise])
 			anvilWindowEthereum = await getMockedEthSimulateWindowEthereum(rpcUrl)
 			await anvilWindowEthereum.setTime(TEST_CHAIN_START_TIMESTAMP)
-			await anvilWindowEthereum.request({
-				method: 'anvil_setNextBlockBaseFeePerGas',
-				params: ['0x0'],
-			})
+			await anvilWindowEthereum.setNextBlockBaseFeePerGasToZero()
 			snapshotId = await anvilWindowEthereum.anvilSnapshot()
 		} catch (error) {
 			terminateProcess(process)
@@ -185,10 +182,7 @@ export const useIsolatedAnvilNode = () => {
 		const currentEthereum = ensureDefined(anvilWindowEthereum, 'Isolated Anvil node was not initialized')
 		const currentSnapshotId = ensureDefined(snapshotId, 'Missing Anvil snapshot for test isolation')
 		await currentEthereum.anvilRevert(currentSnapshotId)
-		await currentEthereum.request({
-			method: 'anvil_setNextBlockBaseFeePerGas',
-			params: ['0x0'],
-		})
+		await currentEthereum.setNextBlockBaseFeePerGasToZero()
 		snapshotId = await currentEthereum.anvilSnapshot()
 	})
 

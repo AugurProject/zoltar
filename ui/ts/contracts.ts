@@ -1,6 +1,8 @@
 import { encodeAbiParameters, encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes, parseAbiItem, toHex, zeroAddress, type Address, type Hash, type Hex } from 'viem'
 import { ABIS } from './abis.js'
+import { assertNever } from './lib/assert.js'
 import {
+	DeploymentStatusOracle_DeploymentStatusOracle,
 	ReputationToken_ReputationToken,
 	ScalarOutcomes_ScalarOutcomes,
 	Zoltar_Zoltar,
@@ -19,9 +21,8 @@ import {
 	peripherals_openOracle_OpenOracle_OpenOracle,
 	peripherals_tokens_ShareToken_ShareToken,
 } from './contractArtifact.js'
-import { assertNever } from './lib/assert.js'
 import type {
-	DeploymentStatus,
+	DeploymentStatusSnapshot,
 	DeploymentStep,
 	DeploymentStepId,
 	EscalationDeposit,
@@ -212,6 +213,64 @@ function applyLibraries(bytecode: string): Hex {
 	return `0x${updatedBytecode}`
 }
 
+function getDeploymentStatusOracleStepAddresses() {
+	const addresses = getInfraContractAddresses()
+	return [
+		PROXY_DEPLOYER_ADDRESS,
+		addresses.uniformPriceDualCapBatchAuctionFactory,
+		addresses.scalarOutcomes,
+		addresses.securityPoolUtils,
+		addresses.openOracle,
+		addresses.zoltarQuestionData,
+		addresses.zoltar,
+		addresses.shareTokenFactory,
+		addresses.priceOracleManagerAndOperatorQueuerFactory,
+		addresses.securityPoolForker,
+		addresses.escalationGameFactory,
+		addresses.securityPoolFactory,
+	] satisfies Address[]
+}
+
+function getDeploymentStatusOracleByteCode() {
+	return encodeDeployData({
+		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
+		bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
+		args: [getDeploymentStatusOracleStepAddresses()],
+	})
+}
+
+function getDeploymentStatusOracleAddress() {
+	return getCreate2Address({
+		bytecode: getDeploymentStatusOracleByteCode(),
+		from: PROXY_DEPLOYER_ADDRESS,
+		salt: ZERO_SALT,
+	})
+}
+
+function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracleDeployed: boolean): DeploymentStatusSnapshot {
+	const steps = getDeploymentSteps()
+	let maskIndex = 0n
+	const deploymentStatuses = steps.map(step => {
+		if (step.id === 'deploymentStatusOracle') {
+			return {
+				...step,
+				deployed: deploymentStatusOracleDeployed,
+			}
+		}
+
+		const deployed = (deployedMask & (1n << maskIndex)) !== 0n
+		maskIndex += 1n
+		return {
+			...step,
+			deployed,
+		}
+	})
+	return {
+		augurPlaceHolderDeployed: deploymentStatuses.every(step => step.deployed),
+		deploymentStatuses,
+	}
+}
+
 function getInfraContractAddresses() {
 	const getAddressForBytecode = (bytecode: Hex) =>
 		getCreate2Address({
@@ -302,6 +361,13 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			},
 		},
 		{
+			id: 'deploymentStatusOracle',
+			label: 'Deployment Status Oracle',
+			address: getDeploymentStatusOracleAddress(),
+			dependencies: ['proxyDeployer'],
+			deploy: async client => await deployViaProxy(client, getDeploymentStatusOracleByteCode()),
+		},
+		{
 			id: 'uniformPriceDualCapBatchAuctionFactory',
 			label: 'UniformPriceDualCapBatchAuctionFactory',
 			address: addresses.uniformPriceDualCapBatchAuctionFactory,
@@ -385,27 +451,28 @@ export function getDeploymentSteps(): DeploymentStep[] {
 	]
 }
 
-export async function loadDeploymentStatuses(client: ReadClient): Promise<DeploymentStatus[]> {
-	const steps = getDeploymentSteps()
-	const deployed = await Promise.all(
-		steps.map(async step => {
-			const code = await client.getCode({ address: step.address })
-			return code !== undefined && code !== '0x'
+async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readContract'>): Promise<bigint> {
+	return BigInt(
+		await client.readContract({
+			abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
+			functionName: 'getDeploymentMask',
+			address: getDeploymentStatusOracleAddress(),
+			args: [],
 		}),
 	)
-
-	return steps.map((step, index) => ({
-		...step,
-		deployed: deployed[index] ?? false,
-	}))
 }
 
-export async function loadZoltarDeploymentStatus(client: Pick<ReadClient, 'getCode'>) {
-	const zoltarStep = getDeploymentSteps().find(step => step.id === 'zoltar')
-	if (zoltarStep === undefined) throw new Error('Missing Zoltar deployment step')
+export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient, 'readContract' | 'getCode'>): Promise<DeploymentStatusSnapshot> {
+	const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
+	const deploymentStatusOracleCode = await client.getCode({ address: deploymentStatusOracleAddress })
+	if (deploymentStatusOracleCode === undefined || deploymentStatusOracleCode === '0x') {
+		const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
+		const proxyDeployerDeployed = proxyDeployerCode !== undefined && proxyDeployerCode !== '0x'
+		return getDeploymentStatusSnapshot(proxyDeployerDeployed ? 1n : 0n, false)
+	}
 
-	const code = await client.getCode({ address: zoltarStep.address })
-	return code !== undefined && code !== '0x'
+	const deployedMask = await loadDeploymentStatusOracleMask(client)
+	return getDeploymentStatusSnapshot(deployedMask, true)
 }
 
 export async function loadErc20Balance(client: ReadClient, tokenAddress: Address, ownerAddress: Address) {

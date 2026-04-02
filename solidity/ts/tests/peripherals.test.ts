@@ -4,10 +4,10 @@ import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
-import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
+import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, ensureProxyDeployerDeployed, setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import { addressString, rpow } from '../testsuite/simulator/utils/bigint'
 import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { deployOriginSecurityPool, ensureDeploymentStatusOracleDeployed, ensureInfraDeployed, getDeploymentStatusOracleAddress, getInfraContractAddresses, getSecurityPoolAddresses, loadDeploymentStatusOracleMask } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 
 import { balanceOfShares, balanceOfSharesInCash, getEthRaiseCap, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndQueueOperation } from '../testsuite/simulator/utils/contracts/peripherals'
@@ -187,6 +187,28 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(storedCurrentRetentionRate, MAX_RETENTION_RATE, 'stored retention rate should match')
 		strictEqualTypeSafe(storedStartingRepEthPrice, startingRepEthPrice, 'stored starting price should match')
 		strictEqualTypeSafe(completeSetCollateralAmount, 0n, 'origin deployments should not have complete set collateral')
+	})
+
+	test('deployment status oracle returns the deployment bitmask in one read', async () => {
+		const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
+		const deploymentMask = await loadDeploymentStatusOracleMask(client)
+
+		assert.notStrictEqual(await client.getCode({ address: deploymentStatusOracleAddress }), '0x', 'deployment status oracle should be deployed')
+		strictEqualTypeSafe(deploymentMask, (1n << 12n) - 1n, 'all deployment steps should be deployed after ensureInfraDeployed')
+	})
+
+	test('deployment status oracle reports missing contracts from a partial deployment', async () => {
+		const partialWindow = getAnvilWindowEthereum()
+		const partialClient = createWriteClient(partialWindow, TEST_ADDRESSES[0], 0)
+		await partialWindow.resetToCleanState()
+		await partialWindow.setTime(1n)
+		await setupTestAccounts(partialWindow)
+		await ensureProxyDeployerDeployed(partialClient)
+		await ensureDeploymentStatusOracleDeployed(partialClient)
+
+		const deploymentMask = await loadDeploymentStatusOracleMask(partialClient)
+
+		strictEqualTypeSafe(deploymentMask, 1n, 'only the proxy deployer should be marked deployed before the rest of infra')
 	})
 
 	test('security pool exposes vault paging without duplicate entries', async () => {

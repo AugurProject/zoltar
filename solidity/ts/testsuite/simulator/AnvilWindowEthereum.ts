@@ -24,6 +24,10 @@ type JsonRpcSuccess = {
 	error?: { code: number; message: string; data?: unknown }
 }
 
+function hasJsonRpcBaseFields(value: unknown): value is { jsonrpc: string; id: number | string } {
+	return typeof value === 'object' && value !== null && 'jsonrpc' in value && 'id' in value && typeof value.jsonrpc === 'string' && (typeof value.id === 'number' || typeof value.id === 'string')
+}
+
 function isJsonRpcError(value: unknown): value is { code: number; message: string; data?: unknown } {
 	return typeof value === 'object' && value !== null && 'message' in value && typeof value.message === 'string'
 }
@@ -32,11 +36,11 @@ function parseJsonRpcResponse(raw: unknown): JsonRpcSuccess {
 	if (typeof raw !== 'object' || raw === null) {
 		throw new Error('Invalid JSON-RPC response: not an object')
 	}
-	if (!('jsonrpc' in raw) || raw.jsonrpc !== '2.0') {
-		throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${String('jsonrpc' in raw ? raw.jsonrpc : undefined)}'`)
+	if (!hasJsonRpcBaseFields(raw)) {
+		throw new Error('Invalid JSON-RPC response: missing base fields')
 	}
-	if (!('id' in raw) || (typeof raw.id !== 'number' && typeof raw.id !== 'string')) {
-		throw new Error('Invalid JSON-RPC response: missing id field')
+	if (raw.jsonrpc !== '2.0') {
+		throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${raw.jsonrpc}'`)
 	}
 	if ('error' in raw && raw.error !== undefined && !isJsonRpcError(raw.error)) {
 		throw new Error('Invalid JSON-RPC response: malformed error object')
@@ -75,6 +79,8 @@ export interface AnvilWindowEthereum {
 	getBlock: () => Promise<GetBlockReturn>
 	advanceTime: (amountInSeconds: bigint) => Promise<void>
 	setTime: (timestamp: bigint) => Promise<void>
+	resetToCleanState: () => Promise<void>
+	setNextBlockBaseFeePerGasToZero: () => Promise<void>
 	impersonateAccount: (address: string) => Promise<void>
 	setBalance: (address: string, amount: bigint) => Promise<void>
 	anvilSnapshot: () => Promise<string>
@@ -277,6 +283,18 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		await request({ method: 'anvil_revert', params: [snapshotId] })
 	}
 
+	const resetToCleanState = async (): Promise<void> => {
+		await request({ method: 'anvil_reset', params: [] })
+		await request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
+	}
+
+	const setNextBlockBaseFeePerGasToZero = async (): Promise<void> => {
+		await request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
+	}
+
+	// Reset Anvil to a clean state before each test
+	await resetToCleanState()
+
 	const mock: AnvilWindowEthereum = {
 		request,
 		on: () => {},
@@ -287,6 +305,8 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		getBlock,
 		advanceTime,
 		setTime,
+		resetToCleanState,
+		setNextBlockBaseFeePerGasToZero,
 		impersonateAccount,
 		setBalance,
 		anvilSnapshot,
