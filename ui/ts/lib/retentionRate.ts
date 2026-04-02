@@ -2,7 +2,7 @@ const PRICE_PRECISION = 1_000_000_000_000_000_000n
 const SECONDS_PER_YEAR = 31_536_000n
 
 function formatPercent(value: number) {
-	return `${ value.toLocaleString(undefined, { maximumFractionDigits: 6 }) }%`
+	return `${value.toLocaleString(undefined, { maximumFractionDigits: 6 })}%`
 }
 
 export function formatOpenInterestFeePerYearPercent(retentionRate: bigint | undefined) {
@@ -19,12 +19,12 @@ export function formatOpenInterestFeePerYearPercent(retentionRate: bigint | unde
 
 export function parseOpenInterestFeePerYearPercentInput(value: string, label: string) {
 	const trimmed = value.trim()
-	if (trimmed === '') throw new Error(`${ label } is required`)
+	if (trimmed === '') throw new Error(`${label} is required`)
 
 	const normalized = trimmed.endsWith('%') ? trimmed.slice(0, -1).trim() : trimmed
 	const annualFeePercent = Number(normalized)
 	if (!Number.isFinite(annualFeePercent) || annualFeePercent < 0 || annualFeePercent > 100) {
-		throw new Error(`${ label } must be between 0 and 100`)
+		throw new Error(`${label} must be between 0 and 100`)
 	}
 
 	const annualRetention = 1 - annualFeePercent / 100

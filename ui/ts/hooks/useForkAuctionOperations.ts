@@ -28,7 +28,7 @@ function getReportingOutcomeKey(outcome: ReportingOutcomeKey | bigint): Reportin
 		case 2n:
 			return 'no'
 		default:
-			throw new Error(`Unsupported child universe outcome index: ${ outcome.toString() }`)
+			throw new Error(`Unsupported child universe outcome index: ${outcome.toString()}`)
 	}
 }
 

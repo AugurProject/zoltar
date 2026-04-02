@@ -92,7 +92,7 @@ describe('Contract Test Suite', () => {
 		for (const index of outcomeIndexes) {
 			const indexUniverse = getChildUniverseId(genesisUniverse, index)
 			const repForIndex = getRepTokenAddress(indexUniverse)
-			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ index } exists`)
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${index} exists`)
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, await getMigrationRepBalance(client, genesisUniverse, client.account.address))
 		}
@@ -114,8 +114,8 @@ describe('Contract Test Suite', () => {
 		for (const [index, outcomeIndex] of splitOutcomeIndexes.entries()) {
 			const indexUniverse = getChildUniverseId(genesisUniverse, outcomeIndex)
 			const repForIndex = getRepTokenAddress(indexUniverse)
-			assert.ok(await contractExists(client, repForIndex), `rep token for index ${ outcomeIndex } exists`)
-			const priorBalance = ensureDefined(priorBalances[index], `priorBalance at index ${ index } is undefined`)
+			assert.ok(await contractExists(client, repForIndex), `rep token for index ${outcomeIndex} exists`)
+			const priorBalance = ensureDefined(priorBalances[index], `priorBalance at index ${index} is undefined`)
 			const ourBalance = await getERC20Balance(client, repForIndex, client.account.address)
 			assert.strictEqual(ourBalance, priorSplitBalance + priorBalance, 'after split balance mismatch')
 		}
@@ -235,7 +235,7 @@ describe('Contract Test Suite', () => {
 			const outcomeIndex = getScalarOutcomeIndex(questionData, tickIndex)
 			const helperLabel = formatScalarOutcomeLabel(questionData, tickIndex)
 			const contractLabel = await getAnswerOptionName(client, questionId, outcomeIndex)
-			assert.strictEqual(helperLabel, contractLabel, `tick ${ tickIndex.toString() } should match the contract`)
+			assert.strictEqual(helperLabel, contractLabel, `tick ${tickIndex.toString()} should match the contract`)
 		}
 
 		const unevenQuestionData = {
@@ -255,7 +255,7 @@ describe('Contract Test Suite', () => {
 			const outcomeIndex = getScalarOutcomeIndex(unevenQuestionData, tickIndex)
 			const helperLabel = formatScalarOutcomeLabel(unevenQuestionData, tickIndex)
 			const contractLabel = await getAnswerOptionName(client, unevenQuestionId, outcomeIndex)
-			assert.strictEqual(helperLabel, contractLabel, `uneven tick ${ tickIndex.toString() } should match the contract`)
+			assert.strictEqual(helperLabel, contractLabel, `uneven tick ${tickIndex.toString()} should match the contract`)
 		}
 		assert.strictEqual(formatScalarOutcomeLabel(unevenQuestionData, 3n), '10 km', 'the max tick should now hit the exact maximum value')
 	})

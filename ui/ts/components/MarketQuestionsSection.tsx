@@ -19,7 +19,7 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 	return (
 		<EntityCard
 			title="Questions"
-			badge={<span className="badge muted">{zoltarQuestionCount === undefined ? 'Unknown count' : `${ zoltarQuestionCount.toString() } questions`}</span>}
+			badge={<span className="badge muted">{zoltarQuestionCount === undefined ? 'Unknown count' : `${zoltarQuestionCount.toString()} questions`}</span>}
 			actions={
 				<button className="secondary" onClick={onLoadZoltarQuestions} disabled={loadingZoltarQuestions}>
 					{loadingZoltarQuestions ? 'Loading Questions...' : 'Refresh Questions'}
@@ -29,7 +29,7 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 			{zoltarQuestions.length === 0 ? (
 				<p className="detail">
 					<LoadableValue loading={loadingZoltarQuestionCount} placeholder="Loading...">
-						{zoltarQuestionCount === undefined ? 'No questions loaded' : `${ zoltarQuestionCount.toString() } questions`}
+						{zoltarQuestionCount === undefined ? 'No questions loaded' : `${zoltarQuestionCount.toString()} questions`}
 					</LoadableValue>
 				</p>
 			) : (

@@ -25,7 +25,7 @@ function getQuestionDescription(question: MarketDetails) {
 }
 
 function getDisplayRange(question: MarketDetails) {
-	return question.answerUnit === '' ? `${ question.displayValueMin.toString() } to ${ question.displayValueMax.toString() }` : `${ question.displayValueMin.toString() } to ${ question.displayValueMax.toString() } ${ question.answerUnit }`
+	return question.answerUnit === '' ? `${question.displayValueMin.toString()} to ${question.displayValueMax.toString()}` : `${question.displayValueMin.toString()} to ${question.displayValueMax.toString()} ${question.answerUnit}`
 }
 
 function renderScalarQuestionFields(question: MarketDetails) {
@@ -50,14 +50,14 @@ function renderScalarQuestionFields(question: MarketDetails) {
 export function QuestionSummaryHeader({ className = '', description, loading = false, questionId, title }: QuestionSummaryHeaderProps) {
 	if (loading) {
 		return (
-			<div className={`question-summary question-summary-header ${ className }`}>
+			<div className={`question-summary question-summary-header ${className}`}>
 				<p className="detail question-summary-loading">Loading question details...</p>
 			</div>
 		)
 	}
 
 	return (
-		<div className={`question-summary question-summary-header ${ className }`}>
+		<div className={`question-summary question-summary-header ${className}`}>
 			<div className="question-summary-heading">
 				<strong>{title}</strong>
 				<p className="detail">{description}</p>
@@ -70,7 +70,7 @@ export function QuestionSummaryHeader({ className = '', description, loading = f
 export function QuestionSummary({ className = '', hideHeading = false, loading = false, question }: QuestionSummaryProps) {
 	if (loading || question === undefined) {
 		return (
-			<div className={`question-summary ${ className }`}>
+			<div className={`question-summary ${className}`}>
 				<p className="detail question-summary-loading">Loading question details...</p>
 			</div>
 		)
@@ -80,7 +80,7 @@ export function QuestionSummary({ className = '', hideHeading = false, loading =
 	const description = getQuestionDescription(question)
 
 	return (
-		<div className={`question-summary ${ className }`}>
+		<div className={`question-summary ${className}`}>
 			{hideHeading ? undefined : (
 				<div className="question-summary-heading">
 					<strong>{title}</strong>

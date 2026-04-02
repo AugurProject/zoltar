@@ -24,13 +24,13 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 			</div>
 
 			<div className="subtab-nav" role="tablist" aria-label="Security Pools views">
-				<button className={`subtab-link ${ view === 'browse' ? 'active' : '' }`} type="button" onClick={() => setView('browse')} aria-pressed={view === 'browse'}>
+				<button className={`subtab-link ${view === 'browse' ? 'active' : ''}`} type="button" onClick={() => setView('browse')} aria-pressed={view === 'browse'}>
 					Browse Pools
 				</button>
-				<button className={`subtab-link ${ view === 'create' ? 'active' : '' }`} type="button" onClick={() => setView('create')} aria-pressed={view === 'create'}>
+				<button className={`subtab-link ${view === 'create' ? 'active' : ''}`} type="button" onClick={() => setView('create')} aria-pressed={view === 'create'}>
 					Create Pool
 				</button>
-				<button className={`subtab-link ${ view === 'operate' ? 'active' : '' }`} type="button" onClick={() => setView('operate')} aria-pressed={view === 'operate'}>
+				<button className={`subtab-link ${view === 'operate' ? 'active' : ''}`} type="button" onClick={() => setView('operate')} aria-pressed={view === 'operate'}>
 					Selected Pool
 				</button>
 			</div>

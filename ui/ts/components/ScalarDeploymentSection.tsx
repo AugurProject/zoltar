@@ -49,13 +49,13 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 
 	return (
 		<div className="entity-card-subsection market-overview-subsection">
-			<ChildUniversesSection childUniverses={childUniverses} emptyMessage="No deployed child universes yet." headerTitle="Child universes" renderBadge={child => <span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>} renderBody={child => <ChildUniverseDetails child={child} />} />
+			<ChildUniversesSection childUniverses={childUniverses} emptyMessage="No deployed child universes yet." headerTitle="Child universes" renderBadge={child => <span className={`badge ${child.exists ? 'ok' : 'pending'}`}>{child.exists ? 'Exists' : 'Not deployed'}</span>} renderBody={child => <ChildUniverseDetails child={child} />} />
 			<div className="market-scalar-deploy">
 				<div className="field scalar-slider-field">
 					<span>Select Child Universe</span>
 					<div className="scalar-slider-rail">
 						<div className="scalar-slider-track" />
-						<div className="scalar-slider-fill" style={{ width: `${ selectedScalarProgress }%` }} />
+						<div className="scalar-slider-fill" style={{ width: `${selectedScalarProgress}%` }} />
 						<input
 							type="range"
 							min="0"
@@ -77,7 +77,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 					</div>
 					<div>
 						<span className="metric-label">Selected Tick</span>
-						<strong>{`${ clampedScalarOutcomeTick } / ${ questionDetails.numTicks.toString() }`}</strong>
+						<strong>{`${clampedScalarOutcomeTick} / ${questionDetails.numTicks.toString()}`}</strong>
 					</div>
 					<div>
 						<span className="metric-label">Selected Value</span>

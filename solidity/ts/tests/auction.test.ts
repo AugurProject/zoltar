@@ -36,7 +36,7 @@ describe('Auction', () => {
 	// ============ Helper Functions ============
 
 	function createTestClient(idx: number): WriteClient {
-		const address = ensureDefined(TEST_ADDRESSES[idx], `TEST_ADDRESSES[${ idx }] is undefined`)
+		const address = ensureDefined(TEST_ADDRESSES[idx], `TEST_ADDRESSES[${idx}] is undefined`)
 		return createWriteClient(mockWindow, address, 0)
 	}
 
@@ -48,7 +48,7 @@ describe('Auction', () => {
 		const before = await getETHBalance(client, client.account.address)
 		await submitBid(client, auctionAddress, tick, bidAmount)
 		const after = await getETHBalance(client, client.account.address)
-		strictEqualTypeSafe(before - bidAmount, after, `bid ${ bidAmount } not locked`)
+		strictEqualTypeSafe(before - bidAmount, after, `bid ${bidAmount} not locked`)
 		return before
 	}
 
@@ -94,7 +94,7 @@ describe('Auction', () => {
 		await startAuction(client, auctionAddress, ethRaiseCapEth * ATTOETH_PER_ETH, maxRepBeingSold * ATTOETH_PER_ETH)
 	}
 
-	async function assertFairPayoutForUser(auctionCreator: WriteClient, auctionAddress: Address, userId: `0x${ string }`, bids: { tick: bigint; bidSize: bigint; bidIndex: bigint }[], clearingTick: bigint, tolerance: bigint = DEFAULT_TOLERANCE): Promise<{ totalFilledRep: bigint; totalEthRefund: bigint }> {
+	async function assertFairPayoutForUser(auctionCreator: WriteClient, auctionAddress: Address, userId: `0x${string}`, bids: { tick: bigint; bidSize: bigint; bidIndex: bigint }[], clearingTick: bigint, tolerance: bigint = DEFAULT_TOLERANCE): Promise<{ totalFilledRep: bigint; totalEthRefund: bigint }> {
 		const clearingPrice = tickToPrice(clearingTick)
 		let totalFilledRep = 0n
 		let totalEthRefund = 0n
@@ -112,21 +112,21 @@ describe('Auction', () => {
 
 			if (bid.tick < clearingTick) {
 				// Losing bid: full refund, no REP
-				assert.strictEqual(amounts.totalFilledRep, 0n, `Bid ${ bid.bidIndex } (losing): should get 0 REP`)
-				approximatelyEqual(amounts.totalEthRefund, bid.bidSize, tolerance, `Bid ${ bid.bidIndex } (losing): full ETH refund`)
+				assert.strictEqual(amounts.totalFilledRep, 0n, `Bid ${bid.bidIndex} (losing): should get 0 REP`)
+				approximatelyEqual(amounts.totalEthRefund, bid.bidSize, tolerance, `Bid ${bid.bidIndex} (losing): full ETH refund`)
 				totalEthRefund += amounts.totalEthRefund
 			} else if (bid.tick === clearingTick) {
 				// At-clearing: partial fill, partial refund
-				if (amounts.totalEthRefund !== bid.bidSize) assert.ok(amounts.totalFilledRep > 0n, `Bid ${ bid.bidIndex } (clearing): should get some REP`)
-				assert.ok(amounts.totalFilledRep <= minRepBackOnFullBuy, `Bid ${ bid.bidIndex } (clearing): filled REP <= demand`)
+				if (amounts.totalEthRefund !== bid.bidSize) assert.ok(amounts.totalFilledRep > 0n, `Bid ${bid.bidIndex} (clearing): should get some REP`)
+				assert.ok(amounts.totalFilledRep <= minRepBackOnFullBuy, `Bid ${bid.bidIndex} (clearing): filled REP <= demand`)
 				const ethUsed = (amounts.totalFilledRep * clearingPrice) / ATTOETH_PER_ETH
-				approximatelyEqual(amounts.totalEthRefund, bid.bidSize - ethUsed, tolerance, `Bid ${ bid.bidIndex } (clearing): correct ETH refund`)
+				approximatelyEqual(amounts.totalEthRefund, bid.bidSize - ethUsed, tolerance, `Bid ${bid.bidIndex} (clearing): correct ETH refund`)
 				totalFilledRep += amounts.totalFilledRep
 				totalEthRefund += amounts.totalEthRefund
 			} else {
 				// Winning bid: full REP demand, no ETH refund
-				assert.ok(amounts.totalFilledRep >= minRepBackOnFullBuy, `Bid ${ bid.bidIndex } (winning): REP fill`)
-				assert.strictEqual(amounts.totalEthRefund, 0n, `Bid ${ bid.bidIndex } (winning): no ETH refund`)
+				assert.ok(amounts.totalFilledRep >= minRepBackOnFullBuy, `Bid ${bid.bidIndex} (winning): REP fill`)
+				assert.strictEqual(amounts.totalEthRefund, 0n, `Bid ${bid.bidIndex} (winning): no ETH refund`)
 				totalFilledRep += amounts.totalFilledRep
 			}
 			await withdrawBids(auctionCreator, auctionAddress, userId, [{ tick: bid.tick, bidIndex: bid.bidIndex }])
@@ -135,7 +135,7 @@ describe('Auction', () => {
 	}
 
 	function assertClearingTickInRange(tick: bigint): void {
-		assert.ok(tick >= MIN_TICK && tick <= MAX_TICK, `clearing tick ${ tick } outside [${ MIN_TICK }, ${ MAX_TICK }]`)
+		assert.ok(tick >= MIN_TICK && tick <= MAX_TICK, `clearing tick ${tick} outside [${MIN_TICK}, ${MAX_TICK}]`)
 	}
 
 	beforeEach(async () => {
@@ -240,7 +240,7 @@ describe('Auction', () => {
 			for (const bid of bids) {
 				const addr = bid.address
 				if (!bidsByUser.has(addr)) bidsByUser.set(addr, [])
-				const bidsForAddr = ensureDefined(bidsByUser.get(addr), `No bids array for address ${ addr }`)
+				const bidsForAddr = ensureDefined(bidsByUser.get(addr), `No bids array for address ${addr}`)
 				bidsForAddr.push(bid)
 			}
 
@@ -829,14 +829,14 @@ describe('Auction', () => {
 			const expected = computeExpectedClearing(c.bids, c.maxRepBeingSold, c.ethRaiseCap)
 			const clearing = await computeClearing(client, auctionAddress)
 
-			assert.strictEqual(clearing.hitCap, expected.hitCap, `${ c.name }: hitCap mismatch`)
+			assert.strictEqual(clearing.hitCap, expected.hitCap, `${c.name}: hitCap mismatch`)
 			if (expected.hitCap) {
-				strictEqualTypeSafe(clearing.foundTick, expected.foundTick, `${ c.name }: foundTick mismatch`)
-				strictEqualTypeSafe(clearing.accumulatedEth, expected.accumulatedEth, `${ c.name }: accumulatedEth mismatch`)
+				strictEqualTypeSafe(clearing.foundTick, expected.foundTick, `${c.name}: foundTick mismatch`)
+				strictEqualTypeSafe(clearing.accumulatedEth, expected.accumulatedEth, `${c.name}: accumulatedEth mismatch`)
 				await finalize(client, auctionAddress)
 				await assertFairPayoutForUser(client, auctionAddress, client.account.address, fairPayoutBids, clearing.foundTick)
 			} else {
-				assert.strictEqual(clearing.hitCap, false, `${ c.name }: expected no clearing price`)
+				assert.strictEqual(clearing.hitCap, false, `${c.name}: expected no clearing price`)
 				// Finalize anyway to clear the contract balance
 				await finalize(client, auctionAddress)
 			}

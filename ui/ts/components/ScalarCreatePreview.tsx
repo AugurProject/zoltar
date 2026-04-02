@@ -32,7 +32,7 @@ export function ScalarCreatePreview({ details, selectedTick, onSelectedTickChang
 				<span>Scalar Preview</span>
 				<div className="scalar-slider-rail">
 					<div className="scalar-slider-track" />
-					<div className="scalar-slider-fill" style={{ width: `${ selectedProgress }%` }} />
+					<div className="scalar-slider-fill" style={{ width: `${selectedProgress}%` }} />
 					<input aria-valuetext={formatScalarOutcomeLabel(details, clampedSelectedTickValue)} max={details.numTicks.toString()} min="0" step="1" type="range" value={clampedSelectedTick} onInput={event => onSelectedTickChange(event.currentTarget.value)} />
 				</div>
 			</label>
@@ -43,7 +43,7 @@ export function ScalarCreatePreview({ details, selectedTick, onSelectedTickChang
 				</div>
 				<div>
 					<span className="metric-label">Selected Tick</span>
-					<strong>{`${ clampedSelectedTick } / ${ details.numTicks.toString() }`}</strong>
+					<strong>{`${clampedSelectedTick} / ${details.numTicks.toString()}`}</strong>
 				</div>
 				<div>
 					<span className="metric-label">Selected Value</span>

@@ -20,7 +20,7 @@ function readUrlState(search: string): UrlState {
 }
 
 function replaceCurrentUrl(nextSearch: string) {
-	window.history.replaceState({}, '', `${ window.location.pathname }${ nextSearch }${ window.location.hash }`)
+	window.history.replaceState({}, '', `${window.location.pathname}${nextSearch}${window.location.hash}`)
 }
 
 export function useUrlState(): UseUrlStateResult {

@@ -13,7 +13,7 @@ export function UniverseLink({ children, className = '', universeId }: UniverseL
 
 	return (
 		<a
-			className={`universe-link ${ className }`}
+			className={`universe-link ${className}`}
 			href={href}
 			onClick={event => {
 				if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
