@@ -10,7 +10,7 @@ type EntityCardProps = {
 
 export function EntityCard({ actions, badge, children, className = '', title }: EntityCardProps) {
 	return (
-		<article className={`entity-card ${ className }`}>
+		<article className={`entity-card ${className}`}>
 			<div className="entity-card-header">
 				<div className="entity-card-copy">
 					<h3>{title}</h3>

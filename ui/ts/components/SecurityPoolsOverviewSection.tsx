@@ -104,7 +104,7 @@ export function SecurityPoolsOverviewSection({ accountState, closeLiquidationMod
 										<div className="entity-card-list">
 											{pool.vaults.map(vault => (
 												<EntityCard
-													key={`${ pool.securityPoolAddress }-${ vault.vaultAddress }`}
+													key={`${pool.securityPoolAddress}-${vault.vaultAddress}`}
 													className="compact"
 													title={vault.vaultAddress}
 													badge={<span className="badge muted">Vault</span>}

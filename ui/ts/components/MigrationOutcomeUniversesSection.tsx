@@ -35,7 +35,7 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 						const heldBalance = childUniverseRepBalances[child.universeId.toString()]
 						const remainingBalance = migrationBalance === undefined || heldBalance === undefined ? undefined : migrationBalance > heldBalance ? migrationBalance - heldBalance : 0n
 						return (
-							<button key={child.universeId.toString()} aria-pressed={selected} className={`migration-outcome-row ${ selected ? 'active' : '' }`} disabled={disabled} onClick={() => onToggleOutcomeIndex(child.outcomeIndex)} type="button">
+							<button key={child.universeId.toString()} aria-pressed={selected} className={`migration-outcome-row ${selected ? 'active' : ''}`} disabled={disabled} onClick={() => onToggleOutcomeIndex(child.outcomeIndex)} type="button">
 								<span className="migration-outcome-copy">
 									<span className="migration-outcome-label">{child.outcomeLabel}</span>
 									<span className="migration-outcome-metrics">
@@ -43,7 +43,7 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 											Held here:{' '}
 											<strong>
 												<LoadableValue loading={heldBalance === undefined || migrationBalance === undefined} placeholder="Loading...">
-													{heldBalance === undefined ? 'Loading...' : `${ formatCurrencyBalance(heldBalance) } REP`}
+													{heldBalance === undefined ? 'Loading...' : `${formatCurrencyBalance(heldBalance)} REP`}
 												</LoadableValue>
 											</strong>
 										</span>
@@ -51,7 +51,7 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 											Still migratable:{' '}
 											<strong>
 												<LoadableValue loading={remainingBalance === undefined} placeholder="Loading...">
-													{remainingBalance === undefined ? 'Loading...' : `${ formatCurrencyBalance(remainingBalance) } REP`}
+													{remainingBalance === undefined ? 'Loading...' : `${formatCurrencyBalance(remainingBalance)} REP`}
 												</LoadableValue>
 											</strong>
 										</span>

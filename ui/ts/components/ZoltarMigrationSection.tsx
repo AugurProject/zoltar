@@ -41,15 +41,7 @@ function getMigrationAmountSource(preparedRepBalance: bigint | undefined, repBal
 	return (preparedRepBalance ?? 0n) + (repBalance ?? 0n)
 }
 
-function getMigrationGuardMessage(
-	accountAddress: Address | undefined,
-	isMainnet: boolean,
-	rootUniverse: ZoltarUniverseSummary | undefined,
-	loadingZoltarForkAccess: boolean,
-	hasForked: boolean,
-	loadingZoltarUniverse: boolean,
-	notForkedAction: string,
-): string | undefined {
+function getMigrationGuardMessage(accountAddress: Address | undefined, isMainnet: boolean, rootUniverse: ZoltarUniverseSummary | undefined, loadingZoltarForkAccess: boolean, hasForked: boolean, loadingZoltarUniverse: boolean, notForkedAction: string): string | undefined {
 	if (accountAddress === undefined) return 'Connect a wallet before using REP migration actions.'
 	if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
 	if (rootUniverse === undefined) return loadingZoltarUniverse ? 'Loading universe...' : 'Load the universe first.'
@@ -100,16 +92,16 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 		if (missingPreparationAmount === undefined) return 'Enter a valid amount.'
 		if (missingPreparationAmount === 0n) return 'This amount is already in your migration balance. Split REP when ready.'
 		if (zoltarForkRepBalance === undefined || zoltarForkRepBalance < missingPreparationAmount) {
-			return `Need ${ formatCurrencyBalance(missingPreparationAmount) } more REP in this universe to prepare the selected amount.`
+			return `Need ${formatCurrencyBalance(missingPreparationAmount)} more REP in this universe to prepare the selected amount.`
 		}
-		return `Add ${ formatCurrencyBalance(missingPreparationAmount) } REP to your migration balance from this universe, then split it across the selected universes.`
+		return `Add ${formatCurrencyBalance(missingPreparationAmount)} REP to your migration balance from this universe, then split it across the selected universes.`
 	})()
 	const splitHintMessage = (() => {
 		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before migrating REP.')
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return 'Enter an amount greater than zero.'
 		if (!hasPreparedBalance) {
-			return `Add ${ formatCurrencyBalance(missingPreparationAmount ?? 0n) } REP to your migration balance first, then split it across the selected universes.`
+			return `Add ${formatCurrencyBalance(missingPreparationAmount ?? 0n)} REP to your migration balance first, then split it across the selected universes.`
 		}
 		if (!hasValidOutcomeIndexes) return 'Select at least one outcome universe.'
 		return 'Split the migration REP across the selected universes.'
@@ -119,11 +111,11 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return undefined
 		if (amountExceedsAvailableRep) {
-			return `You only have ${ formatCurrencyBalance(totalRepAvailable) } REP available for migration in this universe (${ formatCurrencyBalance(zoltarMigrationPreparedRepBalance) } in your migration balance and ${ formatCurrencyBalance(zoltarForkRepBalance) } wallet REP).`
+			return `You only have ${formatCurrencyBalance(totalRepAvailable)} REP available for migration in this universe (${formatCurrencyBalance(zoltarMigrationPreparedRepBalance)} in your migration balance and ${formatCurrencyBalance(zoltarForkRepBalance)} wallet REP).`
 		}
 		if (missingPreparationAmount === undefined) return 'Enter a valid amount.'
 		if (missingPreparationAmount === 0n) return 'This amount is already in your migration balance. Split REP when ready.'
-		return `Add ${ formatCurrencyBalance(missingPreparationAmount) } REP to your migration balance from this universe, then split it across the selected universes.`
+		return `Add ${formatCurrencyBalance(missingPreparationAmount)} REP to your migration balance from this universe, then split it across the selected universes.`
 	})()
 	const selectAllAmount = () => {
 		onZoltarMigrationFormChange({ amount: formatCurrencyBalance(migrationAmountSource) })
@@ -165,7 +157,7 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 						<span className="metric-label">Your REP Balance</span>
 						<strong>
 							<LoadableValue loading={loadingZoltarForkAccess} placeholder="Loading...">
-								{zoltarForkRepBalance === undefined ? 'Loading...' : `${ formatCurrencyBalance(zoltarForkRepBalance) } REP`}
+								{zoltarForkRepBalance === undefined ? 'Loading...' : `${formatCurrencyBalance(zoltarForkRepBalance)} REP`}
 							</LoadableValue>
 						</strong>
 					</div>
@@ -173,7 +165,7 @@ export function ZoltarMigrationSection({ accountAddress, isMainnet, loadingZolta
 						<span className="metric-label">Migration REP Balance</span>
 						<strong>
 							<LoadableValue loading={loadingZoltarForkAccess} placeholder="Loading...">
-								{zoltarMigrationPreparedRepBalance === undefined ? 'Loading...' : `${ formatCurrencyBalance(zoltarMigrationPreparedRepBalance) } REP`}
+								{zoltarMigrationPreparedRepBalance === undefined ? 'Loading...' : `${formatCurrencyBalance(zoltarMigrationPreparedRepBalance)} REP`}
 							</LoadableValue>
 						</strong>
 					</div>

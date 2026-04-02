@@ -40,7 +40,7 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 
 	useEffect(() => {
 		const nextSearch = writeSelectedPoolViewQueryParam(window.location.search, hasSelectedPoolAddress ? view : undefined)
-		window.history.replaceState({}, '', `${ window.location.pathname }${ nextSearch }${ window.location.hash }`)
+		window.history.replaceState({}, '', `${window.location.pathname}${nextSearch}${window.location.hash}`)
 	}, [hasSelectedPoolAddress, view])
 
 	return (
@@ -54,7 +54,7 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 			) : undefined}
 
 			<div className="workflow-stack">
-				<EntityCard title={selectedPoolTitle} badge={<span className={`badge ${ selectedPoolState === undefined ? 'pending' : 'ok' }`}>{selectedPoolState ?? 'Not loaded'}</span>}>
+				<EntityCard title={selectedPoolTitle} badge={<span className={`badge ${selectedPoolState === undefined ? 'pending' : 'ok'}`}>{selectedPoolState ?? 'Not loaded'}</span>}>
 					<div className="form-grid">
 						<label className="field">
 							<span>Security Pool Address</span>
@@ -135,13 +135,13 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 				{!hasSelectedPoolAddress ? undefined : (
 					<>
 						<div className="subtab-nav" role="tablist" aria-label="Selected pool views">
-							<button className={`subtab-link ${ view === 'vaults' ? 'active' : '' }`} type="button" onClick={() => setView('vaults')} aria-pressed={view === 'vaults'}>
+							<button className={`subtab-link ${view === 'vaults' ? 'active' : ''}`} type="button" onClick={() => setView('vaults')} aria-pressed={view === 'vaults'}>
 								Vaults
 							</button>
-							<button className={`subtab-link ${ view === 'trading' ? 'active' : '' }`} type="button" onClick={() => setView('trading')} aria-pressed={view === 'trading'}>
+							<button className={`subtab-link ${view === 'trading' ? 'active' : ''}`} type="button" onClick={() => setView('trading')} aria-pressed={view === 'trading'}>
 								Trading
 							</button>
-							<button className={`subtab-link ${ view === 'resolution' ? 'active' : '' }`} type="button" onClick={() => setView('resolution')} aria-pressed={view === 'resolution'}>
+							<button className={`subtab-link ${view === 'resolution' ? 'active' : ''}`} type="button" onClick={() => setView('resolution')} aria-pressed={view === 'resolution'}>
 								Resolution
 							</button>
 						</div>
@@ -173,7 +173,7 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 										<div className="entity-card-list">
 											{selectedPool.vaults.map(vault => (
 												<EntityCard
-													key={`${ selectedPool.securityPoolAddress }-${ vault.vaultAddress }`}
+													key={`${selectedPool.securityPoolAddress}-${vault.vaultAddress}`}
 													className="compact"
 													title={vault.vaultAddress}
 													badge={<span className="badge muted">Vault</span>}
@@ -237,7 +237,7 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 										<div>
 											<h3>Reporting</h3>
 										</div>
-										<span className={`badge ${ reportingReady ? 'ok' : 'blocked' }`}>{reportingReady ? 'Unlocked' : 'Locked until question end'}</span>
+										<span className={`badge ${reportingReady ? 'ok' : 'blocked'}`}>{reportingReady ? 'Unlocked' : 'Locked until question end'}</span>
 									</div>
 									{reportingReady ? (
 										<ReportingSection {...reporting} showHeader={false} showSecurityPoolAddressInput={false} />
@@ -253,7 +253,7 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 										<div>
 											<h3>Fork & Truth Auction</h3>
 										</div>
-										<span className={`badge ${ forkReady ? 'ok' : 'blocked' }`}>{forkReady ? 'Available' : 'Locked until fork'}</span>
+										<span className={`badge ${forkReady ? 'ok' : 'blocked'}`}>{forkReady ? 'Available' : 'Locked until fork'}</span>
 									</div>
 									{forkReady ? (
 										<ForkAuctionSection {...forkAuction} showHeader={false} showSecurityPoolAddressInput={false} />

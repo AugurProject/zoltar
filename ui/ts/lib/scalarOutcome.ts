@@ -23,9 +23,9 @@ function formatSignedDecimal(value: bigint) {
 	const absoluteValue = isNegative ? -value : value
 	const integerPart = absoluteValue / SCALAR_DECIMAL_BASE
 	const fractionalPart = absoluteValue % SCALAR_DECIMAL_BASE
-	if (fractionalPart === 0n) return `${ isNegative ? '-' : '' }${ integerPart.toString() }`
+	if (fractionalPart === 0n) return `${isNegative ? '-' : ''}${integerPart.toString()}`
 	const fractionalString = fractionalPart.toString().padStart(Number(SCALAR_DECIMALS), '0').replace(/0+$/, '')
-	return `${ isNegative ? '-' : '' }${ integerPart.toString() }.${ fractionalString }`
+	return `${isNegative ? '-' : ''}${integerPart.toString()}.${fractionalString}`
 }
 
 function validateTickIndex(question: ScalarQuestionDetails, tickIndex: bigint) {
@@ -39,6 +39,13 @@ export function getScalarSliderProgress(tickIndex: bigint, numTicks: bigint) {
 	return Number((tickIndex * 100n) / numTicks)
 }
 
+export function clampScalarTickIndex(tickIndex: bigint, numTicks: bigint) {
+	if (numTicks <= 0n) throw new Error('Scalar question numTicks must be positive')
+	if (tickIndex < 0n) return 0n
+	if (tickIndex > numTicks) return numTicks
+	return tickIndex
+}
+
 export function getScalarOutcomeIndex(question: ScalarQuestionDetails, tickIndex: bigint) {
 	validateTickIndex(question, tickIndex)
 	return combineUint256FromTwoWithInvalid(false, question.numTicks - tickIndex, tickIndex)
@@ -49,5 +56,5 @@ export function formatScalarOutcomeLabel(question: ScalarQuestionDetails, tickIn
 	const scalarRange = question.displayValueMax - question.displayValueMin
 	const scalarValue = question.displayValueMin + (tickIndex * scalarRange) / question.numTicks
 	const formattedValue = formatSignedDecimal(scalarValue)
-	return question.answerUnit === '' ? formattedValue : `${ formattedValue } ${ question.answerUnit }`
+	return question.answerUnit === '' ? formattedValue : `${formattedValue} ${question.answerUnit}`
 }

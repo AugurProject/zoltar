@@ -618,10 +618,14 @@ export async function loadZoltarQuestionCount(client: ReadClient) {
 }
 
 export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint): Promise<ZoltarUniverseSummary | undefined> {
+	const zoltarAddress = getDeploymentStep('zoltar').address
+	const zoltarCode = await client.getCode({ address: zoltarAddress })
+	if (zoltarCode === undefined || zoltarCode === '0x') return undefined
+
 	const repToken = await client.readContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'getRepToken',
-		address: getDeploymentStep('zoltar').address,
+		address: zoltarAddress,
 		args: [universeId],
 	})
 	if (repToken === zeroAddress) return undefined
@@ -630,19 +634,19 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 		client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'universes',
-			address: getDeploymentStep('zoltar').address,
+			address: zoltarAddress,
 			args: [universeId],
 		}),
 		client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'getForkTime',
-			address: getDeploymentStep('zoltar').address,
+			address: zoltarAddress,
 			args: [universeId],
 		}),
 		client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'getForkThreshold',
-			address: getDeploymentStep('zoltar').address,
+			address: zoltarAddress,
 			args: [universeId],
 		}),
 		client.readContract({

@@ -29,7 +29,7 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 
 	useEffect(() => {
 		const nextSearch = writeZoltarViewQueryParam(window.location.search, view)
-		window.history.replaceState({}, '', `${ window.location.pathname }${ nextSearch }${ window.location.hash }`)
+		window.history.replaceState({}, '', `${window.location.pathname}${nextSearch}${window.location.hash}`)
 	}, [view])
 
 	useEffect(() => {
@@ -46,16 +46,16 @@ export function MarketSection({ accountState, loadingZoltarForkAccess, loadingZo
 			</div>
 
 			<div className="subtab-nav market-subtab-nav" role="tablist" aria-label="Zoltar views">
-				<button className={`subtab-link ${ view === 'questions' ? 'active' : '' }`} type="button" onClick={() => setView('questions')} aria-pressed={view === 'questions'}>
+				<button className={`subtab-link ${view === 'questions' ? 'active' : ''}`} type="button" onClick={() => setView('questions')} aria-pressed={view === 'questions'}>
 					Questions
 				</button>
-				<button className={`subtab-link ${ view === 'create' ? 'active' : '' }`} type="button" onClick={() => setView('create')} aria-pressed={view === 'create'}>
+				<button className={`subtab-link ${view === 'create' ? 'active' : ''}`} type="button" onClick={() => setView('create')} aria-pressed={view === 'create'}>
 					Create Question
 				</button>
-				<button className={`subtab-link ${ view === 'fork' ? 'active' : '' }`} type="button" onClick={() => setView('fork')} aria-pressed={view === 'fork'}>
+				<button className={`subtab-link ${view === 'fork' ? 'active' : ''}`} type="button" onClick={() => setView('fork')} aria-pressed={view === 'fork'}>
 					Fork Zoltar
 				</button>
-				<button className={`subtab-link ${ view === 'migrate' ? 'active' : '' }`} type="button" onClick={() => setView('migrate')} aria-pressed={view === 'migrate'} disabled={!hasForked} title={!hasForked ? 'Fork Zoltar before migrating REP' : undefined}>
+				<button className={`subtab-link ${view === 'migrate' ? 'active' : ''}`} type="button" onClick={() => setView('migrate')} aria-pressed={view === 'migrate'} disabled={!hasForked} title={!hasForked ? 'Fork Zoltar before migrating REP' : undefined}>
 					Migrate REP
 				</button>
 			</div>

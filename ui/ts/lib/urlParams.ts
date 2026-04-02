@@ -18,7 +18,7 @@ function writeStringQueryParam(search: string, key: string, value: string | unde
 	}
 
 	const nextSearch = params.toString()
-	return nextSearch === '' ? '' : `?${ nextSearch }`
+	return nextSearch === '' ? '' : `?${nextSearch}`
 }
 
 export function readUniverseQueryParam(search: string) {
@@ -41,7 +41,7 @@ export function writeUniverseQueryParam(search: string, universeId: bigint | und
 	}
 
 	const nextSearch = params.toString()
-	return nextSearch === '' ? '' : `?${ nextSearch }`
+	return nextSearch === '' ? '' : `?${nextSearch}`
 }
 
 export function readSecurityPoolQueryParam(search: string) {

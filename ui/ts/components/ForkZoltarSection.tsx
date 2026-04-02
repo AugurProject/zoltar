@@ -42,13 +42,13 @@ export function ForkZoltarSection({ accountAddress, isMainnet, loadingZoltarFork
 
 	return (
 		<>
-			<EntityCard title="Fork Zoltar" badge={<span className={`badge ${ hasForked ? 'blocked' : 'ok' }`}>{hasForked ? 'Already forked' : 'Ready'}</span>}>
+			<EntityCard title="Fork Zoltar" badge={<span className={`badge ${hasForked ? 'blocked' : 'ok'}`}>{hasForked ? 'Already forked' : 'Ready'}</span>}>
 				<div className="workflow-metric-grid">
 					<div>
 						<span className="metric-label">Your REP Balance</span>
 						<strong>
 							<LoadableValue loading={loadingZoltarForkAccess} placeholder="Loading...">
-								{zoltarForkRepBalance === undefined ? 'Loading...' : `${ formatCurrencyBalance(zoltarForkRepBalance) } REP`}
+								{zoltarForkRepBalance === undefined ? 'Loading...' : `${formatCurrencyBalance(zoltarForkRepBalance)} REP`}
 							</LoadableValue>
 						</strong>
 					</div>
@@ -56,7 +56,7 @@ export function ForkZoltarSection({ accountAddress, isMainnet, loadingZoltarFork
 						<span className="metric-label">Fork Threshold</span>
 						<strong>
 							<LoadableValue loading={loadingZoltarForkAccess} placeholder="Loading...">
-								{rootUniverse === undefined ? 'Loading...' : `${ formatCurrencyBalance(rootUniverse.forkThreshold) } REP`}
+								{rootUniverse === undefined ? 'Loading...' : `${formatCurrencyBalance(rootUniverse.forkThreshold)} REP`}
 							</LoadableValue>
 						</strong>
 					</div>
@@ -64,7 +64,7 @@ export function ForkZoltarSection({ accountAddress, isMainnet, loadingZoltarFork
 						<span className="metric-label">REP Approved To Zoltar</span>
 						<strong>
 							<LoadableValue loading={loadingZoltarForkAccess} placeholder="Loading...">
-								{zoltarForkAllowance === undefined ? 'Loading...' : `${ formatCurrencyBalance(zoltarForkAllowance) } REP`}
+								{zoltarForkAllowance === undefined ? 'Loading...' : `${formatCurrencyBalance(zoltarForkAllowance)} REP`}
 							</LoadableValue>
 						</strong>
 					</div>

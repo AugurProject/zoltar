@@ -107,7 +107,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 									const estimate = calculateEstimatedEscalationReturn(side.balance, totalBalance, selectedAmount)
 									const userStake = side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n)
 									return (
-										<div key={side.key} className={`escalation-side ${ reportingForm.selectedOutcome === side.key ? 'selected' : '' } ${ leadingOutcome === side.key ? 'leading' : '' }`}>
+										<div key={side.key} className={`escalation-side ${reportingForm.selectedOutcome === side.key ? 'selected' : ''} ${leadingOutcome === side.key ? 'leading' : ''}`}>
 											<div className="escalation-side-header">
 												<p className="panel-label">{side.label}</p>
 												{leadingOutcome === side.key ? <span className="badge ok">Leading</span> : undefined}

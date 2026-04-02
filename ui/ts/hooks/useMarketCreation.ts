@@ -24,7 +24,7 @@ type UseMarketCreationParameters = {
 }
 
 function formatQuestionId(questionId: bigint) {
-	return `0x${ questionId.toString(16) }`
+	return `0x${questionId.toString(16)}`
 }
 
 function getZoltarAddress() {

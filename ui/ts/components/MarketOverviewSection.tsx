@@ -37,7 +37,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 	}
 
 	return (
-		<EntityCard className="market-overview-card" title={`Zoltar universe ${ currentUniverseName }`} badge={<span className="badge ok">{rootUniverse === undefined ? 'Loading...' : hasForked ? 'Forked' : 'Unforked'}</span>}>
+		<EntityCard className="market-overview-card" title={`Zoltar universe ${currentUniverseName}`} badge={<span className="badge ok">{rootUniverse === undefined ? 'Loading...' : hasForked ? 'Forked' : 'Unforked'}</span>}>
 			{rootUniverse === undefined ? (
 				<p className="detail market-overview-loading">Loading Zoltar universe...</p>
 			) : (
@@ -59,7 +59,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 								</div>
 								<div>
 									<span className="metric-label">Fork Threshold</span>
-									<strong>{`${ formatCurrencyBalance(rootUniverse.forkThreshold) } REP`}</strong>
+									<strong>{`${formatCurrencyBalance(rootUniverse.forkThreshold)} REP`}</strong>
 								</div>
 							</>
 						) : undefined}
@@ -69,7 +69,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 						</div>
 						<div>
 							<span className="metric-label">Total Theoretical Supply</span>
-							<strong>{`${ formatCurrencyBalance(rootUniverse.totalTheoreticalSupply) } REP`}</strong>
+							<strong>{`${formatCurrencyBalance(rootUniverse.totalTheoreticalSupply)} REP`}</strong>
 						</div>
 					</div>
 					{isScalarFork ? (
@@ -85,7 +85,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 								onClick: () => onCreateChildUniverseForOutcomeIndex(child.outcomeIndex),
 								className: 'secondary',
 							})}
-							renderBadge={child => <span className={`badge ${ child.exists ? 'ok' : 'pending' }`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
+							renderBadge={child => <span className={`badge ${child.exists ? 'ok' : 'pending'}`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
 							renderBody={child => <ChildUniverseDetails child={child} />}
 						/>
 					)}

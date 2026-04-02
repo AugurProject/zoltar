@@ -17,7 +17,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 				</h2>
 				<p className="detail">
 					<LoadableValue loading={isLoadingDeploymentStatuses} placeholder="Checking deterministic deployments...">
-						{nextMissingStep === undefined ? 'All deterministic contracts are deployed.' : `Next deployable contract: ${ nextMissingStep.label }`}
+						{nextMissingStep === undefined ? 'All deterministic contracts are deployed.' : `Next deployable contract: ${nextMissingStep.label}`}
 					</LoadableValue>
 				</p>
 				<div className="actions">

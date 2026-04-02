@@ -41,7 +41,7 @@ export function EnumDropdown<T extends string>({ disabled = false, onChange, opt
 	return (
 		<div className="enum-dropdown" ref={rootRef}>
 			<button
-				className={`enum-dropdown-trigger ${ open ? 'open' : '' }`}
+				className={`enum-dropdown-trigger ${open ? 'open' : ''}`}
 				type="button"
 				disabled={disabled}
 				aria-haspopup="listbox"
@@ -59,7 +59,7 @@ export function EnumDropdown<T extends string>({ disabled = false, onChange, opt
 					{options.map(option => (
 						<button
 							key={option.value}
-							className={`enum-dropdown-option ${ option.value === value ? 'selected' : '' }`}
+							className={`enum-dropdown-option ${option.value === value ? 'selected' : ''}`}
 							type="button"
 							role="option"
 							aria-selected={option.value === value}

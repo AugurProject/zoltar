@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'preact/hooks'
+import { useEffect, useMemo, useState } from 'preact/hooks'
 import type { Address } from 'viem'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { EntityCard } from './EntityCard.js'
 import { QuestionSummary } from './QuestionSummary.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
+import { clampScalarTickIndex } from '../lib/scalarOutcome.js'
 import type { MarketFormState } from '../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../types/contracts.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
@@ -52,6 +53,13 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
 	const selectedQuestionDetails = useMemo(() => (marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)), [marketResult?.questionId, zoltarQuestions])
 	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(marketForm)
+
+	useEffect(() => {
+		if (scalarCreatePreviewDetails === undefined) return
+		const clampedTick = clampScalarTickIndex(BigInt(scalarCreatePreviewTick), scalarCreatePreviewDetails.numTicks).toString()
+		if (clampedTick === scalarCreatePreviewTick) return
+		setScalarCreatePreviewTick(clampedTick)
+	}, [scalarCreatePreviewDetails?.numTicks, scalarCreatePreviewTick])
 
 	return (
 		<>

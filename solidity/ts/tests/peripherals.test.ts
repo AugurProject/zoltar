@@ -31,11 +31,11 @@ describe('Peripherals Contract Test Suite', () => {
 	const PRICE_PRECISION = 1n * 10n ** 18n
 	const repDeposit = 1000n * 10n ** 18n
 	let securityPoolAddresses: {
-		securityPool: `0x${ string }`
-		priceOracleManagerAndOperatorQueuer: `0x${ string }`
-		shareToken: `0x${ string }`
-		truthAuction: `0x${ string }`
-		escalationGame: `0x${ string }`
+		securityPool: `0x${string}`
+		priceOracleManagerAndOperatorQueuer: `0x${string}`
+		shareToken: `0x${string}`
+		truthAuction: `0x${string}`
+		escalationGame: `0x${string}`
 	}
 	let questionEndDate: bigint
 	let questionData: {
@@ -57,18 +57,18 @@ describe('Peripherals Contract Test Suite', () => {
 	const outcomes = ['Yes', 'No']
 	let questionId: bigint
 
-	const sendEthAndWait = async (from: `0x${ string }`, to: `0x${ string }`, value: bigint) => {
+	const sendEthAndWait = async (from: `0x${string}`, to: `0x${string}`, value: bigint) => {
 		const hash = (await mockWindow.request({
 			method: 'eth_sendTransaction',
 			params: [
 				{
 					from,
 					to,
-					value: `0x${ value.toString(16) }`,
+					value: `0x${value.toString(16)}`,
 					gasPrice: '0x0',
 				},
 			],
-		})) as `0x${ string }`
+		})) as `0x${string}`
 		await client.waitForTransactionReceipt({ hash })
 	}
 
@@ -119,8 +119,8 @@ describe('Peripherals Contract Test Suite', () => {
 			args: [],
 		})
 
-		assert.strictEqual(name, `Shares-${ questionId }`, 'share token name should include the question id')
-		assert.strictEqual(symbol, `SHARE-${ questionId }`, 'share token symbol should include the question id')
+		assert.strictEqual(name, `Shares-${questionId}`, 'share token name should include the question id')
+		assert.strictEqual(symbol, `SHARE-${questionId}`, 'share token symbol should include the question id')
 	})
 
 	test('security pool factory stores deployments for direct query', async () => {
@@ -738,7 +738,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const actualShares = await balanceOfSharesInCash(client, yesSecurityPool.securityPool, yesSecurityPool.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2]))
 		assert.strictEqual(actualShares.length, 3, 'should have 3 outcomes')
-		actualShares.forEach((value, idx) => approximatelyEqual(value, completeSetAmount, 1000000000000000n, `share ${ idx } should approximately equal completeSetAmount`))
+		actualShares.forEach((value, idx) => approximatelyEqual(value, completeSetAmount, 1000000000000000n, `share ${idx} should approximately equal completeSetAmount`))
 
 		const currentOpenInterestArray = await getCurrentOpenInterestArray()
 		const openInterestFirst = currentOpenInterestArray[0]
