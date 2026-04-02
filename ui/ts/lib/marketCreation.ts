@@ -1,4 +1,4 @@
-import { keccak256, toHex } from 'viem'
+import { encodeAbiParameters, keccak256 } from 'viem'
 import type { MarketFormState, SecurityPoolFormState } from '../types/app.js'
 import type { DeploymentStatus, QuestionData } from '../types/contracts.js'
 import { assertNever } from './assert.js'
@@ -58,10 +58,14 @@ function normalizeOutcomeLabel(label: string) {
 	return label.trim()
 }
 
+function getOutcomeLabelHash(label: string) {
+	return keccak256(encodeAbiParameters([{ type: 'string' }], [label]))
+}
+
 function compareOutcomeLabels(left: string, right: string) {
-	const leftHash = keccak256(toHex(left))
-	const rightHash = keccak256(toHex(right))
-	return leftHash < rightHash ? -1 : leftHash > rightHash ? 1 : 0
+	const leftHash = getOutcomeLabelHash(left)
+	const rightHash = getOutcomeLabelHash(right)
+	return leftHash > rightHash ? -1 : leftHash < rightHash ? 1 : 0
 }
 
 function getCategoricalOutcomeLabels(form: MarketFormState) {

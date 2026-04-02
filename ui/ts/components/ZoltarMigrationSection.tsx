@@ -3,6 +3,7 @@ import type { Address } from 'viem'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
@@ -246,7 +247,9 @@ export function ZoltarMigrationSection({
 						</div>
 						<div className='entity-metric'>
 							<span className='metric-label'>Transaction</span>
-							<strong>{zoltarMigrationResult.hash}</strong>
+							<strong>
+								<TransactionHashLink hash={zoltarMigrationResult.hash} />
+							</strong>
 						</div>
 					</div>
 				</EntityCard>

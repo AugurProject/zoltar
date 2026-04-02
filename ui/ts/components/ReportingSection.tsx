@@ -3,6 +3,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { LoadingText } from './LoadingText.js'
 import { Question } from './Question.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { formatDuration, formatTimestamp } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -154,7 +155,9 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 							<p className='detail'>
 								Universe: <UniverseLink universeId={reportingResult.universeId} />
 							</p>
-							<p className='detail'>Transaction: {reportingResult.hash}</p>
+							<p className='detail'>
+								Transaction: <TransactionHashLink hash={reportingResult.hash} />
+							</p>
 						</div>
 					)}
 				</div>

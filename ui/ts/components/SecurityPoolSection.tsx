@@ -2,6 +2,7 @@ import { AddressValue } from './AddressValue.js'
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
 import { Question } from './Question.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
@@ -109,8 +110,10 @@ export function SecurityPoolSection({
 									</strong>
 								</li>
 								<li>
-									<span>Deploy Pool Tx</span>
-									<strong>{securityPoolResult.deployPoolHash}</strong>
+									<span>Deployment transaction hash</span>
+									<strong>
+										<TransactionHashLink hash={securityPoolResult.deployPoolHash} />
+									</strong>
 								</li>
 							</ul>
 						</EntityCard>

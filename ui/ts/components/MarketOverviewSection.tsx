@@ -39,7 +39,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 	}
 
 	return (
-		<EntityCard className='market-overview-card' title={rootUniverse === undefined ? 'Zoltar universe' : `Zoltar universe ${currentUniverseName}`} badge={rootUniverse === undefined ? undefined : <span className='badge ok'>{hasForked ? 'Forked' : 'Unforked'}</span>}>
+		<EntityCard className='market-overview-card' title={rootUniverse === undefined ? 'Universe' : (currentUniverseName ?? 'Universe')} badge={rootUniverse === undefined ? undefined : <span className='badge ok'>{hasForked ? 'Forked' : 'Unforked'}</span>}>
 			{rootUniverse === undefined ? (
 				<p className='detail market-overview-loading'>
 					<LoadingText>Loading Universe Data...</LoadingText>

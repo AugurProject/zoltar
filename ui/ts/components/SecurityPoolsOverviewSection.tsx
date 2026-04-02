@@ -4,6 +4,7 @@ import { EntityCard } from './EntityCard.js'
 import { LiquidationModal } from './LiquidationModal.js'
 import { LoadingText } from './LoadingText.js'
 import { Question } from './Question.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
@@ -47,7 +48,7 @@ export function SecurityPoolsOverviewSection({
 
 				{securityPoolOverviewResult === undefined ? undefined : (
 					<p className='notice success'>
-						Queued liquidation for {securityPoolOverviewResult.securityPoolAddress}: {securityPoolOverviewResult.hash}
+						Queued liquidation for {securityPoolOverviewResult.securityPoolAddress}: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
 					</p>
 				)}
 				{securityPoolOverviewError === undefined ? undefined : <p className='notice error'>{securityPoolOverviewError}</p>}

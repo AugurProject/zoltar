@@ -3,6 +3,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { LoadingText } from './LoadingText.js'
 import { Question } from './Question.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { formatDuration, formatTimestamp } from '../lib/formatters.js'
 import { AUCTION_TIME_SECONDS, estimateRepPurchased, getForkStageDescription, getOutcomeActionLabel, getSystemStateLabel, getTimeRemaining, MIGRATION_TIME_SECONDS } from '../lib/forkAuction.js'
@@ -211,7 +212,9 @@ export function ForkAuctionSection({
 									<p className='detail'>
 										Universe: <UniverseLink universeId={forkAuctionResult.universeId} />
 									</p>
-									<p className='detail'>Transaction: {forkAuctionResult.hash}</p>
+									<p className='detail'>
+										Transaction: <TransactionHashLink hash={forkAuctionResult.hash} />
+									</p>
 								</div>
 							)}
 						</>

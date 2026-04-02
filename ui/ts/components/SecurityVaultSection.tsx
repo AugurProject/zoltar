@@ -3,6 +3,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
 import { UniverseLink } from './UniverseLink.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
@@ -101,7 +102,9 @@ export function SecurityVaultSection({
 								</div>
 								<div className='entity-metric'>
 									<span className='metric-label'>Transaction</span>
-									<strong>{securityVaultResult.hash}</strong>
+									<strong>
+										<TransactionHashLink hash={securityVaultResult.hash} />
+									</strong>
 								</div>
 							</div>
 						</EntityCard>

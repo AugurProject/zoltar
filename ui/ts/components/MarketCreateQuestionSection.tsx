@@ -4,6 +4,7 @@ import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
 import { Question } from './Question.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import { clampScalarTickIndex } from '../lib/scalarOutcome.js'
 import type { MarketFormState } from '../types/app.js'
@@ -55,6 +56,7 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
 	const selectedQuestionDetails = useMemo(() => (marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)), [marketResult?.questionId, zoltarQuestions])
 	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(marketForm)
+	const selectedQuestionTitle = selectedQuestionDetails === undefined ? 'Question' : selectedQuestionDetails.title.trim() === '' ? 'Untitled question' : selectedQuestionDetails.title
 
 	useEffect(() => {
 		if (scalarCreatePreviewDetails === undefined) return
@@ -67,7 +69,7 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 		<>
 			{marketResult === undefined ? undefined : (
 				<EntityCard
-					title='Question Created'
+					title={selectedQuestionTitle}
 					badge={<span className='badge ok'>{marketResult.marketType}</span>}
 					actions={
 						<div className='actions'>
@@ -92,10 +94,12 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 					}
 				>
 					<div className='question-preview-body'>
-						<Question question={selectedQuestionDetails} />
+						<Question question={selectedQuestionDetails} showTitle={false} />
 						<div>
-							<span className='metric-label'>Creation Tx</span>
-							<strong>{marketResult.createQuestionHash}</strong>
+							<span className='metric-label'>Creation transaction hash</span>
+							<strong>
+								<TransactionHashLink hash={marketResult.createQuestionHash} />
+							</strong>
 						</div>
 					</div>
 				</EntityCard>

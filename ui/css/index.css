@@ -549,6 +549,25 @@ button.currency-value.copyable:hover:not(:disabled) {
 	outline-offset: 2px;
 }
 
+.address-value.copyable {
+	border: 0;
+	padding: 0;
+	background: transparent;
+	font: inherit;
+	cursor: copy;
+	text-align: inherit;
+	color: inherit;
+}
+
+.address-value.copyable:hover:not(:disabled) {
+	background: transparent;
+}
+
+.address-value.copyable:focus-visible {
+	outline: 2px solid rgba(56, 213, 255, 0.45);
+	outline-offset: 2px;
+}
+
 .route-shell {
 	min-width: 0;
 	margin: 0;
@@ -723,6 +742,18 @@ button.currency-value.copyable:hover:not(:disabled) {
 	visibility: hidden;
 	white-space: nowrap;
 	pointer-events: none;
+}
+
+.transaction-hash-link {
+	color: inherit;
+	text-decoration: underline;
+	text-decoration-color: var(--accent);
+	text-underline-offset: 0.14em;
+	word-break: break-all;
+}
+
+.transaction-hash-link:hover {
+	color: var(--accent);
 }
 
 .contract-panel {

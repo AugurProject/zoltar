@@ -1,6 +1,7 @@
 import { AddressValue } from './AddressValue.js'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { LoadingText } from './LoadingText.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleSectionProps } from '../types/components.js'
@@ -78,7 +79,9 @@ export function OpenOracleSection({
 						<div className='status-card'>
 							<p className='panel-label'>Latest Oracle Action</p>
 							<p className='detail'>Action: {openOracleResult.action}</p>
-							<p className='detail'>Transaction: {openOracleResult.hash}</p>
+							<p className='detail'>
+								Transaction: <TransactionHashLink hash={openOracleResult.hash} />
+							</p>
 						</div>
 					)}
 				</div>

@@ -22,6 +22,7 @@ import { createInitialTransactionState, markTransactionFinished, markTransaction
 import type { TransactionState } from './lib/transactionState.js'
 import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
+import { TransactionHashLink } from './components/TransactionHashLink.js'
 
 export function App() {
 	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
@@ -204,32 +205,14 @@ export function App() {
 					<p className='notice success'>
 						<span className='spinner' aria-hidden='true' />
 						{transactionState.value.transactionSubmitted ? (
-							<>
-								Transaction submitted, waiting for confirmation. <span>{transactionState.value.lastTransactionHash ?? 'Pending wallet signature'}</span>
-							</>
+							<>Transaction submitted, waiting for confirmation. {transactionState.value.lastTransactionHash === undefined ? <span>Pending wallet signature</span> : <TransactionHashLink hash={transactionState.value.lastTransactionHash} />}</>
 						) : (
 							'Awaiting wallet confirmation.'
-						)}
-						{transactionState.value.transactionUrl === undefined ? undefined : (
-							<>
-								{' '}
-								<a href={transactionState.value.transactionUrl} target='_blank' rel='noreferrer'>
-									View on Etherscan
-								</a>
-							</>
 						)}
 					</p>
 				) : transactionState.value.lastTransactionHash === undefined ? undefined : (
 					<p className='notice success'>
-						Last transaction: <span>{transactionState.value.lastTransactionHash}</span>
-						{transactionState.value.transactionUrl === undefined ? undefined : (
-							<>
-								{' '}
-								<a href={transactionState.value.transactionUrl} target='_blank' rel='noreferrer'>
-									View on Etherscan
-								</a>
-							</>
-						)}
+						Last transaction: <TransactionHashLink hash={transactionState.value.lastTransactionHash} />
 					</p>
 				)}
 			</div>
