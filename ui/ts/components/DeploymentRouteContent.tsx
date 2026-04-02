@@ -9,22 +9,22 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 
 	return (
 		<>
-			<section className="panel">
+			<section className='panel'>
 				<h2>
-					<LoadableValue loading={isLoadingDeploymentStatuses} placeholder="Loading deployment status...">
+					<LoadableValue loading={isLoadingDeploymentStatuses} placeholder='Loading deployment status...'>
 						{deployedCount} / {deploymentStatuses.length} Ready
 					</LoadableValue>
 				</h2>
-				<p className="detail">
-					<LoadableValue loading={isLoadingDeploymentStatuses} placeholder="Checking deterministic deployments...">
-						{nextMissingStep === undefined ? 'All deterministic contracts are deployed.' : `Next deployable contract: ${ nextMissingStep.label }`}
+				<p className='detail'>
+					<LoadableValue loading={isLoadingDeploymentStatuses} placeholder='Checking deterministic deployments...'>
+						{nextMissingStep === undefined ? 'All deterministic contracts are deployed.' : `Next deployable contract: ${nextMissingStep.label}`}
 					</LoadableValue>
 				</p>
-				<div className="actions">
+				<div className='actions'>
 					<button onClick={onDeployNextMissing} disabled={accountAddress === undefined || !isMainnet || nextMissingStep === undefined || busyStepId !== undefined || deployNextMissingPending}>
 						{deployNextMissingPending ? (
 							<>
-								<span className="spinner" aria-hidden="true" />
+								<span className='spinner' aria-hidden='true' />
 								Deploying...
 							</>
 						) : busyStepId === undefined ? (

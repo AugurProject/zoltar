@@ -97,10 +97,28 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 	const queueOperation = async () =>
 		await runOracleAction(async walletAddress => {
 			const details = oracleManagerDetails.value ?? (await loadOracleManagerDetails(createReadClient(), parseAddressInput(openOracleForm.value.managerAddress, 'Manager address')))
-			return await queueOracleManagerOperation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.managerAddress, parseOracleQueueOperationInput(openOracleForm.value.queuedOperation), parseAddressInput(openOracleForm.value.operationTargetVault, 'Operation target vault'), parseBigIntInput(openOracleForm.value.operationAmount, 'Operation amount'), details.requestPriceEthCost)
+			return await queueOracleManagerOperation(
+				createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
+				details.managerAddress,
+				parseOracleQueueOperationInput(openOracleForm.value.queuedOperation),
+				parseAddressInput(openOracleForm.value.operationTargetVault, 'Operation target vault'),
+				parseBigIntInput(openOracleForm.value.operationAmount, 'Operation amount'),
+				details.requestPriceEthCost,
+			)
 		}, 'Failed to queue oracle manager operation')
 
-	const submitInitialReport = async () => await runOracleAction(async walletAddress => await submitInitialOracleReport(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), parseReportIdInput(openOracleForm.value.reportId), parseBigIntInput(openOracleForm.value.amount1, 'Token1 amount'), parseBigIntInput(openOracleForm.value.amount2, 'Token2 amount'), parseBytes32Input(openOracleForm.value.stateHash, 'State hash')), 'Failed to submit initial report')
+	const submitInitialReport = async () =>
+		await runOracleAction(
+			async walletAddress =>
+				await submitInitialOracleReport(
+					createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
+					parseReportIdInput(openOracleForm.value.reportId),
+					parseBigIntInput(openOracleForm.value.amount1, 'Token1 amount'),
+					parseBigIntInput(openOracleForm.value.amount2, 'Token2 amount'),
+					parseBytes32Input(openOracleForm.value.stateHash, 'State hash'),
+				),
+			'Failed to submit initial report',
+		)
 
 	const settleReport = async () => await runOracleAction(async walletAddress => await settleOracleReport(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), parseReportIdInput(openOracleForm.value.reportId)), 'Failed to settle report')
 

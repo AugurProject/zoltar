@@ -5,15 +5,15 @@ import { encodeDeployData, getAddress, getContractAddress, getCreate2Address, ke
 import { addressString, bytes32String } from '../bigint'
 import { ensureProxyDeployerDeployed } from '../utilities'
 
-function getZoltarInitCode(zoltarQuestionDataAddress: `0x${ string }`): `0x${ string }` {
+function getZoltarInitCode(zoltarQuestionDataAddress: `0x${string}`): `0x${string}` {
 	return encodeDeployData({
 		abi: Zoltar_Zoltar.abi,
-		bytecode: `0x${ Zoltar_Zoltar.evm.bytecode.object }`,
+		bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
 		args: [zoltarQuestionDataAddress],
 	})
 }
 
-export function getZoltarAddress(): `0x${ string }` {
+export function getZoltarAddress(): `0x${string}` {
 	const zoltarQuestionDataAddress = getZoltarQuestionDataAddress()
 	const initCode = getZoltarInitCode(zoltarQuestionDataAddress)
 	return getCreate2Address({
@@ -23,22 +23,22 @@ export function getZoltarAddress(): `0x${ string }` {
 	})
 }
 
-function getZoltarQuestionDataAddress(): `0x${ string }` {
-	const bytecode: `0x${ string }` = `0x${ ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object }`
+function getZoltarQuestionDataAddress(): `0x${string}` {
+	const bytecode: `0x${string}` = `0x${ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object}`
 	return getContractAddress({ bytecode, from: addressString(PROXY_DEPLOYER_ADDRESS), opcode: 'CREATE2', salt: numberToBytes(0, { size: 32 }) })
 }
 
 const isZoltarQuestionDataDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${ string }` = `0x${ ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object }`
+	const expectedDeployedBytecode: `0x${string}` = `0x${ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object}`
 	const address = getZoltarQuestionDataAddress()
 	const deployedBytecode = await client.getCode({ address })
 	return deployedBytecode === expectedDeployedBytecode
 }
 
 const deployZoltarQuestionDataTransaction = () => ({
-		to: addressString(PROXY_DEPLOYER_ADDRESS),
-		data: `0x${ ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object }`,
-	})
+	to: addressString(PROXY_DEPLOYER_ADDRESS),
+	data: `0x${ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object}`,
+})
 
 const ensureZoltarQuestionDataDeployed = async (client: WriteClient) => {
 	await ensureProxyDeployerDeployed(client)
@@ -48,7 +48,7 @@ const ensureZoltarQuestionDataDeployed = async (client: WriteClient) => {
 }
 
 export const isZoltarDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${ string }` = `0x${ Zoltar_Zoltar.evm.deployedBytecode.object }`
+	const expectedDeployedBytecode: `0x${string}` = `0x${Zoltar_Zoltar.evm.deployedBytecode.object}`
 	const address = getZoltarAddress()
 	const deployedBytecode = await client.getCode({ address })
 	return deployedBytecode === expectedDeployedBytecode
@@ -76,32 +76,38 @@ export const getUniverseData = async (client: ReadClient, universeId: bigint) =>
 }
 
 export const forkUniverse = async (client: WriteClient, universeId: bigint, questionId: bigint) =>
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'forkUniverse',
-		address: getZoltarAddress(),
-		args: [universeId, questionId],
-	}))
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'forkUniverse',
+			address: getZoltarAddress(),
+			args: [universeId, questionId],
+		}),
+	)
 
 export const addRepToMigrationBalance = async (client: WriteClient, universeId: bigint, amount: bigint) =>
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'addRepToMigrationBalance',
-		address: getZoltarAddress(),
-		args: [universeId, amount],
-	}))
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'addRepToMigrationBalance',
+			address: getZoltarAddress(),
+			args: [universeId, amount],
+		}),
+	)
 
 export const splitMigrationRep = async (client: WriteClient, universeId: bigint, amount: bigint, outcomeIndexes: (number | bigint)[]) => {
 	const bigintIndices = outcomeIndexes.map(x => BigInt(x))
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'splitMigrationRep',
-		address: getZoltarAddress(),
-		args: [universeId, amount, bigintIndices],
-	}))
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'splitMigrationRep',
+			address: getZoltarAddress(),
+			args: [universeId, amount, bigintIndices],
+		}),
+	)
 }
 
-export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0x${ string }`) {
+export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0x${string}`) {
 	return await client.readContract({
 		abi: ReputationToken_ReputationToken.abi,
 		functionName: 'getTotalTheoreticalSupply',
@@ -110,11 +116,11 @@ export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0
 	})
 }
 
-export function getRepTokenAddress(universeId: bigint): `0x${ string }` {
+export function getRepTokenAddress(universeId: bigint): `0x${string}` {
 	if (universeId === 0n) return getAddress(addressString(GENESIS_REPUTATION_TOKEN))
 	const initCode = encodeDeployData({
 		abi: ReputationToken_ReputationToken.abi,
-		bytecode: `0x${ ReputationToken_ReputationToken.evm.bytecode.object }`,
+		bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
 		args: [getZoltarAddress()],
 	})
 	return getCreate2Address({ from: getZoltarAddress(), salt: bytes32String(universeId), bytecodeHash: keccak256(initCode) })
@@ -129,14 +135,16 @@ export const getZoltarForkThreshold = async (client: ReadClient, universeId: big
 	})
 
 export const deployChild = async (client: WriteClient, universeId: bigint, outcomeIndex: bigint) =>
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'deployChild',
-		address: getZoltarAddress(),
-		args: [universeId, outcomeIndex],
-	}))
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'deployChild',
+			address: getZoltarAddress(),
+			args: [universeId, outcomeIndex],
+		}),
+	)
 
-export const getMigrationRepBalance = async (client: ReadClient, universeId: bigint, address: `0x${ string }`) => {
+export const getMigrationRepBalance = async (client: ReadClient, universeId: bigint, address: `0x${string}`) => {
 	const repBalance = await client.readContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'getMigrationRepBalance',

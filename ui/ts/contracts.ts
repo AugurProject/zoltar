@@ -1,8 +1,60 @@
 import { encodeAbiParameters, encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes, parseAbiItem, toHex, zeroAddress, type Address, type Hash, type Hex } from 'viem'
 import { ABIS } from './abis.js'
-import { ReputationToken_ReputationToken, ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, peripherals_EscalationGame_EscalationGame, peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer, peripherals_SecurityPool_SecurityPool, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, peripherals_factories_EscalationGameFactory_EscalationGameFactory, peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_factories_ShareTokenFactory_ShareTokenFactory, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from './contractArtifact.js'
 import { assertNever } from './lib/assert.js'
-import type { DeploymentStatus, DeploymentStep, DeploymentStepId, EscalationDeposit, EscalationSide, ForkAuctionAction, ForkAuctionActionResult, ForkAuctionDetails, ListedSecurityPool, MarketCreationResult, MarketDetails, MarketType, OpenOracleActionResult, OracleManagerDetails, OracleQueueOperation, QuestionData, ReadClient, ReportingActionResult, ReportingDetails, ReportingOutcomeKey, SecurityPoolCreationResult, SecurityPoolSystemState, SecurityPoolVaultSummary, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, TruthAuctionMetrics, WriteClient, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult, ZoltarUniverseSummary } from './types/contracts.js'
+import {
+	DeploymentStatusOracle_DeploymentStatusOracle,
+	ReputationToken_ReputationToken,
+	ScalarOutcomes_ScalarOutcomes,
+	Zoltar_Zoltar,
+	ZoltarQuestionData_ZoltarQuestionData,
+	peripherals_EscalationGame_EscalationGame,
+	peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer,
+	peripherals_SecurityPool_SecurityPool,
+	peripherals_SecurityPoolForker_SecurityPoolForker,
+	peripherals_SecurityPoolUtils_SecurityPoolUtils,
+	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
+	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
+	peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
+	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
+	peripherals_factories_ShareTokenFactory_ShareTokenFactory,
+	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
+	peripherals_openOracle_OpenOracle_OpenOracle,
+	peripherals_tokens_ShareToken_ShareToken,
+} from './contractArtifact.js'
+import type {
+	DeploymentStatusSnapshot,
+	DeploymentStep,
+	DeploymentStepId,
+	EscalationDeposit,
+	EscalationSide,
+	ForkAuctionAction,
+	ForkAuctionActionResult,
+	ForkAuctionDetails,
+	ListedSecurityPool,
+	MarketCreationResult,
+	MarketDetails,
+	MarketType,
+	OpenOracleActionResult,
+	OracleManagerDetails,
+	OracleQueueOperation,
+	QuestionData,
+	ReadClient,
+	ReportingActionResult,
+	ReportingDetails,
+	ReportingOutcomeKey,
+	SecurityPoolCreationResult,
+	SecurityPoolSystemState,
+	SecurityPoolVaultSummary,
+	SecurityVaultActionResult,
+	SecurityVaultDetails,
+	TradingActionResult,
+	TruthAuctionMetrics,
+	WriteClient,
+	ZoltarChildUniverseActionResult,
+	ZoltarForkActionResult,
+	ZoltarMigrationActionResult,
+	ZoltarUniverseSummary,
+} from './types/contracts.js'
 
 const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
@@ -33,7 +85,7 @@ type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean,
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 
 function bigintToAddress(value: bigint): Address {
-	return getAddress(`0x${ value.toString(16).padStart(40, '0') }`)
+	return getAddress(`0x${value.toString(16).padStart(40, '0')}`)
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -72,14 +124,14 @@ type SecurityPoolDeploymentQueryResult = {
 
 const getSecurityPoolUtilsAddress = () =>
 	getCreate2Address({
-		bytecode: `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`,
+		bytecode: `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
 		from: PROXY_DEPLOYER_ADDRESS,
 		salt: ZERO_SALT,
 	})
 
 const getScalarOutcomesAddress = () =>
 	getCreate2Address({
-		bytecode: `0x${ ScalarOutcomes_ScalarOutcomes.evm.bytecode.object }`,
+		bytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
 		from: PROXY_DEPLOYER_ADDRESS,
 		salt: ZERO_SALT,
 	})
@@ -87,14 +139,14 @@ const getScalarOutcomesAddress = () =>
 const getShareTokenFactoryByteCode = (zoltarAddress: Address) =>
 	encodeDeployData({
 		abi: peripherals_factories_ShareTokenFactory_ShareTokenFactory.abi,
-		bytecode: `0x${ peripherals_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object }`,
+		bytecode: `0x${peripherals_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object}`,
 		args: [zoltarAddress],
 	})
 
 const getEscalationGameFactoryByteCode = () =>
 	encodeDeployData({
 		abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
-		bytecode: `0x${ peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object }`,
+		bytecode: `0x${peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
 	})
 
 const getZoltarQuestionDataByteCode = () =>
@@ -112,7 +164,7 @@ const getSecurityPoolForkerByteCode = (zoltarAddress: Address) =>
 
 const getZoltarQuestionDataAddress = () =>
 	getContractAddress({
-		bytecode: `0x${ ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object }`,
+		bytecode: `0x${ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object}`,
 		from: PROXY_DEPLOYER_ADDRESS,
 		opcode: 'CREATE2',
 		salt: ZERO_SALT,
@@ -121,7 +173,7 @@ const getZoltarQuestionDataAddress = () =>
 const getZoltarInitCode = (zoltarQuestionDataAddress: Address) =>
 	encodeDeployData({
 		abi: Zoltar_Zoltar.abi,
-		bytecode: `0x${ Zoltar_Zoltar.evm.bytecode.object }`,
+		bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
 		args: [zoltarQuestionDataAddress],
 	})
 
@@ -155,10 +207,68 @@ function applyLibraries(bytecode: string): Hex {
 
 	let updatedBytecode = bytecode
 	for (const { hash, address } of librariesToReplace) {
-		updatedBytecode = updatedBytecode.replaceAll(`__$${ hash }$__`, address.slice(2).toLowerCase())
+		updatedBytecode = updatedBytecode.replaceAll(`__$${hash}$__`, address.slice(2).toLowerCase())
 	}
 
-	return `0x${ updatedBytecode }`
+	return `0x${updatedBytecode}`
+}
+
+function getDeploymentStatusOracleStepAddresses() {
+	const addresses = getInfraContractAddresses()
+	return [
+		PROXY_DEPLOYER_ADDRESS,
+		addresses.uniformPriceDualCapBatchAuctionFactory,
+		addresses.scalarOutcomes,
+		addresses.securityPoolUtils,
+		addresses.openOracle,
+		addresses.zoltarQuestionData,
+		addresses.zoltar,
+		addresses.shareTokenFactory,
+		addresses.priceOracleManagerAndOperatorQueuerFactory,
+		addresses.securityPoolForker,
+		addresses.escalationGameFactory,
+		addresses.securityPoolFactory,
+	] satisfies Address[]
+}
+
+function getDeploymentStatusOracleByteCode() {
+	return encodeDeployData({
+		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
+		bytecode: `0x${ DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object }`,
+		args: [getDeploymentStatusOracleStepAddresses()],
+	})
+}
+
+function getDeploymentStatusOracleAddress() {
+	return getCreate2Address({
+		bytecode: getDeploymentStatusOracleByteCode(),
+		from: PROXY_DEPLOYER_ADDRESS,
+		salt: ZERO_SALT,
+	})
+}
+
+function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracleDeployed: boolean): DeploymentStatusSnapshot {
+	const steps = getDeploymentSteps()
+	let maskIndex = 0n
+	const deploymentStatuses = steps.map(step => {
+		if (step.id === 'deploymentStatusOracle') {
+			return {
+				...step,
+				deployed: deploymentStatusOracleDeployed,
+			}
+		}
+
+		const deployed = (deployedMask & (1n << maskIndex)) !== 0n
+		maskIndex += 1n
+		return {
+			...step,
+			deployed,
+		}
+	})
+	return {
+		augurPlaceHolderDeployed: deploymentStatuses.every(step => step.deployed),
+		deploymentStatuses,
+	}
 }
 
 function getInfraContractAddresses() {
@@ -171,15 +281,15 @@ function getInfraContractAddresses() {
 
 	const contracts = {
 		securityPoolUtils: getSecurityPoolUtilsAddress(),
-		openOracle: getAddressForBytecode(`0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`),
+		openOracle: getAddressForBytecode(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`),
 		zoltarQuestionData: getAddressForBytecode(getZoltarQuestionDataByteCode()),
 		zoltar: getZoltarAddress(),
 		shareTokenFactory: getAddressForBytecode(getShareTokenFactoryByteCode(getZoltarAddress())),
-		priceOracleManagerAndOperatorQueuerFactory: getAddressForBytecode(`0x${ peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object }`),
+		priceOracleManagerAndOperatorQueuerFactory: getAddressForBytecode(`0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`),
 		securityPoolForker: getAddressForBytecode(getSecurityPoolForkerByteCode(getZoltarAddress())),
 		escalationGameFactory: getAddressForBytecode(getEscalationGameFactoryByteCode()),
 		scalarOutcomes: getScalarOutcomesAddress(),
-		uniformPriceDualCapBatchAuctionFactory: getAddressForBytecode(`0x${ peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object }`),
+		uniformPriceDualCapBatchAuctionFactory: getAddressForBytecode(`0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`),
 	}
 
 	return {
@@ -251,32 +361,39 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			},
 		},
 		{
+			id: 'deploymentStatusOracle',
+			label: 'Deployment Status Oracle',
+			address: getDeploymentStatusOracleAddress(),
+			dependencies: ['proxyDeployer'],
+			deploy: async client => await deployViaProxy(client, getDeploymentStatusOracleByteCode()),
+		},
+		{
 			id: 'uniformPriceDualCapBatchAuctionFactory',
 			label: 'UniformPriceDualCapBatchAuctionFactory',
 			address: addresses.uniformPriceDualCapBatchAuctionFactory,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${ peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object }`),
+			deploy: async client => await deployViaProxy(client, `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`),
 		},
 		{
 			id: 'scalarOutcomes',
 			label: 'ScalarOutcomes',
 			address: addresses.scalarOutcomes,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${ ScalarOutcomes_ScalarOutcomes.evm.bytecode.object }`),
+			deploy: async client => await deployViaProxy(client, `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`),
 		},
 		{
 			id: 'securityPoolUtils',
 			label: 'SecurityPoolUtils',
 			address: addresses.securityPoolUtils,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`),
+			deploy: async client => await deployViaProxy(client, `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`),
 		},
 		{
 			id: 'openOracle',
 			label: 'OpenOracle',
 			address: addresses.openOracle,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`),
+			deploy: async client => await deployViaProxy(client, `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`),
 		},
 		{
 			id: 'zoltarQuestionData',
@@ -304,7 +421,7 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			label: 'PriceOracleManagerAndOperatorQueuerFactory',
 			address: addresses.priceOracleManagerAndOperatorQueuerFactory,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${ peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object }`),
+			deploy: async client => await deployViaProxy(client, `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`),
 		},
 		{
 			id: 'securityPoolForker',
@@ -325,32 +442,35 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			label: 'SecurityPoolFactory',
 			address: addresses.securityPoolFactory,
 			dependencies: ['proxyDeployer', 'securityPoolForker', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'uniformPriceDualCapBatchAuctionFactory', 'priceOracleManagerAndOperatorQueuerFactory', 'securityPoolUtils'],
-			deploy: async client => await deployViaProxy(client, getSecurityPoolFactoryByteCode(addresses.securityPoolForker, addresses.zoltarQuestionData, addresses.escalationGameFactory, addresses.openOracle, addresses.zoltar, addresses.shareTokenFactory, addresses.uniformPriceDualCapBatchAuctionFactory, addresses.priceOracleManagerAndOperatorQueuerFactory)),
+			deploy: async client =>
+				await deployViaProxy(
+					client,
+					getSecurityPoolFactoryByteCode(addresses.securityPoolForker, addresses.zoltarQuestionData, addresses.escalationGameFactory, addresses.openOracle, addresses.zoltar, addresses.shareTokenFactory, addresses.uniformPriceDualCapBatchAuctionFactory, addresses.priceOracleManagerAndOperatorQueuerFactory),
+				),
 		},
 	]
 }
 
-export async function loadDeploymentStatuses(client: ReadClient): Promise<DeploymentStatus[]> {
-	const steps = getDeploymentSteps()
-	const deployed = await Promise.all(
-		steps.map(async step => {
-			const code = await client.getCode({ address: step.address })
-			return code !== undefined && code !== '0x'
-		}),
-	)
-
-	return steps.map((step, index) => ({
-		...step,
-		deployed: deployed[index] ?? false,
+async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readContract'>): Promise<bigint> {
+	return BigInt(await client.readContract({
+		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
+		functionName: 'getDeploymentMask',
+		address: getDeploymentStatusOracleAddress(),
+		args: [],
 	}))
 }
 
-export async function loadZoltarDeploymentStatus(client: Pick<ReadClient, 'getCode'>) {
-	const zoltarStep = getDeploymentSteps().find(step => step.id === 'zoltar')
-	if (zoltarStep === undefined) throw new Error('Missing Zoltar deployment step')
+export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient, 'readContract' | 'getCode'>): Promise<DeploymentStatusSnapshot> {
+	const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
+	const deploymentStatusOracleCode = await client.getCode({ address: deploymentStatusOracleAddress })
+	if (deploymentStatusOracleCode === undefined || deploymentStatusOracleCode === '0x') {
+		const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
+		const proxyDeployerDeployed = proxyDeployerCode !== undefined && proxyDeployerCode !== '0x'
+		return getDeploymentStatusSnapshot(proxyDeployerDeployed ? 1n : 0n, false)
+	}
 
-	const code = await client.getCode({ address: zoltarStep.address })
-	return code !== undefined && code !== '0x'
+	const deployedMask = await loadDeploymentStatusOracleMask(client)
+	return getDeploymentStatusSnapshot(deployedMask, true)
 }
 
 export async function loadErc20Balance(client: ReadClient, tokenAddress: Address, ownerAddress: Address) {
@@ -382,7 +502,7 @@ export async function loadRepTokensMigratedRepBalance(client: ReadClient, univer
 
 function getDeploymentStep(id: DeploymentStepId) {
 	const step = getDeploymentSteps().find(candidate => candidate.id === id)
-	if (step === undefined) throw new Error(`Unknown deployment step: ${ id }`)
+	if (step === undefined) throw new Error(`Unknown deployment step: ${id}`)
 	return step
 }
 
@@ -413,7 +533,7 @@ function getQuestionId(questionData: QuestionData, outcomeOptions: readonly stri
 }
 
 function getQuestionIdHex(questionId: bigint) {
-	return `0x${ questionId.toString(16) }`
+	return `0x${questionId.toString(16)}`
 }
 
 function getReportingOutcomeValue(outcome: ReportingOutcomeKey) {
@@ -425,7 +545,7 @@ function getReportingOutcomeValue(outcome: ReportingOutcomeKey) {
 		case 'no':
 			return 2
 		default:
-			throw new Error(`Unhandled reporting outcome: ${ JSON.stringify(outcome) }`)
+			throw new Error(`Unhandled reporting outcome: ${JSON.stringify(outcome)}`)
 	}
 }
 
@@ -454,7 +574,7 @@ function getEscalationSideLabel(key: ReportingOutcomeKey) {
 		case 'no':
 			return 'No'
 		default:
-			throw new Error(`Unhandled escalation side: ${ JSON.stringify(key) }`)
+			throw new Error(`Unhandled escalation side: ${JSON.stringify(key)}`)
 	}
 }
 
@@ -473,7 +593,7 @@ function getSecurityPoolSystemState(value: bigint | number): SecurityPoolSystemS
 		case 3n:
 			return 'forkTruthAuction'
 		default:
-			throw new Error(`Unhandled security pool system state: ${ JSON.stringify(value) }`)
+			throw new Error(`Unhandled security pool system state: ${JSON.stringify(value)}`)
 	}
 }
 
@@ -592,9 +712,7 @@ async function loadQuestionIds(client: ReadClient): Promise<bigint[]> {
 		})
 		if (!Array.isArray(page)) throw new Error('Unexpected question id page response')
 
-		const normalizedPage = page
-			.filter((questionId): questionId is bigint => typeof questionId === 'bigint' && questionId !== 0n)
-			.slice(0, Number(CONTRACT_PAGE_SIZE))
+		const normalizedPage = page.filter((questionId): questionId is bigint => typeof questionId === 'bigint' && questionId !== 0n).slice(0, Number(CONTRACT_PAGE_SIZE))
 		questionIds.push(...normalizedPage)
 		if (BigInt(normalizedPage.length) !== CONTRACT_PAGE_SIZE) break
 		currentIndex += CONTRACT_PAGE_SIZE
@@ -618,10 +736,14 @@ export async function loadZoltarQuestionCount(client: ReadClient) {
 }
 
 export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint): Promise<ZoltarUniverseSummary | undefined> {
+	const zoltarAddress = getDeploymentStep('zoltar').address
+	const zoltarCode = await client.getCode({ address: zoltarAddress })
+	if (zoltarCode === undefined || zoltarCode === '0x') return undefined
+
 	const repToken = await client.readContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'getRepToken',
-		address: getDeploymentStep('zoltar').address,
+		address: zoltarAddress,
 		args: [universeId],
 	})
 	if (repToken === zeroAddress) return undefined
@@ -630,19 +752,19 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 		client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'universes',
-			address: getDeploymentStep('zoltar').address,
+			address: zoltarAddress,
 			args: [universeId],
 		}),
 		client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'getForkTime',
-			address: getDeploymentStep('zoltar').address,
+			address: zoltarAddress,
 			args: [universeId],
 		}),
 		client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'getForkThreshold',
-			address: getDeploymentStep('zoltar').address,
+			address: zoltarAddress,
 			args: [universeId],
 		}),
 		client.readContract({
@@ -672,35 +794,38 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 					args: [universeId, currentIndex, CONTRACT_PAGE_SIZE],
 				})
 				const [outcomeIndexes, childUniverseIds, childUniverseTuples] = page
-				const pageChildren = await Promise.all(outcomeIndexes.map(async (outcomeIndex, index) => {
-					const childUniverse = childUniverseTuples[index]
-					if (childUniverse === undefined) throw new Error('Unexpected deployed child universe response')
-					const { forkTime: childForkTime, parentUniverseId: childParentUniverseId, reputationToken: childReputationToken } = childUniverse
-					const outcomeLabel = await client.readContract({
-						abi: ANSWER_OPTION_ABI,
-						functionName: 'getAnswerOptionName',
-						address: getDeploymentStep('zoltarQuestionData').address,
-						args: [forkQuestionId, outcomeIndex],
-					})
-					const childUniverseId = childUniverseIds[index]
-					if (childUniverseId === undefined) throw new Error('Unexpected deployed child universe response')
-					return {
-						exists: childReputationToken !== zeroAddress,
-						forkTime: childForkTime,
-						outcomeIndex,
-						outcomeLabel,
-						parentUniverseId: childParentUniverseId,
-						reputationToken: childReputationToken,
-						universeId: childUniverseId,
-					}
-				}))
+				const pageChildren = await Promise.all(
+					outcomeIndexes.map(async (outcomeIndex, index) => {
+						const childUniverse = childUniverseTuples[index]
+						if (childUniverse === undefined) throw new Error('Unexpected deployed child universe response')
+						const { forkTime: childForkTime, parentUniverseId: childParentUniverseId, reputationToken: childReputationToken } = childUniverse
+						const outcomeLabel = await client.readContract({
+							abi: ANSWER_OPTION_ABI,
+							functionName: 'getAnswerOptionName',
+							address: getDeploymentStep('zoltarQuestionData').address,
+							args: [forkQuestionId, outcomeIndex],
+						})
+						const childUniverseId = childUniverseIds[index]
+						if (childUniverseId === undefined) throw new Error('Unexpected deployed child universe response')
+						return {
+							exists: childReputationToken !== zeroAddress,
+							forkTime: childForkTime,
+							outcomeIndex,
+							outcomeLabel,
+							parentUniverseId: childParentUniverseId,
+							reputationToken: childReputationToken,
+							universeId: childUniverseId,
+						}
+					}),
+				)
 				deployedChildUniverses.push(...pageChildren)
 				if (BigInt(pageChildren.length) !== CONTRACT_PAGE_SIZE) break
 				currentIndex += CONTRACT_PAGE_SIZE
 			}
 			childUniverses = deployedChildUniverses
 		} else {
-				childUniverses = await Promise.all(marketDetails.outcomeLabels.map(async (outcomeLabel, outcomeIndex) => {
+			childUniverses = await Promise.all(
+				marketDetails.outcomeLabels.map(async (outcomeLabel, outcomeIndex) => {
 					const childUniverseId = await client.readContract({
 						abi: Zoltar_Zoltar.abi,
 						functionName: 'getChildUniverseId',
@@ -713,18 +838,19 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 						address: getDeploymentStep('zoltar').address,
 						args: [childUniverseId],
 					})
-				const childUniverseData: UniverseTuple = childUniverse
-				const [childForkTime, , , childReputationToken, childParentUniverseId] = childUniverseData
+					const childUniverseData: UniverseTuple = childUniverse
+					const [childForkTime, , , childReputationToken, childParentUniverseId] = childUniverseData
 					return {
 						exists: childReputationToken !== zeroAddress,
 						forkTime: childForkTime,
-					outcomeIndex: BigInt(outcomeIndex),
-					outcomeLabel,
-					parentUniverseId: childParentUniverseId,
-					reputationToken: childReputationToken,
-					universeId: childUniverseId,
-				}
-			}))
+						outcomeIndex: BigInt(outcomeIndex),
+						outcomeLabel,
+						parentUniverseId: childParentUniverseId,
+						reputationToken: childReputationToken,
+						universeId: childUniverseId,
+					}
+				}),
+			)
 		}
 	}
 
@@ -765,16 +891,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		readSecurityPoolUniverseId(client, securityPoolAddress),
 	])
 
-	const [
-		startBond,
-		nonDecisionThreshold,
-		startingTime,
-		totalCost,
-		bindingCapital,
-		balances,
-		resolution,
-		block,
-	] = await Promise.all([
+	const [startBond, nonDecisionThreshold, startingTime, totalCost, bindingCapital, balances, resolution, block] = await Promise.all([
 		client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'startBond',
@@ -823,11 +940,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 
 	const marketDetails = await loadMarketDetails(client, questionId)
-	const [invalidDeposits, yesDeposits, noDeposits] = await Promise.all([
-		loadEscalationDeposits(client, escalationGameAddress, 'invalid'),
-		loadEscalationDeposits(client, escalationGameAddress, 'yes'),
-		loadEscalationDeposits(client, escalationGameAddress, 'no'),
-	])
+	const [invalidDeposits, yesDeposits, noDeposits] = await Promise.all([loadEscalationDeposits(client, escalationGameAddress, 'invalid'), loadEscalationDeposits(client, escalationGameAddress, 'yes'), loadEscalationDeposits(client, escalationGameAddress, 'no')])
 
 	const sides: EscalationSide[] = [
 		{ balance: balances[0] ?? 0n, deposits: invalidDeposits, key: 'invalid', label: getEscalationSideLabel('invalid'), userDeposits: accountAddress === undefined ? [] : invalidDeposits.filter(deposit => deposit.depositor === accountAddress) },
@@ -864,12 +977,14 @@ export async function createMarket(
 ) {
 	const questionId = getQuestionId(parameters.questionData, parameters.outcomeLabels)
 
-	const createQuestionHash = await writeContractAndWait(client, () => client.writeContract({
-		address: getDeploymentStep('zoltarQuestionData').address,
-		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		functionName: 'createQuestion',
-		args: [parameters.questionData, parameters.outcomeLabels],
-	}))
+	const createQuestionHash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: getDeploymentStep('zoltarQuestionData').address,
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'createQuestion',
+			args: [parameters.questionData, parameters.outcomeLabels],
+		}),
+	)
 
 	return {
 		questionId: getQuestionIdHex(questionId),
@@ -887,12 +1002,14 @@ export async function createSecurityPool(
 		startingRepEthPrice: bigint
 	},
 ) {
-	const deployPoolHash = await writeContractAndWait(client, () => client.writeContract({
-		address: getDeploymentStep('securityPoolFactory').address,
-		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-		functionName: 'deployOriginSecurityPool',
-		args: [0n, parameters.questionId, parameters.securityMultiplier, parameters.currentRetentionRate, parameters.startingRepEthPrice],
-	}))
+	const deployPoolHash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: getDeploymentStep('securityPoolFactory').address,
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'deployOriginSecurityPool',
+			args: [0n, parameters.questionId, parameters.securityMultiplier, parameters.currentRetentionRate, parameters.startingRepEthPrice],
+		}),
+	)
 
 	return {
 		deployPoolHash,
@@ -903,15 +1020,7 @@ export async function createSecurityPool(
 }
 
 function getOriginSecurityPoolShareTokenSalt(questionId: bigint, securityMultiplier: bigint) {
-	return keccak256(
-		encodeAbiParameters(
-			[
-				{ type: 'uint256' },
-				{ type: 'uint256' },
-			],
-			[securityMultiplier, questionId],
-		),
-	)
+	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [securityMultiplier, questionId]))
 }
 
 function getOriginSecurityPoolShareTokenAddress(questionId: bigint, securityMultiplier: bigint) {
@@ -920,7 +1029,7 @@ function getOriginSecurityPoolShareTokenAddress(questionId: bigint, securityMult
 		salt: getOriginSecurityPoolShareTokenSalt(questionId, securityMultiplier),
 		bytecode: encodeDeployData({
 			abi: peripherals_tokens_ShareToken_ShareToken.abi,
-			bytecode: `0x${ peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object }`,
+			bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
 			args: [getInfraContractAddresses().securityPoolFactory, getZoltarAddress(), questionId],
 		}),
 	})
@@ -1014,51 +1123,51 @@ async function poolOwnershipToRep(client: ReadClient, securityPoolAddress: Addre
 async function loadSecurityPoolVaultSummaries(client: ReadClient, securityPoolAddress: Address): Promise<{ vaultCount: bigint; vaults: SecurityPoolVaultSummary[] }> {
 	const vaultCount = await getSecurityPoolVaultCount(client, securityPoolAddress)
 	const vaultAddresses = vaultCount === 0n ? [] : await getSecurityPoolVaults(client, securityPoolAddress, 0n, vaultCount)
-	const vaults = await Promise.all(vaultAddresses.map(async (vaultAddress: Address) => {
-		const vaultData: SecurityVaultTuple = await client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'securityVaults',
-			address: securityPoolAddress,
-			args: [vaultAddress],
-		})
-		const [poolOwnership, securityBondAllowance, unpaidEthFees, feeIndex, lockedRepInEscalationGame] = vaultData
-		const repDepositShare = await poolOwnershipToRep(client, securityPoolAddress, poolOwnership)
-		return {
-			feeIndex,
-			lockedRepInEscalationGame,
-			poolOwnership,
-			repDepositShare,
-			securityBondAllowance,
-			unpaidEthFees,
-			vaultAddress,
-		} satisfies SecurityPoolVaultSummary
-	}))
+	const vaults = await Promise.all(
+		vaultAddresses.map(async (vaultAddress: Address) => {
+			const vaultData: SecurityVaultTuple = await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'securityVaults',
+				address: securityPoolAddress,
+				args: [vaultAddress],
+			})
+			const [poolOwnership, securityBondAllowance, unpaidEthFees, feeIndex, lockedRepInEscalationGame] = vaultData
+			const repDepositShare = await poolOwnershipToRep(client, securityPoolAddress, poolOwnership)
+			return {
+				feeIndex,
+				lockedRepInEscalationGame,
+				poolOwnership,
+				repDepositShare,
+				securityBondAllowance,
+				unpaidEthFees,
+				vaultAddress,
+			} satisfies SecurityPoolVaultSummary
+		}),
+	)
 	return { vaultCount, vaults }
 }
 
-export async function approveErc20<Action extends SecurityVaultActionResult['action'] | OpenOracleActionResult['action'] | ZoltarForkActionResult['action']>(
-	client: WriteClient,
-	tokenAddress: Address,
-	spenderAddress: Address,
-	amount: bigint,
-	action: Action,
-) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: tokenAddress,
-		abi: ABIS.mainnet.erc20,
-		functionName: 'approve',
-		args: [spenderAddress, amount],
-	}))
+export async function approveErc20<Action extends SecurityVaultActionResult['action'] | OpenOracleActionResult['action'] | ZoltarForkActionResult['action']>(client: WriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: Action) {
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: tokenAddress,
+			abi: ABIS.mainnet.erc20,
+			functionName: 'approve',
+			args: [spenderAddress, amount],
+		}),
+	)
 	return { action, hash }
 }
 
 export async function depositRepToSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'depositRep',
-		args: [amount],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'depositRep',
+			args: [amount],
+		}),
+	)
 	return {
 		action: 'depositRep',
 		hash,
@@ -1066,12 +1175,14 @@ export async function depositRepToSecurityPool(client: WriteClient, securityPool
 }
 
 export async function updateSecurityVaultFees(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'updateVaultFees',
-		args: [vaultAddress],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'updateVaultFees',
+			args: [vaultAddress],
+		}),
+	)
 	return {
 		action: 'updateVaultFees',
 		hash,
@@ -1079,12 +1190,14 @@ export async function updateSecurityVaultFees(client: WriteClient, securityPoolA
 }
 
 export async function redeemSecurityVaultFees(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'redeemFees',
-		args: [vaultAddress],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'redeemFees',
+			args: [vaultAddress],
+		}),
+	)
 	return {
 		action: 'redeemFees',
 		hash,
@@ -1092,12 +1205,14 @@ export async function redeemSecurityVaultFees(client: WriteClient, securityPoolA
 }
 
 export async function redeemSecurityVaultRep(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'redeemRep',
-		args: [vaultAddress],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'redeemRep',
+			args: [vaultAddress],
+		}),
+	)
 	return {
 		action: 'redeemRep',
 		hash,
@@ -1132,19 +1247,19 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	let token2: Address | undefined
 
 	if (pendingReportId > 0n) {
-		const extraData = (await client.readContract({
+		const extraData = await client.readContract({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'extraData',
 			address: getInfraContractAddresses().openOracle,
 			args: [pendingReportId],
-		}))
+		})
 
-		const reportMeta = (await client.readContract({
+		const reportMeta = await client.readContract({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'reportMeta',
 			address: getInfraContractAddresses().openOracle,
 			args: [pendingReportId],
-		}))
+		})
 
 		callbackStateHash = extraData[0]
 		exactToken1Report = reportMeta[0]
@@ -1166,13 +1281,15 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 }
 
 export async function requestOraclePrice(client: WriteClient, managerAddress: Address, ethCost: bigint) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: managerAddress,
-		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-		functionName: 'requestPrice',
-		args: [],
-		value: ethCost,
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: managerAddress,
+			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+			functionName: 'requestPrice',
+			args: [],
+			value: ethCost,
+		}),
+	)
 	return {
 		action: 'requestPrice',
 		hash,
@@ -1180,12 +1297,14 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 }
 
 export async function submitInitialOracleReport(client: WriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: Hex) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: getInfraContractAddresses().openOracle,
-		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-		functionName: 'submitInitialReport',
-		args: [reportId, amount1, amount2, stateHash],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: getInfraContractAddresses().openOracle,
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'submitInitialReport',
+			args: [reportId, amount1, amount2, stateHash],
+		}),
+	)
 	return {
 		action: 'submitInitialReport',
 		hash,
@@ -1193,12 +1312,14 @@ export async function submitInitialOracleReport(client: WriteClient, reportId: b
 }
 
 export async function settleOracleReport(client: WriteClient, reportId: bigint) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: getInfraContractAddresses().openOracle,
-		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-		functionName: 'settle',
-		args: [reportId],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: getInfraContractAddresses().openOracle,
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'settle',
+			args: [reportId],
+		}),
+	)
 	return {
 		action: 'settle',
 		hash,
@@ -1206,17 +1327,7 @@ export async function settleOracleReport(client: WriteClient, reportId: bigint) 
 }
 
 export async function loadForkAuctionDetails(client: ReadClient, securityPoolAddress: Address): Promise<ForkAuctionDetails> {
-	const [
-		questionId,
-		parentSecurityPoolAddress,
-		universeId,
-		systemStateValue,
-		truthAuctionAddress,
-		completeSetCollateralAmount,
-		forkData,
-		block,
-		questionOutcome,
-	] = await Promise.all([
+	const [questionId, parentSecurityPoolAddress, universeId, systemStateValue, truthAuctionAddress, completeSetCollateralAmount, forkData, block, questionOutcome] = await Promise.all([
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'questionId',
@@ -1267,12 +1378,15 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	const forkDataTuple: ForkDataTuple = forkData
 	const [repAtFork, , truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)
-	const migrationEndsAt = truthAuctionStartedAt > 0n ? undefined : (await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'getForkTime',
-		address: getInfraContractAddresses().zoltar,
-		args: [universeId],
-	})) + MIGRATION_TIME_LENGTH
+	const migrationEndsAt =
+		truthAuctionStartedAt > 0n
+			? undefined
+			: (await client.readContract({
+					abi: Zoltar_Zoltar.abi,
+					functionName: 'getForkTime',
+					address: getInfraContractAddresses().zoltar,
+					args: [universeId],
+				})) + MIGRATION_TIME_LENGTH
 
 	let truthAuction: TruthAuctionMetrics | undefined
 	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
@@ -1328,12 +1442,15 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		])
 		const computeClearingTuple: AuctionClearingTuple = computeClearingResult
 		const [hitCap, clearingTick, accumulatedEth, ethAtClearingTick] = computeClearingTuple
-		const clearingPrice = clearingTick === 0n && accumulatedEth === 0n ? undefined : await client.readContract({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			functionName: 'tickToPrice',
-			address: truthAuctionAddress,
-			args: [clearingTick],
-		})
+		const clearingPrice =
+			clearingTick === 0n && accumulatedEth === 0n
+				? undefined
+				: await client.readContract({
+						abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+						functionName: 'tickToPrice',
+						address: truthAuctionAddress,
+						args: [clearingTick],
+					})
 
 		truthAuction = {
 			accumulatedEth,
@@ -1388,39 +1505,68 @@ async function executeForkAuctionAction(client: WriteClient, action: ForkAuction
 }
 
 export async function forkZoltarWithOwnEscalation(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
-	return await executeForkAuctionAction(client, 'forkWithOwnEscalation', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
-		address: getInfraContractAddresses().securityPoolForker,
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'forkZoltarWithOwnEscalationGame',
-		args: [securityPoolAddress],
-	})))
+	return await executeForkAuctionAction(
+		client,
+		'forkWithOwnEscalation',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: getInfraContractAddresses().securityPoolForker,
+					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+					functionName: 'forkZoltarWithOwnEscalationGame',
+					args: [securityPoolAddress],
+				}),
+			),
+	)
 }
 
 export async function initiateSecurityPoolFork(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
-	return await executeForkAuctionAction(client, 'initiateFork', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
-		address: getInfraContractAddresses().securityPoolForker,
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'initiateSecurityPoolFork',
-		args: [securityPoolAddress],
-	})))
+	return await executeForkAuctionAction(
+		client,
+		'initiateFork',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: getInfraContractAddresses().securityPoolForker,
+					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+					functionName: 'initiateSecurityPoolFork',
+					args: [securityPoolAddress],
+				}),
+			),
+	)
 }
 
 export async function createChildUniverseFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
-	return await executeForkAuctionAction(client, 'createChildUniverse', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
-		address: getInfraContractAddresses().securityPoolForker,
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'createChildUniverse',
-		args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
-	})))
+	return await executeForkAuctionAction(
+		client,
+		'createChildUniverse',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: getInfraContractAddresses().securityPoolForker,
+					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+					functionName: 'createChildUniverse',
+					args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
+				}),
+			),
+	)
 }
 
 export async function createZoltarChildUniverse(client: WriteClient, universeId: bigint, outcomeIndex: bigint) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: getDeploymentStep('zoltar').address,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'deployChild',
-		args: [universeId, outcomeIndex],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: getDeploymentStep('zoltar').address,
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'deployChild',
+			args: [universeId, outcomeIndex],
+		}),
+	)
 	return {
 		action: 'createChildUniverse',
 		hash,
@@ -1445,49 +1591,87 @@ async function executeZoltarMigrationAction(client: WriteClient, action: ZoltarM
 }
 
 export async function prepareRepForMigrationInZoltar(client: WriteClient, universeId: bigint, amount: bigint) {
-	return await executeZoltarMigrationAction(client, 'addRepToMigrationBalance', universeId, amount, [],async () => await writeContractAndWait(client, () => client.writeContract({
-		address: getDeploymentStep('zoltar').address,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'addRepToMigrationBalance',
-		args: [universeId, amount],
-	})))
+	return await executeZoltarMigrationAction(
+		client,
+		'addRepToMigrationBalance',
+		universeId,
+		amount,
+		[],
+		async () =>
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: getDeploymentStep('zoltar').address,
+					abi: Zoltar_Zoltar.abi,
+					functionName: 'addRepToMigrationBalance',
+					args: [universeId, amount],
+				}),
+			),
+	)
 }
 
 export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) {
-	return await executeZoltarMigrationAction(client, 'splitMigrationRep', universeId, amount, outcomeIndexes,async () => await writeContractAndWait(client, () => client.writeContract({
-		address: getDeploymentStep('zoltar').address,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'splitMigrationRep',
-		args: [universeId, amount, outcomeIndexes],
-	})))
+	return await executeZoltarMigrationAction(
+		client,
+		'splitMigrationRep',
+		universeId,
+		amount,
+		outcomeIndexes,
+		async () =>
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: getDeploymentStep('zoltar').address,
+					abi: Zoltar_Zoltar.abi,
+					functionName: 'splitMigrationRep',
+					args: [universeId, amount, outcomeIndexes],
+				}),
+			),
+	)
 }
 
 export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
-	return await executeForkAuctionAction(client, 'migrateRepToZoltar', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
-		address: getInfraContractAddresses().securityPoolForker,
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'migrateRepToZoltar',
-		args: [securityPoolAddress, outcomes.map(outcome => BigInt(getReportingOutcomeValue(outcome)))],
-	})))
+	return await executeForkAuctionAction(
+		client,
+		'migrateRepToZoltar',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: getInfraContractAddresses().securityPoolForker,
+					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+					functionName: 'migrateRepToZoltar',
+					args: [securityPoolAddress, outcomes.map(outcome => BigInt(getReportingOutcomeValue(outcome)))],
+				}),
+			),
+	)
 }
 
 export async function migrateSecurityVault(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
-	return await executeForkAuctionAction(client, 'migrateVault', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
-		address: getInfraContractAddresses().securityPoolForker,
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'migrateVault',
-		args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
-	})))
+	return await executeForkAuctionAction(
+		client,
+		'migrateVault',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: getInfraContractAddresses().securityPoolForker,
+					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+					functionName: 'migrateVault',
+					args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
+				}),
+			),
+	)
 }
 
 function toUint8(value: bigint) {
 	if (value < 0n || value > 255n) {
-		throw new Error(`Deposit index out of range: ${ value.toString() }`)
+		throw new Error(`Deposit index out of range: ${value.toString()}`)
 	}
 
 	const numberValue = Number(value)
 	if (!Number.isInteger(numberValue) || numberValue < 0 || numberValue > 255) {
-		throw new Error(`Deposit index out of range: ${ value.toString() }`)
+		throw new Error(`Deposit index out of range: ${value.toString()}`)
 	}
 
 	return numberValue
@@ -1498,58 +1682,112 @@ function toUint8Array(values: bigint[]) {
 }
 
 export async function migrateEscalationDeposits(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
-	return await executeForkAuctionAction(client, 'migrateEscalationDeposits', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
-		address: getInfraContractAddresses().securityPoolForker,
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'migrateFromEscalationGame',
-		args: [securityPoolAddress, vaultAddress, getReportingOutcomeValue(outcome), toUint8Array(depositIndexes)],
-	})))
+	return await executeForkAuctionAction(
+		client,
+		'migrateEscalationDeposits',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: getInfraContractAddresses().securityPoolForker,
+					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+					functionName: 'migrateFromEscalationGame',
+					args: [securityPoolAddress, vaultAddress, getReportingOutcomeValue(outcome), toUint8Array(depositIndexes)],
+				}),
+			),
+	)
 }
 
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
-	return await executeForkAuctionAction(client, 'startTruthAuction', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
-		address: getInfraContractAddresses().securityPoolForker,
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'startTruthAuction',
-		args: [securityPoolAddress],
-	})))
+	return await executeForkAuctionAction(
+		client,
+		'startTruthAuction',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: getInfraContractAddresses().securityPoolForker,
+					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+					functionName: 'startTruthAuction',
+					args: [securityPoolAddress],
+				}),
+			),
+	)
 }
 
 export async function submitTruthAuctionBid(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, amount: bigint) {
-	return await executeForkAuctionAction(client, 'submitBid', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
-		address: truthAuctionAddress,
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'submitBid',
-		args: [tick],
-		value: amount,
-	})))
+	return await executeForkAuctionAction(
+		client,
+		'submitBid',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: truthAuctionAddress,
+					abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+					functionName: 'submitBid',
+					args: [tick],
+					value: amount,
+				}),
+			),
+	)
 }
 
 export async function refundTruthAuctionBid(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, bidIndex: bigint) {
-	return await executeForkAuctionAction(client, 'refundLosingBids', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
-		address: truthAuctionAddress,
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'refundLosingBids',
-		args: [[{ tick, bidIndex }]],
-	})))
+	return await executeForkAuctionAction(
+		client,
+		'refundLosingBids',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: truthAuctionAddress,
+					abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+					functionName: 'refundLosingBids',
+					args: [[{ tick, bidIndex }]],
+				}),
+			),
+	)
 }
 
 export async function finalizeSecurityPoolTruthAuction(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
-	return await executeForkAuctionAction(client, 'finalizeTruthAuction', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
-		address: getInfraContractAddresses().securityPoolForker,
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'finalizeTruthAuction',
-		args: [securityPoolAddress],
-	})))
+	return await executeForkAuctionAction(
+		client,
+		'finalizeTruthAuction',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: getInfraContractAddresses().securityPoolForker,
+					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+					functionName: 'finalizeTruthAuction',
+					args: [securityPoolAddress],
+				}),
+			),
+	)
 }
 
 export async function claimSecurityPoolAuctionProceeds(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, tick: bigint, bidIndex: bigint) {
-	return await executeForkAuctionAction(client, 'claimAuctionProceeds', securityPoolAddress, universeId, async () => await writeContractAndWait(client, () => client.writeContract({
-		address: getInfraContractAddresses().securityPoolForker,
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'claimAuctionProceeds',
-		args: [securityPoolAddress, vaultAddress, [{ tick, bidIndex }]],
-	})))
+	return await executeForkAuctionAction(
+		client,
+		'claimAuctionProceeds',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					address: getInfraContractAddresses().securityPoolForker,
+					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+					functionName: 'claimAuctionProceeds',
+					args: [securityPoolAddress, vaultAddress, [{ tick, bidIndex }]],
+				}),
+			),
+	)
 }
 
 export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSecurityPool[]> {
@@ -1560,66 +1798,71 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 		args: [],
 	})
 
-	const deployments: readonly SecurityPoolDeploymentQueryResult[] = deploymentCount === 0n
-		? []
-		: await client.readContract({
-				address: getInfraContractAddresses().securityPoolFactory,
-				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-				functionName: 'securityPoolDeploymentsRange',
-				args: [0n, deploymentCount],
-			})
+	const deployments: readonly SecurityPoolDeploymentQueryResult[] =
+		deploymentCount === 0n
+			? []
+			: await client.readContract({
+					address: getInfraContractAddresses().securityPoolFactory,
+					abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+					functionName: 'securityPoolDeploymentsRange',
+					args: [0n, deploymentCount],
+				})
 
-	return await Promise.all(deployments.map(async deployment => {
-		const { currentRetentionRate, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, startingRepEthPrice, truthAuction: truthAuctionAddress, universeId } = deployment
-		const [systemState, forkData, marketDetails] = await Promise.all([
-			client.readContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
-				functionName: 'systemState',
-				address: securityPoolAddress,
-				args: [],
-			}),
-			client.readContract({
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-				functionName: 'forkData',
-				address: getInfraContractAddresses().securityPoolForker,
-				args: [securityPoolAddress],
-			}),
-			loadMarketDetails(client, questionId),
-		])
-		const forkDataTuple: ForkDataTuple = forkData
-		const [ , , truthAuctionStartedAt, migratedRep, , forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
+	return await Promise.all(
+		deployments.map(async deployment => {
+			const { currentRetentionRate, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, startingRepEthPrice, truthAuction: truthAuctionAddress, universeId } = deployment
+			const [systemState, forkData, marketDetails] = await Promise.all([
+				client.readContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					functionName: 'systemState',
+					address: securityPoolAddress,
+					args: [],
+				}),
+				client.readContract({
+					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+					functionName: 'forkData',
+					address: getInfraContractAddresses().securityPoolForker,
+					args: [securityPoolAddress],
+				}),
+				loadMarketDetails(client, questionId),
+			])
+			const forkDataTuple: ForkDataTuple = forkData
+			const [, , truthAuctionStartedAt, migratedRep, , forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
 
-		const { vaultCount, vaults } = await loadSecurityPoolVaultSummaries(client, securityPoolAddress)
-		return {
-			currentRetentionRate,
-			forkOutcome: getReportingOutcomeKey(forkOutcomeIndex),
-			forkOwnSecurityPool,
-			managerAddress,
-			marketDetails,
-			migratedRep,
-			parent,
-			questionId: getQuestionIdHex(questionId),
-			securityMultiplier,
-			securityPoolAddress,
-			startingRepEthPrice,
-			systemState: getSecurityPoolSystemState(systemState),
-			truthAuctionAddress,
-			truthAuctionStartedAt,
-			universeId,
-			vaultCount,
-			vaults,
-		}
-	}))
+			const { vaultCount, vaults } = await loadSecurityPoolVaultSummaries(client, securityPoolAddress)
+			return {
+				currentRetentionRate,
+				forkOutcome: getReportingOutcomeKey(forkOutcomeIndex),
+				forkOwnSecurityPool,
+				managerAddress,
+				marketDetails,
+				migratedRep,
+				parent,
+				questionId: getQuestionIdHex(questionId),
+				securityMultiplier,
+				securityPoolAddress,
+				startingRepEthPrice,
+				systemState: getSecurityPoolSystemState(systemState),
+				truthAuctionAddress,
+				truthAuctionStartedAt,
+				universeId,
+				vaultCount,
+				vaults,
+			}
+		}),
+	)
 }
 
 export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, ethCost: bigint) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: managerAddress,
-		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-		functionName: 'requestPriceIfNeededAndQueueOperation',
-		args: [LIQUIDATION_OPERATION_TYPE, targetVault, amount],
-		value: ethCost,
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: managerAddress,
+			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+			functionName: 'requestPriceIfNeededAndQueueOperation',
+			args: [LIQUIDATION_OPERATION_TYPE, targetVault, amount],
+			value: ethCost,
+		}),
+	)
 	return hash
 }
 
@@ -1655,13 +1898,15 @@ function getShareTokenId(universeId: bigint, outcome: ReportingOutcomeKey) {
 }
 
 export async function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint, ethCost: bigint) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: managerAddress,
-		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-		functionName: 'requestPriceIfNeededAndQueueOperation',
-		args: [getOracleOperationType(operation), targetVault, amount],
-		value: ethCost,
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: managerAddress,
+			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+			functionName: 'requestPriceIfNeededAndQueueOperation',
+			args: [getOracleOperationType(operation), targetVault, amount],
+			value: ethCost,
+		}),
+	)
 	return {
 		action: 'queueOperation',
 		hash,
@@ -1670,12 +1915,14 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 
 export async function redeemSharesInSecurityPool(client: WriteClient, securityPoolAddress: Address) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'redeemShares',
-		args: [],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'redeemShares',
+			args: [],
+		}),
+	)
 	return {
 		action: 'redeemShares',
 		hash,
@@ -1694,12 +1941,14 @@ export async function migrateSharesFromUniverse(client: WriteClient, securityPoo
 			args: [],
 		}),
 	])
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: shareTokenAddress,
-		abi: peripherals_tokens_ShareToken_ShareToken.abi,
-		functionName: 'migrate',
-		args: [getShareTokenId(fromUniverseId, outcome)],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: shareTokenAddress,
+			abi: peripherals_tokens_ShareToken_ShareToken.abi,
+			functionName: 'migrate',
+			args: [getShareTokenId(fromUniverseId, outcome)],
+		}),
+	)
 	return {
 		action: 'migrateShares',
 		hash,
@@ -1709,12 +1958,14 @@ export async function migrateSharesFromUniverse(client: WriteClient, securityPoo
 }
 
 export async function forkUniverseDirectly(client: WriteClient, universeId: bigint, questionId: bigint, securityPoolAddress: Address) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: getInfraContractAddresses().zoltar,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'forkUniverse',
-		args: [universeId, questionId],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: getInfraContractAddresses().zoltar,
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'forkUniverse',
+			args: [universeId, questionId],
+		}),
+	)
 	return {
 		action: 'forkUniverse',
 		hash,
@@ -1724,12 +1975,14 @@ export async function forkUniverseDirectly(client: WriteClient, universeId: bigi
 }
 
 export async function forkZoltarUniverse(client: WriteClient, universeId: bigint, questionId: bigint) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: getInfraContractAddresses().zoltar,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'forkUniverse',
-		args: [universeId, questionId],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: getInfraContractAddresses().zoltar,
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'forkUniverse',
+			args: [universeId, questionId],
+		}),
+	)
 	return {
 		action: 'forkZoltar',
 		hash,
@@ -1739,12 +1992,14 @@ export async function forkZoltarUniverse(client: WriteClient, universeId: bigint
 }
 
 export async function withdrawTruthAuctionBids(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, withdrawFor: Address, tick: bigint, bidIndex: bigint) {
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: truthAuctionAddress,
-		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'withdrawBids',
-		args: [withdrawFor, [{ tick, bidIndex }]],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: truthAuctionAddress,
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'withdrawBids',
+			args: [withdrawFor, [{ tick, bidIndex }]],
+		}),
+	)
 	return {
 		action: 'withdrawBids',
 		hash,
@@ -1755,13 +2010,15 @@ export async function withdrawTruthAuctionBids(client: WriteClient, securityPool
 
 export async function createCompleteSetInSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'createCompleteSet',
-		args: [],
-		value: amount,
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'createCompleteSet',
+			args: [],
+			value: amount,
+		}),
+	)
 	return {
 		action: 'createCompleteSet',
 		hash,
@@ -1772,12 +2029,14 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 
 export async function redeemCompleteSetInSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'redeemCompleteSet',
-		args: [amount],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'redeemCompleteSet',
+			args: [amount],
+		}),
+	)
 	return {
 		action: 'redeemCompleteSet',
 		hash,
@@ -1788,12 +2047,14 @@ export async function redeemCompleteSetInSecurityPool(client: WriteClient, secur
 
 export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amount: bigint) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'depositToEscalationGame',
-		args: [getReportingOutcomeValue(outcome), amount],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'depositToEscalationGame',
+			args: [getReportingOutcomeValue(outcome), amount],
+		}),
+	)
 	return {
 		action: 'reportOutcome',
 		hash,
@@ -1805,12 +2066,14 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 
 export async function withdrawEscalationFromSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
-	const hash = await writeContractAndWait(client, () => client.writeContract({
-		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'withdrawFromEscalationGame',
-		args: [getReportingOutcomeValue(outcome), depositIndexes],
-	}))
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'withdrawFromEscalationGame',
+			args: [getReportingOutcomeValue(outcome), depositIndexes],
+		}),
+	)
 	return {
 		action: 'withdrawEscalation',
 		hash,

@@ -3,6 +3,7 @@ import type { DeploymentStatus } from '../types/contracts.js'
 const DEPLOYMENT_SECTION_TITLES = ['Proxy Deployer', 'Zoltar', 'Augur PlaceHolder'] as const
 const DEPLOYMENT_SECTION_BY_STEP_ID: Record<DeploymentStatus['id'], (typeof DEPLOYMENT_SECTION_TITLES)[number]> = {
 	proxyDeployer: 'Proxy Deployer',
+	deploymentStatusOracle: 'Proxy Deployer',
 	uniformPriceDualCapBatchAuctionFactory: 'Augur PlaceHolder',
 	scalarOutcomes: 'Zoltar',
 	securityPoolUtils: 'Augur PlaceHolder',

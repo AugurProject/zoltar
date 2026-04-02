@@ -39,29 +39,29 @@ export function EnumDropdown<T extends string>({ disabled = false, onChange, opt
 	}, [])
 
 	return (
-		<div className="enum-dropdown" ref={rootRef}>
+		<div className='enum-dropdown' ref={rootRef}>
 			<button
-				className={`enum-dropdown-trigger ${ open ? 'open' : '' }`}
-				type="button"
+				className={`enum-dropdown-trigger ${open ? 'open' : ''}`}
+				type='button'
 				disabled={disabled}
-				aria-haspopup="listbox"
+				aria-haspopup='listbox'
 				aria-expanded={open}
 				onClick={() => {
 					if (disabled) return
 					setOpen(current => !current)
 				}}
 			>
-				<span className="enum-dropdown-label">{selectedOption?.label ?? value}</span>
-				<span className="enum-dropdown-chevron" aria-hidden="true" />
+				<span className='enum-dropdown-label'>{selectedOption?.label ?? value}</span>
+				<span className='enum-dropdown-chevron' aria-hidden='true' />
 			</button>
 			{open ? (
-				<div className="enum-dropdown-menu" role="listbox" aria-label="Dropdown options">
+				<div className='enum-dropdown-menu' role='listbox' aria-label='Dropdown options'>
 					{options.map(option => (
 						<button
 							key={option.value}
-							className={`enum-dropdown-option ${ option.value === value ? 'selected' : '' }`}
-							type="button"
-							role="option"
+							className={`enum-dropdown-option ${option.value === value ? 'selected' : ''}`}
+							type='button'
+							role='option'
 							aria-selected={option.value === value}
 							onClick={() => {
 								onChange(option.value)

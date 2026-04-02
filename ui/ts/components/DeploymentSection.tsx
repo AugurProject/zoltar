@@ -29,7 +29,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 
 	return {
 		badgeClass: 'blocked',
-		detail: `Waiting for ${ prerequisiteLabel }.`,
+		detail: `Waiting for ${prerequisiteLabel}.`,
 		label: 'Blocked',
 		buttonLabel: isBusy ? 'Deploying...' : 'Deploy',
 	}
@@ -37,13 +37,13 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 
 export function DeploymentSection({ title, steps, allSteps, accountAddress, isMainnet, busyStepId, onDeploy }: DeploymentSectionProps) {
 	return (
-		<section className="panel contract-panel">
-			<div className="contract-panel-header">
+		<section className='panel contract-panel'>
+			<div className='contract-panel-header'>
 				<div>
 					<h2>{title}</h2>
 				</div>
 			</div>
-			<div className="contract-list">
+			<div className='contract-list'>
 				{steps.map(step => {
 					const stepIndex = allSteps.findIndex(candidate => candidate.id === step.id)
 					const prerequisiteLabel = stepIndex === -1 ? undefined : getPrerequisiteLabel(allSteps, stepIndex)
@@ -52,14 +52,14 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, isMa
 					const stepStatus = getStepStatus(step.deployed, prerequisiteLabel, isBusy)
 
 					return (
-						<div className="contract-row" key={step.id}>
-							<div className="contract-copy">
-								<div className="contract-topline">
-									<span className={`badge ${ stepStatus.badgeClass }`}>{stepStatus.label}</span>
+						<div className='contract-row' key={step.id}>
+							<div className='contract-copy'>
+								<div className='contract-topline'>
+									<span className={`badge ${stepStatus.badgeClass}`}>{stepStatus.label}</span>
 									<h3>{step.label}</h3>
 								</div>
-								<p className="address">{step.address}</p>
-								<p className="detail">{stepStatus.detail}</p>
+								<p className='address'>{step.address}</p>
+								<p className='detail'>{stepStatus.detail}</p>
 							</div>
 							<button onClick={() => void onDeploy(step.id)} disabled={!canDeploy}>
 								{stepStatus.buttonLabel}

@@ -18,6 +18,7 @@
 	"ignore": [
 	],
 	"ignoreDependencies": [
+		"@biomejs/biome",
 		"solc",
 		"better-typescript-lib"
 	]

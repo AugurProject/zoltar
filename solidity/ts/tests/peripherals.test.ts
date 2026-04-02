@@ -4,10 +4,10 @@ import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
-import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
+import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, ensureProxyDeployerDeployed, setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import { addressString, rpow } from '../testsuite/simulator/utils/bigint'
 import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
-import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { deployOriginSecurityPool, ensureDeploymentStatusOracleDeployed, ensureInfraDeployed, getDeploymentStatusOracleAddress, getInfraContractAddresses, getSecurityPoolAddresses, loadDeploymentStatusOracleMask } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 
 import { balanceOfShares, balanceOfSharesInCash, getEthRaiseCap, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndQueueOperation } from '../testsuite/simulator/utils/contracts/peripherals'
@@ -18,7 +18,29 @@ import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTyp
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMigratedRep, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
-import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, getVaultCount, getVaults, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
+import {
+	createCompleteSet,
+	depositRep,
+	depositToEscalationGame,
+	getCompleteSetCollateralAmount,
+	getCurrentRetentionRate,
+	getPoolOwnershipDenominator,
+	getRepToken,
+	getSecurityPoolsEscalationGame,
+	getSecurityVault,
+	getSystemState,
+	getTotalFeesOwedToVaults,
+	getTotalSecurityBondAllowance,
+	getVaultCount,
+	getVaults,
+	poolOwnershipToRep,
+	redeemCompleteSet,
+	redeemFees,
+	redeemShares,
+	sharesToCash,
+	updateVaultFees,
+	withdrawFromEscalationGame,
+} from '../testsuite/simulator/utils/contracts/securityPool'
 import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -31,11 +53,11 @@ describe('Peripherals Contract Test Suite', () => {
 	const PRICE_PRECISION = 1n * 10n ** 18n
 	const repDeposit = 1000n * 10n ** 18n
 	let securityPoolAddresses: {
-		securityPool: `0x${ string }`
-		priceOracleManagerAndOperatorQueuer: `0x${ string }`
-		shareToken: `0x${ string }`
-		truthAuction: `0x${ string }`
-		escalationGame: `0x${ string }`
+		securityPool: `0x${string}`
+		priceOracleManagerAndOperatorQueuer: `0x${string}`
+		shareToken: `0x${string}`
+		truthAuction: `0x${string}`
+		escalationGame: `0x${string}`
 	}
 	let questionEndDate: bigint
 	let questionData: {
@@ -57,18 +79,18 @@ describe('Peripherals Contract Test Suite', () => {
 	const outcomes = ['Yes', 'No']
 	let questionId: bigint
 
-	const sendEthAndWait = async (from: `0x${ string }`, to: `0x${ string }`, value: bigint) => {
+	const sendEthAndWait = async (from: `0x${string}`, to: `0x${string}`, value: bigint) => {
 		const hash = (await mockWindow.request({
 			method: 'eth_sendTransaction',
 			params: [
 				{
 					from,
 					to,
-					value: `0x${ value.toString(16) }`,
+					value: `0x${value.toString(16)}`,
 					gasPrice: '0x0',
 				},
 			],
-		})) as `0x${ string }`
+		})) as `0x${string}`
 		await client.waitForTransactionReceipt({ hash })
 	}
 
@@ -119,8 +141,8 @@ describe('Peripherals Contract Test Suite', () => {
 			args: [],
 		})
 
-		assert.strictEqual(name, `Shares-${ questionId }`, 'share token name should include the question id')
-		assert.strictEqual(symbol, `SHARE-${ questionId }`, 'share token symbol should include the question id')
+		assert.strictEqual(name, `Shares-${questionId}`, 'share token name should include the question id')
+		assert.strictEqual(symbol, `SHARE-${questionId}`, 'share token symbol should include the question id')
 	})
 
 	test('security pool factory stores deployments for direct query', async () => {
@@ -138,7 +160,19 @@ describe('Peripherals Contract Test Suite', () => {
 			args: [0n, deploymentCount],
 		})
 		const deployment = ensureDefined(deployments[0], 'origin deployment missing')
-		const { completeSetCollateralAmount, currentRetentionRate: storedCurrentRetentionRate, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId: storedQuestionId, securityMultiplier: storedSecurityMultiplier, securityPool: securityPoolAddress, shareToken: shareTokenAddress, startingRepEthPrice: storedStartingRepEthPrice, truthAuction: truthAuctionAddress, universeId } = deployment
+		const {
+			completeSetCollateralAmount,
+			currentRetentionRate: storedCurrentRetentionRate,
+			parent,
+			priceOracleManagerAndOperatorQueuer: managerAddress,
+			questionId: storedQuestionId,
+			securityMultiplier: storedSecurityMultiplier,
+			securityPool: securityPoolAddress,
+			shareToken: shareTokenAddress,
+			startingRepEthPrice: storedStartingRepEthPrice,
+			truthAuction: truthAuctionAddress,
+			universeId,
+		} = deployment
 		const expectedAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
 
 		strictEqualTypeSafe(deploymentCount, 1n, 'factory should know about the origin deployment')
@@ -153,6 +187,28 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(storedCurrentRetentionRate, MAX_RETENTION_RATE, 'stored retention rate should match')
 		strictEqualTypeSafe(storedStartingRepEthPrice, startingRepEthPrice, 'stored starting price should match')
 		strictEqualTypeSafe(completeSetCollateralAmount, 0n, 'origin deployments should not have complete set collateral')
+	})
+
+	test('deployment status oracle returns the deployment bitmask in one read', async () => {
+		const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
+		const deploymentMask = await loadDeploymentStatusOracleMask(client)
+
+		assert.notStrictEqual(await client.getCode({ address: deploymentStatusOracleAddress }), '0x', 'deployment status oracle should be deployed')
+		strictEqualTypeSafe(deploymentMask, (1n << 12n) - 1n, 'all deployment steps should be deployed after ensureInfraDeployed')
+	})
+
+	test('deployment status oracle reports missing contracts from a partial deployment', async () => {
+		const partialWindow = getAnvilWindowEthereum()
+		const partialClient = createWriteClient(partialWindow, TEST_ADDRESSES[0], 0)
+		await partialWindow.resetToCleanState()
+		await partialWindow.setTime(1n)
+		await setupTestAccounts(partialWindow)
+		await ensureProxyDeployerDeployed(partialClient)
+		await ensureDeploymentStatusOracleDeployed(partialClient)
+
+		const deploymentMask = await loadDeploymentStatusOracleMask(partialClient)
+
+		strictEqualTypeSafe(deploymentMask, 1n, 'only the proxy deployer should be marked deployed before the rest of infra')
 	})
 
 	test('security pool exposes vault paging without duplicate entries', async () => {
@@ -386,7 +442,19 @@ describe('Peripherals Contract Test Suite', () => {
 			deployments.find(deployment => deployment.parent === securityPoolAddresses.securityPool && deployment.universeId === childUniverseId),
 			'child deployment not found',
 		)
-		const { completeSetCollateralAmount: childCompleteSetCollateralAmount, currentRetentionRate: childCurrentRetentionRate, parent: childParent, priceOracleManagerAndOperatorQueuer: childManagerAddress, questionId: childStoredQuestionId, securityMultiplier: childStoredSecurityMultiplier, securityPool: childSecurityPoolAddress, shareToken: childShareTokenAddress, startingRepEthPrice: childStartingRepEthPrice, truthAuction: childTruthAuctionAddress, universeId: childStoredUniverseId } = matchingChildDeployment
+		const {
+			completeSetCollateralAmount: childCompleteSetCollateralAmount,
+			currentRetentionRate: childCurrentRetentionRate,
+			parent: childParent,
+			priceOracleManagerAndOperatorQueuer: childManagerAddress,
+			questionId: childStoredQuestionId,
+			securityMultiplier: childStoredSecurityMultiplier,
+			securityPool: childSecurityPoolAddress,
+			shareToken: childShareTokenAddress,
+			startingRepEthPrice: childStartingRepEthPrice,
+			truthAuction: childTruthAuctionAddress,
+			universeId: childStoredUniverseId,
+		} = matchingChildDeployment
 
 		strictEqualTypeSafe(deploymentCount > 1n, true, 'factory should track more than one deployment')
 		strictEqualTypeSafe(childSecurityPoolAddress, expectedChildAddresses.securityPool, 'child deployment should be queryable')
@@ -738,7 +806,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const actualShares = await balanceOfSharesInCash(client, yesSecurityPool.securityPool, yesSecurityPool.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2]))
 		assert.strictEqual(actualShares.length, 3, 'should have 3 outcomes')
-		actualShares.forEach((value, idx) => approximatelyEqual(value, completeSetAmount, 1000000000000000n, `share ${ idx } should approximately equal completeSetAmount`))
+		actualShares.forEach((value, idx) => approximatelyEqual(value, completeSetAmount, 1000000000000000n, `share ${idx} should approximately equal completeSetAmount`))
 
 		const currentOpenInterestArray = await getCurrentOpenInterestArray()
 		const openInterestFirst = currentOpenInterestArray[0]

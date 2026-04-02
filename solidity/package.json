@@ -3,10 +3,8 @@
 	"type": "module",
 	"description": "Zoltar Contracts",
 	"scripts": {
-		"link-node-modules": "bun ../scripts/link-shared-node-modules.mjs",
-		"link:node-modules": "bun ../scripts/link-shared-node-modules.mjs",
 		"preinstall": "bun ../scripts/link-shared-node-modules.mjs",
-		"setup": "bun ../scripts/link-shared-node-modules.mjs && bun install --frozen-lockfile --ignore-scripts && bun run compile-contracts",
+		"setup": "bun install --frozen-lockfile && bun run compile-contracts",
 		"compile-contracts": "bun tsc --project tsconfig-compile.json && bun run ./js/compile.js",
 		"gas-costs": "bun tsc && bun run ./js/gas-costs.js",
 		"test": "bun run compile-contracts && bun tsc && bun test --timeout 300000 ./js/tests/"
@@ -15,12 +13,8 @@
 	"author": "",
 	"license": "ISC",
 	"devDependencies": {
-		"@typescript-eslint/eslint-plugin": "8.0.0",
-		"@typescript-eslint/parser": "8.0.0",
-		"eslint": "8.57.0",
 		"funtypes": "5.1.1",
 		"knip": "2.4.0",
-		"prettier": "3.3.3",
 		"solc": "0.8.33",
 		"tsx": "4.19.3",
 		"typescript": "5.8.2",

@@ -22,7 +22,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	const repDeposit = 1000n * 10n ** 18n
 	const currentTimestamp = dateToBigintSeconds(new Date())
 	const questionEndDate = currentTimestamp + 365n * DAY
-	let priceOracle: `0x${ string }`
+	let priceOracle: `0x${string}`
 	const genesisUniverse = 0n
 	const securityMultiplier = 2n
 	const startingRepEthPrice = 10n
@@ -78,7 +78,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		// With bug: finalBalance = initialBalance - overpayment (excess not refunded)
 		// With fix: finalBalance = initialBalance - ethCost (excess refunded)
 		const expectedNetCost = ethCost
-		assert.strictEqual(initialBalance - finalBalance, expectedNetCost, `Caller should net pay only ethCost (${ ethCost }), but paid ${ initialBalance - finalBalance }`)
+		assert.strictEqual(initialBalance - finalBalance, expectedNetCost, `Caller should net pay only ethCost (${ethCost}), but paid ${initialBalance - finalBalance}`)
 	})
 
 	test('requestPriceIfNeededAndQueueOperation should not drain preexisting contract balance', async () => {
@@ -114,6 +114,6 @@ describe('Price Oracle Refund Security Tests', () => {
 		// The contract should have retained ethCost (to pay OpenOracle) and refunded the excess (sendValue - ethCost).
 		// Final balance = preBalance (unchanged)
 		const balanceAfter = await getETHBalance(client, priceOracle)
-		assert.strictEqual(balanceAfter, preBalance, `Contract should retain preexisting balance (${ preBalance }) after requestPriceIfNeededAndQueueOperation, but it was drained to ${ balanceAfter }`)
+		assert.strictEqual(balanceAfter, preBalance, `Contract should retain preexisting balance (${preBalance}) after requestPriceIfNeededAndQueueOperation, but it was drained to ${balanceAfter}`)
 	})
 })

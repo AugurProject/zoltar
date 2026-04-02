@@ -71,13 +71,13 @@ const bob = createWriteClient(anvil, TEST_ADDRESSES[1], 0)
 const carol = createWriteClient(anvil, TEST_ADDRESSES[2], 0)
 const dave = createWriteClient(anvil, TEST_ADDRESSES[3], 0)
 
-const waitForGas = async (client: WriteClient, txHashPromise: Promise<`0x${ string }`>) => {
+const waitForGas = async (client: WriteClient, txHashPromise: Promise<`0x${string}`>) => {
 	const hash = await txHashPromise
 	const receipt = await client.waitForTransactionReceipt({ hash })
 	return receipt.gasUsed
 }
 
-const confirmTx = async (client: WriteClient, txHashPromise: Promise<`0x${ string }`>) => {
+const confirmTx = async (client: WriteClient, txHashPromise: Promise<`0x${string}`>) => {
 	const hash = await txHashPromise
 	await client.waitForTransactionReceipt({ hash })
 }
@@ -98,8 +98,7 @@ const measureActionGas = async (client: WriteClient, action: () => Promise<void>
 }
 
 const initializeChain = async ({ deployZoltar, deployInfra }: { deployZoltar: boolean; deployInfra: boolean }) => {
-	await anvil.request({ method: 'anvil_reset', params: [] })
-	await anvil.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
+	await anvil.resetToCleanState()
 	await setupTestAccounts(anvil)
 	if (deployZoltar || deployInfra) await ensureZoltarDeployed(alice)
 	if (deployInfra) await ensureInfraDeployed(alice)
@@ -220,35 +219,42 @@ const prepareOracleInitialReport = async (context: PoolContext) => {
 }
 
 const deployChildTx = async (universeId: bigint, outcomeIndex: bigint) =>
-	await writeContractAndWait(alice, () => alice.writeContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'deployChild',
-		address: getZoltarAddress(),
-		args: [universeId, outcomeIndex],
-	}))
+	await writeContractAndWait(alice, () =>
+		alice.writeContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'deployChild',
+			address: getZoltarAddress(),
+			args: [universeId, outcomeIndex],
+		}),
+	)
 
 const addRepToMigrationBalanceTx = async (universeId: bigint, amount: bigint) =>
-	await writeContractAndWait(alice, () => alice.writeContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'addRepToMigrationBalance',
-		address: getZoltarAddress(),
-		args: [universeId, amount],
-	}))
+	await writeContractAndWait(alice, () =>
+		alice.writeContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'addRepToMigrationBalance',
+			address: getZoltarAddress(),
+			args: [universeId, amount],
+		}),
+	)
 
 const splitMigrationRepTx = async (universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) =>
-	await writeContractAndWait(alice, () => alice.writeContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'splitMigrationRep',
-		address: getZoltarAddress(),
-		args: [universeId, amount, outcomeIndexes],
-	}))
+	await writeContractAndWait(alice, () =>
+		alice.writeContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'splitMigrationRep',
+			address: getZoltarAddress(),
+			args: [universeId, amount, outcomeIndexes],
+		}),
+	)
 
 const scenarios: Scenario[] = [
 	{
 		section: '1. Core Deployment',
 		label: 'deploy Zoltar core contracts',
 		init: { deployZoltar: false, deployInfra: false },
-		run: async () => await measureActionGas(alice, async () => {
+		run: async () =>
+			await measureActionGas(alice, async () => {
 				await ensureZoltarDeployed(alice)
 			}),
 	},
@@ -256,7 +262,8 @@ const scenarios: Scenario[] = [
 		section: '2. Peripheral Deployment',
 		label: 'deploy peripheral contracts',
 		init: { deployZoltar: true, deployInfra: false },
-		run: async () => await measureActionGas(alice, async () => {
+		run: async () =>
+			await measureActionGas(alice, async () => {
 				await ensureInfraDeployed(alice)
 			}),
 	},
@@ -388,7 +395,7 @@ const scenarios: Scenario[] = [
 			const reportMeta = await getOpenOracleReportMeta(bob, pendingReportId)
 			const amount1 = reportMeta.exactToken1Report
 			const forcedPrice = 10n ** 19n
-			const amount2 = amount1 * 10n ** 18n / forcedPrice
+			const amount2 = (amount1 * 10n ** 18n) / forcedPrice
 			const stateHash = (await getOpenOracleExtraData(bob, pendingReportId)).stateHash
 			await confirmTx(bob, approveToken(bob, addressString(GENESIS_REPUTATION_TOKEN), getInfraContractAddresses().openOracle))
 			await confirmTx(bob, approveToken(bob, WETH_ADDRESS, getInfraContractAddresses().openOracle))
@@ -650,19 +657,19 @@ for (const scenario of scenarios) {
 		const gas = await scenario.run()
 		results.push({ section: scenario.section, label: scenario.label, gas })
 	} catch (error) {
-		throw new Error(`Scenario failed: ${ scenario.section } / ${ scenario.label } - ${ error instanceof Error ? error.message : String(error) }`)
+		throw new Error(`Scenario failed: ${scenario.section} / ${scenario.label} - ${error instanceof Error ? error.message : String(error)}`)
 	}
 }
 
-const labelWidth = results.reduce((max, result) => result.label.length > max ? result.label.length : max, 0)
-const gasCostInEth = (gas: bigint) => Number(gas) * totalGasPriceGwei / 1_000_000_000
+const labelWidth = results.reduce((max, result) => (result.label.length > max ? result.label.length : max), 0)
+const gasCostInEth = (gas: bigint) => (Number(gas) * totalGasPriceGwei) / 1_000_000_000
 const gasCostInUsd = (gas: bigint) => gasCostInEth(gas) * ethPriceUsd
 
 console.log(`# Pricing Assumptions`)
-console.log(`ETH price: $${ usdFormatter.format(ethPriceUsd) }`)
-console.log(`Base fee: ${ baseFeeGwei } gwei`)
-console.log(`Priority fee: ${ priorityFeeGwei } gwei`)
-console.log(`Total gas price: ${ totalGasPriceGwei } gwei`)
+console.log(`ETH price: $${usdFormatter.format(ethPriceUsd)}`)
+console.log(`Base fee: ${baseFeeGwei} gwei`)
+console.log(`Priority fee: ${priorityFeeGwei} gwei`)
+console.log(`Total gas price: ${totalGasPriceGwei} gwei`)
 console.log('')
 
 let currentSection = ''
@@ -670,8 +677,8 @@ for (const result of results) {
 	if (result.section !== currentSection) {
 		if (currentSection !== '') console.log('')
 		currentSection = result.section
-		console.log(`# ${ currentSection }`)
+		console.log(`# ${currentSection}`)
 	}
-	const line = `${ result.label.padEnd(labelWidth) }  ${ numberFormatter.format(result.gas).padStart(10) } gas  ${ ethFormatter.format(gasCostInEth(result.gas)).padStart(10) } ETH  $${ usdFormatter.format(gasCostInUsd(result.gas)).padStart(8) }`
+	const line = `${result.label.padEnd(labelWidth)}  ${numberFormatter.format(result.gas).padStart(10)} gas  ${ethFormatter.format(gasCostInEth(result.gas)).padStart(10)} ETH  $${usdFormatter.format(gasCostInUsd(result.gas)).padStart(8)}`
 	console.log(line)
 }

@@ -1,12 +1,12 @@
 import { readUniverseQueryParam, writeUniverseQueryParam } from './urlParams.js'
 
 export function formatUniverseLabel(universeId: bigint) {
-	return universeId === 0n ? 'Genesis (0)' : `Universe ${ universeId.toString() }`
+	return universeId === 0n ? 'Genesis (0)' : `Universe ${universeId.toString()}`
 }
 
 export function getUniverseLinkHref(universeId: bigint) {
 	const nextSearch = writeUniverseQueryParam(window.location.search, universeId)
-	return `${ window.location.pathname }${ nextSearch }${ window.location.hash }`
+	return `${window.location.pathname}${nextSearch}${window.location.hash}`
 }
 
 export function navigateToUniverse(universeId: bigint) {
@@ -25,5 +25,5 @@ export function formatUniverseCollectionLabel(universeIds: bigint[]) {
 		if (universeId === undefined) return formatUniverseLabel(0n)
 		return formatUniverseLabel(universeId)
 	}
-	return `Multiple (${ uniqueUniverseIds.map(universeId => universeId.toString()).join(', ') })`
+	return `Multiple (${uniqueUniverseIds.map(universeId => universeId.toString()).join(', ')})`
 }

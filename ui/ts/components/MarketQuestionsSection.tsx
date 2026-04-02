@@ -18,31 +18,31 @@ type MarketQuestionsSectionProps = {
 export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, loadingZoltarQuestions, onLoadZoltarQuestions, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestionCount, zoltarQuestions }: MarketQuestionsSectionProps) {
 	return (
 		<EntityCard
-			title="Questions"
-			badge={<span className="badge muted">{zoltarQuestionCount === undefined ? 'Unknown count' : `${ zoltarQuestionCount.toString() } questions`}</span>}
+			title='Questions'
+			badge={<span className='badge muted'>{zoltarQuestionCount === undefined ? 'Unknown count' : `${zoltarQuestionCount.toString()} questions`}</span>}
 			actions={
-				<button className="secondary" onClick={onLoadZoltarQuestions} disabled={loadingZoltarQuestions}>
+				<button className='secondary' onClick={onLoadZoltarQuestions} disabled={loadingZoltarQuestions}>
 					{loadingZoltarQuestions ? 'Loading Questions...' : 'Refresh Questions'}
 				</button>
 			}
 		>
 			{zoltarQuestions.length === 0 ? (
-				<p className="detail">
-					<LoadableValue loading={loadingZoltarQuestionCount} placeholder="Loading...">
-						{zoltarQuestionCount === undefined ? 'No questions loaded' : `${ zoltarQuestionCount.toString() } questions`}
+				<p className='detail'>
+					<LoadableValue loading={loadingZoltarQuestionCount} placeholder='Loading...'>
+						{zoltarQuestionCount === undefined ? 'No questions loaded' : `${zoltarQuestionCount.toString()} questions`}
 					</LoadableValue>
 				</p>
 			) : (
-				<div className="entity-card-list question-browser-list">
+				<div className='entity-card-list question-browser-list'>
 					{zoltarQuestions.map(question => (
 						<EntityCard
 							key={question.questionId}
 							title={question.title === '' ? 'Untitled question' : question.title}
-							badge={<span className="badge ok">{question.marketType}</span>}
+							badge={<span className='badge ok'>{question.marketType}</span>}
 							actions={
-								<div className="actions">
+								<div className='actions'>
 									<button
-										className="secondary"
+										className='secondary'
 										disabled={hasForked}
 										onClick={() => {
 											if (hasForked) return
@@ -52,13 +52,13 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 									>
 										{hasForked ? 'Already Forked' : 'Use For Fork'}
 									</button>
-									<button className="secondary" onClick={() => onUseQuestionForPool(question.questionId)} disabled={question.marketType !== 'binary'}>
+									<button className='secondary' onClick={() => onUseQuestionForPool(question.questionId)} disabled={question.marketType !== 'binary'}>
 										Use For Create Pool
 									</button>
 								</div>
 							}
 						>
-							<QuestionSummary question={question} />
+							<QuestionSummary question={question} hideHeading />
 						</EntityCard>
 					))}
 				</div>

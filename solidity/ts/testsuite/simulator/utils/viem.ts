@@ -19,7 +19,7 @@ export const createWriteClient = (ethereum: EIP1193Provider | undefined | AnvilW
 export type WriteClient = ReturnType<typeof createWriteClient>
 export type ReadClient = ReturnType<typeof createReadClient> | ReturnType<typeof createWriteClient>
 
-export const writeContractAndWait = async (client: WriteClient, execute: () => Promise<`0x${ string }`>) => {
+export const writeContractAndWait = async (client: WriteClient, execute: () => Promise<`0x${string}`>) => {
 	const hash = await execute()
 	await client.waitForTransactionReceipt({ hash })
 	return hash

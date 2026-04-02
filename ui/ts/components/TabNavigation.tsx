@@ -5,7 +5,7 @@ function renderTabLink(route: Exclude<TabNavigationProps['route'], 'not-found'>,
 
 	return (
 		<a
-			className={`tab-link ${ isActive ? 'active' : '' }${ disabled ? ' disabled' : '' }`}
+			className={`tab-link ${isActive ? 'active' : ''}${disabled ? ' disabled' : ''}`}
 			href={href}
 			aria-disabled={disabled ? 'true' : undefined}
 			tabIndex={disabled ? -1 : undefined}
@@ -23,10 +23,10 @@ function renderTabLink(route: Exclude<TabNavigationProps['route'], 'not-found'>,
 
 export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDeployed, deployRoute, marketRoute, openOracleRoute, securityPoolsRoute, onRouteChange }: TabNavigationProps) {
 	return (
-		<nav className="tab-nav" aria-label="Application sections">
+		<nav className='tab-nav' aria-label='Application sections'>
 			{showDeployTab ? (
 				<a
-					className={`tab-link ${ route === 'deploy' ? 'active' : '' }`}
+					className={`tab-link ${route === 'deploy' ? 'active' : ''}`}
 					href={deployRoute}
 					onClick={event => {
 						event.preventDefault()

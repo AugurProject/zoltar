@@ -13,7 +13,7 @@ type UseDeploymentFlowParameters = {
 	onTransactionFinished: () => void
 	onTransactionRequested: () => void
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: (options?: { loadDeploymentStatuses?: boolean }) => Promise<void>
+	refreshState: (options?: { loadWalletState?: boolean }) => Promise<void>
 }
 
 export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, setDeploymentStatuses }: UseDeploymentFlowParameters) {
@@ -37,7 +37,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 
 		const prerequisiteLabel = getPrerequisiteLabel(deploymentStatuses, stepIndex)
 		if (prerequisiteLabel !== undefined) {
-			errorMessage.value = `Deploy ${ prerequisiteLabel } first`
+			errorMessage.value = `Deploy ${prerequisiteLabel} first`
 			return
 		}
 
@@ -55,9 +55,9 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 			const hash = await step.deploy(client)
 			onTransaction(hash)
 			setDeploymentStatuses(current => current.map(currentStep => (currentStep.id === step.id ? { ...currentStep, deployed: true } : currentStep)))
-			await refreshState({ loadDeploymentStatuses: false })
+			await refreshState()
 		} catch (error) {
-			errorMessage.value = getErrorMessage(error, `Failed to deploy ${ step.label }`)
+			errorMessage.value = getErrorMessage(error, `Failed to deploy ${step.label}`)
 		} finally {
 			busyStepId.value = undefined
 			onTransactionFinished()

@@ -2,7 +2,20 @@ import type { Address, Hash, Hex } from 'viem'
 import type { WriteClient as ClientsWriteClient } from '../lib/clients.js'
 export type { ReadClient, WriteClient } from '../lib/clients.js'
 
-export type DeploymentStepId = 'proxyDeployer' | 'uniformPriceDualCapBatchAuctionFactory' | 'scalarOutcomes' | 'securityPoolUtils' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'priceOracleManagerAndOperatorQueuerFactory' | 'securityPoolForker' | 'escalationGameFactory' | 'securityPoolFactory'
+export type DeploymentStepId =
+	| 'proxyDeployer'
+	| 'deploymentStatusOracle'
+	| 'uniformPriceDualCapBatchAuctionFactory'
+	| 'scalarOutcomes'
+	| 'securityPoolUtils'
+	| 'openOracle'
+	| 'zoltarQuestionData'
+	| 'zoltar'
+	| 'shareTokenFactory'
+	| 'priceOracleManagerAndOperatorQueuerFactory'
+	| 'securityPoolForker'
+	| 'escalationGameFactory'
+	| 'securityPoolFactory'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
 export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
@@ -53,6 +66,11 @@ export type DeploymentStep = {
 
 export type DeploymentStatus = DeploymentStep & {
 	deployed: boolean
+}
+
+export type DeploymentStatusSnapshot = {
+	augurPlaceHolderDeployed: boolean
+	deploymentStatuses: DeploymentStatus[]
 }
 
 export type MarketCreationResult = {

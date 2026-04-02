@@ -26,7 +26,27 @@ function getSelectedPoolView(value: string | undefined): SelectedPoolView {
 	}
 }
 
-export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModal, forkAuction, liquidationAmount, liquidationManagerAddress, liquidationModalOpen, liquidationSecurityPoolAddress, liquidationTargetVault, onLiquidationAmountChange, onLiquidationTargetVaultChange, onOpenLiquidationModal, onQueueLiquidation, onSecurityPoolAddressChange, reporting, securityPoolAddress, securityPools, securityVault, showHeader = true, trading }: SecurityPoolWorkflowRouteContentProps & { showHeader?: boolean }) {
+export function SecurityPoolWorkflowSection({
+	accountState,
+	closeLiquidationModal,
+	forkAuction,
+	liquidationAmount,
+	liquidationManagerAddress,
+	liquidationModalOpen,
+	liquidationSecurityPoolAddress,
+	liquidationTargetVault,
+	onLiquidationAmountChange,
+	onLiquidationTargetVaultChange,
+	onOpenLiquidationModal,
+	onQueueLiquidation,
+	onSecurityPoolAddressChange,
+	reporting,
+	securityPoolAddress,
+	securityPools,
+	securityVault,
+	showHeader = true,
+	trading,
+}: SecurityPoolWorkflowRouteContentProps & { showHeader?: boolean }) {
 	const [view, setView] = useState<SelectedPoolView>(() => getSelectedPoolView(readSelectedPoolViewQueryParam(window.location.search)))
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
@@ -40,90 +60,90 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 
 	useEffect(() => {
 		const nextSearch = writeSelectedPoolViewQueryParam(window.location.search, hasSelectedPoolAddress ? view : undefined)
-		window.history.replaceState({}, '', `${ window.location.pathname }${ nextSearch }${ window.location.hash }`)
+		window.history.replaceState({}, '', `${window.location.pathname}${nextSearch}${window.location.hash}`)
 	}, [hasSelectedPoolAddress, view])
 
 	return (
-		<section className="panel market-panel">
+		<section className='panel market-panel'>
 			{showHeader ? (
-				<div className="market-header">
+				<div className='market-header'>
 					<div>
 						<h2>Selected Pool</h2>
 					</div>
 				</div>
 			) : undefined}
 
-			<div className="workflow-stack">
-				<EntityCard title={selectedPoolTitle} badge={<span className={`badge ${ selectedPoolState === undefined ? 'pending' : 'ok' }`}>{selectedPoolState ?? 'Not loaded'}</span>}>
-					<div className="form-grid">
-						<label className="field">
+			<div className='workflow-stack'>
+				<EntityCard title={selectedPoolTitle} badge={<span className={`badge ${selectedPoolState === undefined ? 'pending' : 'ok'}`}>{selectedPoolState ?? 'Not loaded'}</span>}>
+					<div className='form-grid'>
+						<label className='field'>
 							<span>Security Pool Address</span>
-							<input value={securityPoolAddress} onInput={event => onSecurityPoolAddressChange(event.currentTarget.value)} placeholder="0x..." />
+							<input value={securityPoolAddress} onInput={event => onSecurityPoolAddressChange(event.currentTarget.value)} placeholder='0x...' />
 						</label>
 					</div>
 
 					{!hasSelectedPoolAddress ? (
-						<p className="detail">Select a pool.</p>
+						<p className='detail'>Select a pool.</p>
 					) : selectedPool === undefined ? (
-						<p className="detail">Pool metadata unavailable.</p>
+						<p className='detail'>Pool metadata unavailable.</p>
 					) : (
 						<>
-							<div className="entity-card-subsection">
-								<div className="entity-card-subsection-header">
+							<div className='entity-card-subsection'>
+								<div className='entity-card-subsection-header'>
 									<h4>Pool</h4>
-									<span className="badge muted">{selectedPool.vaultCount.toString()} vaults</span>
+									<span className='badge muted'>{selectedPool.vaultCount.toString()} vaults</span>
 								</div>
-								<div className="workflow-metric-grid">
+								<div className='workflow-metric-grid'>
 									<div>
-										<span className="metric-label">Question ID</span>
+										<span className='metric-label'>Question ID</span>
 										<strong>{selectedPool.questionId}</strong>
 									</div>
 									<div>
-										<span className="metric-label">Universe</span>
+										<span className='metric-label'>Universe</span>
 										<strong>
 											<UniverseLink universeId={selectedPool.universeId} />
 										</strong>
 									</div>
 									<div>
-										<span className="metric-label">Security Multiplier</span>
+										<span className='metric-label'>Security Multiplier</span>
 										<strong>{selectedPool.securityMultiplier.toString()}</strong>
 									</div>
 									<div>
-										<span className="metric-label">Open Interest Fee / Year</span>
+										<span className='metric-label'>Open Interest Fee / Year</span>
 										<strong>{formatOpenInterestFeePerYearPercent(selectedPool.currentRetentionRate)}</strong>
 									</div>
 									<div>
-										<span className="metric-label">Reporting</span>
+										<span className='metric-label'>Reporting</span>
 										<strong>{reportingReady ? 'Unlocked' : 'Locked until question end'}</strong>
 									</div>
 									<div>
-										<span className="metric-label">Fork Flow</span>
+										<span className='metric-label'>Fork Flow</span>
 										<strong>{forkReady ? 'Forked / active' : 'Not forked'}</strong>
 									</div>
 									<div>
-										<span className="metric-label">Manager</span>
+										<span className='metric-label'>Manager</span>
 										<strong>{selectedPool.managerAddress}</strong>
 									</div>
 									<div>
-										<span className="metric-label">Truth Auction</span>
+										<span className='metric-label'>Truth Auction</span>
 										<strong>{selectedPool.truthAuctionAddress}</strong>
 									</div>
 									<div>
-										<span className="metric-label">Fork Mode</span>
+										<span className='metric-label'>Fork Mode</span>
 										<strong>{selectedPool.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent / Zoltar fork'}</strong>
 									</div>
 									<div>
-										<span className="metric-label">Fork Outcome</span>
+										<span className='metric-label'>Fork Outcome</span>
 										<strong>{selectedPool.forkOutcome}</strong>
 									</div>
 								</div>
 							</div>
 
 							{marketDetails === undefined ? undefined : (
-								<div className="entity-card-subsection">
-									<div className="entity-card-subsection-header">
+								<div className='entity-card-subsection'>
+									<div className='entity-card-subsection-header'>
 										<h4>Question</h4>
-										<span className="badge muted">{marketDetails.marketType}</span>
+										<span className='badge muted'>{marketDetails.marketType}</span>
 									</div>
 									<QuestionSummaryHeader description={marketDetails.description.trim() === '' ? 'No description provided.' : marketDetails.description} questionId={marketDetails.questionId} title={marketDetails.title.trim() === '' ? 'Untitled question' : marketDetails.title} />
 								</div>
@@ -134,78 +154,78 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 
 				{!hasSelectedPoolAddress ? undefined : (
 					<>
-						<div className="subtab-nav" role="tablist" aria-label="Selected pool views">
-							<button className={`subtab-link ${ view === 'vaults' ? 'active' : '' }`} type="button" onClick={() => setView('vaults')} aria-pressed={view === 'vaults'}>
+						<div className='subtab-nav' role='tablist' aria-label='Selected pool views'>
+							<button className={`subtab-link ${view === 'vaults' ? 'active' : ''}`} type='button' onClick={() => setView('vaults')} aria-pressed={view === 'vaults'}>
 								Vaults
 							</button>
-							<button className={`subtab-link ${ view === 'trading' ? 'active' : '' }`} type="button" onClick={() => setView('trading')} aria-pressed={view === 'trading'}>
+							<button className={`subtab-link ${view === 'trading' ? 'active' : ''}`} type='button' onClick={() => setView('trading')} aria-pressed={view === 'trading'}>
 								Trading
 							</button>
-							<button className={`subtab-link ${ view === 'resolution' ? 'active' : '' }`} type="button" onClick={() => setView('resolution')} aria-pressed={view === 'resolution'}>
+							<button className={`subtab-link ${view === 'resolution' ? 'active' : ''}`} type='button' onClick={() => setView('resolution')} aria-pressed={view === 'resolution'}>
 								Resolution
 							</button>
 						</div>
 
 						{view === 'vaults' ? (
-							<div className="workflow-stack">
-								<div className="workflow-section">
-									<div className="workflow-section-header">
+							<div className='workflow-stack'>
+								<div className='workflow-section'>
+									<div className='workflow-section-header'>
 										<div>
 											<h3>Your Vault</h3>
 										</div>
-										<span className="badge ok">Wallet owned</span>
+										<span className='badge ok'>Wallet owned</span>
 									</div>
 									<SecurityVaultSection {...securityVault} showHeader={false} showSecurityPoolAddressInput={false} />
 								</div>
 
-								<div className="workflow-section">
-									<div className="workflow-section-header">
+								<div className='workflow-section'>
+									<div className='workflow-section-header'>
 										<div>
 											<h3>Pool Vaults</h3>
 										</div>
-										<span className="badge muted">{selectedPool?.vaultCount.toString() ?? '0'} vaults</span>
+										<span className='badge muted'>{selectedPool?.vaultCount.toString() ?? '0'} vaults</span>
 									</div>
 									{selectedPool === undefined ? (
-										<p className="detail">No pool metadata</p>
+										<p className='detail'>No pool metadata</p>
 									) : selectedPool.vaults.length === 0 ? (
-										<p className="detail">No vaults</p>
+										<p className='detail'>No vaults</p>
 									) : (
-										<div className="entity-card-list">
+										<div className='entity-card-list'>
 											{selectedPool.vaults.map(vault => (
 												<EntityCard
-													key={`${ selectedPool.securityPoolAddress }-${ vault.vaultAddress }`}
-													className="compact"
+													key={`${selectedPool.securityPoolAddress}-${vault.vaultAddress}`}
+													className='compact'
 													title={vault.vaultAddress}
-													badge={<span className="badge muted">Vault</span>}
+													badge={<span className='badge muted'>Vault</span>}
 													actions={
-														<button className="secondary" onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
+														<button className='secondary' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
 															Liquidate Vault
 														</button>
 													}
 												>
-													<div className="workflow-vault-grid">
+													<div className='workflow-vault-grid'>
 														<div>
-															<span className="metric-label">REP Deposit Share</span>
+															<span className='metric-label'>REP Deposit Share</span>
 															<strong>{formatCurrencyBalance(vault.repDepositShare)}</strong>
 														</div>
 														<div>
-															<span className="metric-label">Pool Ownership</span>
+															<span className='metric-label'>Pool Ownership</span>
 															<strong>{vault.poolOwnership.toString()}</strong>
 														</div>
 														<div>
-															<span className="metric-label">Security Bond Allowance</span>
+															<span className='metric-label'>Security Bond Allowance</span>
 															<strong>{formatCurrencyBalance(vault.securityBondAllowance)}</strong>
 														</div>
 														<div>
-															<span className="metric-label">Unpaid ETH Fees</span>
+															<span className='metric-label'>Unpaid ETH Fees</span>
 															<strong>{formatCurrencyBalance(vault.unpaidEthFees)}</strong>
 														</div>
 														<div>
-															<span className="metric-label">Locked REP</span>
+															<span className='metric-label'>Locked REP</span>
 															<strong>{formatCurrencyBalance(vault.lockedRepInEscalationGame)}</strong>
 														</div>
 														<div>
-															<span className="metric-label">Fee Index</span>
+															<span className='metric-label'>Fee Index</span>
 															<strong>{vault.feeIndex.toString()}</strong>
 														</div>
 													</div>
@@ -218,9 +238,9 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 						) : undefined}
 
 						{view === 'trading' ? (
-							<div className="workflow-stack">
-								<div className="workflow-section">
-									<div className="workflow-section-header">
+							<div className='workflow-stack'>
+								<div className='workflow-section'>
+									<div className='workflow-section-header'>
 										<div>
 											<h3>Trading</h3>
 										</div>
@@ -231,35 +251,35 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 						) : undefined}
 
 						{view === 'resolution' ? (
-							<div className="workflow-stack">
-								<div className="workflow-section">
-									<div className="workflow-section-header">
+							<div className='workflow-stack'>
+								<div className='workflow-section'>
+									<div className='workflow-section-header'>
 										<div>
 											<h3>Reporting</h3>
 										</div>
-										<span className={`badge ${ reportingReady ? 'ok' : 'blocked' }`}>{reportingReady ? 'Unlocked' : 'Locked until question end'}</span>
+										<span className={`badge ${reportingReady ? 'ok' : 'blocked'}`}>{reportingReady ? 'Unlocked' : 'Locked until question end'}</span>
 									</div>
 									{reportingReady ? (
 										<ReportingSection {...reporting} showHeader={false} showSecurityPoolAddressInput={false} />
 									) : (
-										<EntityCard title="Reporting is locked" badge={<span className="badge blocked">Waiting</span>}>
-											<p className="detail">Wait for question end.</p>
+										<EntityCard title='Reporting is locked' badge={<span className='badge blocked'>Waiting</span>}>
+											<p className='detail'>Wait for question end.</p>
 										</EntityCard>
 									)}
 								</div>
 
-								<div className="workflow-section">
-									<div className="workflow-section-header">
+								<div className='workflow-section'>
+									<div className='workflow-section-header'>
 										<div>
 											<h3>Fork & Truth Auction</h3>
 										</div>
-										<span className={`badge ${ forkReady ? 'ok' : 'blocked' }`}>{forkReady ? 'Available' : 'Locked until fork'}</span>
+										<span className={`badge ${forkReady ? 'ok' : 'blocked'}`}>{forkReady ? 'Available' : 'Locked until fork'}</span>
 									</div>
 									{forkReady ? (
 										<ForkAuctionSection {...forkAuction} showHeader={false} showSecurityPoolAddressInput={false} />
 									) : (
-										<EntityCard title="Fork flow is locked" badge={<span className="badge blocked">Operational</span>}>
-											<p className="detail">Not forked.</p>
+										<EntityCard title='Fork flow is locked' badge={<span className='badge blocked'>Operational</span>}>
+											<p className='detail'>Not forked.</p>
 										</EntityCard>
 									)}
 								</div>
@@ -269,7 +289,19 @@ export function SecurityPoolWorkflowSection({ accountState, closeLiquidationModa
 				)}
 			</div>
 
-			<LiquidationModal accountAddress={accountState.address} closeLiquidationModal={closeLiquidationModal} isMainnet={isMainnet} liquidationAmount={liquidationAmount} liquidationManagerAddress={liquidationManagerAddress} liquidationModalOpen={liquidationModalOpen} liquidationSecurityPoolAddress={liquidationSecurityPoolAddress} liquidationTargetVault={liquidationTargetVault} onLiquidationAmountChange={onLiquidationAmountChange} onLiquidationTargetVaultChange={onLiquidationTargetVaultChange} onQueueLiquidation={onQueueLiquidation} />
+			<LiquidationModal
+				accountAddress={accountState.address}
+				closeLiquidationModal={closeLiquidationModal}
+				isMainnet={isMainnet}
+				liquidationAmount={liquidationAmount}
+				liquidationManagerAddress={liquidationManagerAddress}
+				liquidationModalOpen={liquidationModalOpen}
+				liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}
+				liquidationTargetVault={liquidationTargetVault}
+				onLiquidationAmountChange={onLiquidationAmountChange}
+				onLiquidationTargetVaultChange={onLiquidationTargetVaultChange}
+				onQueueLiquidation={onQueueLiquidation}
+			/>
 		</section>
 	)
 }

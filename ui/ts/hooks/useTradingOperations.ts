@@ -45,13 +45,19 @@ export function useTradingOperations({ accountAddress, onTransaction, onTransact
 			},
 		)
 
-	const createCompleteSet = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await createCompleteSetInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.completeSetAmount, 'Complete set amount')), 'Failed to mint complete sets')
+	const createCompleteSet = async () =>
+		await runTradingAction(async (walletAddress, securityPoolAddress) => await createCompleteSetInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.completeSetAmount, 'Complete set amount')), 'Failed to mint complete sets')
 
-	const redeemCompleteSet = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemCompleteSetInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.redeemAmount, 'Redeem amount')), 'Failed to redeem complete sets')
+	const redeemCompleteSet = async () =>
+		await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemCompleteSetInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.redeemAmount, 'Redeem amount')), 'Failed to redeem complete sets')
 
 	const redeemShares = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await redeemSharesInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress), 'Failed to redeem shares')
 
-	const migrateShares = async () => await runTradingAction(async (walletAddress, securityPoolAddress) => await migrateSharesFromUniverse(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.fromUniverseId, 'From universe ID'), parseReportingOutcomeInput(tradingForm.value.selectedOutcome)), 'Failed to migrate shares')
+	const migrateShares = async () =>
+		await runTradingAction(
+			async (walletAddress, securityPoolAddress) => await migrateSharesFromUniverse(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(tradingForm.value.fromUniverseId, 'From universe ID'), parseReportingOutcomeInput(tradingForm.value.selectedOutcome)),
+			'Failed to migrate shares',
+		)
 
 	return {
 		createCompleteSet,

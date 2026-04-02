@@ -41,12 +41,15 @@ const mintERC20 = async (anvilWindowEthereum: AnvilWindowEthereum, erc20Address:
 	await anvilWindowEthereum.addStateOverrides({ [erc20Address]: { stateDiff: stateSets } })
 }
 
-export const approveToken = async (client: WriteClient, tokenAddress: Address, spenderAddress: Address) => await writeContractAndWait(client, () => client.writeContract({
-		abi: ABIS.mainnet.erc20,
-		functionName: 'approve',
-		address: tokenAddress,
-		args: [spenderAddress, DEFAULT_APPROVAL_AMOUNT],
-	}))
+export const approveToken = async (client: WriteClient, tokenAddress: Address, spenderAddress: Address) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: ABIS.mainnet.erc20,
+			functionName: 'approve',
+			address: tokenAddress,
+			args: [spenderAddress, DEFAULT_APPROVAL_AMOUNT],
+		}),
+	)
 
 export const getERC20Balance = async (client: ReadClient, tokenAddress: Address, ownerAddress: Address) =>
 	await client.readContract({
@@ -72,7 +75,7 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 
 	// Deploy the ReputationToken contract at the genesis address
 	const bytecodeHex = ReputationToken_ReputationToken.evm.deployedBytecode.object
-	const bytes = hexToBytes(bytecodeHex.startsWith('0x') ? bytecodeHex : `0x${ bytecodeHex }`)
+	const bytes = hexToBytes(bytecodeHex.startsWith('0x') ? bytecodeHex : `0x${bytecodeHex}`)
 	if (!bytes) throw new Error('Failed to convert bytecode to bytes')
 	await anvilWindowEthereum.addStateOverrides({
 		[addressString(GENESIS_REPUTATION_TOKEN)]: {
@@ -92,7 +95,7 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 	// In the storage layout of ReputationToken (which inherits from ERC20), the variable
 	// `totalTheoreticalSupply` is at slot 5 (after _balances slot0, _allowances slot1, _totalSupply slot2, _name slot3, _symbol slot4).
 	const totalTheoreticalSupply = BigInt(TEST_ADDRESSES.length) * TOKEN_AMOUNT_TO_MINT
-	const slot5 = `0x${ 5n.toString(16).padStart(64, '0') }`
+	const slot5 = `0x${5n.toString(16).padStart(64, '0')}`
 	await anvilWindowEthereum.addStateOverrides({
 		[addressString(GENESIS_REPUTATION_TOKEN)]: {
 			stateDiff: {
@@ -104,7 +107,7 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 	// Deploy WETH9 at its expected address
 	const wethAddress = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
 	const wethBytecodeHex = peripherals_WETH9_WETH9.evm.deployedBytecode.object
-	const wethBytes = hexToBytes(wethBytecodeHex.startsWith('0x') ? wethBytecodeHex : `0x${ wethBytecodeHex }`)
+	const wethBytes = hexToBytes(wethBytecodeHex.startsWith('0x') ? wethBytecodeHex : `0x${wethBytecodeHex}`)
 	if (!wethBytes) throw new Error('Failed to convert WETH bytecode to bytes')
 	await anvilWindowEthereum.addStateOverrides({
 		[wethAddress]: {
@@ -118,11 +121,13 @@ export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<
 	if (deployerBytecode === '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3') return
 	const ethSendHash = await client.sendTransaction({ to: '0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1', amount: 10000000000000000n })
 	await client.waitForTransactionReceipt({ hash: ethSendHash })
-	const deployHash = await client.sendRawTransaction({ serializedTransaction: '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' })
+	const deployHash = await client.sendRawTransaction({
+		serializedTransaction: '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222',
+	})
 	await client.waitForTransactionReceipt({ hash: deployHash })
 }
 
-export const contractExists = async (client: ReadClient, contract: `0x${ string }`) => (await client.getCode({ address: contract })) !== undefined
+export const contractExists = async (client: ReadClient, contract: `0x${string}`) => (await client.getCode({ address: contract })) !== undefined
 
 const uint248BitMask = (1n << 248n) - 1n
 export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint | QuestionOutcome): bigint {
