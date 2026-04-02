@@ -69,7 +69,11 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		)
 	}
 
-	const reportOutcome = async () => await runReportingAction(async (walletAddress, securityPoolAddress, currentForm) => await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, parseBigIntInput(currentForm.reportAmount, 'Report amount')), 'Failed to report on outcome')
+	const reportOutcome = async () =>
+		await runReportingAction(
+			async (walletAddress, securityPoolAddress, currentForm) => await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, parseBigIntInput(currentForm.reportAmount, 'Report amount')),
+			'Failed to report on outcome',
+		)
 
 	const withdrawEscalation = async () =>
 		await runReportingAction(async (walletAddress, securityPoolAddress, currentForm) => {

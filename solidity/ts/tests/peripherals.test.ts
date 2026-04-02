@@ -18,7 +18,29 @@ import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTyp
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMigratedRep, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
-import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, getTotalFeesOwedToVaults, getTotalSecurityBondAllowance, getVaultCount, getVaults, poolOwnershipToRep, redeemCompleteSet, redeemFees, redeemShares, sharesToCash, updateVaultFees, withdrawFromEscalationGame } from '../testsuite/simulator/utils/contracts/securityPool'
+import {
+	createCompleteSet,
+	depositRep,
+	depositToEscalationGame,
+	getCompleteSetCollateralAmount,
+	getCurrentRetentionRate,
+	getPoolOwnershipDenominator,
+	getRepToken,
+	getSecurityPoolsEscalationGame,
+	getSecurityVault,
+	getSystemState,
+	getTotalFeesOwedToVaults,
+	getTotalSecurityBondAllowance,
+	getVaultCount,
+	getVaults,
+	poolOwnershipToRep,
+	redeemCompleteSet,
+	redeemFees,
+	redeemShares,
+	sharesToCash,
+	updateVaultFees,
+	withdrawFromEscalationGame,
+} from '../testsuite/simulator/utils/contracts/securityPool'
 import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -138,7 +160,19 @@ describe('Peripherals Contract Test Suite', () => {
 			args: [0n, deploymentCount],
 		})
 		const deployment = ensureDefined(deployments[0], 'origin deployment missing')
-		const { completeSetCollateralAmount, currentRetentionRate: storedCurrentRetentionRate, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId: storedQuestionId, securityMultiplier: storedSecurityMultiplier, securityPool: securityPoolAddress, shareToken: shareTokenAddress, startingRepEthPrice: storedStartingRepEthPrice, truthAuction: truthAuctionAddress, universeId } = deployment
+		const {
+			completeSetCollateralAmount,
+			currentRetentionRate: storedCurrentRetentionRate,
+			parent,
+			priceOracleManagerAndOperatorQueuer: managerAddress,
+			questionId: storedQuestionId,
+			securityMultiplier: storedSecurityMultiplier,
+			securityPool: securityPoolAddress,
+			shareToken: shareTokenAddress,
+			startingRepEthPrice: storedStartingRepEthPrice,
+			truthAuction: truthAuctionAddress,
+			universeId,
+		} = deployment
 		const expectedAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
 
 		strictEqualTypeSafe(deploymentCount, 1n, 'factory should know about the origin deployment')
@@ -386,7 +420,19 @@ describe('Peripherals Contract Test Suite', () => {
 			deployments.find(deployment => deployment.parent === securityPoolAddresses.securityPool && deployment.universeId === childUniverseId),
 			'child deployment not found',
 		)
-		const { completeSetCollateralAmount: childCompleteSetCollateralAmount, currentRetentionRate: childCurrentRetentionRate, parent: childParent, priceOracleManagerAndOperatorQueuer: childManagerAddress, questionId: childStoredQuestionId, securityMultiplier: childStoredSecurityMultiplier, securityPool: childSecurityPoolAddress, shareToken: childShareTokenAddress, startingRepEthPrice: childStartingRepEthPrice, truthAuction: childTruthAuctionAddress, universeId: childStoredUniverseId } = matchingChildDeployment
+		const {
+			completeSetCollateralAmount: childCompleteSetCollateralAmount,
+			currentRetentionRate: childCurrentRetentionRate,
+			parent: childParent,
+			priceOracleManagerAndOperatorQueuer: childManagerAddress,
+			questionId: childStoredQuestionId,
+			securityMultiplier: childStoredSecurityMultiplier,
+			securityPool: childSecurityPoolAddress,
+			shareToken: childShareTokenAddress,
+			startingRepEthPrice: childStartingRepEthPrice,
+			truthAuction: childTruthAuctionAddress,
+			universeId: childStoredUniverseId,
+		} = matchingChildDeployment
 
 		strictEqualTypeSafe(deploymentCount > 1n, true, 'factory should track more than one deployment')
 		strictEqualTypeSafe(childSecurityPoolAddress, expectedChildAddresses.securityPool, 'child deployment should be queryable')

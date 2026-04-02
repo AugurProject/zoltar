@@ -27,63 +27,77 @@ const getQuestionOutcomeAbi = [
 	},
 ] satisfies Abi
 
-export const initiateSecurityPoolFork = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'initiateSecurityPoolFork',
-		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress],
-	}))
+export const initiateSecurityPoolFork = async (client: WriteClient, securityPoolAddress: `0x${string}`) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'initiateSecurityPoolFork',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		}),
+	)
 
-export const migrateRepToZoltar = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcomeIndices: (number | bigint)[]) =>
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'migrateRepToZoltar',
-		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress, outcomeIndices.map(x => BigInt(x))],
-	}))
+export const migrateRepToZoltar = async (client: WriteClient, securityPoolAddress: `0x${string}`, outcomeIndices: (number | bigint)[]) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'migrateRepToZoltar',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress, outcomeIndices.map(x => BigInt(x))],
+		}),
+	)
 
-export const migrateVault = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: bigint | QuestionOutcome) =>
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'migrateVault',
-		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress, Number(outcome)],
-	}))
+export const migrateVault = async (client: WriteClient, securityPoolAddress: `0x${string}`, outcome: bigint | QuestionOutcome) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'migrateVault',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress, Number(outcome)],
+		}),
+	)
 
-export const startTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'startTruthAuction',
-		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress],
-	}))
+export const startTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${string}`) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'startTruthAuction',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		}),
+	)
 
-export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'finalizeTruthAuction',
-		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress],
-	}))
+export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddress: `0x${string}`) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'finalizeTruthAuction',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		}),
+	)
 
-export const claimAuctionProceeds = async (client: WriteClient, securityPoolAddress: `0x${ string }`, vault: `0x${ string }`, tickIndex: readonly { tick: bigint; bidIndex: bigint }[]) =>
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'claimAuctionProceeds',
-		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress, vault, tickIndex],
-	}))
+export const claimAuctionProceeds = async (client: WriteClient, securityPoolAddress: `0x${string}`, vault: `0x${string}`, tickIndex: readonly { tick: bigint; bidIndex: bigint }[]) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'claimAuctionProceeds',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress, vault, tickIndex],
+		}),
+	)
 
-export const forkZoltarWithOwnEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${ string }`) =>
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'forkZoltarWithOwnEscalationGame',
-		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress],
-	}))
+export const forkZoltarWithOwnEscalationGame = async (client: WriteClient, securityPoolAddress: `0x${string}`) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'forkZoltarWithOwnEscalationGame',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		}),
+	)
 
-export const getMigratedRep = async (client: ReadClient, securityPoolAddress: `0x${ string }`) =>
+export const getMigratedRep = async (client: ReadClient, securityPoolAddress: `0x${string}`) =>
 	await client.readContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'getMigratedRep',
@@ -91,7 +105,7 @@ export const getMigratedRep = async (client: ReadClient, securityPoolAddress: `0
 		args: [securityPoolAddress],
 	})
 
-export const getQuestionOutcome = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getQuestionOutcome = async (client: ReadClient, securityPoolAddress: `0x${string}`) => {
 	if (!(await contractExists(client, securityPoolAddress))) return QuestionOutcome.None
 	return await client.readContract({
 		abi: getQuestionOutcomeAbi,
@@ -101,15 +115,17 @@ export const getQuestionOutcome = async (client: ReadClient, securityPoolAddress
 	})
 }
 
-export const createChildUniverse = async (client: WriteClient, securityPoolAddress: `0x${ string }`, outcome: QuestionOutcome) =>
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'createChildUniverse',
-		address: getInfraContractAddresses().securityPoolForker,
-		args: [securityPoolAddress, Number(outcome)],
-	}))
+export const createChildUniverse = async (client: WriteClient, securityPoolAddress: `0x${string}`, outcome: QuestionOutcome) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'createChildUniverse',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress, Number(outcome)],
+		}),
+	)
 
-export const getSecurityPoolForkerForkData = async (client: ReadClient, securityPoolAddress: `0x${ string }`) => {
+export const getSecurityPoolForkerForkData = async (client: ReadClient, securityPoolAddress: `0x${string}`) => {
 	const data = await client.readContract({
 		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'forkData',
@@ -120,10 +136,12 @@ export const getSecurityPoolForkerForkData = async (client: ReadClient, security
 	return { repAtFork, truthAuction, truthAuctionStarted, migratedRep, auctionedSecurityBondAllowance, ownFork, outcomeIndex }
 }
 
-export const migrateFromEscalationGame = async (client: WriteClient, parentSecurityPool: `0x${ string }`, vault: `0x${ string }`, outcomeIndex: QuestionOutcome, depositIndexes: bigint[]) =>
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'migrateFromEscalationGame',
-		address: getInfraContractAddresses().securityPoolForker,
-		args: [parentSecurityPool, vault, Number(outcomeIndex), depositIndexes.map(x => Number(x))],
-	}))
+export const migrateFromEscalationGame = async (client: WriteClient, parentSecurityPool: `0x${string}`, vault: `0x${string}`, outcomeIndex: QuestionOutcome, depositIndexes: bigint[]) =>
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'migrateFromEscalationGame',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [parentSecurityPool, vault, Number(outcomeIndex), depositIndexes.map(x => Number(x))],
+		}),
+	)

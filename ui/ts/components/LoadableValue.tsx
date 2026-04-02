@@ -7,5 +7,5 @@ type LoadableValueProps = {
 }
 
 export function LoadableValue({ children, loading, placeholder = 'Loading...' }: LoadableValueProps) {
-	return loading ? <span className="loading-value">{placeholder}</span> : <>{children}</>
+	return loading ? <span className='loading-value'>{placeholder}</span> : <>{children}</>
 }

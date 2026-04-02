@@ -23,21 +23,21 @@ type ChildUniversesSectionProps = {
 
 export function ChildUniversesSection({ action, childUniverses, emptyMessage, headerSubtitle, headerTitle, renderBody, renderBadge, renderTitle }: ChildUniversesSectionProps) {
 	return (
-		<div className="entity-card-subsection market-overview-subsection">
-			<div className="entity-card-subsection-header">
+		<div className='entity-card-subsection market-overview-subsection'>
+			<div className='entity-card-subsection-header'>
 				<h4>{headerTitle}</h4>
-				{headerSubtitle === undefined ? undefined : <span className="detail">{headerSubtitle}</span>}
+				{headerSubtitle === undefined ? undefined : <span className='detail'>{headerSubtitle}</span>}
 			</div>
 			{childUniverses.length === 0 ? (
-				<p className="detail">{emptyMessage}</p>
+				<p className='detail'>{emptyMessage}</p>
 			) : (
-				<div className="entity-card-list">
+				<div className='entity-card-list'>
 					{childUniverses.map(child => {
 						const childAction = action?.(child)
 						return (
 							<EntityCard
 								key={child.universeId.toString()}
-								className="compact"
+								className='compact'
 								title={renderTitle === undefined ? <UniverseLink universeId={child.universeId} /> : renderTitle(child)}
 								badge={renderBadge === undefined ? undefined : renderBadge(child)}
 								actions={

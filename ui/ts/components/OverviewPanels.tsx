@@ -4,40 +4,40 @@ import type { OverviewPanelsProps } from '../types/components.js'
 
 export function OverviewPanels({ accountState, isLoadingUniverseRepBalance, onConnect, onGoToGenesisUniverse, onRefresh, universeErrorMessage, universeLabel, universeRepBalance, isRefreshing }: OverviewPanelsProps) {
 	return (
-		<section className="overview-shell">
-			<article className="panel overview-panel overview-wallet-panel">
-				<div className="panel-header overview-wallet-header">
-					<div className="overview-wallet-summary">
-						<div className="overview-brand-lockup">
-							<h1 className="overview-app-title">Augur PLACEHOLDER</h1>
+		<section className='overview-shell'>
+			<article className='panel overview-panel overview-wallet-panel'>
+				<div className='panel-header overview-wallet-header'>
+					<div className='overview-wallet-summary'>
+						<div className='overview-brand-lockup'>
+							<h1 className='overview-app-title'>Augur PLACEHOLDER</h1>
 						</div>
-						<div className="overview-inline-metrics">
-							<div className="overview-address-metric">
-								<span className="metric-label">Address</span>
+						<div className='overview-inline-metrics'>
+							<div className='overview-address-metric'>
+								<span className='metric-label'>Address</span>
 								<strong>{accountState.address ?? 'Not connected'}</strong>
 							</div>
 							<div>
-								<span className="metric-label">ETH</span>
+								<span className='metric-label'>ETH</span>
 								<strong>
-									<LoadableValue loading={isRefreshing && accountState.ethBalance === undefined} placeholder="Loading...">
+									<LoadableValue loading={isRefreshing && accountState.ethBalance === undefined} placeholder='Loading...'>
 										{formatCurrencyBalance(accountState.ethBalance)} ETH
 									</LoadableValue>
 								</strong>
 							</div>
 							<div>
-								<span className="metric-label">REP</span>
+								<span className='metric-label'>REP</span>
 								<strong>
-									<LoadableValue loading={isLoadingUniverseRepBalance} placeholder="Loading...">
+									<LoadableValue loading={isLoadingUniverseRepBalance} placeholder='Loading...'>
 										{formatCurrencyBalance(universeRepBalance)} REP
 									</LoadableValue>
 								</strong>
 							</div>
 							<div>
-								<span className="metric-label">Universe</span>
+								<span className='metric-label'>Universe</span>
 								<strong className={universeErrorMessage === undefined ? undefined : 'overview-universe-error'}>{universeErrorMessage ?? universeLabel}</strong>
 								{universeErrorMessage === undefined ? undefined : (
-									<div className="overview-universe-actions">
-										<button className="secondary" onClick={onGoToGenesisUniverse}>
+									<div className='overview-universe-actions'>
+										<button className='secondary' onClick={onGoToGenesisUniverse}>
 											Go to Genesis universe
 										</button>
 									</div>
@@ -45,8 +45,8 @@ export function OverviewPanels({ accountState, isLoadingUniverseRepBalance, onCo
 							</div>
 						</div>
 					</div>
-					<div className="actions overview-actions">
-						<button className="secondary" onClick={onRefresh} disabled={isRefreshing}>
+					<div className='actions overview-actions'>
+						<button className='secondary' onClick={onRefresh} disabled={isRefreshing}>
 							{isRefreshing ? 'Refreshing...' : 'Refresh'}
 						</button>
 						{accountState.address === undefined ? <button onClick={onConnect}>Connect Wallet</button> : undefined}

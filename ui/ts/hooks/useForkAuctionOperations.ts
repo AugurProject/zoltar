@@ -1,6 +1,21 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
-import { claimSecurityPoolAuctionProceeds, createChildUniverseFromSecurityPool, finalizeSecurityPoolTruthAuction, forkUniverseDirectly, forkZoltarWithOwnEscalation, initiateSecurityPoolFork, loadForkAuctionDetails, migrateEscalationDeposits, migrateRepToZoltarFromSecurityPool, migrateSecurityVault, refundTruthAuctionBid, startTruthAuctionForSecurityPool, submitTruthAuctionBid, withdrawTruthAuctionBids } from '../contracts.js'
+import {
+	claimSecurityPoolAuctionProceeds,
+	createChildUniverseFromSecurityPool,
+	finalizeSecurityPoolTruthAuction,
+	forkUniverseDirectly,
+	forkZoltarWithOwnEscalation,
+	initiateSecurityPoolFork,
+	loadForkAuctionDetails,
+	migrateEscalationDeposits,
+	migrateRepToZoltarFromSecurityPool,
+	migrateSecurityVault,
+	refundTruthAuctionBid,
+	startTruthAuctionForSecurityPool,
+	submitTruthAuctionBid,
+	withdrawTruthAuctionBids,
+} from '../contracts.js'
 import { createReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { runWriteAction } from '../lib/writeAction.js'
@@ -83,16 +98,29 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 
 	const initiateFork = async () => await runForkAuctionAction(async (walletAddress, details) => await initiateSecurityPoolFork(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId), 'Failed to initiate security pool fork')
 
-	const createChildUniverse = async (outcome: ReportingOutcomeKey | bigint) => await runForkAuctionAction(async (walletAddress, details) => await createChildUniverseFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, getReportingOutcomeKey(outcome)), 'Failed to create child universe')
+	const createChildUniverse = async (outcome: ReportingOutcomeKey | bigint) =>
+		await runForkAuctionAction(async (walletAddress, details) => await createChildUniverseFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, getReportingOutcomeKey(outcome)), 'Failed to create child universe')
 
-	const migrateRepToZoltar = async () => await runForkAuctionAction(async (walletAddress, details) => await migrateRepToZoltarFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, parseReportingOutcomeListInput(forkAuctionForm.value.repMigrationOutcomes, 'REP migration outcomes')), 'Failed to migrate REP to Zoltar')
+	const migrateRepToZoltar = async () =>
+		await runForkAuctionAction(
+			async (walletAddress, details) => await migrateRepToZoltarFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, parseReportingOutcomeListInput(forkAuctionForm.value.repMigrationOutcomes, 'REP migration outcomes')),
+			'Failed to migrate REP to Zoltar',
+		)
 
-	const migrateVault = async () => await runForkAuctionAction(async (walletAddress, details) => await migrateSecurityVault(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome)), 'Failed to migrate vault')
+	const migrateVault = async () =>
+		await runForkAuctionAction(async (walletAddress, details) => await migrateSecurityVault(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome)), 'Failed to migrate vault')
 
 	const migrateEscalation = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {
 			const vaultAddress = forkAuctionForm.value.claimVaultAddress.trim() === '' ? walletAddress : parseAddressInput(forkAuctionForm.value.claimVaultAddress, 'Vault address')
-			return await migrateEscalationDeposits(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, vaultAddress, parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome), parseBigIntListInput(forkAuctionForm.value.depositIndexes, 'Deposit indexes'))
+			return await migrateEscalationDeposits(
+				createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
+				details.securityPoolAddress,
+				details.universeId,
+				vaultAddress,
+				parseReportingOutcomeInput(forkAuctionForm.value.selectedOutcome),
+				parseBigIntListInput(forkAuctionForm.value.depositIndexes, 'Deposit indexes'),
+			)
 		}, 'Failed to migrate escalation deposits')
 
 	const startTruthAuction = async () => await runForkAuctionAction(async (walletAddress, details) => await startTruthAuctionForSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId), 'Failed to start truth auction')
@@ -106,7 +134,14 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 	const refundLosingBids = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {
 			if (details.truthAuctionAddress === undefined) throw new Error('Truth auction not available')
-			return await refundTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, details.truthAuctionAddress, parseBigIntInput(forkAuctionForm.value.refundTick, 'Refund tick'), parseBigIntInput(forkAuctionForm.value.refundBidIndex, 'Refund bid index'))
+			return await refundTruthAuctionBid(
+				createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
+				details.securityPoolAddress,
+				details.universeId,
+				details.truthAuctionAddress,
+				parseBigIntInput(forkAuctionForm.value.refundTick, 'Refund tick'),
+				parseBigIntInput(forkAuctionForm.value.refundBidIndex, 'Refund bid index'),
+			)
 		}, 'Failed to refund losing bids')
 
 	const finalizeTruthAuction = async () => await runForkAuctionAction(async (walletAddress, details) => await finalizeSecurityPoolTruthAuction(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId), 'Failed to finalize truth auction')
@@ -117,13 +152,26 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 			return await claimSecurityPoolAuctionProceeds(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, vaultAddress, parseBigIntInput(forkAuctionForm.value.bidTick, 'Bid tick'), parseBigIntInput(forkAuctionForm.value.bidIndex, 'Bid index'))
 		}, 'Failed to claim auction proceeds')
 
-	const forkUniverse = async () => await runForkAuctionAction(async (walletAddress, details) => await forkUniverseDirectly(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), parseBigIntInput(forkAuctionForm.value.directForkUniverseId, 'Fork universe ID'), parseBigIntInput(forkAuctionForm.value.directForkQuestionId, 'Fork question ID'), details.securityPoolAddress), 'Failed to fork universe directly')
+	const forkUniverse = async () =>
+		await runForkAuctionAction(
+			async (walletAddress, details) =>
+				await forkUniverseDirectly(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), parseBigIntInput(forkAuctionForm.value.directForkUniverseId, 'Fork universe ID'), parseBigIntInput(forkAuctionForm.value.directForkQuestionId, 'Fork question ID'), details.securityPoolAddress),
+			'Failed to fork universe directly',
+		)
 
 	const withdrawBids = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {
 			if (details.truthAuctionAddress === undefined) throw new Error('Truth auction not available')
 			const withdrawFor = forkAuctionForm.value.withdrawForAddress.trim() === '' ? walletAddress : parseAddressInput(forkAuctionForm.value.withdrawForAddress, 'Withdraw-for address')
-			return await withdrawTruthAuctionBids(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, details.truthAuctionAddress, withdrawFor, parseBigIntInput(forkAuctionForm.value.withdrawTick, 'Withdraw tick'), parseBigIntInput(forkAuctionForm.value.withdrawBidIndex, 'Withdraw bid index'))
+			return await withdrawTruthAuctionBids(
+				createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
+				details.securityPoolAddress,
+				details.universeId,
+				details.truthAuctionAddress,
+				withdrawFor,
+				parseBigIntInput(forkAuctionForm.value.withdrawTick, 'Withdraw tick'),
+				parseBigIntInput(forkAuctionForm.value.withdrawBidIndex, 'Withdraw bid index'),
+			)
 		}, 'Failed to withdraw bids')
 
 	return {

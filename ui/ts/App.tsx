@@ -53,7 +53,42 @@ export function App() {
 		refreshState,
 	}
 	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
-	const { approveZoltarForkRep, createChildUniverse: createZoltarChildUniverse, createMarket, forkZoltar, loadingZoltarForkAccess, loadingZoltarQuestionCount, loadingZoltarQuestions, loadingZoltarUniverse, loadZoltarQuestions, marketCreating, marketError, marketForm, marketResult, migrateInternalRep, prepareRepForMigration, setMarketForm, setZoltarForkQuestionId, setZoltarMigrationForm, zoltarChildUniverseError, zoltarForkAllowance, zoltarForkError, zoltarForkPending, zoltarForkQuestionId, zoltarForkRepBalance, zoltarMigrationChildRepBalances, zoltarMigrationError, zoltarMigrationForm, zoltarMigrationPending, zoltarMigrationPreparedRepBalance, zoltarMigrationResult, zoltarQuestionCount, zoltarQuestions, zoltarUniverse, zoltarUniverseMissing } = useMarketCreation({ ...baseHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
+	const {
+		approveZoltarForkRep,
+		createChildUniverse: createZoltarChildUniverse,
+		createMarket,
+		forkZoltar,
+		loadingZoltarForkAccess,
+		loadingZoltarQuestionCount,
+		loadingZoltarQuestions,
+		loadingZoltarUniverse,
+		loadZoltarQuestions,
+		marketCreating,
+		marketError,
+		marketForm,
+		marketResult,
+		migrateInternalRep,
+		prepareRepForMigration,
+		setMarketForm,
+		setZoltarForkQuestionId,
+		setZoltarMigrationForm,
+		zoltarChildUniverseError,
+		zoltarForkAllowance,
+		zoltarForkError,
+		zoltarForkPending,
+		zoltarForkQuestionId,
+		zoltarForkRepBalance,
+		zoltarMigrationChildRepBalances,
+		zoltarMigrationError,
+		zoltarMigrationForm,
+		zoltarMigrationPending,
+		zoltarMigrationPreparedRepBalance,
+		zoltarMigrationResult,
+		zoltarQuestionCount,
+		zoltarQuestions,
+		zoltarUniverse,
+		zoltarUniverseMissing,
+	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({ ...baseHookConfig, deploymentStatuses })
 	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, redeemRep, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult, setSecurityVaultForm, updateVaultFees } = useSecurityVaultOperations(baseHookConfig)
 	const { approveToken1, approveToken2, loadOracleManager, loadingOracleManager, onQueueOperation, onRequestPrice, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails, setOpenOracleForm, settleReport, submitInitialReport } = useOpenOracleOperations(baseHookConfig)
@@ -76,7 +111,28 @@ export function App() {
 		setLiquidationTargetVault,
 	} = useSecurityPoolsOverview(baseHookConfig)
 	const { createCompleteSet, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingError, tradingForm, tradingResult } = useTradingOperations(baseHookConfig)
-	const { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkAuctionDetails, forkAuctionError, forkAuctionForm, forkAuctionResult, forkUniverse, forkWithOwnEscalation, initiateFork, loadForkAuction, loadingForkAuctionDetails, migrateEscalation, migrateRepToZoltar, migrateVault, refundLosingBids, setForkAuctionForm, startTruthAuction, submitBid, withdrawBids } = useForkAuctionOperations(baseHookConfig)
+	const {
+		claimAuctionProceeds,
+		createChildUniverse,
+		finalizeTruthAuction,
+		forkAuctionDetails,
+		forkAuctionError,
+		forkAuctionForm,
+		forkAuctionResult,
+		forkUniverse,
+		forkWithOwnEscalation,
+		initiateFork,
+		loadForkAuction,
+		loadingForkAuctionDetails,
+		migrateEscalation,
+		migrateRepToZoltar,
+		migrateVault,
+		refundLosingBids,
+		setForkAuctionForm,
+		startTruthAuction,
+		submitBid,
+		withdrawBids,
+	} = useForkAuctionOperations(baseHookConfig)
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
 	const lastCreatedQuestionId = marketResult?.questionId
@@ -97,10 +153,10 @@ export function App() {
 	}, [walletBootstrapComplete])
 
 	useEffect(() => {
-		setSecurityVaultForm(current => current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress })
-		setTradingForm(current => current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress })
-		setForkAuctionForm(current => current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress })
-		setReportingForm(current => current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress })
+		setSecurityVaultForm(current => (current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress }))
+		setTradingForm(current => (current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress }))
+		setForkAuctionForm(current => (current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress }))
+		setReportingForm(current => (current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress }))
 		if (!walletBootstrapComplete) return
 		if (!securityPoolAddress.startsWith('0x') || securityPoolAddress.length !== 42) return
 		void loadSecurityPools()
@@ -140,11 +196,21 @@ export function App() {
 	return (
 		<main>
 			{showZoltarUniverseForkedWarning ? <div className='notice error'>The universe has forked.</div> : undefined}
-				<div className='top-shell'>
-					<div className='top-shell-content'>
-						{showAugurPlaceHolderDeploymentWarning ? <div className='notice error'>Augur PLACEHOLDER contracts are not deployed yet. Deploy them before the application works.</div> : undefined}
-						<OverviewPanels accountState={accountState} isLoadingUniverseRepBalance={loadingZoltarForkAccess} onConnect={() => void connectWallet()} onGoToGenesisUniverse={() => setActiveUniverseId(0n)} onRefresh={() => void refreshState()} universeErrorMessage={universeErrorMessage} universeLabel={universeLabel} universeRepBalance={zoltarForkRepBalance} isRefreshing={isRefreshing} />
-					</div>
+			<div className='top-shell'>
+				<div className='top-shell-content'>
+					{showAugurPlaceHolderDeploymentWarning ? <div className='notice error'>Augur PLACEHOLDER contracts are not deployed yet. Deploy them before the application works.</div> : undefined}
+					<OverviewPanels
+						accountState={accountState}
+						isLoadingUniverseRepBalance={loadingZoltarForkAccess}
+						onConnect={() => void connectWallet()}
+						onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
+						onRefresh={() => void refreshState()}
+						universeErrorMessage={universeErrorMessage}
+						universeLabel={universeLabel}
+						universeRepBalance={zoltarForkRepBalance}
+						isRefreshing={isRefreshing}
+					/>
+				</div>
 				<TabNavigation route={route} showDeployTab={showDeployTab} augurPlaceHolderDeployed={augurPlaceHolderDeployed !== false && !showZoltarUniverseWarning} deployRoute={DEPLOY_ROUTE} marketRoute={ZOLTAR_ROUTE} openOracleRoute={OPEN_ORACLE_ROUTE} securityPoolsRoute={SECURITY_POOLS_ROUTE} onRouteChange={navigate} />
 			</div>
 
@@ -160,68 +226,82 @@ export function App() {
 					) : (
 						'Awaiting wallet confirmation.'
 					)}
-					{transactionState.value.transactionUrl === undefined ? undefined : <> <a href={transactionState.value.transactionUrl} target='_blank' rel='noreferrer'>View on Etherscan</a></>}
+					{transactionState.value.transactionUrl === undefined ? undefined : (
+						<>
+							{' '}
+							<a href={transactionState.value.transactionUrl} target='_blank' rel='noreferrer'>
+								View on Etherscan
+							</a>
+						</>
+					)}
 				</p>
 			) : transactionState.value.lastTransactionHash === undefined ? undefined : (
 				<p className='notice success'>
 					Last transaction: <span>{transactionState.value.lastTransactionHash}</span>
-					{transactionState.value.transactionUrl === undefined ? undefined : <> <a href={transactionState.value.transactionUrl} target='_blank' rel='noreferrer'>View on Etherscan</a></>}
+					{transactionState.value.transactionUrl === undefined ? undefined : (
+						<>
+							{' '}
+							<a href={transactionState.value.transactionUrl} target='_blank' rel='noreferrer'>
+								View on Etherscan
+							</a>
+						</>
+					)}
 				</p>
 			)}
 
 			{walletBootstrapComplete ? (
 				<fieldset className='route-shell' disabled={transactionState.value.transactionInFlightCount > 0 || disableRouteContent}>
 					<AppRouteContent
-				deployment={{
-					accountAddress: accountState.address,
-					busyStepId,
-					deployNextMissingPending: deployNextMissingPending.value,
-					deploymentSections,
-					deploymentStatuses,
-					isLoadingDeploymentStatuses,
-					isMainnet,
-					onDeploy: deployStep,
-					onDeployNextMissing: () => void onDeployNextMissing(),
-				}}
+						deployment={{
+							accountAddress: accountState.address,
+							busyStepId,
+							deployNextMissingPending: deployNextMissingPending.value,
+							deploymentSections,
+							deploymentStatuses,
+							isLoadingDeploymentStatuses,
+							isMainnet,
+							onDeploy: deployStep,
+							onDeployNextMissing: () => void onDeployNextMissing(),
+						}}
 						market={{
 							accountState,
 							onApproveZoltarForkRep: () => void approveZoltarForkRep(),
 							loadingZoltarQuestionCount,
 							loadingZoltarQuestions,
-								loadingZoltarUniverse,
-								zoltarUniverseMissing,
-								onCreateChildUniverseForOutcomeIndex: outcomeIndex => void createZoltarChildUniverse(outcomeIndex),
-								onForkZoltar: () => void forkZoltar(),
-								onCreateMarket: () => void createMarket(),
-								onLoadZoltarQuestions: () => void loadZoltarQuestions(),
-								onMigrateInternalRep: () => void migrateInternalRep(),
-								marketCreating,
-								marketError,
-								marketForm,
-								marketResult,
-								onMarketFormChange: update => setMarketForm(current => ({ ...current, ...update })),
-								onPrepareRepForMigration: () => void prepareRepForMigration(),
-								onUseQuestionForFork: questionId => setZoltarForkQuestionId(questionId),
-								onUseQuestionForPool,
-								onZoltarMigrationFormChange: update => setZoltarMigrationForm(current => ({ ...current, ...update })),
-								zoltarQuestionCount,
-								zoltarForkAllowance,
-								zoltarForkError,
-								zoltarChildUniverseError,
-								loadingZoltarForkAccess,
-								zoltarForkPending,
-								zoltarForkQuestionId,
-								zoltarForkRepBalance,
-								zoltarMigrationError,
-								zoltarMigrationForm,
-								zoltarMigrationChildRepBalances,
-								zoltarMigrationPending,
-								zoltarMigrationPreparedRepBalance,
-								zoltarMigrationResult,
-								zoltarQuestions,
-								zoltarUniverse,
-								onZoltarForkQuestionIdChange: questionId => setZoltarForkQuestionId(questionId),
-							}}
+							loadingZoltarUniverse,
+							zoltarUniverseMissing,
+							onCreateChildUniverseForOutcomeIndex: outcomeIndex => void createZoltarChildUniverse(outcomeIndex),
+							onForkZoltar: () => void forkZoltar(),
+							onCreateMarket: () => void createMarket(),
+							onLoadZoltarQuestions: () => void loadZoltarQuestions(),
+							onMigrateInternalRep: () => void migrateInternalRep(),
+							marketCreating,
+							marketError,
+							marketForm,
+							marketResult,
+							onMarketFormChange: update => setMarketForm(current => ({ ...current, ...update })),
+							onPrepareRepForMigration: () => void prepareRepForMigration(),
+							onUseQuestionForFork: questionId => setZoltarForkQuestionId(questionId),
+							onUseQuestionForPool,
+							onZoltarMigrationFormChange: update => setZoltarMigrationForm(current => ({ ...current, ...update })),
+							zoltarQuestionCount,
+							zoltarForkAllowance,
+							zoltarForkError,
+							zoltarChildUniverseError,
+							loadingZoltarForkAccess,
+							zoltarForkPending,
+							zoltarForkQuestionId,
+							zoltarForkRepBalance,
+							zoltarMigrationError,
+							zoltarMigrationForm,
+							zoltarMigrationChildRepBalances,
+							zoltarMigrationPending,
+							zoltarMigrationPreparedRepBalance,
+							zoltarMigrationResult,
+							zoltarQuestions,
+							zoltarUniverse,
+							onZoltarForkQuestionIdChange: questionId => setZoltarForkQuestionId(questionId),
+						}}
 						openOracle={{
 							accountState,
 							loadingOracleManager,
@@ -289,11 +369,11 @@ export function App() {
 							liquidationTargetVault,
 							onLiquidationAmountChange: setLiquidationAmount,
 							onLiquidationTargetVaultChange: setLiquidationTargetVault,
-						onOpenLiquidationModal: (managerAddress, securityPoolAddress, vaultAddress) => openLiquidationModal(managerAddress, securityPoolAddress, vaultAddress),
-						onQueueLiquidation: (managerAddress, securityPoolAddress) => void queueLiquidation(managerAddress, securityPoolAddress),
-						onSecurityPoolAddressChange: value => {
-							setSecurityPoolAddress(value)
-						},
+							onOpenLiquidationModal: (managerAddress, securityPoolAddress, vaultAddress) => openLiquidationModal(managerAddress, securityPoolAddress, vaultAddress),
+							onQueueLiquidation: (managerAddress, securityPoolAddress) => void queueLiquidation(managerAddress, securityPoolAddress),
+							onSecurityPoolAddressChange: value => {
+								setSecurityPoolAddress(value)
+							},
 							reporting: {
 								accountState,
 								loadingReportingDetails,

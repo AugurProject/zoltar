@@ -68,12 +68,14 @@ export const getQuestionId = (questionData: QuestionData, outcomeOptions: readon
 }
 
 export const createQuestion = async (client: WriteClient, questionData: QuestionData, outcomeLabels: string[]) =>
-	await writeContractAndWait(client, () => client.writeContract({
-		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		functionName: 'createQuestion',
-		address: getInfraContractAddresses().zoltarQuestionData,
-		args: [questionData, outcomeLabels],
-	}))
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'createQuestion',
+			address: getInfraContractAddresses().zoltarQuestionData,
+			args: [questionData, outcomeLabels],
+		}),
+	)
 
 export const isMalformedAnswerOption = async (client: ReadClient, questionId: bigint, answer: bigint) =>
 	await client.readContract({

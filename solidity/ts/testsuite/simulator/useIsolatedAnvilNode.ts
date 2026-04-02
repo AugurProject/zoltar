@@ -44,9 +44,7 @@ const getFreePort = async (): Promise<number> =>
 
 type AnvilProcess = ReturnType<typeof spawn>
 
-type AnvilConnectionMode =
-	| { readonly type: 'spawn-isolated'; readonly rpcUrl: string; readonly port: number }
-	| { readonly type: 'use-existing'; readonly rpcUrl: string }
+type AnvilConnectionMode = { readonly type: 'spawn-isolated'; readonly rpcUrl: string; readonly port: number } | { readonly type: 'use-existing'; readonly rpcUrl: string }
 
 export const getAnvilConnectionMode = (): AnvilConnectionMode => {
 	if (process.platform === 'win32') {
@@ -86,7 +84,7 @@ const waitForRpcReady = async (rpcUrl: string): Promise<void> => {
 				clearTimeout(timeoutId)
 				return
 			}
-			lastError = new Error(`HTTP ${ response.status }: ${ response.statusText }`)
+			lastError = new Error(`HTTP ${response.status}: ${response.statusText}`)
 		} catch (error) {
 			lastError = error
 		} finally {
@@ -96,7 +94,7 @@ const waitForRpcReady = async (rpcUrl: string): Promise<void> => {
 	}
 
 	const detail = lastError instanceof Error ? lastError.message : String(lastError)
-	throw new Error(`Timed out waiting for Anvil RPC at ${ rpcUrl }: ${ detail }`)
+	throw new Error(`Timed out waiting for Anvil RPC at ${rpcUrl}: ${detail}`)
 }
 
 const waitForExit = async (child: AnvilProcess): Promise<void> =>
@@ -145,21 +143,17 @@ export const useIsolatedAnvilNode = () => {
 				snapshotId = await anvilWindowEthereum.anvilSnapshot()
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error)
-				throw new Error(`Failed to connect to existing Anvil node for test file at ${ connectionMode.rpcUrl }: ${ errorMessage }`)
+				throw new Error(`Failed to connect to existing Anvil node for test file at ${connectionMode.rpcUrl}: ${errorMessage}`)
 			}
 			return
 		}
 
 		const port = await getFreePort()
-		const rpcUrl = `http://${ DEFAULT_ANVIL_HOST }:${ port }`
+		const rpcUrl = `http://${DEFAULT_ANVIL_HOST}:${port}`
 
-		const process = spawn(
-			DEFAULT_ANVIL_BIN,
-			['--host', DEFAULT_ANVIL_HOST, '--port', `${ port }`, '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee'],
-			{
-				stdio: ['ignore', 'ignore', 'pipe'],
-			},
-		)
+		const process = spawn(DEFAULT_ANVIL_BIN, ['--host', DEFAULT_ANVIL_HOST, '--port', `${port}`, '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee'], {
+			stdio: ['ignore', 'ignore', 'pipe'],
+		})
 		anvilProcess = process
 		const spawnErrorPromise = new Promise<never>((_, reject) => {
 			process.once('error', reject)
@@ -182,8 +176,8 @@ export const useIsolatedAnvilNode = () => {
 		} catch (error) {
 			terminateProcess(process)
 			const errorMessage = error instanceof Error ? error.message : String(error)
-			const stderrMessage = stderr.trim() === '' ? '' : `\nAnvil stderr:\n${ stderr.trim() }`
-			throw new Error(`Failed to start isolated Anvil node for test file: ${ errorMessage }${ stderrMessage }`)
+			const stderrMessage = stderr.trim() === '' ? '' : `\nAnvil stderr:\n${stderr.trim()}`
+			throw new Error(`Failed to start isolated Anvil node for test file: ${errorMessage}${stderrMessage}`)
 		}
 	})
 

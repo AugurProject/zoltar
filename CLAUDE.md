@@ -33,13 +33,15 @@ bun run ui:serve        # Dev server
 bun run ui:watch        # Watch and rebuild UI assets
 ```
 
-### Quality Checks (run in order after changes)
+### Quality Checks (run in order before finalizing a task)
 
 ```bash
 bun tsc                 # Full TypeScript check (includes contract generation pipeline)
 bun x tsc --noEmit      # UI-only typecheck (when only ui/ changed, no contract output needed)
 bun test                # Run all tests (skip for ui/-only changes)
-bun run format          # Format with Prettier + ESLint fixes
+bun run check           # Full Biome check
+bun run check:changed   # Biome check on changed files only
+bun run format          # Format changed files with Biome
 bun run knip            # Dead-code analysis (zero warnings required)
 bun run knip:fix        # Auto-fix unused exports/files
 ```
@@ -47,7 +49,7 @@ bun run knip:fix        # Auto-fix unused exports/files
 ### Other
 
 ```bash
-bun run lint            # ESLint only
+bun run check           # Biome lint + format checks
 bun run gas-costs       # Measure Solidity gas costs
 ```
 
@@ -112,7 +114,7 @@ The codebase must have **zero knip warnings** before merging. No unused exports,
 
 ## Code Style
 
-Enforced by ESLint + Prettier (`bun run format`):
+Enforced by Biome (`bun run format` and `bun run check`):
 
 - **Tabs** for indentation (not spaces)
 - **Single quotes** for strings

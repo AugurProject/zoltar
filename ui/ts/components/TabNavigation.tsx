@@ -23,7 +23,7 @@ function renderTabLink(route: Exclude<TabNavigationProps['route'], 'not-found'>,
 
 export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDeployed, deployRoute, marketRoute, openOracleRoute, securityPoolsRoute, onRouteChange }: TabNavigationProps) {
 	return (
-		<nav className="tab-nav" aria-label="Application sections">
+		<nav className='tab-nav' aria-label='Application sections'>
 			{showDeployTab ? (
 				<a
 					className={`tab-link ${route === 'deploy' ? 'active' : ''}`}
