@@ -149,7 +149,7 @@ export function App() {
 
 	useEffect(() => {
 		if (!walletBootstrapComplete) return
-		void refreshState({ loadWalletState: false })
+		refreshState({ loadWalletState: false })
 	}, [walletBootstrapComplete])
 
 	useEffect(() => {
@@ -204,7 +204,7 @@ export function App() {
 						isLoadingUniverseRepBalance={loadingZoltarForkAccess}
 						onConnect={() => void connectWallet()}
 						onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
-						onRefresh={() => void refreshState()}
+						onRefresh={() => refreshState()}
 						universeErrorMessage={universeErrorMessage}
 						universeLabel={universeLabel}
 						universeRepBalance={zoltarForkRepBalance}

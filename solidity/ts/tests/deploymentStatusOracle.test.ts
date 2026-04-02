@@ -18,7 +18,7 @@ describe('Deployment Status Oracle Test Suite', () => {
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 
-	const deployViaProxy = async (bytecode: `0x${ string }`) => {
+	const deployViaProxy = async (bytecode: `0x${string}`) => {
 		const hash = await client.sendTransaction({
 			to: addressString(PROXY_DEPLOYER_ADDRESS),
 			data: bytecode,
@@ -45,8 +45,8 @@ describe('Deployment Status Oracle Test Suite', () => {
 	test('reports a mixed deployment mask after a subset of infra contracts is deployed', async () => {
 		await ensureDeploymentStatusOracleDeployed(client)
 
-		await deployViaProxy(`0x${ ScalarOutcomes_ScalarOutcomes.evm.bytecode.object }`)
-		await deployViaProxy(`0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`)
+		await deployViaProxy(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
+		await deployViaProxy(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
 
 		const deploymentMask = await loadDeploymentStatusOracleMask(client)
 
@@ -54,10 +54,10 @@ describe('Deployment Status Oracle Test Suite', () => {
 	})
 
 	test('ensureInfraDeployed repairs an out-of-order partial deployment', async () => {
-		await deployViaProxy(`0x${ peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object }`)
-		await deployViaProxy(`0x${ peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object }`)
-		await deployViaProxy(`0x${ peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object }`)
-		await deployViaProxy(`0x${ ScalarOutcomes_ScalarOutcomes.evm.bytecode.object }`)
+		await deployViaProxy(`0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
+		await deployViaProxy(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
+		await deployViaProxy(`0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
+		await deployViaProxy(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
 
 		await ensureInfraDeployed(client)
 

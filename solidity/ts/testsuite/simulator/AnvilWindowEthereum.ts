@@ -40,7 +40,7 @@ function parseJsonRpcResponse(raw: unknown): JsonRpcSuccess {
 		throw new Error('Invalid JSON-RPC response: missing base fields')
 	}
 	if (raw.jsonrpc !== '2.0') {
-		throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${ raw.jsonrpc }'`)
+		throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${raw.jsonrpc}'`)
 	}
 	if ('error' in raw && raw.error !== undefined && !isJsonRpcError(raw.error)) {
 		throw new Error('Invalid JSON-RPC response: malformed error object')

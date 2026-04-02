@@ -234,7 +234,7 @@ function getDeploymentStatusOracleStepAddresses() {
 function getDeploymentStatusOracleByteCode() {
 	return encodeDeployData({
 		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-		bytecode: `0x${ DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object }`,
+		bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
 		args: [getDeploymentStatusOracleStepAddresses()],
 	})
 }
@@ -452,12 +452,14 @@ export function getDeploymentSteps(): DeploymentStep[] {
 }
 
 async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readContract'>): Promise<bigint> {
-	return BigInt(await client.readContract({
-		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-		functionName: 'getDeploymentMask',
-		address: getDeploymentStatusOracleAddress(),
-		args: [],
-	}))
+	return BigInt(
+		await client.readContract({
+			abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
+			functionName: 'getDeploymentMask',
+			address: getDeploymentStatusOracleAddress(),
+			args: [],
+		}),
+	)
 }
 
 export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient, 'readContract' | 'getCode'>): Promise<DeploymentStatusSnapshot> {

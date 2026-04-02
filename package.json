@@ -35,11 +35,11 @@
 		"ui:vendor": "cd ui && bun install --frozen-lockfile && bun ./build/vendor.mts",
 		"gas-costs": "cd solidity && bun run gas-costs",
 		"test": "bun run tsc && bun test --timeout 300000",
-		"check": "bunx biome check solidity/ts ui/ts ui/css",
-		"check:changed": "bunx biome check --changed --since origin/main solidity/ts ui/ts ui/css",
-		"lint": "bun x biome check solidity/ts ui/ts",
-		"lint:fix": "bun x biome check --write solidity/ts ui/ts",
-		"format": "bunx biome format --write --changed --since origin/main solidity/ts ui/ts ui/css",
+		"check": "bunx @biomejs/biome check solidity/ts ui/ts ui/css",
+		"check:changed": "bunx @biomejs/biome check --changed --since origin/main solidity/ts ui/ts ui/css",
+		"lint": "bun x @biomejs/biome check solidity/ts ui/ts",
+		"lint:fix": "bun x @biomejs/biome check --write solidity/ts ui/ts",
+		"format": "bunx @biomejs/biome format --write --changed --since origin/main solidity/ts ui/ts ui/css",
 		"knip": "bun x knip",
 		"knip:fix": "bun x knip --fix"
 	}

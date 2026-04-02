@@ -154,7 +154,7 @@ export function useOnchainState() {
 	}
 
 	useEffect(() => {
-		void refreshState({ loadWalletState: false })
+		refreshState({ loadWalletState: false })
 	}, [])
 
 	useEffect(() => {

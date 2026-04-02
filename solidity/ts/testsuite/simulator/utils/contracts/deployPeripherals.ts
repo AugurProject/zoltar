@@ -37,7 +37,7 @@ export function getDeploymentStepAddresses() {
 function getDeploymentStatusOracleByteCode() {
 	return encodeDeployData({
 		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-		bytecode: `0x${ DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object }`,
+		bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
 		args: [getDeploymentStepAddresses()],
 	})
 }
@@ -150,12 +150,14 @@ export function getDeploymentStatusOracleAddress() {
 }
 
 export async function loadDeploymentStatusOracleMask(client: Pick<WriteClient, 'readContract'>): Promise<bigint> {
-	return BigInt(await client.readContract({
-		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-		functionName: 'getDeploymentMask',
-		address: getDeploymentStatusOracleAddress(),
-		args: [],
-	}))
+	return BigInt(
+		await client.readContract({
+			abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
+			functionName: 'getDeploymentMask',
+			address: getDeploymentStatusOracleAddress(),
+			args: [],
+		}),
+	)
 }
 
 export async function ensureDeploymentStatusOracleDeployed(client: WriteClient): Promise<void> {
@@ -187,7 +189,7 @@ type DeploymentStatusOracleStepId = ReturnType<typeof getDeploymentStatusOracleS
 
 function isDeploymentStatusOracleStepDeployed(deploymentMask: bigint, stepId: DeploymentStatusOracleStepId) {
 	const bitIndex = getDeploymentStatusOracleSteps().findIndex(step => step.id === stepId)
-	if (bitIndex === -1) throw new Error(`Unknown deployment status oracle step: ${ stepId }`)
+	if (bitIndex === -1) throw new Error(`Unknown deployment status oracle step: ${stepId}`)
 	return (deploymentMask & (1n << BigInt(bitIndex))) !== 0n
 }
 
