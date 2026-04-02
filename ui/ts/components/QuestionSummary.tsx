@@ -11,6 +11,7 @@ type QuestionSummaryHeaderProps = {
 
 type QuestionSummaryProps = {
 	className?: string
+	hideHeading?: boolean
 	loading?: boolean
 	question: MarketDetails | undefined
 }
@@ -66,7 +67,7 @@ export function QuestionSummaryHeader({ className = '', description, loading = f
 	)
 }
 
-export function QuestionSummary({ className = '', loading = false, question }: QuestionSummaryProps) {
+export function QuestionSummary({ className = '', hideHeading = false, loading = false, question }: QuestionSummaryProps) {
 	if (loading || question === undefined) {
 		return (
 			<div className={`question-summary ${ className }`}>
@@ -80,10 +81,12 @@ export function QuestionSummary({ className = '', loading = false, question }: Q
 
 	return (
 		<div className={`question-summary ${ className }`}>
-			<div className="question-summary-heading">
-				<strong>{title}</strong>
-				<p className="detail">{description}</p>
-			</div>
+			{hideHeading ? undefined : (
+				<div className="question-summary-heading">
+					<strong>{title}</strong>
+					<p className="detail">{description}</p>
+				</div>
+			)}
 			<div className="question-summary-grid">
 				<div>
 					<span className="metric-label">Question ID</span>

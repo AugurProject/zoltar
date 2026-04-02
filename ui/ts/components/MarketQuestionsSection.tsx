@@ -58,7 +58,7 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 								</div>
 							}
 						>
-							<QuestionSummary question={question} />
+							<QuestionSummary question={question} hideHeading />
 						</EntityCard>
 					))}
 				</div>

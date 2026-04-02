@@ -60,7 +60,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 				return await action(walletAddress, securityPoolAddress, currentForm)
 			},
 			errorFallback,
-			async (result) => {
+			async result => {
 				reportingResult.value = result
 				const securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
 				const details = await loadReportingDetails(createReadClient(), securityPoolAddress, accountAddress)

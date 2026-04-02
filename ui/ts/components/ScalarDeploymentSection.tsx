@@ -2,7 +2,8 @@ import { useState } from 'preact/hooks'
 import type { Address } from 'viem'
 import { ChildUniversesSection } from './ChildUniversesSection.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
-import { formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarSliderProgress } from '../lib/scalarOutcome.js'
+import { useEffect } from 'preact/hooks'
+import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarSliderProgress } from '../lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../types/contracts.js'
 
 type ScalarDeploymentSectionProps = {
@@ -31,12 +32,20 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	}
 
 	const selectedScalarTick = BigInt(scalarOutcomeTick)
-	const selectedScalarOutcomeLabel = formatScalarOutcomeLabel(questionDetails, selectedScalarTick)
-	const selectedScalarOutcomeIndex = getScalarOutcomeIndex(questionDetails, selectedScalarTick)
+	const clampedSelectedScalarTick = clampScalarTickIndex(selectedScalarTick, questionDetails.numTicks)
+	const clampedScalarOutcomeTick = clampedSelectedScalarTick.toString()
+	const selectedScalarOutcomeLabel = formatScalarOutcomeLabel(questionDetails, clampedSelectedScalarTick)
+	const selectedScalarOutcomeIndex = getScalarOutcomeIndex(questionDetails, clampedSelectedScalarTick)
 	const selectedScalarChild = childUniverses.find(child => child.outcomeIndex === selectedScalarOutcomeIndex)
 	const selectedScalarChildExists = selectedScalarChild?.exists === true
-	const selectedScalarProgress = getScalarSliderProgress(selectedScalarTick, questionDetails.numTicks)
+	const selectedScalarProgress = getScalarSliderProgress(clampedSelectedScalarTick, questionDetails.numTicks)
 	const canDeployScalarChild = accountAddress !== undefined && isMainnet && hasForked && !selectedScalarChildExists
+
+	useEffect(() => {
+		const nextTick = clampScalarTickIndex(selectedScalarTick, questionDetails.numTicks).toString()
+		if (nextTick === scalarOutcomeTick) return
+		setScalarOutcomeTick(nextTick)
+	}, [questionDetails.numTicks, scalarOutcomeTick, selectedScalarTick])
 
 	return (
 		<div className="entity-card-subsection market-overview-subsection">
@@ -52,7 +61,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 							min="0"
 							max={questionDetails.numTicks.toString()}
 							step="1"
-							value={scalarOutcomeTick}
+							value={clampedScalarOutcomeTick}
 							aria-valuetext={selectedScalarOutcomeLabel}
 							onInput={event => {
 								setScalarDeployError(undefined)
@@ -68,7 +77,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 					</div>
 					<div>
 						<span className="metric-label">Selected Tick</span>
-						<strong>{`${ scalarOutcomeTick } / ${ questionDetails.numTicks.toString() }`}</strong>
+						<strong>{`${ clampedScalarOutcomeTick } / ${ questionDetails.numTicks.toString() }`}</strong>
 					</div>
 					<div>
 						<span className="metric-label">Selected Value</span>

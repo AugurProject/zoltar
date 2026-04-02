@@ -3,10 +3,10 @@
 	"type": "module",
 	"description": "Zoltar Contracts",
 	"scripts": {
-		"link-node-modules": "bun ../scripts/link-shared-node-modules.mjs",
-		"link:node-modules": "bun ../scripts/link-shared-node-modules.mjs",
+		"link-shared-modules": "bun run preinstall",
+		"link:shared-modules": "bun run preinstall",
 		"preinstall": "bun ../scripts/link-shared-node-modules.mjs",
-		"setup": "bun ../scripts/link-shared-node-modules.mjs && bun install --frozen-lockfile --ignore-scripts && bun run compile-contracts",
+		"setup": "bun run link-shared-modules && bun install --frozen-lockfile --ignore-scripts && bun run compile-contracts",
 		"compile-contracts": "bun tsc --project tsconfig-compile.json && bun run ./js/compile.js",
 		"gas-costs": "bun tsc && bun run ./js/gas-costs.js",
 		"test": "bun run compile-contracts && bun tsc && bun test --timeout 300000 ./js/tests/"

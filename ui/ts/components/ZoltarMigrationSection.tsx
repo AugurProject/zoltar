@@ -41,15 +41,7 @@ function getMigrationAmountSource(preparedRepBalance: bigint | undefined, repBal
 	return (preparedRepBalance ?? 0n) + (repBalance ?? 0n)
 }
 
-function getMigrationGuardMessage(
-	accountAddress: Address | undefined,
-	isMainnet: boolean,
-	rootUniverse: ZoltarUniverseSummary | undefined,
-	loadingZoltarForkAccess: boolean,
-	hasForked: boolean,
-	loadingZoltarUniverse: boolean,
-	notForkedAction: string,
-): string | undefined {
+function getMigrationGuardMessage(accountAddress: Address | undefined, isMainnet: boolean, rootUniverse: ZoltarUniverseSummary | undefined, loadingZoltarForkAccess: boolean, hasForked: boolean, loadingZoltarUniverse: boolean, notForkedAction: string): string | undefined {
 	if (accountAddress === undefined) return 'Connect a wallet before using REP migration actions.'
 	if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
 	if (rootUniverse === undefined) return loadingZoltarUniverse ? 'Loading universe...' : 'Load the universe first.'

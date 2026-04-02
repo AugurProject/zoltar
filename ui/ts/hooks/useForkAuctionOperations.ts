@@ -69,7 +69,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 			},
 			async walletAddress => {
 				forkAuctionResult.value = undefined
-				const details = forkAuctionDetails.value ?? await loadForkAuctionDetails(createReadClient(), parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address'))
+				const details = forkAuctionDetails.value ?? (await loadForkAuctionDetails(createReadClient(), parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address')))
 				return await action(walletAddress, details)
 			},
 			errorFallback,
