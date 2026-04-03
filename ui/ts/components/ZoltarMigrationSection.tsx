@@ -47,7 +47,7 @@ function getMigrationAmountSource(preparedRepBalance: bigint | undefined, repBal
 function getMigrationGuardMessage(accountAddress: Address | undefined, isMainnet: boolean, rootUniverse: ZoltarUniverseSummary | undefined, loadingZoltarForkAccess: boolean, hasForked: boolean, loadingZoltarUniverse: boolean, notForkedAction: string): string | undefined {
 	if (accountAddress === undefined) return 'Connect a wallet before using REP migration actions.'
 	if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
-	if (rootUniverse === undefined) return loadingZoltarUniverse ? 'Loading Universe Data...' : 'Load the universe first.'
+	if (rootUniverse === undefined) return loadingZoltarUniverse ? 'Loading universe data...' : 'Load the universe first.'
 	if (loadingZoltarForkAccess) return 'Loading REP balances...'
 	if (!hasForked) return notForkedAction
 	return undefined
@@ -132,7 +132,7 @@ export function ZoltarMigrationSection({
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return undefined
 		if (amountExceedsAvailableRep) {
-			return `You only have ${formatCurrencyBalance(totalRepAvailable)} REP available for migration in this universe (${formatCurrencyBalance(zoltarMigrationPreparedRepBalance)} in your migration balance and ${formatCurrencyBalance(zoltarForkRepBalance)} wallet REP).`
+			return `You only have ${formatCurrencyBalance(totalRepAvailable)} REP available for migration in this universe (${formatCurrencyBalance(zoltarMigrationPreparedRepBalance ?? 0n)} in your migration balance and ${formatCurrencyBalance(zoltarForkRepBalance ?? 0n)} wallet REP).`
 		}
 		if (missingPreparationAmount === undefined) return 'Enter a valid amount.'
 		if (missingPreparationAmount === 0n) return 'This amount is already in your migration balance. Split REP when ready.'
@@ -188,7 +188,7 @@ export function ZoltarMigrationSection({
 					</div>
 					<div>
 						<span className='metric-label'>Universe</span>
-						<strong>{rootUniverse === undefined ? <LoadingText>Loading Universe Data...</LoadingText> : <UniverseLink universeId={rootUniverse.universeId} />}</strong>
+						<strong>{rootUniverse === undefined ? <LoadingText>Loading universe data...</LoadingText> : <UniverseLink universeId={rootUniverse.universeId} />}</strong>
 					</div>
 				</div>
 

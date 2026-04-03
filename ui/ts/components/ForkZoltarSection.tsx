@@ -8,7 +8,9 @@ import type { MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js
 type ForkZoltarSectionProps = {
 	accountAddress: Address | undefined
 	isMainnet: boolean
+	loadingZoltarQuestionCount: boolean
 	loadingZoltarForkAccess: boolean
+	loadingZoltarQuestions: boolean
 	loadingZoltarUniverse: boolean
 	onApproveZoltarForkRep: () => void
 	onForkZoltar: () => void
@@ -27,7 +29,9 @@ type ForkZoltarSectionProps = {
 export function ForkZoltarSection({
 	accountAddress,
 	isMainnet,
+	loadingZoltarQuestionCount,
 	loadingZoltarForkAccess,
+	loadingZoltarQuestions,
 	loadingZoltarUniverse,
 	onApproveZoltarForkRep,
 	onForkZoltar,
@@ -95,7 +99,7 @@ export function ForkZoltarSection({
 							<Question question={selectedQuestion} />
 						</div>
 					)}
-					{selectedQuestionId === '' || selectedQuestion !== undefined ? undefined : <p className='detail'>No loaded question matches this ID.</p>}
+					{loadingZoltarQuestions || loadingZoltarQuestionCount ? undefined : selectedQuestionId === '' || selectedQuestion !== undefined ? undefined : <p className='detail'>No loaded question matches this ID.</p>}
 
 					<div className='actions'>
 						{hasForked ? undefined : (

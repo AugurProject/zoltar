@@ -18,12 +18,21 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 		}
 	}
 
+	if (isBusy) {
+		return {
+			badgeClass: 'pending',
+			detail: 'Deployment in progress.',
+			label: 'Deploying...',
+			buttonLabel: 'Deploying...',
+		}
+	}
+
 	if (prerequisiteLabel === undefined) {
 		return {
 			badgeClass: 'pending',
 			detail: 'Can deploy now.',
-			label: isBusy ? 'Deploying...' : 'Deploy',
-			buttonLabel: isBusy ? 'Deploying...' : 'Deploy',
+			label: 'Deploy',
+			buttonLabel: 'Deploy',
 		}
 	}
 
@@ -31,7 +40,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 		badgeClass: 'blocked',
 		detail: `Waiting for ${prerequisiteLabel}.`,
 		label: 'Blocked',
-		buttonLabel: isBusy ? 'Deploying...' : 'Deploy',
+		buttonLabel: 'Deploy',
 	}
 }
 

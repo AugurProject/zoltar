@@ -545,7 +545,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .currency-value.copyable:focus-visible {
-	outline: 2px solid rgba(56, 213, 255, 0.45);
+	outline: 2px solid var(--focus);
 	outline-offset: 2px;
 }
 
@@ -564,7 +564,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .address-value.copyable:focus-visible {
-	outline: 2px solid rgba(56, 213, 255, 0.45);
+	outline: 2px solid var(--focus);
 	outline-offset: 2px;
 }
 

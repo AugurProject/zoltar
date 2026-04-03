@@ -150,6 +150,8 @@ export function MarketSection({
 						accountAddress={accountState.address}
 						isMainnet={isMainnet}
 						loadingZoltarForkAccess={loadingZoltarForkAccess}
+						loadingZoltarQuestionCount={loadingZoltarQuestionCount}
+						loadingZoltarQuestions={loadingZoltarQuestions}
 						loadingZoltarUniverse={loadingZoltarUniverse}
 						onApproveZoltarForkRep={onApproveZoltarForkRep}
 						onForkZoltar={onForkZoltar}

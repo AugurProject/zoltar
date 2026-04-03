@@ -1,4 +1,5 @@
 import { useSignal } from '@preact/signals'
+import { useEffect, useRef } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
 import { formatCurrencyBalance, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 
@@ -14,6 +15,16 @@ type CurrencyValueProps = {
 
 export function CurrencyValue({ className = '', copyable = true, decimals = 2, loading = false, suffix = '', units = 18, value }: CurrencyValueProps) {
 	const copied = useSignal(false)
+	const copyResetTimeout = useRef<number | undefined>(undefined)
+
+	useEffect(() => {
+		return () => {
+			if (copyResetTimeout.current !== undefined) {
+				window.clearTimeout(copyResetTimeout.current)
+				copyResetTimeout.current = undefined
+			}
+		}
+	}, [])
 
 	if (loading) {
 		return <LoadingText className={`currency-value loading ${className}`}>Loading...</LoadingText>
@@ -44,10 +55,14 @@ export function CurrencyValue({ className = '', copyable = true, decimals = 2, l
 			aria-label={`Copy exact value ${exactValue}`}
 			onClick={async () => {
 				try {
+					if (copyResetTimeout.current !== undefined) {
+						window.clearTimeout(copyResetTimeout.current)
+					}
 					await navigator.clipboard.writeText(exactValue)
 					copied.value = true
-					window.setTimeout(() => {
+					copyResetTimeout.current = window.setTimeout(() => {
 						copied.value = false
+						copyResetTimeout.current = undefined
 					}, 1200)
 				} catch {
 					return

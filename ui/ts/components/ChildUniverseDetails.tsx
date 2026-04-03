@@ -25,12 +25,12 @@ export function ChildUniverseDetails({ child, showOutcomeIndex = false }: ChildU
 					<strong>{child.reputationToken}</strong>
 				</div>
 			) : undefined}
-			{child.forkTime === 0n ? undefined : (
+			{child.forkTime !== 0n ? (
 				<div>
 					<span className='metric-label'>Fork Time</span>
 					<strong>{formatTimestamp(child.forkTime)}</strong>
 				</div>
-			)}
+			) : undefined}
 		</div>
 	)
 }

@@ -132,8 +132,8 @@ export function useOnchainState() {
 		} finally {
 			if (shouldLoadWalletState) {
 				walletLoadCount.value = Math.max(0, walletLoadCount.value - 1)
+				if (isCurrent()) walletBootstrapComplete.value = true
 			}
-			if (isCurrent()) walletBootstrapComplete.value = true
 			deploymentStatusLoadCount.value = Math.max(0, deploymentStatusLoadCount.value - 1)
 		}
 	}

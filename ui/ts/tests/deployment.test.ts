@@ -153,4 +153,20 @@ void describe('deployment helpers', () => {
 		expect(getCodeCallCount).toBe(1)
 		expect(readContractCallCount).toBe(1)
 	})
+
+	void test('loadZoltarUniverseSummary preserves the original read error when the Zoltar code probe fails', async () => {
+		let getCodeCallCount = 0
+		const mockReadClient = {
+			getCode: async () => {
+				getCodeCallCount += 1
+				throw new Error('secondary getCode failure')
+			},
+			readContract: async () => {
+				throw new Error('original load failure')
+			},
+		} as unknown as ReadClient
+
+		await expect(loadZoltarUniverseSummary(mockReadClient, 0n)).rejects.toThrow('original load failure')
+		expect(getCodeCallCount).toBe(1)
+	})
 })

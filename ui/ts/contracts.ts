@@ -874,8 +874,12 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 	try {
 		return await loadUniverseSummary()
 	} catch (error) {
-		const zoltarCode = await client.getCode({ address: zoltarAddress })
-		if (zoltarCode === undefined || zoltarCode === '0x') return undefined
+		try {
+			const zoltarCode = await client.getCode({ address: zoltarAddress })
+			if (zoltarCode === undefined || zoltarCode === '0x') return undefined
+		} catch {
+			throw error
+		}
 		throw error
 	}
 }

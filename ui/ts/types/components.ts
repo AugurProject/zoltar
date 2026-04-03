@@ -127,6 +127,7 @@ export type SecurityPoolRouteContentProps = {
 	onLoadMarketById: (marketId: string) => Promise<void>
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
+	createdQuestionDetails: MarketDetails | undefined
 	onSecurityPoolFormChange: (update: Partial<SecurityPoolFormState>) => void
 	securityPools: ListedSecurityPool[]
 	securityPoolCreating: boolean

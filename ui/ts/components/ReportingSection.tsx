@@ -151,7 +151,9 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 							<p className='panel-label'>Latest Reporting Action</p>
 							<p className='detail'>Action: {reportingResult.action}</p>
 							<p className='detail'>Outcome: {getReportingOutcomeLabel(reportingResult.outcome)}</p>
-							<p className='detail'>Pool: {reportingResult.securityPoolAddress}</p>
+							<p className='detail'>
+								Pool: <AddressValue address={reportingResult.securityPoolAddress} />
+							</p>
 							<p className='detail'>
 								Universe: <UniverseLink universeId={reportingResult.universeId} />
 							</p>

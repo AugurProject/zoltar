@@ -7,13 +7,14 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 	const nextMissingStep = findNextDeployableStep(deploymentStatuses)
 	const deployedContractCount = deploymentStatuses.filter(step => step.deployed).length
 	const totalContractCount = deploymentStatuses.length
+	const deployedContractLabel = deployedContractCount === 1 ? 'contract deployed' : 'contracts deployed'
 
 	return (
 		<>
 			<section className='panel'>
 				<h2>
 					<LoadableValue loading={isLoadingDeploymentStatuses} placeholder='Loading deployment status...'>
-						{deployedContractCount} contracts deployed / {totalContractCount} total
+						{deployedContractCount} {deployedContractLabel} / {totalContractCount} total
 					</LoadableValue>
 				</h2>
 				<p className='detail'>

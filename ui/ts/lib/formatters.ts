@@ -18,6 +18,10 @@ function formatDecimalString(value: string) {
 	return `${isNegative ? '-' : ''}${formattedIntegerPart}${fractionalPart === undefined ? '' : `.${fractionalPart}`}`
 }
 
+function assertInteger(value: number, label: string) {
+	if (!Number.isInteger(value)) throw new RangeError(`${label} must be an integer`)
+}
+
 export function formatCurrencyBalance(value: bigint | undefined, units: number = 18) {
 	if (value === undefined) return 'Unavailable'
 	const formattedValue = units === 18 ? formatEther(value) : formatUnits(value, units)
@@ -26,14 +30,24 @@ export function formatCurrencyBalance(value: bigint | undefined, units: number =
 
 export function formatRoundedCurrencyBalance(value: bigint | undefined, units: number = 18, decimals: number = 2) {
 	if (value === undefined) return 'Unavailable'
+	assertInteger(units, 'Units')
+	assertInteger(decimals, 'Decimals')
 	if (decimals < 0) return formatCurrencyBalance(value, units)
 
+	const isNegative = value < 0n
+	const absoluteValue = isNegative ? -value : value
 	const scale = 10n ** BigInt(decimals)
 	const base = 10n ** BigInt(units)
-	const rounded = (value * scale + base / 2n) / base
+	const rounded = (absoluteValue * scale + base / 2n) / base
 	const integerPart = rounded / scale
+	const prefix = isNegative ? '-' : ''
+
+	if (decimals === 0) {
+		return `${prefix}${formatGroupedInteger(integerPart)}`
+	}
+
 	const fractionalPart = rounded % scale
-	return `${formatGroupedInteger(integerPart)}.${fractionalPart.toString().padStart(decimals, '0')}`
+	return `${prefix}${formatGroupedInteger(integerPart)}.${fractionalPart.toString().padStart(decimals, '0')}`
 }
 
 export function formatTimestamp(timestamp: bigint) {

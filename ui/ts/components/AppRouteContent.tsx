@@ -82,6 +82,7 @@ export function AppRouteContent({ deployment, market, openOracle, route, securit
 						checkingDuplicateOriginPool: securityPool.checkingDuplicateOriginPool,
 						duplicateOriginPoolExists: securityPool.duplicateOriginPoolExists,
 						lastCreatedQuestionId: securityPool.lastCreatedQuestionId,
+						createdQuestionDetails: securityPool.createdQuestionDetails,
 						marketDetails: securityPool.marketDetails,
 						loadingMarketDetails: securityPool.loadingMarketDetails,
 						securityPoolCreating: securityPool.securityPoolCreating,

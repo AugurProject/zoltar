@@ -94,7 +94,10 @@ export function App() {
 		zoltarUniverse,
 		zoltarUniverseMissing,
 	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
-	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({ ...baseHookConfig, deploymentStatuses })
+	const { checkingDuplicateOriginPool, createPool, createdQuestionDetails, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({
+		...baseHookConfig,
+		deploymentStatuses,
+	})
 	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, redeemRep, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult, setSecurityVaultForm, updateVaultFees } = useSecurityVaultOperations(baseHookConfig)
 	const { approveToken1, approveToken2, loadOracleManager, loadingOracleManager, onQueueOperation, onRequestPrice, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails, setOpenOracleForm, settleReport, submitInitialReport } = useOpenOracleOperations(baseHookConfig)
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
@@ -321,6 +324,7 @@ export function App() {
 						accountState,
 						checkingDuplicateOriginPool,
 						duplicateOriginPoolExists,
+						createdQuestionDetails,
 						onCreateSecurityPool: () => void createPool(),
 						lastCreatedQuestionId,
 						onLoadMarket: () => void loadMarket(),

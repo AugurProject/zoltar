@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import { useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { formatAddress } from '../lib/addresses.js'
 
 type AddressValueProps = {
@@ -11,6 +11,7 @@ export function AddressValue({ address, className = '' }: AddressValueProps) {
 	const copied = useSignal(false)
 	const buttonRef = useRef<HTMLButtonElement>(null)
 	const measureRef = useRef<HTMLSpanElement>(null)
+	const copyResetTimeout = useRef<number | undefined>(undefined)
 	const [shouldShorten, setShouldShorten] = useState(false)
 
 	useLayoutEffect(() => {
@@ -39,6 +40,15 @@ export function AddressValue({ address, className = '' }: AddressValueProps) {
 		}
 	}, [address])
 
+	useEffect(() => {
+		return () => {
+			if (copyResetTimeout.current !== undefined) {
+				window.clearTimeout(copyResetTimeout.current)
+				copyResetTimeout.current = undefined
+			}
+		}
+	}, [])
+
 	if (address === undefined) {
 		return (
 			<span className={`address-value ${className}`} title='Unavailable'>
@@ -58,10 +68,14 @@ export function AddressValue({ address, className = '' }: AddressValueProps) {
 			aria-label={`Copy address ${address}`}
 			onClick={async () => {
 				try {
+					if (copyResetTimeout.current !== undefined) {
+						window.clearTimeout(copyResetTimeout.current)
+					}
 					await navigator.clipboard.writeText(address)
 					copied.value = true
-					window.setTimeout(() => {
+					copyResetTimeout.current = window.setTimeout(() => {
 						copied.value = false
+						copyResetTimeout.current = undefined
 					}, 1200)
 				} catch {
 					return
