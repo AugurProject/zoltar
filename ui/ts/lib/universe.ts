@@ -1,4 +1,7 @@
+import { getAddress, type Address } from 'viem'
 import { readUniverseQueryParam, writeUniverseQueryParam } from './urlParams.js'
+
+export const GENESIS_REPUTATION_TOKEN_ADDRESS = getAddress('0x221657776846890989a759ba2973e427dff5c9bb') satisfies Address
 
 export function formatUniverseLabel(universeId: bigint) {
 	return universeId === 0n ? 'Genesis (0)' : `Universe ${universeId.toString()}`

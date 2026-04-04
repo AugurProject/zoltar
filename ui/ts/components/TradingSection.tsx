@@ -1,4 +1,5 @@
 import { EnumDropdown } from './EnumDropdown.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
@@ -28,7 +29,9 @@ export function TradingSection({ accountState, onCreateCompleteSet, onMigrateSha
 							<p className='detail'>
 								Universe: <UniverseLink universeId={tradingResult.universeId} />
 							</p>
-							<p className='detail'>Transaction: {tradingResult.hash}</p>
+							<p className='detail'>
+								Transaction: <TransactionHashLink hash={tradingResult.hash} />
+							</p>
 						</div>
 					)}
 				</div>

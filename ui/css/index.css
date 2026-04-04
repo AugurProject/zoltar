@@ -59,6 +59,11 @@
 	--control-border: rgba(154, 179, 211, 0.28);
 	--input-border: rgba(154, 179, 211, 0.3);
 	--focus: rgba(56, 213, 255, 0.48);
+	--primary-button-bg: rgba(56, 213, 255, 0.11);
+	--primary-button-bg-hover: rgba(56, 213, 255, 0.16);
+	--primary-button-border: rgba(56, 213, 255, 0.22);
+	--primary-button-border-hover: rgba(56, 213, 255, 0.3);
+	--primary-button-shadow: rgba(56, 213, 255, 0.05);
 
 	/* type scale — fixed */
 	--font-xs: 0.68rem;
@@ -147,6 +152,11 @@ main {
 	gap: 0.75rem;
 }
 
+.page-notices {
+	display: grid;
+	gap: 0.75rem;
+}
+
 .top-shell {
 	display: grid;
 	gap: 0.75rem;
@@ -231,6 +241,20 @@ button.secondary:hover:not(:disabled) {
 	color: var(--text);
 }
 
+button.primary {
+	background: var(--primary-button-bg);
+	color: var(--text);
+	border-color: var(--primary-button-border);
+	font-weight: 600;
+	box-shadow: 0 0 0 1px var(--primary-button-shadow) inset;
+}
+
+button.primary:hover:not(:disabled) {
+	background: var(--primary-button-bg-hover);
+	border-color: var(--primary-button-border-hover);
+	color: var(--text);
+}
+
 button.quiet {
 	background: transparent;
 	color: var(--text);
@@ -271,6 +295,11 @@ button.quiet:hover:not(:disabled) {
 .button-link:hover {
 	background: var(--interactive-bg-hover);
 	border-color: var(--interactive-border-hover);
+}
+
+.button-link:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
 }
 
 .button-link.secondary-link {
@@ -420,6 +449,10 @@ button.destructive:hover:not(:disabled) {
 	align-items: center;
 }
 
+.detail + .actions {
+	margin-top: 0.75rem;
+}
+
 .notice {
 	margin-top: 0;
 	padding: 0.75rem 0;
@@ -483,6 +516,61 @@ button.destructive:hover:not(:disabled) {
 
 .loading-value {
 	opacity: 0.72;
+}
+
+.currency-value {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	max-width: 100%;
+	min-width: 0;
+	font: inherit;
+	color: inherit;
+	white-space: nowrap;
+}
+
+button.currency-value.copyable {
+	border: 0;
+	padding: 0;
+	background: transparent;
+	cursor: copy;
+	text-align: inherit;
+}
+
+button.currency-value.copyable:hover:not(:disabled) {
+	background: transparent;
+}
+
+.currency-value.loading {
+	opacity: 0.72;
+}
+
+.currency-value.unavailable {
+	opacity: 0.72;
+}
+
+.currency-value.copyable:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+}
+
+.address-value.copyable {
+	border: 0;
+	padding: 0;
+	background: transparent;
+	font: inherit;
+	cursor: copy;
+	text-align: inherit;
+	color: inherit;
+}
+
+.address-value.copyable:hover:not(:disabled) {
+	background: transparent;
+}
+
+.address-value.copyable:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
 }
 
 .route-shell {
@@ -638,7 +726,44 @@ button.destructive:hover:not(:disabled) {
 }
 
 .overview-address-metric {
-	flex-basis: min(24rem, 100%);
+	flex: 1 1 min(24rem, 100%);
+	min-width: 0;
+}
+
+.address-value {
+	display: inline-block;
+	position: relative;
+	max-width: 100%;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	vertical-align: bottom;
+}
+
+.address-value-measure {
+	position: absolute;
+	top: 0;
+	left: 0;
+	visibility: hidden;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.transaction-hash-link {
+	color: inherit;
+	text-decoration: underline;
+	text-decoration-color: var(--accent);
+	text-underline-offset: 0.14em;
+	word-break: break-all;
+}
+
+.transaction-hash-link:hover {
+	color: var(--accent);
+}
+
+.transaction-hash-link:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
 }
 
 .contract-panel {
@@ -1092,29 +1217,6 @@ button.destructive:hover:not(:disabled) {
 
 .question-summary.compact .question-summary-grid {
 	grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
-}
-
-.market-overview-question-summary {
-	display: grid;
-	gap: 0.45rem;
-	min-width: 0;
-}
-
-.market-overview-question-summary .question-summary {
-	gap: 0.45rem;
-}
-
-.market-overview-question-summary .question-summary-heading strong {
-	font-size: var(--font-body);
-}
-
-.market-overview-question-summary .question-summary-grid {
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.5rem 0.75rem;
-}
-
-.market-overview-question-summary .question-summary-grid > div {
-	padding-top: 0.45rem;
 }
 
 .workflow-question-card {

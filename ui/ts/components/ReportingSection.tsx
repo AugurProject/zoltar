@@ -1,7 +1,11 @@
+import { AddressValue } from './AddressValue.js'
+import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
-import { QuestionSummaryHeader } from './QuestionSummary.js'
+import { LoadingText } from './LoadingText.js'
+import { Question } from './Question.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
-import { formatCurrencyBalance, formatDuration, formatTimestamp } from '../lib/formatters.js'
+import { formatDuration, formatTimestamp } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome } from '../lib/reportingDomain.js'
@@ -43,11 +47,15 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 								<ul className='status-list hashes'>
 									<li>
 										<span>Security Pool</span>
-										<strong>{reportingDetails.securityPoolAddress}</strong>
+										<strong>
+											<AddressValue address={reportingDetails.securityPoolAddress} />
+										</strong>
 									</li>
 									<li>
 										<span>Escalation Game</span>
-										<strong>{reportingDetails.escalationGameAddress}</strong>
+										<strong>
+											<AddressValue address={reportingDetails.escalationGameAddress} />
+										</strong>
 									</li>
 									<li>
 										<span>Universe</span>
@@ -73,11 +81,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 										<h4>Question</h4>
 										<span className='badge muted'>{reportingDetails.marketDetails.marketType}</span>
 									</div>
-									<QuestionSummaryHeader
-										description={reportingDetails.marketDetails.description.trim() === '' ? 'No description provided.' : reportingDetails.marketDetails.description}
-										questionId={reportingDetails.marketDetails.questionId}
-										title={reportingDetails.marketDetails.title.trim() === '' ? 'Untitled question' : reportingDetails.marketDetails.title}
-									/>
+									<Question question={reportingDetails.marketDetails} />
 								</div>
 							</div>
 
@@ -86,15 +90,21 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 								<div className='escalation-metrics'>
 									<div>
 										<span className='metric-label'>Current Bond</span>
-										<strong>{formatCurrencyBalance(reportingDetails.currentRequiredBond)}</strong>
+										<strong>
+											<CurrencyValue value={reportingDetails.currentRequiredBond} suffix='REP' />
+										</strong>
 									</div>
 									<div>
 										<span className='metric-label'>Binding Capital</span>
-										<strong>{formatCurrencyBalance(reportingDetails.bindingCapital)}</strong>
+										<strong>
+											<CurrencyValue value={reportingDetails.bindingCapital} suffix='REP' />
+										</strong>
 									</div>
 									<div>
 										<span className='metric-label'>Threshold</span>
-										<strong>{formatCurrencyBalance(reportingDetails.nonDecisionThreshold)}</strong>
+										<strong>
+											<CurrencyValue value={reportingDetails.nonDecisionThreshold} suffix='REP' />
+										</strong>
 									</div>
 									<div>
 										<span className='metric-label'>Time Left</span>
@@ -102,7 +112,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 									</div>
 								</div>
 								<p className='detail'>
-									Game starts at {formatTimestamp(reportingDetails.startingTime)} and currently uses a start bond of {formatCurrencyBalance(reportingDetails.startBond)} REP-equivalent stake.
+									Game starts at {formatTimestamp(reportingDetails.startingTime)} and currently uses a start bond of <CurrencyValue value={reportingDetails.startBond} suffix='REP' />.
 								</p>
 							</div>
 
@@ -116,11 +126,19 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 												<p className='panel-label'>{side.label}</p>
 												{leadingOutcome === side.key ? <span className='badge ok'>Leading</span> : undefined}
 											</div>
-											<p className='detail'>Total stake: {formatCurrencyBalance(side.balance)}</p>
-											<p className='detail'>Your stake: {formatCurrencyBalance(userStake)}</p>
+											<p className='detail'>
+												Total stake: <CurrencyValue value={side.balance} suffix='REP' />
+											</p>
+											<p className='detail'>
+												Your stake: <CurrencyValue value={userStake} suffix='REP' />
+											</p>
 											<p className='detail'>Your deposits: {side.userDeposits.map(deposit => deposit.depositIndex.toString()).join(', ') || 'None'}</p>
-											<p className='detail'>Projected payout for current amount: {formatCurrencyBalance(estimate.payout)}</p>
-											<p className='detail'>Projected profit if this side wins: {formatCurrencyBalance(estimate.profit)}</p>
+											<p className='detail'>
+												Projected payout for current amount: <CurrencyValue value={estimate.payout} suffix='REP' />
+											</p>
+											<p className='detail'>
+												Projected profit if this side wins: <CurrencyValue value={estimate.profit} suffix='REP' />
+											</p>
 										</div>
 									)
 								})}
@@ -133,11 +151,15 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 							<p className='panel-label'>Latest Reporting Action</p>
 							<p className='detail'>Action: {reportingResult.action}</p>
 							<p className='detail'>Outcome: {getReportingOutcomeLabel(reportingResult.outcome)}</p>
-							<p className='detail'>Pool: {reportingResult.securityPoolAddress}</p>
+							<p className='detail'>
+								Pool: <AddressValue address={reportingResult.securityPoolAddress} />
+							</p>
 							<p className='detail'>
 								Universe: <UniverseLink universeId={reportingResult.universeId} />
 							</p>
-							<p className='detail'>Transaction: {reportingResult.hash}</p>
+							<p className='detail'>
+								Transaction: <TransactionHashLink hash={reportingResult.hash} />
+							</p>
 						</div>
 					)}
 				</div>
@@ -153,7 +175,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 
 						<div className='actions'>
 							<button className='secondary' onClick={onLoadReporting} disabled={loadingReportingDetails}>
-								{loadingReportingDetails ? 'Loading Escalation...' : 'Load Reporting State'}
+								{loadingReportingDetails ? <LoadingText>Loading Escalation...</LoadingText> : 'Load Reporting State'}
 							</button>
 						</div>
 
@@ -169,7 +191,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 
 						{selectedEstimate === undefined ? undefined : (
 							<p className='detail'>
-								If {getReportingOutcomeLabel(reportingForm.selectedOutcome)} wins and no one else contributes afterward, the current amount projects roughly {formatCurrencyBalance(selectedEstimate.profit)} of profit.
+								If {getReportingOutcomeLabel(reportingForm.selectedOutcome)} wins and no one else contributes afterward, the current amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit.
 							</p>
 						)}
 

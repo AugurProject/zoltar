@@ -1,8 +1,11 @@
+import { AddressValue } from './AddressValue.js'
+import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { LiquidationModal } from './LiquidationModal.js'
-import { QuestionSummaryHeader } from './QuestionSummary.js'
+import { LoadingText } from './LoadingText.js'
+import { Question } from './Question.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
-import { formatCurrencyBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
@@ -36,7 +39,7 @@ export function SecurityPoolsOverviewSection({
 					badge={<span className='badge muted'>{securityPools.length} loaded</span>}
 					actions={
 						<button className='secondary' onClick={onLoadSecurityPools} disabled={loadingSecurityPools}>
-							{loadingSecurityPools ? 'Loading Pools...' : 'Refresh Pool Registry'}
+							{loadingSecurityPools ? <LoadingText>Loading Pools...</LoadingText> : 'Refresh Pool Registry'}
 						</button>
 					}
 				>
@@ -45,7 +48,7 @@ export function SecurityPoolsOverviewSection({
 
 				{securityPoolOverviewResult === undefined ? undefined : (
 					<p className='notice success'>
-						Queued liquidation for {securityPoolOverviewResult.securityPoolAddress}: {securityPoolOverviewResult.hash}
+						Queued liquidation for {securityPoolOverviewResult.securityPoolAddress}: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
 					</p>
 				)}
 				{securityPoolOverviewError === undefined ? undefined : <p className='notice error'>{securityPoolOverviewError}</p>}
@@ -59,7 +62,7 @@ export function SecurityPoolsOverviewSection({
 						{securityPools.map(pool => (
 							<EntityCard
 								key={pool.securityPoolAddress}
-								title={pool.marketDetails.title === '' ? pool.questionId : pool.marketDetails.title}
+								title={<AddressValue address={pool.securityPoolAddress} />}
 								badge={<span className='badge ok'>{pool.systemState}</span>}
 								actions={
 									onSelectSecurityPool === undefined ? undefined : (
@@ -74,7 +77,7 @@ export function SecurityPoolsOverviewSection({
 										<h4>Question</h4>
 										<span className='badge muted'>{pool.marketDetails.marketType}</span>
 									</div>
-									<QuestionSummaryHeader description={pool.marketDetails.description.trim() === '' ? 'No description provided.' : pool.marketDetails.description} questionId={pool.questionId} title={pool.marketDetails.title.trim() === '' ? 'Untitled question' : pool.marketDetails.title} />
+									<Question question={pool.marketDetails} />
 								</div>
 
 								<div className='entity-card-subsection'>
@@ -85,7 +88,9 @@ export function SecurityPoolsOverviewSection({
 									<div className='workflow-metric-grid'>
 										<div>
 											<span className='metric-label'>Pool Address</span>
-											<strong>{pool.securityPoolAddress}</strong>
+											<strong>
+												<AddressValue address={pool.securityPoolAddress} />
+											</strong>
 										</div>
 										<div>
 											<span className='metric-label'>Universe</span>
@@ -103,11 +108,15 @@ export function SecurityPoolsOverviewSection({
 										</div>
 										<div>
 											<span className='metric-label'>Manager</span>
-											<strong>{pool.managerAddress}</strong>
+											<strong>
+												<AddressValue address={pool.managerAddress} />
+											</strong>
 										</div>
 										<div>
 											<span className='metric-label'>Truth Auction</span>
-											<strong>{pool.truthAuctionAddress}</strong>
+											<strong>
+												<AddressValue address={pool.truthAuctionAddress} />
+											</strong>
 										</div>
 									</div>
 								</div>
@@ -124,7 +133,7 @@ export function SecurityPoolsOverviewSection({
 												<EntityCard
 													key={`${pool.securityPoolAddress}-${vault.vaultAddress}`}
 													className='compact'
-													title={vault.vaultAddress}
+													title={<AddressValue address={vault.vaultAddress} />}
 													badge={<span className='badge muted'>Vault</span>}
 													actions={
 														<button className='secondary' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
@@ -135,7 +144,9 @@ export function SecurityPoolsOverviewSection({
 													<div className='workflow-vault-grid'>
 														<div>
 															<span className='metric-label'>REP Deposit Share</span>
-															<strong>{formatCurrencyBalance(vault.repDepositShare)}</strong>
+															<strong>
+																<CurrencyValue value={vault.repDepositShare} suffix='REP' />
+															</strong>
 														</div>
 														<div>
 															<span className='metric-label'>Pool Ownership</span>
@@ -143,11 +154,15 @@ export function SecurityPoolsOverviewSection({
 														</div>
 														<div>
 															<span className='metric-label'>Security Bond Allowance</span>
-															<strong>{formatCurrencyBalance(vault.securityBondAllowance)}</strong>
+															<strong>
+																<CurrencyValue value={vault.securityBondAllowance} suffix='REP' />
+															</strong>
 														</div>
 														<div>
 															<span className='metric-label'>Unpaid ETH Fees</span>
-															<strong>{formatCurrencyBalance(vault.unpaidEthFees)}</strong>
+															<strong>
+																<CurrencyValue value={vault.unpaidEthFees} suffix='ETH' />
+															</strong>
 														</div>
 													</div>
 												</EntityCard>

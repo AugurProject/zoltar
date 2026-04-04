@@ -1,19 +1,12 @@
+import { LoadingText } from './LoadingText.js'
 import { formatTimestamp } from '../lib/formatters.js'
 import type { MarketDetails } from '../types/contracts.js'
 
-type QuestionSummaryHeaderProps = {
+type QuestionProps = {
 	className?: string
-	description: string
-	loading?: boolean
-	questionId: string
-	title: string
-}
-
-type QuestionSummaryProps = {
-	className?: string
-	hideHeading?: boolean
 	loading?: boolean
 	question: MarketDetails | undefined
+	showTitle?: boolean
 }
 
 function getQuestionTitle(question: MarketDetails) {
@@ -22,6 +15,12 @@ function getQuestionTitle(question: MarketDetails) {
 
 function getQuestionDescription(question: MarketDetails) {
 	return question.description.trim() === '' ? 'No description provided.' : question.description
+}
+
+function getDisplayedOutcomes(question: MarketDetails) {
+	const outcomes = question.outcomeLabels.length === 0 ? ['Scalar'] : question.outcomeLabels
+	if (outcomes.some(outcome => outcome.toLowerCase() === 'invalid')) return outcomes
+	return [...outcomes, 'Invalid']
 }
 
 function getDisplayRange(question: MarketDetails) {
@@ -47,31 +46,13 @@ function renderScalarQuestionFields(question: MarketDetails) {
 	)
 }
 
-export function QuestionSummaryHeader({ className = '', description, loading = false, questionId, title }: QuestionSummaryHeaderProps) {
-	if (loading) {
-		return (
-			<div className={`question-summary question-summary-header ${className}`}>
-				<p className='detail question-summary-loading'>Loading question details...</p>
-			</div>
-		)
-	}
-
-	return (
-		<div className={`question-summary question-summary-header ${className}`}>
-			<div className='question-summary-heading'>
-				<strong>{title}</strong>
-				<p className='detail'>{description}</p>
-				<span className='question-summary-id'>{questionId}</span>
-			</div>
-		</div>
-	)
-}
-
-export function QuestionSummary({ className = '', hideHeading = false, loading = false, question }: QuestionSummaryProps) {
+export function Question({ className = '', loading = false, question, showTitle = true }: QuestionProps) {
 	if (loading || question === undefined) {
 		return (
 			<div className={`question-summary ${className}`}>
-				<p className='detail question-summary-loading'>Loading question details...</p>
+				<p className='detail question-summary-loading'>
+					<LoadingText>Loading question details...</LoadingText>
+				</p>
 			</div>
 		)
 	}
@@ -81,11 +62,13 @@ export function QuestionSummary({ className = '', hideHeading = false, loading =
 
 	return (
 		<div className={`question-summary ${className}`}>
-			{hideHeading ? undefined : (
+			{showTitle ? (
 				<div className='question-summary-heading'>
 					<strong>{title}</strong>
 					<p className='detail'>{description}</p>
 				</div>
+			) : (
+				<p className='detail question-summary-description'>{description}</p>
 			)}
 			<div className='question-summary-grid'>
 				<div>
@@ -106,7 +89,7 @@ export function QuestionSummary({ className = '', hideHeading = false, loading =
 				</div>
 				<div>
 					<span className='metric-label'>Outcomes</span>
-					<strong>{question.outcomeLabels.length === 0 ? 'Scalar' : question.outcomeLabels.join(', ')}</strong>
+					<strong>{getDisplayedOutcomes(question).join(', ')}</strong>
 				</div>
 				{question.marketType === 'scalar' ? renderScalarQuestionFields(question) : undefined}
 			</div>

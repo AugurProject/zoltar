@@ -1,21 +1,24 @@
 import type { DeploymentStatus } from '../types/contracts.js'
 
-const DEPLOYMENT_SECTION_TITLES = ['Proxy Deployer', 'Zoltar', 'Augur PlaceHolder'] as const
-const DEPLOYMENT_SECTION_BY_STEP_ID: Record<DeploymentStatus['id'], (typeof DEPLOYMENT_SECTION_TITLES)[number]> = {
-	proxyDeployer: 'Proxy Deployer',
-	deploymentStatusOracle: 'Proxy Deployer',
-	uniformPriceDualCapBatchAuctionFactory: 'Augur PlaceHolder',
-	scalarOutcomes: 'Zoltar',
-	securityPoolUtils: 'Augur PlaceHolder',
-	openOracle: 'Augur PlaceHolder',
-	zoltarQuestionData: 'Zoltar',
-	zoltar: 'Zoltar',
-	shareTokenFactory: 'Augur PlaceHolder',
-	priceOracleManagerAndOperatorQueuerFactory: 'Augur PlaceHolder',
-	securityPoolForker: 'Augur PlaceHolder',
-	escalationGameFactory: 'Augur PlaceHolder',
-	securityPoolFactory: 'Augur PlaceHolder',
+type DeploymentSectionDefinition = {
+	title: string
+	stepIds: DeploymentStatus['id'][]
 }
+
+const DEPLOYMENT_SECTIONS: DeploymentSectionDefinition[] = [
+	{
+		title: 'Utilities',
+		stepIds: ['proxyDeployer', 'deploymentStatusOracle'],
+	},
+	{
+		title: 'Zoltar',
+		stepIds: ['scalarOutcomes', 'zoltarQuestionData', 'zoltar'],
+	},
+	{
+		title: 'Augur PlaceHolder',
+		stepIds: ['uniformPriceDualCapBatchAuctionFactory', 'securityPoolUtils', 'openOracle', 'shareTokenFactory', 'priceOracleManagerAndOperatorQueuerFactory', 'securityPoolForker', 'escalationGameFactory', 'securityPoolFactory'],
+	},
+]
 
 export function getPrerequisiteLabel(steps: DeploymentStatus[], index: number) {
 	const currentStep = steps[index]
@@ -35,8 +38,8 @@ export function findNextDeployableStep(steps: DeploymentStatus[]) {
 }
 
 export function getDeploymentSections(steps: DeploymentStatus[]) {
-	return DEPLOYMENT_SECTION_TITLES.map(title => ({
-		title,
-		steps: steps.filter(step => DEPLOYMENT_SECTION_BY_STEP_ID[step.id] === title),
+	return DEPLOYMENT_SECTIONS.map(section => ({
+		title: section.title,
+		steps: steps.filter(step => section.stepIds.includes(step.id)),
 	}))
 }

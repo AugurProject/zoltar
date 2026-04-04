@@ -45,6 +45,7 @@ export function useOnchainState() {
 	const deploymentStatusesLoaded = useSignal(false)
 	const augurPlaceHolderDeployed = useSignal<boolean | undefined>(undefined)
 	const walletBootstrapComplete = useSignal(false)
+	const isConnectingWallet = useSignal(false)
 	const nextRefresh = useRequestGuard()
 	const errorMessage = useSignal<string | undefined>(undefined)
 	const setDeploymentStatuses = (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => {
@@ -70,7 +71,9 @@ export function useOnchainState() {
 			deploymentStatusesLoaded.value = true
 
 			if (shouldLoadWalletState) {
+				console.debug('[useOnchainState] calling eth_accounts')
 				const accounts = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' })
+				console.debug('[useOnchainState] eth_accounts returned', accounts)
 				const connectedAddress = normalizeAccount(accounts[0])
 				if (!isCurrent()) return
 
@@ -129,9 +132,7 @@ export function useOnchainState() {
 		} finally {
 			if (shouldLoadWalletState) {
 				walletLoadCount.value = Math.max(0, walletLoadCount.value - 1)
-				if (isCurrent()) {
-					walletBootstrapComplete.value = true
-				}
+				if (isCurrent()) walletBootstrapComplete.value = true
 			}
 			deploymentStatusLoadCount.value = Math.max(0, deploymentStatusLoadCount.value - 1)
 		}
@@ -143,18 +144,25 @@ export function useOnchainState() {
 			errorMessage.value = 'No injected wallet found'
 			return
 		}
+		if (isConnectingWallet.value) return
 
 		try {
+			isConnectingWallet.value = true
 			errorMessage.value = undefined
+			await new Promise<void>(resolve => {
+				window.requestAnimationFrame(() => resolve())
+			})
 			await ethereum.request({ method: 'eth_requestAccounts' })
 			await refreshState()
 		} catch (error) {
 			errorMessage.value = getErrorMessage(error, 'Wallet connection failed')
+		} finally {
+			isConnectingWallet.value = false
 		}
 	}
 
 	useEffect(() => {
-		refreshState({ loadWalletState: false })
+		void refreshState()
 	}, [])
 
 	useEffect(() => {
@@ -184,6 +192,7 @@ export function useOnchainState() {
 		isLoadingDeploymentStatuses: deploymentStatusLoadCount.value > 0,
 		isRefreshing: walletLoadCount.value > 0,
 		augurPlaceHolderDeployed: augurPlaceHolderDeployed.value,
+		isConnectingWallet: isConnectingWallet.value,
 		setDeploymentStatuses,
 		walletBootstrapComplete: walletBootstrapComplete.value,
 		refreshState,

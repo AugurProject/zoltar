@@ -1,7 +1,11 @@
+import { AddressValue } from './AddressValue.js'
+import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
-import { QuestionSummaryHeader } from './QuestionSummary.js'
+import { LoadingText } from './LoadingText.js'
+import { Question } from './Question.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
-import { formatCurrencyBalance, formatDuration, formatTimestamp } from '../lib/formatters.js'
+import { formatDuration, formatTimestamp } from '../lib/formatters.js'
 import { AUCTION_TIME_SECONDS, estimateRepPurchased, getForkStageDescription, getOutcomeActionLabel, getSystemStateLabel, getTimeRemaining, MIGRATION_TIME_SECONDS } from '../lib/forkAuction.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
@@ -66,7 +70,9 @@ export function ForkAuctionSection({
 								<ul className='status-list hashes'>
 									<li>
 										<span>Security Pool</span>
-										<strong>{forkAuctionDetails.securityPoolAddress}</strong>
+										<strong>
+											<AddressValue address={forkAuctionDetails.securityPoolAddress} />
+										</strong>
 									</li>
 									<li>
 										<span>Universe</span>
@@ -76,7 +82,9 @@ export function ForkAuctionSection({
 									</li>
 									<li>
 										<span>Parent Pool</span>
-										<strong>{forkAuctionDetails.parentSecurityPoolAddress}</strong>
+										<strong>
+											<AddressValue address={forkAuctionDetails.parentSecurityPoolAddress} />
+										</strong>
 									</li>
 									<li>
 										<span>System State</span>
@@ -96,11 +104,7 @@ export function ForkAuctionSection({
 										<h4>Question</h4>
 										<span className='badge muted'>{forkAuctionDetails.marketDetails.marketType}</span>
 									</div>
-									<QuestionSummaryHeader
-										description={forkAuctionDetails.marketDetails.description.trim() === '' ? 'No description provided.' : forkAuctionDetails.marketDetails.description}
-										questionId={forkAuctionDetails.marketDetails.questionId}
-										title={forkAuctionDetails.marketDetails.title.trim() === '' ? 'Untitled question' : forkAuctionDetails.marketDetails.title}
-									/>
+									<Question question={forkAuctionDetails.marketDetails} />
 								</div>
 								<p className='detail'>{getForkStageDescription(forkAuctionDetails)}</p>
 							</div>
@@ -110,15 +114,21 @@ export function ForkAuctionSection({
 								<div className='escalation-metrics'>
 									<div>
 										<span className='metric-label'>REP At Fork</span>
-										<strong>{formatCurrencyBalance(forkAuctionDetails.repAtFork)}</strong>
+										<strong>
+											<CurrencyValue value={forkAuctionDetails.repAtFork} />
+										</strong>
 									</div>
 									<div>
 										<span className='metric-label'>Migrated REP</span>
-										<strong>{formatCurrencyBalance(forkAuctionDetails.migratedRep)}</strong>
+										<strong>
+											<CurrencyValue value={forkAuctionDetails.migratedRep} />
+										</strong>
 									</div>
 									<div>
 										<span className='metric-label'>Collateral</span>
-										<strong>{formatCurrencyBalance(forkAuctionDetails.completeSetCollateralAmount)}</strong>
+										<strong>
+											<CurrencyValue value={forkAuctionDetails.completeSetCollateralAmount} suffix='REP' />
+										</strong>
 									</div>
 									<div>
 										<span className='metric-label'>Fork Type</span>
@@ -141,7 +151,9 @@ export function ForkAuctionSection({
 									<div className='escalation-metrics'>
 										<div>
 											<span className='metric-label'>Auction Address</span>
-											<strong>{forkAuctionDetails.truthAuctionAddress}</strong>
+											<strong>
+												<AddressValue address={forkAuctionDetails.truthAuctionAddress} />
+											</strong>
 										</div>
 										<div>
 											<span className='metric-label'>Started</span>
@@ -158,12 +170,14 @@ export function ForkAuctionSection({
 										<div>
 											<span className='metric-label'>ETH Raised / Cap</span>
 											<strong>
-												{formatCurrencyBalance(forkAuctionDetails.truthAuction.ethRaised)} / {formatCurrencyBalance(forkAuctionDetails.truthAuction.ethRaiseCap)}
+												<CurrencyValue value={forkAuctionDetails.truthAuction.ethRaised} suffix='ETH' /> / <CurrencyValue value={forkAuctionDetails.truthAuction.ethRaiseCap} suffix='ETH' />
 											</strong>
 										</div>
 										<div>
 											<span className='metric-label'>REP Purchased</span>
-											<strong>{formatCurrencyBalance(forkAuctionDetails.truthAuction.totalRepPurchased)}</strong>
+											<strong>
+												<CurrencyValue value={forkAuctionDetails.truthAuction.totalRepPurchased} />
+											</strong>
 										</div>
 										<div>
 											<span className='metric-label'>Clearing Tick</span>
@@ -171,7 +185,9 @@ export function ForkAuctionSection({
 										</div>
 										<div>
 											<span className='metric-label'>Clearing Price</span>
-											<strong>{formatCurrencyBalance(forkAuctionDetails.truthAuction.clearingPrice)}</strong>
+											<strong>
+												<CurrencyValue value={forkAuctionDetails.truthAuction.clearingPrice} suffix='REP' />
+											</strong>
 										</div>
 										<div>
 											<span className='metric-label'>Underfunded</span>
@@ -182,7 +198,7 @@ export function ForkAuctionSection({
 											<strong>{forkAuctionDetails.truthAuction.finalized ? 'Yes' : 'No'}</strong>
 										</div>
 									</div>
-									<p className='detail'>At the current clearing price, the entered bid amount would buy roughly {estimatedRep === undefined ? 'Unavailable' : formatCurrencyBalance(estimatedRep)} REP-equivalent ownership if it clears.</p>
+									<p className='detail'>At the current clearing price, the entered bid amount would buy roughly {estimatedRep === undefined ? 'Unavailable' : <CurrencyValue value={estimatedRep} suffix='REP' />} ownership if it clears.</p>
 								</div>
 							)}
 
@@ -190,11 +206,15 @@ export function ForkAuctionSection({
 								<div className='status-card'>
 									<p className='panel-label'>Latest Fork / Auction Action</p>
 									<p className='detail'>Action: {forkAuctionResult.action}</p>
-									<p className='detail'>Pool: {forkAuctionResult.securityPoolAddress}</p>
+									<p className='detail'>
+										Pool: <AddressValue address={forkAuctionResult.securityPoolAddress} />
+									</p>
 									<p className='detail'>
 										Universe: <UniverseLink universeId={forkAuctionResult.universeId} />
 									</p>
-									<p className='detail'>Transaction: {forkAuctionResult.hash}</p>
+									<p className='detail'>
+										Transaction: <TransactionHashLink hash={forkAuctionResult.hash} />
+									</p>
 								</div>
 							)}
 						</>
@@ -212,7 +232,7 @@ export function ForkAuctionSection({
 
 						<div className='actions'>
 							<button className='secondary' onClick={onLoadForkAuction} disabled={loadingForkAuctionDetails}>
-								{loadingForkAuctionDetails ? 'Loading Fork State...' : 'Load Fork & Auction State'}
+								{loadingForkAuctionDetails ? <LoadingText>Loading Fork State...</LoadingText> : 'Load Fork & Auction State'}
 							</button>
 						</div>
 

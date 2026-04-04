@@ -1,4 +1,5 @@
 import type { Address } from 'viem'
+import { AddressValue } from './AddressValue.js'
 
 type LiquidationModalProps = {
 	accountAddress: Address | undefined
@@ -33,11 +34,11 @@ export function LiquidationModal({ accountAddress, closeLiquidationModal, isMain
 				<div className='modal-summary-grid'>
 					<div>
 						<span className='metric-label'>Security Pool</span>
-						<strong>{liquidationSecurityPoolAddress === undefined ? 'Unknown' : liquidationSecurityPoolAddress}</strong>
+						<strong>{liquidationSecurityPoolAddress === undefined ? 'Unknown' : <AddressValue address={liquidationSecurityPoolAddress} />}</strong>
 					</div>
 					<div>
 						<span className='metric-label'>Manager</span>
-						<strong>{liquidationManagerAddress === undefined ? 'Unknown' : liquidationManagerAddress}</strong>
+						<strong>{liquidationManagerAddress === undefined ? 'Unknown' : <AddressValue address={liquidationManagerAddress} />}</strong>
 					</div>
 				</div>
 				<div className='form-grid'>
