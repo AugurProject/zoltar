@@ -27,7 +27,6 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 	const zoltarMigrationPending = useSignal(false)
 	const zoltarMigrationResult = useSignal<ZoltarMigrationActionResult | undefined>(undefined)
 	const zoltarMigrationActiveAction = useSignal<'prepare' | 'split' | undefined>(undefined)
-	const zoltarMigrationChildRepBalances = useSignal<Record<string, bigint | undefined>>({})
 	const zoltarMigrationForm = useSignal<ZoltarMigrationFormState>(getDefaultZoltarMigrationFormState())
 
 	const runZoltarMigrationAction = async (
@@ -117,7 +116,6 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 			zoltarMigrationForm.value = updater(zoltarMigrationForm.value)
 		},
 		zoltarMigrationActiveAction: zoltarMigrationActiveAction.value,
-		zoltarMigrationChildRepBalances: zoltarMigrationChildRepBalances.value,
 		zoltarMigrationError: zoltarMigrationError.value,
 		zoltarMigrationForm: zoltarMigrationForm.value,
 		zoltarMigrationPending: zoltarMigrationPending.value,

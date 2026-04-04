@@ -40,7 +40,9 @@ export function useZoltarOperations({ accountAddress, activeUniverseId, autoLoad
 		onTransactionRequested,
 		onTransactionSubmitted,
 		refreshState,
-		refreshZoltarForkAccess: fork.loadZoltarForkAccess,
+		refreshZoltarForkAccess: async () => {
+			await fork.loadZoltarForkAccess()
+		},
 		refreshZoltarUniverse: async () => {
 			await universe.refreshZoltarUniverse()
 		},

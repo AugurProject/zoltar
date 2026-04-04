@@ -297,6 +297,11 @@ button.quiet:hover:not(:disabled) {
 	border-color: var(--interactive-border-hover);
 }
 
+.button-link:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+}
+
 .button-link.secondary-link {
 	border-color: var(--control-border);
 }
@@ -754,6 +759,11 @@ button.currency-value.copyable:hover:not(:disabled) {
 
 .transaction-hash-link:hover {
 	color: var(--accent);
+}
+
+.transaction-hash-link:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
 }
 
 .contract-panel {

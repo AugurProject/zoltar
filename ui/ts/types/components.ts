@@ -127,7 +127,7 @@ export type SecurityPoolRouteContentProps = {
 	onLoadMarketById: (marketId: string) => Promise<void>
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
-	createdQuestionDetails: MarketDetails | undefined
+	poolCreationMarketDetails: MarketDetails | undefined
 	onSecurityPoolFormChange: (update: Partial<SecurityPoolFormState>) => void
 	securityPools: ListedSecurityPool[]
 	securityPoolCreating: boolean
@@ -297,15 +297,4 @@ export type ForkAuctionRouteContentProps = {
 export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean
-}
-
-export type AppRouteContentProps = {
-	deployment: DeploymentRouteContentProps
-	market: MarketRouteContentProps
-	openOracle: OpenOracleRouteContentProps
-	route: Route
-	securityPool: SecurityPoolRouteContentProps
-	securityPoolWorkflow: SecurityPoolWorkflowRouteContentProps
-	securityPoolsOverview: SecurityPoolsOverviewRouteContentProps
-	wrongNetworkMessage: string | undefined
 }

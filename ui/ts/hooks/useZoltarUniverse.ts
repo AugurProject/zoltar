@@ -69,6 +69,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 				zoltarUniverseMissing.value = requestedUniverseId !== 0n
 				return undefined
 			}
+			zoltarUniverseMissing.value = false
 			zoltarUniverse.value = universe
 			zoltarUniverseLoadedId.value = requestedUniverseId
 			return universe

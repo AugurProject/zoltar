@@ -133,7 +133,7 @@ export function SecurityPoolsOverviewSection({
 												<EntityCard
 													key={`${pool.securityPoolAddress}-${vault.vaultAddress}`}
 													className='compact'
-													title={vault.vaultAddress}
+													title={<AddressValue address={vault.vaultAddress} />}
 													badge={<span className='badge muted'>Vault</span>}
 													actions={
 														<button className='secondary' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>

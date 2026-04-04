@@ -8,7 +8,6 @@ import type { MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js
 type ForkZoltarSectionProps = {
 	accountAddress: Address | undefined
 	isMainnet: boolean
-	loadingZoltarQuestionCount: boolean
 	loadingZoltarForkAccess: boolean
 	loadingZoltarQuestions: boolean
 	loadingZoltarUniverse: boolean
@@ -29,7 +28,6 @@ type ForkZoltarSectionProps = {
 export function ForkZoltarSection({
 	accountAddress,
 	isMainnet,
-	loadingZoltarQuestionCount,
 	loadingZoltarForkAccess,
 	loadingZoltarQuestions,
 	loadingZoltarUniverse,
@@ -53,7 +51,7 @@ export function ForkZoltarSection({
 	const hasEnoughApproval = rootUniverse !== undefined && zoltarForkAllowance !== undefined && zoltarForkAllowance >= rootUniverse.forkThreshold
 	const selectedQuestionId = zoltarForkQuestionId.trim()
 	const selectedQuestion = selectedQuestionId === '' ? undefined : zoltarQuestions.find(question => question.questionId.toLowerCase() === selectedQuestionId.toLowerCase())
-	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && zoltarForkQuestionId.trim() !== '' && hasEnoughRep && hasEnoughApproval
+	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && hasEnoughRep && hasEnoughApproval
 
 	if (universeMissing) {
 		return (
@@ -99,7 +97,7 @@ export function ForkZoltarSection({
 							<Question question={selectedQuestion} />
 						</div>
 					)}
-					{loadingZoltarQuestions || loadingZoltarQuestionCount ? undefined : selectedQuestionId === '' || selectedQuestion !== undefined ? undefined : <p className='detail'>No loaded question matches this ID.</p>}
+					{loadingZoltarQuestions ? undefined : selectedQuestionId === '' || selectedQuestion !== undefined ? undefined : <p className='detail'>No loaded question matches this ID.</p>}
 
 					<div className='actions'>
 						{hasForked ? undefined : (

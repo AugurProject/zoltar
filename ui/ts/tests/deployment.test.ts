@@ -93,9 +93,11 @@ void describe('deployment helpers', () => {
 	})
 
 	void test('loadZoltarUniverseSummary skips the Zoltar code probe when deployment status is already known', async () => {
+		let getCodeCallCount = 0
 		const mockReadClient = {
 			getCode: async () => {
-				throw new Error('getCode should not be called when the deployment status is already known')
+				getCodeCallCount += 1
+				return '0x1234'
 			},
 			readContract: async ({ functionName }: { functionName: string }) => {
 				expect(functionName).toBe('getRepToken')
@@ -106,6 +108,7 @@ void describe('deployment helpers', () => {
 		const universe = await loadZoltarUniverseSummary(mockReadClient, 0n, true)
 
 		expect(universe).toBe(undefined)
+		expect(getCodeCallCount).toBe(0)
 	})
 
 	void test('loadDeploymentStatusOracleSnapshot returns the proxy deployer when the oracle is missing', async () => {

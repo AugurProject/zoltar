@@ -11,7 +11,6 @@ import type { SecurityPoolSectionProps } from '../types/components.js'
 export function SecurityPoolSection({
 	accountState,
 	checkingDuplicateOriginPool,
-	createdQuestionDetails: carriedCreatedQuestionDetails,
 	duplicateOriginPoolExists,
 	lastCreatedQuestionId,
 	loadingMarketDetails,
@@ -26,13 +25,14 @@ export function SecurityPoolSection({
 	securityPoolForm,
 	securityPoolResult,
 	showHeader = true,
+	poolCreationMarketDetails: carriedPoolCreationMarketDetails,
 }: SecurityPoolSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const isPoolActionPending = securityPoolCreating || checkingDuplicateOriginPool
 	const isCreateDisabled = accountState.address === undefined || !isMainnet || isPoolActionPending || duplicateOriginPoolExists || marketDetails?.marketType !== 'binary'
 	const matchingPools = marketDetails === undefined ? [] : securityPools.filter(pool => pool.questionId.toLowerCase() === marketDetails.questionId.toLowerCase())
 	const hasMatchingSecurityMultiplier = matchingPools.some(pool => pool.securityMultiplier.toString() === securityPoolForm.securityMultiplier.trim())
-	const createdQuestionDetails = securityPoolResult === undefined ? undefined : marketDetails?.questionId === securityPoolResult.questionId ? marketDetails : carriedCreatedQuestionDetails
+	const createdQuestionDetails = securityPoolResult === undefined ? undefined : marketDetails?.questionId === securityPoolResult.questionId ? marketDetails : carriedPoolCreationMarketDetails
 	const createButtonLabel = securityPoolCreating ? <LoadingText>Creating Pool...</LoadingText> : checkingDuplicateOriginPool ? <LoadingText>Checking Duplicate...</LoadingText> : duplicateOriginPoolExists ? 'Pool Already Exists' : matchingPools.length > 0 ? 'Create Another Pool' : 'Create Pool'
 
 	return (
