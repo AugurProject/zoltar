@@ -12,6 +12,11 @@ type MigrationOutcomeUniversesSectionProps = {
 	selectedOutcomeIndexSet: Set<string>
 }
 
+export function getMigrationOutcomeHeldBalance(child: ZoltarChildUniverseSummary, childUniverseRepBalances: Record<string, bigint | undefined>) {
+	if (!child.exists) return 0n
+	return childUniverseRepBalances[child.universeId.toString()]
+}
+
 export function MigrationOutcomeUniversesSection({ childUniverses, childUniverseRepBalances, disabled, isScalarFork, migrationBalance, onAddNextOutcome, onToggleOutcomeIndex, selectedOutcomeIndexSet }: MigrationOutcomeUniversesSectionProps) {
 	const hasAddableOutcome = childUniverses.some(child => !selectedOutcomeIndexSet.has(child.outcomeIndex.toString()))
 
@@ -31,7 +36,7 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 				<div className='migration-outcome-list'>
 					{childUniverses.map(child => {
 						const selected = selectedOutcomeIndexSet.has(child.outcomeIndex.toString())
-						const heldBalance = childUniverseRepBalances[child.universeId.toString()]
+						const heldBalance = getMigrationOutcomeHeldBalance(child, childUniverseRepBalances)
 						const remainingBalance = migrationBalance === undefined || heldBalance === undefined ? undefined : migrationBalance > heldBalance ? migrationBalance - heldBalance : 0n
 						return (
 							<button key={child.universeId.toString()} aria-pressed={selected} className={`migration-outcome-row ${selected ? 'active' : ''}`} disabled={disabled} onClick={() => onToggleOutcomeIndex(child.outcomeIndex)} type='button'>
@@ -41,7 +46,7 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 										<span>
 											Held here:{' '}
 											<strong>
-												<CurrencyValue copyable={false} loading={heldBalance === undefined || migrationBalance === undefined} value={heldBalance} suffix='REP' />
+												<CurrencyValue copyable={false} loading={(child.exists && heldBalance === undefined) || migrationBalance === undefined} value={heldBalance} suffix='REP' />
 											</strong>
 										</span>
 										<span>
