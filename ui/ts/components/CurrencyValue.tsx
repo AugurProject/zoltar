@@ -16,6 +16,16 @@ type CurrencyValueProps = {
 export function CurrencyValue({ className = '', copyable = true, decimals = 2, loading = false, suffix = '', units = 18, value }: CurrencyValueProps) {
 	const copied = useSignal(false)
 	const copyResetTimeout = useRef<number | undefined>(undefined)
+	const exactValue = value === undefined ? undefined : formatCurrencyBalance(value, units)
+	const exactSuffix = suffix === '' ? '' : ` ${suffix}`
+
+	useEffect(() => {
+		copied.value = false
+		if (copyResetTimeout.current !== undefined) {
+			window.clearTimeout(copyResetTimeout.current)
+			copyResetTimeout.current = undefined
+		}
+	}, [exactValue])
 
 	useEffect(() => {
 		return () => {
@@ -34,10 +44,10 @@ export function CurrencyValue({ className = '', copyable = true, decimals = 2, l
 		return <span className={`currency-value unavailable ${className}`}>Unavailable</span>
 	}
 
-	const exactValue = formatCurrencyBalance(value, units)
+	const resolvedExactValue = exactValue ?? formatCurrencyBalance(value, units)
 	const roundedValue = formatRoundedCurrencyBalance(value, units, decimals)
-	const displayValue = suffix === '' ? `≈ ${roundedValue}` : `≈ ${roundedValue} ${suffix}`
-	const exactTitle = suffix === '' ? exactValue : `${exactValue} ${suffix}`
+	const displayValue = `≈ ${roundedValue}${exactSuffix}`
+	const exactTitle = `${resolvedExactValue}${exactSuffix}`
 	const valueClassName = `currency-value${copyable ? ' copyable' : ''} ${className}`
 
 	if (!copyable) {
@@ -53,19 +63,24 @@ export function CurrencyValue({ className = '', copyable = true, decimals = 2, l
 			type='button'
 			className={valueClassName}
 			title={exactTitle}
-			aria-label={`Copy exact value ${exactValue}`}
+			aria-label={`Copy exact value ${resolvedExactValue}`}
 			onClick={async () => {
 				try {
 					if (copyResetTimeout.current !== undefined) {
 						window.clearTimeout(copyResetTimeout.current)
 					}
-					await navigator.clipboard.writeText(exactValue)
+					await navigator.clipboard.writeText(resolvedExactValue)
 					copied.value = true
 					copyResetTimeout.current = window.setTimeout(() => {
 						copied.value = false
 						copyResetTimeout.current = undefined
 					}, 1200)
 				} catch {
+					copied.value = false
+					if (copyResetTimeout.current !== undefined) {
+						window.clearTimeout(copyResetTimeout.current)
+						copyResetTimeout.current = undefined
+					}
 					return
 				}
 			}}

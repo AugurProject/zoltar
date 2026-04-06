@@ -14,9 +14,11 @@ import type { ReportingSectionProps } from '../types/components.js'
 
 function parseOptionalBigInt(value: string) {
 	try {
-		return value.trim() === '' ? 0n : BigInt(value)
+		const trimmedValue = value.trim()
+		if (trimmedValue === '') return undefined
+		return BigInt(trimmedValue)
 	} catch {
-		return 0n
+		return undefined
 	}
 }
 
@@ -26,7 +28,8 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 	const totalBalance = reportingDetails === undefined ? 0n : reportingDetails.sides.reduce((sum, side) => sum + side.balance, 0n)
 	const leadingOutcome = reportingDetails === undefined ? undefined : getLeadingEscalationOutcome(reportingDetails.sides)
 	const selectedSide = reportingDetails?.sides.find(side => side.key === reportingForm.selectedOutcome)
-	const selectedEstimate = selectedSide === undefined ? undefined : calculateEstimatedEscalationReturn(selectedSide.balance, totalBalance, selectedAmount)
+	const selectedEstimate = selectedSide === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(selectedSide.balance, totalBalance, selectedAmount)
+	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 
 	return (
 		<section className='panel market-panel'>
@@ -119,7 +122,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 
 							<div className='escalation-sides'>
 								{reportingDetails.sides.map(side => {
-									const estimate = calculateEstimatedEscalationReturn(side.balance, totalBalance, selectedAmount)
+									const estimate = selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(side.balance, totalBalance, selectedAmount)
 									const userStake = side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n)
 									return <EscalationSide key={side.key} estimate={estimate} isLeading={leadingOutcome === side.key} isSelected={reportingForm.selectedOutcome === side.key} side={side} userStake={userStake} />
 								})}
@@ -169,6 +172,8 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 							<span>Report / Contribution Amount</span>
 							<input value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} />
 						</label>
+
+						{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
 
 						{selectedEstimate === undefined ? undefined : (
 							<p className='detail'>

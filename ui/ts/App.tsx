@@ -151,8 +151,8 @@ export function App() {
 	const lastCreatedQuestionId = marketResult?.questionId
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const wrongNetworkMessage = accountState.address !== undefined && accountState.chainId !== undefined && !isMainnet ? 'Switch your wallet to Ethereum mainnet.' : undefined
-	const augurPlaceHolderDeploymentMissing = hasLoadedDeploymentStatuses && augurPlaceHolderDeployed === false
-	const showDeployTab = hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed)
+	const augurPlaceHolderDeploymentMissing = augurPlaceHolderDeployed === false
+	const showDeployTab = augurPlaceHolderDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 	const showAugurPlaceHolderDeploymentWarning = augurPlaceHolderDeploymentMissing
 	const showZoltarUniverseWarning = zoltarUniverseMissing
 	const showZoltarUniverseForkedWarning = zoltarUniverse?.hasForked === true

@@ -24,6 +24,7 @@
 		"contracts": "cd ../solidity && bun run setup",
 		"setup": "bun install --frozen-lockfile && bun run contracts && bun run build",
 		"build": "tsc",
+		"build:tests": "bun ./build/tests.mts",
 		"watch": "tsc --watch",
 		"serve": "bun x tsc --project tsconfig.json && bun ./dev-server.mjs",
 		"vendor": "bun install --frozen-lockfile && bun --tsconfig-override=tsconfig.vendor.json ./build/vendor.mts"

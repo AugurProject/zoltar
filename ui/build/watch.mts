@@ -18,6 +18,7 @@ let shuttingDown = false
 let restartingServer = false
 let serverProcess: ManagedProcess | undefined
 let typeScriptWatchProcess: ManagedProcess | undefined
+let vendorBuildProcess: ManagedProcess | undefined
 let vendorBuildRunning = false
 let vendorBuildQueued = false
 let liveReloadQueued = false
@@ -27,9 +28,6 @@ let typeScriptWatchStdoutBuffer = ''
 const unwatchCallbacks: Array<() => void> = []
 
 const waitForProcessExit = async (childProcess: ManagedProcess) => {
-	if (childProcess.exitCode !== null || childProcess.signalCode !== null) {
-		return { exitCode: childProcess.exitCode, signalCode: childProcess.signalCode }
-	}
 	return await new Promise<{ exitCode: number | null; signalCode: NodeJS.Signals | null }>((resolve, reject) => {
 		const handleExit = (exitCode: number | null, signalCode: NodeJS.Signals | null) => {
 			cleanup()
@@ -64,16 +62,26 @@ const attachProcessErrorHandler = (childProcess: ManagedProcess, label: string) 
 
 const stopProcess = async (childProcess: ManagedProcess | undefined) => {
 	if (childProcess === undefined) return
-	if (childProcess.exitCode !== null) return
-	childProcess.kill('SIGTERM')
+	if (childProcess.exitCode !== null || childProcess.signalCode !== null) return
+	try {
+		childProcess.kill('SIGTERM')
+	} catch {
+		return
+	}
 	const forceKillTimeout = setTimeout(() => {
-		if (childProcess.exitCode === null) {
-			childProcess.kill('SIGKILL')
+		if (childProcess.exitCode === null && childProcess.signalCode === null) {
+			try {
+				childProcess.kill('SIGKILL')
+			} catch {
+				return
+			}
 		}
 	}, 2_000)
 	try {
 		await waitForProcessExit(childProcess)
-	} catch {
+	} catch (error) {
+		console.error('[ui:watch] Failed while waiting for child process exit')
+		console.error(error)
 		return
 	} finally {
 		clearTimeout(forceKillTimeout)
@@ -117,10 +125,17 @@ const sendLiveReload = async (reason: string) => {
 
 const spawnServer = () => {
 	console.log('[ui:watch] Starting ui:serve')
-	serverProcess = spawn('bun', [DEV_SERVER_PATH], {
-		cwd: REPOSITORY_ROOT_PATH,
-		stdio: 'inherit',
-	})
+	try {
+		serverProcess = spawn('bun', [DEV_SERVER_PATH], {
+			cwd: REPOSITORY_ROOT_PATH,
+			stdio: 'inherit',
+		})
+	} catch (error) {
+		console.error('[ui:watch] Failed to start ui:serve')
+		console.error(error)
+		void shutdown(1)
+		return
+	}
 	attachProcessErrorHandler(serverProcess, 'ui:serve')
 	serverProcess.on('exit', (exitCode, signalCode) => {
 		if (shuttingDown || restartingServer) return
@@ -169,10 +184,19 @@ const runVendorBuild = async (reason: string) => {
 	}
 	vendorBuildRunning = true
 	console.log(`[ui:watch] Rebuilding UI vendor assets because ${reason} changed`)
-	const childProcess = spawn('bun', ['./build/vendor.mts'], {
-		cwd: UI_ROOT_PATH,
-		stdio: 'inherit',
-	})
+	try {
+		vendorBuildProcess = spawn('bun', ['./build/vendor.mts'], {
+			cwd: UI_ROOT_PATH,
+			stdio: 'inherit',
+		})
+	} catch (error) {
+		vendorBuildRunning = false
+		console.error('[ui:watch] Failed to start vendor rebuild')
+		console.error(error)
+		await shutdown(1)
+		return
+	}
+	const childProcess = vendorBuildProcess
 	attachProcessErrorHandler(childProcess, 'Vendor rebuild')
 	let exitCode: number | null
 	let signalCode: NodeJS.Signals | null
@@ -181,10 +205,13 @@ const runVendorBuild = async (reason: string) => {
 	} catch (error) {
 		console.error('[ui:watch] Vendor rebuild failed to start')
 		console.error(error)
+		vendorBuildRunning = false
+		vendorBuildProcess = undefined
 		await shutdown(1)
 		return
 	}
 	vendorBuildRunning = false
+	vendorBuildProcess = undefined
 	if (exitCode !== 0) {
 		const failureCode = exitCode ?? 1
 		console.error(`[ui:watch] Vendor rebuild failed (${signalCode ?? failureCode})`)
@@ -222,6 +249,7 @@ const shutdown = async (exitCode: number) => {
 	for (const unwatch of unwatchCallbacks) {
 		unwatch()
 	}
+	await stopProcess(vendorBuildProcess)
 	await stopProcess(serverProcess)
 	await stopProcess(typeScriptWatchProcess)
 	process.exit(exitCode)
@@ -229,10 +257,17 @@ const shutdown = async (exitCode: number) => {
 
 const main = () => {
 	console.log('[ui:watch] Watching UI TypeScript output and serving static assets')
-	typeScriptWatchProcess = spawn('bun', ['x', 'tsc', '--project', 'tsconfig.json', '--watch', '--preserveWatchOutput'], {
-		cwd: UI_ROOT_PATH,
-		stdio: ['inherit', 'pipe', 'pipe'],
-	})
+	try {
+		typeScriptWatchProcess = spawn('bun', ['x', 'tsc', '--project', 'tsconfig.json', '--watch', '--preserveWatchOutput'], {
+			cwd: UI_ROOT_PATH,
+			stdio: ['inherit', 'pipe', 'pipe'],
+		})
+	} catch (error) {
+		console.error('[ui:watch] Failed to start TypeScript watch')
+		console.error(error)
+		void shutdown(1)
+		return
+	}
 	attachProcessErrorHandler(typeScriptWatchProcess, 'TypeScript watch')
 	if (typeScriptWatchProcess.stdout === null || typeScriptWatchProcess.stderr === null) {
 		throw new Error('TypeScript watch streams are unavailable')

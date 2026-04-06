@@ -8,7 +8,7 @@ type StepStatus = {
 	buttonLabel: string
 }
 
-function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefined, isBusy: boolean): StepStatus {
+function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefined, isBusy: boolean, accountAddress: string | undefined, isMainnet: boolean): StepStatus {
 	if (stepDeployed) {
 		return {
 			badgeClass: 'ok',
@@ -28,6 +28,22 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	}
 
 	if (prerequisiteLabel === undefined) {
+		if (accountAddress === undefined) {
+			return {
+				badgeClass: 'pending',
+				detail: 'Connect a wallet to deploy.',
+				label: undefined,
+				buttonLabel: 'Deploy',
+			}
+		}
+		if (!isMainnet) {
+			return {
+				badgeClass: 'pending',
+				detail: 'Switch your wallet to Ethereum mainnet.',
+				label: undefined,
+				buttonLabel: 'Deploy',
+			}
+		}
 		return {
 			badgeClass: 'pending',
 			detail: 'Can deploy now.',
@@ -58,7 +74,7 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, isMa
 					const prerequisiteLabel = stepIndex === -1 ? undefined : getPrerequisiteLabel(allSteps, stepIndex)
 					const isBusy = busyStepId === step.id
 					const canDeploy = accountAddress !== undefined && isMainnet && prerequisiteLabel === undefined && !step.deployed && busyStepId === undefined
-					const stepStatus = getStepStatus(step.deployed, prerequisiteLabel, isBusy)
+					const stepStatus = getStepStatus(step.deployed, prerequisiteLabel, isBusy, accountAddress, isMainnet)
 
 					return (
 						<div className='contract-row' key={step.id}>

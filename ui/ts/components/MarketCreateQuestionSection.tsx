@@ -94,7 +94,7 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 					}
 				>
 					<div className='question-preview-body'>
-						<Question question={selectedQuestionDetails} showTitle={false} />
+						{selectedQuestionDetails === undefined ? <p className='detail'>Question details are not loaded yet.</p> : <Question question={selectedQuestionDetails} showTitle={false} />}
 						<div>
 							<span className='metric-label'>Creation transaction hash</span>
 							<strong>

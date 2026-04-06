@@ -24,7 +24,7 @@ export function SecurityVaultSection({
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 }: SecurityVaultSectionProps) {
-	const isMainnet = isMainnetChain(accountState.chainId)
+	const isMainnet = isMainnetChain(accountState?.chainId)
 	return (
 		<section className='panel market-panel'>
 			{showHeader ? (

@@ -2,10 +2,12 @@ import { CurrencyValue } from './CurrencyValue.js'
 import type { EscalationSide } from '../types/contracts.js'
 
 type EscalationSideProps = {
-	estimate: {
-		profit: bigint
-		payout: bigint
-	}
+	estimate:
+		| {
+				profit: bigint
+				payout: bigint
+		  }
+		| undefined
 	isLeading: boolean
 	isSelected: boolean
 	side: EscalationSide
@@ -27,10 +29,10 @@ export function EscalationSide({ estimate, isLeading, isSelected, side, userStak
 			</p>
 			<p className='detail'>Your deposits: {side.userDeposits.map(deposit => deposit.depositIndex.toString()).join(', ') || 'None'}</p>
 			<p className='detail'>
-				Projected payout for current amount: <CurrencyValue value={estimate.payout} suffix='REP' />
+				Projected payout for current amount: <CurrencyValue value={estimate?.payout} suffix='REP' />
 			</p>
 			<p className='detail'>
-				Projected profit if this side wins: <CurrencyValue value={estimate.profit} suffix='REP' />
+				Projected profit if this side wins: <CurrencyValue value={estimate?.profit} suffix='REP' />
 			</p>
 		</div>
 	)

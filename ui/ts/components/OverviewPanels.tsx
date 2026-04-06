@@ -3,8 +3,8 @@ import { CurrencyValue } from './CurrencyValue.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 
 export function OverviewPanels({ accountState, isConnectingWallet, isLoadingUniverseRepBalance, onConnect, onGoToGenesisUniverse, onRefresh, universeErrorMessage, universeLabel, universeRepBalance, isRefreshing, walletBootstrapComplete }: OverviewPanelsProps) {
-	const isWalletLoading = isConnectingWallet || !walletBootstrapComplete
-	const showAccountBalances = accountState.address !== undefined && !isWalletLoading
+	const isWalletLoading = isConnectingWallet || (!walletBootstrapComplete && accountState.address === undefined)
+	const showAccountBalances = accountState.address !== undefined
 
 	return (
 		<section className='overview-shell'>
@@ -64,7 +64,7 @@ export function OverviewPanels({ accountState, isConnectingWallet, isLoadingUniv
 							{isRefreshing ? 'Refreshing...' : 'Refresh'}
 						</button>
 						{accountState.address === undefined ? (
-							<button onClick={onConnect} disabled={isWalletLoading}>
+							<button onClick={onConnect} disabled={isConnectingWallet}>
 								{isWalletLoading ? 'Connecting...' : 'Connect Wallet'}
 							</button>
 						) : undefined}

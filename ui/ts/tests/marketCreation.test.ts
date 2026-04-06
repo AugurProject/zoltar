@@ -1,23 +1,9 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, keccak256 } from 'viem'
 import { createMarketParameters } from '../lib/marketCreation.js'
+import { sortStringArrayByKeccak } from '../lib/sortStringArrayByKeccak.js'
 import type { MarketFormState } from '../types/app.js'
-
-function getOutcomeHash(label: string) {
-	return keccak256(encodeAbiParameters([{ type: 'string' }], [label]))
-}
-
-function sortOutcomesByContractOrder(labels: string[]) {
-	return [...labels].sort((left, right) => {
-		const leftHash = getOutcomeHash(left)
-		const rightHash = getOutcomeHash(right)
-		if (leftHash > rightHash) return -1
-		if (leftHash < rightHash) return 1
-		return 0
-	})
-}
 
 void describe('market creation helpers', () => {
 	void test('categorical outcomes are sorted by the contract hash order before submission', () => {
@@ -36,6 +22,6 @@ void describe('market creation helpers', () => {
 
 		const parameters = createMarketParameters(form)
 
-		expect(parameters.outcomeLabels).toEqual(sortOutcomesByContractOrder(['Cherry', 'Apple', 'Banana']))
+		expect(parameters.outcomeLabels).toEqual(sortStringArrayByKeccak(['Cherry', 'Apple', 'Banana']))
 	})
 })

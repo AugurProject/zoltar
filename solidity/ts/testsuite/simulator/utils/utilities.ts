@@ -8,6 +8,7 @@ import { ABIS } from '../../../abi/abis'
 import { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 import { QuestionOutcome } from '../types/types'
 import { ReputationToken_ReputationToken, peripherals_WETH9_WETH9 } from '../../../types/contractArtifact'
+export { sortStringArrayByKeccak } from './sortStringArrayByKeccak'
 const TOKEN_AMOUNT_TO_MINT = 100000000n * 10n ** 18n
 const ETH_AMOUNT_TO_MINT = 10n ** 30n
 const DEFAULT_APPROVAL_AMOUNT = 1000000000000000000000000000000n
@@ -133,14 +134,3 @@ const uint248BitMask = (1n << 248n) - 1n
 export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint | QuestionOutcome): bigint {
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint8' }], [parentUniverseId, Number(outcome)]))) & uint248BitMask
 }
-
-export const sortStringArrayByKeccak = (inputStrings: string[]): string[] =>
-	[...inputStrings].sort((firstString, secondString) => {
-		const firstHash = keccak256(encodeAbiParameters([{ type: 'string' }], [firstString]))
-
-		const secondHash = keccak256(encodeAbiParameters([{ type: 'string' }], [secondString]))
-
-		if (firstHash > secondHash) return -1
-		if (firstHash < secondHash) return 1
-		return 0
-	})

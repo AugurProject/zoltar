@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import { AddressValue } from './AddressValue.js'
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
@@ -32,8 +33,25 @@ export function SecurityPoolSection({
 	const isCreateDisabled = accountState.address === undefined || !isMainnet || isPoolActionPending || duplicateOriginPoolExists || marketDetails?.marketType !== 'binary'
 	const matchingPools = marketDetails === undefined ? [] : securityPools.filter(pool => pool.questionId.toLowerCase() === marketDetails.questionId.toLowerCase())
 	const hasMatchingSecurityMultiplier = matchingPools.some(pool => pool.securityMultiplier.toString() === securityPoolForm.securityMultiplier.trim())
-	const createdQuestionDetails = securityPoolResult === undefined ? undefined : marketDetails?.questionId === securityPoolResult.questionId ? marketDetails : carriedPoolCreationMarketDetails
-	const createButtonLabel = securityPoolCreating ? <LoadingText>Creating Pool...</LoadingText> : checkingDuplicateOriginPool ? <LoadingText>Checking Duplicate...</LoadingText> : duplicateOriginPoolExists ? 'Pool Already Exists' : matchingPools.length > 0 ? 'Create Another Pool' : 'Create Pool'
+	let createdQuestionDetails = undefined
+	if (securityPoolResult !== undefined) {
+		if (marketDetails?.questionId === securityPoolResult.questionId) {
+			createdQuestionDetails = marketDetails
+		} else {
+			createdQuestionDetails = carriedPoolCreationMarketDetails
+		}
+	}
+
+	let createButtonLabel: ComponentChildren = 'Create Pool'
+	if (securityPoolCreating) {
+		createButtonLabel = <LoadingText>Creating Pool...</LoadingText>
+	} else if (checkingDuplicateOriginPool) {
+		createButtonLabel = <LoadingText>Checking Duplicate...</LoadingText>
+	} else if (duplicateOriginPoolExists) {
+		createButtonLabel = 'Pool Already Exists'
+	} else if (matchingPools.length > 0) {
+		createButtonLabel = 'Create Another Pool'
+	}
 
 	return (
 		<section className='panel market-panel'>

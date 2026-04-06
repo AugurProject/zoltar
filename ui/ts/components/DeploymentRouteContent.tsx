@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import { LoadableValue } from './LoadableValue.js'
 import { DeploymentSection } from './DeploymentSection.js'
 import { findNextDeployableStep } from '../lib/deployment.js'
@@ -8,6 +9,17 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 	const deployedContractCount = deploymentStatuses.filter(step => step.deployed).length
 	const totalContractCount = deploymentStatuses.length
 	const deployedContractLabel = deployedContractCount === 1 ? 'contract deployed' : 'contracts deployed'
+	let buttonContent: ComponentChildren = 'Deploy Next Missing'
+	if (deployNextMissingPending) {
+		buttonContent = (
+			<>
+				<span className='spinner' aria-hidden='true' />
+				Deploying...
+			</>
+		)
+	} else if (busyStepId !== undefined) {
+		buttonContent = 'Deployment In Progress'
+	}
 
 	return (
 		<>
@@ -24,16 +36,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 				</p>
 				<div className='actions'>
 					<button className='primary' onClick={onDeployNextMissing} disabled={accountAddress === undefined || !isMainnet || nextMissingStep === undefined || busyStepId !== undefined || deployNextMissingPending}>
-						{deployNextMissingPending ? (
-							<>
-								<span className='spinner' aria-hidden='true' />
-								Deploying...
-							</>
-						) : busyStepId === undefined ? (
-							'Deploy Next Missing'
-						) : (
-							'Deployment In Progress'
-						)}
+						{buttonContent}
 					</button>
 				</div>
 			</section>

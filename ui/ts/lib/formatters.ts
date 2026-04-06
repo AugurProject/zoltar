@@ -22,6 +22,11 @@ function assertInteger(value: number, label: string) {
 	if (!Number.isInteger(value)) throw new RangeError(`${label} must be an integer`)
 }
 
+function assertNonNegativeInteger(value: number, label: string) {
+	assertInteger(value, label)
+	if (value < 0) throw new RangeError(`${label} must be non-negative`)
+}
+
 export function formatCurrencyBalance(value: bigint | undefined, units: number = 18) {
 	if (value === undefined) return 'Unavailable'
 	assertInteger(units, 'Units')
@@ -31,7 +36,7 @@ export function formatCurrencyBalance(value: bigint | undefined, units: number =
 
 export function formatRoundedCurrencyBalance(value: bigint | undefined, units: number = 18, decimals: number = 2) {
 	if (value === undefined) return 'Unavailable'
-	assertInteger(units, 'Units')
+	assertNonNegativeInteger(units, 'Units')
 	assertInteger(decimals, 'Decimals')
 	if (decimals < 0) return formatCurrencyBalance(value, units)
 

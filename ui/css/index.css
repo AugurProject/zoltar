@@ -1323,6 +1323,34 @@ button.currency-value.copyable:hover:not(:disabled) {
 	color: var(--accent);
 }
 
+.market-scalar-deploy .field.scalar-invalid-toggle {
+	display: flex;
+	align-items: center;
+	gap: 0.65rem;
+	padding: 0.05rem 0 0.1rem;
+}
+
+.market-scalar-deploy .field.scalar-invalid-toggle > input[type="checkbox"] {
+	width: 1rem;
+	height: 1rem;
+	margin: 0;
+	accent-color: var(--accent);
+	cursor: pointer;
+}
+
+.market-scalar-deploy .field.scalar-invalid-toggle > input[type="checkbox"]:disabled {
+	opacity: 0.7;
+	cursor: not-allowed;
+}
+
+.market-scalar-deploy .scalar-invalid-toggle > span {
+	color: var(--text);
+	font-family: inherit;
+	font-size: var(--font-body);
+	letter-spacing: normal;
+	text-transform: none;
+}
+
 .scalar-slider-rail {
 	position: relative;
 	display: grid;
@@ -1334,6 +1362,10 @@ button.currency-value.copyable:hover:not(:disabled) {
 	box-shadow:
 		var(--glow-inset-subtle),
 		0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.scalar-slider-rail.is-disabled {
+	opacity: 0.62;
 }
 
 .scalar-slider-track {
@@ -1370,6 +1402,10 @@ button.currency-value.copyable:hover:not(:disabled) {
 	appearance: none;
 	-webkit-appearance: none;
 	cursor: pointer;
+}
+
+.scalar-slider-field input[type="range"]:disabled {
+	cursor: not-allowed;
 }
 
 .scalar-slider-field input[type="range"]::-webkit-slider-runnable-track {
