@@ -14,3 +14,12 @@ solidity/types/contractArtifact.ts
 /ui/ts/deploymentArtifacts.ts
 /ui/ts/deploymentsArtifacts.ts
 solidity/.contract-hash.json
+# Compiled output must never appear inside source directories
+solidity/ts/**/*.js
+solidity/ts/**/*.js.map
+solidity/ts/**/*.d.ts
+solidity/ts/**/*.d.ts.map
+ui/ts/**/*.js
+ui/ts/**/*.js.map
+ui/ts/**/*.d.ts
+ui/ts/**/*.d.ts.map

@@ -2,40 +2,49 @@
 # App Setup: Install dependencies and build app
 # ---------------------------------------------
 
-FROM node:20-alpine3.19@sha256:e96618520c7db4c3e082648678ab72a49b73367b9a1e7884cf75ac30a198e454 AS builder
+FROM oven/bun:1.3.9-alpine AS builder
 
-RUN npm install -g bun@1.3.9 --integrity=sha512-bf9864875baceec30d8df8a6584ef47e561b0f9235fea5906aa989e39ab6aa4e47ffb9ae4156b8efc2d2551485c864c1501a20d8bb0f4277c845d8f2589458f8
-
-# Install app dependencies
-COPY ./package.json /source/package.json
-COPY ./package-lock.json /source/package-lock.json
+# git is required by preinstall hook scripts (link-shared-node-modules.mjs uses git rev-parse)
+RUN apk add --no-cache git
 WORKDIR /source
-RUN npm ci
+RUN git init
+
+# Copy preinstall hook scripts before running bun install
+COPY ./scripts/ /source/scripts/
+COPY ./ui/scripts/ /source/ui/scripts/
+
+# Install root dependencies
+COPY ./package.json ./bun.lock /source/
+RUN bun install --frozen-lockfile
 
 # Install Solidity dependencies
-COPY ./solidity/package.json /source/solidity/package.json
-COPY ./solidity/package-lock.json /source/solidity/package-lock.json
-WORKDIR /source/solidity
-RUN npm ci
+COPY ./solidity/package.json ./solidity/bun.lock /source/solidity/
+RUN cd /source/solidity && bun install --frozen-lockfile
 
-# Vendoring files
-COPY ./tsconfig.vendor.json /source/tsconfig.vendor.json
-COPY ./build/ /source/build/
-COPY ./app/index.html /source/app/index.html
+# Install UI dependencies
+COPY ./ui/package.json ./ui/bun.lock /source/ui/
+RUN cd /source/ui && bun install --frozen-lockfile
 
-# Contracts
-WORKDIR /source
+# Vendoring config and build scripts
+COPY ./ui/tsconfig.vendor.json /source/ui/tsconfig.vendor.json
+COPY ./ui/build/ /source/ui/build/
+COPY ./ui/index.html /source/ui/index.html
+
+# Solidity contracts and TypeScript source
 COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json
 COPY ./solidity/tsconfig-compile.json /source/solidity/tsconfig-compile.json
 COPY ./solidity/contracts/ /source/solidity/contracts/
 COPY ./solidity/ts/ /source/solidity/ts/
 
-# Build the app
-COPY ./tsconfig.json /source/tsconfig.json
-COPY ./app/css/ /source/app/css/
-COPY ./app/ts/ /source/app/ts/
-COPY ./app/favicon.ico /source/app/favicon.ico
-RUN npm run setup
+# UI TypeScript source
+COPY ./ui/tsconfig.json /source/ui/tsconfig.json
+COPY ./ui/css/ /source/ui/css/
+COPY ./ui/ts/ /source/ui/ts/
+COPY ./ui/favicon.ico /source/ui/favicon.ico
+COPY ./ui/favicon.svg /source/ui/favicon.svg
+
+# Compile contracts, vendor dependencies, and build UI
+RUN bun run ui:build
 
 # --------------------------------------------------------
 # Base Image: Create the base image that will host the app
@@ -56,8 +65,14 @@ RUN sed -i 's/URIs/# URIs/g' /etc/apt/sources.list.d/debian.sources && \
 # Install kubo and initialize ipfs
 COPY --from=ipfs-kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
 
-# Copy app's build output and initialize IPFS api
-COPY --from=builder /source/app /export
+# Copy only the deployable UI artifacts (excluding node_modules, source files, build tools)
+COPY --from=builder /source/ui/index.html /export/index.html
+COPY --from=builder /source/ui/favicon.ico /export/favicon.ico
+COPY --from=builder /source/ui/favicon.svg /export/favicon.svg
+COPY --from=builder /source/ui/js/ /export/js/
+COPY --from=builder /source/ui/vendor/ /export/vendor/
+COPY --from=builder /source/ui/css/ /export/css/
+
 RUN ipfs init
 
 # Store the hash to a file
