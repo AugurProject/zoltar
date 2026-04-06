@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { approveErc20, depositRepToSecurityPool, loadSecurityVaultDetails, redeemSecurityVaultFees, redeemSecurityVaultRep, updateSecurityVaultFees } from '../contracts.js'
-import { createReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
@@ -26,7 +26,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 	const securityVaultForm = useSignal<SecurityVaultFormState>(getDefaultSecurityVaultFormState())
 	const securityVaultResult = useSignal<SecurityVaultActionResult | undefined>(undefined)
 	const reloadSecurityVaultDetails = async (securityPoolAddress: Address, vaultAddress: Address) => {
-		securityVaultDetails.value = await loadSecurityVaultDetails(createReadClient(), securityPoolAddress, vaultAddress)
+		securityVaultDetails.value = await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress)
 	}
 
 	const loadSecurityVault = async () => {
@@ -39,7 +39,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 		securityVaultError.value = undefined
 		try {
 			const securityPoolAddress = parseAddressInput(securityVaultForm.value.securityPoolAddress, 'Security pool address')
-			const details = await loadSecurityVaultDetails(createReadClient(), securityPoolAddress, accountAddress)
+			const details = await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
 			securityVaultDetails.value = details
 		} catch (error) {
 			securityVaultDetails.value = undefined
@@ -82,7 +82,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 	const approveRep = async () =>
 		await runVaultAction(
 			async (vaultAddress, securityPoolAddress) => {
-				const details = securityVaultDetails.value ?? (await loadSecurityVaultDetails(createReadClient(), securityPoolAddress, vaultAddress))
+				const details = securityVaultDetails.value ?? (await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress))
 				return await approveErc20(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.repToken, securityPoolAddress, parseBigIntInput(securityVaultForm.value.repApprovalAmount, 'REP approval amount'), 'approveRep')
 			},
 			'Failed to approve REP',

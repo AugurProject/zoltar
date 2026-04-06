@@ -32,7 +32,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 			return {
 				badgeClass: 'pending',
 				detail: 'Connect a wallet to deploy.',
-				label: undefined,
+				label: 'Not Deployed',
 				buttonLabel: 'Deploy',
 			}
 		}
@@ -40,14 +40,14 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 			return {
 				badgeClass: 'pending',
 				detail: 'Switch your wallet to Ethereum mainnet.',
-				label: undefined,
+				label: 'Not Deployed',
 				buttonLabel: 'Deploy',
 			}
 		}
 		return {
 			badgeClass: 'pending',
 			detail: 'Can deploy now.',
-			label: undefined,
+			label: 'Not Deployed',
 			buttonLabel: 'Deploy',
 		}
 	}

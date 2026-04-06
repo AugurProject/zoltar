@@ -2,7 +2,7 @@ import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { zeroAddress, type Address, type Hash } from 'viem'
 import { approveErc20, forkZoltarUniverse, getDeploymentSteps, loadErc20Allowance, loadErc20Balance, loadRepTokensMigratedRepBalance } from '../contracts.js'
-import { createReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createConnectedReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import { GENESIS_REPUTATION_TOKEN_ADDRESS } from '../lib/universe.js'
@@ -57,30 +57,48 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 
 		const isCurrent = nextForkAccessLoad()
 		loadingZoltarForkAccess.value = true
-		try {
-			const readClient = createReadClient()
-			const universeId = zoltarUniverse?.universeId ?? activeUniverseId
-			const childUniverses = zoltarUniverse?.childUniverses ?? []
-			const [allowance, balance, preparedRepBalance, childRepBalances] = await Promise.all([
-				loadErc20Allowance(readClient, reputationToken, accountAddress, getZoltarAddress()),
-				loadErc20Balance(readClient, reputationToken, accountAddress),
-				loadRepTokensMigratedRepBalance(readClient, universeId, accountAddress),
-				Promise.all(childUniverses.map(async child => [child.universeId.toString(), child.reputationToken === zeroAddress ? undefined : await loadErc20Balance(readClient, child.reputationToken, accountAddress)] as const)),
-			])
-			if (!isCurrent()) return
-			zoltarForkAllowance.value = allowance
-			zoltarForkRepBalance.value = balance
-			zoltarMigrationPreparedRepBalance.value = preparedRepBalance
-			const nextChildRepBalances: Record<string, bigint | undefined> = {}
-			for (const [childUniverseId, childRepBalance] of childRepBalances) {
-				nextChildRepBalances[childUniverseId] = childRepBalance
-			}
-			zoltarMigrationChildRepBalances.value = nextChildRepBalances
-		} finally {
-			if (isCurrent()) {
-				loadingZoltarForkAccess.value = false
-			}
+		const readClient = createConnectedReadClient()
+		const universeId = zoltarUniverse?.universeId ?? activeUniverseId
+		const childUniverses = zoltarUniverse?.childUniverses ?? []
+
+		let pending = 0
+		const done = () => {
+			pending -= 1
+			if (pending === 0 && isCurrent()) loadingZoltarForkAccess.value = false
 		}
+
+		pending++
+		loadErc20Balance(readClient, reputationToken, accountAddress)
+			.then(balance => { if (isCurrent()) zoltarForkRepBalance.value = balance })
+			.catch(() => undefined)
+			.finally(done)
+
+		pending++
+		loadErc20Allowance(readClient, reputationToken, accountAddress, getZoltarAddress())
+			.then(allowance => { if (isCurrent()) zoltarForkAllowance.value = allowance })
+			.catch(() => { if (isCurrent()) zoltarForkAllowance.value = undefined })
+			.finally(done)
+
+		pending++
+		loadRepTokensMigratedRepBalance(readClient, universeId, accountAddress)
+			.then(preparedRepBalance => { if (isCurrent()) zoltarMigrationPreparedRepBalance.value = preparedRepBalance })
+			.catch(() => { if (isCurrent()) zoltarMigrationPreparedRepBalance.value = undefined })
+			.finally(done)
+
+		for (const child of childUniverses) {
+			if (child.reputationToken === zeroAddress) continue
+			const childId = child.universeId.toString()
+			pending++
+			loadErc20Balance(readClient, child.reputationToken, accountAddress)
+				.then(balance => {
+					if (!isCurrent()) return
+					zoltarMigrationChildRepBalances.value = { ...zoltarMigrationChildRepBalances.value, [childId]: balance }
+				})
+				.catch(() => undefined)
+				.finally(done)
+		}
+
+		if (pending === 0) loadingZoltarForkAccess.value = false
 	}
 
 	const runZoltarForkAction = async (actionName: 'approve' | 'fork', action: (walletAddress: Address, universe: ZoltarUniverseSummary, questionId: bigint) => Promise<ZoltarForkActionResult>, errorFallback: string, refreshAfter: boolean) => {

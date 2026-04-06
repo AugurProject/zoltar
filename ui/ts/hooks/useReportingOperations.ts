@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool } from '../contracts.js'
-import { createReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput, parseBigIntListInput } from '../lib/inputs.js'
@@ -30,7 +30,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		reportingError.value = undefined
 		try {
 			const securityPoolAddress = parseAddressInput(reportingForm.value.securityPoolAddress, 'Security pool address')
-			const details = await loadReportingDetails(createReadClient(), securityPoolAddress, accountAddress)
+			const details = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
 			reportingDetails.value = details
 		} catch (error) {
 			reportingDetails.value = undefined
@@ -63,7 +63,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 			async result => {
 				reportingResult.value = result
 				const securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
-				const details = await loadReportingDetails(createReadClient(), securityPoolAddress, accountAddress)
+				const details = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
 				reportingDetails.value = details
 			},
 		)
@@ -77,7 +77,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 
 	const withdrawEscalation = async () =>
 		await runReportingAction(async (walletAddress, securityPoolAddress, currentForm) => {
-			const latestDetails = await loadReportingDetails(createReadClient(), securityPoolAddress, walletAddress)
+			const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
 			const selectedSide = latestDetails.sides.find(side => side.key === currentForm.selectedOutcome)
 			const depositIndexes = currentForm.withdrawDepositIndexes.trim() === '' ? (selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []) : parseBigIntListInput(currentForm.withdrawDepositIndexes, 'Deposit indexes')
 

@@ -2,7 +2,7 @@ import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot } from '../contracts.js'
 import { getInjectedEthereum } from '../injectedEthereum.js'
-import { createReadClient, normalizeAccount } from '../lib/clients.js'
+import { createConnectedReadClient, normalizeAccount } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { MAINNET_CHAIN_ID } from '../lib/network.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
@@ -13,19 +13,6 @@ type RefreshStateOptions = {
 	loadWalletState?: boolean
 }
 
-async function loadAccountBalances(readClient: ReturnType<typeof createReadClient>, connectedAddress: AccountState['address']) {
-	if (connectedAddress === undefined) {
-		return {
-			ethBalance: undefined,
-		}
-	}
-
-	const ethBalance = await readClient.getBalance({ address: connectedAddress })
-
-	return {
-		ethBalance,
-	}
-}
 
 export function useOnchainState() {
 	const accountState = useSignal<AccountState>({
@@ -55,86 +42,74 @@ export function useOnchainState() {
 	const refreshState = async (options: RefreshStateOptions = {}) => {
 		const shouldLoadWalletState = options.loadWalletState ?? true
 		const ethereum = getInjectedEthereum()
-		const readClient = createReadClient()
 		const isCurrent = nextRefresh()
-		if (shouldLoadWalletState) {
-			walletLoadCount.value += 1
-		}
+		hasInjectedWallet.value = ethereum !== undefined
+		errorMessage.value = undefined
+
+		// Fire deployment status immediately — independent of wallet state
 		deploymentStatusLoadCount.value += 1
-		try {
-			hasInjectedWallet.value = ethereum !== undefined
-
-			const deploymentStatusSnapshot = await loadDeploymentStatusOracleSnapshot(readClient)
-			if (!isCurrent()) return
-			augurPlaceHolderDeployed.value = deploymentStatusSnapshot.augurPlaceHolderDeployed
-			deploymentStatuses.value = deploymentStatusSnapshot.deploymentStatuses
-			deploymentStatusesLoaded.value = true
-
-			if (shouldLoadWalletState) {
-				console.debug('[useOnchainState] calling eth_accounts')
-				const accounts = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' })
-				console.debug('[useOnchainState] eth_accounts returned', accounts)
-				const connectedAddress = normalizeAccount(accounts[0])
+		loadDeploymentStatusOracleSnapshot(createConnectedReadClient())
+			.then(snapshot => {
 				if (!isCurrent()) return
+				augurPlaceHolderDeployed.value = snapshot.augurPlaceHolderDeployed
+				deploymentStatuses.value = snapshot.deploymentStatuses
+				deploymentStatusesLoaded.value = true
+			})
+			.catch(error => {
+				if (!isCurrent()) return
+				errorMessage.value = getErrorMessage(error, 'Failed to refresh deployment status')
+			})
+			.finally(() => {
+				deploymentStatusLoadCount.value = Math.max(0, deploymentStatusLoadCount.value - 1)
+			})
 
-				accountState.value = {
-					address: connectedAddress,
-					chainId: accountState.value.chainId,
-					ethBalance: connectedAddress === accountState.value.address ? accountState.value.ethBalance : undefined,
-				}
-				errorMessage.value = undefined
+		if (!shouldLoadWalletState) return
 
-				const pendingWalletTasks: Promise<void>[] = []
+		// Resolve connection state — must complete before wallet-specific reads
+		walletLoadCount.value += 1
+		try {
+			console.debug('[useOnchainState] calling eth_accounts')
+			const accounts = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' }).catch(() => [])
+			console.debug('[useOnchainState] eth_accounts returned', accounts)
+			if (!isCurrent()) return
+			const connectedAddress = normalizeAccount(accounts[0])
+			accountState.value = {
+				address: connectedAddress,
+				chainId: accountState.value.chainId,
+				ethBalance: connectedAddress === accountState.value.address ? accountState.value.ethBalance : undefined,
+			}
 
-				if (ethereum !== undefined) {
-					pendingWalletTasks.push(
-						ethereum
-							.request({ method: 'eth_chainId' })
-							.then(chainId => {
-								if (!isCurrent()) return
-								accountState.value = {
-									...accountState.value,
-									chainId,
-								}
-							})
-							.catch(error => {
-								if (!isCurrent()) return
-								errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet network')
-							}),
-					)
-				} else {
-					accountState.value = {
-						...accountState.value,
-						chainId: MAINNET_CHAIN_ID,
-					}
-				}
-
-				pendingWalletTasks.push(
-					loadAccountBalances(readClient, connectedAddress)
-						.then(balances => {
-							if (!isCurrent()) return
-							accountState.value = {
-								...accountState.value,
-								ethBalance: balances.ethBalance,
-							}
-						})
-						.catch(error => {
-							if (!isCurrent()) return
-							errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet balances')
-						}),
-				)
-
-				await Promise.allSettled(pendingWalletTasks)
+			if (connectedAddress !== undefined && ethereum !== undefined) {
+				const readClient = createConnectedReadClient()
+				ethereum
+					.request({ method: 'eth_chainId' })
+					.then(chainId => {
+						if (!isCurrent()) return
+						accountState.value = { ...accountState.value, chainId }
+					})
+					.catch(() => {
+						if (!isCurrent()) return
+						accountState.value = { ...accountState.value, chainId: MAINNET_CHAIN_ID }
+					})
+				readClient
+					.getBalance({ address: connectedAddress })
+					.then(ethBalance => {
+						if (!isCurrent()) return
+						accountState.value = { ...accountState.value, ethBalance }
+					})
+					.catch(error => {
+						if (!isCurrent()) return
+						errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet balances')
+					})
+			} else {
+				accountState.value = { ...accountState.value, chainId: MAINNET_CHAIN_ID }
 			}
 		} catch (error) {
 			if (!isCurrent()) return
 			errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
 		} finally {
-			if (shouldLoadWalletState) {
-				walletLoadCount.value = Math.max(0, walletLoadCount.value - 1)
-				if (isCurrent()) walletBootstrapComplete.value = true
-			}
-			deploymentStatusLoadCount.value = Math.max(0, deploymentStatusLoadCount.value - 1)
+			walletLoadCount.value = Math.max(0, walletLoadCount.value - 1)
+			if (isCurrent()) walletBootstrapComplete.value = true
 		}
 	}
 

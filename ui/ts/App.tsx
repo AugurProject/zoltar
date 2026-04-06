@@ -26,7 +26,8 @@ import { isMainnetChain } from './lib/network.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
 import type { TransactionState } from './lib/transactionState.js'
 import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
-import { formatUniverseCollectionLabel } from './lib/universe.js'
+import { formatTimestamp } from './lib/formatters.js'
+import { formatUniverseCollectionLabel, formatUniverseLabel } from './lib/universe.js'
 import { TransactionHashLink } from './components/TransactionHashLink.js'
 
 export function App() {
@@ -424,7 +425,7 @@ export function App() {
 	return (
 		<main>
 			<div className='page-notices'>
-				{showZoltarUniverseForkedWarning ? <div className='notice error'>The universe has forked.</div> : undefined}
+				{showZoltarUniverseForkedWarning && zoltarUniverse !== undefined ? <div className='notice error'>{ `${ formatUniverseLabel(zoltarUniverse.universeId) } has forked on ${ formatTimestamp(zoltarUniverse.forkTime) }.` }</div> : undefined}
 				{showAugurPlaceHolderDeploymentWarning ? <div className='notice error'>Augur PLACEHOLDER contracts are not deployed yet. Deploy them before the application works.</div> : undefined}
 				{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected.</p>}
 				{errorMessage === undefined ? undefined : <p className='notice error'>{errorMessage}</p>}

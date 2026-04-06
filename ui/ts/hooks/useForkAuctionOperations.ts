@@ -16,7 +16,7 @@ import {
 	submitTruthAuctionBid,
 	withdrawTruthAuctionBids,
 } from '../contracts.js'
-import { createReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput } from '../lib/inputs.js'
@@ -59,7 +59,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 		forkAuctionError.value = undefined
 		try {
 			const securityPoolAddress = parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address')
-			const details = await loadForkAuctionDetails(createReadClient(), securityPoolAddress)
+			const details = await loadForkAuctionDetails(createConnectedReadClient(), securityPoolAddress)
 			forkAuctionDetails.value = details
 		} catch (error) {
 			forkAuctionDetails.value = undefined
@@ -84,13 +84,13 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 			},
 			async walletAddress => {
 				forkAuctionResult.value = undefined
-				const details = forkAuctionDetails.value ?? (await loadForkAuctionDetails(createReadClient(), parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address')))
+				const details = forkAuctionDetails.value ?? (await loadForkAuctionDetails(createConnectedReadClient(), parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address')))
 				return await action(walletAddress, details)
 			},
 			errorFallback,
 			async result => {
 				forkAuctionResult.value = result
-				forkAuctionDetails.value = await loadForkAuctionDetails(createReadClient(), result.securityPoolAddress)
+				forkAuctionDetails.value = await loadForkAuctionDetails(createConnectedReadClient(), result.securityPoolAddress)
 			},
 		)
 
