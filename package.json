@@ -41,6 +41,7 @@
 		"lint:fix": "bun x @biomejs/biome check --write solidity/ts ui/ts",
 		"format": "bunx @biomejs/biome format --write package.json scripts ui/package.json ui/tsconfig.json ui/build solidity/ts ui/ts ui/css",
 		"knip": "bun x knip",
-		"knip:fix": "bun x knip --fix"
+		"knip:fix": "bun x knip --fix",
+		"ui:docker": "docker build -f ui/Dockerfile ."
 	}
 }
