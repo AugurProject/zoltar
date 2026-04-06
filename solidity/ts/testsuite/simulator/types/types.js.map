@@ -1,1 +1,0 @@
-{"version":3,"file":"types.js","sourceRoot":"","sources":["types.ts"],"names":[],"mappings":"AAEA,MAAM,CAAN,IAAY,eAKX;AALD,WAAY,eAAe;IAC1B,2DAAO,CAAA;IACP,mDAAG,CAAA;IACH,iDAAE,CAAA;IACF,qDAAI,CAAA;AACL,CAAC,EALW,eAAe,KAAf,eAAe,QAK1B","sourcesContent":["export type AccountAddress = `0x${string}`\n\nexport enum QuestionOutcome {\n\tInvalid,\n\tYes,\n\tNo,\n\tNone,\n}\n"]}
