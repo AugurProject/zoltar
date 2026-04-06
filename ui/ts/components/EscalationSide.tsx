@@ -1,5 +1,5 @@
 import { CurrencyValue } from './CurrencyValue.js'
-import type { EscalationSide as EscalationSideSummary } from '../types/contracts.js'
+import type { EscalationSide } from '../types/contracts.js'
 
 type EscalationSideProps = {
 	estimate: {
@@ -8,7 +8,7 @@ type EscalationSideProps = {
 	}
 	isLeading: boolean
 	isSelected: boolean
-	side: EscalationSideSummary
+	side: EscalationSide
 	userStake: bigint
 }
 

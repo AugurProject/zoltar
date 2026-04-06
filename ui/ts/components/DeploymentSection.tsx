@@ -3,7 +3,7 @@ import { getPrerequisiteLabel } from '../lib/deployment.js'
 
 type StepStatus = {
 	badgeClass: string
-	label: string
+	label: string | undefined
 	detail: string
 	buttonLabel: string
 }
@@ -31,7 +31,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 		return {
 			badgeClass: 'pending',
 			detail: 'Can deploy now.',
-			label: 'Ready',
+			label: undefined,
 			buttonLabel: 'Deploy',
 		}
 	}
@@ -64,7 +64,7 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, isMa
 						<div className='contract-row' key={step.id}>
 							<div className='contract-copy'>
 								<div className='contract-topline'>
-									<span className={`badge ${stepStatus.badgeClass}`}>{stepStatus.label}</span>
+									{stepStatus.label === undefined ? undefined : <span className={`badge ${stepStatus.badgeClass}`}>{stepStatus.label}</span>}
 									<h3>{step.label}</h3>
 								</div>
 								<p className='address'>{step.address}</p>
