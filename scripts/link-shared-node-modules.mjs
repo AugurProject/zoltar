@@ -21,6 +21,10 @@ const ensureDirectory = async directoryPath => {
 }
 
 async function ensureSharedNodeModules() {
+	if (localNodeModulesPath === sharedNodeModulesPath) {
+		await ensureDirectory(sharedNodeModulesPath)
+		return
+	}
 	const localStat = await fs.lstat(localNodeModulesPath).catch(() => undefined)
 	if (localStat?.isSymbolicLink()) {
 		const linkedTarget = await fs.readlink(localNodeModulesPath)
