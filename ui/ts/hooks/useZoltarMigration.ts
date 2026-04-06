@@ -103,6 +103,7 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 			} catch (error) {
 				console.error('[useZoltarMigration] Refresh after transaction failed')
 				console.error(error)
+				zoltarMigrationError.value = getErrorMessage(error, 'Migration succeeded, but refreshing the UI failed')
 			}
 		},
 		[
