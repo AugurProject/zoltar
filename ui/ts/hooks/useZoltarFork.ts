@@ -69,20 +69,30 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 
 		pending++
 		loadErc20Balance(readClient, reputationToken, accountAddress)
-			.then(balance => { if (isCurrent()) zoltarForkRepBalance.value = balance })
+			.then(balance => {
+				if (isCurrent()) zoltarForkRepBalance.value = balance
+			})
 			.catch(() => undefined)
 			.finally(done)
 
 		pending++
 		loadErc20Allowance(readClient, reputationToken, accountAddress, getZoltarAddress())
-			.then(allowance => { if (isCurrent()) zoltarForkAllowance.value = allowance })
-			.catch(() => { if (isCurrent()) zoltarForkAllowance.value = undefined })
+			.then(allowance => {
+				if (isCurrent()) zoltarForkAllowance.value = allowance
+			})
+			.catch(() => {
+				if (isCurrent()) zoltarForkAllowance.value = undefined
+			})
 			.finally(done)
 
 		pending++
 		loadRepTokensMigratedRepBalance(readClient, universeId, accountAddress)
-			.then(preparedRepBalance => { if (isCurrent()) zoltarMigrationPreparedRepBalance.value = preparedRepBalance })
-			.catch(() => { if (isCurrent()) zoltarMigrationPreparedRepBalance.value = undefined })
+			.then(preparedRepBalance => {
+				if (isCurrent()) zoltarMigrationPreparedRepBalance.value = preparedRepBalance
+			})
+			.catch(() => {
+				if (isCurrent()) zoltarMigrationPreparedRepBalance.value = undefined
+			})
 			.finally(done)
 
 		for (const child of childUniverses) {

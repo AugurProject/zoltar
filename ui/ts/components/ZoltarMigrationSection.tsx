@@ -48,7 +48,7 @@ function getMigrationGuardMessage(accountAddress: Address | undefined, isMainnet
 	if (accountAddress === undefined) return 'Connect a wallet before using REP migration actions.'
 	if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
 	if (rootUniverse === undefined) return loadingZoltarUniverse ? 'Loading universe data...' : 'Load the universe first.'
-	if (loadingZoltarForkAccess) return 'Loading REP balances...'
+	if (loadingZoltarForkAccess) return 'Loading migration data...'
 	if (!hasForked) return notForkedAction
 	return undefined
 }
@@ -172,12 +172,6 @@ export function ZoltarMigrationSection({
 		<>
 			<EntityCard title='Migrate REP'>
 				<div className='workflow-metric-grid'>
-					<div>
-						<span className='metric-label'>Your REP Balance</span>
-						<strong>
-							<CurrencyValue loading={loadingZoltarForkAccess} value={zoltarForkRepBalance} suffix='REP' />
-						</strong>
-					</div>
 					<div>
 						<span className='metric-label'>Migration REP Balance</span>
 						<strong>
