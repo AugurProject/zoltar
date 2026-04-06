@@ -2,6 +2,7 @@ node_modules
 /node_modules/
 /solidity/artifacts
 /solidity/node_modules
+/ui/node_modules
 /solidity/js
 solidity/user-config.json
 solidity/ts/types/contractArtifact.ts
