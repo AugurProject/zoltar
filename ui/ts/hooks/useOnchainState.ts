@@ -13,7 +13,6 @@ type RefreshStateOptions = {
 	loadWalletState?: boolean
 }
 
-
 export function useOnchainState() {
 	const accountState = useSignal<AccountState>({
 		address: undefined,

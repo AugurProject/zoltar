@@ -6,7 +6,7 @@ import { getMigrationOutcomeHeldBalance } from '../components/MigrationOutcomeUn
 import type { ZoltarChildUniverseSummary } from '../types/contracts.js'
 
 void describe('getMigrationOutcomeHeldBalance', () => {
-	void test('returns zero for undeployed child universes', () => {
+	void test('returns undefined for undeployed child universes', () => {
 		const child = {
 			exists: false,
 			forkTime: 0n,
@@ -17,7 +17,7 @@ void describe('getMigrationOutcomeHeldBalance', () => {
 			universeId: 123n,
 		} satisfies ZoltarChildUniverseSummary
 
-		expect(getMigrationOutcomeHeldBalance(child, {})).toBe(0n)
+		expect(getMigrationOutcomeHeldBalance(child, {})).toBe(undefined)
 	})
 
 	void test('returns the recorded balance for deployed child universes', () => {
