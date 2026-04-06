@@ -7,13 +7,15 @@ const DEFAULT_RPC_URL = 'https://ethereum.dark.florist'
 export type ReadClient = ReturnType<typeof createPublicClient>
 export type WriteClient = WalletClient<Transport, typeof mainnet, Account> & PublicActions<Transport, typeof mainnet>
 
-export function createReadClient(): ReadClient {
-	const ethereum = getInjectedEthereum()
-
+export function createReadClient(ethereum?: InjectedEthereum): ReadClient {
 	return createPublicClient({
 		chain: mainnet,
-		transport: ethereum === undefined ? http(DEFAULT_RPC_URL, { batch: { wait: 100 } }) : custom(ethereum),
+		transport: ethereum !== undefined ? custom(ethereum) : http(DEFAULT_RPC_URL, { batch: { wait: 100 } }),
 	})
+}
+
+export function createConnectedReadClient(): ReadClient {
+	return createReadClient(getInjectedEthereum())
 }
 
 type CreateWriteClientCallbacks = {

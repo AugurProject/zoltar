@@ -2,7 +2,7 @@ import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { loadAllSecurityPools, loadOracleManagerDetails, queueSecurityPoolLiquidation } from '../contracts.js'
 import { getInjectedEthereum } from '../injectedEthereum.js'
-import { createReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
@@ -32,7 +32,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 		loadingSecurityPools.value = true
 		securityPoolOverviewError.value = undefined
 		try {
-			securityPools.value = await loadAllSecurityPools(createReadClient())
+			securityPools.value = await loadAllSecurityPools(createConnectedReadClient())
 		} catch (error) {
 			securityPoolOverviewError.value = getErrorMessage(error, 'Failed to load security pools')
 		} finally {
@@ -68,7 +68,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 			securityPoolOverviewResult.value = undefined
 			const targetVault = parseAddressInput(liquidationTargetVault.value, 'Target vault')
 			const amount = parseBigIntInput(liquidationAmount.value, 'Liquidation amount')
-			const oracleDetails = await loadOracleManagerDetails(createReadClient(), managerAddress)
+			const oracleDetails = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
 			const hash = await queueSecurityPoolLiquidation(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount, oracleDetails.requestPriceEthCost)
 			securityPoolOverviewResult.value = {
 				action: 'queueLiquidation',

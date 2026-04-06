@@ -8,7 +8,6 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 	const nextMissingStep = findNextDeployableStep(deploymentStatuses)
 	const deployedContractCount = deploymentStatuses.filter(step => step.deployed).length
 	const totalContractCount = deploymentStatuses.length
-	const deployedContractLabel = deployedContractCount === 1 ? 'contract deployed' : 'contracts deployed'
 	let buttonContent: ComponentChildren = 'Deploy Next Missing'
 	if (deployNextMissingPending) {
 		buttonContent = (
@@ -26,14 +25,14 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 			<section className='panel'>
 				<h2>
 					<LoadableValue loading={isLoadingDeploymentStatuses} placeholder='Loading deployment status...'>
-						{deployedContractCount} {deployedContractLabel} / {totalContractCount} total
+						{deployedContractCount} / {totalContractCount} contracts deployed
 					</LoadableValue>
 				</h2>
-				<p className='detail'>
-					<LoadableValue loading={isLoadingDeploymentStatuses} placeholder='Checking deterministic deployments...'>
+				{!isLoadingDeploymentStatuses && (
+					<p className='detail'>
 						{nextMissingStep === undefined ? 'All deterministic contracts are deployed.' : `Next deployable contract: ${nextMissingStep.label}`}
-					</LoadableValue>
-				</p>
+					</p>
+				)}
 				<div className='actions'>
 					<button className='primary' onClick={onDeployNextMissing} disabled={accountAddress === undefined || !isMainnet || nextMissingStep === undefined || busyStepId !== undefined || deployNextMissingPending}>
 						{buttonContent}

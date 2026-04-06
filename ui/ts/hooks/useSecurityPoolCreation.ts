@@ -2,7 +2,7 @@ import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
 import { createSecurityPool, loadMarketDetails, originSecurityPoolExists } from '../contracts.js'
-import { createReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createConnectedReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
@@ -57,7 +57,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		checkingDuplicateOriginPool.value = true
 
 		try {
-			const exists = await originSecurityPoolExists(createReadClient(), questionId, securityMultiplier)
+			const exists = await originSecurityPoolExists(createConnectedReadClient(), questionId, securityMultiplier)
 			if (!isCurrent()) return
 			duplicateOriginPoolExists.value = exists
 		} catch {
@@ -84,7 +84,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 				...securityPoolForm.value,
 				marketId,
 			})
-			const details = await loadMarketDetails(createReadClient(), questionId)
+			const details = await loadMarketDetails(createConnectedReadClient(), questionId)
 			if (!isCurrent()) return
 			if (!details.exists) {
 				marketDetails.value = undefined
@@ -132,7 +132,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		poolCreationMarketDetails.value = undefined
 		try {
 			const parameters = createSecurityPoolParameters(securityPoolForm.value)
-			const details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createReadClient(), parameters.questionId)
+			const details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createConnectedReadClient(), parameters.questionId)
 			if (!details.exists) {
 				securityPoolError.value = 'No market found for that ID'
 				return
@@ -142,7 +142,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 				marketDetails.value = details
 				return
 			}
-			if (await originSecurityPoolExists(createReadClient(), parameters.questionId, parameters.securityMultiplier)) {
+			if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.securityMultiplier)) {
 				securityPoolError.value = 'A security pool for this question and security multiplier already exists. Change the security multiplier to create a different pool.'
 				marketDetails.value = details
 				return

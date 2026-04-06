@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { approveErc20, loadOracleManagerDetails, queueOracleManagerOperation, requestOraclePrice, settleOracleReport, submitInitialOracleReport } from '../contracts.js'
-import { createReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput, parseBytes32Input, parseOracleQueueOperationInput, parseReportIdInput } from '../lib/inputs.js'
@@ -31,7 +31,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		openOracleError.value = undefined
 		try {
 			const managerAddress = parseAddressInput(openOracleForm.value.managerAddress, 'Manager address')
-			const details = await loadOracleManagerDetails(createReadClient(), managerAddress)
+			const details = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
 			oracleManagerDetails.value = details
 			const current = openOracleForm.value
 			openOracleForm.value = {
@@ -90,13 +90,13 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 
 	const requestPrice = async () =>
 		await runOracleAction(async walletAddress => {
-			const details = oracleManagerDetails.value ?? (await loadOracleManagerDetails(createReadClient(), parseAddressInput(openOracleForm.value.managerAddress, 'Manager address')))
+			const details = oracleManagerDetails.value ?? (await loadOracleManagerDetails(createConnectedReadClient(), parseAddressInput(openOracleForm.value.managerAddress, 'Manager address')))
 			return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.managerAddress, details.requestPriceEthCost)
 		}, 'Failed to request price')
 
 	const queueOperation = async () =>
 		await runOracleAction(async walletAddress => {
-			const details = oracleManagerDetails.value ?? (await loadOracleManagerDetails(createReadClient(), parseAddressInput(openOracleForm.value.managerAddress, 'Manager address')))
+			const details = oracleManagerDetails.value ?? (await loadOracleManagerDetails(createConnectedReadClient(), parseAddressInput(openOracleForm.value.managerAddress, 'Manager address')))
 			return await queueOracleManagerOperation(
 				createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
 				details.managerAddress,
