@@ -1,8 +1,11 @@
-import { LoadableValue } from './LoadableValue.js'
-import { formatCurrencyBalance } from '../lib/formatters.js'
+import { AddressValue } from './AddressValue.js'
+import { CurrencyValue } from './CurrencyValue.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 
-export function OverviewPanels({ accountState, isLoadingUniverseRepBalance, onConnect, onGoToGenesisUniverse, onRefresh, universeErrorMessage, universeLabel, universeRepBalance, isRefreshing }: OverviewPanelsProps) {
+export function OverviewPanels({ accountState, isConnectingWallet, isLoadingUniverseRepBalance, onConnect, onGoToGenesisUniverse, onRefresh, universeErrorMessage, universeLabel, universeRepBalance, isRefreshing, walletBootstrapComplete }: OverviewPanelsProps) {
+	const isWalletLoading = isConnectingWallet || (!walletBootstrapComplete && accountState.address === undefined)
+	const showAccountBalances = accountState.address !== undefined
+
 	return (
 		<section className='overview-shell'>
 			<article className='panel overview-panel overview-wallet-panel'>
@@ -14,24 +17,35 @@ export function OverviewPanels({ accountState, isLoadingUniverseRepBalance, onCo
 						<div className='overview-inline-metrics'>
 							<div className='overview-address-metric'>
 								<span className='metric-label'>Address</span>
-								<strong>{accountState.address ?? 'Not connected'}</strong>
-							</div>
-							<div>
-								<span className='metric-label'>ETH</span>
 								<strong>
-									<LoadableValue loading={isRefreshing && accountState.ethBalance === undefined} placeholder='Loading...'>
-										{formatCurrencyBalance(accountState.ethBalance)} ETH
-									</LoadableValue>
+									{isWalletLoading ? (
+										<span className='loading-value'>
+											<span className='spinner' aria-hidden='true' />
+											Connecting...
+										</span>
+									) : accountState.address === undefined ? (
+										'Not connected'
+									) : (
+										<AddressValue address={accountState.address} />
+									)}
 								</strong>
 							</div>
-							<div>
-								<span className='metric-label'>REP</span>
-								<strong>
-									<LoadableValue loading={isLoadingUniverseRepBalance} placeholder='Loading...'>
-										{formatCurrencyBalance(universeRepBalance)} REP
-									</LoadableValue>
-								</strong>
-							</div>
+							{showAccountBalances ? (
+								<>
+									<div>
+										<span className='metric-label'>ETH</span>
+										<strong>
+											<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix='ETH' />
+										</strong>
+									</div>
+									<div>
+										<span className='metric-label'>REP</span>
+										<strong>
+											<CurrencyValue value={universeRepBalance} loading={isLoadingUniverseRepBalance} suffix='REP' />
+										</strong>
+									</div>
+								</>
+							) : undefined}
 							<div>
 								<span className='metric-label'>Universe</span>
 								<strong className={universeErrorMessage === undefined ? undefined : 'overview-universe-error'}>{universeErrorMessage ?? universeLabel}</strong>
@@ -49,7 +63,11 @@ export function OverviewPanels({ accountState, isLoadingUniverseRepBalance, onCo
 						<button className='secondary' onClick={onRefresh} disabled={isRefreshing}>
 							{isRefreshing ? 'Refreshing...' : 'Refresh'}
 						</button>
-						{accountState.address === undefined ? <button onClick={onConnect}>Connect Wallet</button> : undefined}
+						{accountState.address === undefined ? (
+							<button onClick={onConnect} disabled={isConnectingWallet}>
+								{isWalletLoading ? 'Connecting...' : 'Connect Wallet'}
+							</button>
+						) : undefined}
 					</div>
 				</div>
 			</article>

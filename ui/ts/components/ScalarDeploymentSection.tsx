@@ -3,6 +3,7 @@ import type { Address } from 'viem'
 import { ChildUniversesSection } from './ChildUniversesSection.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
 import { useEffect } from 'preact/hooks'
+import { LoadingText } from './LoadingText.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarSliderProgress } from '../lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../types/contracts.js'
 
@@ -18,6 +19,7 @@ type ScalarDeploymentSectionProps = {
 
 export function ScalarDeploymentSection({ accountAddress, childUniverses, hasForked, isMainnet, onCreateChildUniverseForOutcomeIndex, questionDetails, zoltarChildUniverseError }: ScalarDeploymentSectionProps) {
 	const [scalarOutcomeTick, setScalarOutcomeTick] = useState('0')
+	const [scalarOutcomeInvalid, setScalarOutcomeInvalid] = useState(false)
 	const [scalarDeployError, setScalarDeployError] = useState<string | undefined>(undefined)
 
 	if (questionDetails === undefined) {
@@ -26,7 +28,9 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				<div className='entity-card-subsection-header'>
 					<h4>Child universes</h4>
 				</div>
-				<p className='detail'>Loading scalar range...</p>
+				<p className='detail'>
+					<LoadingText>Loading scalar range...</LoadingText>
+				</p>
 			</div>
 		)
 	}
@@ -34,11 +38,11 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const selectedScalarTick = BigInt(scalarOutcomeTick)
 	const clampedSelectedScalarTick = clampScalarTickIndex(selectedScalarTick, questionDetails.numTicks)
 	const clampedScalarOutcomeTick = clampedSelectedScalarTick.toString()
-	const selectedScalarOutcomeLabel = formatScalarOutcomeLabel(questionDetails, clampedSelectedScalarTick)
-	const selectedScalarOutcomeIndex = getScalarOutcomeIndex(questionDetails, clampedSelectedScalarTick)
+	const selectedScalarOutcomeLabel = scalarOutcomeInvalid ? 'Invalid' : formatScalarOutcomeLabel(questionDetails, clampedSelectedScalarTick)
+	const selectedScalarOutcomeIndex = scalarOutcomeInvalid ? 0n : getScalarOutcomeIndex(questionDetails, clampedSelectedScalarTick)
 	const selectedScalarChild = childUniverses.find(child => child.outcomeIndex === selectedScalarOutcomeIndex)
 	const selectedScalarChildExists = selectedScalarChild?.exists === true
-	const selectedScalarProgress = getScalarSliderProgress(clampedSelectedScalarTick, questionDetails.numTicks)
+	const selectedScalarProgress = scalarOutcomeInvalid ? 0 : getScalarSliderProgress(clampedSelectedScalarTick, questionDetails.numTicks)
 	const canDeployScalarChild = accountAddress !== undefined && isMainnet && hasForked && !selectedScalarChildExists
 
 	useEffect(() => {
@@ -57,12 +61,24 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				renderBody={child => <ChildUniverseDetails child={child} />}
 			/>
 			<div className='market-scalar-deploy'>
+				<label className='field scalar-invalid-toggle'>
+					<input
+						type='checkbox'
+						checked={scalarOutcomeInvalid}
+						onChange={event => {
+							setScalarDeployError(undefined)
+							setScalarOutcomeInvalid(event.currentTarget.checked)
+						}}
+					/>
+					<span>Resolve as Invalid</span>
+				</label>
 				<div className='field scalar-slider-field'>
 					<span>Select Child Universe</span>
-					<div className='scalar-slider-rail'>
+					<div className={`scalar-slider-rail ${scalarOutcomeInvalid ? 'is-disabled' : ''}`}>
 						<div className='scalar-slider-track' />
 						<div className='scalar-slider-fill' style={{ width: `${selectedScalarProgress}%` }} />
 						<input
+							disabled={scalarOutcomeInvalid}
 							type='range'
 							min='0'
 							max={questionDetails.numTicks.toString()}
@@ -83,10 +99,10 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 					</div>
 					<div>
 						<span className='metric-label'>Selected Tick</span>
-						<strong>{`${clampedScalarOutcomeTick} / ${questionDetails.numTicks.toString()}`}</strong>
+						<strong>{scalarOutcomeInvalid ? 'Invalid' : `${clampedScalarOutcomeTick} / ${questionDetails.numTicks.toString()}`}</strong>
 					</div>
 					<div>
-						<span className='metric-label'>Selected Value</span>
+						<span className='metric-label'>Selected Outcome</span>
 						<strong>{selectedScalarOutcomeLabel}</strong>
 					</div>
 					<div>
@@ -107,7 +123,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 						}}
 						disabled={!canDeployScalarChild}
 					>
-						{selectedScalarChildExists ? 'Deployed' : 'Deploy Universe'}
+						{selectedScalarChildExists ? 'Deployed' : scalarOutcomeInvalid ? 'Deploy Invalid Universe' : 'Deploy Universe'}
 					</button>
 				</div>
 				{scalarDeployError === undefined ? undefined : <p className='notice error'>{scalarDeployError}</p>}

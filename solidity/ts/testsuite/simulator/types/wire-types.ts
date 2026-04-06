@@ -64,13 +64,13 @@ const BytesParser: funtypes.ParsedValue<funtypes.String, Uint8Array>['config'] =
 	},
 }
 
-const EthereumQuantity = funtypes.String.withParser(BigIntParser)
+export const EthereumQuantity = funtypes.String.withParser(BigIntParser)
 export type EthereumQuantity = funtypes.Static<typeof EthereumQuantity>
 
-const EthereumQuantitySmall = funtypes.String.withParser(SmallIntParser)
+export const EthereumQuantitySmall = funtypes.String.withParser(SmallIntParser)
 export type EthereumQuantitySmall = funtypes.Static<typeof EthereumQuantitySmall>
 
-const EthereumData = funtypes.String.withParser(BytesParser)
+export const EthereumData = funtypes.String.withParser(BytesParser)
 export type EthereumData = funtypes.Static<typeof EthereumData>
 
 export const EthereumBytes32 = funtypes.String.withParser(Bytes32Parser)

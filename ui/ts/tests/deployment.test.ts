@@ -87,7 +87,7 @@ void describe('deployment helpers', () => {
 			deployed: false,
 		}))
 		const sections = getDeploymentSections(deploymentStatuses)
-		const proxyDeployerSection = sections.find(section => section.title === 'Proxy Deployer')
+		const proxyDeployerSection = sections.find(section => section.title === 'Utilities')
 
 		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle'])
 	})
@@ -103,7 +103,6 @@ void describe('deployment helpers', () => {
 	void test('loadZoltarUniverseSummary returns undefined for an unknown universe id', async () => {
 		let callCount = 0
 		const mockReadClient = {
-			getCode: async () => '0x1234',
 			readContract: async ({ functionName }: { functionName: string }) => {
 				callCount += 1
 				expect(functionName).toBe('getRepToken')
@@ -115,26 +114,5 @@ void describe('deployment helpers', () => {
 
 		expect(universe).toBe(undefined)
 		expect(callCount).toBe(1)
-	})
-
-	void test('loadZoltarUniverseSummary returns undefined when the Zoltar contract is not deployed', async () => {
-		let getCodeCallCount = 0
-		let readContractCallCount = 0
-		const mockReadClient = {
-			getCode: async () => {
-				getCodeCallCount += 1
-				return undefined
-			},
-			readContract: async () => {
-				readContractCallCount += 1
-				throw new Error('readContract should not be called when Zoltar is missing')
-			},
-		} as unknown as ReadClient
-
-		const universe = await loadZoltarUniverseSummary(mockReadClient, 0n)
-
-		expect(universe).toBe(undefined)
-		expect(getCodeCallCount).toBe(1)
-		expect(readContractCallCount).toBe(0)
 	})
 })

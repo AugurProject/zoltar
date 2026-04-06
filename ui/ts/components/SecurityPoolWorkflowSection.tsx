@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'preact/hooks'
+import { AddressValue } from './AddressValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
 import { LiquidationModal } from './LiquidationModal.js'
-import { QuestionSummaryHeader } from './QuestionSummary.js'
+import { Question } from './Question.js'
 import { ReportingSection } from './ReportingSection.js'
 import { SecurityVaultSection } from './SecurityVaultSection.js'
 import { TradingSection } from './TradingSection.js'
 import { UniverseLink } from './UniverseLink.js'
-import { formatCurrencyBalance } from '../lib/formatters.js'
+import { CurrencyValue } from './CurrencyValue.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import { readSelectedPoolViewQueryParam, writeSelectedPoolViewQueryParam } from '../lib/urlParams.js'
@@ -56,7 +57,7 @@ export function SecurityPoolWorkflowSection({
 	const reportingReady = marketDetails !== undefined && marketDetails.endTime <= currentTimestamp
 	const forkReady = selectedPoolState !== undefined && selectedPoolState !== 'operational'
 	const hasSelectedPoolAddress = securityPoolAddress.trim() !== ''
-	const selectedPoolTitle = marketDetails?.title === undefined || marketDetails.title === '' ? (securityPoolAddress === '' ? 'Select a security pool' : securityPoolAddress) : marketDetails.title
+	const selectedPoolTitle = securityPoolAddress === '' ? 'Select a security pool' : <AddressValue address={securityPoolAddress} />
 
 	useEffect(() => {
 		const nextSearch = writeSelectedPoolViewQueryParam(window.location.search, hasSelectedPoolAddress ? view : undefined)
@@ -74,7 +75,7 @@ export function SecurityPoolWorkflowSection({
 			) : undefined}
 
 			<div className='workflow-stack'>
-				<EntityCard title={selectedPoolTitle} badge={<span className={`badge ${selectedPoolState === undefined ? 'pending' : 'ok'}`}>{selectedPoolState ?? 'Not loaded'}</span>}>
+				<EntityCard title={selectedPoolTitle} badge={selectedPoolState === undefined ? undefined : <span className='badge ok'>{selectedPoolState}</span>}>
 					<div className='form-grid'>
 						<label className='field'>
 							<span>Security Pool Address</span>
@@ -94,10 +95,6 @@ export function SecurityPoolWorkflowSection({
 									<span className='badge muted'>{selectedPool.vaultCount.toString()} vaults</span>
 								</div>
 								<div className='workflow-metric-grid'>
-									<div>
-										<span className='metric-label'>Question ID</span>
-										<strong>{selectedPool.questionId}</strong>
-									</div>
 									<div>
 										<span className='metric-label'>Universe</span>
 										<strong>
@@ -122,11 +119,15 @@ export function SecurityPoolWorkflowSection({
 									</div>
 									<div>
 										<span className='metric-label'>Manager</span>
-										<strong>{selectedPool.managerAddress}</strong>
+										<strong>
+											<AddressValue address={selectedPool.managerAddress} />
+										</strong>
 									</div>
 									<div>
 										<span className='metric-label'>Truth Auction</span>
-										<strong>{selectedPool.truthAuctionAddress}</strong>
+										<strong>
+											<AddressValue address={selectedPool.truthAuctionAddress} />
+										</strong>
 									</div>
 									<div>
 										<span className='metric-label'>Fork Mode</span>
@@ -145,7 +146,7 @@ export function SecurityPoolWorkflowSection({
 										<h4>Question</h4>
 										<span className='badge muted'>{marketDetails.marketType}</span>
 									</div>
-									<QuestionSummaryHeader description={marketDetails.description.trim() === '' ? 'No description provided.' : marketDetails.description} questionId={marketDetails.questionId} title={marketDetails.title.trim() === '' ? 'Untitled question' : marketDetails.title} />
+									<Question question={marketDetails} />
 								</div>
 							)}
 						</>
@@ -195,7 +196,7 @@ export function SecurityPoolWorkflowSection({
 												<EntityCard
 													key={`${selectedPool.securityPoolAddress}-${vault.vaultAddress}`}
 													className='compact'
-													title={vault.vaultAddress}
+													title={<AddressValue address={vault.vaultAddress} />}
 													badge={<span className='badge muted'>Vault</span>}
 													actions={
 														<button className='secondary' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
@@ -206,7 +207,9 @@ export function SecurityPoolWorkflowSection({
 													<div className='workflow-vault-grid'>
 														<div>
 															<span className='metric-label'>REP Deposit Share</span>
-															<strong>{formatCurrencyBalance(vault.repDepositShare)}</strong>
+															<strong>
+																<CurrencyValue value={vault.repDepositShare} suffix='REP' />
+															</strong>
 														</div>
 														<div>
 															<span className='metric-label'>Pool Ownership</span>
@@ -214,15 +217,21 @@ export function SecurityPoolWorkflowSection({
 														</div>
 														<div>
 															<span className='metric-label'>Security Bond Allowance</span>
-															<strong>{formatCurrencyBalance(vault.securityBondAllowance)}</strong>
+															<strong>
+																<CurrencyValue value={vault.securityBondAllowance} suffix='REP' />
+															</strong>
 														</div>
 														<div>
 															<span className='metric-label'>Unpaid ETH Fees</span>
-															<strong>{formatCurrencyBalance(vault.unpaidEthFees)}</strong>
+															<strong>
+																<CurrencyValue value={vault.unpaidEthFees} suffix='ETH' />
+															</strong>
 														</div>
 														<div>
 															<span className='metric-label'>Locked REP</span>
-															<strong>{formatCurrencyBalance(vault.lockedRepInEscalationGame)}</strong>
+															<strong>
+																<CurrencyValue value={vault.lockedRepInEscalationGame} suffix='REP' />
+															</strong>
 														</div>
 														<div>
 															<span className='metric-label'>Fee Index</span>

@@ -739,9 +739,6 @@ export async function loadZoltarQuestionCount(client: ReadClient) {
 
 export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint): Promise<ZoltarUniverseSummary | undefined> {
 	const zoltarAddress = getDeploymentStep('zoltar').address
-	const zoltarCode = await client.getCode({ address: zoltarAddress })
-	if (zoltarCode === undefined || zoltarCode === '0x') return undefined
-
 	const repToken = await client.readContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'getRepToken',
@@ -826,33 +823,33 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 			}
 			childUniverses = deployedChildUniverses
 		} else {
-			childUniverses = await Promise.all(
-				marketDetails.outcomeLabels.map(async (outcomeLabel, outcomeIndex) => {
-					const childUniverseId = await client.readContract({
-						abi: Zoltar_Zoltar.abi,
-						functionName: 'getChildUniverseId',
-						address: getDeploymentStep('zoltar').address,
-						args: [universeId, BigInt(outcomeIndex)],
-					})
-					const childUniverse = await client.readContract({
-						abi: Zoltar_Zoltar.abi,
-						functionName: 'universes',
-						address: getDeploymentStep('zoltar').address,
-						args: [childUniverseId],
-					})
-					const childUniverseData: UniverseTuple = childUniverse
-					const [childForkTime, , , childReputationToken, childParentUniverseId] = childUniverseData
-					return {
-						exists: childReputationToken !== zeroAddress,
-						forkTime: childForkTime,
-						outcomeIndex: BigInt(outcomeIndex),
-						outcomeLabel,
-						parentUniverseId: childParentUniverseId,
-						reputationToken: childReputationToken,
-						universeId: childUniverseId,
-					}
-				}),
-			)
+			const loadChildUniverse = async (outcomeIndex: bigint, outcomeLabel: string): Promise<ZoltarUniverseSummary['childUniverses'][number]> => {
+				const childUniverseId = await client.readContract({
+					abi: Zoltar_Zoltar.abi,
+					functionName: 'getChildUniverseId',
+					address: getDeploymentStep('zoltar').address,
+					args: [universeId, outcomeIndex],
+				})
+				const childUniverse = await client.readContract({
+					abi: Zoltar_Zoltar.abi,
+					functionName: 'universes',
+					address: getDeploymentStep('zoltar').address,
+					args: [childUniverseId],
+				})
+				const childUniverseData: UniverseTuple = childUniverse
+				const [childForkTime, , , childReputationToken, childParentUniverseId] = childUniverseData
+				return {
+					exists: childReputationToken !== zeroAddress,
+					forkTime: childForkTime,
+					outcomeIndex,
+					outcomeLabel,
+					parentUniverseId: childParentUniverseId,
+					reputationToken: childReputationToken,
+					universeId: childUniverseId,
+				}
+			}
+
+			childUniverses = await Promise.all([loadChildUniverse(0n, 'Invalid'), ...marketDetails.outcomeLabels.map((outcomeLabel, outcomeIndex) => loadChildUniverse(BigInt(outcomeIndex + 1), outcomeLabel))])
 		}
 	}
 

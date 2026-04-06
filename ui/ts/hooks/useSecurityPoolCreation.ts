@@ -23,6 +23,7 @@ type UseSecurityPoolCreationParameters = {
 export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolCreationParameters) {
 	const loadingMarketDetails = useSignal(false)
 	const marketDetails = useSignal<MarketDetails | undefined>(undefined)
+	const poolCreationMarketDetails = useSignal<MarketDetails | undefined>(undefined)
 	const securityPoolCreating = useSignal(false)
 	const securityPoolError = useSignal<string | undefined>(undefined)
 	const securityPoolForm = useSignal<SecurityPoolFormState>(getDefaultSecurityPoolFormState())
@@ -128,6 +129,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		securityPoolCreating.value = true
 		securityPoolError.value = undefined
 		securityPoolResult.value = undefined
+		poolCreationMarketDetails.value = undefined
 		try {
 			const parameters = createSecurityPoolParameters(securityPoolForm.value)
 			const details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createReadClient(), parameters.questionId)
@@ -149,6 +151,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 			onTransactionRequested()
 			const result = await createSecurityPool(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), parameters)
 			marketDetails.value = details
+			poolCreationMarketDetails.value = details
 			securityPoolResult.value = result
 			onTransaction(result.deployPoolHash)
 			await refreshState()
@@ -175,6 +178,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		securityPoolError: securityPoolError.value,
 		securityPoolForm: securityPoolForm.value,
 		securityPoolResult: securityPoolResult.value,
+		poolCreationMarketDetails: poolCreationMarketDetails.value,
 		setSecurityPoolForm: (updater: (current: SecurityPoolFormState) => SecurityPoolFormState) => {
 			securityPoolForm.value = updater(securityPoolForm.value)
 		},

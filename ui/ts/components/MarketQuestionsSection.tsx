@@ -1,10 +1,11 @@
 import { EntityCard } from './EntityCard.js'
-import { LoadableValue } from './LoadableValue.js'
-import { QuestionSummary } from './QuestionSummary.js'
+import { LoadingText } from './LoadingText.js'
+import { Question } from './Question.js'
 import type { MarketDetails } from '../types/contracts.js'
 
 type MarketQuestionsSectionProps = {
 	hasForked: boolean
+	hasLoadedZoltarQuestions: boolean
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestions: boolean
 	onLoadZoltarQuestions: () => void
@@ -15,29 +16,34 @@ type MarketQuestionsSectionProps = {
 	zoltarQuestions: MarketDetails[]
 }
 
-export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, loadingZoltarQuestions, onLoadZoltarQuestions, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestionCount, zoltarQuestions }: MarketQuestionsSectionProps) {
+export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, loadingZoltarQuestionCount, loadingZoltarQuestions, onLoadZoltarQuestions, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestionCount, zoltarQuestions }: MarketQuestionsSectionProps) {
+	const questionCountBadge = zoltarQuestionCount === undefined ? undefined : `${zoltarQuestionCount.toString()} questions`
+	const noQuestionsAvailable = zoltarQuestionCount === 0n
+
+	function getQuestionTitle(question: MarketDetails) {
+		return question.title.trim() === '' ? 'Untitled question' : question.title
+	}
+
 	return (
 		<EntityCard
 			title='Questions'
-			badge={<span className='badge muted'>{zoltarQuestionCount === undefined ? 'Unknown count' : `${zoltarQuestionCount.toString()} questions`}</span>}
+			badge={questionCountBadge === undefined ? undefined : <span className='badge muted'>{questionCountBadge}</span>}
 			actions={
-				<button className='secondary' onClick={onLoadZoltarQuestions} disabled={loadingZoltarQuestions}>
-					{loadingZoltarQuestions ? 'Loading Questions...' : 'Refresh Questions'}
+				<button className='secondary' onClick={onLoadZoltarQuestions} disabled={loadingZoltarQuestions || noQuestionsAvailable}>
+					{loadingZoltarQuestions ? <LoadingText>Loading Questions...</LoadingText> : noQuestionsAvailable ? 'No Questions' : hasLoadedZoltarQuestions ? 'Refresh Questions' : 'Fetch Questions'}
 				</button>
 			}
 		>
 			{zoltarQuestions.length === 0 ? (
-				<p className='detail'>
-					<LoadableValue loading={loadingZoltarQuestionCount} placeholder='Loading...'>
-						{zoltarQuestionCount === undefined ? 'No questions loaded' : `${zoltarQuestionCount.toString()} questions`}
-					</LoadableValue>
-				</p>
+				loadingZoltarQuestionCount || loadingZoltarQuestions ? undefined : noQuestionsAvailable ? (
+					<p className='detail'>No questions</p>
+				) : undefined
 			) : (
 				<div className='entity-card-list question-browser-list'>
 					{zoltarQuestions.map(question => (
 						<EntityCard
 							key={question.questionId}
-							title={question.title === '' ? 'Untitled question' : question.title}
+							title={getQuestionTitle(question)}
 							badge={<span className='badge ok'>{question.marketType}</span>}
 							actions={
 								<div className='actions'>
@@ -58,7 +64,7 @@ export function MarketQuestionsSection({ hasForked, loadingZoltarQuestionCount, 
 								</div>
 							}
 						>
-							<QuestionSummary question={question} hideHeading />
+							<Question question={question} showTitle={false} />
 						</EntityCard>
 					))}
 				</div>

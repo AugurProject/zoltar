@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { LoadingText } from './LoadingText.js'
 
 type LoadableValueProps = {
 	children: ComponentChildren
@@ -7,5 +8,5 @@ type LoadableValueProps = {
 }
 
 export function LoadableValue({ children, loading, placeholder = 'Loading...' }: LoadableValueProps) {
-	return loading ? <span className='loading-value'>{placeholder}</span> : <>{children}</>
+	return loading ? <LoadingText>{placeholder}</LoadingText> : <>{children}</>
 }

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(grep -E '\\\\.\\(d\\\\.ts|js|map\\)$')",
+      "Bash(grep -E '\\\\.\\(d\\\\.ts|d\\\\.ts\\\\.map|js|js\\\\.map\\)$')",
+      "Bash(xargs git:*)",
+      "Bash(git add:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(grep -E '\\\\.\\(js|map\\)$')",
+      "Bash(grep '\\\\.d\\\\.ts$')",
+      "Bash(git rm:*)"
+    ]
+  }
+}
