@@ -109,8 +109,8 @@ async function rewriteSourceMapSourcePath(packageName: string, sourcePath: strin
 		const source = fileContents.sources[i]
 		if (source === undefined) continue
 		// we want to ensure all source files show up in the appropriate directory and don't leak out of our directory tree, so we strip leading '../' references
-		const sourcePath = source.replace(/^(?:.\/)*/, '').replace(/^(?:..\/)*/, '')
-		fileContents.sources[i] = ['dependencies://dependencies', packageName, sourcePath].join('/')
+		const cleanSourcePath = source.replace(/^(?:\.\/)*/, '').replace(/^(?:\.\.\/)*/, '')
+		fileContents.sources[i] = ['dependencies://dependencies', packageName, cleanSourcePath].join('/')
 	}
 	await fs.writeFile(destinationPath, JSON.stringify(fileContents))
 }

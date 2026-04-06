@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process'
-import { once } from 'node:events'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
@@ -28,8 +27,39 @@ let typeScriptWatchStdoutBuffer = ''
 const unwatchCallbacks: Array<() => void> = []
 
 const waitForProcessExit = async (childProcess: ManagedProcess) => {
-	const [exitCode, signalCode] = (await once(childProcess, 'exit')) as [number | null, NodeJS.Signals | null]
-	return { exitCode, signalCode }
+	if (childProcess.exitCode !== null || childProcess.signalCode !== null) {
+		return { exitCode: childProcess.exitCode, signalCode: childProcess.signalCode }
+	}
+	return await new Promise<{ exitCode: number | null; signalCode: NodeJS.Signals | null }>((resolve, reject) => {
+		const handleExit = (exitCode: number | null, signalCode: NodeJS.Signals | null) => {
+			cleanup()
+			resolve({ exitCode, signalCode })
+		}
+		const handleError = (error: Error) => {
+			cleanup()
+			reject(error)
+		}
+		const cleanup = () => {
+			childProcess.off('exit', handleExit)
+			childProcess.off('error', handleError)
+		}
+
+		childProcess.on('exit', handleExit)
+		childProcess.on('error', handleError)
+
+		if (childProcess.exitCode !== null || childProcess.signalCode !== null) {
+			handleExit(childProcess.exitCode, childProcess.signalCode)
+		}
+	})
+}
+
+const attachProcessErrorHandler = (childProcess: ManagedProcess, label: string) => {
+	childProcess.on('error', error => {
+		if (shuttingDown) return
+		console.error(`[ui:watch] ${label} failed to start`)
+		console.error(error)
+		void shutdown(1)
+	})
 }
 
 const stopProcess = async (childProcess: ManagedProcess | undefined) => {
@@ -43,6 +73,8 @@ const stopProcess = async (childProcess: ManagedProcess | undefined) => {
 	}, 2_000)
 	try {
 		await waitForProcessExit(childProcess)
+	} catch {
+		return
 	} finally {
 		clearTimeout(forceKillTimeout)
 	}
@@ -85,10 +117,11 @@ const sendLiveReload = async (reason: string) => {
 
 const spawnServer = () => {
 	console.log('[ui:watch] Starting ui:serve')
-	serverProcess = spawn('bun', ['./ui/dev-server.mjs'], {
+	serverProcess = spawn('bun', [DEV_SERVER_PATH], {
 		cwd: REPOSITORY_ROOT_PATH,
 		stdio: 'inherit',
 	})
+	attachProcessErrorHandler(serverProcess, 'ui:serve')
 	serverProcess.on('exit', (exitCode, signalCode) => {
 		if (shuttingDown || restartingServer) return
 		const failureCode = exitCode ?? 1
@@ -140,7 +173,17 @@ const runVendorBuild = async (reason: string) => {
 		cwd: UI_ROOT_PATH,
 		stdio: 'inherit',
 	})
-	const { exitCode, signalCode } = await waitForProcessExit(childProcess)
+	attachProcessErrorHandler(childProcess, 'Vendor rebuild')
+	let exitCode: number | null
+	let signalCode: NodeJS.Signals | null
+	try {
+		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
+	} catch (error) {
+		console.error('[ui:watch] Vendor rebuild failed to start')
+		console.error(error)
+		await shutdown(1)
+		return
+	}
 	vendorBuildRunning = false
 	if (exitCode !== 0) {
 		const failureCode = exitCode ?? 1
@@ -190,6 +233,7 @@ const main = () => {
 		cwd: UI_ROOT_PATH,
 		stdio: ['inherit', 'pipe', 'pipe'],
 	})
+	attachProcessErrorHandler(typeScriptWatchProcess, 'TypeScript watch')
 	if (typeScriptWatchProcess.stdout === null || typeScriptWatchProcess.stderr === null) {
 		throw new Error('TypeScript watch streams are unavailable')
 	}
@@ -218,11 +262,16 @@ const main = () => {
 	}
 
 	void (async () => {
-		const cssFiles = await getAllFiles(path.join(UI_ROOT_PATH, 'css'))
-		for (const cssFile of cssFiles) {
-			watchFile(cssFile, relativePath => {
-				queueLiveReload(relativePath)
-			})
+		try {
+			const cssFiles = await getAllFiles(path.join(UI_ROOT_PATH, 'css'))
+			for (const cssFile of cssFiles) {
+				watchFile(cssFile, relativePath => {
+					queueLiveReload(relativePath)
+				})
+			}
+		} catch (error) {
+			console.error('[ui:watch] Failed to load CSS files for watching')
+			console.error(error)
 		}
 	})()
 

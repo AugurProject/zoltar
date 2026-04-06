@@ -2,6 +2,7 @@ import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { LoadingText } from './LoadingText.js'
+import { EscalationSide } from './EscalationSide.js'
 import { Question } from './Question.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
@@ -120,27 +121,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 								{reportingDetails.sides.map(side => {
 									const estimate = calculateEstimatedEscalationReturn(side.balance, totalBalance, selectedAmount)
 									const userStake = side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n)
-									return (
-										<div key={side.key} className={`escalation-side ${reportingForm.selectedOutcome === side.key ? 'selected' : ''} ${leadingOutcome === side.key ? 'leading' : ''}`}>
-											<div className='escalation-side-header'>
-												<p className='panel-label'>{side.label}</p>
-												{leadingOutcome === side.key ? <span className='badge ok'>Leading</span> : undefined}
-											</div>
-											<p className='detail'>
-												Total stake: <CurrencyValue value={side.balance} suffix='REP' />
-											</p>
-											<p className='detail'>
-												Your stake: <CurrencyValue value={userStake} suffix='REP' />
-											</p>
-											<p className='detail'>Your deposits: {side.userDeposits.map(deposit => deposit.depositIndex.toString()).join(', ') || 'None'}</p>
-											<p className='detail'>
-												Projected payout for current amount: <CurrencyValue value={estimate.payout} suffix='REP' />
-											</p>
-											<p className='detail'>
-												Projected profit if this side wins: <CurrencyValue value={estimate.profit} suffix='REP' />
-											</p>
-										</div>
-									)
+									return <EscalationSide key={side.key} estimate={estimate} isLeading={leadingOutcome === side.key} isSelected={reportingForm.selectedOutcome === side.key} side={side} userStake={userStake} />
 								})}
 							</div>
 						</>

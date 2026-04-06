@@ -17,7 +17,7 @@ type UseZoltarOperationsParameters = {
 }
 
 export function useZoltarOperations({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseZoltarOperationsParameters) {
-	const universe = useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted })
+	const { createChildUniverse: createUniverseChildUniverse, ...universe } = useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted })
 	const fork = useZoltarFork({
 		accountAddress,
 		activeUniverseId,
@@ -55,7 +55,7 @@ export function useZoltarOperations({ accountAddress, activeUniverseId, autoLoad
 		...fork,
 		...migration,
 		createChildUniverse: async (outcomeIndex: bigint) => {
-			await universe.createChildUniverse(outcomeIndex)
+			await createUniverseChildUniverse(outcomeIndex)
 			await fork.loadZoltarForkAccess()
 		},
 	}

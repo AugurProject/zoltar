@@ -56,7 +56,7 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
 	const selectedQuestionDetails = useMemo(() => (marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)), [marketResult?.questionId, zoltarQuestions])
 	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(marketForm)
-	const selectedQuestionTitle = selectedQuestionDetails === undefined ? 'Question' : selectedQuestionDetails.title.trim() === '' ? 'Untitled question' : selectedQuestionDetails.title
+	const selectedQuestionTitle = selectedQuestionDetails === undefined ? 'Question' : typeof selectedQuestionDetails.title !== 'string' || selectedQuestionDetails.title.trim() === '' ? 'Untitled question' : selectedQuestionDetails.title
 
 	useEffect(() => {
 		if (scalarCreatePreviewDetails === undefined) return

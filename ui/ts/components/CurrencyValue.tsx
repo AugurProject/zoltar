@@ -37,11 +37,12 @@ export function CurrencyValue({ className = '', copyable = true, decimals = 2, l
 	const exactValue = formatCurrencyBalance(value, units)
 	const roundedValue = formatRoundedCurrencyBalance(value, units, decimals)
 	const displayValue = suffix === '' ? `≈ ${roundedValue}` : `≈ ${roundedValue} ${suffix}`
+	const exactTitle = suffix === '' ? exactValue : `${exactValue} ${suffix}`
 	const valueClassName = `currency-value${copyable ? ' copyable' : ''} ${className}`
 
 	if (!copyable) {
 		return (
-			<span className={valueClassName} title={suffix === '' ? exactValue : `${exactValue} ${suffix}`}>
+			<span className={valueClassName} title={exactTitle}>
 				{displayValue}
 			</span>
 		)
@@ -51,7 +52,7 @@ export function CurrencyValue({ className = '', copyable = true, decimals = 2, l
 		<button
 			type='button'
 			className={valueClassName}
-			title={suffix === '' ? exactValue : `${exactValue} ${suffix}`}
+			title={exactTitle}
 			aria-label={`Copy exact value ${exactValue}`}
 			onClick={async () => {
 				try {

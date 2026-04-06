@@ -96,13 +96,13 @@ export function ZoltarMigrationSection({
 		}
 	})()
 	const hasValidAmount = migrationAmount !== undefined && migrationAmount > 0n
-	const missingPreparationAmount = hasValidAmount ? getMissingPreparationAmount(migrationAmount, zoltarMigrationPreparedRepBalance) : undefined
+	const missingPreparationAmount = hasValidAmount && migrationAmount !== undefined ? getMissingPreparationAmount(migrationAmount, zoltarMigrationPreparedRepBalance) : 0n
 	const totalRepAvailable = (zoltarMigrationPreparedRepBalance ?? 0n) + (zoltarForkRepBalance ?? 0n)
 	const amountExceedsAvailableRep = hasValidAmount && migrationAmount !== undefined && migrationAmount > totalRepAvailable
-	const hasEnoughRep = hasValidAmount && missingPreparationAmount !== undefined && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= missingPreparationAmount
+	const hasEnoughRep = hasValidAmount && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= missingPreparationAmount
 	const hasPreparedBalance = hasValidAmount && zoltarMigrationPreparedRepBalance !== undefined && zoltarMigrationPreparedRepBalance >= migrationAmount
 	const hasValidOutcomeIndexes = selectedOutcomeIndexes.length > 0
-	const needsAdditionalPreparation = missingPreparationAmount !== undefined && missingPreparationAmount > 0n
+	const needsAdditionalPreparation = missingPreparationAmount > 0n
 	const canPrepare = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && needsAdditionalPreparation && hasEnoughRep
 	const canSplit = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && hasPreparedBalance && hasValidOutcomeIndexes
 	const migrationAmountSource = getMigrationAmountSource(zoltarMigrationPreparedRepBalance, zoltarForkRepBalance)
@@ -110,7 +110,6 @@ export function ZoltarMigrationSection({
 		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before preparing REP.')
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return 'Enter an amount greater than zero.'
-		if (missingPreparationAmount === undefined) return 'Enter a valid amount.'
 		if (missingPreparationAmount === 0n) return 'This amount is already in your migration balance. Split REP when ready.'
 		if (zoltarForkRepBalance === undefined || zoltarForkRepBalance < missingPreparationAmount) {
 			return `Need ${formatCurrencyBalance(missingPreparationAmount)} more REP in this universe to prepare the selected amount.`
@@ -134,7 +133,6 @@ export function ZoltarMigrationSection({
 		if (amountExceedsAvailableRep) {
 			return `You only have ${formatCurrencyBalance(totalRepAvailable)} REP available for migration in this universe (${formatCurrencyBalance(zoltarMigrationPreparedRepBalance ?? 0n)} in your migration balance and ${formatCurrencyBalance(zoltarForkRepBalance ?? 0n)} wallet REP).`
 		}
-		if (missingPreparationAmount === undefined) return 'Enter a valid amount.'
 		if (missingPreparationAmount === 0n) return 'This amount is already in your migration balance. Split REP when ready.'
 		return `Add ${formatCurrencyBalance(missingPreparationAmount)} REP to your migration balance from this universe, then split it across the selected universes.`
 	})()

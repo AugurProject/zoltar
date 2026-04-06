@@ -51,6 +51,7 @@ export function ForkZoltarSection({
 	const hasEnoughApproval = rootUniverse !== undefined && zoltarForkAllowance !== undefined && zoltarForkAllowance >= rootUniverse.forkThreshold
 	const selectedQuestionId = zoltarForkQuestionId.trim()
 	const selectedQuestion = selectedQuestionId === '' ? undefined : zoltarQuestions.find(question => question.questionId.toLowerCase() === selectedQuestionId.toLowerCase())
+	const showMissingQuestionMessage = !loadingZoltarQuestions && selectedQuestionId !== '' && selectedQuestion === undefined
 	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && hasEnoughRep && hasEnoughApproval
 
 	if (universeMissing) {
@@ -97,7 +98,7 @@ export function ForkZoltarSection({
 							<Question question={selectedQuestion} />
 						</div>
 					)}
-					{loadingZoltarQuestions ? undefined : selectedQuestionId === '' || selectedQuestion !== undefined ? undefined : <p className='detail'>No loaded question matches this ID.</p>}
+					{showMissingQuestionMessage ? <p className='detail'>No loaded question matches this ID.</p> : undefined}
 
 					<div className='actions'>
 						{hasForked ? undefined : (
@@ -105,7 +106,13 @@ export function ForkZoltarSection({
 								{zoltarForkActiveAction === 'approve' ? <LoadingText>Approve REP Threshold</LoadingText> : hasEnoughApproval ? 'Threshold Approved' : 'Approve REP Threshold'}
 							</button>
 						)}
-						<button onClick={onForkZoltar} disabled={!canFork}>
+						<button
+							onClick={() => {
+								if (selectedQuestionId === '') return
+								onForkZoltar()
+							}}
+							disabled={!canFork}
+						>
 							{zoltarForkActiveAction === 'fork' ? <LoadingText>Fork Zoltar</LoadingText> : 'Fork Zoltar'}
 						</button>
 					</div>

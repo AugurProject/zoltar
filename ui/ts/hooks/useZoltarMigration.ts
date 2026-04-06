@@ -64,24 +64,28 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 				throw new Error('Migration amount must be greater than zero')
 			}
 			const resolvedAmount = resolveAmount(amount, zoltarMigrationPreparedRepBalance, zoltarForkRepBalance)
-			if (resolvedAmount <= 0n) {
-				throw new Error('Selected amount is already prepared')
-			}
 			const outcomeIndexes = requiresOutcomeIndexes ? parseBigIntListInput(zoltarMigrationForm.value.outcomeIndexes, 'Outcome indexes') : []
 			const result = await action(accountAddress, universe, resolvedAmount, outcomeIndexes)
 			zoltarMigrationResult.value = result
 			onTransaction(result.hash)
-			if (refreshAfter) {
-				await refreshState()
-				await refreshZoltarUniverse()
-			}
-			await refreshZoltarForkAccess()
 		} catch (error) {
 			zoltarMigrationError.value = getErrorMessage(error, errorFallback)
 		} finally {
 			zoltarMigrationPending.value = false
 			zoltarMigrationActiveAction.value = undefined
 			onTransactionFinished()
+		}
+
+		try {
+			if (zoltarMigrationError.value !== undefined) return
+			if (refreshAfter) {
+				await refreshState()
+				await refreshZoltarUniverse()
+			}
+			await refreshZoltarForkAccess()
+		} catch (error) {
+			console.error('[useZoltarMigration] Refresh after transaction failed')
+			console.error(error)
 		}
 	}
 

@@ -21,7 +21,6 @@ import { useSecurityPoolsOverview } from './hooks/useSecurityPoolsOverview.js'
 import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { useUrlState } from './hooks/useUrlState.js'
-import { assertNever } from './lib/assert.js'
 import { getDeploymentSections } from './lib/deployment.js'
 import { isMainnetChain } from './lib/network.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
@@ -377,7 +376,7 @@ export function App() {
 			case 'not-found':
 				return <NotFoundSection />
 			default:
-				return assertNever(route)
+				return <NotFoundSection />
 		}
 	}
 

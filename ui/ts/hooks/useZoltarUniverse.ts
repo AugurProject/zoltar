@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import { useLayoutEffect } from 'preact/hooks'
+import { useLayoutEffect, useRef } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
 import { createZoltarChildUniverse, loadAllZoltarQuestions, loadZoltarQuestionCount, loadZoltarUniverseSummary } from '../contracts.js'
 import { createReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
@@ -30,6 +30,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 	const zoltarQuestions = useSignal<MarketDetails[]>([])
 	const zoltarUniverse = useSignal<ZoltarUniverseSummary | undefined>(undefined)
 	const zoltarChildUniverseError = useSignal<string | undefined>(undefined)
+	const isMounted = useRef(true)
 	const nextUniverseLoad = useRequestGuard()
 	const nextQuestionCountLoad = useRequestGuard()
 	const nextQuestionsLoad = useRequestGuard()
@@ -40,6 +41,11 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		zoltarUniverse.value = undefined
 		zoltarUniverseLoadedId.value = undefined
 		zoltarChildUniverseError.value = undefined
+		loadingZoltarQuestionCount.value = false
+		loadingZoltarQuestions.value = false
+		hasLoadedZoltarQuestions.value = false
+		zoltarQuestionCount.value = undefined
+		zoltarQuestions.value = []
 	}
 
 	const ensureZoltarUniverse = async (): Promise<ZoltarUniverseSummary> => {
@@ -53,6 +59,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 	}
 
 	const loadZoltarUniverse = async (options: { clearCurrentState?: boolean } = {}) => {
+		if (!isMounted.current) return undefined
 		const clearCurrentState = options.clearCurrentState ?? true
 		const isCurrent = nextUniverseLoad()
 		const requestedUniverseId = activeUniverseId
@@ -62,7 +69,14 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 			loadingZoltarUniverse.value = true
 		}
 		try {
-			const universe = await loadZoltarUniverseSummary(createReadClient(), requestedUniverseId, hasDeployedStep(deploymentStatuses, 'zoltar'))
+			if (!hasDeployedStep(deploymentStatuses, 'zoltar')) {
+				zoltarUniverseMissing.value = false
+				zoltarUniverse.value = undefined
+				zoltarUniverseLoadedId.value = undefined
+				zoltarChildUniverseError.value = undefined
+				return undefined
+			}
+			const universe = await loadZoltarUniverseSummary(createReadClient(), requestedUniverseId)
 			if (!isCurrent()) return undefined
 			if (requestedUniverseId !== activeUniverseId) return undefined
 			if (universe === undefined) {
@@ -74,7 +88,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 			zoltarUniverseLoadedId.value = requestedUniverseId
 			return universe
 		} finally {
-			if (isCurrent()) {
+			if (isCurrent() && isMounted.current) {
 				loadingZoltarUniverse.value = false
 			}
 		}
@@ -83,38 +97,42 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 	const refreshZoltarUniverse = async () => await loadZoltarUniverse({ clearCurrentState: false })
 
 	const loadZoltarQuestionCountData = async () => {
+		if (!isMounted.current) return
 		const isCurrent = nextQuestionCountLoad()
 		loadingZoltarQuestionCount.value = true
 		try {
 			const questionCount = await loadZoltarQuestionCount(createReadClient())
+			if (!isMounted.current) return
 			if (!isCurrent()) return
 			zoltarQuestionCount.value = questionCount
 		} finally {
-			if (isCurrent()) {
+			if (isCurrent() && isMounted.current) {
 				loadingZoltarQuestionCount.value = false
 			}
 		}
 	}
 
 	const loadQuestions = async () => {
+		if (!isMounted.current) return
 		const isCountCurrent = nextQuestionCountLoad()
 		const isQuestionsCurrent = nextQuestionsLoad()
 		loadingZoltarQuestions.value = true
 		loadingZoltarQuestionCount.value = true
-		hasLoadedZoltarQuestions.value = true
 		try {
 			const readClient = createReadClient()
 			const [questions, questionCount] = await Promise.all([loadAllZoltarQuestions(readClient), loadZoltarQuestionCount(readClient)])
+			if (!isMounted.current) return
 			if (!isQuestionsCurrent()) return
 			zoltarQuestions.value = questions
+			hasLoadedZoltarQuestions.value = true
 			if (isCountCurrent()) {
 				zoltarQuestionCount.value = questionCount
 			}
 		} finally {
-			if (isQuestionsCurrent()) {
+			if (isQuestionsCurrent() && isMounted.current) {
 				loadingZoltarQuestions.value = false
 			}
-			if (isCountCurrent()) {
+			if (isCountCurrent() && isMounted.current) {
 				loadingZoltarQuestionCount.value = false
 			}
 		}
@@ -152,7 +170,13 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 	useLayoutEffect(() => {
 		if (!autoLoadInitialData) return
 		void Promise.allSettled([loadZoltarUniverse(), loadZoltarQuestionCountData()])
-	}, [activeUniverseId, autoLoadInitialData])
+	}, [activeUniverseId, autoLoadInitialData, deploymentStatuses])
+
+	useLayoutEffect(() => {
+		return () => {
+			isMounted.current = false
+		}
+	}, [])
 
 	return {
 		createChildUniverse,

@@ -48,7 +48,7 @@ export function SecurityPoolsOverviewSection({
 
 				{securityPoolOverviewResult === undefined ? undefined : (
 					<p className='notice success'>
-						Queued liquidation for {securityPoolOverviewResult.securityPoolAddress}: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
+						Queued liquidation for <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
 					</p>
 				)}
 				{securityPoolOverviewError === undefined ? undefined : <p className='notice error'>{securityPoolOverviewError}</p>}

@@ -149,9 +149,6 @@ export function useOnchainState() {
 		try {
 			isConnectingWallet.value = true
 			errorMessage.value = undefined
-			await new Promise<void>(resolve => {
-				window.requestAnimationFrame(() => resolve())
-			})
 			await ethereum.request({ method: 'eth_requestAccounts' })
 			await refreshState()
 		} catch (error) {

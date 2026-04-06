@@ -115,13 +115,13 @@ export function ForkAuctionSection({
 									<div>
 										<span className='metric-label'>REP At Fork</span>
 										<strong>
-											<CurrencyValue value={forkAuctionDetails.repAtFork} />
+											<CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' />
 										</strong>
 									</div>
 									<div>
 										<span className='metric-label'>Migrated REP</span>
 										<strong>
-											<CurrencyValue value={forkAuctionDetails.migratedRep} />
+											<CurrencyValue value={forkAuctionDetails.migratedRep} suffix='REP' />
 										</strong>
 									</div>
 									<div>
@@ -176,7 +176,7 @@ export function ForkAuctionSection({
 										<div>
 											<span className='metric-label'>REP Purchased</span>
 											<strong>
-												<CurrencyValue value={forkAuctionDetails.truthAuction.totalRepPurchased} />
+												<CurrencyValue value={forkAuctionDetails.truthAuction.totalRepPurchased} suffix='REP' />
 											</strong>
 										</div>
 										<div>

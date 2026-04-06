@@ -24,6 +24,7 @@ function assertInteger(value: number, label: string) {
 
 export function formatCurrencyBalance(value: bigint | undefined, units: number = 18) {
 	if (value === undefined) return 'Unavailable'
+	assertInteger(units, 'Units')
 	const formattedValue = units === 18 ? formatEther(value) : formatUnits(value, units)
 	return formatDecimalString(formattedValue)
 }

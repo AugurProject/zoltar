@@ -92,25 +92,6 @@ void describe('deployment helpers', () => {
 		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle'])
 	})
 
-	void test('loadZoltarUniverseSummary skips the Zoltar code probe when deployment status is already known', async () => {
-		let getCodeCallCount = 0
-		const mockReadClient = {
-			getCode: async () => {
-				getCodeCallCount += 1
-				return '0x1234'
-			},
-			readContract: async ({ functionName }: { functionName: string }) => {
-				expect(functionName).toBe('getRepToken')
-				return zeroAddress
-			},
-		} as unknown as ReadClient
-
-		const universe = await loadZoltarUniverseSummary(mockReadClient, 0n, true)
-
-		expect(universe).toBe(undefined)
-		expect(getCodeCallCount).toBe(0)
-	})
-
 	void test('loadDeploymentStatusOracleSnapshot returns the proxy deployer when the oracle is missing', async () => {
 		const snapshot = await loadDeploymentStatusOracleSnapshot(readClient)
 
@@ -122,7 +103,6 @@ void describe('deployment helpers', () => {
 	void test('loadZoltarUniverseSummary returns undefined for an unknown universe id', async () => {
 		let callCount = 0
 		const mockReadClient = {
-			getCode: async () => '0x1234',
 			readContract: async ({ functionName }: { functionName: string }) => {
 				callCount += 1
 				expect(functionName).toBe('getRepToken')
@@ -134,42 +114,5 @@ void describe('deployment helpers', () => {
 
 		expect(universe).toBe(undefined)
 		expect(callCount).toBe(1)
-	})
-
-	void test('loadZoltarUniverseSummary falls back to getCode when reading Zoltar state fails', async () => {
-		let getCodeCallCount = 0
-		let readContractCallCount = 0
-		const mockReadClient = {
-			getCode: async () => {
-				getCodeCallCount += 1
-				return undefined
-			},
-			readContract: async () => {
-				readContractCallCount += 1
-				throw new Error('readContract failed because Zoltar is missing')
-			},
-		} as unknown as ReadClient
-
-		const universe = await loadZoltarUniverseSummary(mockReadClient, 0n)
-
-		expect(universe).toBe(undefined)
-		expect(getCodeCallCount).toBe(1)
-		expect(readContractCallCount).toBe(1)
-	})
-
-	void test('loadZoltarUniverseSummary preserves the original read error when the Zoltar code probe fails', async () => {
-		let getCodeCallCount = 0
-		const mockReadClient = {
-			getCode: async () => {
-				getCodeCallCount += 1
-				throw new Error('secondary getCode failure')
-			},
-			readContract: async () => {
-				throw new Error('original load failure')
-			},
-		} as unknown as ReadClient
-
-		await expect(loadZoltarUniverseSummary(mockReadClient, 0n)).rejects.toThrow('original load failure')
-		expect(getCodeCallCount).toBe(1)
 	})
 })
