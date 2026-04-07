@@ -1,6 +1,6 @@
 # Quality Assurance Guidelines
 
-After completing the requested code changes for a task, always run the following quality checks **separately and in order** before finalizing:
+After completing all the requested code changes for given tasks, run the following quality checks **separately and in order** before finalizing:
 
 ## Check Commands
 
@@ -48,7 +48,7 @@ You can automatically fix many issues with:
 
 Repeat the cycle iteratively after each fix to ensure clean builds and avoid accumulating issues.
 
-**Final requirement**: The codebase must have **zero knip warnings** (no unused exports, no unused files, no configuration hints). All knip issues must be addressed.
+**Final requirement**: The codebase must have zero knip warnings, zero test failures and zero typescript errors.
 
 # Package Guidelines
 
@@ -56,12 +56,9 @@ Repeat the cycle iteratively after each fix to ensure clean builds and avoid acc
 
 # Code Style Guidelines
 
-- **Indentation**: Use tabs (not spaces) for indentation. This is enforced by Biome.
 - **Quotes**: Use single quotes (`'`) for strings. Double quotes are not allowed unless escaping is required.
 - **Semicolons**: Do not use semicolons at the end of statements.
-- **Template literals**: Always include a space inside `${}` (e.g., ``Hello, ${ name }!``).
 - **Empty lines**: Do not have multiple consecutive empty lines (maximum 1).
-- **Consecutive spaces**: Do not have multiple consecutive spaces within a line. This is enforced by Biome.
 - **Non-null assertions**: Do not use the `!` operator. Instead, perform explicit undefined checks and throw an error if a value is unexpectedly undefined.
 - **Type casts**: Avoid using `as` casts unless they are truly necessary. Prefer narrower helper functions, explicit runtime checks, better generic typing, or inferred types first.
 - **Nullability**: Prefer `undefined` over `null` for absent optional values. Avoid introducing new `null` usage unless there is a strong external API reason.
@@ -69,8 +66,6 @@ Repeat the cycle iteratively after each fix to ensure clean builds and avoid acc
 Biome is configured to enforce these rules automatically. Run `bun run format` to format your code and `bun run check` to validate it.
 
 # Testing Guidelines
-
-Always run the appropriate tests after implementing a feature or fixing a bug to ensure correctness and prevent regressions.
 
 ## Bug Fix Process
 
@@ -86,17 +81,6 @@ This test-driven approach ensures:
 - The bug is properly documented and prevented from recurring
 - The fix is validated automatically
 - Regression testing is built into the process
-
-## Key Principles
-
-- **Always run the full test suite**: `bun test` runs all tests and catches cross-module issues.
-  - **UI-only work**: When the change only affects `ui/`, you do not need to run `bun test`; the test suite here applies to Solidity and shared code paths, not UI-only edits.
-- **Prefer the fast UI typecheck when eligible**: For `ui/`-only changes, use `bun x tsc --noEmit`. If `solidity/` or generated contract outputs changed, use the full `bun tsc`.
-- **Prefer Biome changed-file checks**: Use `bun run check:changed` for local iteration when you only need to validate modified files.
-
-## Commands
-
-- `bun test` – runs all tests
 
 ## Notes
 

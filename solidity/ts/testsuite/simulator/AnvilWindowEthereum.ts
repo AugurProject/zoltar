@@ -101,7 +101,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			const parsed = new URL(url)
 			const allowedHosts = ['localhost', '127.0.0.1', '::1', 'host.docker.internal']
 			if (!allowedHosts.includes(parsed.hostname)) {
-				throw new Error(`ANVIL_RPC points to unauthorized host '${parsed.hostname}'. ` + `Test RPC endpoints must be localhost (localhost, 127.0.0.1, ::1, host.docker.internal). ` + `Set ANVIL_RPC to a local Anvil instance.`)
+				throw new Error(`ANVIL_RPC points to unauthorized host '${parsed.hostname}'. ` + `Test RPC endpoints must be local (localhost, 127.0.0.1, ::1, host.docker.internal). ` + `Set ANVIL_RPC to a local Anvil instance.`)
 			}
 		} catch (error) {
 			if (error instanceof Error && error.message.includes('unauthorized')) {

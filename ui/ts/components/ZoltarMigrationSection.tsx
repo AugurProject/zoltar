@@ -2,11 +2,12 @@ import { useMemo } from 'preact/hooks'
 import type { Address } from 'viem'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
+import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
-import { formatCurrencyBalance } from '../lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { parseBigIntListInput } from '../lib/inputs.js'
 import { parseRepAmountInput as parseMigrationAmountInput } from '../lib/marketForm.js'
 import type { ZoltarMigrationFormState } from '../types/app.js'
@@ -96,6 +97,7 @@ export function ZoltarMigrationSection({
 		}
 	})()
 	const hasValidAmount = migrationAmount !== undefined && migrationAmount > 0n
+	const isMigrationAmountInvalid = zoltarMigrationForm.amount.trim() !== '' && migrationAmount === undefined
 	const missingPreparationAmount = hasValidAmount && migrationAmount !== undefined ? getMissingPreparationAmount(migrationAmount, zoltarMigrationPreparedRepBalance) : 0n
 	const totalRepAvailable = (zoltarMigrationPreparedRepBalance ?? 0n) + (zoltarForkRepBalance ?? 0n)
 	const amountExceedsAvailableRep = hasValidAmount && migrationAmount !== undefined && migrationAmount > totalRepAvailable
@@ -137,7 +139,7 @@ export function ZoltarMigrationSection({
 		return `Add ${formatCurrencyBalance(missingPreparationAmount)} REP to your migration balance from this universe, then split it across the selected universes.`
 	})()
 	const selectAllAmount = () => {
-		onZoltarMigrationFormChange({ amount: formatCurrencyBalance(migrationAmountSource) })
+		onZoltarMigrationFormChange({ amount: formatCurrencyInputBalance(migrationAmountSource) })
 	}
 	const addNextOutcome = () => {
 		const nextOutcome = rootUniverse?.childUniverses.find(child => !selectedOutcomeIndexSet.has(child.outcomeIndex.toString()))
@@ -186,13 +188,13 @@ export function ZoltarMigrationSection({
 
 				<div className='form-grid'>
 					<div className='field'>
-						<div className='field-header'>
-							<span>Migration Amount</span>
-							<button className='quiet' type='button' onClick={selectAllAmount} disabled={zoltarMigrationPending || !hasForked || migrationAmountSource <= 0n}>
-								All
+						<span>Migration Amount</span>
+						<div className='field-inline'>
+							<FormInput className='field-inline-input' invalid={isMigrationAmountInvalid} inputMode='decimal' onInput={event => onZoltarMigrationFormChange({ amount: event.currentTarget.value })} placeholder='0.0' value={zoltarMigrationForm.amount} disabled={zoltarMigrationPending || !hasForked} />
+							<button className='quiet field-inline-action' type='button' onClick={selectAllAmount} disabled={zoltarMigrationPending || !hasForked || migrationAmountSource <= 0n}>
+								Max
 							</button>
 						</div>
-						<input inputMode='decimal' value={zoltarMigrationForm.amount} onInput={event => onZoltarMigrationFormChange({ amount: event.currentTarget.value })} placeholder='0.0' disabled={zoltarMigrationPending || !hasForked} />
 						{migrationAmountHintMessage === undefined ? undefined : <p className='detail'>{migrationAmountHintMessage}</p>}
 					</div>
 

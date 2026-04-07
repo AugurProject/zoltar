@@ -34,6 +34,11 @@ export function formatCurrencyBalance(value: bigint | undefined, units: number =
 	return formatDecimalString(formattedValue)
 }
 
+export function formatCurrencyInputBalance(value: bigint, units: number = 18) {
+	assertInteger(units, 'Units')
+	return units === 18 ? formatEther(value) : formatUnits(value, units)
+}
+
 export function formatRoundedCurrencyBalance(value: bigint | undefined, units: number = 18, decimals: number = 2) {
 	if (value === undefined) return 'Unavailable'
 	assertNonNegativeInteger(units, 'Units')

@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, beforeEach, setDefaultTimeout } from 'bun:test'
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { AddressInfo, createServer } from 'node:net'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { getDefaultAnvilRpcUrl, getMockedEthSimulateWindowEthereum, AnvilWindowEthereum } from './AnvilWindowEthereum'
 import { ensureDefined } from './utils/testUtils'
 
 const DEFAULT_ANVIL_HOST = '127.0.0.1'
-const DEFAULT_ANVIL_BIN = process.env['ANVIL_BIN'] ?? 'anvil'
 const RPC_READY_TIMEOUT_MS = 30_000
 const RPC_PROBE_TIMEOUT_MS = 3_000
 const SHUTDOWN_TIMEOUT_MS = 15_000
@@ -46,9 +46,34 @@ type AnvilProcess = ReturnType<typeof spawn>
 
 type AnvilConnectionMode = { readonly type: 'spawn-isolated'; readonly rpcUrl: string; readonly port: number } | { readonly type: 'use-existing'; readonly rpcUrl: string }
 
+const resolveAnvilBinary = (): string => {
+	const explicitAnvilBin = process.env['ANVIL_BIN']?.trim()
+	if (explicitAnvilBin !== undefined && explicitAnvilBin !== '') {
+		return explicitAnvilBin
+	}
+
+	const homeDirectory = process.env['USERPROFILE'] ?? process.env['HOME']
+	if (homeDirectory !== undefined) {
+		const candidates = process.platform === 'win32' ? [`${homeDirectory}\\.foundry\\bin\\anvil.exe`, `${homeDirectory}\\.foundry\\bin\\anvil.cmd`, `${homeDirectory}\\.foundry\\bin\\anvil.bat`] : [`${homeDirectory}/.foundry/bin/anvil`]
+
+		for (const candidate of candidates) {
+			if (existsSync(candidate)) return candidate
+		}
+	}
+
+	return 'anvil'
+}
+
+const DEFAULT_ANVIL_BIN = resolveAnvilBinary()
+
 export const getAnvilConnectionMode = (): AnvilConnectionMode => {
+	const anvilRpc = process.env['ANVIL_RPC']
+	if (anvilRpc !== undefined && anvilRpc.trim() !== '') {
+		return { type: 'use-existing', rpcUrl: anvilRpc }
+	}
+
 	if (process.platform === 'win32') {
-		return { type: 'use-existing', rpcUrl: process.env['ANVIL_RPC'] ?? getDefaultAnvilRpcUrl() }
+		return { type: 'use-existing', rpcUrl: getDefaultAnvilRpcUrl() }
 	}
 
 	return {
@@ -151,16 +176,23 @@ export const useIsolatedAnvilNode = () => {
 		const port = await getFreePort()
 		const rpcUrl = `http://${DEFAULT_ANVIL_HOST}:${port}`
 
-		const process = spawn(DEFAULT_ANVIL_BIN, ['--host', DEFAULT_ANVIL_HOST, '--port', `${port}`, '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee'], {
+		const childProcess = spawn(DEFAULT_ANVIL_BIN, ['--host', DEFAULT_ANVIL_HOST, '--port', `${port}`, '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee'], {
+			windowsHide: true,
 			stdio: ['ignore', 'ignore', 'pipe'],
 		})
-		anvilProcess = process
+		anvilProcess = childProcess
 		const spawnErrorPromise = new Promise<never>((_, reject) => {
-			process.once('error', reject)
+			childProcess.once('error', error => {
+				if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+					reject(new Error(`Failed to start isolated Anvil node: could not find Anvil executable '${DEFAULT_ANVIL_BIN}'. On Windows, Foundry usually installs to %USERPROFILE%\\.foundry\\bin\\anvil.exe. Set ANVIL_BIN to the full path if Anvil is not on PATH.`))
+					return
+				}
+				reject(error)
+			})
 		})
 
 		let stderr = ''
-		ensureDefined(process.stderr, 'Anvil stderr pipe is unavailable').on('data', chunk => {
+		ensureDefined(childProcess.stderr, 'Anvil stderr pipe is unavailable').on('data', chunk => {
 			stderr += chunk.toString()
 		})
 
@@ -171,7 +203,7 @@ export const useIsolatedAnvilNode = () => {
 			await anvilWindowEthereum.setNextBlockBaseFeePerGasToZero()
 			snapshotId = await anvilWindowEthereum.anvilSnapshot()
 		} catch (error) {
-			terminateProcess(process)
+			terminateProcess(childProcess)
 			const errorMessage = error instanceof Error ? error.message : String(error)
 			const stderrMessage = stderr.trim() === '' ? '' : `\nAnvil stderr:\n${stderr.trim()}`
 			throw new Error(`Failed to start isolated Anvil node for test file: ${errorMessage}${stderrMessage}`)
