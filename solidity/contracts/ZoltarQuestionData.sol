@@ -19,7 +19,6 @@ import { ScalarOutcomes } from './ScalarOutcomes.sol';
 	mapping(uint256 => string[]) public outcomeLabels;
 	mapping(uint256 => QuestionData) public questions;
 	uint256[] public questionIds;
-	mapping(uint256 => uint256) public questionIndexPlusOne;
 
 	function getQuestionId(QuestionData memory questionData, string[] calldata outcomeOptions) public pure returns (uint256) {
 		return uint256(keccak256(abi.encode(questionData, outcomeOptions)));
@@ -46,10 +45,7 @@ import { ScalarOutcomes } from './ScalarOutcomes.sol';
 		}
 		questions[questionId] = questionData;
 		questionCreatedTimestamp[questionId] = block.timestamp;
-		if (questionIndexPlusOne[questionId] == 0) {
-			questionIds.push(questionId);
-			questionIndexPlusOne[questionId] = questionIds.length;
-		}
+		questionIds.push(questionId);
 
 		return questionId;
 	}

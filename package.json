@@ -42,6 +42,7 @@
 		"format": "bunx @biomejs/biome format --write package.json scripts ui/package.json ui/tsconfig.json ui/build solidity/ts ui/ts ui/css",
 		"knip": "bun x knip",
 		"knip:fix": "bun x knip --fix",
-		"ui:docker": "docker build -f ui/Dockerfile . -t zoltar-ui && docker run --add-host=host.docker.internal:host-gateway zoltar-ui"
+		"ui:docker": "docker build -f ui/Dockerfile . -t zoltar-ui && docker run --add-host=host.docker.internal:host-gateway zoltar-ui",
+		"anvil:docker": "docker run --rm --name anvil -p 8545:8545 --entrypoint anvil ghcr.io/foundry-rs/foundry:v1.5.1 --host 0.0.0.0 --port 8545 --block-base-fee-per-gas 0 --gas-price 0 --no-priority-fee --chain-id 1"
 	}
 }
