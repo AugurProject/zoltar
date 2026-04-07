@@ -158,7 +158,7 @@ export function App() {
 	const showZoltarUniverseWarning = zoltarUniverseMissing
 	const showZoltarUniverseForkedWarning = zoltarUniverse?.hasForked === true
 	const disableRouteContent = route !== 'deploy' && (augurPlaceHolderDeploymentMissing || showZoltarUniverseWarning)
-	const isRouteContentDisabled = transactionState.value.transactionInFlightCount > 0 || disableRouteContent || !walletBootstrapComplete
+	const isRouteContentDisabled = transactionState.value.transactionInFlightCount > 0 || disableRouteContent
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universeErrorMessage = showZoltarUniverseWarning ? 'The universe does not exist.' : undefined
 	const renderRouteContent = () => {

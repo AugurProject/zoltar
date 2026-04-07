@@ -47,21 +47,10 @@ function getScalarCreatePreviewDetails(marketForm: MarketFormState): ScalarCreat
 	}
 }
 
-function getScalarCreatePreviewError(marketForm: MarketFormState) {
-	if (marketForm.marketType !== 'scalar') return undefined
-	try {
-		parseScalarFormInputs(marketForm)
-		return undefined
-	} catch (error) {
-		return error instanceof Error ? error.message : 'Scalar inputs are invalid'
-	}
-}
-
 export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainnet, marketCreating, marketError, marketForm, marketResult, onCreateMarket, onMarketFormChange, onOpenForkTab, onResetMarket, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestions }: MarketCreateQuestionSectionProps) {
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
 	const selectedQuestionDetails = useMemo(() => (marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)), [marketResult?.questionId, zoltarQuestions])
 	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(marketForm)
-	const scalarCreatePreviewError = getScalarCreatePreviewError(marketForm)
 	const marketFormValidation = validateMarketForm(marketForm)
 	const selectedQuestionTitle = selectedQuestionDetails === undefined ? 'Question' : typeof selectedQuestionDetails.title !== 'string' || selectedQuestionDetails.title.trim() === '' ? 'Untitled question' : selectedQuestionDetails.title
 
@@ -180,8 +169,6 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 							</div>
 						) : undefined}
 
-						{marketForm.marketType === 'scalar' && scalarCreatePreviewError !== undefined ? <p className='notice error'>{scalarCreatePreviewError}</p> : undefined}
-
 						{marketForm.marketType === 'scalar' ? (
 							scalarCreatePreviewDetails === undefined ? (
 								<p className='detail'>Enter scalar min, max, and increment to preview the tick slider.</p>
@@ -194,12 +181,12 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 							<button onClick={onCreateMarket} disabled={accountAddress === undefined || !isMainnet || marketCreating || !marketFormValidation.isValid}>
 								{marketCreating ? <LoadingText>Creating Question...</LoadingText> : 'Create Question'}
 							</button>
+							{marketFormValidation.notice === undefined ? undefined : <p className='form-validation-inline'>{marketFormValidation.notice}</p>}
 						</div>
 					</div>
 				</EntityCard>
 			) : undefined}
 
-			{marketResult === undefined && marketFormValidation.notice !== undefined ? <p className='form-validation-summary detail'>{marketFormValidation.notice}</p> : undefined}
 			{marketError === undefined ? undefined : <p className='notice error'>{marketError}</p>}
 		</>
 	)
