@@ -128,6 +128,7 @@ const sendLiveReload = async (reason: string) => {
 	liveReloadQueued = false
 	try {
 		await fetch(`${LIVE_RELOAD_ENDPOINT}?reason=${encodeURIComponent(reason)}`, { method: 'POST' })
+		console.log(`[ui:watch] Reload requested (${reason})`)
 	} catch (error) {
 		console.error(`[ui:watch] Failed to signal browser reload because ${reason} changed`)
 		console.error(error)

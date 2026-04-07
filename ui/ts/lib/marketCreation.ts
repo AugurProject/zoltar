@@ -74,13 +74,10 @@ function compareOutcomeLabels(left: string, right: string) {
 }
 
 function getCategoricalOutcomeLabels(form: MarketFormState) {
-	const outcomeLabels = form.categoricalOutcomes
-		.split('\n')
-		.map(normalizeOutcomeLabel)
-		.filter(label => label !== '')
+	const outcomeLabels = form.categoricalOutcomes.map(normalizeOutcomeLabel).filter(label => label !== '')
 
-	if (outcomeLabels.length < 2) throw new Error('Categorical markets require at least 2 outcome labels')
-	if (new Set(outcomeLabels).size !== outcomeLabels.length) throw new Error('Outcome labels must be unique')
+	if (outcomeLabels.length < 2) throw new Error('Categorical markets require at least 2 outcomes')
+	if (new Set(outcomeLabels).size !== outcomeLabels.length) throw new Error('Outcomes must be unique')
 
 	return [...outcomeLabels].sort(compareOutcomeLabels)
 }
@@ -153,19 +150,16 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 	}
 
 	if (form.marketType === 'categorical') {
-		const normalizedOutcomeLabels = form.categoricalOutcomes
-			.split('\n')
-			.map(normalizeOutcomeLabel)
-			.filter(label => label !== '')
+		const normalizedOutcomeLabels = form.categoricalOutcomes.map(normalizeOutcomeLabel).filter(label => label !== '')
 
 		if (normalizedOutcomeLabels.length === 0) {
-			setFieldError(fieldErrors, 'categoricalOutcomes', 'Outcome labels are required')
-			missingFields.push('Outcome Labels')
+			setFieldError(fieldErrors, 'categoricalOutcomes', 'Outcomes are required')
+			missingFields.push('Outcomes')
 		} else {
 			try {
 				getCategoricalOutcomeLabels(form)
 			} catch (error) {
-				const message = error instanceof Error ? error.message : 'Outcome labels are invalid'
+				const message = error instanceof Error ? error.message : 'Outcomes are invalid'
 				setFieldError(fieldErrors, 'categoricalOutcomes', message)
 				invalidMessages.push(message)
 			}

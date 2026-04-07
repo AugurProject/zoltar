@@ -61,6 +61,24 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 		setScalarCreatePreviewTick(clampedTick)
 	}, [scalarCreatePreviewDetails?.numTicks, scalarCreatePreviewTick])
 
+	const updateCategoricalOutcome = (outcomeIndex: number, value: string) => {
+		onMarketFormChange({
+			categoricalOutcomes: marketForm.categoricalOutcomes.map((outcome, index) => (index === outcomeIndex ? value : outcome)),
+		})
+	}
+
+	const addCategoricalOutcome = () => {
+		onMarketFormChange({
+			categoricalOutcomes: [...marketForm.categoricalOutcomes, ''],
+		})
+	}
+
+	const removeCategoricalOutcome = (outcomeIndex: number) => {
+		onMarketFormChange({
+			categoricalOutcomes: marketForm.categoricalOutcomes.filter((_, index) => index !== outcomeIndex),
+		})
+	}
+
 	return (
 		<>
 			{marketResult === undefined ? undefined : (
@@ -131,16 +149,23 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 						</div>
 
 						{marketForm.marketType === 'categorical' ? (
-							<label className='field'>
-								<span>Outcome Labels</span>
-								<textarea
-									aria-invalid={marketFormValidation.fieldErrors.categoricalOutcomes !== undefined ? 'true' : undefined}
-									className={marketFormValidation.fieldErrors.categoricalOutcomes !== undefined ? 'is-invalid' : undefined}
-									value={marketForm.categoricalOutcomes}
-									onInput={event => onMarketFormChange({ categoricalOutcomes: event.currentTarget.value })}
-									placeholder={'One outcome per line\nApple\nBanana\nCherry'}
-								/>
-							</label>
+							<div className='field'>
+								<span>Outcomes</span>
+								<p className='detail'>Add the possible answers for this market. Example: Apple, Banana, Cherry.</p>
+								<div className='categorical-outcomes'>
+									{marketForm.categoricalOutcomes.map((outcome, outcomeIndex) => (
+										<div className='categorical-outcome-row' key={`categorical-outcome-${outcomeIndex}`}>
+											<FormInput invalid={marketFormValidation.fieldErrors.categoricalOutcomes !== undefined} value={outcome} onInput={event => updateCategoricalOutcome(outcomeIndex, event.currentTarget.value)} placeholder={`Outcome ${outcomeIndex + 1}`} />
+											<button className='secondary categorical-outcome-remove' type='button' onClick={() => removeCategoricalOutcome(outcomeIndex)}>
+												Remove
+											</button>
+										</div>
+									))}
+								</div>
+								<button className='secondary categorical-outcome-add' type='button' onClick={addCategoricalOutcome}>
+									Add Outcome
+								</button>
+							</div>
 						) : undefined}
 
 						{marketForm.marketType === 'scalar' ? (

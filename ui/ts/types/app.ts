@@ -11,7 +11,7 @@ export type AccountState = {
 
 export type MarketFormState = {
 	answerUnit: string
-	categoricalOutcomes: string
+	categoricalOutcomes: string[]
 	description: string
 	scalarIncrement: string
 	scalarMax: string

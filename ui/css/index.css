@@ -1992,6 +1992,23 @@ button:focus-visible {
 	resize: vertical;
 }
 
+.categorical-outcomes {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.categorical-outcome-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 0.75rem;
+	align-items: end;
+}
+
+.categorical-outcome-add,
+.categorical-outcome-remove {
+	justify-self: start;
+}
+
 .escalation-metrics {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2053,6 +2070,7 @@ button:focus-visible {
 	.grid,
 	.escalation-metrics,
 	.escalation-sides,
+	.categorical-outcome-row,
 	.field-row,
 	.market-grid {
 		grid-template-columns: 1fr;

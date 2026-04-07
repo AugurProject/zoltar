@@ -6,7 +6,7 @@ const DEFAULT_CURRENT_RETENTION_RATE = '10'
 export function getDefaultMarketFormState(): MarketFormState {
 	return {
 		answerUnit: '',
-		categoricalOutcomes: 'Yes\nNo',
+		categoricalOutcomes: ['Yes', 'No'],
 		description: '',
 		endTime: '',
 		marketType: 'binary',

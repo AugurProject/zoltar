@@ -9,7 +9,7 @@ void describe('market creation helpers', () => {
 	void test('categorical outcomes are sorted by the contract hash order before submission', () => {
 		const form: MarketFormState = {
 			answerUnit: '',
-			categoricalOutcomes: 'Cherry\nApple\nBanana',
+			categoricalOutcomes: ['Cherry', 'Apple', 'Banana'],
 			description: 'test categorical description',
 			endTime: '2000',
 			marketType: 'categorical',
@@ -28,7 +28,7 @@ void describe('market creation helpers', () => {
 	void test('scalar inputs map to the expected contract values', () => {
 		const form: MarketFormState = {
 			answerUnit: '$',
-			categoricalOutcomes: 'Yes\nNo',
+			categoricalOutcomes: ['Yes', 'No'],
 			description: 'test scalar description',
 			endTime: '2000',
 			marketType: 'scalar',
@@ -49,7 +49,7 @@ void describe('market creation helpers', () => {
 	void test('validation reports missing required fields and impossible scalar combinations', () => {
 		const validation = validateMarketForm({
 			answerUnit: '$',
-			categoricalOutcomes: 'Yes\nNo',
+			categoricalOutcomes: ['Yes', 'No'],
 			description: 'test scalar description',
 			endTime: '',
 			marketType: 'scalar',
@@ -66,5 +66,24 @@ void describe('market creation helpers', () => {
 		expect(validation.fieldErrors.scalarMin).toBe('Scalar min, max, and increment do not produce a whole number of ticks')
 		expect(validation.notice).toContain('Missing required fields: Title, End Time')
 		expect(validation.notice).toContain('Fix invalid fields: Scalar min, max, and increment do not produce a whole number of ticks')
+	})
+
+	void test('validation reports duplicate categorical outcomes', () => {
+		const validation = validateMarketForm({
+			answerUnit: '',
+			categoricalOutcomes: ['Apple', 'Apple'],
+			description: 'test categorical description',
+			endTime: '2000',
+			marketType: 'categorical',
+			scalarIncrement: '1',
+			scalarMax: '0',
+			scalarMin: '0',
+			title: 'test categorical question',
+			startTime: '1000',
+		})
+
+		expect(validation.isValid).toBe(false)
+		expect(validation.fieldErrors.categoricalOutcomes).toBe('Outcomes must be unique')
+		expect(validation.notice).toContain('Fix invalid fields: Outcomes must be unique')
 	})
 })
