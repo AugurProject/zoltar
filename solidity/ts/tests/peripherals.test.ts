@@ -201,7 +201,6 @@ describe('Peripherals Contract Test Suite', () => {
 		const partialWindow = getAnvilWindowEthereum()
 		const partialClient = createWriteClient(partialWindow, TEST_ADDRESSES[0], 0)
 		await partialWindow.resetToCleanState()
-		await partialWindow.setTime(1n)
 		await setupTestAccounts(partialWindow)
 		await ensureProxyDeployerDeployed(partialClient)
 		await ensureDeploymentStatusOracleDeployed(partialClient)

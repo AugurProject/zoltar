@@ -165,7 +165,6 @@ export const useIsolatedAnvilNode = () => {
 			try {
 				await waitForRpcReady(connectionMode.rpcUrl)
 				anvilWindowEthereum = await getMockedEthSimulateWindowEthereum(connectionMode.rpcUrl)
-				await anvilWindowEthereum.setTime(TEST_CHAIN_START_TIMESTAMP)
 				await anvilWindowEthereum.setNextBlockBaseFeePerGasToZero()
 				snapshotId = await anvilWindowEthereum.anvilSnapshot()
 			} catch (error) {
