@@ -151,7 +151,6 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 						{marketForm.marketType === 'categorical' ? (
 							<div className='field'>
 								<span>Outcomes</span>
-								<p className='detail'>Add the possible answers for this market. Example: Apple, Banana, Cherry.</p>
 								<div className='categorical-outcomes'>
 									{marketForm.categoricalOutcomes.map((outcome, outcomeIndex) => (
 										<div className='categorical-outcome-row' key={`categorical-outcome-${outcomeIndex}`}>
