@@ -10,7 +10,16 @@
       "Bash(grep -E '\\\\.\\(js|map\\)$')",
       "Bash(grep '\\\\.d\\\\.ts$')",
       "Bash(git rm:*)",
-      "Bash(bun install:*)"
+      "Bash(bun install:*)",
+      "Bash(bun test:*)",
+      "Bash(bun run:*)",
+      "Bash(wait)",
+      "Bash(grep:*)",
+      "Bash(export PATH=\"$HOME/.foundry/bin:$PATH\")",
+      "Bash(bun x:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(gh pr:*)"
     ]
   }
 }
