@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> See `/workspace/AGENTS.md` for workspace-level instructions. Those take precedence over this file where they conflict.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Overview
@@ -38,7 +40,7 @@ bun run ui:watch        # Watch and rebuild UI assets
 ```bash
 bun tsc                 # Full TypeScript check (includes contract generation pipeline)
 bun x tsc --noEmit      # UI-only typecheck (when only ui/ changed, no contract output needed)
-bun test                # Run all tests (skip for ui/-only changes)
+bun run test            # Run all tests (skip for ui/-only changes)
 bun run check           # Full Biome check
 bun run check:changed   # Biome check on changed files only
 bun run format          # Format changed files with Biome
@@ -110,7 +112,7 @@ The codebase must have **zero knip warnings** before merging. No unused exports,
 2. Verify it fails
 3. Implement the fix
 4. Verify the test passes
-5. Run full test suite (`bun test`)
+5. Run full test suite (`bun run test`)
 
 ## Code Style
 

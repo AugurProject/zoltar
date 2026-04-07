@@ -10,7 +10,7 @@ const DEFAULT_ANVIL_BIN = process.env['ANVIL_BIN'] ?? 'anvil'
 const RPC_READY_TIMEOUT_MS = 30_000
 const RPC_PROBE_TIMEOUT_MS = 3_000
 const SHUTDOWN_TIMEOUT_MS = 15_000
-const TEST_CHAIN_START_TIMESTAMP = 1n
+export const TEST_CHAIN_START_TIMESTAMP = 1n
 export const TEST_TIMEOUT_MS = 300_000
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -140,6 +140,8 @@ export const useIsolatedAnvilNode = () => {
 			try {
 				await waitForRpcReady(connectionMode.rpcUrl)
 				anvilWindowEthereum = await getMockedEthSimulateWindowEthereum(connectionMode.rpcUrl)
+				await anvilWindowEthereum.setTime(TEST_CHAIN_START_TIMESTAMP)
+				await anvilWindowEthereum.setNextBlockBaseFeePerGasToZero()
 				snapshotId = await anvilWindowEthereum.anvilSnapshot()
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error)
