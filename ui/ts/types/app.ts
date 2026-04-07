@@ -13,12 +13,12 @@ export type MarketFormState = {
 	answerUnit: string
 	categoricalOutcomes: string
 	description: string
-	displayValueMax: string
-	displayValueMin: string
+	scalarIncrement: string
+	scalarMax: string
+	scalarMin: string
 	title: string
 	endTime: string
 	marketType: MarketType
-	numTicks: string
 	startTime: string
 }
 

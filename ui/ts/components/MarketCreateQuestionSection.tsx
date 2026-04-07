@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'preact/hooks'
 import type { Address } from 'viem'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { EntityCard } from './EntityCard.js'
+import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
 import { Question } from './Question.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
-import { parseBigIntInput } from '../lib/marketForm.js'
-import { clampScalarTickIndex } from '../lib/scalarOutcome.js'
+import { validateMarketForm } from '../lib/marketCreation.js'
+import { clampScalarTickIndex, parseScalarFormInputs } from '../lib/scalarOutcome.js'
 import type { MarketFormState } from '../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../types/contracts.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
@@ -37,18 +38,22 @@ type MarketCreateQuestionSectionProps = {
 function getScalarCreatePreviewDetails(marketForm: MarketFormState): ScalarCreatePreviewDetails | undefined {
 	if (marketForm.marketType !== 'scalar') return undefined
 	try {
-		const numTicks = parseBigIntInput(marketForm.numTicks, 'Number of ticks')
-		const displayValueMin = parseBigIntInput(marketForm.displayValueMin, 'Display value min')
-		const displayValueMax = parseBigIntInput(marketForm.displayValueMax, 'Display value max')
-		if (numTicks <= 0n || displayValueMax <= displayValueMin) throw new Error('Invalid scalar parameters')
 		return {
 			answerUnit: marketForm.answerUnit.trim(),
-			displayValueMax,
-			displayValueMin,
-			numTicks,
+			...parseScalarFormInputs(marketForm),
 		}
 	} catch {
 		return undefined
+	}
+}
+
+function getScalarCreatePreviewError(marketForm: MarketFormState) {
+	if (marketForm.marketType !== 'scalar') return undefined
+	try {
+		parseScalarFormInputs(marketForm)
+		return undefined
+	} catch (error) {
+		return error instanceof Error ? error.message : 'Scalar inputs are invalid'
 	}
 }
 
@@ -56,6 +61,8 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
 	const selectedQuestionDetails = useMemo(() => (marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)), [marketResult?.questionId, zoltarQuestions])
 	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(marketForm)
+	const scalarCreatePreviewError = getScalarCreatePreviewError(marketForm)
+	const marketFormValidation = validateMarketForm(marketForm)
 	const selectedQuestionTitle = selectedQuestionDetails === undefined ? 'Question' : typeof selectedQuestionDetails.title !== 'string' || selectedQuestionDetails.title.trim() === '' ? 'Untitled question' : selectedQuestionDetails.title
 
 	useEffect(() => {
@@ -115,7 +122,7 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 
 						<label className='field'>
 							<span>Title</span>
-							<input value={marketForm.title} onInput={event => onMarketFormChange({ title: event.currentTarget.value })} placeholder='Will event X happen?' />
+							<FormInput invalid={marketFormValidation.fieldErrors.title !== undefined} value={marketForm.title} onInput={event => onMarketFormChange({ title: event.currentTarget.value })} placeholder='Will event X happen?' />
 						</label>
 
 						<label className='field'>
@@ -126,30 +133,36 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 						<div className='field-row'>
 							<label className='field'>
 								<span>Start Time</span>
-								<input type='datetime-local' value={marketForm.startTime} onInput={event => onMarketFormChange({ startTime: event.currentTarget.value })} />
+								<FormInput invalid={marketFormValidation.fieldErrors.startTime !== undefined} type='datetime-local' value={marketForm.startTime} onInput={event => onMarketFormChange({ startTime: event.currentTarget.value })} />
 							</label>
 							<label className='field'>
 								<span>End Time</span>
-								<input type='datetime-local' value={marketForm.endTime} onInput={event => onMarketFormChange({ endTime: event.currentTarget.value })} />
+								<FormInput invalid={marketFormValidation.fieldErrors.endTime !== undefined} type='datetime-local' value={marketForm.endTime} onInput={event => onMarketFormChange({ endTime: event.currentTarget.value })} />
 							</label>
 						</div>
 
 						{marketForm.marketType === 'categorical' ? (
 							<label className='field'>
 								<span>Outcome Labels</span>
-								<textarea value={marketForm.categoricalOutcomes} onInput={event => onMarketFormChange({ categoricalOutcomes: event.currentTarget.value })} placeholder={'One outcome per line\nApple\nBanana\nCherry'} />
+								<textarea
+									aria-invalid={marketFormValidation.fieldErrors.categoricalOutcomes !== undefined ? 'true' : undefined}
+									className={marketFormValidation.fieldErrors.categoricalOutcomes !== undefined ? 'is-invalid' : undefined}
+									value={marketForm.categoricalOutcomes}
+									onInput={event => onMarketFormChange({ categoricalOutcomes: event.currentTarget.value })}
+									placeholder={'One outcome per line\nApple\nBanana\nCherry'}
+								/>
 							</label>
 						) : undefined}
 
 						{marketForm.marketType === 'scalar' ? (
 							<div className='field-row'>
 								<label className='field'>
-									<span>Number Of Ticks</span>
-									<input value={marketForm.numTicks} onInput={event => onMarketFormChange({ numTicks: event.currentTarget.value })} />
+									<span>Scalar Min</span>
+									<FormInput invalid={marketFormValidation.fieldErrors.scalarMin !== undefined} value={marketForm.scalarMin} onInput={event => onMarketFormChange({ scalarMin: event.currentTarget.value })} placeholder='1' />
 								</label>
 								<label className='field'>
 									<span>Answer Unit</span>
-									<input value={marketForm.answerUnit} onInput={event => onMarketFormChange({ answerUnit: event.currentTarget.value })} placeholder='USD' />
+									<FormInput value={marketForm.answerUnit} onInput={event => onMarketFormChange({ answerUnit: event.currentTarget.value })} placeholder='USD' />
 								</label>
 							</div>
 						) : undefined}
@@ -157,26 +170,28 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 						{marketForm.marketType === 'scalar' ? (
 							<div className='field-row'>
 								<label className='field'>
-									<span>Display Value Min</span>
-									<input value={marketForm.displayValueMin} onInput={event => onMarketFormChange({ displayValueMin: event.currentTarget.value })} />
+									<span>Scalar Increment</span>
+									<FormInput invalid={marketFormValidation.fieldErrors.scalarIncrement !== undefined} value={marketForm.scalarIncrement} onInput={event => onMarketFormChange({ scalarIncrement: event.currentTarget.value })} placeholder='0.1' />
 								</label>
 								<label className='field'>
-									<span>Display Value Max</span>
-									<input value={marketForm.displayValueMax} onInput={event => onMarketFormChange({ displayValueMax: event.currentTarget.value })} />
+									<span>Scalar Max</span>
+									<FormInput invalid={marketFormValidation.fieldErrors.scalarMax !== undefined} value={marketForm.scalarMax} onInput={event => onMarketFormChange({ scalarMax: event.currentTarget.value })} placeholder='10' />
 								</label>
 							</div>
 						) : undefined}
 
+						{marketForm.marketType === 'scalar' && scalarCreatePreviewError !== undefined ? <p className='notice error'>{scalarCreatePreviewError}</p> : undefined}
+
 						{marketForm.marketType === 'scalar' ? (
 							scalarCreatePreviewDetails === undefined ? (
-								<p className='detail'>Enter valid scalar parameters to preview the tick slider.</p>
+								<p className='detail'>Enter scalar min, max, and increment to preview the tick slider.</p>
 							) : (
 								<ScalarCreatePreview details={scalarCreatePreviewDetails} selectedTick={scalarCreatePreviewTick} onSelectedTickChange={setScalarCreatePreviewTick} />
 							)
 						) : undefined}
 
 						<div className='actions'>
-							<button onClick={onCreateMarket} disabled={accountAddress === undefined || !isMainnet || marketCreating}>
+							<button onClick={onCreateMarket} disabled={accountAddress === undefined || !isMainnet || marketCreating || !marketFormValidation.isValid}>
 								{marketCreating ? <LoadingText>Creating Question...</LoadingText> : 'Create Question'}
 							</button>
 						</div>
@@ -184,6 +199,7 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 				</EntityCard>
 			) : undefined}
 
+			{marketResult === undefined && marketFormValidation.notice !== undefined ? <p className='form-validation-summary detail'>{marketFormValidation.notice}</p> : undefined}
 			{marketError === undefined ? undefined : <p className='notice error'>{marketError}</p>}
 		</>
 	)

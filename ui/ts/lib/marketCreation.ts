@@ -4,6 +4,15 @@ import type { DeploymentStatus, QuestionData } from '../types/contracts.js'
 import { assertNever } from './assert.js'
 import { parseBigIntInput, parseTimestampInput } from './marketForm.js'
 import { parseOpenInterestFeePerYearPercentInput } from './retentionRate.js'
+import { parseScalarFormInputs } from './scalarOutcome.js'
+
+type MarketFormField = keyof Pick<MarketFormState, 'categoricalOutcomes' | 'endTime' | 'scalarIncrement' | 'scalarMax' | 'scalarMin' | 'startTime' | 'title'>
+
+type MarketFormValidation = {
+	fieldErrors: Partial<Record<MarketFormField, string>>
+	isValid: boolean
+	notice: string | undefined
+}
 
 export function hasDeployedStep(steps: DeploymentStatus[], stepId: DeploymentStatus['id']) {
 	return steps.some(step => step.id === stepId && step.deployed)
@@ -12,9 +21,7 @@ export function hasDeployedStep(steps: DeploymentStatus[], stepId: DeploymentSta
 function getScalarQuestionData(form: MarketFormState) {
 	return {
 		answerUnit: form.answerUnit.trim(),
-		displayValueMax: parseBigIntInput(form.displayValueMax, 'Display value max'),
-		displayValueMin: parseBigIntInput(form.displayValueMin, 'Display value min'),
-		numTicks: parseBigIntInput(form.numTicks, 'Number of ticks'),
+		...parseScalarFormInputs(form),
 	}
 }
 
@@ -48,8 +55,6 @@ function createQuestionData(form: MarketFormState): QuestionData {
 
 	if (questionData.title === '') throw new Error('Title is required')
 	if (questionData.endTime <= questionData.startTime) throw new Error('End time must be after start time')
-	if (form.marketType === 'scalar' && questionData.numTicks <= 1n) throw new Error('Number of ticks must be greater than 1')
-	if (form.marketType === 'scalar' && questionData.displayValueMax <= questionData.displayValueMin) throw new Error('Display value max must be greater than display value min')
 
 	return questionData
 }
@@ -90,6 +95,124 @@ function getOutcomeLabels(form: MarketFormState) {
 			return []
 		default:
 			return assertNever(form.marketType)
+	}
+}
+
+function setFieldError(fieldErrors: Partial<Record<MarketFormField, string>>, field: MarketFormField, message: string) {
+	if (fieldErrors[field] !== undefined) return
+	fieldErrors[field] = message
+}
+
+function formatFieldList(fields: string[]) {
+	return fields.join(', ')
+}
+
+export function validateMarketForm(form: MarketFormState): MarketFormValidation {
+	const fieldErrors: Partial<Record<MarketFormField, string>> = {}
+	const missingFields: string[] = []
+	const invalidMessages: string[] = []
+
+	if (form.title.trim() === '') {
+		setFieldError(fieldErrors, 'title', 'Title is required')
+		missingFields.push('Title')
+	}
+
+	const startTime = form.startTime.trim()
+	const endTime = form.endTime.trim()
+	let parsedStartTime: bigint | undefined
+	let parsedEndTime: bigint | undefined
+
+	if (startTime !== '') {
+		try {
+			parsedStartTime = parseTimestampInput(form.startTime, 'Start time')
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Start time is invalid'
+			setFieldError(fieldErrors, 'startTime', message)
+			invalidMessages.push(message)
+		}
+	}
+
+	if (endTime === '') {
+		setFieldError(fieldErrors, 'endTime', 'End time is required')
+		missingFields.push('End Time')
+	} else {
+		try {
+			parsedEndTime = parseTimestampInput(form.endTime, 'End time')
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'End time is invalid'
+			setFieldError(fieldErrors, 'endTime', message)
+			invalidMessages.push(message)
+		}
+	}
+
+	if (parsedEndTime !== undefined && parsedStartTime !== undefined && parsedEndTime <= parsedStartTime) {
+		const message = 'End time must be after start time'
+		setFieldError(fieldErrors, 'startTime', message)
+		setFieldError(fieldErrors, 'endTime', message)
+		invalidMessages.push(message)
+	}
+
+	if (form.marketType === 'categorical') {
+		const normalizedOutcomeLabels = form.categoricalOutcomes
+			.split('\n')
+			.map(normalizeOutcomeLabel)
+			.filter(label => label !== '')
+
+		if (normalizedOutcomeLabels.length === 0) {
+			setFieldError(fieldErrors, 'categoricalOutcomes', 'Outcome labels are required')
+			missingFields.push('Outcome Labels')
+		} else {
+			try {
+				getCategoricalOutcomeLabels(form)
+			} catch (error) {
+				const message = error instanceof Error ? error.message : 'Outcome labels are invalid'
+				setFieldError(fieldErrors, 'categoricalOutcomes', message)
+				invalidMessages.push(message)
+			}
+		}
+	}
+
+	if (form.marketType === 'scalar') {
+		const scalarFields: Array<{ key: 'scalarMin' | 'scalarMax' | 'scalarIncrement'; label: string }> = [
+			{ key: 'scalarMin', label: 'Scalar Min' },
+			{ key: 'scalarMax', label: 'Scalar Max' },
+			{ key: 'scalarIncrement', label: 'Scalar Increment' },
+		]
+
+		const missingScalarFields = scalarFields.filter(field => form[field.key].trim() === '')
+		for (const field of missingScalarFields) {
+			setFieldError(fieldErrors, field.key, `${field.label} is required`)
+			missingFields.push(field.label)
+		}
+
+		if (missingScalarFields.length === 0) {
+			try {
+				parseScalarFormInputs(form)
+			} catch (error) {
+				const message = error instanceof Error ? error.message : 'Scalar inputs are invalid'
+				if (message.includes('Scalar increment')) {
+					setFieldError(fieldErrors, 'scalarIncrement', message)
+				} else if (message.includes('Scalar max must be greater than scalar min')) {
+					setFieldError(fieldErrors, 'scalarMin', message)
+					setFieldError(fieldErrors, 'scalarMax', message)
+				} else {
+					setFieldError(fieldErrors, 'scalarMin', message)
+					setFieldError(fieldErrors, 'scalarMax', message)
+					setFieldError(fieldErrors, 'scalarIncrement', message)
+				}
+				invalidMessages.push(message)
+			}
+		}
+	}
+
+	const noticeParts: string[] = []
+	if (missingFields.length > 0) noticeParts.push(`Missing required fields: ${formatFieldList(missingFields)}`)
+	if (invalidMessages.length > 0) noticeParts.push(`Fix invalid fields: ${[...new Set(invalidMessages)].join(', ')}`)
+
+	return {
+		fieldErrors,
+		isValid: missingFields.length === 0 && invalidMessages.length === 0,
+		notice: noticeParts.length === 0 ? undefined : noticeParts.join('. '),
 	}
 }
 

@@ -20,6 +20,10 @@ Run each command individually and address any issues before proceeding to the ne
     ```bash
     bun test
     ```
+   - If tests require Anvil and the `anvil` executable is missing, install it with:
+     ```bash
+     bun run install:anvil
+     ```
 
 3. **Code formatting**:
    ```bash
