@@ -1,4 +1,4 @@
-import { useSignal } from '@preact/signals'
+import { useSignal, useSignalEffect } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { formatAddress } from '../lib/addresses.js'
 
@@ -23,6 +23,7 @@ export function AddressValue({ address, className = '' }: AddressValueProps) {
 		}
 
 		const updateShortening = () => {
+			if (copied.value) return
 			setShouldShorten(measureElement.getBoundingClientRect().width > element.clientWidth + 1)
 		}
 
@@ -39,6 +40,14 @@ export function AddressValue({ address, className = '' }: AddressValueProps) {
 			observer.disconnect()
 		}
 	}, [address])
+
+	useSignalEffect(() => {
+		if (copied.value) return
+		const element = buttonRef.current
+		const measureElement = measureRef.current
+		if (address === undefined || element === null || measureElement === null) return
+		setShouldShorten(measureElement.getBoundingClientRect().width > element.clientWidth + 1)
+	})
 
 	useEffect(() => {
 		return () => {

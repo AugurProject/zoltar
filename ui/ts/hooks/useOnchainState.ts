@@ -1,5 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
+import type { Address } from 'viem'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot } from '../contracts.js'
 import { getInjectedEthereum } from '../injectedEthereum.js'
 import { createConnectedReadClient, normalizeAccount } from '../lib/clients.js'
@@ -11,6 +12,39 @@ import type { DeploymentStatus } from '../types/contracts.js'
 
 type RefreshStateOptions = {
 	loadWalletState?: boolean
+}
+
+type LoadWalletStateParameters = {
+	connectedAddress: Address | undefined
+	chainIdPromise: Promise<string> | undefined
+	balancePromise: Promise<bigint> | undefined
+	getAccountState: () => AccountState
+	isCurrent: () => boolean
+	setAccountState: (state: AccountState) => void
+	setErrorMessage: (message: string | undefined) => void
+}
+
+export async function loadWalletState({ balancePromise, chainIdPromise, connectedAddress, getAccountState, isCurrent, setAccountState, setErrorMessage }: LoadWalletStateParameters) {
+	if (connectedAddress === undefined || chainIdPromise === undefined || balancePromise === undefined) return
+	const chainIdTask = chainIdPromise
+		.then(chainId => {
+			if (!isCurrent()) return
+			setAccountState({ ...getAccountState(), chainId })
+		})
+		.catch(() => {
+			if (!isCurrent()) return
+			setAccountState({ ...getAccountState(), chainId: MAINNET_CHAIN_ID })
+		})
+	const balanceTask = balancePromise
+		.then(ethBalance => {
+			if (!isCurrent()) return
+			setAccountState({ ...getAccountState(), ethBalance })
+		})
+		.catch(error => {
+			if (!isCurrent()) return
+			setErrorMessage(getErrorMessage(error, 'Failed to refresh wallet balances'))
+		})
+	await Promise.all([chainIdTask, balanceTask])
 }
 
 export function useOnchainState() {
@@ -67,10 +101,9 @@ export function useOnchainState() {
 		// Resolve connection state — must complete before wallet-specific reads
 		walletLoadCount.value += 1
 		try {
-			console.debug('[useOnchainState] calling eth_accounts')
-			const accounts = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' }).catch(() => [])
-			console.debug('[useOnchainState] eth_accounts returned', accounts)
+			const accountsResult = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' }).catch(() => [])
 			if (!isCurrent()) return
+			const accounts = Array.isArray(accountsResult) ? accountsResult : []
 			const connectedAddress = normalizeAccount(accounts[0])
 			accountState.value = {
 				address: connectedAddress,
@@ -79,27 +112,21 @@ export function useOnchainState() {
 			}
 
 			if (connectedAddress !== undefined && ethereum !== undefined) {
-				const readClient = createConnectedReadClient()
-				ethereum
-					.request({ method: 'eth_chainId' })
-					.then(chainId => {
-						if (!isCurrent()) return
-						accountState.value = { ...accountState.value, chainId }
-					})
-					.catch(() => {
-						if (!isCurrent()) return
-						accountState.value = { ...accountState.value, chainId: MAINNET_CHAIN_ID }
-					})
-				readClient
-					.getBalance({ address: connectedAddress })
-					.then(ethBalance => {
-						if (!isCurrent()) return
-						accountState.value = { ...accountState.value, ethBalance }
-					})
-					.catch(error => {
-						if (!isCurrent()) return
-						errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet balances')
-					})
+				const chainIdPromise = ethereum.request({ method: 'eth_chainId' })
+				const balancePromise = createConnectedReadClient().getBalance({ address: connectedAddress })
+				await loadWalletState({
+					connectedAddress,
+					chainIdPromise,
+					balancePromise,
+					getAccountState: () => accountState.value,
+					isCurrent,
+					setAccountState: state => {
+						accountState.value = state
+					},
+					setErrorMessage: message => {
+						errorMessage.value = message
+					},
+				})
 			} else {
 				accountState.value = { ...accountState.value, chainId: MAINNET_CHAIN_ID }
 			}

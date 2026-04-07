@@ -13,10 +13,9 @@ type UseDeploymentFlowParameters = {
 	onTransactionFinished: () => void
 	onTransactionRequested: () => void
 	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: (options?: { loadWalletState?: boolean }) => Promise<void>
 }
 
-export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, setDeploymentStatuses }: UseDeploymentFlowParameters) {
+export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, setDeploymentStatuses }: UseDeploymentFlowParameters) {
 	const busyStepId = useSignal<DeploymentStepId | undefined>(undefined)
 	const errorMessage = useSignal<string | undefined>(undefined)
 
@@ -55,7 +54,6 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 			const hash = await step.deploy(client)
 			onTransaction(hash)
 			setDeploymentStatuses(current => current.map(currentStep => (currentStep.id === step.id ? { ...currentStep, deployed: true } : currentStep)))
-			await refreshState()
 		} catch (error) {
 			errorMessage.value = getErrorMessage(error, `Failed to deploy ${step.label}`)
 		} finally {
