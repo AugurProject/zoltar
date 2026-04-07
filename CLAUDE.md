@@ -51,7 +51,6 @@ bun run knip:fix        # Auto-fix unused exports/files
 ### Other
 
 ```bash
-bun run check           # Biome lint + format checks
 bun run gas-costs       # Measure Solidity gas costs
 ```
 

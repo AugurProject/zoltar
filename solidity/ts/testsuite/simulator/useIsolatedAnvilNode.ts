@@ -10,7 +10,7 @@ const DEFAULT_ANVIL_BIN = process.env['ANVIL_BIN'] ?? 'anvil'
 const RPC_READY_TIMEOUT_MS = 30_000
 const RPC_PROBE_TIMEOUT_MS = 3_000
 const SHUTDOWN_TIMEOUT_MS = 15_000
-export const TEST_CHAIN_START_TIMESTAMP = 1n
+const TEST_CHAIN_START_TIMESTAMP = 1n
 export const TEST_TIMEOUT_MS = 300_000
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
