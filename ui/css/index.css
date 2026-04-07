@@ -453,6 +453,10 @@ button.destructive:hover:not(:disabled) {
 	margin-top: 0.75rem;
 }
 
+.panel > h2 + .actions {
+	margin-top: 0.75rem;
+}
+
 .notice {
 	margin-top: 0;
 	padding: 0.75rem 0;
