@@ -68,7 +68,7 @@ export function TradingSection({ accountState, onCreateCompleteSet, onMigrateSha
 						</div>
 
 						<div className='actions'>
-							<button onClick={onCreateCompleteSet} disabled={isTradingDisabled}>
+							<button className='primary' onClick={onCreateCompleteSet} disabled={isTradingDisabled}>
 								Mint Complete Sets
 							</button>
 							<button className='secondary' onClick={onRedeemCompleteSet} disabled={isTradingDisabled}>

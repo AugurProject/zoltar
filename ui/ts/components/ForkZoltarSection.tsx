@@ -107,6 +107,7 @@ export function ForkZoltarSection({
 							</button>
 						)}
 						<button
+							className='primary'
 							onClick={() => {
 								if (selectedQuestionId === '') return
 								onForkZoltar()

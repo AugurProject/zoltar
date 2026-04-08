@@ -31,10 +31,6 @@ export function OpenOracleSection({
 	const isMainnet = isMainnetChain(accountState.chainId)
 	return (
 		<section className='panel market-panel'>
-			<div className='market-header'>
-				<div></div>
-			</div>
-
 			<div className='market-grid'>
 				<div className='market-column'>
 					{oracleManagerDetails === undefined ? undefined : (
@@ -97,7 +93,7 @@ export function OpenOracleSection({
 							<button className='secondary' onClick={onLoadOracleManager} disabled={loadingOracleManager}>
 								{loadingOracleManager ? <LoadingText>Loading Oracle...</LoadingText> : 'Load Oracle Manager'}
 							</button>
-							<button onClick={onRequestPrice} disabled={accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onRequestPrice} disabled={accountState.address === undefined || !isMainnet}>
 								Request Price
 							</button>
 						</div>
@@ -155,7 +151,7 @@ export function OpenOracleSection({
 						</div>
 
 						<div className='actions'>
-							<button onClick={onSubmitInitialReport} disabled={accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onSubmitInitialReport} disabled={accountState.address === undefined || !isMainnet}>
 								Submit Initial Report
 							</button>
 							<button className='secondary' onClick={onSettleReport} disabled={accountState.address === undefined || !isMainnet}>

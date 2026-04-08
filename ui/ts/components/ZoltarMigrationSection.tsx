@@ -258,7 +258,7 @@ export function ZoltarMigrationSection({
 						<button className='secondary' title={prepareHintMessage} onClick={onPrepareRepForMigration} disabled={!canPrepare}>
 							{zoltarMigrationActiveAction === 'prepare' ? <LoadingText>Preparing REP...</LoadingText> : 'Prepare REP'}
 						</button>
-						<button title={splitHintMessage} onClick={onMigrateInternalRep} disabled={!canSplit}>
+						<button className='primary' title={splitHintMessage} onClick={onMigrateInternalRep} disabled={!canSplit}>
 							{zoltarMigrationActiveAction === 'split' ? <LoadingText>Splitting REP...</LoadingText> : 'Split REP'}
 						</button>
 					</div>

@@ -140,7 +140,7 @@ export function SecurityVaultSection({
 							<button className='secondary' onClick={onApproveRep} disabled={accountState.address === undefined || !isMainnet}>
 								Approve REP
 							</button>
-							<button onClick={onDepositRep} disabled={accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onDepositRep} disabled={accountState.address === undefined || !isMainnet}>
 								Create / Deposit REP
 							</button>
 						</div>

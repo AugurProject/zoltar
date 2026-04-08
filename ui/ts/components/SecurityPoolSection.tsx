@@ -171,7 +171,7 @@ export function SecurityPoolSection({
 						</label>
 
 						<div className='actions'>
-							<button onClick={onCreateSecurityPool} disabled={isCreateDisabled}>
+							<button className='primary' onClick={onCreateSecurityPool} disabled={isCreateDisabled}>
 								{createButtonLabel}
 							</button>
 						</div>

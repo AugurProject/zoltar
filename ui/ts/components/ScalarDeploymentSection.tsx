@@ -66,7 +66,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 						<div className={`scalar-slider-rail ${scalarOutcomeInvalid ? 'is-disabled' : ''}`}>
 							<div className='scalar-slider-track' />
 							<div className='scalar-slider-input-wrapper'>
-								<div className='scalar-slider-fill' style={{ width: scalarOutcomeInvalid ? '0' : getScalarSliderFillWidth(clampedSelectedScalarTick, questionDetails.numTicks) }} />
+								<div className='scalar-slider-fill' style={{ '--slider-fill': scalarOutcomeInvalid ? '0%' : getScalarSliderFillWidth(clampedSelectedScalarTick, questionDetails.numTicks) }} />
 								<input
 									disabled={scalarOutcomeInvalid}
 									type='range'

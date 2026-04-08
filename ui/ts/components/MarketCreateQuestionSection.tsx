@@ -202,7 +202,7 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 						) : undefined}
 
 						<div className='actions'>
-							<button onClick={onCreateMarket} disabled={accountAddress === undefined || !isMainnet || marketCreating || !marketFormValidation.isValid}>
+							<button className='primary' onClick={onCreateMarket} disabled={accountAddress === undefined || !isMainnet || marketCreating || !marketFormValidation.isValid}>
 								{marketCreating ? <LoadingText>Creating Question...</LoadingText> : 'Create Question'}
 							</button>
 							{marketFormValidation.notice === undefined ? undefined : <p className='form-validation-inline'>{marketFormValidation.notice}</p>}

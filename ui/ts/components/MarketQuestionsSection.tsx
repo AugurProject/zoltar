@@ -39,7 +39,7 @@ export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, lo
 					<p className='detail'>No questions</p>
 				) : undefined
 			) : (
-				<div className='entity-card-list question-browser-list'>
+				<div className='entity-card-list'>
 					{zoltarQuestions.map(question => (
 						<EntityCard
 							key={question.questionId}

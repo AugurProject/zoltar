@@ -182,7 +182,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 						)}
 
 						<div className='actions'>
-							<button onClick={onReportOutcome} disabled={accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onReportOutcome} disabled={accountState.address === undefined || !isMainnet}>
 								Report / Contribute On Selected Side
 							</button>
 						</div>

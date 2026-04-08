@@ -32,7 +32,7 @@ export function ScalarCreatePreview({ details, selectedTick, onSelectedTickChang
 					<div className={`scalar-slider-rail ${isInvalid ? 'is-disabled' : ''}`}>
 						<div className='scalar-slider-track' />
 						<div className='scalar-slider-input-wrapper'>
-							<div className='scalar-slider-fill' style={{ width: isInvalid ? '0' : getScalarSliderFillWidth(clampedSelectedTickValue, details.numTicks) }} />
+							<div className='scalar-slider-fill' style={{ '--slider-fill': isInvalid ? '0%' : getScalarSliderFillWidth(clampedSelectedTickValue, details.numTicks) }} />
 							<input disabled={isInvalid} aria-valuetext={isInvalid ? 'Invalid' : formatScalarOutcomeLabel(details, clampedSelectedTickValue)} max={details.numTicks.toString()} min='0' step='1' type='range' value={clampedSelectedTick} onInput={event => onSelectedTickChange(event.currentTarget.value)} />
 						</div>
 					</div>
