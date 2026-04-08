@@ -224,7 +224,6 @@ const watchDirectoryForTypeScriptSources = (directoryPath: string, refreshWatche
 			debounceTimeout = undefined
 			refreshWatchers()
 			const changedPath = typeof filename === 'string' && filename.length > 0 ? path.join(directoryPath, filename) : directoryPath
-			queueLiveReload(path.relative(UI_ROOT_PATH, changedPath).replaceAll('\\', '/'))
 		}, 120)
 	})
 	typeScriptSourceUnwatchCallbacks.push(() => {
@@ -265,11 +264,15 @@ const refreshTypeScriptSourceWatchers = async () => {
 	}
 	const files = await getAllFiles(TYPE_SCRIPT_SOURCE_PATH)
 	for (const filePath of files) {
-		watchFileWithCleanup(filePath, relativePath => {
-			queueLiveReload(relativePath)
-		}, callback => {
-			typeScriptSourceUnwatchCallbacks.push(callback)
-		})
+		watchFileWithCleanup(
+			filePath,
+			relativePath => {
+				queueLiveReload(relativePath)
+			},
+			callback => {
+				typeScriptSourceUnwatchCallbacks.push(callback)
+			},
+		)
 	}
 }
 

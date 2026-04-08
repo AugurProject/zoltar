@@ -1160,6 +1160,21 @@ button.currency-value.copyable:hover:not(:disabled) {
 	overflow-wrap: anywhere;
 }
 
+.migration-approval-row {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-bottom: 1rem;
+	padding-top: 0.5rem;
+	border-top: 1px solid var(--border-default);
+}
+
+.migration-approval-row strong {
+	display: block;
+	margin-top: 0.25rem;
+}
+
 .question-summary {
 	display: grid;
 	gap: 0.7rem;

@@ -111,7 +111,13 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 		if (pending === 0) loadingZoltarForkAccess.value = false
 	}
 
-	const runZoltarForkAction = async (actionName: 'approve' | 'fork', action: (walletAddress: Address, universe: ZoltarUniverseSummary, questionId: bigint) => Promise<ZoltarForkActionResult>, errorFallback: string, refreshAfter: boolean) => {
+	const runZoltarForkAction = async (
+		actionName: 'approve' | 'fork',
+		action: (walletAddress: Address, universe: ZoltarUniverseSummary, questionId: bigint) => Promise<ZoltarForkActionResult>,
+		errorFallback: string,
+		refreshAfter: boolean,
+		options?: { requireQuestionIdInput?: boolean },
+	) => {
 		try {
 			getRequiredInjectedEthereum()
 		} catch {
@@ -130,8 +136,14 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 
 		try {
 			onTransactionRequested()
-			const questionId = parseBigIntInput(zoltarForkQuestionId.value, 'Fork question ID')
 			const universe = await ensureZoltarUniverse()
+			const questionId = options?.requireQuestionIdInput
+				? parseBigIntInput(zoltarForkQuestionId.value, 'Fork question ID')
+				: (() => {
+						const questionIdString = universe.forkQuestionDetails?.questionId ?? ''
+						if (questionIdString === '') throw new Error('Fork question ID is missing')
+						return BigInt(questionIdString)
+				  })()
 			const result = await action(accountAddress, universe, questionId)
 			zoltarForkResult.value = result
 			onTransaction(result.hash)
@@ -163,6 +175,7 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 			},
 			'Failed to approve REP for Zoltar fork',
 			false,
+			{ requireQuestionIdInput: false },
 		)
 
 	const forkZoltar = async () =>

@@ -1,4 +1,4 @@
-import { encodeAbiParameters, encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes, parseAbiItem, toHex, zeroAddress, type Address, type Hash, type Hex } from 'viem'
+import { encodeAbiParameters, encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes, parseAbiItem, toHex, zeroAddress, RpcError, type Address, type Hash, type Hex } from 'viem'
 import { ABIS } from './abis.js'
 import { assertNever } from './lib/assert.js'
 import {
@@ -309,6 +309,21 @@ async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 	})
 	await client.waitForTransactionReceipt({ hash })
 	return hash
+}
+
+type ContractCallParams = Parameters<WriteClient['writeContract']>[0]
+
+async function getContractRevertReason(client: ReadClient | WriteClient, params: ContractCallParams) {
+	try {
+		await client.call(params as Parameters<ReadClient['call']>[0])
+		return undefined
+	} catch (error) {
+		if (error instanceof RpcError) {
+			return error.shortMessage ?? error.message ?? (error.cause instanceof Error ? error.cause.message : undefined)
+		}
+		if (error instanceof Error) return error.message
+		return undefined
+	}
 }
 
 async function writeContractAndWait(client: WriteClient, write: () => Promise<Hash>) {
@@ -1574,57 +1589,41 @@ export async function createZoltarChildUniverse(client: WriteClient, universeId:
 	} satisfies ZoltarChildUniverseActionResult
 }
 
-async function executeZoltarMigrationAction(client: WriteClient, action: ZoltarMigrationActionResult['action'], universeId: bigint, amount: bigint, outcomeIndexes: bigint[], request: () => Promise<Hash>) {
-	const hash = await request()
-	const receipt = await client.waitForTransactionReceipt({ hash })
-	if (receipt.status === 'reverted') {
-		throw new Error('Transaction reverted')
+async function executeZoltarMigrationAction(client: WriteClient, action: ZoltarMigrationActionResult['action'], universeId: bigint, amount: bigint, outcomeIndexes: bigint[], callParams: ContractCallParams) {
+	try {
+		const hash = await writeContractAndWait(client, () => client.writeContract(callParams))
+		return {
+			action,
+			amount,
+			hash,
+			outcomeIndexes,
+			universeId,
+		} satisfies ZoltarMigrationActionResult
+	} catch (error) {
+		const reason = await getContractRevertReason(client, callParams)
+		const message = reason ?? (error instanceof Error ? error.message : 'Transaction reverted')
+		throw new Error(message)
 	}
-	return {
-		action,
-		amount,
-		hash,
-		outcomeIndexes,
-		universeId,
-	} satisfies ZoltarMigrationActionResult
 }
 
 export async function prepareRepForMigrationInZoltar(client: WriteClient, universeId: bigint, amount: bigint) {
-	return await executeZoltarMigrationAction(
-		client,
-		'addRepToMigrationBalance',
-		universeId,
-		amount,
-		[],
-		async () =>
-			await writeContractAndWait(client, () =>
-				client.writeContract({
-					address: getDeploymentStep('zoltar').address,
-					abi: Zoltar_Zoltar.abi,
-					functionName: 'addRepToMigrationBalance',
-					args: [universeId, amount],
-				}),
-			),
-	)
+	const callParams: ContractCallParams = {
+		address: getDeploymentStep('zoltar').address,
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'addRepToMigrationBalance',
+		args: [universeId, amount],
+	}
+	return await executeZoltarMigrationAction(client, 'addRepToMigrationBalance', universeId, amount, [], callParams)
 }
 
 export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) {
-	return await executeZoltarMigrationAction(
-		client,
-		'splitMigrationRep',
-		universeId,
-		amount,
-		outcomeIndexes,
-		async () =>
-			await writeContractAndWait(client, () =>
-				client.writeContract({
-					address: getDeploymentStep('zoltar').address,
-					abi: Zoltar_Zoltar.abi,
-					functionName: 'splitMigrationRep',
-					args: [universeId, amount, outcomeIndexes],
-				}),
-			),
-	)
+	const callParams: ContractCallParams = {
+		address: getDeploymentStep('zoltar').address,
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'splitMigrationRep',
+		args: [universeId, amount, outcomeIndexes],
+	}
+	return await executeZoltarMigrationAction(client, 'splitMigrationRep', universeId, amount, outcomeIndexes, callParams)
 }
 
 export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
