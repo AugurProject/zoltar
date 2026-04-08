@@ -121,14 +121,14 @@ export type SecurityPoolRouteContentProps = {
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
 	onCreateSecurityPool: () => void
-	lastCreatedQuestionId: string | undefined
-	onLoadLatestMarket?: () => void
 	onLoadMarket: () => void
 	onLoadMarketById: (marketId: string) => Promise<void>
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
 	poolCreationMarketDetails: MarketDetails | undefined
+	onResetSecurityPoolCreation: () => void
 	onSecurityPoolFormChange: (update: Partial<SecurityPoolFormState>) => void
+	zoltarUniverseHasForked: boolean
 	securityPools: ListedSecurityPool[]
 	securityPoolCreating: boolean
 	securityPoolError: string | undefined

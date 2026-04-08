@@ -100,10 +100,13 @@ export function App() {
 		zoltarUniverse,
 		zoltarUniverseMissing,
 	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
-	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, poolCreationMarketDetails, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({
-		...baseHookConfig,
-		deploymentStatuses,
-	})
+	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
+	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } =
+		useSecurityPoolCreation({
+			...baseHookConfig,
+			deploymentStatuses,
+			zoltarUniverseHasForked,
+		})
 	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, redeemRep, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult, setSecurityVaultForm, updateVaultFees } = useSecurityVaultOperations(baseHookConfig)
 	const { approveToken1, approveToken2, loadOracleManager, loadingOracleManager, onQueueOperation, onRequestPrice, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails, setOpenOracleForm, settleReport, submitInitialReport } = useOpenOracleOperations(baseHookConfig)
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
@@ -149,7 +152,6 @@ export function App() {
 	} = useForkAuctionOperations(baseHookConfig)
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
-	const lastCreatedQuestionId = marketResult?.questionId
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const wrongNetworkMessage = accountState.address !== undefined && accountState.chainId !== undefined && !isMainnet ? 'Switch your wallet to Ethereum mainnet.' : undefined
 	const augurPlaceHolderDeploymentMissing = augurPlaceHolderDeployed === false
@@ -236,25 +238,18 @@ export function App() {
 							duplicateOriginPoolExists,
 							poolCreationMarketDetails,
 							onCreateSecurityPool: () => void createPool(),
-							lastCreatedQuestionId,
 							onLoadMarket: () => void loadMarket(),
 							onLoadMarketById: loadMarketById,
 							loadingMarketDetails,
 							marketDetails,
+							onResetSecurityPoolCreation: resetSecurityPoolCreation,
 							onSecurityPoolFormChange: update => setSecurityPoolForm(current => ({ ...current, ...update })),
+							zoltarUniverseHasForked,
 							securityPools,
 							securityPoolCreating,
 							securityPoolError,
 							securityPoolForm,
 							securityPoolResult,
-							onLoadLatestMarket: () => {
-								if (lastCreatedQuestionId === undefined) return
-								setSecurityPoolForm(current => ({
-									...current,
-									marketId: lastCreatedQuestionId,
-								}))
-								void loadMarketById(lastCreatedQuestionId)
-							},
 						}}
 						overview={{
 							accountState,
