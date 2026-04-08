@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import { useEffect } from 'preact/hooks'
+import { useCallback, useEffect } from 'preact/hooks'
 import { zeroAddress, type Address, type Hash } from 'viem'
 import { approveErc20, forkZoltarUniverse, getDeploymentSteps, loadErc20Allowance, loadErc20Balance, loadRepTokensMigratedRepBalance } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
@@ -111,13 +111,13 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 		if (pending === 0) loadingZoltarForkAccess.value = false
 	}
 
-	const runZoltarForkAction = async (
-		actionName: 'approve' | 'fork',
-		action: (walletAddress: Address, universe: ZoltarUniverseSummary, questionId: bigint) => Promise<ZoltarForkActionResult>,
-		errorFallback: string,
-		refreshAfter: boolean,
-		options?: { requireQuestionIdInput?: boolean },
-	) => {
+const runZoltarForkAction = async (
+	actionName: 'approve' | 'fork',
+	action: (walletAddress: Address, universe: ZoltarUniverseSummary, questionId: bigint) => Promise<ZoltarForkActionResult>,
+	errorFallback: string,
+	refreshAfter: boolean,
+	options?: { requireQuestionIdInput?: boolean; approvalAmount?: bigint },
+) => {
 		try {
 			getRequiredInjectedEthereum()
 		} catch {
@@ -161,22 +161,26 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 		}
 	}
 
-	const approveZoltarForkRep = async () =>
-		await runZoltarForkAction(
-			'approve',
-			async (walletAddress, universe, questionId) => {
-				const approval = await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), universe.reputationToken, getZoltarAddress(), universe.forkThreshold, 'approveForkRep')
-				return {
-					action: 'approveForkRep',
-					hash: approval.hash,
-					questionId: formatQuestionId(questionId),
-					universeId: universe.universeId,
-				} satisfies ZoltarForkActionResult
-			},
-			'Failed to approve REP for Zoltar fork',
-			false,
-			{ requireQuestionIdInput: false },
-		)
+	const approveZoltarForkRep = useCallback(
+		async (amount?: bigint) =>
+			await runZoltarForkAction(
+				'approve',
+				async (walletAddress, universe, questionId) => {
+					const approvalAmount = amount ?? universe.forkThreshold
+					const approval = await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), universe.reputationToken, getZoltarAddress(), approvalAmount, 'approveForkRep')
+					return {
+						action: 'approveForkRep',
+						hash: approval.hash,
+						questionId: formatQuestionId(questionId),
+						universeId: universe.universeId,
+					} satisfies ZoltarForkActionResult
+				},
+				'Failed to approve REP for Zoltar fork',
+				false,
+				{ requireQuestionIdInput: false, approvalAmount: amount },
+			),
+		[runZoltarForkAction, onTransactionSubmitted],
+	)
 
 	const forkZoltar = async () =>
 		await runZoltarForkAction(
