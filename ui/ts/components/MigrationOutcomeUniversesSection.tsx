@@ -13,8 +13,23 @@ type MigrationOutcomeUniversesSectionProps = {
 }
 
 export function getMigrationOutcomeHeldBalance(child: ZoltarChildUniverseSummary, childUniverseRepBalances: Record<string, bigint | undefined>) {
-	if (!child.exists) return undefined
+	if (!child.exists) return 0n
 	return childUniverseRepBalances[child.universeId.toString()]
+}
+
+export function getMigrationOutcomeSplitLimit(childUniverses: ZoltarChildUniverseSummary[], childUniverseRepBalances: Record<string, bigint | undefined>, migrationBalance: bigint | undefined, selectedOutcomeIndexSet: Set<string>) {
+	if (migrationBalance === undefined) return undefined
+	let splitLimit: bigint | undefined = undefined
+
+	for (const child of childUniverses) {
+		if (!selectedOutcomeIndexSet.has(child.outcomeIndex.toString())) continue
+		const heldBalance = getMigrationOutcomeHeldBalance(child, childUniverseRepBalances)
+		if (heldBalance === undefined) return undefined
+		const remainingCapacity = migrationBalance > heldBalance ? migrationBalance - heldBalance : 0n
+		splitLimit = splitLimit === undefined || remainingCapacity < splitLimit ? remainingCapacity : splitLimit
+	}
+
+	return splitLimit ?? 0n
 }
 
 export function MigrationOutcomeUniversesSection({ childUniverses, childUniverseRepBalances, disabled, isScalarFork, migrationBalance, onAddNextOutcome, onToggleOutcomeIndex, selectedOutcomeIndexSet }: MigrationOutcomeUniversesSectionProps) {
@@ -37,24 +52,22 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 					{childUniverses.map(child => {
 						const selected = selectedOutcomeIndexSet.has(child.outcomeIndex.toString())
 						const heldBalance = getMigrationOutcomeHeldBalance(child, childUniverseRepBalances)
-						const remainingBalance = (() => {
-							if (migrationBalance === undefined) return undefined
-							if (!child.exists) return migrationBalance
-							if (heldBalance === undefined) return undefined
-							return migrationBalance > heldBalance ? migrationBalance - heldBalance : 0n
-						})()
+						const isHeldBalanceLoading = child.exists && heldBalance === undefined
 						return (
 							<button key={child.universeId.toString()} aria-pressed={selected} className={`migration-outcome-row ${selected ? 'active' : ''}`} disabled={disabled} onClick={() => onToggleOutcomeIndex(child.outcomeIndex)} type='button'>
 								<span className='migration-outcome-copy'>
 									<span className='migration-outcome-label'>{child.outcomeLabel}</span>
 									<span className='migration-outcome-metrics'>
 										<span>
-											Held here: <strong>{child.exists ? <CurrencyValue copyable={false} loading={heldBalance === undefined || migrationBalance === undefined} value={heldBalance} suffix='REP' /> : 'Not deployed yet'}</strong>
+											Your balance:{' '}
+											<strong>
+												<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix='REP' />
+											</strong>
 										</span>
 										<span>
-											Still migratable:{' '}
+											Already migrated:{' '}
 											<strong>
-												<CurrencyValue copyable={false} loading={remainingBalance === undefined} value={remainingBalance} suffix='REP' />
+												<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix='REP' /> / <CurrencyValue copyable={false} loading={migrationBalance === undefined} value={migrationBalance} suffix='REP' />
 											</strong>
 										</span>
 									</span>

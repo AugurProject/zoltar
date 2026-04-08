@@ -218,12 +218,11 @@ const watchDirectoryForTypeScriptOutputs = (directoryPath: string, refreshWatche
 
 const watchDirectoryForTypeScriptSources = (directoryPath: string, refreshWatchers: () => void) => {
 	let debounceTimeout: NodeJS.Timeout | undefined
-	const watcher = fs.watch(directoryPath, (_eventType, filename) => {
+	const watcher = fs.watch(directoryPath, (_eventType, _filename) => {
 		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
 		debounceTimeout = setTimeout(() => {
 			debounceTimeout = undefined
 			refreshWatchers()
-			const changedPath = typeof filename === 'string' && filename.length > 0 ? path.join(directoryPath, filename) : directoryPath
 		}, 120)
 	})
 	typeScriptSourceUnwatchCallbacks.push(() => {

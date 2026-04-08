@@ -197,7 +197,7 @@ export function App() {
 						marketCreating={marketCreating}
 						marketError={marketError}
 						marketResult={marketResult}
-						onApproveZoltarForkRep={() => void approveZoltarForkRep()}
+						onApproveZoltarForkRep={amount => void approveZoltarForkRep(amount)}
 						onCreateMarket={() => void createMarket()}
 						onForkZoltar={() => void forkZoltar()}
 						onLoadZoltarQuestions={() => void loadZoltarQuestions()}
