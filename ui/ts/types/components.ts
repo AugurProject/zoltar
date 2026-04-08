@@ -164,9 +164,7 @@ export type SecurityPoolsOverviewRouteContentProps = {
 	securityPools: ListedSecurityPool[]
 } & LiquidationControlsProps
 
-export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps & {
-	showHeader?: boolean
-}
+export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
 export type SecurityPoolWorkflowRouteContentProps = {
 	accountState: AccountState

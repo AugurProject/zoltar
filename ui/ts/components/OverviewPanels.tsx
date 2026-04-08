@@ -64,7 +64,7 @@ export function OverviewPanels({ accountState, isConnectingWallet, isLoadingUniv
 							{isRefreshing ? 'Refreshing...' : 'Refresh'}
 						</button>
 						{accountState.address === undefined ? (
-							<button onClick={onConnect} disabled={isConnectingWallet}>
+							<button className='primary' onClick={onConnect} disabled={isConnectingWallet}>
 								{isWalletLoading ? 'Connecting...' : 'Connect Wallet'}
 							</button>
 						) : undefined}

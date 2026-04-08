@@ -19,7 +19,10 @@
       "Bash(bun x:*)",
       "Bash(git commit -m ':*)",
       "Bash(git push:*)",
-      "Bash(gh pr:*)"
+      "Bash(gh pr:*)",
+      "Bash(sed -i \"57s/title='Pool Registry'/title='No Pools Loaded'/\" ui/ts/components/SecurityPoolsOverviewSection.tsx)",
+      "Bash(sed -i \"65s|title={<AddressValue address={pool.securityPoolAddress} />}|title={getQuestionTitle\\(pool.marketDetails\\)}|\" ui/ts/components/SecurityPoolsOverviewSection.tsx)",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }

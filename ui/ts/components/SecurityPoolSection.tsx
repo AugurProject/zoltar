@@ -178,6 +178,7 @@ export function SecurityPoolSection({
 					</div>
 
 					{!duplicateOriginPoolExists && !hasMatchingSecurityMultiplier ? undefined : <p className='detail'>A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.</p>}
+					{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>Security pools can only be created for binary markets. Load a binary market to proceed.</p> : undefined}
 					{securityPoolError === undefined ? undefined : <p className='notice error'>{securityPoolError}</p>}
 				</div>
 			</div>

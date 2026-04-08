@@ -43,7 +43,7 @@ export function ScalarCreatePreview({ details, selectedTick, onSelectedTickChang
 					</label>
 				</div>
 			</div>
-			<div className='workflow-question-grid market-scalar-deploy-grid scalar-slider-stats'>
+			<div className='workflow-question-grid scalar-slider-stats'>
 				<div>
 					<span className='metric-label'>Selected Tick</span>
 					<strong>{isInvalid ? 'Invalid' : `${clampedSelectedTick} / ${details.numTicks.toString()}`}</strong>

@@ -96,7 +96,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 						</label>
 					</div>
 				</div>
-				<div className='workflow-question-grid market-scalar-deploy-grid scalar-slider-stats'>
+				<div className='workflow-question-grid scalar-slider-stats'>
 					<div>
 						<span className='metric-label'>Min Value</span>
 						<strong>{formatScalarOutcomeLabel(questionDetails, 0n)}</strong>

@@ -23,7 +23,9 @@ export function LiquidationModal({ accountAddress, closeLiquidationModal, isMain
 			if (event.key === 'Escape') closeLiquidationModal()
 		}
 		document.addEventListener('keydown', handleKeyDown)
-		return () => { document.removeEventListener('keydown', handleKeyDown) }
+		return () => {
+			document.removeEventListener('keydown', handleKeyDown)
+		}
 	}, [liquidationModalOpen, closeLiquidationModal])
 
 	if (!liquidationModalOpen) return undefined

@@ -3,12 +3,13 @@ import { AddressValue } from './AddressValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
 import { LiquidationModal } from './LiquidationModal.js'
-import { Question } from './Question.js'
+import { Question, getQuestionTitle } from './Question.js'
 import { ReportingSection } from './ReportingSection.js'
 import { SecurityVaultSection } from './SecurityVaultSection.js'
 import { TradingSection } from './TradingSection.js'
 import { UniverseLink } from './UniverseLink.js'
 import { CurrencyValue } from './CurrencyValue.js'
+import { formatTimestamp } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import { readSelectedPoolViewQueryParam, writeSelectedPoolViewQueryParam } from '../lib/urlParams.js'
@@ -57,7 +58,7 @@ export function SecurityPoolWorkflowSection({
 	const reportingReady = marketDetails !== undefined && marketDetails.endTime <= currentTimestamp
 	const forkReady = selectedPoolState !== undefined && selectedPoolState !== 'operational'
 	const hasSelectedPoolAddress = securityPoolAddress.trim() !== ''
-	const selectedPoolTitle = securityPoolAddress === '' ? 'Select a security pool' : <AddressValue address={securityPoolAddress} />
+	const selectedPoolTitle = selectedPool !== undefined ? getQuestionTitle(selectedPool.marketDetails) : securityPoolAddress === '' ? 'Select a security pool' : <AddressValue address={securityPoolAddress} />
 
 	useEffect(() => {
 		const nextSearch = writeSelectedPoolViewQueryParam(window.location.search, hasSelectedPoolAddress ? view : undefined)
@@ -84,9 +85,9 @@ export function SecurityPoolWorkflowSection({
 					</div>
 
 					{!hasSelectedPoolAddress ? (
-						<p className='detail'>Select a pool.</p>
+						<p className='detail'>Browse Pools to pick one, or paste an address above.</p>
 					) : selectedPool === undefined ? (
-						<p className='detail'>Pool metadata unavailable.</p>
+						<p className='detail'>Pool metadata unavailable. Refresh Pool Registry in the Browse tab to load metadata for this address.</p>
 					) : (
 						<>
 							<div className='entity-card-subsection'>
@@ -163,7 +164,7 @@ export function SecurityPoolWorkflowSection({
 								Trading
 							</button>
 							<button className={`subtab-link ${view === 'resolution' ? 'active' : ''}`} type='button' onClick={() => setView('resolution')} aria-pressed={view === 'resolution'}>
-								Resolution
+								Resolution <span className={`badge ${reportingReady ? 'ok' : 'blocked'}`}>{reportingReady ? 'Unlocked' : 'Locked'}</span>
 							</button>
 						</div>
 
@@ -197,9 +198,8 @@ export function SecurityPoolWorkflowSection({
 													key={`${selectedPool.securityPoolAddress}-${vault.vaultAddress}`}
 													className='compact'
 													title={<AddressValue address={vault.vaultAddress} />}
-													badge={<span className='badge muted'>Vault</span>}
 													actions={
-														<button className='secondary' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
+														<button className='destructive' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
 															Liquidate Vault
 														</button>
 													}
@@ -272,7 +272,7 @@ export function SecurityPoolWorkflowSection({
 										<ReportingSection {...reporting} showHeader={false} showSecurityPoolAddressInput={false} />
 									) : (
 										<EntityCard title='Reporting is locked' badge={<span className='badge blocked'>Waiting</span>}>
-											<p className='detail'>Wait for question end.</p>
+											<p className='detail'>{marketDetails === undefined ? 'Reporting unlocks once the question end time passes.' : `Reporting unlocks after ${formatTimestamp(marketDetails.endTime)}.`}</p>
 										</EntityCard>
 									)}
 								</div>
@@ -288,7 +288,7 @@ export function SecurityPoolWorkflowSection({
 										<ForkAuctionSection {...forkAuction} showHeader={false} showSecurityPoolAddressInput={false} />
 									) : (
 										<EntityCard title='Fork flow is locked' badge={<span className='badge blocked'>Operational</span>}>
-											<p className='detail'>Not forked.</p>
+											<p className='detail'>The pool must enter a non-operational state (forked or in escalation) before the fork & auction flow becomes available.</p>
 										</EntityCard>
 									)}
 								</div>

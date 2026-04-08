@@ -130,11 +130,17 @@ export function ZoltarMigrationSection({
 		if (approvalShortage === 0n) return 'No additional REP approval is needed for this amount.'
 		return `Approve ${formatCurrencyBalance(approvalShortage)} more REP for Zoltar before preparing the selected amount.`
 	})()
+	const getAlreadyPreparedHint = () => {
+		if (hasValidOutcomeIndexes && splitLimit === 0n) {
+			return 'This amount is already fully split across the selected universes.'
+		}
+		return 'This amount is already in your migration balance. Split REP when ready.'
+	}
 	const prepareHintMessage = (() => {
 		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before preparing REP.')
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return 'Enter an amount greater than zero.'
-		if (missingPreparationAmount === 0n) return 'This amount is already in your migration balance. Split REP when ready.'
+		if (missingPreparationAmount === 0n) return getAlreadyPreparedHint()
 		if (zoltarForkRepBalance === undefined || zoltarForkRepBalance < missingPreparationAmount) {
 			return `Need ${formatCurrencyBalance(missingPreparationAmount)} more REP in this universe to prepare the selected amount.`
 		}
@@ -157,6 +163,9 @@ export function ZoltarMigrationSection({
 		if (splitLimit === undefined) {
 			return 'Loading outcome universe balances...'
 		}
+		if (splitLimit === 0n) {
+			return 'This amount is already fully split across the selected universes.'
+		}
 		if (!hasSufficientSplitLimit) {
 			return `The selected universes only have ${formatCurrencyBalance(splitLimit)} REP of room left for this amount. Reduce the amount or choose different universes.`
 		}
@@ -169,7 +178,7 @@ export function ZoltarMigrationSection({
 		if (amountExceedsAvailableRep) {
 			return `You only have ${formatCurrencyBalance(totalRepAvailable)} REP available for migration in this universe (${formatCurrencyBalance(zoltarMigrationPreparedRepBalance ?? 0n)} in your migration balance and ${formatCurrencyBalance(zoltarForkRepBalance ?? 0n)} wallet REP).`
 		}
-		if (missingPreparationAmount === 0n) return 'This amount is already in your migration balance. Split REP when ready.'
+		if (missingPreparationAmount === 0n) return getAlreadyPreparedHint()
 		return `Add ${formatCurrencyBalance(missingPreparationAmount)} REP to your migration balance from this universe, then split it across the selected universes.`
 	})()
 	const selectAllAmount = () => {

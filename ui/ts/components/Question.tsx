@@ -9,7 +9,7 @@ type QuestionProps = {
 	showTitle?: boolean
 }
 
-function getQuestionTitle(question: MarketDetails) {
+export function getQuestionTitle(question: MarketDetails) {
 	return question.title.trim() === '' ? 'Untitled question' : question.title
 }
 
