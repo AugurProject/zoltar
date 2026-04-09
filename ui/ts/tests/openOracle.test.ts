@@ -1,8 +1,8 @@
 /// <reference types="bun-types" />
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { getAddress, zeroAddress } from 'viem'
-import { createOpenOracleReportInstance, getOpenOracleAddress, loadOpenOracleGames } from '../contracts.js'
+import { getAddress, zeroAddress, type Address } from 'viem'
+import { getOpenOracleAddress, loadOracleManagerDetails, loadOpenOracleReportDetails, requestOraclePrice, submitInitialOracleReport, settleOracleReport } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS, TEST_ADDRESSES } from '../../../solidity/ts/testsuite/simulator/utils/constants'
@@ -11,8 +11,10 @@ import { approveToken, setupTestAccounts, ensureProxyDeployerDeployed } from '..
 import { AnvilWindowEthereum } from '../../../solidity/ts/testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../solidity/ts/testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../../../solidity/ts/testsuite/simulator/utils/viem'
-import { ensureInfraDeployed } from '../../../solidity/ts/testsuite/simulator/utils/contracts/deployPeripherals'
-import { getOpenOracleExtraData, openOracleSettle, openOracleSubmitInitialReport, wrapWeth } from '../../../solidity/ts/testsuite/simulator/utils/contracts/peripherals'
+import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../solidity/ts/testsuite/simulator/utils/contracts/deployPeripherals'
+import { ensureZoltarDeployed } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltar'
+import { createQuestion, getQuestionId } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltarQuestionData'
+import { getOpenOracleExtraData, wrapWeth } from '../../../solidity/ts/testsuite/simulator/utils/contracts/peripherals'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -24,14 +26,19 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
 	globalWindow.window.ethereum = mockWindow as unknown as InjectedEthereum
 }
 
+const genesisUniverse = 0n
+const securityMultiplier = 2n
+const MAX_RETENTION_RATE = 999_999_996_848_000_000n
+const startingRepEthPrice = 10n
+const outcomes = ['Yes', 'No']
+
 describe('Open Oracle helpers', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	let uiReadClient: ReturnType<typeof createConnectedReadClient>
 	let uiWriteClient: ReturnType<typeof createWalletWriteClient>
-	const token1 = addressString(GENESIS_REPUTATION_TOKEN)
-	const token2 = WETH_ADDRESS
+	let managerAddress: Address
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
@@ -41,100 +48,84 @@ describe('Open Oracle helpers', () => {
 		uiWriteClient = createWalletWriteClient(addressString(TEST_ADDRESSES[0]))
 		await setupTestAccounts(mockWindow)
 		await ensureProxyDeployerDeployed(client)
+		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
+
+		const currentTimestamp = await mockWindow.getTime()
+		const questionData = {
+			title: 'Test question for Open Oracle',
+			description: '',
+			startTime: 0n,
+			endTime: currentTimestamp + 365n * DAY,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const questionId = getQuestionId(questionData, outcomes)
+		await createQuestion(client, questionData, outcomes)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+		managerAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer
 	})
 
-	test('loads an empty Open Oracle game list from the fixed deployment address', async () => {
-		const list = await loadOpenOracleGames(uiReadClient)
-
+	test('getOpenOracleAddress returns the deterministic non-zero oracle address', () => {
 		expect(getOpenOracleAddress()).not.toBe(zeroAddress)
-		expect(list.nextReportId).toBe(1n)
-		expect(list.games).toHaveLength(0)
 	})
 
-	test('creates a report instance and lists it from nextReportId', async () => {
-		const created = await createOpenOracleReportInstance(uiWriteClient, {
-			callbackContract: zeroAddress,
-			callbackGasLimit: 0,
-			callbackSelector: '0x00000000',
-			disputeDelay: 0,
-			escalationHalt: 0n,
-			exactToken1Report: 1n,
-			feePercentage: 3000,
-			feeToken: true,
-			keepFee: true,
-			multiplier: 110,
-			protocolFee: 0,
-			protocolFeeRecipient: zeroAddress,
-			settlementTime: 60,
-			settlerReward: 100n,
-			timeType: true,
-			token1Address: token1,
-			token2Address: token2,
-			trackDisputes: false,
-			value: 1000n,
-		})
+	test('loadOracleManagerDetails reflects initial manager state after deployment', async () => {
+		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 
-		const list = await loadOpenOracleGames(uiReadClient)
-		const game = list.games[0]
-
-		expect(created.reportId).toBe(1n)
-		expect(list.nextReportId).toBe(2n)
-		expect(list.games).toHaveLength(1)
-		expect(game).toBeDefined()
-		expect(game?.reportId).toBe(1n)
-		expect(getAddress(game?.token1 ?? zeroAddress)).toBe(getAddress(token1))
-		expect(getAddress(game?.token2 ?? zeroAddress)).toBe(getAddress(token2))
-		expect(game?.exactToken1Report).toBe(1n)
-		expect(game?.isSubmitted).toBe(false)
-		expect(game?.isSettled).toBe(false)
+		expect(details.managerAddress).toBe(managerAddress)
+		expect(details.pendingReportId).toBe(0n)
+		expect(details.lastPrice).toBe(startingRepEthPrice)
+		expect(details.lastSettlementTimestamp).toBe(0n)
+		expect(details.isPriceValid).toBe(false)
 	})
 
-	test('tracks submission and settlement for created Open Oracle games', async () => {
-		const created = await createOpenOracleReportInstance(uiWriteClient, {
-			callbackContract: zeroAddress,
-			callbackGasLimit: 0,
-			callbackSelector: '0x00000000',
-			disputeDelay: 0,
-			escalationHalt: 0n,
-			exactToken1Report: 1n,
-			feePercentage: 3000,
-			feeToken: true,
-			keepFee: true,
-			multiplier: 110,
-			protocolFee: 0,
-			protocolFeeRecipient: zeroAddress,
-			settlementTime: 60,
-			settlerReward: 100n,
-			timeType: true,
-			token1Address: token1,
-			token2Address: token2,
-			trackDisputes: false,
-			value: 1000n,
-		})
+	test('requestOraclePrice creates a pending report visible via loadOpenOracleReportDetails', async () => {
+		const { requestPriceEthCost } = await loadOracleManagerDetails(uiReadClient, managerAddress)
 
-		await approveToken(client, token1, getOpenOracleAddress())
-		await approveToken(client, token2, getOpenOracleAddress())
-		await wrapWeth(client, 2n)
-		const stateHash = (await getOpenOracleExtraData(client, created.reportId)).stateHash
-		await openOracleSubmitInitialReport(client, created.reportId, 1n, 2n, stateHash)
+		await requestOraclePrice(uiWriteClient, managerAddress, requestPriceEthCost)
 
-		let list = await loadOpenOracleGames(uiReadClient)
-		let game = list.games[0]
+		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
+		const reportId = details.pendingReportId
 
-		expect(game?.isSubmitted).toBe(true)
-		expect(game?.isSettled).toBe(false)
-		expect(game?.currentAmount1).toBe(1n)
-		expect(game?.currentAmount2).toBe(2n)
+		expect(reportId).toBeGreaterThan(0n)
+
+		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
+		expect(reportDetails.reportId).toBe(reportId)
+		expect(getAddress(reportDetails.token1)).toBe(getAddress(addressString(GENESIS_REPUTATION_TOKEN)))
+		expect(getAddress(reportDetails.token2)).toBe(getAddress(WETH_ADDRESS))
+		expect(reportDetails.settlementTimestamp).toBe(0n)
+	})
+
+	test('submitted and settled reports are tracked in loadOpenOracleReportDetails', async () => {
+		const { requestPriceEthCost } = await loadOracleManagerDetails(uiReadClient, managerAddress)
+		await requestOraclePrice(uiWriteClient, managerAddress, requestPriceEthCost)
+
+		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
+		const { exactToken1Report } = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
+		const PRICE_PRECISION = 10n ** 18n
+		const amount1 = exactToken1Report
+		const amount2 = (amount1 * PRICE_PRECISION) / startingRepEthPrice
+
+		const openOracleAddress = getOpenOracleAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracleAddress)
+		await approveToken(client, WETH_ADDRESS, openOracleAddress)
+		await wrapWeth(client, amount2)
+
+		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash
+		await submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, stateHash)
+
+		let reportDetails = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
+		expect(reportDetails.currentAmount1).toBe(amount1)
+		expect(reportDetails.currentAmount2).toBe(amount2)
+		expect(reportDetails.settlementTimestamp).toBe(0n)
 
 		await mockWindow.advanceTime(DAY)
-		await openOracleSettle(client, created.reportId)
+		await settleOracleReport(uiWriteClient, openOracleAddress, reportId)
 
-		list = await loadOpenOracleGames(uiReadClient)
-		game = list.games[0]
-
-		expect(game?.isSubmitted).toBe(true)
-		expect(game?.isSettled).toBe(true)
-		expect(game?.settlementTimestamp).toBeGreaterThan(0n)
+		reportDetails = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
+		expect(reportDetails.settlementTimestamp).toBeGreaterThan(0n)
 	})
 })

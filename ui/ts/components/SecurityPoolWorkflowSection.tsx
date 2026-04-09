@@ -165,7 +165,7 @@ export function SecurityPoolWorkflowSection({
 							<div className='entity-card-subsection'>
 								<div className='entity-card-subsection-header'>
 									<h4>Price Oracle</h4>
-									{poolOracleManagerDetails === undefined ? undefined : <span className={`badge ${ poolOracleManagerDetails.isPriceValid ? 'ok' : 'error' }`}>{poolOracleManagerDetails.isPriceValid ? 'Valid' : 'Invalid'}</span>}
+									{poolOracleManagerDetails === undefined ? undefined : <span className={`badge ${poolOracleManagerDetails.isPriceValid ? 'ok' : 'error'}`}>{poolOracleManagerDetails.isPriceValid ? 'Valid' : 'Invalid'}</span>}
 								</div>
 								{poolOracleManagerError === undefined ? undefined : <p className='notice error'>{poolOracleManagerError}</p>}
 								{poolPriceOracleResult === undefined ? undefined : (
@@ -192,7 +192,7 @@ export function SecurityPoolWorkflowSection({
 											</div>
 											<div>
 												<span className='metric-label'>Pending Request</span>
-												<strong>{poolOracleManagerDetails.pendingReportId > 0n ? `Report #${ poolOracleManagerDetails.pendingReportId.toString() }` : 'None'}</strong>
+												<strong>{poolOracleManagerDetails.pendingReportId > 0n ? `Report #${poolOracleManagerDetails.pendingReportId.toString()}` : 'None'}</strong>
 											</div>
 											<div>
 												<span className='metric-label'>Request Cost</span>

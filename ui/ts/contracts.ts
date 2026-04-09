@@ -361,6 +361,10 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 	return deployHash
 }
 
+export function getOpenOracleAddress() {
+	return getInfraContractAddresses().openOracle
+}
+
 export function getDeploymentSteps(): DeploymentStep[] {
 	const addresses = getInfraContractAddresses()
 
