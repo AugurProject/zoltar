@@ -105,7 +105,25 @@ export function App() {
 		deploymentStatuses,
 	})
 	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, redeemRep, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult, setSecurityVaultForm, updateVaultFees } = useSecurityVaultOperations(baseHookConfig)
-	const { approveToken1, approveToken2, loadOracleManager, loadingOracleManager, onQueueOperation, onRequestPrice, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails, setOpenOracleForm, settleReport, submitInitialReport } = useOpenOracleOperations(baseHookConfig)
+	const {
+		approveToken1,
+		approveToken2,
+		createGame,
+		loadOpenOracleGames,
+		loadReportGame,
+		loadingOpenOracleGames,
+		nextReportId,
+		openOracleAddress,
+		openOracleCreateForm,
+		openOracleError,
+		openOracleGames,
+		openOracleReportForm,
+		openOracleResult,
+		setOpenOracleCreateForm,
+		setOpenOracleReportForm,
+		settleReport,
+		submitInitialReport,
+	} = useOpenOracleOperations(baseHookConfig)
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
 	const {
 		closeLiquidationModal,
@@ -359,19 +377,23 @@ export function App() {
 				return (
 					<OpenOracleSection
 						accountState={accountState}
-						loadingOracleManager={loadingOracleManager}
+						loadingOpenOracleGames={loadingOpenOracleGames}
+						nextReportId={nextReportId}
 						onApproveToken1={() => void approveToken1()}
 						onApproveToken2={() => void approveToken2()}
-						onLoadOracleManager={() => void loadOracleManager()}
-						onOpenOracleFormChange={update => setOpenOracleForm(current => ({ ...current, ...update }))}
-						onQueueOperation={() => void onQueueOperation()}
-						onRequestPrice={() => void onRequestPrice()}
+						onCreateOpenOracleGame={() => void createGame()}
+						onLoadOpenOracleGames={() => void loadOpenOracleGames()}
+						onLoadReportGame={reportId => void loadReportGame(reportId)}
+						onOpenOracleCreateFormChange={update => setOpenOracleCreateForm(current => ({ ...current, ...update }))}
+						onOpenOracleReportFormChange={update => setOpenOracleReportForm(current => ({ ...current, ...update }))}
 						onSettleReport={() => void settleReport()}
 						onSubmitInitialReport={() => void submitInitialReport()}
+						openOracleAddress={openOracleAddress}
+						openOracleCreateForm={openOracleCreateForm}
 						openOracleError={openOracleError}
-						openOracleForm={openOracleForm}
+						openOracleGames={openOracleGames}
+						openOracleReportForm={openOracleReportForm}
 						openOracleResult={openOracleResult}
-						oracleManagerDetails={oracleManagerDetails}
 					/>
 				)
 			case 'not-found':
@@ -397,6 +419,11 @@ export function App() {
 		if (securityPoolResult === undefined) return
 		void loadSecurityPools()
 	}, [securityPoolResult?.deployPoolHash])
+
+	useEffect(() => {
+		if (route !== 'open-oracle') return
+		void loadOpenOracleGames()
+	}, [route])
 
 	useEffect(() => {
 		if (!augurPlaceHolderDeploymentMissing) return

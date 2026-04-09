@@ -197,7 +197,6 @@ export function SecurityPoolWorkflowSection({
 													key={`${selectedPool.securityPoolAddress}-${vault.vaultAddress}`}
 													className='compact'
 													title={<AddressValue address={vault.vaultAddress} />}
-													badge={<span className='badge muted'>Vault</span>}
 													actions={
 														<button className='secondary' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
 															Liquidate Vault

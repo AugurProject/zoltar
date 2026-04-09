@@ -1,5 +1,5 @@
-import { parseUnits } from 'viem'
-import type { ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
+import { parseUnits, zeroAddress } from 'viem'
+import type { ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleReportFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
 
 const DEFAULT_CURRENT_RETENTION_RATE = '10'
 
@@ -35,14 +35,34 @@ export function getDefaultSecurityVaultFormState(): SecurityVaultFormState {
 	}
 }
 
-export function getDefaultOpenOracleFormState(): OpenOracleFormState {
+export function getDefaultOpenOracleCreateFormState(): OpenOracleCreateFormState {
+	return {
+		callbackContract: zeroAddress,
+		callbackGasLimit: '0',
+		callbackSelector: '0x00000000',
+		disputeDelay: '0',
+		escalationHalt: '0',
+		exactToken1Report: '1',
+		feePercentage: '3000',
+		feeToken: 'true',
+		keepFee: 'true',
+		multiplier: '110',
+		protocolFee: '0',
+		protocolFeeRecipient: zeroAddress,
+		settlementTime: '60',
+		settlerReward: '100000000000000',
+		timeType: 'true',
+		token1Address: '',
+		token2Address: '',
+		transactionValue: '1000000000000000',
+		trackDisputes: 'false',
+	}
+}
+
+export function getDefaultOpenOracleReportFormState(): OpenOracleReportFormState {
 	return {
 		amount1: '0',
 		amount2: '0',
-		managerAddress: '',
-		operationAmount: '0',
-		operationTargetVault: '',
-		queuedOperation: 'liquidation',
 		reportId: '',
 		stateHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
 	}

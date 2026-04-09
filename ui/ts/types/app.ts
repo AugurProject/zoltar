@@ -35,13 +35,33 @@ export type SecurityVaultFormState = {
 	securityPoolAddress: string
 }
 
-export type OpenOracleFormState = {
+export type OpenOracleBooleanValue = 'true' | 'false'
+
+export type OpenOracleCreateFormState = {
+	callbackContract: string
+	callbackGasLimit: string
+	callbackSelector: string
+	disputeDelay: string
+	escalationHalt: string
+	exactToken1Report: string
+	feePercentage: string
+	feeToken: OpenOracleBooleanValue
+	keepFee: OpenOracleBooleanValue
+	multiplier: string
+	protocolFee: string
+	protocolFeeRecipient: string
+	settlementTime: string
+	settlerReward: string
+	timeType: OpenOracleBooleanValue
+	token1Address: string
+	token2Address: string
+	transactionValue: string
+	trackDisputes: OpenOracleBooleanValue
+}
+
+export type OpenOracleReportFormState = {
 	amount1: string
 	amount2: string
-	managerAddress: string
-	operationAmount: string
-	operationTargetVault: string
-	queuedOperation: 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
 	reportId: string
 	stateHash: string
 }

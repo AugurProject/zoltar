@@ -1,5 +1,5 @@
 import type { Address } from 'viem'
-import type { AccountState, ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from './app.js'
+import type { AccountState, ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleReportFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from './app.js'
 import type {
 	DeploymentStatus,
 	DeploymentStepId,
@@ -8,8 +8,8 @@ import type {
 	ListedSecurityPool,
 	MarketCreationResult,
 	MarketDetails,
+	OpenOracleGameSummary,
 	OpenOracleActionResult,
-	OracleManagerDetails,
 	ReportingActionResult,
 	ReportingDetails,
 	SecurityPoolCreationResult,
@@ -218,19 +218,23 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 
 export type OpenOracleRouteContentProps = {
 	accountState: AccountState
-	loadingOracleManager: boolean
+	loadingOpenOracleGames: boolean
+	nextReportId: bigint | undefined
+	onCreateOpenOracleGame: () => void
 	onApproveToken1: () => void
 	onApproveToken2: () => void
-	onLoadOracleManager: () => void
-	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
-	onQueueOperation: () => void
-	onRequestPrice: () => void
+	onLoadOpenOracleGames: () => void
+	onLoadReportGame: (reportId: bigint) => void
+	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
+	onOpenOracleReportFormChange: (update: Partial<OpenOracleReportFormState>) => void
 	onSettleReport: () => void
 	onSubmitInitialReport: () => void
 	openOracleError: string | undefined
-	openOracleForm: OpenOracleFormState
+	openOracleAddress: Address
+	openOracleCreateForm: OpenOracleCreateFormState
+	openOracleGames: OpenOracleGameSummary[]
 	openOracleResult: OpenOracleActionResult | undefined
-	oracleManagerDetails: OracleManagerDetails | undefined
+	openOracleReportForm: OpenOracleReportFormState
 }
 
 export type OpenOracleSectionProps = OpenOracleRouteContentProps
