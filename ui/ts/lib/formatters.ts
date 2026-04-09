@@ -47,18 +47,25 @@ export function formatRoundedCurrencyBalance(value: bigint | undefined, units: n
 
 	const isNegative = value < 0n
 	const absoluteValue = isNegative ? -value : value
-	const scale = 10n ** BigInt(decimals)
+	const prefix = isNegative ? '-' : ''
+
+	// For tiny values between 0 and 1, extend decimal places to show 2 significant figures.
+	// floatValue is used only for order-of-magnitude detection; bigint arithmetic handles rounding.
+	const floatValue = Number(absoluteValue) / 10 ** units
+	const effectiveDecimals =
+		floatValue > 0 && floatValue < 1 ? Math.max(decimals, Math.ceil(-Math.log10(floatValue)) + 1) : decimals
+
+	const scale = 10n ** BigInt(effectiveDecimals)
 	const base = 10n ** BigInt(units)
 	const rounded = (absoluteValue * scale + base / 2n) / base
 	const integerPart = rounded / scale
-	const prefix = isNegative ? '-' : ''
 
-	if (decimals === 0) {
+	if (effectiveDecimals === 0) {
 		return `${prefix}${formatGroupedInteger(integerPart)}`
 	}
 
 	const fractionalPart = rounded % scale
-	return `${prefix}${formatGroupedInteger(integerPart)}.${fractionalPart.toString().padStart(decimals, '0')}`
+	return `${prefix}${formatGroupedInteger(integerPart)}.${fractionalPart.toString().padStart(effectiveDecimals, '0')}`
 }
 
 export function formatTimestamp(timestamp: bigint) {

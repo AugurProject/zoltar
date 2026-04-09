@@ -20,4 +20,36 @@ void describe('formatting helpers', () => {
 	void test('formatCurrencyInputBalance returns a compact decimal string without grouped separators', () => {
 		expect(formatCurrencyInputBalance(1234567890000000000000n)).toBe('1234.56789')
 	})
+
+	void describe('formatRoundedCurrencyBalance — 2 significant figures for tiny values', () => {
+		// 0.000025532 ETH → 6 decimal places to capture 2 sig figs
+		void test('0.000025532 ETH rounds to 0.000026', () => {
+			expect(formatRoundedCurrencyBalance(25532000000000n, 18, 2)).toBe('0.000026')
+		})
+
+		// 0.023 ETH → 3 decimal places (first non-zero at position 2)
+		void test('0.023 ETH rounds to 0.023', () => {
+			expect(formatRoundedCurrencyBalance(23000000000000000n, 18, 2)).toBe('0.023')
+		})
+
+		// 0.0045 ETH → 4 decimal places to capture 2 sig figs (4 and 5)
+		void test('0.0045 ETH rounds to 0.0045', () => {
+			expect(formatRoundedCurrencyBalance(4500000000000000n, 18, 2)).toBe('0.0045')
+		})
+
+		// 0.00041 ETH (typical REP/ETH price) → 5 decimal places: 0.00041
+		void test('0.00041 ETH rounds to 0.00041', () => {
+			expect(formatRoundedCurrencyBalance(410000000000000n, 18, 2)).toBe('0.00041')
+		})
+
+		// Values >= 1 are unaffected — still use fixed decimal count
+		void test('1.234 ETH rounds to 1.23 (unchanged behaviour)', () => {
+			expect(formatRoundedCurrencyBalance(1234000000000000000n, 18, 2)).toBe('1.23')
+		})
+
+		// USDC (6 decimals) — 0.85 USDC stays at 2 decimal places
+		void test('0.85 USDC rounds to 0.85', () => {
+			expect(formatRoundedCurrencyBalance(850000n, 6, 2)).toBe('0.85')
+		})
+	})
 })

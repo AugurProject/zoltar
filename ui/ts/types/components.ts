@@ -41,6 +41,11 @@ export type OverviewPanelsProps = {
 	universeErrorMessage: string | undefined
 	universeLabel: string
 	isRefreshing: boolean
+	repEthPrice: bigint | undefined
+	repEthSource: 'v4' | 'v3' | undefined
+	repUsdcPrice: bigint | undefined
+	repUsdcSource: 'v4' | 'v3' | undefined
+	isLoadingRepPrices: boolean
 	onConnect: () => void
 	onGoToGenesisUniverse: () => void
 	onRefresh: () => void

@@ -18,6 +18,7 @@ import { useOpenOracleOperations } from './hooks/useOpenOracleOperations.js'
 import { useReportingOperations } from './hooks/useReportingOperations.js'
 import { useSecurityPoolCreation } from './hooks/useSecurityPoolCreation.js'
 import { useSecurityPoolsOverview } from './hooks/useSecurityPoolsOverview.js'
+import { useRepPrices } from './hooks/useRepPrices.js'
 import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { useUrlState } from './hooks/useUrlState.js'
@@ -169,6 +170,7 @@ export function App() {
 		submitBid,
 		withdrawBids,
 	} = useForkAuctionOperations(baseHookConfig)
+	const { repEthPrice, repEthSource, repUsdcPrice, repUsdcSource, isLoadingRepPrices } = useRepPrices()
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
 	const isMainnet = isMainnetChain(accountState.chainId)
@@ -470,10 +472,15 @@ export function App() {
 					<OverviewPanels
 						accountState={accountState}
 						isConnectingWallet={isConnectingWallet}
+						isLoadingRepPrices={isLoadingRepPrices}
 						isLoadingUniverseRepBalance={loadingZoltarForkAccess}
 						onConnect={() => void connectWallet()}
 						onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
 						onRefresh={() => refreshState()}
+						repEthPrice={repEthPrice}
+						repEthSource={repEthSource}
+						repUsdcPrice={repUsdcPrice}
+						repUsdcSource={repUsdcSource}
 						universeErrorMessage={universeErrorMessage}
 						universeLabel={universeLabel}
 						universeRepBalance={zoltarForkRepBalance}
