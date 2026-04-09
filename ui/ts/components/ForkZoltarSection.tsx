@@ -11,7 +11,7 @@ type ForkZoltarSectionProps = {
 	loadingZoltarForkAccess: boolean
 	loadingZoltarQuestions: boolean
 	loadingZoltarUniverse: boolean
-	onApproveZoltarForkRep: () => void
+	onApproveZoltarForkRep: (amount?: bigint) => void
 	onForkZoltar: () => void
 	onZoltarForkQuestionIdChange: (questionId: string) => void
 	zoltarForkActiveAction: 'approve' | 'fork' | undefined
@@ -102,18 +102,19 @@ export function ForkZoltarSection({
 
 					<div className='actions'>
 						{hasForked ? undefined : (
-							<button className='secondary' onClick={onApproveZoltarForkRep} disabled={accountAddress === undefined || !isMainnet || rootUniverse === undefined || zoltarForkPending || hasEnoughApproval}>
-								{zoltarForkActiveAction === 'approve' ? <LoadingText>Approve REP Threshold</LoadingText> : hasEnoughApproval ? 'Threshold Approved' : 'Approve REP Threshold'}
+							<button className='secondary' onClick={() => onApproveZoltarForkRep()} disabled={accountAddress === undefined || !isMainnet || rootUniverse === undefined || zoltarForkPending || hasEnoughApproval}>
+								{zoltarForkActiveAction === 'approve' ? <LoadingText>Approving REP Threshold...</LoadingText> : hasEnoughApproval ? 'Threshold Approved' : 'Approve REP Threshold'}
 							</button>
 						)}
 						<button
+							className='primary'
 							onClick={() => {
 								if (selectedQuestionId === '') return
 								onForkZoltar()
 							}}
 							disabled={!canFork}
 						>
-							{zoltarForkActiveAction === 'fork' ? <LoadingText>Fork Zoltar</LoadingText> : 'Fork Zoltar'}
+							{zoltarForkActiveAction === 'fork' ? <LoadingText>Forking Zoltar...</LoadingText> : 'Fork Zoltar'}
 						</button>
 					</div>
 				</div>

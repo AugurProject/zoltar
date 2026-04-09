@@ -69,7 +69,9 @@ export function useOnchainState() {
 	const nextRefresh = useRequestGuard()
 	const errorMessage = useSignal<string | undefined>(undefined)
 	const setDeploymentStatuses = (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => {
-		deploymentStatuses.value = update(deploymentStatuses.value)
+		const updated = update(deploymentStatuses.value)
+		deploymentStatuses.value = updated
+		if (updated.every(step => step.deployed)) augurPlaceHolderDeployed.value = true
 	}
 
 	const refreshState = async (options: RefreshStateOptions = {}) => {

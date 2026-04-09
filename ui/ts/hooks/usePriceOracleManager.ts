@@ -1,9 +1,9 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
-import { loadOracleManagerDetails, requestPriceFromManager } from '../contracts.js'
+import { loadOracleManagerDetails, requestOraclePrice } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import type { OracleManagerDetails, PriceOracleActionResult } from '../types/contracts.js'
+import type { OpenOracleActionResult, OracleManagerDetails } from '../types/contracts.js'
 
 type UsePriceOracleManagerParameters = {
 	accountAddress: Address | undefined
@@ -14,52 +14,50 @@ type UsePriceOracleManagerParameters = {
 }
 
 export function usePriceOracleManager({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted }: UsePriceOracleManagerParameters) {
-	const loadingOracleManager = useSignal(false)
-	const oracleManagerDetails = useSignal<OracleManagerDetails | undefined>(undefined)
-	const oracleManagerError = useSignal<string | undefined>(undefined)
-	const priceOracleResult = useSignal<PriceOracleActionResult | undefined>(undefined)
-	const requestingPrice = useSignal(false)
+	const loadingPoolOracleManager = useSignal(false)
+	const poolOracleManagerDetails = useSignal<OracleManagerDetails | undefined>(undefined)
+	const poolOracleManagerError = useSignal<string | undefined>(undefined)
+	const poolPriceOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)
 
-	const loadOracleManager = async (managerAddress: Address) => {
-		loadingOracleManager.value = true
-		oracleManagerError.value = undefined
+	const loadPoolOracleManager = async (managerAddress: Address) => {
+		loadingPoolOracleManager.value = true
+		poolOracleManagerError.value = undefined
 		try {
-			oracleManagerDetails.value = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
+			poolOracleManagerDetails.value = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
 		} catch (error) {
-			oracleManagerError.value = getErrorMessage(error, 'Failed to load price oracle details')
+			poolOracleManagerError.value = getErrorMessage(error, 'Failed to load price oracle details')
 		} finally {
-			loadingOracleManager.value = false
+			loadingPoolOracleManager.value = false
 		}
 	}
 
-	const requestPrice = async (managerAddress: Address) => {
+	const requestPoolPrice = async (managerAddress: Address) => {
 		if (accountAddress === undefined) {
-			oracleManagerError.value = 'Connect a wallet before requesting a price'
+			poolOracleManagerError.value = 'Connect a wallet before requesting a price'
 			return
 		}
-		const ethCost = oracleManagerDetails.value?.requestPriceEthCost ?? 0n
+		const ethCost = poolOracleManagerDetails.value?.requestPriceEthCost ?? 0n
 		try {
 			onTransactionRequested()
-			oracleManagerError.value = undefined
-			priceOracleResult.value = undefined
-			const hash = await requestPriceFromManager(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), managerAddress, ethCost)
-			priceOracleResult.value = { action: 'requestPrice', hash }
-			onTransaction(hash)
-			await loadOracleManager(managerAddress)
+			poolOracleManagerError.value = undefined
+			poolPriceOracleResult.value = undefined
+			const result = await requestOraclePrice(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), managerAddress, ethCost)
+			poolPriceOracleResult.value = result
+			onTransaction(result.hash)
+			await loadPoolOracleManager(managerAddress)
 		} catch (error) {
-			oracleManagerError.value = getErrorMessage(error, 'Failed to request price')
+			poolOracleManagerError.value = getErrorMessage(error, 'Failed to request price')
 		} finally {
 			onTransactionFinished()
 		}
 	}
 
 	return {
-		loadingOracleManager: loadingOracleManager.value,
-		loadOracleManager,
-		oracleManagerDetails: oracleManagerDetails.value,
-		oracleManagerError: oracleManagerError.value,
-		priceOracleResult: priceOracleResult.value,
-		requestingPrice: requestingPrice.value,
-		requestPrice,
+		loadingPoolOracleManager: loadingPoolOracleManager.value,
+		loadPoolOracleManager,
+		poolOracleManagerDetails: poolOracleManagerDetails.value,
+		poolOracleManagerError: poolOracleManagerError.value,
+		poolPriceOracleResult: poolPriceOracleResult.value,
+		requestPoolPrice,
 	}
 }

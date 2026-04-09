@@ -1,4 +1,4 @@
-import type { ReportingOutcomeKey } from '../types/contracts.js'
+import type { OracleQueueOperation, ReportingOutcomeKey } from '../types/contracts.js'
 import { getAddress, isHex, type Address, type Hex } from 'viem'
 import { parseBigIntInput } from './marketForm.js'
 
@@ -15,26 +15,6 @@ export function parseBytes32Input(value: string, label: string): Hex {
 	}
 
 	return trimmed
-}
-
-export function parseBytes4Input(value: string, label: string): Hex {
-	const trimmed = value.trim()
-	if (!isHex(trimmed, { strict: true }) || trimmed.length !== 10) {
-		throw new Error(`${label} must be a 4-byte hex value`)
-	}
-
-	return trimmed
-}
-
-export function parseBooleanInput(value: string, label: string) {
-	switch (value.trim()) {
-		case 'true':
-			return true
-		case 'false':
-			return false
-		default:
-			throw new Error(`${label} must be true or false`)
-	}
 }
 
 export function parseReportIdInput(value: string) {
@@ -60,6 +40,17 @@ export function parseReportingOutcomeInput(value: string): ReportingOutcomeKey {
 			return value
 		default:
 			throw new Error(`Unknown reporting outcome: ${value}`)
+	}
+}
+
+export function parseOracleQueueOperationInput(value: string): OracleQueueOperation {
+	switch (value) {
+		case 'liquidation':
+		case 'withdrawRep':
+		case 'setSecurityBondsAllowance':
+			return value
+		default:
+			throw new Error(`Unknown queued oracle operation: ${value}`)
 	}
 }
 

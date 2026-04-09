@@ -1,18 +1,18 @@
-import { parseUnits, zeroAddress } from 'viem'
-import type { ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleReportFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
+import { parseUnits } from 'viem'
+import type { ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
 
 const DEFAULT_CURRENT_RETENTION_RATE = '10'
 
 export function getDefaultMarketFormState(): MarketFormState {
 	return {
 		answerUnit: '',
-		categoricalOutcomes: 'Yes\nNo',
+		categoricalOutcomes: ['Yes', 'No'],
 		description: '',
-		displayValueMax: '100',
-		displayValueMin: '0',
 		endTime: '',
 		marketType: 'binary',
-		numTicks: '100',
+		scalarIncrement: '1',
+		scalarMax: '100',
+		scalarMin: '0',
 		title: '',
 		startTime: '',
 	}
@@ -30,39 +30,24 @@ export function getDefaultSecurityPoolFormState(): SecurityPoolFormState {
 export function getDefaultSecurityVaultFormState(): SecurityVaultFormState {
 	return {
 		depositAmount: '0',
-		repApprovalAmount: '0',
+		securityBondAllowanceAmount: '0',
+		repWithdrawAmount: '0',
 		securityPoolAddress: '',
 	}
 }
 
-export function getDefaultOpenOracleCreateFormState(): OpenOracleCreateFormState {
-	return {
-		callbackContract: zeroAddress,
-		callbackGasLimit: '0',
-		callbackSelector: '0x00000000',
-		disputeDelay: '0',
-		escalationHalt: '0',
-		exactToken1Report: '1',
-		feePercentage: '3000',
-		feeToken: 'true',
-		keepFee: 'true',
-		multiplier: '110',
-		protocolFee: '0',
-		protocolFeeRecipient: zeroAddress,
-		settlementTime: '60',
-		settlerReward: '100000000000000',
-		timeType: 'true',
-		token1Address: '',
-		token2Address: '',
-		transactionValue: '1000000000000000',
-		trackDisputes: 'false',
-	}
-}
-
-export function getDefaultOpenOracleReportFormState(): OpenOracleReportFormState {
+export function getDefaultOpenOracleFormState(): OpenOracleFormState {
 	return {
 		amount1: '0',
 		amount2: '0',
+		disputeNewAmount1: '0',
+		disputeNewAmount2: '0',
+		disputeTokenToSwap: 'token1',
+		managerAddress: '',
+		openOracleAddress: '',
+		operationAmount: '0',
+		operationTargetVault: '',
+		queuedOperation: 'liquidation',
 		reportId: '',
 		stateHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
 	}

@@ -56,22 +56,6 @@ function parseSnapshotId(value: unknown) {
 	return value
 }
 
-function parseBlock(value: unknown): GetBlockReturn {
-	if (typeof value !== 'object' || value === null) {
-		throw new Error('Invalid eth_getBlockByNumber response: block is not an object')
-	}
-	if (!('timestamp' in value) || typeof value.timestamp !== 'string') {
-		throw new Error('Invalid eth_getBlockByNumber response: missing timestamp')
-	}
-	if (!/^0x([a-fA-F0-9]{1,64})$/.test(value.timestamp)) {
-		throw new Error(`Invalid eth_getBlockByNumber response: invalid timestamp ${value.timestamp}`)
-	}
-
-	return {
-		timestamp: BigInt(value.timestamp),
-	}
-}
-
 export interface AnvilWindowEthereum {
 	addStateOverrides: (stateOverrides: StateOverrides) => Promise<void>
 	manipulateTime: (blockTimeManipulation: BlockTimeManipulation) => Promise<void>
@@ -94,6 +78,8 @@ export const getDefaultAnvilRpcUrl = (): string => (process.platform === 'win32'
 
 export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promise<AnvilWindowEthereum> => {
 	const ANVIL_RPC = rpcUrl ?? process.env['ANVIL_RPC'] ?? getDefaultAnvilRpcUrl()
+	let currentTimestamp = 0n
+	let snapshotTimestamp = 0n
 
 	// Validate RPC endpoint points to localhost only for test security
 	const validateLocalhostUrl = (url: string): void => {
@@ -115,6 +101,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 	// Make JSON-RPC request to Anvil
 	let requestId = 0
 	const request = async (args: { method: string; params?: unknown[] | unknown | undefined }): Promise<unknown> => {
+		let nextBlockTimestamp: bigint | undefined
 		// For eth_sendTransaction, simulate first to catch reverts early
 		const params = ensureArray(args.params)
 		if (args.method === 'eth_sendTransaction' && params[0]) {
@@ -126,10 +113,10 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				throw simulationError
 			}
 
-			const latestBlock = parseBlock(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
+			nextBlockTimestamp = currentTimestamp + 1n
 			await request({
 				method: 'evm_setNextBlockTimestamp',
-				params: [`0x${(latestBlock.timestamp + 1n).toString(16)}`],
+				params: [`0x${nextBlockTimestamp.toString(16)}`],
 			})
 		}
 
@@ -164,6 +151,9 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		// For eth_getTransactionReceipt, return the receipt even if status === '0x0' (reverted)
 		// Callers can check the status field themselves
 		ensureDefined(json.result, 'json.result is undefined')
+		if (nextBlockTimestamp !== undefined) {
+			currentTimestamp = nextBlockTimestamp
+		}
 		return json.result
 	}
 
@@ -218,6 +208,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				params: [`0x${blockTimeManipulation.deltaToAdd.toString(16)}`],
 			})
 			await request({ method: 'evm_mine', params: [] })
+			currentTimestamp += blockTimeManipulation.deltaToAdd
 		} else if (blockTimeManipulation.type === 'SetTimestamp') {
 			const hexTimestamp = `0x${blockTimeManipulation.timeToSet.toString(16)}`
 			try {
@@ -236,17 +227,16 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				})
 			}
 			await request({ method: 'evm_mine', params: [] })
+			currentTimestamp = blockTimeManipulation.timeToSet
 		}
 	}
 
 	const getTime = async (): Promise<bigint> => {
-		const block = await getBlock()
-		return block.timestamp
+		return currentTimestamp
 	}
 
 	const getBlock = async (): Promise<GetBlockReturn> => {
-		const raw = await request({ method: 'eth_getBlockByNumber', params: ['latest', false] })
-		return parseBlock(raw)
+		return { timestamp: currentTimestamp }
 	}
 
 	const advanceTime = async (amountInSeconds: bigint) => {
@@ -275,17 +265,21 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 	}
 
 	const anvilSnapshot = async (): Promise<string> => {
+		snapshotTimestamp = currentTimestamp
 		const result = await request({ method: 'anvil_snapshot', params: [] })
 		return parseSnapshotId(result)
 	}
 
 	const anvilRevert = async (snapshotId: string): Promise<void> => {
 		await request({ method: 'anvil_revert', params: [snapshotId] })
+		currentTimestamp = snapshotTimestamp
 	}
 
 	const resetToCleanState = async (): Promise<void> => {
 		await request({ method: 'anvil_reset', params: [] })
 		await request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
+		currentTimestamp = 0n
+		snapshotTimestamp = 0n
 	}
 
 	const setNextBlockBaseFeePerGasToZero = async (): Promise<void> => {

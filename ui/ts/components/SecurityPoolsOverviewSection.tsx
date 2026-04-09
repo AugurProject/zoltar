@@ -3,7 +3,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { LiquidationModal } from './LiquidationModal.js'
 import { LoadingText } from './LoadingText.js'
-import { Question } from './Question.js'
+import { Question, getQuestionTitle } from './Question.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -43,7 +43,7 @@ export function SecurityPoolsOverviewSection({
 						</button>
 					}
 				>
-					<></>
+					<p className='detail'>Displays all pools loaded from the on-chain registry.</p>
 				</EntityCard>
 
 				{securityPoolOverviewResult === undefined ? undefined : (
@@ -54,19 +54,19 @@ export function SecurityPoolsOverviewSection({
 				{securityPoolOverviewError === undefined ? undefined : <p className='notice error'>{securityPoolOverviewError}</p>}
 
 				{securityPools.length === 0 ? (
-					<EntityCard title='No pools loaded' badge={<span className='badge pending'>Registry empty</span>}>
-						<p className='detail'>Use Refresh Pool Registry.</p>
+					<EntityCard title='No Pools Loaded' badge={<span className='badge pending'>Empty</span>}>
+						<p className='detail'>No pools loaded yet. Use Refresh Pool Registry to fetch them from the chain.</p>
 					</EntityCard>
 				) : (
 					<div className='entity-card-list'>
 						{securityPools.map(pool => (
 							<EntityCard
 								key={pool.securityPoolAddress}
-								title={<AddressValue address={pool.securityPoolAddress} />}
+								title={getQuestionTitle(pool.marketDetails)}
 								badge={<span className='badge ok'>{pool.systemState}</span>}
 								actions={
 									onSelectSecurityPool === undefined ? undefined : (
-										<button className='secondary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
+										<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
 											Open Pool
 										</button>
 									)
@@ -135,7 +135,7 @@ export function SecurityPoolsOverviewSection({
 													className='compact'
 													title={<AddressValue address={vault.vaultAddress} />}
 													actions={
-														<button className='secondary' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
+														<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
 															Liquidate Vault
 														</button>
 													}

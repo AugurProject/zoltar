@@ -19,6 +19,7 @@ import { usePriceOracleManager } from './hooks/usePriceOracleManager.js'
 import { useReportingOperations } from './hooks/useReportingOperations.js'
 import { useSecurityPoolCreation } from './hooks/useSecurityPoolCreation.js'
 import { useSecurityPoolsOverview } from './hooks/useSecurityPoolsOverview.js'
+import { useRepPrices } from './hooks/useRepPrices.js'
 import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { useUrlState } from './hooks/useUrlState.js'
@@ -101,32 +102,36 @@ export function App() {
 		zoltarUniverse,
 		zoltarUniverseMissing,
 	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
-	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, poolCreationMarketDetails, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } = useSecurityPoolCreation({
-		...baseHookConfig,
-		deploymentStatuses,
-	})
-	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, redeemRep, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult, setSecurityVaultForm, updateVaultFees } = useSecurityVaultOperations(baseHookConfig)
+	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
+	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } =
+		useSecurityPoolCreation({
+			...baseHookConfig,
+			deploymentStatuses,
+			zoltarUniverseHasForked,
+		})
+	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultRepAllowance, securityVaultRepBalance, securityVaultResult, setSecurityBondAllowance, setSecurityVaultForm, withdrawRep } =
+		useSecurityVaultOperations(baseHookConfig)
 	const {
 		approveToken1,
 		approveToken2,
-		createGame,
-		loadOpenOracleGames,
-		loadReportGame,
-		loadingOpenOracleGames,
-		nextReportId,
-		openOracleAddress,
-		openOracleCreateForm,
+		disputeReport,
+		loadOracleManager,
+		loadOracleReport,
+		loadingOracleManager,
+		loadingOracleReport,
+		onQueueOperation,
+		onRequestPrice,
 		openOracleError,
-		openOracleGames,
-		openOracleReportForm,
+		openOracleForm,
+		openOracleReportDetails,
 		openOracleResult,
-		setOpenOracleCreateForm,
-		setOpenOracleReportForm,
+		oracleManagerDetails,
+		setOpenOracleForm,
 		settleReport,
 		submitInitialReport,
 	} = useOpenOracleOperations(baseHookConfig)
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
-	const { loadingOracleManager, loadOracleManager, oracleManagerDetails, oracleManagerError, priceOracleResult, requestPrice } = usePriceOracleManager(baseHookConfig)
+	const { loadingPoolOracleManager, loadPoolOracleManager, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(baseHookConfig)
 	const {
 		closeLiquidationModal,
 		liquidationAmount,
@@ -167,9 +172,9 @@ export function App() {
 		submitBid,
 		withdrawBids,
 	} = useForkAuctionOperations(baseHookConfig)
+	const { repEthPrice, repEthSource, repUsdcPrice, repUsdcSource, isLoadingRepPrices } = useRepPrices()
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
-	const lastCreatedQuestionId = marketResult?.questionId
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const wrongNetworkMessage = accountState.address !== undefined && accountState.chainId !== undefined && !isMainnet ? 'Switch your wallet to Ethereum mainnet.' : undefined
 	const augurPlaceHolderDeploymentMissing = augurPlaceHolderDeployed === false
@@ -178,7 +183,7 @@ export function App() {
 	const showZoltarUniverseWarning = zoltarUniverseMissing
 	const showZoltarUniverseForkedWarning = zoltarUniverse?.hasForked === true
 	const disableRouteContent = route !== 'deploy' && (augurPlaceHolderDeploymentMissing || showZoltarUniverseWarning)
-	const isRouteContentDisabled = transactionState.value.transactionInFlightCount > 0 || disableRouteContent || !walletBootstrapComplete
+	const isRouteContentDisabled = transactionState.value.transactionInFlightCount > 0 || disableRouteContent
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universeErrorMessage = showZoltarUniverseWarning ? 'The universe does not exist.' : undefined
 	const renderRouteContent = () => {
@@ -217,7 +222,7 @@ export function App() {
 						marketCreating={marketCreating}
 						marketError={marketError}
 						marketResult={marketResult}
-						onApproveZoltarForkRep={() => void approveZoltarForkRep()}
+						onApproveZoltarForkRep={amount => void approveZoltarForkRep(amount)}
 						onCreateMarket={() => void createMarket()}
 						onForkZoltar={() => void forkZoltar()}
 						onLoadZoltarQuestions={() => void loadZoltarQuestions()}
@@ -256,25 +261,18 @@ export function App() {
 							duplicateOriginPoolExists,
 							poolCreationMarketDetails,
 							onCreateSecurityPool: () => void createPool(),
-							lastCreatedQuestionId,
 							onLoadMarket: () => void loadMarket(),
 							onLoadMarketById: loadMarketById,
 							loadingMarketDetails,
 							marketDetails,
+							onResetSecurityPoolCreation: resetSecurityPoolCreation,
 							onSecurityPoolFormChange: update => setSecurityPoolForm(current => ({ ...current, ...update })),
+							zoltarUniverseHasForked,
 							securityPools,
 							securityPoolCreating,
 							securityPoolError,
 							securityPoolForm,
 							securityPoolResult,
-							onLoadLatestMarket: () => {
-								if (lastCreatedQuestionId === undefined) return
-								setSecurityPoolForm(current => ({
-									...current,
-									marketId: lastCreatedQuestionId,
-								}))
-								void loadMarketById(lastCreatedQuestionId)
-							},
 						}}
 						overview={{
 							accountState,
@@ -296,13 +294,8 @@ export function App() {
 						}}
 						workflow={{
 							accountState,
+							activeUniverseId,
 							closeLiquidationModal: () => closeLiquidationModal(),
-							loadingOracleManager,
-							onLoadOracleManager: managerAddress => void loadOracleManager(managerAddress),
-							onRequestPrice: managerAddress => void requestPrice(managerAddress),
-							oracleManagerDetails,
-							oracleManagerError,
-							priceOracleResult,
 							forkAuction: {
 								accountState,
 								forkAuctionDetails,
@@ -335,6 +328,12 @@ export function App() {
 							onLiquidationTargetVaultChange: setLiquidationTargetVault,
 							onOpenLiquidationModal: (managerAddress, securityPoolAddress, vaultAddress) => openLiquidationModal(managerAddress, securityPoolAddress, vaultAddress),
 							onQueueLiquidation: (managerAddress, securityPoolAddress) => void queueLiquidation(managerAddress, securityPoolAddress),
+							loadingPoolOracleManager,
+							onLoadPoolOracleManager: managerAddress => void loadPoolOracleManager(managerAddress),
+							onRequestPoolPrice: managerAddress => void requestPoolPrice(managerAddress),
+							poolOracleManagerDetails,
+							poolOracleManagerError,
+							poolPriceOracleResult,
 							onSecurityPoolAddressChange: value => {
 								setSecurityPoolAddress(value)
 							},
@@ -355,16 +354,18 @@ export function App() {
 							securityVault: {
 								accountState,
 								loadingSecurityVault,
-								onApproveRep: () => void approveRep(),
+								onApproveRep: amount => void approveRep(amount),
 								onDepositRep: () => void depositRep(),
 								onLoadSecurityVault: () => void loadSecurityVault(),
 								onRedeemFees: () => void redeemFees(),
-								onRedeemRep: () => void redeemRep(),
+								onSetSecurityBondAllowance: () => void setSecurityBondAllowance(),
 								onSecurityVaultFormChange: update => setSecurityVaultForm(current => ({ ...current, ...update })),
-								onUpdateVaultFees: () => void updateVaultFees(),
+								onWithdrawRep: () => void withdrawRep(),
 								securityVaultDetails,
 								securityVaultError,
 								securityVaultForm,
+								securityVaultRepAllowance,
+								securityVaultRepBalance,
 								securityVaultResult,
 							},
 							trading: {
@@ -385,23 +386,23 @@ export function App() {
 				return (
 					<OpenOracleSection
 						accountState={accountState}
-						loadingOpenOracleGames={loadingOpenOracleGames}
-						nextReportId={nextReportId}
+						loadingOracleManager={loadingOracleManager}
+						loadingOracleReport={loadingOracleReport}
 						onApproveToken1={() => void approveToken1()}
 						onApproveToken2={() => void approveToken2()}
-						onCreateOpenOracleGame={() => void createGame()}
-						onLoadOpenOracleGames={() => void loadOpenOracleGames()}
-						onLoadReportGame={reportId => void loadReportGame(reportId)}
-						onOpenOracleCreateFormChange={update => setOpenOracleCreateForm(current => ({ ...current, ...update }))}
-						onOpenOracleReportFormChange={update => setOpenOracleReportForm(current => ({ ...current, ...update }))}
+						onDisputeReport={() => void disputeReport()}
+						onLoadOracleManager={() => void loadOracleManager()}
+						onLoadOracleReport={() => void loadOracleReport()}
+						onOpenOracleFormChange={update => setOpenOracleForm(current => ({ ...current, ...update }))}
+						onQueueOperation={() => void onQueueOperation()}
+						onRequestPrice={() => void onRequestPrice()}
 						onSettleReport={() => void settleReport()}
 						onSubmitInitialReport={() => void submitInitialReport()}
-						openOracleAddress={openOracleAddress}
-						openOracleCreateForm={openOracleCreateForm}
 						openOracleError={openOracleError}
-						openOracleGames={openOracleGames}
-						openOracleReportForm={openOracleReportForm}
+						openOracleForm={openOracleForm}
+						openOracleReportDetails={openOracleReportDetails}
 						openOracleResult={openOracleResult}
+						oracleManagerDetails={oracleManagerDetails}
 					/>
 				)
 			case 'not-found':
@@ -427,11 +428,6 @@ export function App() {
 		if (securityPoolResult === undefined) return
 		void loadSecurityPools()
 	}, [securityPoolResult?.deployPoolHash])
-
-	useEffect(() => {
-		if (route !== 'open-oracle') return
-		void loadOpenOracleGames()
-	}, [route])
 
 	useEffect(() => {
 		if (!augurPlaceHolderDeploymentMissing) return
@@ -484,10 +480,15 @@ export function App() {
 					<OverviewPanels
 						accountState={accountState}
 						isConnectingWallet={isConnectingWallet}
+						isLoadingRepPrices={isLoadingRepPrices}
 						isLoadingUniverseRepBalance={loadingZoltarForkAccess}
 						onConnect={() => void connectWallet()}
 						onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
 						onRefresh={() => refreshState()}
+						repEthPrice={repEthPrice}
+						repEthSource={repEthSource}
+						repUsdcPrice={repUsdcPrice}
+						repUsdcSource={repUsdcSource}
 						universeErrorMessage={universeErrorMessage}
 						universeLabel={universeLabel}
 						universeRepBalance={zoltarForkRepBalance}

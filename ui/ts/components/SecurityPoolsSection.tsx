@@ -17,12 +17,6 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 
 	return (
 		<section className='panel market-panel'>
-			<div className='market-header'>
-				<div>
-					<h2></h2>
-				</div>
-			</div>
-
 			<div className='subtab-nav' role='tablist' aria-label='Security Pools views'>
 				<button className={`subtab-link ${view === 'browse' ? 'active' : ''}`} type='button' onClick={() => setView('browse')} aria-pressed={view === 'browse'}>
 					Browse Pools
@@ -38,7 +32,6 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 			{view === 'browse' ? (
 				<SecurityPoolsOverviewSection
 					{...overview}
-					showHeader={false}
 					onSelectSecurityPool={securityPoolAddress => {
 						workflow.onSecurityPoolAddressChange(securityPoolAddress)
 						setView('operate')

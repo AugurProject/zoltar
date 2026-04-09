@@ -11,14 +11,14 @@ export type AccountState = {
 
 export type MarketFormState = {
 	answerUnit: string
-	categoricalOutcomes: string
+	categoricalOutcomes: string[]
 	description: string
-	displayValueMax: string
-	displayValueMin: string
+	scalarIncrement: string
+	scalarMax: string
+	scalarMin: string
 	title: string
 	endTime: string
 	marketType: MarketType
-	numTicks: string
 	startTime: string
 }
 
@@ -31,37 +31,22 @@ export type SecurityPoolFormState = {
 
 export type SecurityVaultFormState = {
 	depositAmount: string
-	repApprovalAmount: string
+	securityBondAllowanceAmount: string
+	repWithdrawAmount: string
 	securityPoolAddress: string
 }
 
-export type OpenOracleBooleanValue = 'true' | 'false'
-
-export type OpenOracleCreateFormState = {
-	callbackContract: string
-	callbackGasLimit: string
-	callbackSelector: string
-	disputeDelay: string
-	escalationHalt: string
-	exactToken1Report: string
-	feePercentage: string
-	feeToken: OpenOracleBooleanValue
-	keepFee: OpenOracleBooleanValue
-	multiplier: string
-	protocolFee: string
-	protocolFeeRecipient: string
-	settlementTime: string
-	settlerReward: string
-	timeType: OpenOracleBooleanValue
-	token1Address: string
-	token2Address: string
-	transactionValue: string
-	trackDisputes: OpenOracleBooleanValue
-}
-
-export type OpenOracleReportFormState = {
+export type OpenOracleFormState = {
 	amount1: string
 	amount2: string
+	disputeNewAmount1: string
+	disputeNewAmount2: string
+	disputeTokenToSwap: 'token1' | 'token2'
+	managerAddress: string
+	openOracleAddress: string
+	operationAmount: string
+	operationTargetVault: string
+	queuedOperation: 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
 	reportId: string
 	stateHash: string
 }

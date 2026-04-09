@@ -4,7 +4,7 @@ import { ChildUniversesSection } from './ChildUniversesSection.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
 import { useEffect } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
-import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarSliderProgress } from '../lib/scalarOutcome.js'
+import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../types/contracts.js'
 
 type ScalarDeploymentSectionProps = {
@@ -42,7 +42,6 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const selectedScalarOutcomeIndex = scalarOutcomeInvalid ? 0n : getScalarOutcomeIndex(questionDetails, clampedSelectedScalarTick)
 	const selectedScalarChild = childUniverses.find(child => child.outcomeIndex === selectedScalarOutcomeIndex)
 	const selectedScalarChildExists = selectedScalarChild?.exists === true
-	const selectedScalarProgress = scalarOutcomeInvalid ? 0 : getScalarSliderProgress(clampedSelectedScalarTick, questionDetails.numTicks)
 	const canDeployScalarChild = accountAddress !== undefined && isMainnet && hasForked && !selectedScalarChildExists
 
 	useEffect(() => {
@@ -61,38 +60,43 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				renderBody={child => <ChildUniverseDetails child={child} />}
 			/>
 			<div className='market-scalar-deploy'>
-				<label className='field scalar-invalid-toggle'>
-					<input
-						type='checkbox'
-						checked={scalarOutcomeInvalid}
-						onChange={event => {
-							setScalarDeployError(undefined)
-							setScalarOutcomeInvalid(event.currentTarget.checked)
-						}}
-					/>
-					<span>Resolve as Invalid</span>
-				</label>
 				<div className='field scalar-slider-field'>
 					<span>Select Child Universe</span>
-					<div className={`scalar-slider-rail ${scalarOutcomeInvalid ? 'is-disabled' : ''}`}>
-						<div className='scalar-slider-track' />
-						<div className='scalar-slider-fill' style={{ width: `${selectedScalarProgress}%` }} />
-						<input
-							disabled={scalarOutcomeInvalid}
-							type='range'
-							min='0'
-							max={questionDetails.numTicks.toString()}
-							step='1'
-							value={clampedScalarOutcomeTick}
-							aria-valuetext={selectedScalarOutcomeLabel}
-							onInput={event => {
-								setScalarDeployError(undefined)
-								setScalarOutcomeTick(event.currentTarget.value)
-							}}
-						/>
+					<div className='scalar-slider-with-invalid'>
+						<div className={`scalar-slider-rail ${scalarOutcomeInvalid ? 'is-disabled' : ''}`}>
+							<div className='scalar-slider-track' />
+							<div className='scalar-slider-input-wrapper'>
+								<div className='scalar-slider-fill' style={{ '--slider-fill': scalarOutcomeInvalid ? '0%' : getScalarSliderFillWidth(clampedSelectedScalarTick, questionDetails.numTicks) }} />
+								<input
+									disabled={scalarOutcomeInvalid}
+									type='range'
+									min='0'
+									max={questionDetails.numTicks.toString()}
+									step='1'
+									value={clampedScalarOutcomeTick}
+									aria-valuetext={selectedScalarOutcomeLabel}
+									onInput={event => {
+										setScalarDeployError(undefined)
+										setScalarOutcomeTick(event.currentTarget.value)
+									}}
+								/>
+							</div>
+						</div>
+						<span className='scalar-or-divider'>or</span>
+						<label className='scalar-invalid-toggle'>
+							<input
+								type='checkbox'
+								checked={scalarOutcomeInvalid}
+								onChange={event => {
+									setScalarDeployError(undefined)
+									setScalarOutcomeInvalid(event.currentTarget.checked)
+								}}
+							/>
+							<span>Invalid</span>
+						</label>
 					</div>
 				</div>
-				<div className='workflow-question-grid market-scalar-deploy-grid scalar-slider-stats'>
+				<div className='workflow-question-grid scalar-slider-stats'>
 					<div>
 						<span className='metric-label'>Min Value</span>
 						<strong>{formatScalarOutcomeLabel(questionDetails, 0n)}</strong>

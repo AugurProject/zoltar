@@ -7,7 +7,7 @@ type LoadingTextProps = {
 
 export function LoadingText({ children = 'Loading...', className = '' }: LoadingTextProps) {
 	return (
-		<span className={`loading-value loading-text ${className}`}>
+		<span className={`loading-value ${className}`}>
 			<span className='spinner' aria-hidden='true' />
 			{children}
 		</span>

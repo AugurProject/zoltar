@@ -6,7 +6,7 @@ import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
-import { MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
+import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { parseBigIntListInput } from '../lib/inputs.js'
 import { parseRepAmountInput as parseMigrationAmountInput } from '../lib/marketForm.js'
@@ -22,6 +22,9 @@ type ZoltarMigrationSectionProps = {
 	onPrepareRepForMigration: () => void
 	onZoltarMigrationFormChange: (update: Partial<ZoltarMigrationFormState>) => void
 	zoltarForkRepBalance: bigint | undefined
+	zoltarForkAllowance: bigint | undefined
+	zoltarForkActiveAction: 'approve' | 'fork' | undefined
+	zoltarForkPending: boolean
 	zoltarMigrationChildRepBalances: Record<string, bigint | undefined>
 	zoltarMigrationActiveAction: 'prepare' | 'split' | undefined
 	zoltarMigrationError: string | undefined
@@ -31,6 +34,7 @@ type ZoltarMigrationSectionProps = {
 	zoltarMigrationResult: ZoltarMigrationActionResult | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseMissing: boolean
+	onApproveZoltarForkRep: (amount?: bigint) => void
 }
 
 function getMigrationAmount(value: string) {
@@ -68,6 +72,9 @@ export function ZoltarMigrationSection({
 	onPrepareRepForMigration,
 	onZoltarMigrationFormChange,
 	zoltarForkRepBalance,
+	zoltarForkAllowance,
+	zoltarForkActiveAction,
+	zoltarForkPending,
 	zoltarMigrationChildRepBalances,
 	zoltarMigrationActiveAction,
 	zoltarMigrationError,
@@ -77,6 +84,7 @@ export function ZoltarMigrationSection({
 	zoltarMigrationResult,
 	zoltarUniverse,
 	zoltarUniverseMissing,
+	onApproveZoltarForkRep,
 }: ZoltarMigrationSectionProps) {
 	const rootUniverse = zoltarUniverse
 	const universeMissing = rootUniverse === undefined && zoltarUniverseMissing && !loadingZoltarUniverse
@@ -103,18 +111,44 @@ export function ZoltarMigrationSection({
 	const amountExceedsAvailableRep = hasValidAmount && migrationAmount !== undefined && migrationAmount > totalRepAvailable
 	const hasEnoughRep = hasValidAmount && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= missingPreparationAmount
 	const hasPreparedBalance = hasValidAmount && zoltarMigrationPreparedRepBalance !== undefined && zoltarMigrationPreparedRepBalance >= migrationAmount
+	const approvedRep = zoltarForkAllowance ?? 0n
+	const approvalShortage = missingPreparationAmount > approvedRep ? missingPreparationAmount - approvedRep : 0n
+	const hasSufficientAllowance = zoltarForkAllowance !== undefined && approvalShortage === 0n
 	const hasValidOutcomeIndexes = selectedOutcomeIndexes.length > 0
 	const needsAdditionalPreparation = missingPreparationAmount > 0n
-	const canPrepare = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && needsAdditionalPreparation && hasEnoughRep
-	const canSplit = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && hasPreparedBalance && hasValidOutcomeIndexes
+	const splitLimit = useMemo(() => getMigrationOutcomeSplitLimit(rootUniverse?.childUniverses ?? [], zoltarMigrationChildRepBalances, zoltarMigrationPreparedRepBalance, selectedOutcomeIndexSet), [rootUniverse?.childUniverses, selectedOutcomeIndexSet, zoltarMigrationChildRepBalances, zoltarMigrationPreparedRepBalance])
+	const hasSufficientSplitLimit = migrationAmount !== undefined && splitLimit !== undefined && migrationAmount <= splitLimit
+	const canPrepare = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && needsAdditionalPreparation && hasEnoughRep && hasSufficientAllowance
+	const canApproveRep = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarForkPending && hasValidAmount && approvalShortage > 0n
+	const canSplit = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && hasPreparedBalance && hasValidOutcomeIndexes && hasSufficientSplitLimit
 	const migrationAmountSource = getMigrationAmountSource(zoltarMigrationPreparedRepBalance, zoltarForkRepBalance)
+	const approveButtonLabel = !hasValidAmount || migrationAmount === undefined ? 'Approve REP' : approvalShortage > 0n ? `Approve ${formatCurrencyBalance(approvalShortage)} REP` : 'Approval Satisfied'
+	const approveButtonTitle = (() => {
+		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before preparing REP.')
+		if (guard !== undefined) return guard
+		if (!hasValidAmount || migrationAmount === undefined) return 'Enter an amount greater than zero.'
+		if (approvalShortage === 0n) return 'No additional REP approval is needed for this amount.'
+		return `Approve ${formatCurrencyBalance(approvalShortage)} more REP for Zoltar before preparing the selected amount.`
+	})()
+	const getAlreadyPreparedHint = () => {
+		if (hasValidOutcomeIndexes && splitLimit === 0n) {
+			return 'This amount is already fully split across the selected universes.'
+		}
+		return 'This amount is already in your migration balance. Split REP when ready.'
+	}
 	const prepareHintMessage = (() => {
 		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before preparing REP.')
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return 'Enter an amount greater than zero.'
-		if (missingPreparationAmount === 0n) return 'This amount is already in your migration balance. Split REP when ready.'
+		if (missingPreparationAmount === 0n) return getAlreadyPreparedHint()
 		if (zoltarForkRepBalance === undefined || zoltarForkRepBalance < missingPreparationAmount) {
 			return `Need ${formatCurrencyBalance(missingPreparationAmount)} more REP in this universe to prepare the selected amount.`
+		}
+		if (approvalShortage > 0n) {
+			return `Approve ${formatCurrencyBalance(approvalShortage)} more REP for Zoltar before preparing the selected amount.`
+		}
+		if (!hasSufficientAllowance) {
+			return 'Waiting for approved REP amount before preparing the selected amount.'
 		}
 		return `Add ${formatCurrencyBalance(missingPreparationAmount)} REP to your migration balance from this universe, then split it across the selected universes.`
 	})()
@@ -126,6 +160,15 @@ export function ZoltarMigrationSection({
 			return `Add ${formatCurrencyBalance(missingPreparationAmount ?? 0n)} REP to your migration balance first, then split it across the selected universes.`
 		}
 		if (!hasValidOutcomeIndexes) return 'Select at least one outcome universe.'
+		if (splitLimit === undefined) {
+			return 'Loading outcome universe balances...'
+		}
+		if (splitLimit === 0n) {
+			return 'This amount is already fully split across the selected universes.'
+		}
+		if (!hasSufficientSplitLimit) {
+			return `The selected universes only have ${formatCurrencyBalance(splitLimit)} REP of room left for this amount. Reduce the amount or choose different universes.`
+		}
 		return 'Split the migration REP across the selected universes.'
 	})()
 	const migrationAmountHintMessage = (() => {
@@ -135,7 +178,7 @@ export function ZoltarMigrationSection({
 		if (amountExceedsAvailableRep) {
 			return `You only have ${formatCurrencyBalance(totalRepAvailable)} REP available for migration in this universe (${formatCurrencyBalance(zoltarMigrationPreparedRepBalance ?? 0n)} in your migration balance and ${formatCurrencyBalance(zoltarForkRepBalance ?? 0n)} wallet REP).`
 		}
-		if (missingPreparationAmount === 0n) return 'This amount is already in your migration balance. Split REP when ready.'
+		if (missingPreparationAmount === 0n) return getAlreadyPreparedHint()
 		return `Add ${formatCurrencyBalance(missingPreparationAmount)} REP to your migration balance from this universe, then split it across the selected universes.`
 	})()
 	const selectAllAmount = () => {
@@ -177,15 +220,21 @@ export function ZoltarMigrationSection({
 					<div>
 						<span className='metric-label'>Migration REP Balance</span>
 						<strong>
-							<CurrencyValue loading={loadingZoltarForkAccess} value={zoltarMigrationPreparedRepBalance} suffix='REP' />
+							<CurrencyValue loading={loadingZoltarForkAccess && zoltarMigrationPreparedRepBalance === undefined} value={zoltarMigrationPreparedRepBalance} suffix='REP' />
 						</strong>
+					</div>
+					<div>
+						<span className='metric-label'>Approved REP</span>
+						<strong>
+							<CurrencyValue loading={loadingZoltarForkAccess && zoltarForkAllowance === undefined} value={zoltarForkAllowance} suffix='REP' />
+						</strong>
+						{approvalShortage > 0n ? <p className='detail'>Need {formatCurrencyBalance(approvalShortage)} more REP approved before preparing the current amount.</p> : undefined}
 					</div>
 					<div>
 						<span className='metric-label'>Universe</span>
 						<strong>{rootUniverse === undefined ? <LoadingText>Loading universe data...</LoadingText> : <UniverseLink universeId={rootUniverse.universeId} />}</strong>
 					</div>
 				</div>
-
 				<div className='form-grid'>
 					<div className='field'>
 						<span>Migration Amount</span>
@@ -212,11 +261,14 @@ export function ZoltarMigrationSection({
 					)}
 
 					<div className='actions'>
-						<button className='secondary' title={prepareHintMessage} onClick={onPrepareRepForMigration} disabled={!canPrepare}>
-							{zoltarMigrationActiveAction === 'prepare' ? <LoadingText>Prepare REP</LoadingText> : 'Prepare REP'}
+						<button className='secondary' title={approveButtonTitle} onClick={() => onApproveZoltarForkRep(approvalShortage)} disabled={!canApproveRep || zoltarForkActiveAction === 'approve'}>
+							{zoltarForkActiveAction === 'approve' ? <LoadingText>Approving REP...</LoadingText> : approveButtonLabel}
 						</button>
-						<button title={splitHintMessage} onClick={onMigrateInternalRep} disabled={!canSplit}>
-							{zoltarMigrationActiveAction === 'split' ? <LoadingText>Split REP</LoadingText> : 'Split REP'}
+						<button className='secondary' title={prepareHintMessage} onClick={onPrepareRepForMigration} disabled={!canPrepare}>
+							{zoltarMigrationActiveAction === 'prepare' ? <LoadingText>Preparing REP...</LoadingText> : 'Prepare REP'}
+						</button>
+						<button className='primary' title={splitHintMessage} onClick={onMigrateInternalRep} disabled={!canSplit}>
+							{zoltarMigrationActiveAction === 'split' ? <LoadingText>Splitting REP...</LoadingText> : 'Split REP'}
 						</button>
 					</div>
 				</div>

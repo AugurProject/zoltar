@@ -1,11 +1,13 @@
 import { useSignal } from '@preact/signals'
+import { useEffect } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
-import { approveErc20, depositRepToSecurityPool, loadSecurityVaultDetails, redeemSecurityVaultFees, redeemSecurityVaultRep, updateSecurityVaultFees } from '../contracts.js'
+import { approveErc20, depositRepToSecurityPool, loadErc20Allowance, loadErc20Balance, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation, redeemSecurityVaultFees, updateSecurityVaultFees } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import { getDefaultSecurityVaultFormState } from '../lib/marketForm.js'
+import { useRequestGuard } from '../lib/requestGuard.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import type { SecurityVaultFormState } from '../types/app.js'
 import type { SecurityVaultActionResult, SecurityVaultDetails } from '../types/contracts.js'
@@ -24,9 +26,42 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 	const securityVaultDetails = useSignal<SecurityVaultDetails | undefined>(undefined)
 	const securityVaultError = useSignal<string | undefined>(undefined)
 	const securityVaultForm = useSignal<SecurityVaultFormState>(getDefaultSecurityVaultFormState())
+	const securityVaultRepBalance = useSignal<bigint | undefined>(undefined)
+	const securityVaultRepAllowance = useSignal<bigint | undefined>(undefined)
 	const securityVaultResult = useSignal<SecurityVaultActionResult | undefined>(undefined)
+	const nextSecurityVaultRepBalanceLoad = useRequestGuard()
+	const nextSecurityVaultRepAllowanceLoad = useRequestGuard()
+
+	const reloadSecurityVaultRepBalance = async (repToken: Address, vaultAddress: Address) => {
+		const isCurrent = nextSecurityVaultRepBalanceLoad()
+		try {
+			const balance = await loadErc20Balance(createConnectedReadClient(), repToken, vaultAddress)
+			if (!isCurrent()) return
+			securityVaultRepBalance.value = balance
+		} catch {
+			if (!isCurrent()) return
+			securityVaultRepBalance.value = undefined
+		}
+	}
+
+	const reloadSecurityVaultRepAllowance = async (repToken: Address, vaultAddress: Address, securityPoolAddress: Address) => {
+		const isCurrent = nextSecurityVaultRepAllowanceLoad()
+		try {
+			const allowance = await loadErc20Allowance(createConnectedReadClient(), repToken, vaultAddress, securityPoolAddress)
+			if (!isCurrent()) return
+			securityVaultRepAllowance.value = allowance
+		} catch {
+			if (!isCurrent()) return
+			securityVaultRepAllowance.value = undefined
+		}
+	}
+
 	const reloadSecurityVaultDetails = async (securityPoolAddress: Address, vaultAddress: Address) => {
 		securityVaultDetails.value = await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress)
+	}
+
+	const refreshVaultFees = async (vaultAddress: Address, securityPoolAddress: Address) => {
+		await updateSecurityVaultFees(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress)
 	}
 
 	const loadSecurityVault = async () => {
@@ -41,8 +76,12 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 			const securityPoolAddress = parseAddressInput(securityVaultForm.value.securityPoolAddress, 'Security pool address')
 			const details = await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
 			securityVaultDetails.value = details
+			await reloadSecurityVaultRepBalance(details.repToken, accountAddress)
+			await reloadSecurityVaultRepAllowance(details.repToken, accountAddress, securityPoolAddress)
 		} catch (error) {
 			securityVaultDetails.value = undefined
+			securityVaultRepBalance.value = undefined
+			securityVaultRepAllowance.value = undefined
 			securityVaultError.value = getErrorMessage(error, 'Failed to load security vault')
 		} finally {
 			loadingSecurityVault.value = false
@@ -79,15 +118,19 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 		)
 	}
 
-	const approveRep = async () =>
+	const approveRep = async (amount?: bigint) =>
 		await runVaultAction(
 			async (vaultAddress, securityPoolAddress) => {
 				const details = securityVaultDetails.value ?? (await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress))
-				return await approveErc20(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.repToken, securityPoolAddress, parseBigIntInput(securityVaultForm.value.repApprovalAmount, 'REP approval amount'), 'approveRep')
+				const approvalAmount = amount ?? parseBigIntInput(securityVaultForm.value.depositAmount, 'REP deposit amount')
+				return await approveErc20(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.repToken, securityPoolAddress, approvalAmount, 'approveRep')
 			},
 			'Failed to approve REP',
 			async (_result, securityPoolAddress, vaultAddress) => {
 				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
+				const details = securityVaultDetails.value
+				if (details === undefined) return
+				await reloadSecurityVaultRepAllowance(details.repToken, vaultAddress, securityPoolAddress)
 			},
 		)
 
@@ -97,13 +140,26 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 			'Failed to deposit REP',
 			async (_result, securityPoolAddress, vaultAddress) => {
 				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
+				const details = securityVaultDetails.value
+				if (details === undefined) return
+				await reloadSecurityVaultRepAllowance(details.repToken, vaultAddress, securityPoolAddress)
 			},
 		)
 
-	const updateVaultFees = async () =>
+	const setSecurityBondAllowance = async () =>
 		await runVaultAction(
-			async (vaultAddress, securityPoolAddress) => await updateSecurityVaultFees(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress),
-			'Failed to update vault fees',
+			async (vaultAddress, securityPoolAddress) => {
+				const amount = parseBigIntInput(securityVaultForm.value.securityBondAllowanceAmount, 'Security bond allowance')
+				if (amount <= 0n) throw new Error('Security bond allowance must be greater than zero')
+				const details = securityVaultDetails.value ?? (await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress))
+				const managerDetails = await loadOracleManagerDetails(createConnectedReadClient(), details.managerAddress)
+				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'setSecurityBondsAllowance', vaultAddress, amount, managerDetails.requestPriceEthCost)
+				return {
+					action: 'queueSetSecurityBondAllowance',
+					hash: result.hash,
+				} satisfies SecurityVaultActionResult
+			},
+			'Failed to set security bond allowance',
 			async (_result, securityPoolAddress, vaultAddress) => {
 				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
 			},
@@ -111,21 +167,46 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 
 	const redeemFees = async () =>
 		await runVaultAction(
-			async (vaultAddress, securityPoolAddress) => await redeemSecurityVaultFees(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress),
+			async (vaultAddress, securityPoolAddress) => {
+				await refreshVaultFees(vaultAddress, securityPoolAddress)
+				return await redeemSecurityVaultFees(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress)
+			},
 			'Failed to redeem fees',
 			async (_result, securityPoolAddress, vaultAddress) => {
 				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
 			},
 		)
 
-	const redeemRep = async () =>
+	const withdrawRep = async () =>
 		await runVaultAction(
-			async (vaultAddress, securityPoolAddress) => await redeemSecurityVaultRep(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress),
-			'Failed to redeem REP',
+			async (vaultAddress, securityPoolAddress) => {
+				const amount = parseBigIntInput(securityVaultForm.value.repWithdrawAmount, 'REP withdraw amount')
+				if (amount <= 0n) throw new Error('REP withdraw amount must be greater than zero')
+
+				const details = securityVaultDetails.value ?? (await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress))
+				const managerDetails = await loadOracleManagerDetails(createConnectedReadClient(), details.managerAddress)
+				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'withdrawRep', vaultAddress, amount, managerDetails.requestPriceEthCost)
+				return {
+					action: 'queueWithdrawRep',
+					hash: result.hash,
+				} satisfies SecurityVaultActionResult
+			},
+			'Failed to withdraw REP',
 			async (_result, securityPoolAddress, vaultAddress) => {
 				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
 			},
 		)
+
+	useEffect(() => {
+		if (accountAddress === undefined || securityVaultDetails.value === undefined) {
+			securityVaultRepBalance.value = undefined
+			securityVaultRepAllowance.value = undefined
+			return
+		}
+
+		void reloadSecurityVaultRepBalance(securityVaultDetails.value.repToken, accountAddress).catch(() => undefined)
+		void reloadSecurityVaultRepAllowance(securityVaultDetails.value.repToken, accountAddress, securityVaultDetails.value.securityPoolAddress).catch(() => undefined)
+	}, [accountAddress, securityVaultDetails.value?.repToken, securityVaultDetails.value?.securityPoolAddress])
 
 	return {
 		approveRep,
@@ -133,14 +214,16 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 		loadSecurityVault,
 		loadingSecurityVault: loadingSecurityVault.value,
 		redeemFees,
-		redeemRep,
+		setSecurityBondAllowance,
+		withdrawRep,
+		securityVaultRepAllowance: securityVaultRepAllowance.value,
 		securityVaultDetails: securityVaultDetails.value,
 		securityVaultError: securityVaultError.value,
 		securityVaultForm: securityVaultForm.value,
+		securityVaultRepBalance: securityVaultRepBalance.value,
 		securityVaultResult: securityVaultResult.value,
 		setSecurityVaultForm: (updater: (current: SecurityVaultFormState) => SecurityVaultFormState) => {
 			securityVaultForm.value = updater(securityVaultForm.value)
 		},
-		updateVaultFees,
 	}
 }

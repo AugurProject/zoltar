@@ -1,5 +1,5 @@
 import type { Address } from 'viem'
-import type { AccountState, ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleReportFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from './app.js'
+import type { AccountState, ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from './app.js'
 import type {
 	DeploymentStatus,
 	DeploymentStepId,
@@ -8,10 +8,9 @@ import type {
 	ListedSecurityPool,
 	MarketCreationResult,
 	MarketDetails,
-	OracleManagerDetails,
-	OpenOracleGameSummary,
 	OpenOracleActionResult,
-	PriceOracleActionResult,
+	OpenOracleReportDetails,
+	OracleManagerDetails,
 	ReportingActionResult,
 	ReportingDetails,
 	SecurityPoolCreationResult,
@@ -42,6 +41,11 @@ export type OverviewPanelsProps = {
 	universeErrorMessage: string | undefined
 	universeLabel: string
 	isRefreshing: boolean
+	repEthPrice: bigint | undefined
+	repEthSource: 'v4' | 'v3' | undefined
+	repUsdcPrice: bigint | undefined
+	repUsdcSource: 'v4' | 'v3' | undefined
+	isLoadingRepPrices: boolean
 	onConnect: () => void
 	onGoToGenesisUniverse: () => void
 	onRefresh: () => void
@@ -76,7 +80,7 @@ export type DeploymentRouteContentProps = {
 
 export type MarketRouteContentProps = {
 	accountState: AccountState
-	onApproveZoltarForkRep: () => void
+	onApproveZoltarForkRep: (amount?: bigint) => void
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	onCreateMarket: () => void
 	onForkZoltar: () => void
@@ -123,14 +127,14 @@ export type SecurityPoolRouteContentProps = {
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
 	onCreateSecurityPool: () => void
-	lastCreatedQuestionId: string | undefined
-	onLoadLatestMarket?: () => void
 	onLoadMarket: () => void
 	onLoadMarketById: (marketId: string) => Promise<void>
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
 	poolCreationMarketDetails: MarketDetails | undefined
+	onResetSecurityPoolCreation: () => void
 	onSecurityPoolFormChange: (update: Partial<SecurityPoolFormState>) => void
+	zoltarUniverseHasForked: boolean
 	securityPools: ListedSecurityPool[]
 	securityPoolCreating: boolean
 	securityPoolError: string | undefined
@@ -166,12 +170,11 @@ export type SecurityPoolsOverviewRouteContentProps = {
 	securityPools: ListedSecurityPool[]
 } & LiquidationControlsProps
 
-export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps & {
-	showHeader?: boolean
-}
+export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
 export type SecurityPoolWorkflowRouteContentProps = {
 	accountState: AccountState
+	activeUniverseId: bigint
 	closeLiquidationModal: () => void
 	forkAuction: ForkAuctionRouteContentProps
 	liquidationAmount: string
@@ -179,16 +182,16 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
 	liquidationTargetVault: string
-	loadingOracleManager: boolean
+	loadingPoolOracleManager: boolean
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTargetVaultChange: (value: string) => void
-	onLoadOracleManager: (managerAddress: Address) => void
+	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
-	onRequestPrice: (managerAddress: Address) => void
-	oracleManagerDetails: OracleManagerDetails | undefined
-	oracleManagerError: string | undefined
-	priceOracleResult: PriceOracleActionResult | undefined
+	onRequestPoolPrice: (managerAddress: Address) => void
+	poolOracleManagerDetails: OracleManagerDetails | undefined
+	poolOracleManagerError: string | undefined
+	poolPriceOracleResult: OpenOracleActionResult | undefined
 	securityPoolAddress: string
 	onSecurityPoolAddressChange: (value: string) => void
 	reporting: ReportingRouteContentProps
@@ -206,43 +209,47 @@ export type SecurityPoolsSectionProps = {
 export type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
-	onApproveRep: () => void
+	onApproveRep: (amount?: bigint) => void
 	onDepositRep: () => void
 	onLoadSecurityVault: () => void
 	onRedeemFees: () => void
-	onRedeemRep: () => void
+	onSetSecurityBondAllowance: () => void
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
-	onUpdateVaultFees: () => void
+	onWithdrawRep: () => void
 	securityVaultDetails: SecurityVaultDetails | undefined
 	securityVaultError: string | undefined
 	securityVaultForm: SecurityVaultFormState
+	securityVaultRepAllowance: bigint | undefined
+	securityVaultRepBalance: bigint | undefined
 	securityVaultResult: SecurityVaultActionResult | undefined
 }
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
+	compactLayout?: boolean
+	autoLoadVault?: boolean
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean
 }
 
 export type OpenOracleRouteContentProps = {
 	accountState: AccountState
-	loadingOpenOracleGames: boolean
-	nextReportId: bigint | undefined
-	onCreateOpenOracleGame: () => void
+	loadingOracleManager: boolean
+	loadingOracleReport: boolean
 	onApproveToken1: () => void
 	onApproveToken2: () => void
-	onLoadOpenOracleGames: () => void
-	onLoadReportGame: (reportId: bigint) => void
-	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
-	onOpenOracleReportFormChange: (update: Partial<OpenOracleReportFormState>) => void
+	onDisputeReport: () => void
+	onLoadOracleManager: () => void
+	onLoadOracleReport: () => void
+	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
+	onQueueOperation: () => void
+	onRequestPrice: () => void
 	onSettleReport: () => void
 	onSubmitInitialReport: () => void
 	openOracleError: string | undefined
-	openOracleAddress: Address
-	openOracleCreateForm: OpenOracleCreateFormState
-	openOracleGames: OpenOracleGameSummary[]
+	openOracleForm: OpenOracleFormState
+	openOracleReportDetails: OpenOracleReportDetails | undefined
 	openOracleResult: OpenOracleActionResult | undefined
-	openOracleReportForm: OpenOracleReportFormState
+	oracleManagerDetails: OracleManagerDetails | undefined
 }
 
 export type OpenOracleSectionProps = OpenOracleRouteContentProps

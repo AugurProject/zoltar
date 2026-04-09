@@ -13,13 +13,12 @@ export function SecurityPoolSection({
 	accountState,
 	checkingDuplicateOriginPool,
 	duplicateOriginPoolExists,
-	lastCreatedQuestionId,
 	loadingMarketDetails,
 	marketDetails,
 	onCreateSecurityPool,
-	onLoadLatestMarket,
 	onLoadMarket,
 	onSecurityPoolFormChange,
+	onResetSecurityPoolCreation,
 	securityPools,
 	securityPoolCreating,
 	securityPoolError,
@@ -27,10 +26,12 @@ export function SecurityPoolSection({
 	securityPoolResult,
 	showHeader = true,
 	poolCreationMarketDetails: carriedPoolCreationMarketDetails,
+	zoltarUniverseHasForked,
 }: SecurityPoolSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const isPoolActionPending = securityPoolCreating || checkingDuplicateOriginPool
-	const isCreateDisabled = accountState.address === undefined || !isMainnet || isPoolActionPending || duplicateOriginPoolExists || marketDetails?.marketType !== 'binary'
+	const hasSecurityPoolResult = securityPoolResult !== undefined
+	const isCreateDisabled = accountState.address === undefined || !isMainnet || isPoolActionPending || duplicateOriginPoolExists || marketDetails?.marketType !== 'binary' || zoltarUniverseHasForked
 	const matchingPools = marketDetails === undefined ? [] : securityPools.filter(pool => pool.questionId.toLowerCase() === marketDetails.questionId.toLowerCase())
 	const hasMatchingSecurityMultiplier = matchingPools.some(pool => pool.securityMultiplier.toString() === securityPoolForm.securityMultiplier.trim())
 	let createdQuestionDetails = undefined
@@ -49,6 +50,8 @@ export function SecurityPoolSection({
 		createButtonLabel = <LoadingText>Checking Duplicate...</LoadingText>
 	} else if (duplicateOriginPoolExists) {
 		createButtonLabel = 'Pool Already Exists'
+	} else if (zoltarUniverseHasForked) {
+		createButtonLabel = 'Pool Creation Locked'
 	} else if (matchingPools.length > 0) {
 		createButtonLabel = 'Create Another Pool'
 	}
@@ -64,58 +67,19 @@ export function SecurityPoolSection({
 			) : undefined}
 
 			<div className='market-grid'>
-				<div className='market-column'>
-					{marketDetails === undefined ? undefined : (
+				{hasSecurityPoolResult ? (
+					<div className='market-column'>
 						<EntityCard
-							title='Question'
-							badge={<span className='badge ok'>{marketDetails.marketType}</span>}
+							title='Pool created'
+							badge={<span className='badge ok'>Deployed</span>}
 							actions={
 								<div className='actions'>
-									<button className='secondary' onClick={onLoadMarket} disabled={loadingMarketDetails || isPoolActionPending}>
-										{loadingMarketDetails ? <LoadingText>Loading Question...</LoadingText> : 'Reload Question'}
-									</button>
-									<button className='secondary' onClick={onLoadLatestMarket} disabled={lastCreatedQuestionId === undefined || isPoolActionPending}>
-										Use Latest Question
+									<button className='secondary' onClick={onResetSecurityPoolCreation}>
+										Create Another Pool
 									</button>
 								</div>
 							}
 						>
-							<Question question={marketDetails} />
-							{marketDetails.marketType === 'scalar' ? undefined : (
-								<div className='question-chip-row'>
-									{marketDetails.outcomeLabels.map(label => (
-										<span key={label} className='status-chip muted'>
-											{label}
-										</span>
-									))}
-								</div>
-							)}
-						</EntityCard>
-					)}
-
-					{matchingPools.length === 0 ? undefined : (
-						<EntityCard title='Existing Pools For This Question' badge={<span className='badge muted'>{matchingPools.length} existing</span>}>
-							<div className='entity-card-list'>
-								{matchingPools.map(pool => (
-									<EntityCard key={pool.securityPoolAddress} className='compact' title={<AddressValue address={pool.securityPoolAddress} />} badge={<span className='badge ok'>{pool.systemState}</span>}>
-										<div className='workflow-vault-grid'>
-											<div>
-												<span className='metric-label'>Security Multiplier</span>
-												<strong>{pool.securityMultiplier.toString()}</strong>
-											</div>
-											<div>
-												<span className='metric-label'>Open Interest Fee / Year</span>
-												<strong>{formatOpenInterestFeePerYearPercent(pool.currentRetentionRate)}</strong>
-											</div>
-										</div>
-									</EntityCard>
-								))}
-							</div>
-						</EntityCard>
-					)}
-
-					{securityPoolResult === undefined ? undefined : (
-						<EntityCard title='Pool created' badge={<span className='badge ok'>Deployed</span>}>
 							<Question question={createdQuestionDetails} loading={createdQuestionDetails === undefined} />
 							<ul className='status-list hashes'>
 								<li>
@@ -136,50 +100,101 @@ export function SecurityPoolSection({
 								</li>
 							</ul>
 						</EntityCard>
-					)}
-				</div>
-
-				<div className='market-column'>
-					<div className='form-grid'>
-						<label className='field'>
-							<span>Question ID</span>
-							<input value={securityPoolForm.marketId} onInput={event => onSecurityPoolFormChange({ marketId: event.currentTarget.value })} placeholder='0x...' />
-						</label>
-
-						<div className='actions'>
-							<button className='secondary' onClick={onLoadMarket} disabled={loadingMarketDetails || isPoolActionPending}>
-								{loadingMarketDetails ? <LoadingText>Loading Question...</LoadingText> : 'Load Question'}
-							</button>
-							<button className='secondary' onClick={onLoadLatestMarket} disabled={lastCreatedQuestionId === undefined || isPoolActionPending}>
-								Use Latest Question
-							</button>
-						</div>
-
-						<label className='field'>
-							<span>Security Multiplier</span>
-							<input value={securityPoolForm.securityMultiplier} onInput={event => onSecurityPoolFormChange({ securityMultiplier: event.currentTarget.value })} />
-						</label>
-
-						<label className='field'>
-							<span>Open Interest Fee / Year (%)</span>
-							<input value={securityPoolForm.currentRetentionRate} onInput={event => onSecurityPoolFormChange({ currentRetentionRate: event.currentTarget.value })} placeholder={formatOpenInterestFeePerYearPercent(999999996848000000n)} />
-						</label>
-
-						<label className='field'>
-							<span>Starting REP / ETH Price</span>
-							<input value={securityPoolForm.startingRepEthPrice} onInput={event => onSecurityPoolFormChange({ startingRepEthPrice: event.currentTarget.value })} />
-						</label>
-
-						<div className='actions'>
-							<button onClick={onCreateSecurityPool} disabled={isCreateDisabled}>
-								{createButtonLabel}
-							</button>
-						</div>
 					</div>
+				) : (
+					<>
+						<div className='market-column'>
+							{marketDetails === undefined ? undefined : (
+								<EntityCard
+									title='Question'
+									badge={<span className='badge ok'>{marketDetails.marketType}</span>}
+									actions={
+										<div className='actions'>
+											<button className='secondary' onClick={onLoadMarket} disabled={loadingMarketDetails || isPoolActionPending}>
+												{loadingMarketDetails ? <LoadingText>Loading Question...</LoadingText> : 'Reload Question'}
+											</button>
+										</div>
+									}
+								>
+									<Question question={marketDetails} />
+									{marketDetails.marketType === 'scalar' ? undefined : (
+										<div className='question-chip-row'>
+											{marketDetails.outcomeLabels.map(label => (
+												<span key={label} className='status-chip muted'>
+													{label}
+												</span>
+											))}
+										</div>
+									)}
+								</EntityCard>
+							)}
 
-					{!duplicateOriginPoolExists && !hasMatchingSecurityMultiplier ? undefined : <p className='detail'>A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.</p>}
-					{securityPoolError === undefined ? undefined : <p className='notice error'>{securityPoolError}</p>}
-				</div>
+							{matchingPools.length === 0 ? undefined : (
+								<EntityCard title='Existing Pools For This Question' badge={<span className='badge muted'>{matchingPools.length} existing</span>}>
+									<div className='entity-card-list'>
+										{matchingPools.map(pool => (
+											<EntityCard key={pool.securityPoolAddress} className='compact' title={<AddressValue address={pool.securityPoolAddress} />} badge={<span className='badge ok'>{pool.systemState}</span>}>
+												<div className='workflow-vault-grid'>
+													<div>
+														<span className='metric-label'>Security Multiplier</span>
+														<strong>{pool.securityMultiplier.toString()}</strong>
+													</div>
+													<div>
+														<span className='metric-label'>Open Interest Fee / Year</span>
+														<strong>{formatOpenInterestFeePerYearPercent(pool.currentRetentionRate)}</strong>
+													</div>
+												</div>
+											</EntityCard>
+										))}
+									</div>
+								</EntityCard>
+							)}
+						</div>
+
+						<div className='market-column'>
+							<EntityCard title='Create Pool' badge={<span className='badge muted'>binary</span>}>
+								<div className='form-grid'>
+									<label className='field'>
+										<span>Question ID</span>
+										<input value={securityPoolForm.marketId} onInput={event => onSecurityPoolFormChange({ marketId: event.currentTarget.value })} placeholder='0x...' />
+									</label>
+
+									<div className='actions'>
+										<button className='secondary' onClick={onLoadMarket} disabled={loadingMarketDetails || isPoolActionPending}>
+											{loadingMarketDetails ? <LoadingText>Loading Question...</LoadingText> : 'Load Question'}
+										</button>
+									</div>
+
+									<label className='field'>
+										<span>Security Multiplier</span>
+										<input value={securityPoolForm.securityMultiplier} onInput={event => onSecurityPoolFormChange({ securityMultiplier: event.currentTarget.value })} />
+									</label>
+
+									<label className='field'>
+										<span>Open Interest Fee / Year (%)</span>
+										<input value={securityPoolForm.currentRetentionRate} onInput={event => onSecurityPoolFormChange({ currentRetentionRate: event.currentTarget.value })} placeholder={formatOpenInterestFeePerYearPercent(999999996848000000n)} />
+									</label>
+
+									<label className='field'>
+										<span>Starting REP / ETH Price</span>
+										<input value={securityPoolForm.startingRepEthPrice} onInput={event => onSecurityPoolFormChange({ startingRepEthPrice: event.currentTarget.value })} />
+									</label>
+
+									<div className='actions'>
+										<button className='primary' onClick={onCreateSecurityPool} disabled={isCreateDisabled}>
+											{createButtonLabel}
+										</button>
+									</div>
+								</div>
+							</EntityCard>
+
+							{!duplicateOriginPoolExists && !hasMatchingSecurityMultiplier ? undefined : <p className='detail'>A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.</p>}
+							{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>Security pools can only be created for binary markets. Load a binary market to proceed.</p> : undefined}
+							{zoltarUniverseHasForked ? <p className='notice error'>Security pools cannot be created after Zoltar has forked.</p> : undefined}
+							{securityPoolError === undefined ? undefined : <p className='notice error'>{securityPoolError}</p>}
+						</div>
+					</>
+				)}
 			</div>
 		</section>
 	)

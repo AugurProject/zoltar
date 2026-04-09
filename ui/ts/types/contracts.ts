@@ -20,6 +20,7 @@ export type MarketType = 'binary' | 'categorical' | 'scalar'
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
 export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
 export type ForkAuctionAction = 'forkWithOwnEscalation' | 'initiateFork' | 'createChildUniverse' | 'migrateRepToZoltar' | 'migrateVault' | 'migrateEscalationDeposits' | 'startTruthAuction' | 'submitBid' | 'refundLosingBids' | 'finalizeTruthAuction' | 'claimAuctionProceeds' | 'forkUniverse' | 'withdrawBids'
+export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
 
 export type QuestionData = {
 	title: string
@@ -118,6 +119,7 @@ export type SecurityPoolCreationResult = {
 export type SecurityVaultDetails = {
 	currentRetentionRate: bigint
 	lockedRepInEscalationGame: bigint
+	managerAddress: Address
 	poolOwnershipDenominator: bigint
 	repDepositShare: bigint
 	repToken: Address
@@ -130,7 +132,7 @@ export type SecurityVaultDetails = {
 }
 
 export type SecurityVaultActionResult = {
-	action: 'approveRep' | 'depositRep' | 'redeemFees' | 'redeemRep' | 'updateVaultFees'
+	action: 'approveRep' | 'depositRep' | 'queueSetSecurityBondAllowance' | 'queueWithdrawRep' | 'redeemFees' | 'updateVaultFees'
 	hash: Hash
 }
 
@@ -148,65 +150,43 @@ export type OracleManagerDetails = {
 	token2: Address | undefined
 }
 
-export type PriceOracleActionResult = {
-	action: 'requestPrice'
+export type OpenOracleActionResult = {
+	action: 'approveToken1' | 'approveToken2' | 'dispute' | 'queueOperation' | 'requestPrice' | 'settle' | 'submitInitialReport'
 	hash: Hash
 }
 
-export type OpenOracleGameSummary = {
-	currentAmount1: bigint
-	currentAmount2: bigint
-	currentReporter: Address
-	exactToken1Report: bigint
-	feePercentage: bigint
-	feeToken: boolean
-	initialReporter: Address
-	isSettled: boolean
-	isSubmitted: boolean
-	keepFee: boolean
-	lastReportOppoTime: bigint
-	multiplier: bigint
-	numReports: bigint
-	protocolFee: bigint
-	protocolFeeRecipient: Address
+export type OpenOracleReportDetails = {
+	// Identity
 	reportId: bigint
-	reportTimestamp: bigint
-	settlementTime: bigint
-	settlementTimestamp: bigint
+	openOracleAddress: Address
+	// Meta
+	exactToken1Report: bigint
+	escalationHalt: bigint
+	fee: bigint
 	settlerReward: bigint
-	stateHash: Hex
 	token1: Address
 	token2: Address
+	settlementTime: bigint
 	timeType: boolean
-	trackDisputes: boolean
-	callbackContract: Address
-	callbackGasLimit: bigint
-	callbackSelector: Hex
-	escalationHalt: bigint
-	disputeOccurred: boolean
-	price: bigint
+	feePercentage: bigint
+	protocolFee: bigint
+	multiplier: bigint
 	disputeDelay: bigint
+	// Status
+	currentAmount1: bigint
+	currentAmount2: bigint
+	price: bigint
+	currentReporter: Address
+	reportTimestamp: bigint
+	settlementTimestamp: bigint
+	initialReporter: Address
+	disputeOccurred: boolean
+	isDistributed: boolean
+	// Extra
+	stateHash: Hex
+	callbackContract: Address
+	numReports: bigint
 }
-
-export type OpenOracleGameDetails = OpenOracleGameSummary
-
-export type OpenOracleGameList = {
-	games: OpenOracleGameSummary[]
-	nextReportId: bigint
-}
-
-export type OpenOracleCreateResult = {
-	action: 'createReportInstance'
-	hash: Hash
-	reportId: bigint
-}
-
-export type OpenOracleActionResult =
-	| {
-			action: 'approveToken1' | 'approveToken2' | 'settle' | 'submitInitialReport'
-			hash: Hash
-	  }
-	| OpenOracleCreateResult
 
 export type ListedSecurityPool = {
 	currentRetentionRate: bigint

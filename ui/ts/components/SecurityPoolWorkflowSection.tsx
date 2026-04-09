@@ -4,7 +4,7 @@ import { EntityCard } from './EntityCard.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
 import { LiquidationModal } from './LiquidationModal.js'
 import { LoadingText } from './LoadingText.js'
-import { Question } from './Question.js'
+import { Question, getQuestionTitle } from './Question.js'
 import { ReportingSection } from './ReportingSection.js'
 import { SecurityVaultSection } from './SecurityVaultSection.js'
 import { TradingSection } from './TradingSection.js'
@@ -14,6 +14,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatTimestamp } from '../lib/formatters.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
+import { formatUniverseLabel } from '../lib/universe.js'
 import { readSelectedPoolViewQueryParam, writeSelectedPoolViewQueryParam } from '../lib/urlParams.js'
 import type { SecurityPoolWorkflowRouteContentProps } from '../types/components.js'
 
@@ -32,6 +33,7 @@ function getSelectedPoolView(value: string | undefined): SelectedPoolView {
 
 export function SecurityPoolWorkflowSection({
 	accountState,
+	activeUniverseId,
 	closeLiquidationModal,
 	forkAuction,
 	liquidationAmount,
@@ -39,16 +41,16 @@ export function SecurityPoolWorkflowSection({
 	liquidationModalOpen,
 	liquidationSecurityPoolAddress,
 	liquidationTargetVault,
-	loadingOracleManager,
+	loadingPoolOracleManager,
 	onLiquidationAmountChange,
 	onLiquidationTargetVaultChange,
-	onLoadOracleManager,
+	onLoadPoolOracleManager,
 	onOpenLiquidationModal,
 	onQueueLiquidation,
-	onRequestPrice,
-	oracleManagerDetails,
-	oracleManagerError,
-	priceOracleResult,
+	onRequestPoolPrice,
+	poolOracleManagerDetails,
+	poolOracleManagerError,
+	poolPriceOracleResult,
 	onSecurityPoolAddressChange,
 	reporting,
 	securityPoolAddress,
@@ -65,8 +67,9 @@ export function SecurityPoolWorkflowSection({
 	const currentTimestamp = reporting.reportingDetails?.currentTime ?? BigInt(Math.floor(Date.now() / 1000))
 	const reportingReady = marketDetails !== undefined && marketDetails.endTime <= currentTimestamp
 	const forkReady = selectedPoolState !== undefined && selectedPoolState !== 'operational'
+	const selectedPoolUniverseMismatch = selectedPool !== undefined && selectedPool.universeId !== activeUniverseId
 	const hasSelectedPoolAddress = securityPoolAddress.trim() !== ''
-	const selectedPoolTitle = securityPoolAddress === '' ? 'Select a security pool' : <AddressValue address={securityPoolAddress} />
+	const selectedPoolTitle = selectedPool !== undefined ? getQuestionTitle(selectedPool.marketDetails) : securityPoolAddress === '' ? 'Select a security pool' : <AddressValue address={securityPoolAddress} />
 
 	useEffect(() => {
 		const nextSearch = writeSelectedPoolViewQueryParam(window.location.search, hasSelectedPoolAddress ? view : undefined)
@@ -84,7 +87,7 @@ export function SecurityPoolWorkflowSection({
 			) : undefined}
 
 			<div className='workflow-stack'>
-				<EntityCard title={selectedPoolTitle} badge={selectedPoolState === undefined ? undefined : <span className='badge ok'>{selectedPoolState}</span>}>
+				<EntityCard className='selected-pool-card' title={selectedPoolTitle} badge={selectedPoolState === undefined ? undefined : <span className='badge ok'>{selectedPoolState}</span>}>
 					<div className='form-grid'>
 						<label className='field'>
 							<span>Security Pool Address</span>
@@ -93,9 +96,9 @@ export function SecurityPoolWorkflowSection({
 					</div>
 
 					{!hasSelectedPoolAddress ? (
-						<p className='detail'>Select a pool.</p>
+						<p className='detail'>Browse Pools to pick one, or paste an address above.</p>
 					) : selectedPool === undefined ? (
-						<p className='detail'>Pool metadata unavailable.</p>
+						<p className='detail'>Pool metadata unavailable. Refresh Pool Registry in the Browse tab to load metadata for this address.</p>
 					) : (
 						<>
 							<div className='entity-card-subsection'>
@@ -105,12 +108,6 @@ export function SecurityPoolWorkflowSection({
 								</div>
 								<div className='workflow-metric-grid'>
 									<div>
-										<span className='metric-label'>Universe</span>
-										<strong>
-											<UniverseLink universeId={selectedPool.universeId} />
-										</strong>
-									</div>
-									<div>
 										<span className='metric-label'>Security Multiplier</span>
 										<strong>{selectedPool.securityMultiplier.toString()}</strong>
 									</div>
@@ -118,34 +115,40 @@ export function SecurityPoolWorkflowSection({
 										<span className='metric-label'>Open Interest Fee / Year</span>
 										<strong>{formatOpenInterestFeePerYearPercent(selectedPool.currentRetentionRate)}</strong>
 									</div>
-									<div>
-										<span className='metric-label'>Reporting</span>
-										<strong>{reportingReady ? 'Unlocked' : 'Locked until question end'}</strong>
-									</div>
-									<div>
-										<span className='metric-label'>Fork Flow</span>
-										<strong>{forkReady ? 'Forked / active' : 'Not forked'}</strong>
-									</div>
+									{reportingReady ? (
+										<div>
+											<span className='metric-label'>Reporting</span>
+											<strong>Unlocked</strong>
+										</div>
+									) : undefined}
 									<div>
 										<span className='metric-label'>Manager</span>
 										<strong>
 											<AddressValue address={selectedPool.managerAddress} />
 										</strong>
 									</div>
-									<div>
-										<span className='metric-label'>Truth Auction</span>
-										<strong>
-											<AddressValue address={selectedPool.truthAuctionAddress} />
-										</strong>
-									</div>
-									<div>
-										<span className='metric-label'>Fork Mode</span>
-										<strong>{selectedPool.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent / Zoltar fork'}</strong>
-									</div>
-									<div>
-										<span className='metric-label'>Fork Outcome</span>
-										<strong>{selectedPool.forkOutcome}</strong>
-									</div>
+									{forkReady ? (
+										<>
+											<div>
+												<span className='metric-label'>Fork Flow</span>
+												<strong>Forked / active</strong>
+											</div>
+											<div>
+												<span className='metric-label'>Truth Auction</span>
+												<strong>
+													<AddressValue address={selectedPool.truthAuctionAddress} />
+												</strong>
+											</div>
+											<div>
+												<span className='metric-label'>Fork Mode</span>
+												<strong>{selectedPool.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent / Zoltar fork'}</strong>
+											</div>
+											<div>
+												<span className='metric-label'>Fork Outcome</span>
+												<strong>{selectedPool.forkOutcome}</strong>
+											</div>
+										</>
+									) : undefined}
 								</div>
 							</div>
 
@@ -162,18 +165,18 @@ export function SecurityPoolWorkflowSection({
 							<div className='entity-card-subsection'>
 								<div className='entity-card-subsection-header'>
 									<h4>Price Oracle</h4>
-									{oracleManagerDetails === undefined ? undefined : <span className={`badge ${oracleManagerDetails.isPriceValid ? 'ok' : 'error'}`}>{oracleManagerDetails.isPriceValid ? 'Valid' : 'Invalid'}</span>}
+									{poolOracleManagerDetails === undefined ? undefined : <span className={`badge ${ poolOracleManagerDetails.isPriceValid ? 'ok' : 'error' }`}>{poolOracleManagerDetails.isPriceValid ? 'Valid' : 'Invalid'}</span>}
 								</div>
-								{oracleManagerError === undefined ? undefined : <p className='notice error'>{oracleManagerError}</p>}
-								{priceOracleResult === undefined ? undefined : (
+								{poolOracleManagerError === undefined ? undefined : <p className='notice error'>{poolOracleManagerError}</p>}
+								{poolPriceOracleResult === undefined ? undefined : (
 									<p className='notice success'>
-										Requested price: <TransactionHashLink hash={priceOracleResult.hash} />
+										Requested price: <TransactionHashLink hash={poolPriceOracleResult.hash} />
 									</p>
 								)}
-								{oracleManagerDetails === undefined ? (
+								{poolOracleManagerDetails === undefined ? (
 									<p className='detail'>
-										<button className='secondary' onClick={() => onLoadOracleManager(selectedPool.managerAddress)} disabled={loadingOracleManager}>
-											{loadingOracleManager ? <LoadingText>Loading...</LoadingText> : 'Load Price Oracle'}
+										<button className='secondary' onClick={() => onLoadPoolOracleManager(selectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
+											{loadingPoolOracleManager ? <LoadingText>Loading...</LoadingText> : 'Load Price Oracle'}
 										</button>
 									</p>
 								) : (
@@ -181,29 +184,29 @@ export function SecurityPoolWorkflowSection({
 										<div className='workflow-metric-grid'>
 											<div>
 												<span className='metric-label'>Last Price</span>
-												<strong>{oracleManagerDetails.lastPrice.toString()}</strong>
+												<strong>{poolOracleManagerDetails.lastPrice.toString()}</strong>
 											</div>
 											<div>
 												<span className='metric-label'>Set At</span>
-												<strong>{oracleManagerDetails.lastSettlementTimestamp === 0n ? 'Never' : formatTimestamp(oracleManagerDetails.lastSettlementTimestamp)}</strong>
+												<strong>{poolOracleManagerDetails.lastSettlementTimestamp === 0n ? 'Never' : formatTimestamp(poolOracleManagerDetails.lastSettlementTimestamp)}</strong>
 											</div>
 											<div>
 												<span className='metric-label'>Pending Request</span>
-												<strong>{oracleManagerDetails.pendingReportId > 0n ? `Report #${oracleManagerDetails.pendingReportId.toString()}` : 'None'}</strong>
+												<strong>{poolOracleManagerDetails.pendingReportId > 0n ? `Report #${ poolOracleManagerDetails.pendingReportId.toString() }` : 'None'}</strong>
 											</div>
 											<div>
 												<span className='metric-label'>Request Cost</span>
 												<strong>
-													<CurrencyValue value={oracleManagerDetails.requestPriceEthCost} suffix='ETH' />
+													<CurrencyValue value={poolOracleManagerDetails.requestPriceEthCost} suffix='ETH' />
 												</strong>
 											</div>
 										</div>
 										<div className='actions'>
-											<button className='secondary' onClick={() => onRequestPrice(selectedPool.managerAddress)} disabled={accountState.address === undefined || !isMainnet || oracleManagerDetails.pendingReportId > 0n}>
+											<button className='secondary' onClick={() => onRequestPoolPrice(selectedPool.managerAddress)} disabled={accountState.address === undefined || !isMainnet || poolOracleManagerDetails.pendingReportId > 0n}>
 												Request New Price
 											</button>
-											<button className='secondary' onClick={() => onLoadOracleManager(selectedPool.managerAddress)} disabled={loadingOracleManager}>
-												{loadingOracleManager ? <LoadingText>Refreshing...</LoadingText> : 'Refresh'}
+											<button className='secondary' onClick={() => onLoadPoolOracleManager(selectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
+												{loadingPoolOracleManager ? <LoadingText>Refreshing...</LoadingText> : 'Refresh'}
 											</button>
 										</div>
 									</>
@@ -213,7 +216,16 @@ export function SecurityPoolWorkflowSection({
 					)}
 				</EntityCard>
 
-				{!hasSelectedPoolAddress ? undefined : (
+				{selectedPool === undefined || !selectedPoolUniverseMismatch ? undefined : (
+					<EntityCard className='selected-pool-card' title='Universe mismatch' badge={<span className='badge blocked'>Blocked</span>}>
+						<div className='notice error'>
+							This pool belongs to <UniverseLink universeId={selectedPool.universeId} /> but the app is currently set to {formatUniverseLabel(activeUniverseId)}.
+						</div>
+						<p className='detail'>Switch the application universe to match this pool before using Vaults, Trading, or Resolution.</p>
+					</EntityCard>
+				)}
+
+				{!hasSelectedPoolAddress || selectedPoolUniverseMismatch ? undefined : (
 					<>
 						<div className='subtab-nav' role='tablist' aria-label='Selected pool views'>
 							<button className={`subtab-link ${view === 'vaults' ? 'active' : ''}`} type='button' onClick={() => setView('vaults')} aria-pressed={view === 'vaults'}>
@@ -229,23 +241,11 @@ export function SecurityPoolWorkflowSection({
 
 						{view === 'vaults' ? (
 							<div className='workflow-stack'>
-								<div className='workflow-section'>
-									<div className='workflow-section-header'>
-										<div>
-											<h3>Your Vault</h3>
-										</div>
-										<span className='badge ok'>Wallet owned</span>
-									</div>
-									<SecurityVaultSection {...securityVault} showHeader={false} showSecurityPoolAddressInput={false} />
-								</div>
+								<EntityCard className='selected-pool-card' title='Your Vault'>
+									<SecurityVaultSection {...securityVault} autoLoadVault compactLayout showHeader={false} showSecurityPoolAddressInput={false} />
+								</EntityCard>
 
-								<div className='workflow-section'>
-									<div className='workflow-section-header'>
-										<div>
-											<h3>Pool Vaults</h3>
-										</div>
-										<span className='badge muted'>{selectedPool?.vaultCount.toString() ?? '0'} vaults</span>
-									</div>
+								<EntityCard className='selected-pool-card' title='Pool Vaults' badge={<span className='badge muted'>{selectedPool?.vaultCount.toString() ?? '0'} vaults</span>}>
 									{selectedPool === undefined ? (
 										<p className='detail'>No pool metadata</p>
 									) : selectedPool.vaults.length === 0 ? (
@@ -258,7 +258,7 @@ export function SecurityPoolWorkflowSection({
 													className='compact'
 													title={<AddressValue address={vault.vaultAddress} />}
 													actions={
-														<button className='secondary' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet || oracleManagerDetails?.isPriceValid === false}>
+														<button className='destructive' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet || poolOracleManagerDetails?.isPriceValid === false}>
 															Liquidate Vault
 														</button>
 													}
@@ -301,56 +301,35 @@ export function SecurityPoolWorkflowSection({
 											))}
 										</div>
 									)}
-								</div>
+								</EntityCard>
 							</div>
 						) : undefined}
 
 						{view === 'trading' ? (
 							<div className='workflow-stack'>
-								<div className='workflow-section'>
-									<div className='workflow-section-header'>
-										<div>
-											<h3>Trading</h3>
-										</div>
-									</div>
+								<EntityCard className='selected-pool-card' title='Trading' badge={<span className='badge muted'>manage</span>}>
 									<TradingSection {...trading} showHeader={false} showSecurityPoolAddressInput={false} />
-								</div>
+								</EntityCard>
 							</div>
 						) : undefined}
 
 						{view === 'resolution' ? (
 							<div className='workflow-stack'>
-								<div className='workflow-section'>
-									<div className='workflow-section-header'>
-										<div>
-											<h3>Reporting</h3>
-										</div>
-										<span className={`badge ${reportingReady ? 'ok' : 'blocked'}`}>{reportingReady ? 'Unlocked' : 'Locked until question end'}</span>
-									</div>
-									{reportingReady ? (
+								{reportingReady ? (
+									<EntityCard className='selected-pool-card' title='Reporting' badge={<span className='badge ok'>Unlocked</span>}>
 										<ReportingSection {...reporting} showHeader={false} showSecurityPoolAddressInput={false} />
-									) : (
-										<EntityCard title='Reporting is locked' badge={<span className='badge blocked'>Waiting</span>}>
-											<p className='detail'>Wait for question end.</p>
-										</EntityCard>
-									)}
-								</div>
+									</EntityCard>
+								) : undefined}
 
-								<div className='workflow-section'>
-									<div className='workflow-section-header'>
-										<div>
-											<h3>Fork & Truth Auction</h3>
-										</div>
-										<span className={`badge ${forkReady ? 'ok' : 'blocked'}`}>{forkReady ? 'Available' : 'Locked until fork'}</span>
-									</div>
+								<EntityCard className='selected-pool-card' title='Fork & Truth Auction' badge={<span className={`badge ${forkReady ? 'ok' : 'blocked'}`}>{forkReady ? 'Available' : 'Locked until fork'}</span>}>
 									{forkReady ? (
 										<ForkAuctionSection {...forkAuction} showHeader={false} showSecurityPoolAddressInput={false} />
 									) : (
 										<EntityCard title='Fork flow is locked' badge={<span className='badge blocked'>Operational</span>}>
-											<p className='detail'>Not forked.</p>
+											<p className='detail'>The pool must enter a non-operational state (forked or in escalation) before the fork & auction flow becomes available.</p>
 										</EntityCard>
 									)}
-								</div>
+								</EntityCard>
 							</div>
 						) : undefined}
 					</>

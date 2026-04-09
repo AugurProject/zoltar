@@ -214,7 +214,13 @@ export const useIsolatedAnvilNode = () => {
 	beforeEach(async () => {
 		const currentEthereum = ensureDefined(anvilWindowEthereum, 'Isolated Anvil node was not initialized')
 		const currentSnapshotId = ensureDefined(snapshotId, 'Missing Anvil snapshot for test isolation')
-		await currentEthereum.anvilRevert(currentSnapshotId)
+		try {
+			await currentEthereum.anvilRevert(currentSnapshotId)
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error)
+			if (!errorMessage.includes('Resource not found')) throw error
+			await currentEthereum.resetToCleanState()
+		}
 		await currentEthereum.setNextBlockBaseFeePerGasToZero()
 		snapshotId = await currentEthereum.anvilSnapshot()
 	})

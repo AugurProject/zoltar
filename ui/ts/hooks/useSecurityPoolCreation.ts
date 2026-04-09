@@ -18,9 +18,10 @@ type UseSecurityPoolCreationParameters = {
 	onTransactionRequested: () => void
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
+	zoltarUniverseHasForked: boolean
 }
 
-export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolCreationParameters) {
+export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, zoltarUniverseHasForked }: UseSecurityPoolCreationParameters) {
 	const loadingMarketDetails = useSignal(false)
 	const marketDetails = useSignal<MarketDetails | undefined>(undefined)
 	const poolCreationMarketDetails = useSignal<MarketDetails | undefined>(undefined)
@@ -121,6 +122,10 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 			securityPoolError.value = 'Deploy SecurityPoolFactory before creating a security pool'
 			return
 		}
+		if (zoltarUniverseHasForked) {
+			securityPoolError.value = 'Security pools cannot be created after the universe has forked'
+			return
+		}
 		if (securityPoolCreating.value) {
 			securityPoolError.value = 'Security pool creation already in progress'
 			return
@@ -163,6 +168,11 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		}
 	}
 
+	const resetSecurityPoolCreation = () => {
+		securityPoolError.value = undefined
+		securityPoolResult.value = undefined
+	}
+
 	useEffect(() => {
 		void loadDuplicateOriginPoolState()
 	}, [securityPoolForm.value.marketId, securityPoolForm.value.securityMultiplier])
@@ -179,6 +189,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		securityPoolForm: securityPoolForm.value,
 		securityPoolResult: securityPoolResult.value,
 		poolCreationMarketDetails: poolCreationMarketDetails.value,
+		resetSecurityPoolCreation,
 		setSecurityPoolForm: (updater: (current: SecurityPoolFormState) => SecurityPoolFormState) => {
 			securityPoolForm.value = updater(securityPoolForm.value)
 		},

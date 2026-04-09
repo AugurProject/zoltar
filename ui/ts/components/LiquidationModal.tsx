@@ -1,3 +1,4 @@
+import { useEffect } from 'preact/hooks'
 import type { Address } from 'viem'
 import { AddressInfo } from './AddressInfo.js'
 
@@ -16,6 +17,17 @@ type LiquidationModalProps = {
 }
 
 export function LiquidationModal({ accountAddress, closeLiquidationModal, isMainnet, liquidationAmount, liquidationManagerAddress, liquidationModalOpen, liquidationSecurityPoolAddress, liquidationTargetVault, onLiquidationAmountChange, onLiquidationTargetVaultChange, onQueueLiquidation }: LiquidationModalProps) {
+	useEffect(() => {
+		if (!liquidationModalOpen) return
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') closeLiquidationModal()
+		}
+		document.addEventListener('keydown', handleKeyDown)
+		return () => {
+			document.removeEventListener('keydown', handleKeyDown)
+		}
+	}, [liquidationModalOpen, closeLiquidationModal])
+
 	if (!liquidationModalOpen) return undefined
 
 	return (
@@ -52,6 +64,7 @@ export function LiquidationModal({ accountAddress, closeLiquidationModal, isMain
 						Cancel
 					</button>
 					<button
+						className='primary'
 						onClick={() => {
 							if (liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined) return
 							onQueueLiquidation(liquidationManagerAddress, liquidationSecurityPoolAddress)
