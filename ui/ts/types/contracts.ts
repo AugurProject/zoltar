@@ -137,13 +137,20 @@ export type SecurityVaultActionResult = {
 export type OracleManagerDetails = {
 	callbackStateHash: Hex | undefined
 	exactToken1Report: bigint | undefined
+	isPriceValid: boolean
 	lastPrice: bigint
+	lastSettlementTimestamp: bigint
 	managerAddress: Address
 	openOracleAddress: Address
 	pendingReportId: bigint
 	requestPriceEthCost: bigint
 	token1: Address | undefined
 	token2: Address | undefined
+}
+
+export type PriceOracleActionResult = {
+	action: 'requestPrice'
+	hash: Hash
 }
 
 export type OpenOracleGameSummary = {

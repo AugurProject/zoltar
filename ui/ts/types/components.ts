@@ -8,8 +8,10 @@ import type {
 	ListedSecurityPool,
 	MarketCreationResult,
 	MarketDetails,
+	OracleManagerDetails,
 	OpenOracleGameSummary,
 	OpenOracleActionResult,
+	PriceOracleActionResult,
 	ReportingActionResult,
 	ReportingDetails,
 	SecurityPoolCreationResult,
@@ -177,10 +179,16 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
 	liquidationTargetVault: string
+	loadingOracleManager: boolean
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTargetVaultChange: (value: string) => void
+	onLoadOracleManager: (managerAddress: Address) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
+	onRequestPrice: (managerAddress: Address) => void
+	oracleManagerDetails: OracleManagerDetails | undefined
+	oracleManagerError: string | undefined
+	priceOracleResult: PriceOracleActionResult | undefined
 	securityPoolAddress: string
 	onSecurityPoolAddressChange: (value: string) => void
 	reporting: ReportingRouteContentProps

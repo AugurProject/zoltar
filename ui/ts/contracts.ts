@@ -1323,7 +1323,7 @@ export async function loadOpenOracleGames(client: ReadClient): Promise<OpenOracl
 }
 
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingReportId, requestPriceEthCost] = await Promise.all([
+	const [lastPrice, pendingReportId, requestPriceEthCost, isPriceValid, lastSettlementTimestamp] = await Promise.all([
 		client.readContract({
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 			functionName: 'lastPrice',
@@ -1339,6 +1339,18 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		client.readContract({
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 			functionName: 'getRequestPriceEthCost',
+			address: managerAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+			functionName: 'isPriceValid',
+			address: managerAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+			functionName: 'lastSettlementTimestamp',
 			address: managerAddress,
 			args: [],
 		}),
@@ -1373,7 +1385,9 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	return {
 		callbackStateHash,
 		exactToken1Report,
+		isPriceValid,
 		lastPrice,
+		lastSettlementTimestamp,
 		managerAddress,
 		openOracleAddress: getOpenOracleAddress(),
 		pendingReportId,
@@ -1381,6 +1395,19 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		token1,
 		token2,
 	}
+}
+
+export async function requestPriceFromManager(client: WriteClient, managerAddress: Address, ethCost: bigint) {
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: managerAddress,
+			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+			functionName: 'requestPrice',
+			args: [],
+			value: ethCost,
+		}),
+	)
+	return hash
 }
 
 type CreateOpenOracleReportInstanceParameters = {

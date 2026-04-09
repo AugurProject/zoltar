@@ -15,6 +15,7 @@ import { useHashRoute } from './hooks/useHashRoute.js'
 import { useMarketCreation } from './hooks/useMarketCreation.js'
 import { useOnchainState } from './hooks/useOnchainState.js'
 import { useOpenOracleOperations } from './hooks/useOpenOracleOperations.js'
+import { usePriceOracleManager } from './hooks/usePriceOracleManager.js'
 import { useReportingOperations } from './hooks/useReportingOperations.js'
 import { useSecurityPoolCreation } from './hooks/useSecurityPoolCreation.js'
 import { useSecurityPoolsOverview } from './hooks/useSecurityPoolsOverview.js'
@@ -125,6 +126,7 @@ export function App() {
 		submitInitialReport,
 	} = useOpenOracleOperations(baseHookConfig)
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
+	const { loadingOracleManager, loadOracleManager, oracleManagerDetails, oracleManagerError, priceOracleResult, requestPrice } = usePriceOracleManager(baseHookConfig)
 	const {
 		closeLiquidationModal,
 		liquidationAmount,
@@ -295,6 +297,12 @@ export function App() {
 						workflow={{
 							accountState,
 							closeLiquidationModal: () => closeLiquidationModal(),
+							loadingOracleManager,
+							onLoadOracleManager: managerAddress => void loadOracleManager(managerAddress),
+							onRequestPrice: managerAddress => void requestPrice(managerAddress),
+							oracleManagerDetails,
+							oracleManagerError,
+							priceOracleResult,
 							forkAuction: {
 								accountState,
 								forkAuctionDetails,

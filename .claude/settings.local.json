@@ -19,7 +19,9 @@
       "Bash(bun x:*)",
       "Bash(git commit -m ':*)",
       "Bash(git push:*)",
-      "Bash(gh pr:*)"
+      "Bash(gh pr:*)",
+      "Bash(bash:*)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

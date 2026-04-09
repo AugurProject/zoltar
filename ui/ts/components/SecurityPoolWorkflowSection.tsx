@@ -3,13 +3,16 @@ import { AddressValue } from './AddressValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
 import { LiquidationModal } from './LiquidationModal.js'
+import { LoadingText } from './LoadingText.js'
 import { Question } from './Question.js'
 import { ReportingSection } from './ReportingSection.js'
 import { SecurityVaultSection } from './SecurityVaultSection.js'
 import { TradingSection } from './TradingSection.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { isMainnetChain } from '../lib/network.js'
+import { formatTimestamp } from '../lib/formatters.js'
 import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import { readSelectedPoolViewQueryParam, writeSelectedPoolViewQueryParam } from '../lib/urlParams.js'
 import type { SecurityPoolWorkflowRouteContentProps } from '../types/components.js'
@@ -36,10 +39,16 @@ export function SecurityPoolWorkflowSection({
 	liquidationModalOpen,
 	liquidationSecurityPoolAddress,
 	liquidationTargetVault,
+	loadingOracleManager,
 	onLiquidationAmountChange,
 	onLiquidationTargetVaultChange,
+	onLoadOracleManager,
 	onOpenLiquidationModal,
 	onQueueLiquidation,
+	onRequestPrice,
+	oracleManagerDetails,
+	oracleManagerError,
+	priceOracleResult,
 	onSecurityPoolAddressChange,
 	reporting,
 	securityPoolAddress,
@@ -149,6 +158,57 @@ export function SecurityPoolWorkflowSection({
 									<Question question={marketDetails} />
 								</div>
 							)}
+
+							<div className='entity-card-subsection'>
+								<div className='entity-card-subsection-header'>
+									<h4>Price Oracle</h4>
+									{oracleManagerDetails === undefined ? undefined : <span className={`badge ${oracleManagerDetails.isPriceValid ? 'ok' : 'error'}`}>{oracleManagerDetails.isPriceValid ? 'Valid' : 'Invalid'}</span>}
+								</div>
+								{oracleManagerError === undefined ? undefined : <p className='notice error'>{oracleManagerError}</p>}
+								{priceOracleResult === undefined ? undefined : (
+									<p className='notice success'>
+										Requested price: <TransactionHashLink hash={priceOracleResult.hash} />
+									</p>
+								)}
+								{oracleManagerDetails === undefined ? (
+									<p className='detail'>
+										<button className='secondary' onClick={() => onLoadOracleManager(selectedPool.managerAddress)} disabled={loadingOracleManager}>
+											{loadingOracleManager ? <LoadingText>Loading...</LoadingText> : 'Load Price Oracle'}
+										</button>
+									</p>
+								) : (
+									<>
+										<div className='workflow-metric-grid'>
+											<div>
+												<span className='metric-label'>Last Price</span>
+												<strong>{oracleManagerDetails.lastPrice.toString()}</strong>
+											</div>
+											<div>
+												<span className='metric-label'>Set At</span>
+												<strong>{oracleManagerDetails.lastSettlementTimestamp === 0n ? 'Never' : formatTimestamp(oracleManagerDetails.lastSettlementTimestamp)}</strong>
+											</div>
+											<div>
+												<span className='metric-label'>Pending Request</span>
+												<strong>{oracleManagerDetails.pendingReportId > 0n ? `Report #${oracleManagerDetails.pendingReportId.toString()}` : 'None'}</strong>
+											</div>
+											<div>
+												<span className='metric-label'>Request Cost</span>
+												<strong>
+													<CurrencyValue value={oracleManagerDetails.requestPriceEthCost} suffix='ETH' />
+												</strong>
+											</div>
+										</div>
+										<div className='actions'>
+											<button className='secondary' onClick={() => onRequestPrice(selectedPool.managerAddress)} disabled={accountState.address === undefined || !isMainnet || oracleManagerDetails.pendingReportId > 0n}>
+												Request New Price
+											</button>
+											<button className='secondary' onClick={() => onLoadOracleManager(selectedPool.managerAddress)} disabled={loadingOracleManager}>
+												{loadingOracleManager ? <LoadingText>Refreshing...</LoadingText> : 'Refresh'}
+											</button>
+										</div>
+									</>
+								)}
+							</div>
 						</>
 					)}
 				</EntityCard>
@@ -198,7 +258,7 @@ export function SecurityPoolWorkflowSection({
 													className='compact'
 													title={<AddressValue address={vault.vaultAddress} />}
 													actions={
-														<button className='secondary' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
+														<button className='secondary' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet || oracleManagerDetails?.isPriceValid === false}>
 															Liquidate Vault
 														</button>
 													}
