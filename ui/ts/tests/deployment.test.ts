@@ -1,11 +1,11 @@
 /// <reference types="bun-types" />
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { createPublicClient, custom, publicActions } from 'viem'
-import { mainnet } from 'viem/chains'
 import { zeroAddress } from 'viem'
 import { findNextDeployableStep, getDeploymentSections, getPrerequisiteLabel } from '../lib/deployment.js'
-import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '../contracts.js'
+import { createConnectedReadClient } from '../lib/clients.js'
+import type { InjectedEthereum } from '../injectedEthereum.js'
+import { getDeploymentSteps, getOpenOracleAddress, loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '../contracts.js'
 import type { DeploymentStatus, ReadClient } from '../types/contracts.js'
 import { AnvilWindowEthereum } from '../../../solidity/ts/testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../solidity/ts/testsuite/simulator/useIsolatedAnvilNode'
@@ -14,6 +14,14 @@ import { TEST_ADDRESSES } from '../../../solidity/ts/testsuite/simulator/utils/c
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../solidity/ts/testsuite/simulator/utils/utilities'
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
+	const globalWindow = globalThis as typeof globalThis & { window?: Window }
+	if (globalWindow.window === undefined) {
+		globalWindow.window = globalThis as unknown as Window & typeof globalThis
+	}
+	globalWindow.window.ethereum = mockWindow as unknown as InjectedEthereum
+}
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -38,10 +46,8 @@ void describe('deployment helpers', () => {
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		writeClient = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		readClient = createPublicClient({
-			chain: mainnet,
-			transport: custom(mockWindow),
-		}).extend(publicActions)
+		installInjectedEthereum(mockWindow)
+		readClient = createConnectedReadClient()
 		await setupTestAccounts(mockWindow)
 		await ensureProxyDeployerDeployed(writeClient)
 	})
@@ -90,6 +96,12 @@ void describe('deployment helpers', () => {
 		const proxyDeployerSection = sections.find(section => section.title === 'Utilities')
 
 		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle'])
+	})
+
+	void test('getOpenOracleAddress matches the deterministic OpenOracle deployment step', () => {
+		const openOracleStep = getDeploymentSteps().find(step => step.id === 'openOracle')
+
+		expect(openOracleStep?.address).toBe(getOpenOracleAddress())
 	})
 
 	void test('loadDeploymentStatusOracleSnapshot returns the proxy deployer when the oracle is missing', async () => {

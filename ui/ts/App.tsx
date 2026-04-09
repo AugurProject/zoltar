@@ -15,6 +15,7 @@ import { useHashRoute } from './hooks/useHashRoute.js'
 import { useMarketCreation } from './hooks/useMarketCreation.js'
 import { useOnchainState } from './hooks/useOnchainState.js'
 import { useOpenOracleOperations } from './hooks/useOpenOracleOperations.js'
+import { usePriceOracleManager } from './hooks/usePriceOracleManager.js'
 import { useReportingOperations } from './hooks/useReportingOperations.js'
 import { useSecurityPoolCreation } from './hooks/useSecurityPoolCreation.js'
 import { useSecurityPoolsOverview } from './hooks/useSecurityPoolsOverview.js'
@@ -130,6 +131,7 @@ export function App() {
 		submitInitialReport,
 	} = useOpenOracleOperations(baseHookConfig)
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
+	const { loadingPoolOracleManager, loadPoolOracleManager, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(baseHookConfig)
 	const {
 		closeLiquidationModal,
 		liquidationAmount,
@@ -326,6 +328,12 @@ export function App() {
 							onLiquidationTargetVaultChange: setLiquidationTargetVault,
 							onOpenLiquidationModal: (managerAddress, securityPoolAddress, vaultAddress) => openLiquidationModal(managerAddress, securityPoolAddress, vaultAddress),
 							onQueueLiquidation: (managerAddress, securityPoolAddress) => void queueLiquidation(managerAddress, securityPoolAddress),
+							loadingPoolOracleManager,
+							onLoadPoolOracleManager: managerAddress => void loadPoolOracleManager(managerAddress),
+							onRequestPoolPrice: managerAddress => void requestPoolPrice(managerAddress),
+							poolOracleManagerDetails,
+							poolOracleManagerError,
+							poolPriceOracleResult,
 							onSecurityPoolAddressChange: value => {
 								setSecurityPoolAddress(value)
 							},

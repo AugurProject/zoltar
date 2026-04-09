@@ -26,7 +26,13 @@
       "WebFetch(domain:docs.uniswap.org)",
       "Bash(bunx:*)",
       "WebFetch(domain:app.uniswap.org)",
-      "WebFetch(domain:gateway.thegraph.com)"
+      "WebFetch(domain:gateway.thegraph.com)",
+      "Bash(git -C /workspace/.t3/worktrees/zoltar/t3code-ad1f2154 show origin/main:ui/ts/types/app.ts)",
+      "Bash(git -C /workspace/.t3/worktrees/zoltar/t3code-ad1f2154 add ui/ts/types/app.ts)",
+      "Bash(git:*)",
+      "Bash(git -C /workspace/.t3/worktrees/zoltar/t3code-ad1f2154 show origin/main:ui/ts/components/SecurityPoolWorkflowSection.tsx)",
+      "Read(//tmp/**)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

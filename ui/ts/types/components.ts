@@ -182,10 +182,16 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
 	liquidationTargetVault: string
+	loadingPoolOracleManager: boolean
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTargetVaultChange: (value: string) => void
+	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
+	onRequestPoolPrice: (managerAddress: Address) => void
+	poolOracleManagerDetails: OracleManagerDetails | undefined
+	poolOracleManagerError: string | undefined
+	poolPriceOracleResult: OpenOracleActionResult | undefined
 	securityPoolAddress: string
 	onSecurityPoolAddressChange: (value: string) => void
 	reporting: ReportingRouteContentProps

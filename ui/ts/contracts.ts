@@ -361,6 +361,10 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 	return deployHash
 }
 
+export function getOpenOracleAddress() {
+	return getInfraContractAddresses().openOracle
+}
+
 export function getDeploymentSteps(): DeploymentStep[] {
 	const addresses = getInfraContractAddresses()
 
@@ -1226,7 +1230,7 @@ export async function redeemSecurityVaultFees(client: WriteClient, securityPoolA
 }
 
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingReportId, requestPriceEthCost] = await Promise.all([
+	const [lastPrice, pendingReportId, requestPriceEthCost, isPriceValid, lastSettlementTimestamp] = await Promise.all([
 		client.readContract({
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 			functionName: 'lastPrice',
@@ -1242,6 +1246,18 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		client.readContract({
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 			functionName: 'getRequestPriceEthCost',
+			address: managerAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+			functionName: 'isPriceValid',
+			address: managerAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+			functionName: 'lastSettlementTimestamp',
 			address: managerAddress,
 			args: [],
 		}),
@@ -1278,7 +1294,9 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	return {
 		callbackStateHash,
 		exactToken1Report,
+		isPriceValid,
 		lastPrice,
+		lastSettlementTimestamp,
 		managerAddress,
 		openOracleAddress: resolvedOracleAddress,
 		pendingReportId,

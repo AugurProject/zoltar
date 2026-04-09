@@ -52,8 +52,7 @@ export function formatRoundedCurrencyBalance(value: bigint | undefined, units: n
 	// For tiny values between 0 and 1, extend decimal places to show 2 significant figures.
 	// floatValue is used only for order-of-magnitude detection; bigint arithmetic handles rounding.
 	const floatValue = Number(absoluteValue) / 10 ** units
-	const effectiveDecimals =
-		floatValue > 0 && floatValue < 1 ? Math.max(decimals, Math.ceil(-Math.log10(floatValue)) + 1) : decimals
+	const effectiveDecimals = floatValue > 0 && floatValue < 1 ? Math.max(decimals, Math.ceil(-Math.log10(floatValue)) + 1) : decimals
 
 	const scale = 10n ** BigInt(effectiveDecimals)
 	const base = 10n ** BigInt(units)
