@@ -107,8 +107,27 @@ export function App() {
 			deploymentStatuses,
 			zoltarUniverseHasForked,
 		})
-	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, redeemRep, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultResult, setSecurityVaultForm, updateVaultFees } = useSecurityVaultOperations(baseHookConfig)
-	const { approveToken1, approveToken2, loadOracleManager, loadingOracleManager, onQueueOperation, onRequestPrice, openOracleError, openOracleForm, openOracleResult, oracleManagerDetails, setOpenOracleForm, settleReport, submitInitialReport } = useOpenOracleOperations(baseHookConfig)
+	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultRepAllowance, securityVaultRepBalance, securityVaultResult, setSecurityBondAllowance, setSecurityVaultForm, withdrawRep } =
+		useSecurityVaultOperations(baseHookConfig)
+	const {
+		approveToken1,
+		approveToken2,
+		disputeReport,
+		loadOracleManager,
+		loadOracleReport,
+		loadingOracleManager,
+		loadingOracleReport,
+		onQueueOperation,
+		onRequestPrice,
+		openOracleError,
+		openOracleForm,
+		openOracleReportDetails,
+		openOracleResult,
+		oracleManagerDetails,
+		setOpenOracleForm,
+		settleReport,
+		submitInitialReport,
+	} = useOpenOracleOperations(baseHookConfig)
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
 	const {
 		closeLiquidationModal,
@@ -271,6 +290,7 @@ export function App() {
 						}}
 						workflow={{
 							accountState,
+							activeUniverseId,
 							closeLiquidationModal: () => closeLiquidationModal(),
 							forkAuction: {
 								accountState,
@@ -324,16 +344,18 @@ export function App() {
 							securityVault: {
 								accountState,
 								loadingSecurityVault,
-								onApproveRep: () => void approveRep(),
+								onApproveRep: amount => void approveRep(amount),
 								onDepositRep: () => void depositRep(),
 								onLoadSecurityVault: () => void loadSecurityVault(),
 								onRedeemFees: () => void redeemFees(),
-								onRedeemRep: () => void redeemRep(),
+								onSetSecurityBondAllowance: () => void setSecurityBondAllowance(),
 								onSecurityVaultFormChange: update => setSecurityVaultForm(current => ({ ...current, ...update })),
-								onUpdateVaultFees: () => void updateVaultFees(),
+								onWithdrawRep: () => void withdrawRep(),
 								securityVaultDetails,
 								securityVaultError,
 								securityVaultForm,
+								securityVaultRepAllowance,
+								securityVaultRepBalance,
 								securityVaultResult,
 							},
 							trading: {
@@ -355,9 +377,12 @@ export function App() {
 					<OpenOracleSection
 						accountState={accountState}
 						loadingOracleManager={loadingOracleManager}
+						loadingOracleReport={loadingOracleReport}
 						onApproveToken1={() => void approveToken1()}
 						onApproveToken2={() => void approveToken2()}
+						onDisputeReport={() => void disputeReport()}
 						onLoadOracleManager={() => void loadOracleManager()}
+						onLoadOracleReport={() => void loadOracleReport()}
 						onOpenOracleFormChange={update => setOpenOracleForm(current => ({ ...current, ...update }))}
 						onQueueOperation={() => void onQueueOperation()}
 						onRequestPrice={() => void onRequestPrice()}
@@ -365,6 +390,7 @@ export function App() {
 						onSubmitInitialReport={() => void submitInitialReport()}
 						openOracleError={openOracleError}
 						openOracleForm={openOracleForm}
+						openOracleReportDetails={openOracleReportDetails}
 						openOracleResult={openOracleResult}
 						oracleManagerDetails={oracleManagerDetails}
 					/>

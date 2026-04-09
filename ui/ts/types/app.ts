@@ -31,14 +31,19 @@ export type SecurityPoolFormState = {
 
 export type SecurityVaultFormState = {
 	depositAmount: string
-	repApprovalAmount: string
+	securityBondAllowanceAmount: string
+	repWithdrawAmount: string
 	securityPoolAddress: string
 }
 
 export type OpenOracleFormState = {
 	amount1: string
 	amount2: string
+	disputeNewAmount1: string
+	disputeNewAmount2: string
+	disputeTokenToSwap: 'token1' | 'token2'
 	managerAddress: string
+	openOracleAddress: string
 	operationAmount: string
 	operationTargetVault: string
 	queuedOperation: 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'

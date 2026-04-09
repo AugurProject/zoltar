@@ -119,6 +119,7 @@ export type SecurityPoolCreationResult = {
 export type SecurityVaultDetails = {
 	currentRetentionRate: bigint
 	lockedRepInEscalationGame: bigint
+	managerAddress: Address
 	poolOwnershipDenominator: bigint
 	repDepositShare: bigint
 	repToken: Address
@@ -131,7 +132,7 @@ export type SecurityVaultDetails = {
 }
 
 export type SecurityVaultActionResult = {
-	action: 'approveRep' | 'depositRep' | 'redeemFees' | 'redeemRep' | 'updateVaultFees'
+	action: 'approveRep' | 'depositRep' | 'queueSetSecurityBondAllowance' | 'queueWithdrawRep' | 'redeemFees' | 'updateVaultFees'
 	hash: Hash
 }
 
@@ -148,8 +149,41 @@ export type OracleManagerDetails = {
 }
 
 export type OpenOracleActionResult = {
-	action: 'approveToken1' | 'approveToken2' | 'queueOperation' | 'requestPrice' | 'settle' | 'submitInitialReport'
+	action: 'approveToken1' | 'approveToken2' | 'dispute' | 'queueOperation' | 'requestPrice' | 'settle' | 'submitInitialReport'
 	hash: Hash
+}
+
+export type OpenOracleReportDetails = {
+	// Identity
+	reportId: bigint
+	openOracleAddress: Address
+	// Meta
+	exactToken1Report: bigint
+	escalationHalt: bigint
+	fee: bigint
+	settlerReward: bigint
+	token1: Address
+	token2: Address
+	settlementTime: bigint
+	timeType: boolean
+	feePercentage: bigint
+	protocolFee: bigint
+	multiplier: bigint
+	disputeDelay: bigint
+	// Status
+	currentAmount1: bigint
+	currentAmount2: bigint
+	price: bigint
+	currentReporter: Address
+	reportTimestamp: bigint
+	settlementTimestamp: bigint
+	initialReporter: Address
+	disputeOccurred: boolean
+	isDistributed: boolean
+	// Extra
+	stateHash: Hex
+	callbackContract: Address
+	numReports: bigint
 }
 
 export type ListedSecurityPool = {

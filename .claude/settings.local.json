@@ -22,7 +22,8 @@
       "Bash(gh pr:*)",
       "Bash(sed -i \"57s/title='Pool Registry'/title='No Pools Loaded'/\" ui/ts/components/SecurityPoolsOverviewSection.tsx)",
       "Bash(sed -i \"65s|title={<AddressValue address={pool.securityPoolAddress} />}|title={getQuestionTitle\\(pool.marketDetails\\)}|\" ui/ts/components/SecurityPoolsOverviewSection.tsx)",
-      "Bash(echo \"EXIT:$?\")"
+      "Bash(echo \"EXIT:$?\")",
+      "WebFetch(domain:docs.uniswap.org)"
     ]
   }
 }

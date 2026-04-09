@@ -1056,10 +1056,16 @@ export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode
 }
 
 export async function loadSecurityVaultDetails(client: ReadClient, securityPoolAddress: Address, vaultAddress: Address): Promise<SecurityVaultDetails> {
-	const [currentRetentionRate, poolOwnershipDenominator, repToken, totalSecurityBondAllowance, universeId, vaultData] = await Promise.all([
+	const [currentRetentionRate, managerAddress, poolOwnershipDenominator, repToken, totalSecurityBondAllowance, universeId, vaultData] = await Promise.all([
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'currentRetentionRate',
+			address: securityPoolAddress,
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'priceOracleManagerAndOperatorQueuer',
 			address: securityPoolAddress,
 			args: [],
 		}),
@@ -1095,6 +1101,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 	return {
 		currentRetentionRate: currentRetentionRate,
 		lockedRepInEscalationGame,
+		managerAddress,
 		poolOwnershipDenominator: poolOwnershipDenominator,
 		repDepositShare,
 		repToken,
@@ -1218,22 +1225,7 @@ export async function redeemSecurityVaultFees(client: WriteClient, securityPoolA
 	} satisfies SecurityVaultActionResult
 }
 
-export async function redeemSecurityVaultRep(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
-	const hash = await writeContractAndWait(client, () =>
-		client.writeContract({
-			address: securityPoolAddress,
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'redeemRep',
-			args: [vaultAddress],
-		}),
-	)
-	return {
-		action: 'redeemRep',
-		hash,
-	} satisfies SecurityVaultActionResult
-}
-
-export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address): Promise<OracleManagerDetails> {
+export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
 	const [lastPrice, pendingReportId, requestPriceEthCost] = await Promise.all([
 		client.readContract({
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
@@ -1255,6 +1247,8 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		}),
 	])
 
+	const resolvedOracleAddress = openOracleAddress ?? getInfraContractAddresses().openOracle
+
 	let callbackStateHash: Hex | undefined
 	let exactToken1Report: bigint | undefined
 	let token1: Address | undefined
@@ -1264,14 +1258,14 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		const extraData = await client.readContract({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'extraData',
-			address: getInfraContractAddresses().openOracle,
+			address: resolvedOracleAddress,
 			args: [pendingReportId],
 		})
 
 		const reportMeta = await client.readContract({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'reportMeta',
-			address: getInfraContractAddresses().openOracle,
+			address: resolvedOracleAddress,
 			args: [pendingReportId],
 		})
 
@@ -1286,11 +1280,63 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		exactToken1Report,
 		lastPrice,
 		managerAddress,
-		openOracleAddress: getInfraContractAddresses().openOracle,
+		openOracleAddress: resolvedOracleAddress,
 		pendingReportId,
 		requestPriceEthCost,
 		token1,
 		token2,
+	}
+}
+
+export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('./types/contracts.js').OpenOracleReportDetails> {
+	const [meta, status, extra] = await Promise.all([
+		client.readContract({
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'reportMeta',
+			address: openOracleAddress,
+			args: [reportId],
+		}),
+		client.readContract({
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'reportStatus',
+			address: openOracleAddress,
+			args: [reportId],
+		}),
+		client.readContract({
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'extraData',
+			address: openOracleAddress,
+			args: [reportId],
+		}),
+	])
+
+	return {
+		reportId,
+		openOracleAddress,
+		exactToken1Report: meta[0],
+		escalationHalt: meta[1],
+		fee: meta[2],
+		settlerReward: meta[3],
+		token1: meta[4],
+		settlementTime: BigInt(meta[5]),
+		token2: meta[6],
+		timeType: meta[7],
+		feePercentage: BigInt(meta[8]),
+		protocolFee: BigInt(meta[9]),
+		multiplier: BigInt(meta[10]),
+		disputeDelay: BigInt(meta[11]),
+		currentAmount1: status[0],
+		currentAmount2: status[1],
+		price: status[2],
+		currentReporter: status[3],
+		reportTimestamp: BigInt(status[4]),
+		settlementTimestamp: BigInt(status[5]),
+		initialReporter: status[6],
+		disputeOccurred: status[8],
+		isDistributed: status[9],
+		stateHash: extra[0],
+		callbackContract: extra[1],
+		numReports: BigInt(extra[2]),
 	}
 }
 
@@ -1310,10 +1356,10 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 	} satisfies OpenOracleActionResult
 }
 
-export async function submitInitialOracleReport(client: WriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: Hex) {
+export async function submitInitialOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: Hex) {
 	const hash = await writeContractAndWait(client, () =>
 		client.writeContract({
-			address: getInfraContractAddresses().openOracle,
+			address: openOracleAddress,
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'submitInitialReport',
 			args: [reportId, amount1, amount2, stateHash],
@@ -1325,10 +1371,10 @@ export async function submitInitialOracleReport(client: WriteClient, reportId: b
 	} satisfies OpenOracleActionResult
 }
 
-export async function settleOracleReport(client: WriteClient, reportId: bigint) {
+export async function settleOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint) {
 	const hash = await writeContractAndWait(client, () =>
 		client.writeContract({
-			address: getInfraContractAddresses().openOracle,
+			address: openOracleAddress,
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'settle',
 			args: [reportId],
@@ -1336,6 +1382,21 @@ export async function settleOracleReport(client: WriteClient, reportId: bigint) 
 	)
 	return {
 		action: 'settle',
+		hash,
+	} satisfies OpenOracleActionResult
+}
+
+export async function disputeOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, amt2Expected: bigint, stateHash: Hex) {
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: openOracleAddress,
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'disputeAndSwap',
+			args: [reportId, tokenToSwap, newAmount1, newAmount2, amt2Expected, stateHash],
+		}),
+	)
+	return {
+		action: 'dispute',
 		hash,
 	} satisfies OpenOracleActionResult
 }

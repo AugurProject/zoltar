@@ -9,6 +9,7 @@ import type {
 	MarketCreationResult,
 	MarketDetails,
 	OpenOracleActionResult,
+	OpenOracleReportDetails,
 	OracleManagerDetails,
 	ReportingActionResult,
 	ReportingDetails,
@@ -168,6 +169,7 @@ export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteConten
 
 export type SecurityPoolWorkflowRouteContentProps = {
 	accountState: AccountState
+	activeUniverseId: bigint
 	closeLiquidationModal: () => void
 	forkAuction: ForkAuctionRouteContentProps
 	liquidationAmount: string
@@ -196,20 +198,24 @@ export type SecurityPoolsSectionProps = {
 export type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
-	onApproveRep: () => void
+	onApproveRep: (amount?: bigint) => void
 	onDepositRep: () => void
 	onLoadSecurityVault: () => void
 	onRedeemFees: () => void
-	onRedeemRep: () => void
+	onSetSecurityBondAllowance: () => void
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
-	onUpdateVaultFees: () => void
+	onWithdrawRep: () => void
 	securityVaultDetails: SecurityVaultDetails | undefined
 	securityVaultError: string | undefined
 	securityVaultForm: SecurityVaultFormState
+	securityVaultRepAllowance: bigint | undefined
+	securityVaultRepBalance: bigint | undefined
 	securityVaultResult: SecurityVaultActionResult | undefined
 }
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
+	compactLayout?: boolean
+	autoLoadVault?: boolean
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean
 }
@@ -217,9 +223,12 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 export type OpenOracleRouteContentProps = {
 	accountState: AccountState
 	loadingOracleManager: boolean
+	loadingOracleReport: boolean
 	onApproveToken1: () => void
 	onApproveToken2: () => void
+	onDisputeReport: () => void
 	onLoadOracleManager: () => void
+	onLoadOracleReport: () => void
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
 	onQueueOperation: () => void
 	onRequestPrice: () => void
@@ -227,6 +236,7 @@ export type OpenOracleRouteContentProps = {
 	onSubmitInitialReport: () => void
 	openOracleError: string | undefined
 	openOracleForm: OpenOracleFormState
+	openOracleReportDetails: OpenOracleReportDetails | undefined
 	openOracleResult: OpenOracleActionResult | undefined
 	oracleManagerDetails: OracleManagerDetails | undefined
 }
