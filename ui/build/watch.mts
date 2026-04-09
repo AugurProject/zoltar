@@ -9,6 +9,8 @@ const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
 const REPOSITORY_ROOT_PATH = path.join(UI_ROOT_PATH, '..')
 const DEV_SERVER_PATH = path.join(UI_ROOT_PATH, 'dev-server.mjs')
 const INDEX_HTML_PATH = path.join(UI_ROOT_PATH, 'index.html')
+const TYPE_SCRIPT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'js')
+const TYPE_SCRIPT_SOURCE_PATH = path.join(UI_ROOT_PATH, 'ts')
 const VENDOR_INPUT_PATHS = [path.join(UI_ROOT_PATH, 'build', 'vendor.mts'), path.join(UI_ROOT_PATH, 'package.json'), path.join(UI_ROOT_PATH, 'tsconfig.vendor.json'), path.join(UI_ROOT_PATH, 'bun.lock')]
 const LIVE_RELOAD_ENDPOINT = 'http://127.0.0.1:12345/__live-reload'
 
@@ -23,9 +25,10 @@ let vendorBuildRunning = false
 let vendorBuildQueued = false
 let liveReloadQueued = false
 let liveReloadTimeout: NodeJS.Timeout | undefined
-let typeScriptWatchStdoutBuffer = ''
 
 const unwatchCallbacks: Array<() => void> = []
+let typeScriptOutputUnwatchCallbacks: Array<() => void> = []
+let typeScriptSourceUnwatchCallbacks: Array<() => void> = []
 
 const waitForProcessExit = async (childProcess: ManagedProcess) => {
 	return await new Promise<{ exitCode: number | null; signalCode: NodeJS.Signals | null }>((resolve, reject) => {
@@ -101,6 +104,16 @@ const getAllFiles = async (dirPath: string, fileList: string[] = []) => {
 	return fileList
 }
 
+const getAllDirectories = async (dirPath: string, directoryList: string[] = []) => {
+	directoryList.push(dirPath)
+	const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
+	for (const entry of entries) {
+		if (!entry.isDirectory()) continue
+		await getAllDirectories(path.join(dirPath, entry.name), directoryList)
+	}
+	return directoryList
+}
+
 const queueLiveReload = (reason: string) => {
 	if (shuttingDown) return
 	if (liveReloadTimeout !== undefined) clearTimeout(liveReloadTimeout)
@@ -117,6 +130,7 @@ const sendLiveReload = async (reason: string) => {
 	liveReloadQueued = false
 	try {
 		await fetch(`${LIVE_RELOAD_ENDPOINT}?reason=${encodeURIComponent(reason)}`, { method: 'POST' })
+		console.log(`[ui:watch] Reload requested (${reason})`)
 	} catch (error) {
 		console.error(`[ui:watch] Failed to signal browser reload because ${reason} changed`)
 		console.error(error)
@@ -146,22 +160,119 @@ const spawnServer = () => {
 }
 
 const onTypeScriptWatchStdout = (chunk: Buffer) => {
-	const output = chunk.toString('utf8')
-	process.stdout.write(output)
-	typeScriptWatchStdoutBuffer += output
-	let newlineIndex = typeScriptWatchStdoutBuffer.indexOf('\n')
-	while (newlineIndex !== -1) {
-		const line = typeScriptWatchStdoutBuffer.slice(0, newlineIndex).trim()
-		typeScriptWatchStdoutBuffer = typeScriptWatchStdoutBuffer.slice(newlineIndex + 1)
-		if (line.includes('Found 0 errors')) {
-			queueLiveReload('TypeScript rebuild')
-		}
-		newlineIndex = typeScriptWatchStdoutBuffer.indexOf('\n')
-	}
+	process.stdout.write(chunk)
 }
 
 const onTypeScriptWatchStderr = (chunk: Buffer) => {
 	process.stderr.write(chunk)
+}
+
+const watchFileWithCleanup = (filePath: string, onChange: (relativePath: string) => void, registerUnwatch: (callback: () => void) => void) => {
+	let debounceTimeout: NodeJS.Timeout | undefined
+	const listener = (currentStat: fs.Stats, previousStat: fs.Stats) => {
+		if (currentStat.mtimeMs === previousStat.mtimeMs) return
+		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
+		debounceTimeout = setTimeout(() => {
+			debounceTimeout = undefined
+			const relativePath = path.relative(UI_ROOT_PATH, filePath).replaceAll('\\', '/')
+			onChange(relativePath)
+		}, 120)
+	}
+	fs.watchFile(filePath, { interval: 250 }, listener)
+	registerUnwatch(() => {
+		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
+		fs.unwatchFile(filePath, listener)
+	})
+}
+
+const clearTypeScriptOutputWatchers = () => {
+	for (const unwatch of typeScriptOutputUnwatchCallbacks) {
+		unwatch()
+	}
+	typeScriptOutputUnwatchCallbacks = []
+}
+
+const clearTypeScriptSourceWatchers = () => {
+	for (const unwatch of typeScriptSourceUnwatchCallbacks) {
+		unwatch()
+	}
+	typeScriptSourceUnwatchCallbacks = []
+}
+
+const watchDirectoryForTypeScriptOutputs = (directoryPath: string, refreshWatchers: () => void) => {
+	let debounceTimeout: NodeJS.Timeout | undefined
+	const watcher = fs.watch(directoryPath, (_eventType, filename) => {
+		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
+		debounceTimeout = setTimeout(() => {
+			debounceTimeout = undefined
+			refreshWatchers()
+			const changedPath = typeof filename === 'string' && filename.length > 0 ? path.join(directoryPath, filename) : directoryPath
+			queueLiveReload(path.relative(UI_ROOT_PATH, changedPath).replaceAll('\\', '/'))
+		}, 120)
+	})
+	typeScriptOutputUnwatchCallbacks.push(() => {
+		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
+		watcher.close()
+	})
+}
+
+const watchDirectoryForTypeScriptSources = (directoryPath: string, refreshWatchers: () => void) => {
+	let debounceTimeout: NodeJS.Timeout | undefined
+	const watcher = fs.watch(directoryPath, (_eventType, _filename) => {
+		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
+		debounceTimeout = setTimeout(() => {
+			debounceTimeout = undefined
+			refreshWatchers()
+		}, 120)
+	})
+	typeScriptSourceUnwatchCallbacks.push(() => {
+		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
+		watcher.close()
+	})
+}
+
+const refreshTypeScriptOutputWatchers = async () => {
+	clearTypeScriptOutputWatchers()
+	const directories = await getAllDirectories(TYPE_SCRIPT_OUTPUT_PATH)
+	for (const directoryPath of directories) {
+		watchDirectoryForTypeScriptOutputs(directoryPath, () => {
+			void refreshTypeScriptOutputWatchers()
+		})
+	}
+	const files = await getAllFiles(TYPE_SCRIPT_OUTPUT_PATH)
+	for (const filePath of files) {
+		watchFileWithCleanup(
+			filePath,
+			relativePath => {
+				queueLiveReload(relativePath)
+			},
+			callback => {
+				typeScriptOutputUnwatchCallbacks.push(callback)
+			},
+		)
+	}
+}
+
+const refreshTypeScriptSourceWatchers = async () => {
+	clearTypeScriptSourceWatchers()
+	const directories = await getAllDirectories(TYPE_SCRIPT_SOURCE_PATH)
+	for (const directoryPath of directories) {
+		watchDirectoryForTypeScriptSources(directoryPath, () => {
+			void refreshTypeScriptSourceWatchers()
+		})
+	}
+	const files = await getAllFiles(TYPE_SCRIPT_SOURCE_PATH)
+	for (const filePath of files) {
+		watchFileWithCleanup(
+			filePath,
+			relativePath => {
+				queueLiveReload(relativePath)
+			},
+			callback => {
+				typeScriptSourceUnwatchCallbacks.push(callback)
+			},
+		)
+	}
 }
 
 const restartServer = async (reason: string) => {
@@ -226,20 +337,8 @@ const runVendorBuild = async (reason: string) => {
 }
 
 const watchFile = (filePath: string, onChange: (relativePath: string) => void) => {
-	let debounceTimeout: NodeJS.Timeout | undefined
-	const listener = (currentStat: fs.Stats, previousStat: fs.Stats) => {
-		if (currentStat.mtimeMs === previousStat.mtimeMs) return
-		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
-		debounceTimeout = setTimeout(() => {
-			debounceTimeout = undefined
-			const relativePath = path.relative(UI_ROOT_PATH, filePath).replaceAll('\\', '/')
-			onChange(relativePath)
-		}, 120)
-	}
-	fs.watchFile(filePath, { interval: 250 }, listener)
-	unwatchCallbacks.push(() => {
-		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
-		fs.unwatchFile(filePath, listener)
+	watchFileWithCleanup(filePath, onChange, callback => {
+		unwatchCallbacks.push(callback)
 	})
 }
 
@@ -249,6 +348,8 @@ const shutdown = async (exitCode: number) => {
 	for (const unwatch of unwatchCallbacks) {
 		unwatch()
 	}
+	clearTypeScriptOutputWatchers()
+	clearTypeScriptSourceWatchers()
 	await stopProcess(vendorBuildProcess)
 	await stopProcess(serverProcess)
 	await stopProcess(typeScriptWatchProcess)
@@ -295,6 +396,18 @@ const main = () => {
 			void runVendorBuild(relativePath)
 		})
 	}
+
+	void refreshTypeScriptOutputWatchers().catch(error => {
+		console.error('[ui:watch] Failed to watch TypeScript output files')
+		console.error(error)
+		void shutdown(1)
+	})
+
+	void refreshTypeScriptSourceWatchers().catch(error => {
+		console.error('[ui:watch] Failed to watch TypeScript source files')
+		console.error(error)
+		void shutdown(1)
+	})
 
 	void (async () => {
 		try {

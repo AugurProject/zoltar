@@ -171,10 +171,11 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		}
 	}
 
+	const zoltarDeployed = hasDeployedStep(deploymentStatuses, 'zoltar')
 	useLayoutEffect(() => {
 		if (!autoLoadInitialData) return
 		void Promise.allSettled([loadZoltarUniverse(), loadZoltarQuestionCountData()])
-	}, [activeUniverseId, autoLoadInitialData, deploymentStatuses])
+	}, [activeUniverseId, autoLoadInitialData, zoltarDeployed])
 
 	useLayoutEffect(() => {
 		return () => {

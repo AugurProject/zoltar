@@ -177,6 +177,9 @@ export function MarketSection({
 						onPrepareRepForMigration={onPrepareRepForMigration}
 						onZoltarMigrationFormChange={onZoltarMigrationFormChange}
 						zoltarForkRepBalance={zoltarForkRepBalance}
+						zoltarForkAllowance={zoltarForkAllowance}
+						zoltarForkActiveAction={zoltarForkActiveAction}
+						zoltarForkPending={zoltarForkPending}
 						zoltarMigrationChildRepBalances={zoltarMigrationChildRepBalances}
 						zoltarMigrationActiveAction={zoltarMigrationActiveAction}
 						zoltarMigrationError={zoltarMigrationError}
@@ -186,6 +189,7 @@ export function MarketSection({
 						zoltarMigrationResult={zoltarMigrationResult}
 						zoltarUniverse={zoltarUniverse}
 						zoltarUniverseMissing={zoltarUniverseMissing}
+						onApproveZoltarForkRep={onApproveZoltarForkRep}
 					/>
 				) : undefined}
 			</div>

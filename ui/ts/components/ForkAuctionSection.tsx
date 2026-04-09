@@ -257,7 +257,7 @@ export function ForkAuctionSection({
 						</label>
 
 						<div className='actions'>
-							<button onClick={onForkWithOwnEscalation} disabled={accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onForkWithOwnEscalation} disabled={accountState.address === undefined || !isMainnet}>
 								Fork With Own Escalation
 							</button>
 							<button className='secondary' onClick={onInitiateFork} disabled={accountState.address === undefined || !isMainnet}>
@@ -283,7 +283,7 @@ export function ForkAuctionSection({
 						</div>
 
 						<div className='actions'>
-							<button onClick={onCreateChildUniverse} disabled={accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onCreateChildUniverse} disabled={accountState.address === undefined || !isMainnet}>
 								Create {getOutcomeActionLabel(forkAuctionForm.selectedOutcome)} Child Universe
 							</button>
 							<button className='secondary' onClick={onMigrateRepToZoltar} disabled={accountState.address === undefined || !isMainnet}>
@@ -292,7 +292,7 @@ export function ForkAuctionSection({
 						</div>
 
 						<div className='actions'>
-							<button onClick={onMigrateVault} disabled={accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onMigrateVault} disabled={accountState.address === undefined || !isMainnet}>
 								Migrate Vault
 							</button>
 							<button className='secondary' onClick={onMigrateEscalationDeposits} disabled={accountState.address === undefined || !isMainnet}>
@@ -309,7 +309,7 @@ export function ForkAuctionSection({
 							<input value={forkAuctionForm.bidAmount} onInput={event => onForkAuctionFormChange({ bidAmount: event.currentTarget.value })} />
 						</label>
 						<div className='actions'>
-							<button onClick={onStartTruthAuction} disabled={accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onStartTruthAuction} disabled={accountState.address === undefined || !isMainnet}>
 								Start Truth Auction
 							</button>
 							<button className='secondary' onClick={onSubmitBid} disabled={accountState.address === undefined || !isMainnet}>
@@ -326,7 +326,7 @@ export function ForkAuctionSection({
 							<input value={forkAuctionForm.refundBidIndex} onInput={event => onForkAuctionFormChange({ refundBidIndex: event.currentTarget.value })} />
 						</label>
 						<div className='actions'>
-							<button onClick={onRefundLosingBids} disabled={accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onRefundLosingBids} disabled={accountState.address === undefined || !isMainnet}>
 								Refund Losing Bid
 							</button>
 							<button className='secondary' onClick={onFinalizeTruthAuction} disabled={accountState.address === undefined || !isMainnet}>
@@ -339,7 +339,7 @@ export function ForkAuctionSection({
 							<input value={forkAuctionForm.bidIndex} onInput={event => onForkAuctionFormChange({ bidIndex: event.currentTarget.value })} />
 						</label>
 						<div className='actions'>
-							<button onClick={onClaimAuctionProceeds} disabled={accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onClaimAuctionProceeds} disabled={accountState.address === undefined || !isMainnet}>
 								Claim Auction Proceeds
 							</button>
 						</div>

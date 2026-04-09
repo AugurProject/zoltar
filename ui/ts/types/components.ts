@@ -9,6 +9,7 @@ import type {
 	MarketCreationResult,
 	MarketDetails,
 	OpenOracleActionResult,
+	OpenOracleReportDetails,
 	OracleManagerDetails,
 	ReportingActionResult,
 	ReportingDetails,
@@ -40,6 +41,11 @@ export type OverviewPanelsProps = {
 	universeErrorMessage: string | undefined
 	universeLabel: string
 	isRefreshing: boolean
+	repEthPrice: bigint | undefined
+	repEthSource: 'v4' | 'v3' | undefined
+	repUsdcPrice: bigint | undefined
+	repUsdcSource: 'v4' | 'v3' | undefined
+	isLoadingRepPrices: boolean
 	onConnect: () => void
 	onGoToGenesisUniverse: () => void
 	onRefresh: () => void
@@ -74,7 +80,7 @@ export type DeploymentRouteContentProps = {
 
 export type MarketRouteContentProps = {
 	accountState: AccountState
-	onApproveZoltarForkRep: () => void
+	onApproveZoltarForkRep: (amount?: bigint) => void
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	onCreateMarket: () => void
 	onForkZoltar: () => void
@@ -121,14 +127,14 @@ export type SecurityPoolRouteContentProps = {
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
 	onCreateSecurityPool: () => void
-	lastCreatedQuestionId: string | undefined
-	onLoadLatestMarket?: () => void
 	onLoadMarket: () => void
 	onLoadMarketById: (marketId: string) => Promise<void>
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
 	poolCreationMarketDetails: MarketDetails | undefined
+	onResetSecurityPoolCreation: () => void
 	onSecurityPoolFormChange: (update: Partial<SecurityPoolFormState>) => void
+	zoltarUniverseHasForked: boolean
 	securityPools: ListedSecurityPool[]
 	securityPoolCreating: boolean
 	securityPoolError: string | undefined
@@ -164,12 +170,11 @@ export type SecurityPoolsOverviewRouteContentProps = {
 	securityPools: ListedSecurityPool[]
 } & LiquidationControlsProps
 
-export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps & {
-	showHeader?: boolean
-}
+export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
 export type SecurityPoolWorkflowRouteContentProps = {
 	accountState: AccountState
+	activeUniverseId: bigint
 	closeLiquidationModal: () => void
 	forkAuction: ForkAuctionRouteContentProps
 	liquidationAmount: string
@@ -198,20 +203,24 @@ export type SecurityPoolsSectionProps = {
 export type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
-	onApproveRep: () => void
+	onApproveRep: (amount?: bigint) => void
 	onDepositRep: () => void
 	onLoadSecurityVault: () => void
 	onRedeemFees: () => void
-	onRedeemRep: () => void
+	onSetSecurityBondAllowance: () => void
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
-	onUpdateVaultFees: () => void
+	onWithdrawRep: () => void
 	securityVaultDetails: SecurityVaultDetails | undefined
 	securityVaultError: string | undefined
 	securityVaultForm: SecurityVaultFormState
+	securityVaultRepAllowance: bigint | undefined
+	securityVaultRepBalance: bigint | undefined
 	securityVaultResult: SecurityVaultActionResult | undefined
 }
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
+	compactLayout?: boolean
+	autoLoadVault?: boolean
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean
 }
@@ -219,9 +228,12 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 export type OpenOracleRouteContentProps = {
 	accountState: AccountState
 	loadingOracleManager: boolean
+	loadingOracleReport: boolean
 	onApproveToken1: () => void
 	onApproveToken2: () => void
+	onDisputeReport: () => void
 	onLoadOracleManager: () => void
+	onLoadOracleReport: () => void
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
 	onQueueOperation: () => void
 	onRequestPrice: () => void
@@ -229,6 +241,7 @@ export type OpenOracleRouteContentProps = {
 	onSubmitInitialReport: () => void
 	openOracleError: string | undefined
 	openOracleForm: OpenOracleFormState
+	openOracleReportDetails: OpenOracleReportDetails | undefined
 	openOracleResult: OpenOracleActionResult | undefined
 	oracleManagerDetails: OracleManagerDetails | undefined
 }

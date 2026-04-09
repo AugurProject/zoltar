@@ -86,7 +86,7 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, isMa
 								<p className='address'>{step.address}</p>
 								<p className='detail'>{stepStatus.detail}</p>
 							</div>
-							<button onClick={() => void onDeploy(step.id)} disabled={!canDeploy}>
+							<button className='primary' onClick={() => void onDeploy(step.id)} disabled={!canDeploy}>
 								{stepStatus.buttonLabel}
 							</button>
 						</div>

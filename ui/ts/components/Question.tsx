@@ -9,7 +9,7 @@ type QuestionProps = {
 	showTitle?: boolean
 }
 
-function getQuestionTitle(question: MarketDetails) {
+export function getQuestionTitle(question: MarketDetails) {
 	return question.title.trim() === '' ? 'Untitled question' : question.title
 }
 
@@ -50,7 +50,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 	if (loading || question === undefined) {
 		return (
 			<div className={`question-summary ${className}`}>
-				<p className='detail question-summary-loading'>
+				<p className='detail'>
 					<LoadingText>Loading question details...</LoadingText>
 				</p>
 			</div>
@@ -68,7 +68,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 					<p className='detail'>{description}</p>
 				</div>
 			) : (
-				<p className='detail question-summary-description'>{description}</p>
+				<p className='detail'>{description}</p>
 			)}
 			<div className='question-summary-grid'>
 				<div>

@@ -6,13 +6,13 @@ const DEFAULT_CURRENT_RETENTION_RATE = '10'
 export function getDefaultMarketFormState(): MarketFormState {
 	return {
 		answerUnit: '',
-		categoricalOutcomes: 'Yes\nNo',
+		categoricalOutcomes: ['Yes', 'No'],
 		description: '',
-		displayValueMax: '100',
-		displayValueMin: '0',
 		endTime: '',
 		marketType: 'binary',
-		numTicks: '100',
+		scalarIncrement: '1',
+		scalarMax: '100',
+		scalarMin: '0',
 		title: '',
 		startTime: '',
 	}
@@ -30,7 +30,8 @@ export function getDefaultSecurityPoolFormState(): SecurityPoolFormState {
 export function getDefaultSecurityVaultFormState(): SecurityVaultFormState {
 	return {
 		depositAmount: '0',
-		repApprovalAmount: '0',
+		securityBondAllowanceAmount: '0',
+		repWithdrawAmount: '0',
 		securityPoolAddress: '',
 	}
 }
@@ -39,7 +40,11 @@ export function getDefaultOpenOracleFormState(): OpenOracleFormState {
 	return {
 		amount1: '0',
 		amount2: '0',
+		disputeNewAmount1: '0',
+		disputeNewAmount2: '0',
+		disputeTokenToSwap: 'token1',
 		managerAddress: '',
+		openOracleAddress: '',
 		operationAmount: '0',
 		operationTargetVault: '',
 		queuedOperation: 'liquidation',

@@ -11,14 +11,14 @@ export type AccountState = {
 
 export type MarketFormState = {
 	answerUnit: string
-	categoricalOutcomes: string
+	categoricalOutcomes: string[]
 	description: string
-	displayValueMax: string
-	displayValueMin: string
+	scalarIncrement: string
+	scalarMax: string
+	scalarMin: string
 	title: string
 	endTime: string
 	marketType: MarketType
-	numTicks: string
 	startTime: string
 }
 
@@ -31,14 +31,19 @@ export type SecurityPoolFormState = {
 
 export type SecurityVaultFormState = {
 	depositAmount: string
-	repApprovalAmount: string
+	securityBondAllowanceAmount: string
+	repWithdrawAmount: string
 	securityPoolAddress: string
 }
 
 export type OpenOracleFormState = {
 	amount1: string
 	amount2: string
+	disputeNewAmount1: string
+	disputeNewAmount2: string
+	disputeTokenToSwap: 'token1' | 'token2'
 	managerAddress: string
+	openOracleAddress: string
 	operationAmount: string
 	operationTargetVault: string
 	queuedOperation: 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
