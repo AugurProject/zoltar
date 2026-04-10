@@ -32,7 +32,11 @@
       "Bash(git:*)",
       "Bash(git -C /workspace/.t3/worktrees/zoltar/t3code-ad1f2154 show origin/main:ui/ts/components/SecurityPoolWorkflowSection.tsx)",
       "Read(//tmp/**)",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(python3:*)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(echo \"BIOME_EXIT: $?\")",
+      "Bash(bun tsc:*)"
     ]
   }
 }

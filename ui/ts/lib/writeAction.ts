@@ -1,5 +1,6 @@
 import type { Address, Hash } from 'viem'
 import { getErrorMessage } from './errors.js'
+import type { WriteOperationsParameters } from '../types/app.js'
 
 type RunWriteActionParameters = {
 	accountAddress: Address | undefined
@@ -9,6 +10,20 @@ type RunWriteActionParameters = {
 	onTransactionRequested: () => void
 	refreshState: () => Promise<void>
 	setErrorMessage: (message: string | undefined) => void
+}
+
+export function buildWriteActionConfig(params: Omit<WriteOperationsParameters, 'onTransactionSubmitted'>, errorSignal: { value: string | undefined }, missingWalletMessage: string) {
+	return {
+		accountAddress: params.accountAddress,
+		onTransaction: params.onTransaction,
+		onTransactionFinished: params.onTransactionFinished,
+		onTransactionRequested: params.onTransactionRequested,
+		refreshState: params.refreshState,
+		setErrorMessage: (message: string | undefined) => {
+			errorSignal.value = message
+		},
+		missingWalletMessage,
+	}
 }
 
 export async function runWriteAction<TResult extends { hash: Hash }>(parameters: RunWriteActionParameters, action: (walletAddress: Address) => Promise<TResult>, errorFallback: string, onSuccess?: (result: TResult, walletAddress: Address) => Promise<void> | void) {

@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { readSecurityPoolQueryParam, readUniverseQueryParam, writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../lib/urlParams.js'
+import { readOpenOracleReportIdQueryParam, readSecurityPoolQueryParam, readUniverseQueryParam, writeOpenOracleReportIdQueryParam, writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../lib/urlParams.js'
 
 void describe('url params', () => {
 	void test('reads a universe query param', () => {
@@ -22,5 +22,13 @@ void describe('url params', () => {
 		expect(writeSecurityPoolQueryParam('', '0x1234')).toBe('?securityPool=0x1234')
 		expect(writeSecurityPoolQueryParam('?foo=bar', '0x1234')).toBe('?foo=bar&securityPool=0x1234')
 		expect(writeSecurityPoolQueryParam('?foo=bar&securityPool=0x1234', undefined)).toBe('?foo=bar')
+	})
+
+	void test('reads and writes an open oracle report id query param', () => {
+		expect(readOpenOracleReportIdQueryParam('?openOracleReportId=42')).toBe('42')
+		expect(readOpenOracleReportIdQueryParam('?openOracleReportId=')).toBe(undefined)
+		expect(writeOpenOracleReportIdQueryParam('', '42')).toBe('?openOracleReportId=42')
+		expect(writeOpenOracleReportIdQueryParam('?foo=bar', '42')).toBe('?foo=bar&openOracleReportId=42')
+		expect(writeOpenOracleReportIdQueryParam('?foo=bar&openOracleReportId=42', undefined)).toBe('?foo=bar')
 	})
 })

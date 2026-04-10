@@ -3,6 +3,7 @@ import type { Address, Hash } from 'viem'
 import { loadOracleManagerDetails, requestOraclePrice } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { runWriteAction } from '../lib/writeAction.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '../types/contracts.js'
 
 type UsePriceOracleManagerParameters = {
@@ -32,24 +33,30 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 	}
 
 	const requestPoolPrice = async (managerAddress: Address) => {
-		if (accountAddress === undefined) {
-			poolOracleManagerError.value = 'Connect a wallet before requesting a price'
-			return
-		}
-		const ethCost = poolOracleManagerDetails.value?.requestPriceEthCost ?? 0n
-		try {
-			onTransactionRequested()
-			poolOracleManagerError.value = undefined
-			poolPriceOracleResult.value = undefined
-			const result = await requestOraclePrice(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), managerAddress, ethCost)
-			poolPriceOracleResult.value = result
-			onTransaction(result.hash)
-			await loadPoolOracleManager(managerAddress)
-		} catch (error) {
-			poolOracleManagerError.value = getErrorMessage(error, 'Failed to request price')
-		} finally {
-			onTransactionFinished()
-		}
+		poolPriceOracleResult.value = undefined
+		await runWriteAction(
+			{
+				accountAddress,
+				missingWalletMessage: 'Connect a wallet before requesting a price',
+				onTransaction,
+				onTransactionFinished,
+				onTransactionRequested,
+				refreshState: async () => {
+					await loadPoolOracleManager(managerAddress)
+				},
+				setErrorMessage: message => {
+					poolOracleManagerError.value = message
+				},
+			},
+			async walletAddress => {
+				const details = poolOracleManagerDetails.value ?? await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
+				return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, details.requestPriceEthCost)
+			},
+			'Failed to request price',
+			result => {
+				poolPriceOracleResult.value = result
+			},
+		)
 	}
 
 	return {

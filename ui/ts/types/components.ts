@@ -1,5 +1,5 @@
 import type { Address } from 'viem'
-import type { AccountState, ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from './app.js'
+import type { AccountState, ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from './app.js'
 import type {
 	DeploymentStatus,
 	DeploymentStepId,
@@ -15,12 +15,14 @@ import type {
 	ReportingDetails,
 	SecurityPoolCreationResult,
 	SecurityPoolOverviewActionResult,
+	SecurityPoolVaultSummary,
 	SecurityVaultActionResult,
 	SecurityVaultDetails,
 	TradingActionResult,
 	ZoltarMigrationActionResult,
 	ZoltarUniverseSummary,
 } from './contracts.js'
+import type { OpenOracleInitialReportPriceSource } from '../lib/openOracle.js'
 
 export type DeploymentSectionProps = {
 	title: string
@@ -189,6 +191,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 	onRequestPoolPrice: (managerAddress: Address) => void
+	onViewPendingReport: (reportId: bigint) => void
 	poolOracleManagerDetails: OracleManagerDetails | undefined
 	poolOracleManagerError: string | undefined
 	poolPriceOracleResult: OpenOracleActionResult | undefined
@@ -211,7 +214,7 @@ export type SecurityVaultRouteContentProps = {
 	loadingSecurityVault: boolean
 	onApproveRep: (amount?: bigint) => void
 	onDepositRep: () => void
-	onLoadSecurityVault: () => void
+	onLoadSecurityVault: (vaultAddress?: string) => void
 	onRedeemFees: () => void
 	onSetSecurityBondAllowance: () => void
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
@@ -222,6 +225,7 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultRepAllowance: bigint | undefined
 	securityVaultRepBalance: bigint | undefined
 	securityVaultResult: SecurityVaultActionResult | undefined
+	securityPoolVaults?: SecurityPoolVaultSummary[] | undefined
 }
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
@@ -233,26 +237,36 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 
 export type OpenOracleRouteContentProps = {
 	accountState: AccountState
-	loadingOracleManager: boolean
 	loadingOracleReport: boolean
 	onApproveToken1: () => void
 	onApproveToken2: () => void
+	onCreateOpenOracleGame: () => void
 	onDisputeReport: () => void
-	onLoadOracleManager: () => void
-	onLoadOracleReport: () => void
+	onLoadOracleReport: (reportId?: string) => void
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
-	onQueueOperation: () => void
-	onRequestPrice: () => void
+	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
 	onSettleReport: () => void
 	onSubmitInitialReport: () => void
+	loadingOpenOracleCreate: boolean
 	openOracleError: string | undefined
+	openOracleInitialReportState: {
+		defaultPrice: string | undefined
+		defaultPriceSource: OpenOracleInitialReportPriceSource | undefined
+		loading: boolean
+		token1Allowance: bigint | undefined
+		token1Decimals: number | undefined
+		token2Allowance: bigint | undefined
+		token2Decimals: number | undefined
+	}
+	openOracleCreateForm: OpenOracleCreateFormState
 	openOracleForm: OpenOracleFormState
 	openOracleReportDetails: OpenOracleReportDetails | undefined
 	openOracleResult: OpenOracleActionResult | undefined
-	oracleManagerDetails: OracleManagerDetails | undefined
 }
 
-export type OpenOracleSectionProps = OpenOracleRouteContentProps
+export type OpenOracleView = 'browse' | 'create' | 'selected-report'
+
+export type OpenOracleSectionProps = OpenOracleRouteContentProps & { initialView: OpenOracleView | undefined }
 
 export type ReportingRouteContentProps = {
 	accountState: AccountState

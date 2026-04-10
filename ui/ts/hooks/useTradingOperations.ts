@@ -1,21 +1,14 @@
 import { useSignal } from '@preact/signals'
-import type { Address, Hash } from 'viem'
+import type { Address } from 'viem'
 import { createCompleteSetInSecurityPool, migrateSharesFromUniverse, redeemCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '../contracts.js'
 import { createWalletWriteClient } from '../lib/clients.js'
 import { parseAddressInput, parseReportingOutcomeInput } from '../lib/inputs.js'
 import { getDefaultTradingFormState, parseBigIntInput } from '../lib/marketForm.js'
-import { runWriteAction } from '../lib/writeAction.js'
-import type { TradingFormState } from '../types/app.js'
+import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
+import type { TradingFormState, WriteOperationsParameters } from '../types/app.js'
 import type { TradingActionResult } from '../types/contracts.js'
 
-type UseTradingOperationsParameters = {
-	accountAddress: Address | undefined
-	onTransaction: (hash: Hash) => void
-	onTransactionFinished: () => void
-	onTransactionRequested: () => void
-	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
-}
+type UseTradingOperationsParameters = WriteOperationsParameters
 
 export function useTradingOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseTradingOperationsParameters) {
 	const tradingError = useSignal<string | undefined>(undefined)
@@ -23,17 +16,7 @@ export function useTradingOperations({ accountAddress, onTransaction, onTransact
 	const tradingResult = useSignal<TradingActionResult | undefined>(undefined)
 	const runTradingAction = async (action: (walletAddress: Address, securityPoolAddress: Address) => Promise<TradingActionResult>, errorFallback: string) =>
 		await runWriteAction(
-			{
-				accountAddress,
-				missingWalletMessage: 'Connect a wallet before trading',
-				onTransaction,
-				onTransactionFinished,
-				onTransactionRequested,
-				refreshState,
-				setErrorMessage: message => {
-					tradingError.value = message
-				},
-			},
+			buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, tradingError, 'Connect a wallet before trading'),
 			async walletAddress => {
 				const securityPoolAddress = parseAddressInput(tradingForm.value.securityPoolAddress, 'Security pool address')
 				const result = await action(walletAddress, securityPoolAddress)

@@ -1,9 +1,11 @@
 import { useSignal } from '@preact/signals'
 import { useCallback } from 'preact/hooks'
+import { useFormState } from './useFormState.js'
 import type { Address, Hash } from 'viem'
 import { migrateInternalRepInZoltar, prepareRepForMigrationInZoltar } from '../contracts.js'
-import { createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { requireWallet } from '../lib/walletGuard.js'
 import { parseBigIntListInput } from '../lib/inputs.js'
 import { getDefaultZoltarMigrationFormState, parseRepAmountInput } from '../lib/marketForm.js'
 import type { ZoltarMigrationFormState } from '../types/app.js'
@@ -50,20 +52,20 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 	const zoltarMigrationPending = useSignal(false)
 	const zoltarMigrationResult = useSignal<ZoltarMigrationActionResult | undefined>(undefined)
 	const zoltarMigrationActiveAction = useSignal<'prepare' | 'split' | undefined>(undefined)
-	const zoltarMigrationForm = useSignal<ZoltarMigrationFormState>(getDefaultZoltarMigrationFormState())
+	const { state: zoltarMigrationForm, setState: setZoltarMigrationForm } = useFormState<ZoltarMigrationFormState>(getDefaultZoltarMigrationFormState())
 
 	const runZoltarMigrationAction = useCallback(
 		async ({ actionName, action, errorFallback, refreshAfter, requiresOutcomeIndexes, resolveAmount = amount => amount }: RunZoltarMigrationActionParameters) => {
-			try {
-				getRequiredInjectedEthereum()
-			} catch {
-				zoltarMigrationError.value = 'No injected wallet found'
+			if (
+				!requireWallet(
+					accountAddress,
+					message => {
+						zoltarMigrationError.value = message
+					},
+					'using REP migration actions',
+				)
+			)
 				return
-			}
-			if (accountAddress === undefined) {
-				zoltarMigrationError.value = 'Connect a wallet before using REP migration actions'
-				return
-			}
 
 			zoltarMigrationPending.value = true
 			zoltarMigrationActiveAction.value = actionName
@@ -118,7 +120,6 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 			refreshZoltarUniverse,
 			zoltarForkRepBalance,
 			zoltarMigrationPreparedRepBalance,
-			zoltarMigrationForm,
 			zoltarMigrationError,
 			zoltarMigrationPending,
 			zoltarMigrationResult,
@@ -146,13 +147,6 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 			requiresOutcomeIndexes: true,
 		})
 	}, [onTransactionSubmitted, runZoltarMigrationAction])
-
-	const setZoltarMigrationForm = useCallback(
-		(updater: (current: ZoltarMigrationFormState) => ZoltarMigrationFormState) => {
-			zoltarMigrationForm.value = updater(zoltarMigrationForm.value)
-		},
-		[zoltarMigrationForm],
-	)
 
 	return {
 		migrateInternalRep,

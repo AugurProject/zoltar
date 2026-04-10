@@ -1,8 +1,9 @@
 import { useSignal } from '@preact/signals'
+import { useFormState } from './useFormState.js'
 import type { Address, Hash } from 'viem'
 import { createMarket as createMarketTransaction } from '../contracts.js'
-import { createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { createWalletWriteClient } from '../lib/clients.js'
+import { runWriteAction } from '../lib/writeAction.js'
 import { createMarketParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultMarketFormState } from '../lib/marketForm.js'
 import type { MarketFormState } from '../types/app.js'
@@ -23,46 +24,45 @@ type UseMarketCreationParameters = {
 
 export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseMarketCreationParameters) {
 	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState })
-	const marketForm = useSignal<MarketFormState>(getDefaultMarketFormState())
+	const { state: marketForm, setState: setMarketForm } = useFormState<MarketFormState>(getDefaultMarketFormState())
 	const marketCreating = useSignal(false)
 	const marketResult = useSignal<MarketCreationResult | undefined>(undefined)
 	const marketError = useSignal<string | undefined>(undefined)
 
 	const createMarket = async () => {
-		try {
-			getRequiredInjectedEthereum()
-		} catch {
-			marketError.value = 'No injected wallet found'
-			return
-		}
-		if (accountAddress === undefined) {
-			marketError.value = 'Connect a wallet before creating a question'
-			return
-		}
-		const marketParameters = createMarketParameters(marketForm.value)
-		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) {
-			marketError.value = 'Deploy ZoltarQuestionData before creating a question'
-			return
-		}
-
-		marketCreating.value = true
-		marketError.value = undefined
 		marketResult.value = undefined
-
-		try {
-			onTransactionRequested()
-			const result = await createMarketTransaction(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), marketParameters)
-			marketResult.value = result
-			zoltar.setZoltarForkQuestionId(result.questionId)
-			onTransaction(result.createQuestionHash)
-			await refreshState()
-			await zoltar.loadZoltarQuestions()
-		} catch (error) {
-			marketError.value = getErrorMessage(error, 'Failed to create question')
-		} finally {
-			marketCreating.value = false
-			onTransactionFinished()
-		}
+		await runWriteAction(
+			{
+				accountAddress,
+				missingWalletMessage: 'Connect a wallet before creating a question',
+				onTransaction,
+				onTransactionRequested: () => {
+					marketCreating.value = true
+					onTransactionRequested()
+				},
+				onTransactionFinished: () => {
+					marketCreating.value = false
+					onTransactionFinished()
+				},
+				refreshState: async () => {
+					await refreshState()
+					await zoltar.loadZoltarQuestions()
+				},
+				setErrorMessage: message => {
+					marketError.value = message
+				},
+			},
+			async walletAddress => {
+				if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) throw new Error('Deploy ZoltarQuestionData before creating a question')
+				const result = await createMarketTransaction(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), createMarketParameters(marketForm.value))
+				return { ...result, hash: result.createQuestionHash }
+			},
+			'Failed to create question',
+			result => {
+				marketResult.value = result
+				zoltar.setZoltarForkQuestionId(result.questionId)
+			},
+		)
 	}
 
 	const resetMarket = () => {
@@ -79,8 +79,6 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 		marketForm: marketForm.value,
 		marketResult: marketResult.value,
 		resetMarket,
-		setMarketForm: (updater: (current: MarketFormState) => MarketFormState) => {
-			marketForm.value = updater(marketForm.value)
-		},
+		setMarketForm,
 	}
 }

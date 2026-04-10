@@ -1,8 +1,9 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
-import { createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createWalletWriteClient } from '../lib/clients.js'
 import { findNextDeployableStep, getPrerequisiteLabel } from '../lib/deployment.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { requireWallet } from '../lib/walletGuard.js'
 import type { DeploymentStatus, DeploymentStepId } from '../types/contracts.js'
 
 type UseDeploymentFlowParameters = {
@@ -20,16 +21,16 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 	const errorMessage = useSignal<string | undefined>(undefined)
 
 	const deployStep = async (stepId: DeploymentStepId) => {
-		try {
-			getRequiredInjectedEthereum()
-		} catch {
-			errorMessage.value = 'No injected wallet found'
+		if (
+			!requireWallet(
+				accountAddress,
+				message => {
+					errorMessage.value = message
+				},
+				'deploying',
+			)
+		)
 			return
-		}
-		if (accountAddress === undefined) {
-			errorMessage.value = 'Connect a wallet before deploying'
-			return
-		}
 
 		const stepIndex = deploymentStatuses.findIndex(step => step.id === stepId)
 		if (stepIndex === -1) return

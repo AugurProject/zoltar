@@ -1,11 +1,14 @@
 import { useEffect, useRef } from 'preact/hooks'
+import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
+import { approvalShortage } from '../lib/inputs.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
+import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
 export function SecurityVaultSection({
@@ -35,8 +38,11 @@ export function SecurityVaultSection({
 		securityBondAllowanceAmount: securityVaultForm.securityBondAllowanceAmount ?? '0',
 		repWithdrawAmount: securityVaultForm.repWithdrawAmount ?? '0',
 		securityPoolAddress: securityVaultForm.securityPoolAddress ?? '',
+		selectedVaultAddress: securityVaultForm.selectedVaultAddress ?? '',
 	}
+	const selectedVaultAddress = getSelectedVaultAddress(normalizedSecurityVaultForm.selectedVaultAddress, accountState.address)
 	const hasWithdrawAmount = normalizedSecurityVaultForm.repWithdrawAmount.trim() !== '' && normalizedSecurityVaultForm.repWithdrawAmount.trim() !== '0'
+	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddress, accountState.address)
 	const depositAmount = (() => {
 		try {
 			return parseRepAmountInput(normalizedSecurityVaultForm.depositAmount, 'REP deposit amount')
@@ -53,21 +59,22 @@ export function SecurityVaultSection({
 	})()
 	const securityBondAllowance = securityVaultDetails?.securityBondAllowance ?? 0n
 	const approvedRep = securityVaultRepAllowance
-	const approvalShortage = depositAmount === undefined || approvedRep === undefined ? undefined : depositAmount > approvedRep ? depositAmount - approvedRep : 0n
+	const shortage = approvalShortage(depositAmount, approvedRep)
 	const withdrawableRepAmount = securityVaultDetails === undefined ? undefined : securityVaultDetails.repDepositShare > securityVaultDetails.lockedRepInEscalationGame ? securityVaultDetails.repDepositShare - securityVaultDetails.lockedRepInEscalationGame : 0n
 	const hasClaimableFees = securityVaultDetails !== undefined && securityVaultDetails.unpaidEthFees > 0n
-	const canClaimFees = accountState.address !== undefined && isMainnet && hasClaimableFees
-	const hasSufficientDepositAllowance = approvedRep !== undefined && depositAmount !== undefined && depositAmount > 0n && approvedRep >= depositAmount
-	const canApproveRep = accountState.address !== undefined && isMainnet && securityVaultDetails !== undefined && depositAmount !== undefined && depositAmount > 0n && approvalShortage !== undefined && approvalShortage > 0n
-	const canSetSecurityBondAllowance = accountState.address !== undefined && isMainnet && securityVaultDetails !== undefined && securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > 0n
-	const approveButtonLabel = depositAmount === undefined ? 'Approve REP' : approvalShortage === 0n ? 'Approval Satisfied' : `Approve ${formatCurrencyBalance(approvalShortage)} REP`
+	const canClaimFees = selectedVaultIsOwnedByAccount && isMainnet && hasClaimableFees
+	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && approvedRep !== undefined && depositAmount !== undefined && depositAmount > 0n && approvedRep >= depositAmount
+	const canApproveRep = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && depositAmount !== undefined && depositAmount > 0n && shortage !== undefined && shortage > 0n
+	const canSetSecurityBondAllowance = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > 0n
+	const approveButtonLabel = depositAmount === undefined || depositAmount <= 0n || shortage === undefined ? 'Approve REP' : shortage === 0n ? 'Approval Satisfied' : `Approve ${formatCurrencyBalance(shortage)} REP`
 	const approveButtonTitle = (() => {
 		if (accountState.address === undefined) return 'Connect a wallet before approving REP.'
 		if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
+		if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to approve REP.'
 		if (securityVaultDetails === undefined) return 'Load the vault to calculate the required approval amount.'
 		if (depositAmount === undefined || depositAmount <= 0n) return 'Enter a deposit amount greater than zero.'
-		if (approvalShortage === 0n) return 'No additional REP approval is needed for this deposit amount.'
-		return `Approve ${formatCurrencyBalance(approvalShortage)} more REP before depositing.`
+		if (shortage === 0n) return 'No additional REP approval is needed for this deposit amount.'
+		return `Approve ${formatCurrencyBalance(shortage)} more REP before depositing.`
 	})()
 	const latestActionLabel =
 		securityVaultResult === undefined
@@ -80,28 +87,30 @@ export function SecurityVaultSection({
 					redeemFees: 'Redeem Fees',
 					updateVaultFees: 'Update Fees',
 				}[securityVaultResult.action]
-	const autoLoadKey = `${accountState.address ?? ''}:${normalizedSecurityVaultForm.securityPoolAddress}`
-	const hasLoadedCurrentVault = securityVaultDetails !== undefined && securityVaultDetails.vaultAddress.toLowerCase() === accountState.address?.toLowerCase() && securityVaultDetails.securityPoolAddress.toLowerCase() === normalizedSecurityVaultForm.securityPoolAddress.toLowerCase()
+	const autoLoadKey = `${selectedVaultAddress ?? ''}:${normalizedSecurityVaultForm.securityPoolAddress}`
+	const hasLoadedCurrentVault = securityVaultDetails !== undefined && selectedVaultAddress !== undefined && securityVaultDetails.vaultAddress.toLowerCase() === selectedVaultAddress.toLowerCase() && securityVaultDetails.securityPoolAddress.toLowerCase() === normalizedSecurityVaultForm.securityPoolAddress.toLowerCase()
 	const lastAutoLoadKey = useRef<string | undefined>(undefined)
 
 	useEffect(() => {
 		if (!autoLoadVault) return
-		if (showSecurityPoolAddressInput) return
 		if (accountState.address === undefined) return
 		if (normalizedSecurityVaultForm.securityPoolAddress.trim() === '') return
 		if (hasLoadedCurrentVault || loadingSecurityVault) return
 		if (lastAutoLoadKey.current === autoLoadKey) return
 		lastAutoLoadKey.current = autoLoadKey
 		void onLoadSecurityVault()
-	}, [accountState.address, autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, showSecurityPoolAddressInput])
+	}, [accountState.address, autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault])
 
-	const vaultDetails =
-		securityVaultDetails === undefined ? undefined : (
-			<div className='entity-card-subsection'>
-				<div className='entity-card-subsection-header'>
-					<h4>Vault Details</h4>
-				</div>
+	const vaultSummarySection = (
+		<div className='entity-card-subsection'>
+			{securityVaultDetails === undefined ? undefined : (
 				<div className='entity-metric-grid'>
+					<div className='entity-metric'>
+						<span className='metric-label'>Selected Vault</span>
+						<strong>
+							<AddressValue address={securityVaultDetails.vaultAddress} />
+						</strong>
+					</div>
 					<div className='entity-metric'>
 						<span className='metric-label'>REP Deposit Share</span>
 						<strong>
@@ -137,13 +146,24 @@ export function SecurityVaultSection({
 						</strong>
 					</div>
 				</div>
-				<div className='actions'>
-					<button className='primary' onClick={onRedeemFees} disabled={!canClaimFees}>
-						Claim Fees
-					</button>
-				</div>
+			)}
+			{showSecurityPoolAddressInput ? (
+				<label className='field'>
+					<span>Security Pool Address</span>
+					<input value={normalizedSecurityVaultForm.securityPoolAddress} onInput={event => onSecurityVaultFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder='0x...' />
+				</label>
+			) : undefined}
+			<div className='actions'>
+				<button className='secondary' onClick={() => onLoadSecurityVault()} disabled={loadingSecurityVault}>
+					{loadingSecurityVault ? <LoadingText>Refreshing...</LoadingText> : 'Refresh'}
+				</button>
+				<button className='primary' onClick={onRedeemFees} disabled={!canClaimFees}>
+					Claim Fees
+				</button>
 			</div>
-		)
+			{selectedVaultIsOwnedByAccount ? undefined : <p className='detail'>Read-only vault. Refresh is available, but write actions are disabled.</p>}
+		</div>
+	)
 
 	const securityBondAllowanceSection =
 		securityVaultDetails === undefined ? undefined : (
@@ -184,27 +204,6 @@ export function SecurityVaultSection({
 			</div>
 		)
 
-	const vaultLoadSection = (
-		<div className='entity-card-subsection'>
-			<div className='entity-card-subsection-header'>
-				<h4>Load Vault</h4>
-			</div>
-			{showSecurityPoolAddressInput ? (
-				<label className='field'>
-					<span>Security Pool Address</span>
-					<input value={normalizedSecurityVaultForm.securityPoolAddress} onInput={event => onSecurityVaultFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder='0x...' />
-				</label>
-			) : (
-				<p className='detail'>Uses the selected security pool address from the selected-pool view.</p>
-			)}
-			<div className='actions'>
-				<button className='secondary' onClick={onLoadSecurityVault} disabled={loadingSecurityVault}>
-					{loadingSecurityVault ? <LoadingText>Loading Vault...</LoadingText> : 'Load My Vault'}
-				</button>
-			</div>
-		</div>
-	)
-
 	const vaultDepositSection = (
 		<div className='entity-card-subsection'>
 			<div className='entity-card-subsection-header'>
@@ -228,17 +227,17 @@ export function SecurityVaultSection({
 					</button>
 				</div>
 			</label>
-			<p className='detail'>Available REP: {securityVaultRepBalance === undefined ? 'Load the vault to fetch your balance.' : <CurrencyValue value={securityVaultRepBalance} suffix='REP' copyable={false} />}</p>
+			<p className='detail'>Available REP: {securityVaultRepBalance === undefined ? selectedVaultIsOwnedByAccount ? 'Refresh the vault to fetch your balance.' : 'Unavailable for read-only vaults.' : <CurrencyValue value={securityVaultRepBalance} suffix='REP' copyable={false} />}</p>
 			<div className='actions'>
-				<button className='secondary' title={approveButtonTitle} onClick={() => onApproveRep(approvalShortage)} disabled={!canApproveRep}>
+				<button className='secondary' title={approveButtonTitle} onClick={() => onApproveRep(shortage)} disabled={!canApproveRep}>
 					{approveButtonLabel}
 				</button>
-				<button className='primary' onClick={onDepositRep} disabled={accountState.address === undefined || !isMainnet || !hasSufficientDepositAllowance}>
+				<button className='primary' onClick={onDepositRep} disabled={!selectedVaultIsOwnedByAccount || accountState.address === undefined || !isMainnet || !hasSufficientDepositAllowance}>
 					Create / Deposit REP
 				</button>
 			</div>
-			{depositAmount === undefined ? undefined : approvalShortage === undefined ? undefined : approvalShortage > 0n ? (
-				<p className='detail'>Need {<CurrencyValue value={approvalShortage} suffix='REP' copyable={false} />} more REP approved before depositing.</p>
+			{depositAmount === undefined ? undefined : shortage === undefined ? undefined : shortage > 0n ? (
+				<p className='detail'>Need {<CurrencyValue value={shortage} suffix='REP' copyable={false} />} more REP approved before depositing.</p>
 			) : (
 				<p className='detail'>No additional REP approval is needed for this deposit amount.</p>
 			)}
@@ -251,7 +250,7 @@ export function SecurityVaultSection({
 				<h4>Withdraw REP</h4>
 			</div>
 			{withdrawableRepAmount === undefined ? (
-				<p className='detail'>Load the vault to calculate withdrawable REP.</p>
+				<p className='detail'>Refresh the vault to calculate withdrawable REP.</p>
 			) : (
 				<div className='entity-metric-grid'>
 					<div className='entity-metric'>
@@ -281,7 +280,7 @@ export function SecurityVaultSection({
 				</div>
 			</label>
 			<div className='actions'>
-				<button className='secondary' onClick={onWithdrawRep} disabled={accountState.address === undefined || !isMainnet || !hasWithdrawAmount || withdrawableRepAmount === 0n}>
+				<button className='secondary' onClick={onWithdrawRep} disabled={!selectedVaultIsOwnedByAccount || accountState.address === undefined || !isMainnet || !hasWithdrawAmount || withdrawableRepAmount === 0n}>
 					Withdraw REP
 				</button>
 			</div>
@@ -291,9 +290,8 @@ export function SecurityVaultSection({
 	if (compactLayout) {
 		return (
 			<>
-				{vaultDetails}
+				{vaultSummarySection}
 				{latestAction}
-				{vaultLoadSection}
 				{vaultDepositSection}
 				{securityBondAllowanceSection}
 				{vaultRepSection}
@@ -308,58 +306,14 @@ export function SecurityVaultSection({
 				<div className='market-header'>
 					<div>
 						<h2>Security Vault</h2>
-						<p className='detail'>Deposit REP to create your own vault, then manage fees and redemptions from the connected wallet.</p>
+						<p className='detail'>Browse vaults for the selected security pool, then manage REP, fees, and redemptions for the selected vault.</p>
 					</div>
 				</div>
 			) : undefined}
 
 			<div className='market-grid'>
 				<div className='market-column'>
-					{securityVaultDetails === undefined ? undefined : (
-						<EntityCard title='Vault Details'>
-							<div className='entity-metric-grid'>
-								<div className='entity-metric'>
-									<span className='metric-label'>REP Deposit Share</span>
-									<strong>
-										<CurrencyValue value={securityVaultDetails.repDepositShare} suffix='REP' />
-									</strong>
-								</div>
-								<div className='entity-metric'>
-									<span className='metric-label'>Approved REP</span>
-									<strong>{approvedRep === undefined ? <LoadingText>Loading...</LoadingText> : <CurrencyValue value={approvedRep} suffix='REP' />}</strong>
-								</div>
-								<div className='entity-metric'>
-									<span className='metric-label'>Security Bond Allowance</span>
-									<strong>
-										<CurrencyValue value={securityBondAllowance} suffix='REP' />
-									</strong>
-								</div>
-								<div className='entity-metric'>
-									<span className='metric-label'>Unpaid ETH Fees</span>
-									<strong>
-										<CurrencyValue value={securityVaultDetails.unpaidEthFees} suffix='ETH' />
-									</strong>
-								</div>
-								<div className='entity-metric'>
-									<span className='metric-label'>Locked REP</span>
-									<strong>
-										<CurrencyValue value={securityVaultDetails.lockedRepInEscalationGame} suffix='REP' />
-									</strong>
-								</div>
-								<div className='entity-metric'>
-									<span className='metric-label'>Total Security Bond Allowance</span>
-									<strong>
-										<CurrencyValue value={securityVaultDetails.totalSecurityBondAllowance} suffix='ETH' />
-									</strong>
-								</div>
-							</div>
-							<div className='actions'>
-								<button className='primary' onClick={onRedeemFees} disabled={!canClaimFees}>
-									Claim Fees
-								</button>
-							</div>
-						</EntityCard>
-					)}
+					<EntityCard title='Selected Vault'>{vaultSummarySection}</EntityCard>
 
 					{securityVaultResult === undefined ? undefined : (
 						<EntityCard title='Latest Vault Action'>
@@ -381,7 +335,6 @@ export function SecurityVaultSection({
 
 				<div className='market-column'>
 					<EntityCard title='Vault Actions'>
-						{vaultLoadSection}
 						{vaultDepositSection}
 						{securityBondAllowanceSection}
 						{vaultRepSection}

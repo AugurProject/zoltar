@@ -1,6 +1,6 @@
-import { useSignal } from '@preact/signals'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { formatCurrencyBalance, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 
 type CurrencyValueProps = {
@@ -14,27 +14,13 @@ type CurrencyValueProps = {
 }
 
 export function CurrencyValue({ className = '', copyable = true, decimals = 2, loading = false, suffix = '', units = 18, value }: CurrencyValueProps) {
-	const copied = useSignal(false)
-	const copyResetTimeout = useRef<number | undefined>(undefined)
+	const { copied, copyText } = useCopyToClipboard()
 	const exactValue = value === undefined ? undefined : formatCurrencyBalance(value, units)
 	const exactSuffix = suffix === '' ? '' : ` ${suffix}`
 
 	useEffect(() => {
 		copied.value = false
-		if (copyResetTimeout.current !== undefined) {
-			window.clearTimeout(copyResetTimeout.current)
-			copyResetTimeout.current = undefined
-		}
 	}, [exactValue])
-
-	useEffect(() => {
-		return () => {
-			if (copyResetTimeout.current !== undefined) {
-				window.clearTimeout(copyResetTimeout.current)
-				copyResetTimeout.current = undefined
-			}
-		}
-	}, [])
 
 	if (loading) {
 		return <LoadingText className={`currency-value loading ${className}`}>Loading...</LoadingText>
@@ -59,32 +45,7 @@ export function CurrencyValue({ className = '', copyable = true, decimals = 2, l
 	}
 
 	return (
-		<button
-			type='button'
-			className={valueClassName}
-			title={exactTitle}
-			aria-label={`Copy exact value ${resolvedExactValue}`}
-			onClick={async () => {
-				try {
-					if (copyResetTimeout.current !== undefined) {
-						window.clearTimeout(copyResetTimeout.current)
-					}
-					await navigator.clipboard.writeText(resolvedExactValue)
-					copied.value = true
-					copyResetTimeout.current = window.setTimeout(() => {
-						copied.value = false
-						copyResetTimeout.current = undefined
-					}, 1200)
-				} catch {
-					copied.value = false
-					if (copyResetTimeout.current !== undefined) {
-						window.clearTimeout(copyResetTimeout.current)
-						copyResetTimeout.current = undefined
-					}
-					return
-				}
-			}}
-		>
+		<button type='button' className={valueClassName} title={exactTitle} aria-label={`Copy exact value ${resolvedExactValue}`} onClick={() => copyText(resolvedExactValue)}>
 			{copied.value ? 'Copied' : displayValue}
 		</button>
 	)

@@ -2,6 +2,7 @@ const UNIVERSE_QUERY_PARAM = 'universe'
 const SECURITY_POOL_QUERY_PARAM = 'securityPool'
 const ZOLTAR_VIEW_QUERY_PARAM = 'zoltarView'
 const SELECTED_POOL_VIEW_QUERY_PARAM = 'selectedPoolView'
+const OPEN_ORACLE_REPORT_ID_QUERY_PARAM = 'openOracleReportId'
 
 function readStringQueryParam(search: string, key: string) {
 	const value = new URLSearchParams(search).get(key)
@@ -66,4 +67,12 @@ export function readSelectedPoolViewQueryParam(search: string) {
 
 export function writeSelectedPoolViewQueryParam(search: string, view: string | undefined) {
 	return writeStringQueryParam(search, SELECTED_POOL_VIEW_QUERY_PARAM, view)
+}
+
+export function readOpenOracleReportIdQueryParam(search: string) {
+	return readStringQueryParam(search, OPEN_ORACLE_REPORT_ID_QUERY_PARAM)
+}
+
+export function writeOpenOracleReportIdQueryParam(search: string, reportId: string | undefined) {
+	return writeStringQueryParam(search, OPEN_ORACLE_REPORT_ID_QUERY_PARAM, reportId)
 }

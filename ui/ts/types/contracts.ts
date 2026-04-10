@@ -73,30 +73,29 @@ export type DeploymentStatusSnapshot = {
 	deploymentStatuses: DeploymentStatus[]
 }
 
+type ActionResult = { hash: Hash }
+
 export type MarketCreationResult = {
 	questionId: string
 	createQuestionHash: Hash
 	marketType: MarketType
 }
 
-export type ZoltarForkActionResult = {
+export type ZoltarForkActionResult = ActionResult & {
 	action: 'approveForkRep' | 'forkZoltar'
-	hash: Hash
 	questionId: string
 	universeId: bigint
 }
 
-export type ZoltarChildUniverseActionResult = {
+export type ZoltarChildUniverseActionResult = ActionResult & {
 	action: 'createChildUniverse'
-	hash: Hash
 	outcomeIndex: bigint
 	universeId: bigint
 }
 
-export type ZoltarMigrationActionResult = {
+export type ZoltarMigrationActionResult = ActionResult & {
 	action: 'addRepToMigrationBalance' | 'splitMigrationRep'
 	amount: bigint
-	hash: Hash
 	outcomeIndexes: bigint[]
 	universeId: bigint
 }
@@ -131,9 +130,8 @@ export type SecurityVaultDetails = {
 	vaultAddress: Address
 }
 
-export type SecurityVaultActionResult = {
+export type SecurityVaultActionResult = ActionResult & {
 	action: 'approveRep' | 'depositRep' | 'queueSetSecurityBondAllowance' | 'queueWithdrawRep' | 'redeemFees' | 'updateVaultFees'
-	hash: Hash
 }
 
 export type OracleManagerDetails = {
@@ -150,13 +148,39 @@ export type OracleManagerDetails = {
 	token2: Address | undefined
 }
 
-export type OpenOracleActionResult = {
-	action: 'approveToken1' | 'approveToken2' | 'dispute' | 'queueOperation' | 'requestPrice' | 'settle' | 'submitInitialReport'
-	hash: Hash
+export type OpenOracleActionResult = ActionResult & {
+	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'queueOperation' | 'requestPrice' | 'settle' | 'submitInitialReport'
+}
+
+export type OpenOracleReportSummary = {
+	currentAmount1: bigint
+	currentAmount2: bigint
+	currentReporter: Address
+	disputeOccurred: boolean
+	exactToken1Report: bigint
+	createdAt: bigint | undefined
+	isDistributed: boolean
+	price: bigint
+	reportId: bigint
+	reportTimestamp: bigint
+	settlementTimestamp: bigint
+	token1: Address
+	token2: Address
+	token1Decimals: number
+	token2Decimals: number
+}
+
+export type OpenOracleReportSummaryPage = {
+	nextReportId: bigint
+	pageIndex: number
+	pageSize: number
+	reportCount: bigint
+	reports: OpenOracleReportSummary[]
 }
 
 export type OpenOracleReportDetails = {
 	// Identity
+	createdAt: bigint | undefined
 	reportId: bigint
 	openOracleAddress: Address
 	// Meta
@@ -186,6 +210,8 @@ export type OpenOracleReportDetails = {
 	stateHash: Hex
 	callbackContract: Address
 	numReports: bigint
+	token1Decimals: number
+	token2Decimals: number
 }
 
 export type ListedSecurityPool = {
@@ -218,15 +244,13 @@ export type SecurityPoolVaultSummary = {
 	vaultAddress: Address
 }
 
-export type SecurityPoolOverviewActionResult = {
+export type SecurityPoolOverviewActionResult = ActionResult & {
 	action: 'queueLiquidation'
-	hash: Hash
 	securityPoolAddress: Address
 }
 
-export type TradingActionResult = {
+export type TradingActionResult = ActionResult & {
 	action: 'createCompleteSet' | 'migrateShares' | 'redeemCompleteSet' | 'redeemShares'
-	hash: Hash
 	securityPoolAddress: Address
 	universeId: bigint
 }
@@ -264,9 +288,8 @@ export type ReportingDetails = {
 	universeId: bigint
 }
 
-export type ReportingActionResult = {
+export type ReportingActionResult = ActionResult & {
 	action: 'reportOutcome' | 'withdrawEscalation'
-	hash: Hash
 	outcome: ReportingOutcomeKey
 	securityPoolAddress: Address
 	universeId: bigint
@@ -311,9 +334,8 @@ export type ForkAuctionDetails = {
 	universeId: bigint
 }
 
-export type ForkAuctionActionResult = {
+export type ForkAuctionActionResult = ActionResult & {
 	action: ForkAuctionAction
-	hash: Hash
 	securityPoolAddress: Address
 	universeId: bigint
 }
