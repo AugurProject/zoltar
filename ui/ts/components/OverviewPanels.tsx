@@ -25,7 +25,7 @@ export function OverviewPanels({
 	walletBootstrapComplete,
 }: OverviewPanelsProps) {
 	const isWalletLoading = isConnectingWallet || (!walletBootstrapComplete && accountState.address === undefined)
-	const showAccountBalances = accountState.address !== undefined
+	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
 
 	return (
 		<section className='overview-shell'>

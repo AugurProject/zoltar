@@ -125,6 +125,7 @@ export function App() {
 		openOracleInitialReportState,
 		openOracleReportDetails,
 		openOracleResult,
+		refreshPrice,
 		setOpenOracleCreateForm,
 		setOpenOracleForm,
 		settleReport,
@@ -330,6 +331,7 @@ export function App() {
 							onOpenLiquidationModal: (managerAddress, securityPoolAddress, vaultAddress) => openLiquidationModal(managerAddress, securityPoolAddress, vaultAddress),
 							onQueueLiquidation: (managerAddress, securityPoolAddress) => void queueLiquidation(managerAddress, securityPoolAddress),
 							loadingPoolOracleManager,
+							loadingSecurityPools,
 							onLoadPoolOracleManager: managerAddress => void loadPoolOracleManager(managerAddress),
 							onRequestPoolPrice: managerAddress => void requestPoolPrice(managerAddress),
 							onViewPendingReport: reportId => {
@@ -400,6 +402,7 @@ export function App() {
 						onCreateOpenOracleGame={() => void createOpenOracleGame()}
 						onDisputeReport={() => void disputeReport()}
 						onLoadOracleReport={reportId => void loadOracleReport(reportId)}
+						onRefreshPrice={refreshPrice}
 						onOpenOracleCreateFormChange={update => setOpenOracleCreateForm(current => ({ ...current, ...update }))}
 						onOpenOracleFormChange={update => setOpenOracleForm(current => ({ ...current, ...update }))}
 						onSettleReport={() => void settleReport()}

@@ -100,7 +100,7 @@ export function useOnchainState() {
 
 		if (!shouldLoadWalletState) return
 
-		// Resolve connection state — must complete before wallet-specific reads
+		// Resolve connection state — address check completes bootstrap; balance/chainId load in background
 		walletLoadCount.value += 1
 		try {
 			const accountsResult = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' }).catch(() => [])
@@ -112,6 +112,9 @@ export function useOnchainState() {
 				chainId: accountState.value.chainId,
 				ethBalance: connectedAddress === accountState.value.address ? accountState.value.ethBalance : undefined,
 			}
+
+			// Address is now known — unblock data loading regardless of wallet presence
+			walletBootstrapComplete.value = true
 
 			if (connectedAddress !== undefined && ethereum !== undefined) {
 				const chainIdPromise = ethereum.request({ method: 'eth_chainId' })
@@ -134,10 +137,10 @@ export function useOnchainState() {
 			}
 		} catch (error) {
 			if (!isCurrent()) return
+			walletBootstrapComplete.value = true
 			errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
 		} finally {
 			walletLoadCount.value = Math.max(0, walletLoadCount.value - 1)
-			if (isCurrent()) walletBootstrapComplete.value = true
 		}
 	}
 
