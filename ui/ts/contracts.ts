@@ -39,6 +39,8 @@ import type {
 	OracleQueueOperation,
 	QuestionData,
 	ReadClient,
+	OpenOracleReportSummary,
+	OpenOracleReportSummaryPage,
 	ReportingActionResult,
 	ReportingDetails,
 	ReportingOutcomeKey,
@@ -68,6 +70,9 @@ const MIGRATION_TIME_LENGTH = 4_838_400n
 const TRUTH_AUCTION_TIME_LENGTH = 604_800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
 const ANSWER_OPTION_ABI = [parseAbiItem('function getAnswerOptionName(uint256 questionId, uint256 answer) view returns (string memory)')]
+const REPORT_INSTANCE_CREATED_EVENT = parseAbiItem(
+	'event ReportInstanceCreated(uint256 indexed reportId, address indexed token1Address, address indexed token2Address, uint256 feePercentage, uint256 multiplier, uint256 exactToken1Report, uint256 ethFee, address creator, uint256 settlementTime, uint256 escalationHalt, uint256 disputeDelay, uint256 protocolFee, uint256 settlerReward, bool timeType, address callbackContract, bytes4 callbackSelector, bool trackDisputes, uint256 callbackGasLimit, bool keepFee, bytes32 stateHash, uint256 blockTimestamp, bool feeToken)',
+)
 const CONTRACT_PAGE_SIZE = 30n
 
 type DeployedChildUniverseRecord = {
@@ -510,6 +515,17 @@ export async function loadErc20Allowance(client: ReadClient, tokenAddress: Addre
 		address: tokenAddress,
 		args: [ownerAddress, spenderAddress],
 	})
+}
+
+async function loadErc20Decimals(client: ReadClient, tokenAddress: Address) {
+	return Number(
+		await client.readContract({
+			abi: ABIS.mainnet.erc20,
+			functionName: 'decimals',
+			address: tokenAddress,
+			args: [],
+		}),
+	)
 }
 
 export async function loadRepTokensMigratedRepBalance(client: ReadClient, universeId: bigint, address: Address) {
@@ -1230,7 +1246,7 @@ export async function redeemSecurityVaultFees(client: WriteClient, securityPoolA
 }
 
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingReportId, requestPriceEthCost, isPriceValid, lastSettlementTimestamp] = await Promise.all([
+	const [lastPrice, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp] = await Promise.all([
 		client.readContract({
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 			functionName: 'lastPrice',
@@ -1294,7 +1310,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	return {
 		callbackStateHash,
 		exactToken1Report,
-		isPriceValid,
+		isPriceValid: pendingReportId === 0n ? false : rawIsPriceValid,
 		lastPrice,
 		lastSettlementTimestamp,
 		managerAddress,
@@ -1307,13 +1323,14 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 }
 
 export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('./types/contracts.js').OpenOracleReportDetails> {
-	const [meta, status, extra] = await Promise.all([
-		client.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-			functionName: 'reportMeta',
-			address: openOracleAddress,
-			args: [reportId],
-		}),
+	const meta = await client.readContract({
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+		functionName: 'reportMeta',
+		address: openOracleAddress,
+		args: [reportId],
+	})
+	if (meta[4] === zeroAddress) throw new Error(`Oracle report #${reportId.toString()} does not exist`)
+	const [status, extra, createdAt, token1Decimals, token2Decimals] = await Promise.all([
 		client.readContract({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'reportStatus',
@@ -1326,9 +1343,21 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 			address: openOracleAddress,
 			args: [reportId],
 		}),
+		client
+			.getLogs({
+				address: openOracleAddress,
+				args: { reportId },
+				event: REPORT_INSTANCE_CREATED_EVENT,
+				fromBlock: 0n,
+				toBlock: 'latest',
+			})
+			.then(logs => logs.at(-1)?.args.blockTimestamp),
+		loadErc20Decimals(client, meta[4]),
+		loadErc20Decimals(client, meta[6]),
 	])
 
 	return {
+		createdAt,
 		reportId,
 		openOracleAddress,
 		exactToken1Report: meta[0],
@@ -1355,7 +1384,117 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		stateHash: extra[0],
 		callbackContract: extra[1],
 		numReports: BigInt(extra[2]),
+		token1Decimals,
+		token2Decimals,
 	}
+}
+
+export async function loadOpenOracleReportSummaries(client: ReadClient, pageIndex: number, pageSize: number): Promise<OpenOracleReportSummaryPage> {
+	if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('Page index must be a non-negative integer')
+	if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error('Page size must be a positive integer')
+
+	const openOracleAddress = getOpenOracleAddress()
+	const nextReportId = await client.readContract({
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+		functionName: 'nextReportId',
+		address: openOracleAddress,
+		args: [],
+	})
+	const reportCount = nextReportId > 0n ? nextReportId - 1n : 0n
+
+	if (reportCount === 0n) {
+		return {
+			nextReportId,
+			pageIndex,
+			pageSize,
+			reportCount,
+			reports: [],
+		}
+	}
+
+	const pageSizeBigInt = BigInt(pageSize)
+	const pageIndexBigInt = BigInt(pageIndex)
+	const pageEndId = reportCount - pageIndexBigInt * pageSizeBigInt
+
+	if (pageEndId <= 0n) {
+		return {
+			nextReportId,
+			pageIndex,
+			pageSize,
+			reportCount,
+			reports: [],
+		}
+	}
+
+	const pageStartId = pageEndId > pageSizeBigInt ? pageEndId - pageSizeBigInt + 1n : 1n
+	const reportIds: bigint[] = []
+	for (let reportId = pageEndId; reportId >= pageStartId; reportId--) {
+		reportIds.push(reportId)
+		if (reportId === pageStartId) break
+	}
+
+	const reports = await Promise.all(
+		reportIds.map(async reportId => {
+			const details = await loadOpenOracleReportDetails(client, openOracleAddress, reportId)
+			return {
+				createdAt: details.createdAt,
+				currentAmount1: details.currentAmount1,
+				currentAmount2: details.currentAmount2,
+				currentReporter: details.currentReporter,
+				disputeOccurred: details.disputeOccurred,
+				exactToken1Report: details.exactToken1Report,
+				isDistributed: details.isDistributed,
+				price: details.price,
+				reportId: details.reportId,
+				reportTimestamp: details.reportTimestamp,
+				settlementTimestamp: details.settlementTimestamp,
+				token1: details.token1,
+				token2: details.token2,
+				token1Decimals: details.token1Decimals,
+				token2Decimals: details.token2Decimals,
+			} satisfies OpenOracleReportSummary
+		}),
+	)
+
+	return {
+		nextReportId,
+		pageIndex,
+		pageSize,
+		reportCount,
+		reports,
+	}
+}
+
+export async function createOpenOracleReportInstance(
+	client: WriteClient,
+	parameters: {
+		disputeDelay: number
+		escalationHalt: bigint
+		exactToken1Report: bigint
+		ethValue: bigint
+		feePercentage: number
+		multiplier: number
+		protocolFee: number
+		settlementTime: number
+		settlerReward: bigint
+		token1Address: Address
+		token2Address: Address
+	},
+) {
+	const hash = await writeContractAndWait(client, () =>
+		client.writeContract({
+			address: getOpenOracleAddress(),
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'createReportInstance',
+			args: [parameters.token1Address, parameters.token2Address, parameters.exactToken1Report, parameters.feePercentage, parameters.multiplier, parameters.settlementTime, parameters.escalationHalt, parameters.disputeDelay, parameters.protocolFee, parameters.settlerReward],
+			value: parameters.ethValue,
+		}),
+	)
+
+	return {
+		action: 'createReportInstance',
+		hash,
+	} satisfies OpenOracleActionResult
 }
 
 export async function requestOraclePrice(client: WriteClient, managerAddress: Address, ethCost: bigint) {

@@ -17,6 +17,18 @@ export function formatOpenInterestFeePerYearPercent(retentionRate: bigint | unde
 	return formatPercent(annualFeePercent)
 }
 
+export function openInterestFeePerYearBigint(retentionRate: bigint | undefined): bigint | undefined {
+	if (retentionRate === undefined) return undefined
+	if (retentionRate <= 0n) return 100n * PRICE_PRECISION
+
+	const retentionRateAsNumber = Number(retentionRate) / Number(PRICE_PRECISION)
+	if (!Number.isFinite(retentionRateAsNumber) || retentionRateAsNumber <= 0) return 100n * PRICE_PRECISION
+
+	const annualRetention = Math.pow(retentionRateAsNumber, Number(SECONDS_PER_YEAR))
+	const annualFeePercent = Math.max(0, Math.min(100, (1 - annualRetention) * 100))
+	return BigInt(Math.round(annualFeePercent * Number(PRICE_PRECISION)))
+}
+
 export function parseOpenInterestFeePerYearPercentInput(value: string, label: string) {
 	const trimmed = value.trim()
 	if (trimmed === '') throw new Error(`${label} is required`)

@@ -2,7 +2,8 @@ import { useSignal } from '@preact/signals'
 import { useCallback, useEffect } from 'preact/hooks'
 import { zeroAddress, type Address, type Hash } from 'viem'
 import { approveErc20, forkZoltarUniverse, getDeploymentSteps, loadErc20Allowance, loadErc20Balance, loadRepTokensMigratedRepBalance } from '../contracts.js'
-import { createConnectedReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { requireWallet } from '../lib/walletGuard.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import { GENESIS_REPUTATION_TOKEN_ADDRESS } from '../lib/universe.js'
@@ -112,16 +113,16 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 	}
 
 	const runZoltarForkAction = async (actionName: 'approve' | 'fork', action: (walletAddress: Address, universe: ZoltarUniverseSummary, questionId: bigint) => Promise<ZoltarForkActionResult>, errorFallback: string, refreshAfter: boolean, options?: { requireQuestionIdInput?: boolean }) => {
-		try {
-			getRequiredInjectedEthereum()
-		} catch {
-			zoltarForkError.value = 'No injected wallet found'
+		if (
+			!requireWallet(
+				accountAddress,
+				message => {
+					zoltarForkError.value = message
+				},
+				'using Zoltar fork actions',
+			)
+		)
 			return
-		}
-		if (accountAddress === undefined) {
-			zoltarForkError.value = 'Connect a wallet before using Zoltar fork actions'
-			return
-		}
 
 		zoltarForkPending.value = true
 		zoltarForkActiveAction.value = actionName

@@ -2,9 +2,10 @@ import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
 import { createSecurityPool, loadMarketDetails, originSecurityPoolExists } from '../contracts.js'
-import { createConnectedReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { runWriteAction } from '../lib/writeAction.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultSecurityPoolFormState, parseBigIntInput } from '../lib/marketForm.js'
 import type { SecurityPoolFormState } from '../types/app.js'
@@ -108,64 +109,62 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 	const loadMarket = async () => await loadMarketById(securityPoolForm.value.marketId)
 
 	const createPool = async () => {
-		try {
-			getRequiredInjectedEthereum()
-		} catch {
-			securityPoolError.value = 'No injected wallet found'
-			return
-		}
-		if (accountAddress === undefined) {
-			securityPoolError.value = 'Connect a wallet before creating a security pool'
-			return
-		}
-		if (!hasDeployedStep(deploymentStatuses, 'securityPoolFactory')) {
-			securityPoolError.value = 'Deploy SecurityPoolFactory before creating a security pool'
-			return
-		}
-		if (zoltarUniverseHasForked) {
-			securityPoolError.value = 'Security pools cannot be created after the universe has forked'
-			return
-		}
 		if (securityPoolCreating.value) {
 			securityPoolError.value = 'Security pool creation already in progress'
 			return
 		}
-
-		securityPoolCreating.value = true
-		securityPoolError.value = undefined
 		securityPoolResult.value = undefined
 		poolCreationMarketDetails.value = undefined
-		try {
-			const parameters = createSecurityPoolParameters(securityPoolForm.value)
-			const details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createConnectedReadClient(), parameters.questionId)
-			if (!details.exists) {
-				securityPoolError.value = 'No market found for that ID'
-				return
-			}
-			if (details.marketType !== 'binary') {
-				securityPoolError.value = 'Security pools can only be deployed for binary markets'
-				marketDetails.value = details
-				return
-			}
-			if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.securityMultiplier)) {
-				securityPoolError.value = 'A security pool for this question and security multiplier already exists. Change the security multiplier to create a different pool.'
-				marketDetails.value = details
-				return
-			}
 
-			onTransactionRequested()
-			const result = await createSecurityPool(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), parameters)
-			marketDetails.value = details
-			poolCreationMarketDetails.value = details
-			securityPoolResult.value = result
-			onTransaction(result.deployPoolHash)
-			await refreshState()
-		} catch (error) {
-			securityPoolError.value = getErrorMessage(error, 'Failed to create security pool')
-		} finally {
-			securityPoolCreating.value = false
-			onTransactionFinished()
-		}
+		let capturedDetails: MarketDetails | undefined
+
+		await runWriteAction(
+			{
+				accountAddress,
+				missingWalletMessage: 'Connect a wallet before creating a security pool',
+				onTransaction,
+				onTransactionRequested: () => {
+					securityPoolCreating.value = true
+					onTransactionRequested()
+				},
+				onTransactionFinished: () => {
+					securityPoolCreating.value = false
+					onTransactionFinished()
+				},
+				refreshState,
+				setErrorMessage: message => {
+					securityPoolError.value = message
+				},
+			},
+			async walletAddress => {
+				if (!hasDeployedStep(deploymentStatuses, 'securityPoolFactory')) throw new Error('Deploy SecurityPoolFactory before creating a security pool')
+				if (zoltarUniverseHasForked) throw new Error('Security pools cannot be created after the universe has forked')
+
+				const parameters = createSecurityPoolParameters(securityPoolForm.value)
+				const details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createConnectedReadClient(), parameters.questionId)
+				if (!details.exists) throw new Error('No market found for that ID')
+				if (details.marketType !== 'binary') {
+					marketDetails.value = details
+					throw new Error('Security pools can only be deployed for binary markets')
+				}
+				if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.securityMultiplier)) {
+					marketDetails.value = details
+					throw new Error('A security pool for this question and security multiplier already exists. Change the security multiplier to create a different pool.')
+				}
+
+				capturedDetails = details
+				const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), parameters)
+				return { ...result, hash: result.deployPoolHash }
+			},
+			'Failed to create security pool',
+			result => {
+				if (capturedDetails !== undefined) {
+					marketDetails.value = capturedDetails
+					poolCreationMarketDetails.value = capturedDetails
+				}
+				securityPoolResult.value = result
+			},
+		)
 	}
 
 	const resetSecurityPoolCreation = () => {

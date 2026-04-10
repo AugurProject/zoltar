@@ -35,7 +35,7 @@ import { TransactionHashLink } from './components/TransactionHashLink.js'
 export function App() {
 	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
 	const deployNextMissingPending = useSignal(false)
-	const { activeUniverseId, securityPoolAddress, setActiveUniverseId, setSecurityPoolAddress } = useUrlState()
+	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, setActiveUniverseId, setOpenOracleReport, setSecurityPoolAddress } = useUrlState()
 	const onTransaction = (hash: Hash) => {
 		transactionState.value = {
 			...transactionState.value,
@@ -114,18 +114,18 @@ export function App() {
 	const {
 		approveToken1,
 		approveToken2,
+		createOpenOracleGame,
 		disputeReport,
-		loadOracleManager,
 		loadOracleReport,
-		loadingOracleManager,
+		loadingOpenOracleCreate,
 		loadingOracleReport,
-		onQueueOperation,
-		onRequestPrice,
 		openOracleError,
+		openOracleCreateForm,
 		openOracleForm,
+		openOracleInitialReportState,
 		openOracleReportDetails,
 		openOracleResult,
-		oracleManagerDetails,
+		setOpenOracleCreateForm,
 		setOpenOracleForm,
 		settleReport,
 		submitInitialReport,
@@ -186,6 +186,7 @@ export function App() {
 	const isRouteContentDisabled = transactionState.value.transactionInFlightCount > 0 || disableRouteContent
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universeErrorMessage = showZoltarUniverseWarning ? 'The universe does not exist.' : undefined
+	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const renderRouteContent = () => {
 		if (wrongNetworkMessage !== undefined) {
 			return <MainnetGateSection message={wrongNetworkMessage} />
@@ -331,6 +332,11 @@ export function App() {
 							loadingPoolOracleManager,
 							onLoadPoolOracleManager: managerAddress => void loadPoolOracleManager(managerAddress),
 							onRequestPoolPrice: managerAddress => void requestPoolPrice(managerAddress),
+							onViewPendingReport: reportId => {
+								setOpenOracleForm(current => ({ ...current, reportId: reportId.toString() }))
+								navigate('open-oracle')
+								void loadOracleReport(reportId.toString())
+							},
 							poolOracleManagerDetails,
 							poolOracleManagerError,
 							poolPriceOracleResult,
@@ -356,7 +362,7 @@ export function App() {
 								loadingSecurityVault,
 								onApproveRep: amount => void approveRep(amount),
 								onDepositRep: () => void depositRep(),
-								onLoadSecurityVault: () => void loadSecurityVault(),
+								onLoadSecurityVault: vaultAddress => void loadSecurityVault(vaultAddress),
 								onRedeemFees: () => void redeemFees(),
 								onSetSecurityBondAllowance: () => void setSecurityBondAllowance(),
 								onSecurityVaultFormChange: update => setSecurityVaultForm(current => ({ ...current, ...update })),
@@ -367,6 +373,7 @@ export function App() {
 								securityVaultRepAllowance,
 								securityVaultRepBalance,
 								securityVaultResult,
+								securityPoolVaults: selectedPool?.vaults,
 							},
 							trading: {
 								accountState,
@@ -386,23 +393,24 @@ export function App() {
 				return (
 					<OpenOracleSection
 						accountState={accountState}
-						loadingOracleManager={loadingOracleManager}
+						initialView={urlOpenOracleReportId === '' && openOracleForm.reportId === '' ? 'browse' : 'selected-report'}
 						loadingOracleReport={loadingOracleReport}
 						onApproveToken1={() => void approveToken1()}
 						onApproveToken2={() => void approveToken2()}
+						onCreateOpenOracleGame={() => void createOpenOracleGame()}
 						onDisputeReport={() => void disputeReport()}
-						onLoadOracleManager={() => void loadOracleManager()}
-						onLoadOracleReport={() => void loadOracleReport()}
+						onLoadOracleReport={reportId => void loadOracleReport(reportId)}
+						onOpenOracleCreateFormChange={update => setOpenOracleCreateForm(current => ({ ...current, ...update }))}
 						onOpenOracleFormChange={update => setOpenOracleForm(current => ({ ...current, ...update }))}
-						onQueueOperation={() => void onQueueOperation()}
-						onRequestPrice={() => void onRequestPrice()}
 						onSettleReport={() => void settleReport()}
 						onSubmitInitialReport={() => void submitInitialReport()}
+						loadingOpenOracleCreate={loadingOpenOracleCreate}
 						openOracleError={openOracleError}
+						openOracleCreateForm={openOracleCreateForm}
 						openOracleForm={openOracleForm}
+						openOracleInitialReportState={openOracleInitialReportState}
 						openOracleReportDetails={openOracleReportDetails}
 						openOracleResult={openOracleResult}
-						oracleManagerDetails={oracleManagerDetails}
 					/>
 				)
 			case 'not-found':
@@ -411,6 +419,23 @@ export function App() {
 				return <NotFoundSection />
 		}
 	}
+
+	useEffect(() => {
+		if (urlOpenOracleReportId === '') return
+		void loadOracleReport(urlOpenOracleReportId)
+	}, [urlOpenOracleReportId])
+
+	useEffect(() => {
+		if (openOracleReportDetails !== undefined) {
+			setOpenOracleReport(openOracleReportDetails.reportId.toString())
+			return
+		}
+		if (openOracleForm.reportId.trim() !== '') {
+			setOpenOracleReport(openOracleForm.reportId)
+			return
+		}
+		setOpenOracleReport(undefined)
+	}, [openOracleForm.reportId, openOracleReportDetails])
 
 	useEffect(() => {
 		setSecurityVaultForm(current => (current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress }))

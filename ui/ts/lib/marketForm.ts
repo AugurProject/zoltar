@@ -1,5 +1,5 @@
 import { parseUnits } from 'viem'
-import type { ForkAuctionFormState, MarketFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
+import type { ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
 
 const DEFAULT_CURRENT_RETENTION_RATE = '10'
 
@@ -32,6 +32,7 @@ export function getDefaultSecurityVaultFormState(): SecurityVaultFormState {
 		depositAmount: '0',
 		securityBondAllowanceAmount: '0',
 		repWithdrawAmount: '0',
+		selectedVaultAddress: '',
 		securityPoolAddress: '',
 	}
 }
@@ -43,13 +44,25 @@ export function getDefaultOpenOracleFormState(): OpenOracleFormState {
 		disputeNewAmount1: '0',
 		disputeNewAmount2: '0',
 		disputeTokenToSwap: 'token1',
-		managerAddress: '',
-		openOracleAddress: '',
-		operationAmount: '0',
-		operationTargetVault: '',
-		queuedOperation: 'liquidation',
 		reportId: '',
+		price: '',
 		stateHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+	}
+}
+
+export function getDefaultOpenOracleCreateFormState(): OpenOracleCreateFormState {
+	return {
+		disputeDelay: '0',
+		escalationHalt: '0',
+		exactToken1Report: '0',
+		ethValue: '0',
+		feePercentage: '0',
+		multiplier: '100',
+		protocolFee: '0',
+		settlementTime: '0',
+		settlerReward: '0',
+		token1Address: '',
+		token2Address: '',
 	}
 }
 
@@ -99,12 +112,15 @@ export function getDefaultZoltarMigrationFormState(): ZoltarMigrationFormState {
 	}
 }
 
-export function parseRepAmountInput(value: string, label: string) {
+function validateAndTrim(value: string, label: string): string {
 	const trimmed = value.trim()
 	if (trimmed === '') throw new Error(`${label} is required`)
+	return trimmed
+}
 
+export function parseRepAmountInput(value: string, label: string) {
+	const trimmed = validateAndTrim(value, label)
 	const normalized = trimmed.startsWith('.') ? `0${trimmed}` : trimmed.endsWith('.') ? `${trimmed}0` : trimmed
-
 	try {
 		return parseUnits(normalized, 18)
 	} catch {
@@ -113,8 +129,7 @@ export function parseRepAmountInput(value: string, label: string) {
 }
 
 export function parseBigIntInput(value: string, label: string) {
-	const trimmed = value.trim()
-	if (trimmed === '') throw new Error(`${label} is required`)
+	const trimmed = validateAndTrim(value, label)
 	try {
 		return BigInt(trimmed)
 	} catch {

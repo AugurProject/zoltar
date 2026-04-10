@@ -5,8 +5,9 @@ import { LoadingText } from './LoadingText.js'
 import { Question } from './Question.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
+import { CurrencyValue } from './CurrencyValue.js'
 import { isMainnetChain } from '../lib/network.js'
-import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
+import { formatOpenInterestFeePerYearPercent, openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import type { SecurityPoolSectionProps } from '../types/components.js'
 
 export function SecurityPoolSection({
@@ -141,7 +142,9 @@ export function SecurityPoolSection({
 													</div>
 													<div>
 														<span className='metric-label'>Open Interest Fee / Year</span>
-														<strong>{formatOpenInterestFeePerYearPercent(pool.currentRetentionRate)}</strong>
+														<strong>
+															<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
+														</strong>
 													</div>
 												</div>
 											</EntityCard>

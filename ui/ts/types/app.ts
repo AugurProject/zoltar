@@ -1,7 +1,16 @@
 import type { MarketType, ReportingOutcomeKey } from './contracts.js'
-import type { Address } from 'viem'
+import type { Address, Hash } from 'viem'
 
 export type Route = 'deploy' | 'zoltar' | 'security-pools' | 'open-oracle' | 'not-found'
+
+export type WriteOperationsParameters = {
+	accountAddress: Address | undefined
+	onTransaction: (hash: Hash) => void
+	onTransactionFinished: () => void
+	onTransactionRequested: () => void
+	onTransactionSubmitted: (hash: Hash) => void
+	refreshState: () => Promise<void>
+}
 
 export type AccountState = {
 	address: Address | undefined
@@ -33,6 +42,7 @@ export type SecurityVaultFormState = {
 	depositAmount: string
 	securityBondAllowanceAmount: string
 	repWithdrawAmount: string
+	selectedVaultAddress: string
 	securityPoolAddress: string
 }
 
@@ -42,13 +52,23 @@ export type OpenOracleFormState = {
 	disputeNewAmount1: string
 	disputeNewAmount2: string
 	disputeTokenToSwap: 'token1' | 'token2'
-	managerAddress: string
-	openOracleAddress: string
-	operationAmount: string
-	operationTargetVault: string
-	queuedOperation: 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
 	reportId: string
+	price: string
 	stateHash: string
+}
+
+export type OpenOracleCreateFormState = {
+	ethValue: string
+	exactToken1Report: string
+	escalationHalt: string
+	feePercentage: string
+	multiplier: string
+	protocolFee: string
+	settlementTime: string
+	settlerReward: string
+	token1Address: string
+	token2Address: string
+	disputeDelay: string
 }
 
 export type TradingFormState = {

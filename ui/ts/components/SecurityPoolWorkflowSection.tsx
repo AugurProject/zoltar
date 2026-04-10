@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { AddressValue } from './AddressValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
@@ -13,12 +13,14 @@ import { UniverseLink } from './UniverseLink.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatTimestamp } from '../lib/formatters.js'
-import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
+import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
+import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import { readSelectedPoolViewQueryParam, writeSelectedPoolViewQueryParam } from '../lib/urlParams.js'
 import type { SecurityPoolWorkflowRouteContentProps } from '../types/components.js'
 
 type SelectedPoolView = 'vaults' | 'trading' | 'resolution'
+type SelectedVaultView = 'browse-vaults' | 'selected-vault'
 
 function getSelectedPoolView(value: string | undefined): SelectedPoolView {
 	switch (value) {
@@ -48,6 +50,7 @@ export function SecurityPoolWorkflowSection({
 	onOpenLiquidationModal,
 	onQueueLiquidation,
 	onRequestPoolPrice,
+	onViewPendingReport,
 	poolOracleManagerDetails,
 	poolOracleManagerError,
 	poolPriceOracleResult,
@@ -60,6 +63,7 @@ export function SecurityPoolWorkflowSection({
 	trading,
 }: SecurityPoolWorkflowRouteContentProps & { showHeader?: boolean }) {
 	const [view, setView] = useState<SelectedPoolView>(() => getSelectedPoolView(readSelectedPoolViewQueryParam(window.location.search)))
+	const [vaultView, setVaultView] = useState<SelectedVaultView>('selected-vault')
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const marketDetails = selectedPool?.marketDetails ?? reporting.reportingDetails?.marketDetails ?? forkAuction.forkAuctionDetails?.marketDetails
@@ -69,7 +73,33 @@ export function SecurityPoolWorkflowSection({
 	const forkReady = selectedPoolState !== undefined && selectedPoolState !== 'operational'
 	const selectedPoolUniverseMismatch = selectedPool !== undefined && selectedPool.universeId !== activeUniverseId
 	const hasSelectedPoolAddress = securityPoolAddress.trim() !== ''
+	const selectedPoolManagerAddress = selectedPool?.managerAddress
+	const selectedPoolManagerAddressKey = selectedPoolManagerAddress?.toLowerCase()
+	const selectedVaultAddress = getSelectedVaultAddress(securityVault.securityVaultForm.selectedVaultAddress, accountState.address) ?? ''
+	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddress, accountState.address)
 	const selectedPoolTitle = selectedPool !== undefined ? getQuestionTitle(selectedPool.marketDetails) : securityPoolAddress === '' ? 'Select a security pool' : <AddressValue address={securityPoolAddress} />
+	const lastAutoLoadedManagerAddress = useRef<string | undefined>(undefined)
+	const lastSelectedPoolVaultDefaultKey = useRef<string | undefined>(undefined)
+
+	useEffect(() => {
+		if (selectedPoolManagerAddress === undefined) return
+		if (poolOracleManagerDetails?.managerAddress.toLowerCase() === selectedPoolManagerAddressKey) return
+		if (lastAutoLoadedManagerAddress.current === selectedPoolManagerAddressKey) return
+		lastAutoLoadedManagerAddress.current = selectedPoolManagerAddressKey
+		void onLoadPoolOracleManager(selectedPoolManagerAddress)
+	}, [poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress, selectedPoolManagerAddressKey])
+
+	useEffect(() => {
+		const normalizedSelectedPoolAddress = selectedPool?.securityPoolAddress.toLowerCase()
+		if (normalizedSelectedPoolAddress === undefined) return
+		const selectedPoolVaultDefaultKey = `${normalizedSelectedPoolAddress}:${accountState.address?.toLowerCase() ?? ''}`
+		if (lastSelectedPoolVaultDefaultKey.current === selectedPoolVaultDefaultKey) return
+		lastSelectedPoolVaultDefaultKey.current = selectedPoolVaultDefaultKey
+		setVaultView('selected-vault')
+		if (accountState.address === undefined) return
+		if (isSelectedVaultOwnedByAccountHelper(securityVault.securityVaultForm.selectedVaultAddress, accountState.address)) return
+		securityVault.onSecurityVaultFormChange({ selectedVaultAddress: accountState.address.toString() })
+	}, [accountState.address, selectedPool?.securityPoolAddress, securityVault.onSecurityVaultFormChange, securityVault.securityVaultForm.selectedVaultAddress])
 
 	useEffect(() => {
 		const nextSearch = writeSelectedPoolViewQueryParam(window.location.search, hasSelectedPoolAddress ? view : undefined)
@@ -113,7 +143,9 @@ export function SecurityPoolWorkflowSection({
 									</div>
 									<div>
 										<span className='metric-label'>Open Interest Fee / Year</span>
-										<strong>{formatOpenInterestFeePerYearPercent(selectedPool.currentRetentionRate)}</strong>
+										<strong>
+											<CurrencyValue value={openInterestFeePerYearBigint(selectedPool.currentRetentionRate)} suffix='%' />
+										</strong>
 									</div>
 									{reportingReady ? (
 										<div>
@@ -192,7 +224,15 @@ export function SecurityPoolWorkflowSection({
 											</div>
 											<div>
 												<span className='metric-label'>Pending Request</span>
-												<strong>{poolOracleManagerDetails.pendingReportId > 0n ? `Report #${poolOracleManagerDetails.pendingReportId.toString()}` : 'None'}</strong>
+												<strong>
+													{poolOracleManagerDetails.pendingReportId > 0n ? (
+														<button className='link' type='button' onClick={() => onViewPendingReport(poolOracleManagerDetails.pendingReportId)}>
+															Report #{poolOracleManagerDetails.pendingReportId.toString()} (security pool/price)
+														</button>
+													) : (
+														'None'
+													)}
+												</strong>
 											</div>
 											<div>
 												<span className='metric-label'>Request Cost</span>
@@ -241,67 +281,91 @@ export function SecurityPoolWorkflowSection({
 
 						{view === 'vaults' ? (
 							<div className='workflow-stack'>
-								<EntityCard className='selected-pool-card' title='Your Vault'>
-									<SecurityVaultSection {...securityVault} autoLoadVault compactLayout showHeader={false} showSecurityPoolAddressInput={false} />
-								</EntityCard>
+								<div className='subtab-nav' role='tablist' aria-label='Selected pool vault views'>
+									<button className={`subtab-link ${vaultView === 'browse-vaults' ? 'active' : ''}`} type='button' onClick={() => setVaultView('browse-vaults')} aria-pressed={vaultView === 'browse-vaults'}>
+										Browse Vaults
+									</button>
+									<button className={`subtab-link ${vaultView === 'selected-vault' ? 'active' : ''}`} type='button' onClick={() => setVaultView('selected-vault')} aria-pressed={vaultView === 'selected-vault'}>
+										Selected Vault
+									</button>
+								</div>
 
-								<EntityCard className='selected-pool-card' title='Pool Vaults' badge={<span className='badge muted'>{selectedPool?.vaultCount.toString() ?? '0'} vaults</span>}>
-									{selectedPool === undefined ? (
-										<p className='detail'>No pool metadata</p>
-									) : selectedPool.vaults.length === 0 ? (
-										<p className='detail'>No vaults</p>
-									) : (
-										<div className='entity-card-list'>
-											{selectedPool.vaults.map(vault => (
-												<EntityCard
-													key={`${selectedPool.securityPoolAddress}-${vault.vaultAddress}`}
-													className='compact'
-													title={<AddressValue address={vault.vaultAddress} />}
-													actions={
-														<button className='destructive' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet || poolOracleManagerDetails?.isPriceValid === false}>
-															Liquidate Vault
-														</button>
-													}
-												>
-													<div className='workflow-vault-grid'>
-														<div>
-															<span className='metric-label'>REP Deposit Share</span>
-															<strong>
-																<CurrencyValue value={vault.repDepositShare} suffix='REP' />
-															</strong>
+								{vaultView === 'browse-vaults' ? (
+									<EntityCard className='selected-pool-card' title='Browse Vaults' badge={<span className='badge muted'>{selectedPool?.vaultCount.toString() ?? '0'} vaults</span>}>
+										{selectedPool === undefined ? (
+											<p className='detail'>No pool metadata</p>
+										) : selectedPool.vaults.length === 0 ? (
+											<p className='detail'>No vaults</p>
+										) : (
+											<div className='entity-card-list'>
+												{selectedPool.vaults.map(vault => (
+													<EntityCard
+														key={`${selectedPool.securityPoolAddress}-${vault.vaultAddress}`}
+														className='compact'
+														title={<AddressValue address={vault.vaultAddress} />}
+														badge={selectedVaultAddress !== '' && selectedVaultAddress.toLowerCase() === vault.vaultAddress.toLowerCase() ? <span className='badge ok'>Selected</span> : undefined}
+														actions={
+															<div className='actions'>
+																<button
+																	className='secondary'
+																	onClick={() => {
+																		securityVault.onSecurityVaultFormChange({ selectedVaultAddress: vault.vaultAddress.toString() })
+																		setVaultView('selected-vault')
+																		void securityVault.onLoadSecurityVault(vault.vaultAddress.toString())
+																	}}
+																>
+																	Select Vault
+																</button>
+																<button className='destructive' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet || poolOracleManagerDetails?.isPriceValid === false}>
+																	Liquidate Vault
+																</button>
+															</div>
+														}
+													>
+														<div className='workflow-vault-grid'>
+															<div>
+																<span className='metric-label'>REP Deposit Share</span>
+																<strong>
+																	<CurrencyValue value={vault.repDepositShare} suffix='REP' />
+																</strong>
+															</div>
+															<div>
+																<span className='metric-label'>Pool Ownership</span>
+																<strong>{vault.poolOwnership.toString()}</strong>
+															</div>
+															<div>
+																<span className='metric-label'>Security Bond Allowance</span>
+																<strong>
+																	<CurrencyValue value={vault.securityBondAllowance} suffix='REP' />
+																</strong>
+															</div>
+															<div>
+																<span className='metric-label'>Unpaid ETH Fees</span>
+																<strong>
+																	<CurrencyValue value={vault.unpaidEthFees} suffix='ETH' />
+																</strong>
+															</div>
+															<div>
+																<span className='metric-label'>Locked REP</span>
+																<strong>
+																	<CurrencyValue value={vault.lockedRepInEscalationGame} suffix='REP' />
+																</strong>
+															</div>
+															<div>
+																<span className='metric-label'>Fee Index</span>
+																<strong>{vault.feeIndex.toString()}</strong>
+															</div>
 														</div>
-														<div>
-															<span className='metric-label'>Pool Ownership</span>
-															<strong>{vault.poolOwnership.toString()}</strong>
-														</div>
-														<div>
-															<span className='metric-label'>Security Bond Allowance</span>
-															<strong>
-																<CurrencyValue value={vault.securityBondAllowance} suffix='REP' />
-															</strong>
-														</div>
-														<div>
-															<span className='metric-label'>Unpaid ETH Fees</span>
-															<strong>
-																<CurrencyValue value={vault.unpaidEthFees} suffix='ETH' />
-															</strong>
-														</div>
-														<div>
-															<span className='metric-label'>Locked REP</span>
-															<strong>
-																<CurrencyValue value={vault.lockedRepInEscalationGame} suffix='REP' />
-															</strong>
-														</div>
-														<div>
-															<span className='metric-label'>Fee Index</span>
-															<strong>{vault.feeIndex.toString()}</strong>
-														</div>
-													</div>
-												</EntityCard>
-											))}
-										</div>
-									)}
-								</EntityCard>
+													</EntityCard>
+												))}
+											</div>
+										)}
+									</EntityCard>
+								) : (
+									<EntityCard className='selected-pool-card' title='Selected Vault' badge={<span className={`badge ${selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}`}>{selectedVaultIsOwnedByAccount ? 'Owned' : 'Read only'}</span>}>
+										<SecurityVaultSection {...securityVault} autoLoadVault compactLayout showHeader={false} showSecurityPoolAddressInput={false} />
+									</EntityCard>
+								)}
 							</div>
 						) : undefined}
 

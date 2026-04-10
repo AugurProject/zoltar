@@ -1,5 +1,6 @@
 import { useSignal } from '@preact/signals'
-import type { Address, Hash } from 'viem'
+import { useFormState } from './useFormState.js'
+import type { Address } from 'viem'
 import {
 	claimSecurityPoolAuctionProceeds,
 	createChildUniverseFromSecurityPool,
@@ -18,39 +19,18 @@ import {
 } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { runWriteAction } from '../lib/writeAction.js'
-import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput } from '../lib/inputs.js'
+import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
+import { getReportingOutcomeKey, parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput } from '../lib/inputs.js'
 import { getDefaultForkAuctionFormState, parseBigIntInput } from '../lib/marketForm.js'
-import type { ForkAuctionFormState } from '../types/app.js'
+import type { ForkAuctionFormState, WriteOperationsParameters } from '../types/app.js'
 import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
-type UseForkAuctionOperationsParameters = {
-	accountAddress: Address | undefined
-	onTransaction: (hash: Hash) => void
-	onTransactionFinished: () => void
-	onTransactionRequested: () => void
-	onTransactionSubmitted: (hash: Hash) => void
-	refreshState: () => Promise<void>
-}
-
-function getReportingOutcomeKey(outcome: ReportingOutcomeKey | bigint): ReportingOutcomeKey {
-	if (typeof outcome !== 'bigint') return outcome
-	switch (outcome) {
-		case 0n:
-			return 'invalid'
-		case 1n:
-			return 'yes'
-		case 2n:
-			return 'no'
-		default:
-			throw new Error(`Unsupported child universe outcome index: ${outcome.toString()}`)
-	}
-}
+type UseForkAuctionOperationsParameters = WriteOperationsParameters
 
 export function useForkAuctionOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseForkAuctionOperationsParameters) {
 	const forkAuctionDetails = useSignal<ForkAuctionDetails | undefined>(undefined)
 	const forkAuctionError = useSignal<string | undefined>(undefined)
-	const forkAuctionForm = useSignal<ForkAuctionFormState>(getDefaultForkAuctionFormState())
+	const { state: forkAuctionForm, setState: setForkAuctionForm } = useFormState<ForkAuctionFormState>(getDefaultForkAuctionFormState())
 	const forkAuctionResult = useSignal<ForkAuctionActionResult | undefined>(undefined)
 	const loadingForkAuctionDetails = useSignal(false)
 
@@ -71,17 +51,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 
 	const runForkAuctionAction = async (action: (walletAddress: Address, details: ForkAuctionDetails) => Promise<ForkAuctionActionResult>, errorFallback: string) =>
 		await runWriteAction(
-			{
-				accountAddress,
-				missingWalletMessage: 'Connect a wallet before using fork or truth auction actions',
-				onTransaction,
-				onTransactionFinished,
-				onTransactionRequested,
-				refreshState,
-				setErrorMessage: message => {
-					forkAuctionError.value = message
-				},
-			},
+			buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, forkAuctionError, 'Connect a wallet before using fork or truth auction actions'),
 			async walletAddress => {
 				forkAuctionResult.value = undefined
 				const details = forkAuctionDetails.value ?? (await loadForkAuctionDetails(createConnectedReadClient(), parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address')))
@@ -190,9 +160,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 		migrateRepToZoltar,
 		migrateVault,
 		refundLosingBids,
-		setForkAuctionForm: (updater: (current: ForkAuctionFormState) => ForkAuctionFormState) => {
-			forkAuctionForm.value = updater(forkAuctionForm.value)
-		},
+		setForkAuctionForm,
 		startTruthAuction,
 		submitBid,
 		withdrawBids,
