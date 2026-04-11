@@ -11,8 +11,8 @@ import { TradingSection } from './TradingSection.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { CurrencyValue } from './CurrencyValue.js'
+import { TimestampValue } from './TimestampValue.js'
 import { isMainnetChain } from '../lib/network.js'
-import { formatTimestamp } from '../lib/formatters.js'
 import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { formatUniverseLabel } from '../lib/universe.js'
@@ -44,6 +44,7 @@ export function SecurityPoolWorkflowSection({
 	liquidationSecurityPoolAddress,
 	liquidationTargetVault,
 	loadingPoolOracleManager,
+	loadingSecurityPools,
 	onLiquidationAmountChange,
 	onLiquidationTargetVaultChange,
 	onLoadPoolOracleManager,
@@ -128,7 +129,13 @@ export function SecurityPoolWorkflowSection({
 					{!hasSelectedPoolAddress ? (
 						<p className='detail'>Browse Pools to pick one, or paste an address above.</p>
 					) : selectedPool === undefined ? (
-						<p className='detail'>Pool metadata unavailable. Refresh Pool Registry in the Browse tab to load metadata for this address.</p>
+						loadingSecurityPools ? (
+							<p className='detail'>
+								<span className='spinner' aria-hidden='true' /> Loading pool data…
+							</p>
+						) : (
+							<p className='detail'>Pool metadata unavailable. Refresh Pool Registry in the Browse tab to load metadata for this address.</p>
+						)
 					) : (
 						<>
 							<div className='entity-card-subsection'>
@@ -220,7 +227,9 @@ export function SecurityPoolWorkflowSection({
 											</div>
 											<div>
 												<span className='metric-label'>Set At</span>
-												<strong>{poolOracleManagerDetails.lastSettlementTimestamp === 0n ? 'Never' : formatTimestamp(poolOracleManagerDetails.lastSettlementTimestamp)}</strong>
+												<strong>
+													<TimestampValue timestamp={poolOracleManagerDetails.lastSettlementTimestamp} zeroText='Never' />
+												</strong>
 											</div>
 											<div>
 												<span className='metric-label'>Pending Request</span>
@@ -293,7 +302,13 @@ export function SecurityPoolWorkflowSection({
 								{vaultView === 'browse-vaults' ? (
 									<EntityCard className='selected-pool-card' title='Browse Vaults' badge={<span className='badge muted'>{selectedPool?.vaultCount.toString() ?? '0'} vaults</span>}>
 										{selectedPool === undefined ? (
-											<p className='detail'>No pool metadata</p>
+											loadingSecurityPools ? (
+												<p className='detail'>
+													<span className='spinner' aria-hidden='true' /> Loading pool data…
+												</p>
+											) : (
+												<p className='detail'>No pool metadata</p>
+											)
 										) : selectedPool.vaults.length === 0 ? (
 											<p className='detail'>No vaults</p>
 										) : (

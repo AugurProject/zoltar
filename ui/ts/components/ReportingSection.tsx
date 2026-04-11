@@ -7,10 +7,11 @@ import { EscalationSide } from './EscalationSide.js'
 import { Question } from './Question.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
-import { formatDuration, formatTimestamp } from '../lib/formatters.js'
+import { formatDuration } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome } from '../lib/reportingDomain.js'
+import { TimestampValue } from './TimestampValue.js'
 import type { ReportingSectionProps } from '../types/components.js'
 
 function parseOptionalBigInt(value: string) {
@@ -69,7 +70,9 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 									</li>
 									<li>
 										<span>Market End</span>
-										<strong>{formatTimestamp(reportingDetails.marketDetails.endTime)}</strong>
+										<strong>
+											<TimestampValue timestamp={reportingDetails.marketDetails.endTime} />
+										</strong>
 									</li>
 									<li>
 										<span>Resolution</span>
@@ -111,7 +114,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 									</div>
 								</div>
 								<p className='detail'>
-									Game starts at {formatTimestamp(reportingDetails.startingTime)} and currently uses a start bond of <CurrencyValue value={reportingDetails.startBond} suffix='REP' />.
+									Game starts at <TimestampValue timestamp={reportingDetails.startingTime} /> and currently uses a start bond of <CurrencyValue value={reportingDetails.startBond} suffix='REP' />.
 								</p>
 							</EntityCard>
 

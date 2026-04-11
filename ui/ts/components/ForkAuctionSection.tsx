@@ -5,7 +5,8 @@ import { LoadingText } from './LoadingText.js'
 import { Question } from './Question.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
-import { formatDuration, formatTimestamp } from '../lib/formatters.js'
+import { TimestampValue } from './TimestampValue.js'
+import { formatDuration } from '../lib/formatters.js'
 import { AUCTION_TIME_SECONDS, estimateRepPurchased, getForkStageDescription, getOutcomeActionLabel, getSystemStateLabel, getTimeRemaining, MIGRATION_TIME_SECONDS } from '../lib/forkAuction.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
@@ -136,7 +137,7 @@ export function ForkAuctionSection({
 									</div>
 									<div>
 										<span className='metric-label'>Migration Ends</span>
-										<strong>{forkAuctionDetails.migrationEndsAt === undefined ? 'Started/finished' : formatTimestamp(forkAuctionDetails.migrationEndsAt)}</strong>
+										<strong>{forkAuctionDetails.migrationEndsAt === undefined ? 'Started/finished' : <TimestampValue timestamp={forkAuctionDetails.migrationEndsAt} />}</strong>
 									</div>
 									<div>
 										<span className='metric-label'>Migration Time Left</span>
@@ -157,11 +158,13 @@ export function ForkAuctionSection({
 										</div>
 										<div>
 											<span className='metric-label'>Started</span>
-											<strong>{formatTimestamp(forkAuctionDetails.truthAuctionStartedAt)}</strong>
+											<strong>
+												<TimestampValue timestamp={forkAuctionDetails.truthAuctionStartedAt} />
+											</strong>
 										</div>
 										<div>
 											<span className='metric-label'>Ends</span>
-											<strong>{auctionWindow === undefined ? 'Not started' : formatTimestamp(auctionWindow.endsAt)}</strong>
+											<strong>{auctionWindow === undefined ? 'Not started' : <TimestampValue timestamp={auctionWindow.endsAt} />}</strong>
 										</div>
 										<div>
 											<span className='metric-label'>Time Left</span>

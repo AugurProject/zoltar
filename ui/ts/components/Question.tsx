@@ -1,5 +1,5 @@
 import { LoadingText } from './LoadingText.js'
-import { formatTimestamp } from '../lib/formatters.js'
+import { TimestampValue } from './TimestampValue.js'
 import type { MarketDetails } from '../types/contracts.js'
 
 type QuestionProps = {
@@ -81,11 +81,15 @@ export function Question({ className = '', loading = false, question, showTitle 
 				</div>
 				<div>
 					<span className='metric-label'>Created</span>
-					<strong>{formatTimestamp(question.createdAt)}</strong>
+					<strong>
+						<TimestampValue timestamp={question.createdAt} />
+					</strong>
 				</div>
 				<div>
 					<span className='metric-label'>End Time</span>
-					<strong>{formatTimestamp(question.endTime)}</strong>
+					<strong>
+						<TimestampValue timestamp={question.endTime} />
+					</strong>
 				</div>
 				<div>
 					<span className='metric-label'>Outcomes</span>

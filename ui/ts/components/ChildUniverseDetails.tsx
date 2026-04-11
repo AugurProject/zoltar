@@ -1,4 +1,4 @@
-import { formatTimestamp } from '../lib/formatters.js'
+import { TimestampValue } from './TimestampValue.js'
 import type { ZoltarChildUniverseSummary } from '../types/contracts.js'
 
 type ChildUniverseDetailsProps = {
@@ -28,7 +28,9 @@ export function ChildUniverseDetails({ child, showOutcomeIndex = false }: ChildU
 			{child.forkTime !== 0n ? (
 				<div>
 					<span className='metric-label'>Fork Time</span>
-					<strong>{formatTimestamp(child.forkTime)}</strong>
+					<strong>
+						<TimestampValue timestamp={child.forkTime} />
+					</strong>
 				</div>
 			) : undefined}
 		</div>

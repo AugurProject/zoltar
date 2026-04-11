@@ -145,21 +145,34 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				if (result.action !== 'createReportInstance' && openOracleForm.value.reportId.trim() !== '') {
 					await ensureLoadedSelectedReport()
 				}
+				if (result.action === 'approveToken1' || result.action === 'approveToken2') {
+					await refreshOpenOracleInitialReportState(openOracleReportDetails.value)
+				}
 			},
 		)
+
+	const parseApproveAmount = (raw: string) => {
+		const trimmed = raw.trim()
+		if (trimmed === '') return OPEN_ORACLE_APPROVAL_AMOUNT
+		try {
+			return parseBigIntInput(trimmed, 'Approve amount')
+		} catch {
+			return OPEN_ORACLE_APPROVAL_AMOUNT
+		}
+	}
 
 	const approveToken1 = async () =>
 		await runOracleAction(async walletAddress => {
 			const reportDetails = openOracleReportDetails.value
 			if (reportDetails === undefined) throw new Error('Load an oracle report first')
-			return await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), reportDetails.token1, getOpenOracleAddress(), OPEN_ORACLE_APPROVAL_AMOUNT, 'approveToken1')
+			return await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), reportDetails.token1, getOpenOracleAddress(), parseApproveAmount(openOracleForm.value.approveAmount1), 'approveToken1')
 		}, 'Failed to approve token1')
 
 	const approveToken2 = async () =>
 		await runOracleAction(async walletAddress => {
 			const reportDetails = openOracleReportDetails.value
 			if (reportDetails === undefined) throw new Error('Load an oracle report first')
-			return await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), reportDetails.token2, getOpenOracleAddress(), OPEN_ORACLE_APPROVAL_AMOUNT, 'approveToken2')
+			return await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), reportDetails.token2, getOpenOracleAddress(), parseApproveAmount(openOracleForm.value.approveAmount2), 'approveToken2')
 		}, 'Failed to approve token2')
 
 	const createOpenOracleGame = async () => {
@@ -241,6 +254,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		createOpenOracleGame,
 		disputeReport,
 		loadOracleReport,
+		refreshPrice: () => void refreshOpenOracleInitialReportState(openOracleReportDetails.value),
 		loadingOpenOracleCreate: loadingOpenOracleCreate.value,
 		loadingOracleReport: loadingOracleReport.value,
 		openOracleCreateForm: openOracleCreateForm.value,

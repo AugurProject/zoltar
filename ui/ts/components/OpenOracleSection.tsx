@@ -7,8 +7,8 @@ import { EntityCard } from './EntityCard.js'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { LoadingText } from './LoadingText.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
+import { TimestampValue } from './TimestampValue.js'
 import { createConnectedReadClient } from '../lib/clients.js'
-import { formatTimestamp } from '../lib/formatters.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOracleFeePercentage, formatOpenOracleMultiplier, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSelectedReportActionMode, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import { loadOpenOracleReportSummaries } from '../contracts.js'
 import type { OpenOracleFormState } from '../types/app.js'
@@ -16,11 +16,6 @@ import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReport
 import type { OpenOracleSectionProps, OpenOracleView } from '../types/components.js'
 
 const BROWSE_PAGE_SIZE = 10
-
-const DISPUTE_TOKEN_OPTIONS: EnumDropdownOption<OpenOracleFormState['disputeTokenToSwap']>[] = [
-	{ value: 'token1', label: 'Token1' },
-	{ value: 'token2', label: 'Token2' },
-]
 
 function getInitialOpenOracleView({ openOracleForm, initialView }: { openOracleForm: OpenOracleFormState; initialView: OpenOracleView | undefined }): OpenOracleView {
 	if (initialView !== undefined) return initialView
@@ -72,13 +67,12 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 						<AddressValue address={report.token1} /> / <AddressValue address={report.token2} />
 					</>,
 				)}
-				{renderReportField('Current Price', <CurrencyValue value={report.price} suffix='Token1 / Token2' copyable={false} />)}
+				{renderReportField('Current Price', <CurrencyValue value={report.price} suffix={`${report.token1Symbol} / ${report.token2Symbol}`} copyable={false} />)}
 				{renderReportField('Current Reporter', report.currentReporter === zeroAddress ? 'None' : <AddressValue address={report.currentReporter} />)}
-				{renderReportField('Current Amount1', <CurrencyValue value={report.currentAmount1} suffix='Token1' units={report.token1Decimals} copyable={false} />)}
-				{renderReportField('Current Amount2', <CurrencyValue value={report.currentAmount2} suffix='Token2' units={report.token2Decimals} copyable={false} />)}
-				{renderReportField('Created At', report.createdAt === undefined ? 'Unavailable' : formatTimestamp(report.createdAt))}
-				{renderReportField('Report Timestamp', report.reportTimestamp === 0n ? 'Awaiting initial report' : formatTimestamp(report.reportTimestamp))}
-				{renderReportField('Settlement Timestamp', report.settlementTimestamp === 0n ? 'Not settled' : formatTimestamp(report.settlementTimestamp))}
+				{renderReportField('Current Amount1', <CurrencyValue value={report.currentAmount1} suffix={report.token1Symbol} units={report.token1Decimals} copyable={false} />)}
+				{renderReportField('Current Amount2', <CurrencyValue value={report.currentAmount2} suffix={report.token2Symbol} units={report.token2Decimals} copyable={false} />)}
+				{renderReportField('Report Timestamp', <TimestampValue timestamp={report.reportTimestamp} zeroText='Awaiting initial report' />)}
+				{renderReportField('Settlement Timestamp', <TimestampValue timestamp={report.settlementTimestamp} zeroText='Not settled' />)}
 			</div>
 		</EntityCard>
 	)
@@ -90,13 +84,20 @@ function renderSelectedReportActionSection(
 	openOracleForm: OpenOracleFormState,
 	initialReportSubmission: ReturnType<typeof deriveOpenOracleInitialReportSubmissionDetails>,
 	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
+	token1Symbol: string,
+	token2Symbol: string,
 	onApproveToken1: () => void,
 	onApproveToken2: () => void,
 	onDisputeReport: () => void,
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void,
+	onRefreshPrice: () => void,
 	onSettleReport: () => void,
 	onSubmitInitialReport: () => void,
 ) {
+	const disputeTokenOptions: EnumDropdownOption<OpenOracleFormState['disputeTokenToSwap']>[] = [
+		{ value: 'token1', label: token1Symbol },
+		{ value: 'token2', label: token2Symbol },
+	]
 	switch (actionMode) {
 		case 'initial-report':
 			return (
@@ -105,52 +106,67 @@ function renderSelectedReportActionSection(
 						<h4>Initial Report</h4>
 					</div>
 					<div className='form-grid'>
-						<label className='field'>
-							<span>Price</span>
-							<input value={openOracleForm.price} onInput={event => onOpenOracleFormChange({ price: event.currentTarget.value })} placeholder='1.00' />
-						</label>
-						<p className='detail'>
-							Resolved price:{' '}
-							<strong>
-								<CurrencyValue value={initialReportSubmission.price} suffix='Token1 / Token2' copyable={false} />
-							</strong>
-						</p>
+						<div className='field-row'>
+							<label className='field'>
+								<span>{`Price (${token1Symbol} / ${token2Symbol})`}</span>
+								<input value={openOracleForm.price} onInput={event => onOpenOracleFormChange({ price: event.currentTarget.value })} placeholder='1.00' />
+							</label>
+							<div className='actions'>
+								<button className='secondary' onClick={onRefreshPrice} disabled={openOracleInitialReportState.loading}>
+									{openOracleInitialReportState.loading ? 'Fetching...' : 'Fetch Price'}
+								</button>
+							</div>
+						</div>
 						<p className='detail'>
 							Price source: <strong>{openOracleInitialReportState.loading ? 'Loading...' : initialReportSubmission.priceSource}</strong>
 						</p>
 						<div className='question-summary-grid'>
 							<div>
-								<span className='metric-label'>Required Token1</span>
+								<span className='metric-label'>{`Required ${token1Symbol}`}</span>
 								<strong>
-									<CurrencyValue value={initialReportSubmission.amount1} units={initialReportSubmission.token1Decimals ?? 18} suffix='Token1' copyable={false} />
+									<CurrencyValue value={initialReportSubmission.amount1} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
 								</strong>
 							</div>
 							<div>
-								<span className='metric-label'>Required Token2</span>
+								<span className='metric-label'>{`Required ${token2Symbol}`}</span>
 								<strong>
-									<CurrencyValue value={initialReportSubmission.amount2} units={initialReportSubmission.token2Decimals ?? 18} suffix='Token2' copyable={false} />
+									<CurrencyValue value={initialReportSubmission.amount2} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
 								</strong>
 							</div>
 							<div>
-								<span className='metric-label'>Approved Token1</span>
+								<span className='metric-label'>{`Approved ${token1Symbol}`}</span>
 								<strong>
-									<CurrencyValue value={initialReportSubmission.approvedToken1Amount} units={initialReportSubmission.token1Decimals ?? 18} suffix='Token1' copyable={false} />
+									<CurrencyValue value={initialReportSubmission.approvedToken1Amount} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
 								</strong>
 							</div>
 							<div>
-								<span className='metric-label'>Approved Token2</span>
+								<span className='metric-label'>{`Approved ${token2Symbol}`}</span>
 								<strong>
-									<CurrencyValue value={initialReportSubmission.approvedToken2Amount} units={initialReportSubmission.token2Decimals ?? 18} suffix='Token2' copyable={false} />
+									<CurrencyValue value={initialReportSubmission.approvedToken2Amount} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
 								</strong>
 							</div>
 						</div>
-						<div className='actions'>
-							<button className='secondary' onClick={onApproveToken1} disabled={!isConnected || openOracleInitialReportState.loading}>
-								Approve Max Token1
-							</button>
-							<button className='secondary' onClick={onApproveToken2} disabled={!isConnected || openOracleInitialReportState.loading}>
-								Approve Max Token2
-							</button>
+						<div className='field-row'>
+							<label className='field'>
+								<span>{`${token1Symbol} Approve Amount (leave empty for max)`}</span>
+								<input value={openOracleForm.approveAmount1} onInput={event => onOpenOracleFormChange({ approveAmount1: event.currentTarget.value })} placeholder='Max' />
+							</label>
+							<div className='actions'>
+								<button className='secondary' onClick={onApproveToken1} disabled={!isConnected || openOracleInitialReportState.loading}>
+									{`Approve ${token1Symbol}`}
+								</button>
+							</div>
+						</div>
+						<div className='field-row'>
+							<label className='field'>
+								<span>{`${token2Symbol} Approve Amount (leave empty for max)`}</span>
+								<input value={openOracleForm.approveAmount2} onInput={event => onOpenOracleFormChange({ approveAmount2: event.currentTarget.value })} placeholder='Max' />
+							</label>
+							<div className='actions'>
+								<button className='secondary' onClick={onApproveToken2} disabled={!isConnected || openOracleInitialReportState.loading}>
+									{`Approve ${token2Symbol}`}
+								</button>
+							</div>
 						</div>
 						{initialReportSubmission.blockReason === undefined ? undefined : <p className='notice error'>{initialReportSubmission.blockReason}</p>}
 						<div className='actions'>
@@ -170,15 +186,15 @@ function renderSelectedReportActionSection(
 					<div className='form-grid'>
 						<label className='field'>
 							<span>Token to Swap Out</span>
-							<EnumDropdown options={DISPUTE_TOKEN_OPTIONS} value={openOracleForm.disputeTokenToSwap} onChange={disputeTokenToSwap => onOpenOracleFormChange({ disputeTokenToSwap })} />
+							<EnumDropdown options={disputeTokenOptions} value={openOracleForm.disputeTokenToSwap} onChange={disputeTokenToSwap => onOpenOracleFormChange({ disputeTokenToSwap })} />
 						</label>
 						<div className='field-row'>
 							<label className='field'>
-								<span>New Token1 Amount</span>
+								<span>{`New ${token1Symbol} Amount`}</span>
 								<input value={openOracleForm.disputeNewAmount1} onInput={event => onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })} />
 							</label>
 							<label className='field'>
-								<span>New Token2 Amount</span>
+								<span>{`New ${token2Symbol} Amount`}</span>
 								<input value={openOracleForm.disputeNewAmount2} onInput={event => onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })} />
 							</label>
 						</div>
@@ -218,6 +234,7 @@ function renderReportDetailsCard(
 	onDisputeReport: () => void,
 	onLoadOracleReport: (reportId?: string) => void,
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void,
+	onRefreshPrice: () => void,
 	onSettleReport: () => void,
 	onSubmitInitialReport: () => void,
 ) {
@@ -289,11 +306,15 @@ function renderReportDetailsCard(
 
 			{renderReportSection('Identity', [
 				{
-					label: 'Token1',
+					label: 'Oracle Address',
+					value: <AddressValue address={openOracleReportDetails.openOracleAddress} />,
+				},
+				{
+					label: openOracleReportDetails.token1Symbol,
 					value: <AddressValue address={openOracleReportDetails.token1} />,
 				},
 				{
-					label: 'Token2',
+					label: openOracleReportDetails.token2Symbol,
 					value: <AddressValue address={openOracleReportDetails.token2} />,
 				},
 				{
@@ -308,20 +329,20 @@ function renderReportDetailsCard(
 
 			{renderReportSection('Economics', [
 				{
-					label: 'Exact Token1 Required',
-					value: <CurrencyValue value={openOracleReportDetails.exactToken1Report} suffix='Token1' units={openOracleReportDetails.token1Decimals} copyable={false} />,
+					label: `Exact ${openOracleReportDetails.token1Symbol} Required`,
+					value: <CurrencyValue value={openOracleReportDetails.exactToken1Report} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
 				},
 				{
-					label: 'Current Amount1',
-					value: <CurrencyValue value={openOracleReportDetails.currentAmount1} suffix='Token1' units={openOracleReportDetails.token1Decimals} copyable={false} />,
+					label: `Current ${openOracleReportDetails.token1Symbol}`,
+					value: <CurrencyValue value={openOracleReportDetails.currentAmount1} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
 				},
 				{
-					label: 'Current Amount2',
-					value: <CurrencyValue value={openOracleReportDetails.currentAmount2} suffix='Token2' units={openOracleReportDetails.token2Decimals} copyable={false} />,
+					label: `Current ${openOracleReportDetails.token2Symbol}`,
+					value: <CurrencyValue value={openOracleReportDetails.currentAmount2} suffix={openOracleReportDetails.token2Symbol} units={openOracleReportDetails.token2Decimals} copyable={false} />,
 				},
 				{
 					label: 'Price',
-					value: <CurrencyValue value={openOracleReportDetails.price} suffix='Token1 / Token2' copyable={false} />,
+					value: <CurrencyValue value={openOracleReportDetails.price} suffix={`${openOracleReportDetails.token1Symbol} / ${openOracleReportDetails.token2Symbol}`} copyable={false} />,
 				},
 				{
 					label: 'Fee',
@@ -333,18 +354,14 @@ function renderReportDetailsCard(
 				},
 				{
 					label: 'Escalation Halt',
-					value: <CurrencyValue value={openOracleReportDetails.escalationHalt} suffix='Token1' units={openOracleReportDetails.token1Decimals} copyable={false} />,
+					value: <CurrencyValue value={openOracleReportDetails.escalationHalt} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
 				},
 			])}
 
 			{renderReportSection('Status', [
 				{
-					label: 'Created At',
-					value: openOracleReportDetails.createdAt === undefined ? 'Unavailable' : formatTimestamp(openOracleReportDetails.createdAt),
-				},
-				{
 					label: 'Report Timestamp',
-					value: openOracleReportDetails.reportTimestamp === 0n ? 'Awaiting initial report' : formatTimestamp(openOracleReportDetails.reportTimestamp),
+					value: <TimestampValue timestamp={openOracleReportDetails.reportTimestamp} zeroText='Awaiting initial report' />,
 				},
 				{
 					label: 'Dispute Occurred',
@@ -356,7 +373,15 @@ function renderReportDetailsCard(
 				},
 				{
 					label: 'Settlement Timestamp',
-					value: openOracleReportDetails.settlementTimestamp === 0n ? 'Not settled' : formatTimestamp(openOracleReportDetails.settlementTimestamp),
+					value: <TimestampValue timestamp={openOracleReportDetails.settlementTimestamp} zeroText='Not settled' />,
+				},
+				{
+					label: 'Last Report Opportunity',
+					value: openOracleReportDetails.lastReportOppoTime === 0n ? 'None' : `${openOracleReportDetails.lastReportOppoTime.toString()} ${openOracleReportDetails.timeType ? 's' : ' blocks'}`,
+				},
+				{
+					label: 'State Hash',
+					value: openOracleReportDetails.stateHash,
 				},
 			])}
 
@@ -389,12 +414,51 @@ function renderReportDetailsCard(
 					value: openOracleReportDetails.callbackContract === zeroAddress ? 'None' : <AddressValue address={openOracleReportDetails.callbackContract} />,
 				},
 				{
+					label: 'Callback Selector',
+					value: openOracleReportDetails.callbackSelector === '0x00000000' ? 'None' : openOracleReportDetails.callbackSelector,
+				},
+				{
+					label: 'Callback Gas Limit',
+					value: openOracleReportDetails.callbackGasLimit === 0 ? 'None' : openOracleReportDetails.callbackGasLimit.toString(),
+				},
+				{
+					label: 'Protocol Fee Recipient',
+					value: openOracleReportDetails.protocolFeeRecipient === zeroAddress ? 'None' : <AddressValue address={openOracleReportDetails.protocolFeeRecipient} />,
+				},
+				{
+					label: 'Track Disputes',
+					value: openOracleReportDetails.trackDisputes ? 'Yes' : 'No',
+				},
+				{
+					label: 'Keep Fee',
+					value: openOracleReportDetails.keepFee ? 'Yes' : 'No',
+				},
+				{
+					label: 'Fee Token',
+					value: openOracleReportDetails.feeToken ? openOracleReportDetails.token1Symbol : 'ETH',
+				},
+				{
 					label: 'Number of Reports',
 					value: openOracleReportDetails.numReports.toString(),
 				},
 			])}
 
-			{renderSelectedReportActionSection(actionMode, isConnected, openOracleForm, initialReportSubmission, openOracleInitialReportState, onApproveToken1, onApproveToken2, onDisputeReport, onOpenOracleFormChange, onSettleReport, onSubmitInitialReport)}
+			{renderSelectedReportActionSection(
+				actionMode,
+				isConnected,
+				openOracleForm,
+				initialReportSubmission,
+				openOracleInitialReportState,
+				openOracleReportDetails.token1Symbol,
+				openOracleReportDetails.token2Symbol,
+				onApproveToken1,
+				onApproveToken2,
+				onDisputeReport,
+				onOpenOracleFormChange,
+				onRefreshPrice,
+				onSettleReport,
+				onSubmitInitialReport,
+			)}
 		</EntityCard>
 	)
 }
@@ -422,6 +486,7 @@ export function OpenOracleSection({
 	onLoadOracleReport,
 	onOpenOracleCreateFormChange,
 	onOpenOracleFormChange,
+	onRefreshPrice,
 	onSettleReport,
 	onSubmitInitialReport,
 	loadingOpenOracleCreate,
@@ -614,7 +679,7 @@ export function OpenOracleSection({
 			{view === 'selected-report' ? (
 				<div className='market-grid'>
 					<div className='market-column'>
-						{renderReportDetailsCard(openOracleReportDetails, openOracleForm, openOracleInitialReportState, loadingOracleReport, isConnected, onApproveToken1, onApproveToken2, onDisputeReport, onLoadOracleReport, onOpenOracleFormChange, onSettleReport, onSubmitInitialReport)}
+						{renderReportDetailsCard(openOracleReportDetails, openOracleForm, openOracleInitialReportState, loadingOracleReport, isConnected, onApproveToken1, onApproveToken2, onDisputeReport, onLoadOracleReport, onOpenOracleFormChange, onRefreshPrice, onSettleReport, onSubmitInitialReport)}
 						{renderLatestActionCard(openOracleResult)}
 					</div>
 				</div>

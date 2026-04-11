@@ -41,6 +41,8 @@ export function getDefaultOpenOracleFormState(): OpenOracleFormState {
 	return {
 		amount1: '0',
 		amount2: '0',
+		approveAmount1: '',
+		approveAmount2: '',
 		disputeNewAmount1: '0',
 		disputeNewAmount2: '0',
 		disputeTokenToSwap: 'token1',
