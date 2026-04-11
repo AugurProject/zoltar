@@ -8,7 +8,7 @@ import { LoadingText } from './LoadingText.js'
 import { LoadableValue } from './LoadableValue.js'
 import { Question } from './Question.js'
 import { ScalarDeploymentSection } from './ScalarDeploymentSection.js'
-import { formatTimestamp } from '../lib/formatters.js'
+import { TimestampValue } from './TimestampValue.js'
 import { formatUniverseCollectionLabel } from '../lib/universe.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -58,7 +58,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 									<span className='metric-label'>Fork Time</span>
 									<strong>
 										<LoadableValue loading={loadingZoltarUniverse} placeholder='Loading...'>
-											{formatTimestamp(rootUniverse.forkTime)}
+											<TimestampValue timestamp={rootUniverse.forkTime} />
 										</LoadableValue>
 									</strong>
 								</div>

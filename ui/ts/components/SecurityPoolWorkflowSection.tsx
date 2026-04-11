@@ -11,8 +11,8 @@ import { TradingSection } from './TradingSection.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { CurrencyValue } from './CurrencyValue.js'
+import { TimestampValue } from './TimestampValue.js'
 import { isMainnetChain } from '../lib/network.js'
-import { formatTimestamp } from '../lib/formatters.js'
 import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { formatUniverseLabel } from '../lib/universe.js'
@@ -227,7 +227,9 @@ export function SecurityPoolWorkflowSection({
 											</div>
 											<div>
 												<span className='metric-label'>Set At</span>
-												<strong>{poolOracleManagerDetails.lastSettlementTimestamp === 0n ? 'Never' : formatTimestamp(poolOracleManagerDetails.lastSettlementTimestamp)}</strong>
+												<strong>
+													<TimestampValue timestamp={poolOracleManagerDetails.lastSettlementTimestamp} zeroText='Never' />
+												</strong>
 											</div>
 											<div>
 												<span className='metric-label'>Pending Request</span>

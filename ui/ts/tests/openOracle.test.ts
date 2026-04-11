@@ -200,6 +200,7 @@ describe('Open Oracle helpers', () => {
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		const reportId = details.pendingReportId
 
+		// The pending report should now be visible through the selected report loader.
 		expect(reportId).toBeGreaterThan(0n)
 
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)

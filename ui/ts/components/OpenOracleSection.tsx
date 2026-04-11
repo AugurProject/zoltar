@@ -7,8 +7,8 @@ import { EntityCard } from './EntityCard.js'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { LoadingText } from './LoadingText.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
+import { TimestampValue } from './TimestampValue.js'
 import { createConnectedReadClient } from '../lib/clients.js'
-import { formatTimestamp } from '../lib/formatters.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOracleFeePercentage, formatOpenOracleMultiplier, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSelectedReportActionMode, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import { loadOpenOracleReportSummaries } from '../contracts.js'
 import type { OpenOracleFormState } from '../types/app.js'
@@ -71,8 +71,8 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 				{renderReportField('Current Reporter', report.currentReporter === zeroAddress ? 'None' : <AddressValue address={report.currentReporter} />)}
 				{renderReportField('Current Amount1', <CurrencyValue value={report.currentAmount1} suffix={report.token1Symbol} units={report.token1Decimals} copyable={false} />)}
 				{renderReportField('Current Amount2', <CurrencyValue value={report.currentAmount2} suffix={report.token2Symbol} units={report.token2Decimals} copyable={false} />)}
-				{renderReportField('Report Timestamp', report.reportTimestamp === 0n ? 'Awaiting initial report' : formatTimestamp(report.reportTimestamp))}
-				{renderReportField('Settlement Timestamp', report.settlementTimestamp === 0n ? 'Not settled' : formatTimestamp(report.settlementTimestamp))}
+				{renderReportField('Report Timestamp', <TimestampValue timestamp={report.reportTimestamp} zeroText='Awaiting initial report' />)}
+				{renderReportField('Settlement Timestamp', <TimestampValue timestamp={report.settlementTimestamp} zeroText='Not settled' />)}
 			</div>
 		</EntityCard>
 	)
@@ -361,7 +361,7 @@ function renderReportDetailsCard(
 			{renderReportSection('Status', [
 				{
 					label: 'Report Timestamp',
-					value: openOracleReportDetails.reportTimestamp === 0n ? 'Awaiting initial report' : formatTimestamp(openOracleReportDetails.reportTimestamp),
+					value: <TimestampValue timestamp={openOracleReportDetails.reportTimestamp} zeroText='Awaiting initial report' />,
 				},
 				{
 					label: 'Dispute Occurred',
@@ -373,7 +373,7 @@ function renderReportDetailsCard(
 				},
 				{
 					label: 'Settlement Timestamp',
-					value: openOracleReportDetails.settlementTimestamp === 0n ? 'Not settled' : formatTimestamp(openOracleReportDetails.settlementTimestamp),
+					value: <TimestampValue timestamp={openOracleReportDetails.settlementTimestamp} zeroText='Not settled' />,
 				},
 				{
 					label: 'Last Report Opportunity',
