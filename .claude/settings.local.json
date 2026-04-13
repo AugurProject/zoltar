@@ -36,7 +36,9 @@
       "Bash(python3:*)",
       "Bash(echo \"EXIT: $?\")",
       "Bash(echo \"BIOME_EXIT: $?\")",
-      "Bash(bun tsc:*)"
+      "Bash(bun tsc:*)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(echo \"Done: $?\")"
     ]
   }
 }

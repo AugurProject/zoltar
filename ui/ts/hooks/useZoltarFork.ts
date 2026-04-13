@@ -7,6 +7,7 @@ import { requireWallet } from '../lib/walletGuard.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import { GENESIS_REPUTATION_TOKEN_ADDRESS } from '../lib/universe.js'
+import { requireDefined } from '../lib/required.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -28,8 +29,10 @@ function formatQuestionId(questionId: bigint) {
 }
 
 function getZoltarAddress() {
-	const zoltarStep = getDeploymentSteps().find(step => step.id === 'zoltar')
-	if (zoltarStep === undefined) throw new Error('Zoltar deployment step not found')
+	const zoltarStep = requireDefined(
+		getDeploymentSteps().find(step => step.id === 'zoltar'),
+		'Zoltar deployment step not found',
+	)
 	return zoltarStep.address
 }
 

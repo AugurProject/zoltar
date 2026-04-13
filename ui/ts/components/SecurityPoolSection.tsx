@@ -2,10 +2,12 @@ import type { ComponentChildren } from 'preact'
 import { AddressValue } from './AddressValue.js'
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
+import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { CurrencyValue } from './CurrencyValue.js'
+import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent, openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import type { SecurityPoolSectionProps } from '../types/components.js'
@@ -33,7 +35,7 @@ export function SecurityPoolSection({
 	const isPoolActionPending = securityPoolCreating || checkingDuplicateOriginPool
 	const hasSecurityPoolResult = securityPoolResult !== undefined
 	const isCreateDisabled = accountState.address === undefined || !isMainnet || isPoolActionPending || duplicateOriginPoolExists || marketDetails?.marketType !== 'binary' || zoltarUniverseHasForked
-	const matchingPools = marketDetails === undefined ? [] : securityPools.filter(pool => pool.questionId.toLowerCase() === marketDetails.questionId.toLowerCase())
+	const matchingPools = marketDetails === undefined ? [] : securityPools.filter(pool => sameCaseInsensitiveText(pool.questionId, marketDetails.questionId))
 	const hasMatchingSecurityMultiplier = matchingPools.some(pool => pool.securityMultiplier.toString() === securityPoolForm.securityMultiplier.trim())
 	let createdQuestionDetails = undefined
 	if (securityPoolResult !== undefined) {
@@ -136,16 +138,10 @@ export function SecurityPoolSection({
 										{matchingPools.map(pool => (
 											<EntityCard key={pool.securityPoolAddress} className='compact' title={<AddressValue address={pool.securityPoolAddress} />} badge={<span className='badge ok'>{pool.systemState}</span>}>
 												<div className='workflow-vault-grid'>
-													<div>
-														<span className='metric-label'>Security Multiplier</span>
-														<strong>{pool.securityMultiplier.toString()}</strong>
-													</div>
-													<div>
-														<span className='metric-label'>Open Interest Fee / Year</span>
-														<strong>
-															<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
-														</strong>
-													</div>
+													<MetricField label='Security Multiplier'>{pool.securityMultiplier.toString()}</MetricField>
+													<MetricField label='Open Interest Fee / Year'>
+														<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
+													</MetricField>
 												</div>
 											</EntityCard>
 										))}

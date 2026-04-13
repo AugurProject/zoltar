@@ -1,11 +1,16 @@
 import type { ReportingOutcomeKey } from '../types/contracts.js'
 import { assertNever } from './assert.js'
 
-export const REPORTING_OUTCOME_OPTIONS: { key: ReportingOutcomeKey; label: string }[] = [
+const REPORTING_OUTCOME_OPTIONS: { key: ReportingOutcomeKey; label: string }[] = [
 	{ key: 'invalid', label: 'Invalid' },
 	{ key: 'yes', label: 'Yes' },
 	{ key: 'no', label: 'No' },
 ]
+
+export const REPORTING_OUTCOME_DROPDOWN_OPTIONS = REPORTING_OUTCOME_OPTIONS.map(option => ({
+	value: option.key,
+	label: option.label,
+}))
 
 export function getReportingOutcomeLabel(outcome: ReportingOutcomeKey | 'none') {
 	switch (outcome) {

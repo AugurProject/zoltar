@@ -1,5 +1,7 @@
 import { LoadingText } from './LoadingText.js'
-import { formatTimestamp } from '../lib/formatters.js'
+import { MetricField } from './MetricField.js'
+import { TimestampValue } from './TimestampValue.js'
+import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import type { MarketDetails } from '../types/contracts.js'
 
 type QuestionProps = {
@@ -19,7 +21,7 @@ function getQuestionDescription(question: MarketDetails) {
 
 function getDisplayedOutcomes(question: MarketDetails) {
 	const outcomes = question.outcomeLabels.length === 0 ? ['Scalar'] : question.outcomeLabels
-	if (outcomes.some(outcome => outcome.toLowerCase() === 'invalid')) return outcomes
+	if (outcomes.some(outcome => sameCaseInsensitiveText(outcome, 'invalid'))) return outcomes
 	return [...outcomes, 'Invalid']
 }
 
@@ -30,18 +32,9 @@ function getDisplayRange(question: MarketDetails) {
 function renderScalarQuestionFields(question: MarketDetails) {
 	return (
 		<>
-			<div>
-				<span className='metric-label'>Ticks</span>
-				<strong>{question.numTicks.toString()}</strong>
-			</div>
-			<div>
-				<span className='metric-label'>Display Range</span>
-				<strong>{getDisplayRange(question)}</strong>
-			</div>
-			<div>
-				<span className='metric-label'>Answer Unit</span>
-				<strong>{question.answerUnit === '' ? 'None' : question.answerUnit}</strong>
-			</div>
+			<MetricField label='Ticks'>{question.numTicks.toString()}</MetricField>
+			<MetricField label='Display Range'>{getDisplayRange(question)}</MetricField>
+			<MetricField label='Answer Unit'>{question.answerUnit === '' ? 'None' : question.answerUnit}</MetricField>
 		</>
 	)
 }
@@ -71,26 +64,15 @@ export function Question({ className = '', loading = false, question, showTitle 
 				<p className='detail'>{description}</p>
 			)}
 			<div className='question-summary-grid'>
-				<div>
-					<span className='metric-label'>Question ID</span>
-					<strong>{question.questionId}</strong>
-				</div>
-				<div>
-					<span className='metric-label'>Type</span>
-					<strong>{question.marketType}</strong>
-				</div>
-				<div>
-					<span className='metric-label'>Created</span>
-					<strong>{formatTimestamp(question.createdAt)}</strong>
-				</div>
-				<div>
-					<span className='metric-label'>End Time</span>
-					<strong>{formatTimestamp(question.endTime)}</strong>
-				</div>
-				<div>
-					<span className='metric-label'>Outcomes</span>
-					<strong>{getDisplayedOutcomes(question).join(', ')}</strong>
-				</div>
+				<MetricField label='Question ID'>{question.questionId}</MetricField>
+				<MetricField label='Type'>{question.marketType}</MetricField>
+				<MetricField label='Created'>
+					<TimestampValue timestamp={question.createdAt} />
+				</MetricField>
+				<MetricField label='End Time'>
+					<TimestampValue timestamp={question.endTime} />
+				</MetricField>
+				<MetricField label='Outcomes'>{getDisplayedOutcomes(question).join(', ')}</MetricField>
 				{question.marketType === 'scalar' ? renderScalarQuestionFields(question) : undefined}
 			</div>
 		</div>

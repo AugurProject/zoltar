@@ -49,6 +49,8 @@ export type SecurityVaultFormState = {
 export type OpenOracleFormState = {
 	amount1: string
 	amount2: string
+	approveAmount1: string
+	approveAmount2: string
 	disputeNewAmount1: string
 	disputeNewAmount2: string
 	disputeTokenToSwap: 'token1' | 'token2'

@@ -3,7 +3,7 @@ import { EntityCard } from './EntityCard.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
-import { REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
+import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
 import type { TradingSectionProps } from '../types/components.js'
 
 export function TradingSection({ accountState, onCreateCompleteSet, onMigrateShares, onRedeemCompleteSet, onRedeemShares, onTradingFormChange, tradingError, tradingForm, tradingResult, showHeader = true, showSecurityPoolAddressInput = true }: TradingSectionProps) {
@@ -64,7 +64,7 @@ export function TradingSection({ accountState, onCreateCompleteSet, onMigrateSha
 								</label>
 								<label className='field'>
 									<span>Outcome To Migrate</span>
-									<EnumDropdown options={REPORTING_OUTCOME_OPTIONS.map(option => ({ value: option.key, label: option.label }))} value={tradingForm.selectedOutcome} onChange={selectedOutcome => onTradingFormChange({ selectedOutcome })} />
+									<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={tradingForm.selectedOutcome} onChange={selectedOutcome => onTradingFormChange({ selectedOutcome })} />
 								</label>
 							</div>
 

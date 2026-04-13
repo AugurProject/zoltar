@@ -28,9 +28,9 @@ import { isMainnetChain } from './lib/network.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
 import type { TransactionState } from './lib/transactionState.js'
 import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
-import { formatTimestamp } from './lib/formatters.js'
 import { formatUniverseCollectionLabel, formatUniverseLabel } from './lib/universe.js'
 import { TransactionHashLink } from './components/TransactionHashLink.js'
+import { TimestampValue } from './components/TimestampValue.js'
 
 export function App() {
 	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
@@ -125,6 +125,7 @@ export function App() {
 		openOracleInitialReportState,
 		openOracleReportDetails,
 		openOracleResult,
+		refreshPrice,
 		setOpenOracleCreateForm,
 		setOpenOracleForm,
 		settleReport,
@@ -330,6 +331,7 @@ export function App() {
 							onOpenLiquidationModal: (managerAddress, securityPoolAddress, vaultAddress) => openLiquidationModal(managerAddress, securityPoolAddress, vaultAddress),
 							onQueueLiquidation: (managerAddress, securityPoolAddress) => void queueLiquidation(managerAddress, securityPoolAddress),
 							loadingPoolOracleManager,
+							loadingSecurityPools,
 							onLoadPoolOracleManager: managerAddress => void loadPoolOracleManager(managerAddress),
 							onRequestPoolPrice: managerAddress => void requestPoolPrice(managerAddress),
 							onViewPendingReport: reportId => {
@@ -400,6 +402,7 @@ export function App() {
 						onCreateOpenOracleGame={() => void createOpenOracleGame()}
 						onDisputeReport={() => void disputeReport()}
 						onLoadOracleReport={reportId => void loadOracleReport(reportId)}
+						onRefreshPrice={refreshPrice}
 						onOpenOracleCreateFormChange={update => setOpenOracleCreateForm(current => ({ ...current, ...update }))}
 						onOpenOracleFormChange={update => setOpenOracleForm(current => ({ ...current, ...update }))}
 						onSettleReport={() => void settleReport()}
@@ -481,7 +484,11 @@ export function App() {
 	return (
 		<main>
 			<div className='page-notices'>
-				{showZoltarUniverseForkedWarning && zoltarUniverse !== undefined ? <div className='notice error'>{`${formatUniverseLabel(zoltarUniverse.universeId)} has forked on ${formatTimestamp(zoltarUniverse.forkTime)}.`}</div> : undefined}
+				{showZoltarUniverseForkedWarning && zoltarUniverse !== undefined ? (
+					<div className='notice error'>
+						{formatUniverseLabel(zoltarUniverse.universeId)} has forked on <TimestampValue timestamp={zoltarUniverse.forkTime} />.
+					</div>
+				) : undefined}
 				{showAugurPlaceHolderDeploymentWarning ? <div className='notice error'>Augur PLACEHOLDER contracts are not deployed yet. Deploy them before the application works.</div> : undefined}
 				{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected.</p>}
 				{errorMessage === undefined ? undefined : <p className='notice error'>{errorMessage}</p>}

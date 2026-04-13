@@ -185,6 +185,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	liquidationSecurityPoolAddress: Address | undefined
 	liquidationTargetVault: string
 	loadingPoolOracleManager: boolean
+	loadingSecurityPools: boolean
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTargetVaultChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
@@ -243,6 +244,7 @@ export type OpenOracleRouteContentProps = {
 	onCreateOpenOracleGame: () => void
 	onDisputeReport: () => void
 	onLoadOracleReport: (reportId?: string) => void
+	onRefreshPrice: () => void
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
 	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
 	onSettleReport: () => void

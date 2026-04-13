@@ -5,6 +5,7 @@ import { createSecurityPool, loadMarketDetails, originSecurityPoolExists } from 
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { runLoadRequest } from '../lib/loadState.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultSecurityPoolFormState, parseBigIntInput } from '../lib/marketForm.js'
@@ -79,31 +80,35 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		}
 
 		const isCurrent = nextMarketDetailsLoad()
-		loadingMarketDetails.value = true
-		securityPoolError.value = undefined
-		try {
-			const { questionId } = createSecurityPoolParameters({
-				...securityPoolForm.value,
-				marketId,
-			})
-			const details = await loadMarketDetails(createConnectedReadClient(), questionId)
-			if (!isCurrent()) return
-			if (!details.exists) {
+		await runLoadRequest({
+			isCurrent,
+			setLoading: value => {
+				loadingMarketDetails.value = value
+			},
+			onStart: () => {
+				securityPoolError.value = undefined
+			},
+			load: async () => {
+				const { questionId } = createSecurityPoolParameters({
+					...securityPoolForm.value,
+					marketId,
+				})
+				const details = await loadMarketDetails(createConnectedReadClient(), questionId)
+				return details
+			},
+			onSuccess: details => {
+				if (!details.exists) {
+					marketDetails.value = undefined
+					securityPoolError.value = 'No market found for that ID'
+					return
+				}
+				marketDetails.value = details
+			},
+			onError: error => {
 				marketDetails.value = undefined
-				securityPoolError.value = 'No market found for that ID'
-				return
-			}
-
-			marketDetails.value = details
-		} catch (error) {
-			if (!isCurrent()) return
-			marketDetails.value = undefined
-			securityPoolError.value = getErrorMessage(error, 'Failed to load market')
-		} finally {
-			if (isCurrent()) {
-				loadingMarketDetails.value = false
-			}
-		}
+				securityPoolError.value = getErrorMessage(error, 'Failed to load market')
+			},
+		})
 	}
 
 	const loadMarket = async () => await loadMarketById(securityPoolForm.value.marketId)

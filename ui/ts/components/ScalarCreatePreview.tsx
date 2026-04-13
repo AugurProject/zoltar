@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
+import { MetricField } from './MetricField.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
 
 export type ScalarCreatePreviewDetails = {
@@ -44,14 +45,8 @@ export function ScalarCreatePreview({ details, selectedTick, onSelectedTickChang
 				</div>
 			</div>
 			<div className='workflow-question-grid scalar-slider-stats'>
-				<div>
-					<span className='metric-label'>Selected Tick</span>
-					<strong>{isInvalid ? 'Invalid' : `${clampedSelectedTick} / ${details.numTicks.toString()}`}</strong>
-				</div>
-				<div>
-					<span className='metric-label'>Current Value</span>
-					<strong>{isInvalid ? 'Invalid' : formatScalarOutcomeLabel(details, clampedSelectedTickValue)}</strong>
-				</div>
+				<MetricField label='Selected Tick'>{isInvalid ? 'Invalid' : `${clampedSelectedTick} / ${details.numTicks.toString()}`}</MetricField>
+				<MetricField label='Current Value'>{isInvalid ? 'Invalid' : formatScalarOutcomeLabel(details, clampedSelectedTickValue)}</MetricField>
 			</div>
 		</div>
 	)

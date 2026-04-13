@@ -2,7 +2,9 @@ import type { Address } from 'viem'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
+import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
+import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type ForkZoltarSectionProps = {
@@ -50,7 +52,7 @@ export function ForkZoltarSection({
 	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= rootUniverse.forkThreshold
 	const hasEnoughApproval = rootUniverse !== undefined && zoltarForkAllowance !== undefined && zoltarForkAllowance >= rootUniverse.forkThreshold
 	const selectedQuestionId = zoltarForkQuestionId.trim()
-	const selectedQuestion = selectedQuestionId === '' ? undefined : zoltarQuestions.find(question => question.questionId.toLowerCase() === selectedQuestionId.toLowerCase())
+	const selectedQuestion = selectedQuestionId === '' ? undefined : zoltarQuestions.find(question => sameCaseInsensitiveText(question.questionId, selectedQuestionId))
 	const showMissingQuestionMessage = !loadingZoltarQuestions && selectedQuestionId !== '' && selectedQuestion === undefined
 	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && hasEnoughRep && hasEnoughApproval
 
@@ -69,18 +71,12 @@ export function ForkZoltarSection({
 		<>
 			<EntityCard title='Fork Zoltar' badge={hasForked ? <span className='badge blocked'>Forked</span> : undefined}>
 				<div className='workflow-metric-grid'>
-					<div>
-						<span className='metric-label'>Fork Threshold</span>
-						<strong>
-							<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThreshold} suffix='REP' />
-						</strong>
-					</div>
-					<div>
-						<span className='metric-label'>REP Approved To Zoltar</span>
-						<strong>
-							<CurrencyValue loading={loadingZoltarForkAccess} value={zoltarForkAllowance} suffix='REP' />
-						</strong>
-					</div>
+					<MetricField label='Fork Threshold'>
+						<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThreshold} suffix='REP' />
+					</MetricField>
+					<MetricField label='REP Approved To Zoltar'>
+						<CurrencyValue loading={loadingZoltarForkAccess} value={zoltarForkAllowance} suffix='REP' />
+					</MetricField>
 				</div>
 
 				<div className='form-grid'>

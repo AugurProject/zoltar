@@ -4,8 +4,9 @@ import type { Address } from 'viem'
 import { loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { runLoadRequest } from '../lib/loadState.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
-import { parseAddressInput, parseBigIntListInput } from '../lib/inputs.js'
+import { parseAddressInput, resolveOptionalBigIntListInput } from '../lib/inputs.js'
 import { getDefaultReportingFormState, parseBigIntInput } from '../lib/marketForm.js'
 import type { ReportingFormState, WriteOperationsParameters } from '../types/app.js'
 import type { ReportingActionResult, ReportingDetails } from '../types/contracts.js'
@@ -20,18 +21,25 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 	const reportingResult = useSignal<ReportingActionResult | undefined>(undefined)
 
 	const loadReporting = async () => {
-		loadingReportingDetails.value = true
-		reportingError.value = undefined
-		try {
-			const securityPoolAddress = parseAddressInput(reportingForm.value.securityPoolAddress, 'Security pool address')
-			const details = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
-			reportingDetails.value = details
-		} catch (error) {
-			reportingDetails.value = undefined
-			reportingError.value = getErrorMessage(error, 'Failed to load reporting details')
-		} finally {
-			loadingReportingDetails.value = false
-		}
+		await runLoadRequest({
+			setLoading: value => {
+				loadingReportingDetails.value = value
+			},
+			onStart: () => {
+				reportingError.value = undefined
+			},
+			load: async () => {
+				const securityPoolAddress = parseAddressInput(reportingForm.value.securityPoolAddress, 'Security pool address')
+				return await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
+			},
+			onSuccess: details => {
+				reportingDetails.value = details
+			},
+			onError: error => {
+				reportingDetails.value = undefined
+				reportingError.value = getErrorMessage(error, 'Failed to load reporting details')
+			},
+		})
 	}
 
 	const runReportingAction = async (action: (walletAddress: Address, securityPoolAddress: Address, currentForm: ReportingFormState) => Promise<ReportingActionResult>, errorFallback: string) => {
@@ -63,7 +71,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		await runReportingAction(async (walletAddress, securityPoolAddress, currentForm) => {
 			const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
 			const selectedSide = latestDetails.sides.find(side => side.key === currentForm.selectedOutcome)
-			const depositIndexes = currentForm.withdrawDepositIndexes.trim() === '' ? (selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []) : parseBigIntListInput(currentForm.withdrawDepositIndexes, 'Deposit indexes')
+			const depositIndexes = resolveOptionalBigIntListInput(currentForm.withdrawDepositIndexes, selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? [], 'Deposit indexes')
 
 			if (depositIndexes.length === 0) {
 				throw new Error('No deposits available to withdraw for the selected side')

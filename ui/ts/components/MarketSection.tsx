@@ -5,22 +5,11 @@ import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
 import { ZoltarMigrationSection } from './ZoltarMigrationSection.js'
 import { isMainnetChain } from '../lib/network.js'
+import { resolveEnumValue } from '../lib/viewState.js'
 import { readZoltarViewQueryParam, writeZoltarViewQueryParam } from '../lib/urlParams.js'
 import type { MarketSectionProps } from '../types/components.js'
 
 type ZoltarView = 'questions' | 'create' | 'fork' | 'migrate'
-
-function getZoltarView(value: string | undefined): ZoltarView {
-	switch (value) {
-		case 'questions':
-		case 'create':
-		case 'fork':
-		case 'migrate':
-			return value
-		default:
-			return 'questions'
-	}
-}
 
 export function MarketSection({
 	accountState,
@@ -65,7 +54,7 @@ export function MarketSection({
 	zoltarUniverse,
 	zoltarUniverseMissing,
 }: MarketSectionProps) {
-	const [view, setView] = useState<ZoltarView>(() => getZoltarView(readZoltarViewQueryParam(window.location.search)))
+	const [view, setView] = useState<ZoltarView>(() => resolveEnumValue<ZoltarView>(readZoltarViewQueryParam(window.location.search), 'questions', ['questions', 'create', 'fork', 'migrate']))
 	const hasForked = zoltarUniverse?.hasForked === true
 	const isMainnet = isMainnetChain(accountState.chainId)
 

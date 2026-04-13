@@ -27,6 +27,15 @@ function assertNonNegativeInteger(value: number, label: string) {
 	if (value < 0) throw new RangeError(`${label} must be non-negative`)
 }
 
+function formatTimestampPart(value: number) {
+	return value.toString().padStart(2, '0')
+}
+
+function formatUtcTimestamp(timestamp: bigint) {
+	const date = new Date(Number(timestamp) * MILLISECONDS_PER_SECOND)
+	return `${date.getUTCFullYear()}-${formatTimestampPart(date.getUTCMonth() + 1)}-${formatTimestampPart(date.getUTCDate())} ${formatTimestampPart(date.getUTCHours())}:${formatTimestampPart(date.getUTCMinutes())}:${formatTimestampPart(date.getUTCSeconds())} UTC`
+}
+
 export function formatCurrencyBalance(value: bigint | undefined, units: number = 18) {
 	if (value === undefined) return 'Unavailable'
 	assertInteger(units, 'Units')
@@ -69,7 +78,35 @@ export function formatRoundedCurrencyBalance(value: bigint | undefined, units: n
 
 export function formatTimestamp(timestamp: bigint) {
 	if (timestamp === 0n) return 'Immediate'
-	return new Date(Number(timestamp) * MILLISECONDS_PER_SECOND).toLocaleString()
+	return formatUtcTimestamp(timestamp)
+}
+
+function formatRelativeDuration(seconds: bigint) {
+	const days = seconds / SECONDS_PER_DAY
+	const hours = (seconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR
+	const minutes = (seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE
+	const remainingSeconds = seconds % SECONDS_PER_MINUTE
+
+	if (days > 0n) {
+		return `${days}d ${hours}h ${minutes}m ${remainingSeconds}s`
+	}
+
+	if (hours > 0n) {
+		return `${hours}h ${minutes}m ${remainingSeconds}s`
+	}
+
+	if (minutes > 0n) {
+		return `${minutes}m ${remainingSeconds}s`
+	}
+
+	return `${remainingSeconds}s`
+}
+
+export function formatRelativeTimestamp(timestamp: bigint, currentTimestamp: bigint = BigInt(Math.floor(Date.now() / MILLISECONDS_PER_SECOND))) {
+	const delta = timestamp - currentTimestamp
+	if (delta === 0n) return 'now'
+	if (delta > 0n) return `in ${formatRelativeDuration(delta)}`
+	return `${formatRelativeDuration(-delta)} ago`
 }
 
 export function formatDuration(seconds: bigint) {

@@ -3,6 +3,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { LiquidationModal } from './LiquidationModal.js'
 import { LoadingText } from './LoadingText.js'
+import { MetricField } from './MetricField.js'
 import { Question, getQuestionTitle } from './Question.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
@@ -86,40 +87,22 @@ export function SecurityPoolsOverviewSection({
 										<span className='badge muted'>{pool.vaultCount.toString()} vaults</span>
 									</div>
 									<div className='workflow-metric-grid'>
-										<div>
-											<span className='metric-label'>Pool Address</span>
-											<strong>
-												<AddressValue address={pool.securityPoolAddress} />
-											</strong>
-										</div>
-										<div>
-											<span className='metric-label'>Universe</span>
-											<strong>
-												<UniverseLink universeId={pool.universeId} />
-											</strong>
-										</div>
-										<div>
-											<span className='metric-label'>Security Multiplier</span>
-											<strong>{pool.securityMultiplier.toString()}</strong>
-										</div>
-										<div>
-											<span className='metric-label'>Open Interest Fee / Year</span>
-											<strong>
-												<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
-											</strong>
-										</div>
-										<div>
-											<span className='metric-label'>Manager</span>
-											<strong>
-												<AddressValue address={pool.managerAddress} />
-											</strong>
-										</div>
-										<div>
-											<span className='metric-label'>Truth Auction</span>
-											<strong>
-												<AddressValue address={pool.truthAuctionAddress} />
-											</strong>
-										</div>
+										<MetricField label='Pool Address'>
+											<AddressValue address={pool.securityPoolAddress} />
+										</MetricField>
+										<MetricField label='Universe'>
+											<UniverseLink universeId={pool.universeId} />
+										</MetricField>
+										<MetricField label='Security Multiplier'>{pool.securityMultiplier.toString()}</MetricField>
+										<MetricField label='Open Interest Fee / Year'>
+											<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
+										</MetricField>
+										<MetricField label='Manager'>
+											<AddressValue address={pool.managerAddress} />
+										</MetricField>
+										<MetricField label='Truth Auction'>
+											<AddressValue address={pool.truthAuctionAddress} />
+										</MetricField>
 									</div>
 								</div>
 
@@ -143,28 +126,16 @@ export function SecurityPoolsOverviewSection({
 													}
 												>
 													<div className='workflow-vault-grid'>
-														<div>
-															<span className='metric-label'>REP Deposit Share</span>
-															<strong>
-																<CurrencyValue value={vault.repDepositShare} suffix='REP' />
-															</strong>
-														</div>
-														<div>
-															<span className='metric-label'>Pool Ownership</span>
-															<strong>{vault.poolOwnership.toString()}</strong>
-														</div>
-														<div>
-															<span className='metric-label'>Security Bond Allowance</span>
-															<strong>
-																<CurrencyValue value={vault.securityBondAllowance} suffix='REP' />
-															</strong>
-														</div>
-														<div>
-															<span className='metric-label'>Unpaid ETH Fees</span>
-															<strong>
-																<CurrencyValue value={vault.unpaidEthFees} suffix='ETH' />
-															</strong>
-														</div>
+														<MetricField label='REP Deposit Share'>
+															<CurrencyValue value={vault.repDepositShare} suffix='REP' />
+														</MetricField>
+														<MetricField label='Pool Ownership'>{vault.poolOwnership.toString()}</MetricField>
+														<MetricField label='Security Bond Allowance'>
+															<CurrencyValue value={vault.securityBondAllowance} suffix='REP' />
+														</MetricField>
+														<MetricField label='Unpaid ETH Fees'>
+															<CurrencyValue value={vault.unpaidEthFees} suffix='ETH' />
+														</MetricField>
 													</div>
 												</EntityCard>
 											))}

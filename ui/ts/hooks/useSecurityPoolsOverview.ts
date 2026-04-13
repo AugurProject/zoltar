@@ -3,6 +3,7 @@ import type { Address, Hash } from 'viem'
 import { loadAllSecurityPools, loadOracleManagerDetails, queueSecurityPoolLiquidation } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { runLoadRequest } from '../lib/loadState.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
@@ -29,15 +30,21 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 	const securityPools = useSignal<ListedSecurityPool[]>([])
 
 	const loadSecurityPools = async () => {
-		loadingSecurityPools.value = true
-		securityPoolOverviewError.value = undefined
-		try {
-			securityPools.value = await loadAllSecurityPools(createConnectedReadClient())
-		} catch (error) {
-			securityPoolOverviewError.value = getErrorMessage(error, 'Failed to load security pools')
-		} finally {
-			loadingSecurityPools.value = false
-		}
+		await runLoadRequest({
+			setLoading: value => {
+				loadingSecurityPools.value = value
+			},
+			onStart: () => {
+				securityPoolOverviewError.value = undefined
+			},
+			load: async () => await loadAllSecurityPools(createConnectedReadClient()),
+			onSuccess: pools => {
+				securityPools.value = pools
+			},
+			onError: error => {
+				securityPoolOverviewError.value = getErrorMessage(error, 'Failed to load security pools')
+			},
+		})
 	}
 
 	const openLiquidationModal = (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => {

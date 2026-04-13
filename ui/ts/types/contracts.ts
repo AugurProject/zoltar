@@ -158,7 +158,6 @@ export type OpenOracleReportSummary = {
 	currentReporter: Address
 	disputeOccurred: boolean
 	exactToken1Report: bigint
-	createdAt: bigint | undefined
 	isDistributed: boolean
 	price: bigint
 	reportId: bigint
@@ -168,6 +167,8 @@ export type OpenOracleReportSummary = {
 	token2: Address
 	token1Decimals: number
 	token2Decimals: number
+	token1Symbol: string
+	token2Symbol: string
 }
 
 export type OpenOracleReportSummaryPage = {
@@ -180,7 +181,6 @@ export type OpenOracleReportSummaryPage = {
 
 export type OpenOracleReportDetails = {
 	// Identity
-	createdAt: bigint | undefined
 	reportId: bigint
 	openOracleAddress: Address
 	// Meta
@@ -209,9 +209,18 @@ export type OpenOracleReportDetails = {
 	// Extra
 	stateHash: Hex
 	callbackContract: Address
+	callbackSelector: Hex
+	callbackGasLimit: number
+	protocolFeeRecipient: Address
+	trackDisputes: boolean
+	keepFee: boolean
+	feeToken: boolean
 	numReports: bigint
+	lastReportOppoTime: bigint
 	token1Decimals: number
 	token2Decimals: number
+	token1Symbol: string
+	token2Symbol: string
 }
 
 export type ListedSecurityPool = {

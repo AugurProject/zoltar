@@ -19,8 +19,10 @@ import {
 } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { getReportingOutcomeKey, parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, resolveOptionalAddressInput } from '../lib/inputs.js'
+import { runLoadRequest } from '../lib/loadState.js'
+import { requireDefined } from '../lib/required.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
-import { getReportingOutcomeKey, parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput } from '../lib/inputs.js'
 import { getDefaultForkAuctionFormState, parseBigIntInput } from '../lib/marketForm.js'
 import type { ForkAuctionFormState, WriteOperationsParameters } from '../types/app.js'
 import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey } from '../types/contracts.js'
@@ -35,18 +37,25 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 	const loadingForkAuctionDetails = useSignal(false)
 
 	const loadForkAuction = async () => {
-		loadingForkAuctionDetails.value = true
-		forkAuctionError.value = undefined
-		try {
-			const securityPoolAddress = parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address')
-			const details = await loadForkAuctionDetails(createConnectedReadClient(), securityPoolAddress)
-			forkAuctionDetails.value = details
-		} catch (error) {
-			forkAuctionDetails.value = undefined
-			forkAuctionError.value = getErrorMessage(error, 'Failed to load fork and auction details')
-		} finally {
-			loadingForkAuctionDetails.value = false
-		}
+		await runLoadRequest({
+			setLoading: value => {
+				loadingForkAuctionDetails.value = value
+			},
+			onStart: () => {
+				forkAuctionError.value = undefined
+			},
+			load: async () => {
+				const securityPoolAddress = parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address')
+				return await loadForkAuctionDetails(createConnectedReadClient(), securityPoolAddress)
+			},
+			onSuccess: details => {
+				forkAuctionDetails.value = details
+			},
+			onError: error => {
+				forkAuctionDetails.value = undefined
+				forkAuctionError.value = getErrorMessage(error, 'Failed to load fork and auction details')
+			},
+		})
 	}
 
 	const runForkAuctionAction = async (action: (walletAddress: Address, details: ForkAuctionDetails) => Promise<ForkAuctionActionResult>, errorFallback: string) =>
@@ -82,7 +91,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 
 	const migrateEscalation = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {
-			const vaultAddress = forkAuctionForm.value.claimVaultAddress.trim() === '' ? walletAddress : parseAddressInput(forkAuctionForm.value.claimVaultAddress, 'Vault address')
+			const vaultAddress = resolveOptionalAddressInput(forkAuctionForm.value.claimVaultAddress, walletAddress, 'Vault address')
 			return await migrateEscalationDeposits(
 				createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
 				details.securityPoolAddress,
@@ -97,18 +106,18 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 
 	const submitBid = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {
-			if (details.truthAuctionAddress === undefined) throw new Error('Truth auction not available')
-			return await submitTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, details.truthAuctionAddress, parseBigIntInput(forkAuctionForm.value.bidTick, 'Bid tick'), parseBigIntInput(forkAuctionForm.value.bidAmount, 'Bid amount'))
+			const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
+			return await submitTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, parseBigIntInput(forkAuctionForm.value.bidTick, 'Bid tick'), parseBigIntInput(forkAuctionForm.value.bidAmount, 'Bid amount'))
 		}, 'Failed to submit truth auction bid')
 
 	const refundLosingBids = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {
-			if (details.truthAuctionAddress === undefined) throw new Error('Truth auction not available')
+			const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
 			return await refundTruthAuctionBid(
 				createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
 				details.securityPoolAddress,
 				details.universeId,
-				details.truthAuctionAddress,
+				truthAuctionAddress,
 				parseBigIntInput(forkAuctionForm.value.refundTick, 'Refund tick'),
 				parseBigIntInput(forkAuctionForm.value.refundBidIndex, 'Refund bid index'),
 			)
@@ -118,7 +127,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 
 	const claimAuctionProceeds = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {
-			const vaultAddress = forkAuctionForm.value.claimVaultAddress.trim() === '' ? walletAddress : parseAddressInput(forkAuctionForm.value.claimVaultAddress, 'Vault address')
+			const vaultAddress = resolveOptionalAddressInput(forkAuctionForm.value.claimVaultAddress, walletAddress, 'Vault address')
 			return await claimSecurityPoolAuctionProceeds(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, vaultAddress, parseBigIntInput(forkAuctionForm.value.bidTick, 'Bid tick'), parseBigIntInput(forkAuctionForm.value.bidIndex, 'Bid index'))
 		}, 'Failed to claim auction proceeds')
 
@@ -131,13 +140,13 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 
 	const withdrawBids = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {
-			if (details.truthAuctionAddress === undefined) throw new Error('Truth auction not available')
-			const withdrawFor = forkAuctionForm.value.withdrawForAddress.trim() === '' ? walletAddress : parseAddressInput(forkAuctionForm.value.withdrawForAddress, 'Withdraw-for address')
+			const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
+			const withdrawFor = resolveOptionalAddressInput(forkAuctionForm.value.withdrawForAddress, walletAddress, 'Withdraw-for address')
 			return await withdrawTruthAuctionBids(
 				createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
 				details.securityPoolAddress,
 				details.universeId,
-				details.truthAuctionAddress,
+				truthAuctionAddress,
 				withdrawFor,
 				parseBigIntInput(forkAuctionForm.value.withdrawTick, 'Withdraw tick'),
 				parseBigIntInput(forkAuctionForm.value.withdrawBidIndex, 'Withdraw bid index'),

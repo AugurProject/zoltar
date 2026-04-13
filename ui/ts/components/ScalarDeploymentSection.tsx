@@ -4,6 +4,7 @@ import { ChildUniversesSection } from './ChildUniversesSection.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
 import { useEffect } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
+import { MetricField } from './MetricField.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../types/contracts.js'
 
@@ -97,22 +98,10 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 					</div>
 				</div>
 				<div className='workflow-question-grid scalar-slider-stats'>
-					<div>
-						<span className='metric-label'>Min Value</span>
-						<strong>{formatScalarOutcomeLabel(questionDetails, 0n)}</strong>
-					</div>
-					<div>
-						<span className='metric-label'>Selected Tick</span>
-						<strong>{scalarOutcomeInvalid ? 'Invalid' : `${clampedScalarOutcomeTick} / ${questionDetails.numTicks.toString()}`}</strong>
-					</div>
-					<div>
-						<span className='metric-label'>Selected Outcome</span>
-						<strong>{selectedScalarOutcomeLabel}</strong>
-					</div>
-					<div>
-						<span className='metric-label'>Max Value</span>
-						<strong>{formatScalarOutcomeLabel(questionDetails, questionDetails.numTicks)}</strong>
-					</div>
+					<MetricField label='Min Value'>{formatScalarOutcomeLabel(questionDetails, 0n)}</MetricField>
+					<MetricField label='Selected Tick'>{scalarOutcomeInvalid ? 'Invalid' : `${clampedScalarOutcomeTick} / ${questionDetails.numTicks.toString()}`}</MetricField>
+					<MetricField label='Selected Outcome'>{selectedScalarOutcomeLabel}</MetricField>
+					<MetricField label='Max Value'>{formatScalarOutcomeLabel(questionDetails, questionDetails.numTicks)}</MetricField>
 				</div>
 				<div className='actions'>
 					<button

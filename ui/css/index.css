@@ -579,6 +579,24 @@ button.currency-value.copyable:hover:not(:disabled) {
 	outline-offset: 2px;
 }
 
+.timestamp-value {
+	font: inherit;
+	color: inherit;
+}
+
+.timestamp-value.loading,
+.timestamp-value.unavailable,
+.timestamp-value.zero {
+	opacity: 0.72;
+}
+
+.timestamp-value-relative {
+	color: var(--muted);
+	font-weight: 400;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
 .address-value.copyable {
 	border: 0;
 	padding: 0;

@@ -4,8 +4,9 @@ import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { EntityCard } from './EntityCard.js'
 import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
-import { Question } from './Question.js'
+import { Question, getQuestionTitle } from './Question.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
+import { MetricField } from './MetricField.js'
 import { validateMarketForm } from '../lib/marketCreation.js'
 import { clampScalarTickIndex, parseScalarFormInputs } from '../lib/scalarOutcome.js'
 import type { MarketFormState } from '../types/app.js'
@@ -52,7 +53,7 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 	const selectedQuestionDetails = useMemo(() => (marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)), [marketResult?.questionId, zoltarQuestions])
 	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(marketForm)
 	const marketFormValidation = validateMarketForm(marketForm)
-	const selectedQuestionTitle = selectedQuestionDetails === undefined ? 'Question' : typeof selectedQuestionDetails.title !== 'string' || selectedQuestionDetails.title.trim() === '' ? 'Untitled question' : selectedQuestionDetails.title
+	const selectedQuestionTitle = selectedQuestionDetails === undefined ? 'Question' : getQuestionTitle(selectedQuestionDetails)
 
 	useEffect(() => {
 		if (scalarCreatePreviewDetails === undefined) return
@@ -109,12 +110,9 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 				>
 					<div className='question-preview-body'>
 						{selectedQuestionDetails === undefined ? <p className='detail'>Question details are not loaded yet.</p> : <Question question={selectedQuestionDetails} showTitle={false} />}
-						<div>
-							<span className='metric-label'>Creation transaction hash</span>
-							<strong>
-								<TransactionHashLink hash={marketResult.createQuestionHash} />
-							</strong>
-						</div>
+						<MetricField label='Creation transaction hash'>
+							<TransactionHashLink hash={marketResult.createQuestionHash} />
+						</MetricField>
 					</div>
 				</EntityCard>
 			)}

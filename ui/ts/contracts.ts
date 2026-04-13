@@ -70,9 +70,7 @@ const MIGRATION_TIME_LENGTH = 4_838_400n
 const TRUTH_AUCTION_TIME_LENGTH = 604_800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
 const ANSWER_OPTION_ABI = [parseAbiItem('function getAnswerOptionName(uint256 questionId, uint256 answer) view returns (string memory)')]
-const REPORT_INSTANCE_CREATED_EVENT = parseAbiItem(
-	'event ReportInstanceCreated(uint256 indexed reportId, address indexed token1Address, address indexed token2Address, uint256 feePercentage, uint256 multiplier, uint256 exactToken1Report, uint256 ethFee, address creator, uint256 settlementTime, uint256 escalationHalt, uint256 disputeDelay, uint256 protocolFee, uint256 settlerReward, bool timeType, address callbackContract, bytes4 callbackSelector, bool trackDisputes, uint256 callbackGasLimit, bool keepFee, bytes32 stateHash, uint256 blockTimestamp, bool feeToken)',
-)
+
 const CONTRACT_PAGE_SIZE = 30n
 
 type DeployedChildUniverseRecord = {
@@ -522,6 +520,17 @@ async function loadErc20Decimals(client: ReadClient, tokenAddress: Address) {
 		await client.readContract({
 			abi: ABIS.mainnet.erc20,
 			functionName: 'decimals',
+			address: tokenAddress,
+			args: [],
+		}),
+	)
+}
+
+async function loadErc20Symbol(client: ReadClient, tokenAddress: Address) {
+	return String(
+		await client.readContract({
+			abi: ABIS.mainnet.erc20,
+			functionName: 'symbol',
 			address: tokenAddress,
 			args: [],
 		}),
@@ -1330,7 +1339,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		args: [reportId],
 	})
 	if (meta[4] === zeroAddress) throw new Error(`Oracle report #${reportId.toString()} does not exist`)
-	const [status, extra, createdAt, token1Decimals, token2Decimals] = await Promise.all([
+	const [status, extra, token1Decimals, token2Decimals, token1Symbol, token2Symbol] = await Promise.all([
 		client.readContract({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'reportStatus',
@@ -1343,21 +1352,13 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 			address: openOracleAddress,
 			args: [reportId],
 		}),
-		client
-			.getLogs({
-				address: openOracleAddress,
-				args: { reportId },
-				event: REPORT_INSTANCE_CREATED_EVENT,
-				fromBlock: 0n,
-				toBlock: 'latest',
-			})
-			.then(logs => logs.at(-1)?.args.blockTimestamp),
 		loadErc20Decimals(client, meta[4]),
 		loadErc20Decimals(client, meta[6]),
+		loadErc20Symbol(client, meta[4]),
+		loadErc20Symbol(client, meta[6]),
 	])
 
 	return {
-		createdAt,
 		reportId,
 		openOracleAddress,
 		exactToken1Report: meta[0],
@@ -1384,8 +1385,17 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		stateHash: extra[0],
 		callbackContract: extra[1],
 		numReports: BigInt(extra[2]),
+		callbackGasLimit: Number(extra[3]),
+		callbackSelector: extra[4],
+		protocolFeeRecipient: extra[5],
+		trackDisputes: extra[6],
+		keepFee: extra[7],
+		feeToken: extra[8],
+		lastReportOppoTime: BigInt(status[7]),
 		token1Decimals,
 		token2Decimals,
+		token1Symbol,
+		token2Symbol,
 	}
 }
 
@@ -1437,7 +1447,6 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		reportIds.map(async reportId => {
 			const details = await loadOpenOracleReportDetails(client, openOracleAddress, reportId)
 			return {
-				createdAt: details.createdAt,
 				currentAmount1: details.currentAmount1,
 				currentAmount2: details.currentAmount2,
 				currentReporter: details.currentReporter,
@@ -1452,6 +1461,8 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 				token2: details.token2,
 				token1Decimals: details.token1Decimals,
 				token2Decimals: details.token2Decimals,
+				token1Symbol: details.token1Symbol,
+				token2Symbol: details.token2Symbol,
 			} satisfies OpenOracleReportSummary
 		}),
 	)
