@@ -2,6 +2,7 @@ import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { LoadingText } from './LoadingText.js'
+import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
@@ -9,7 +10,7 @@ import { TimestampValue } from './TimestampValue.js'
 import { formatDuration } from '../lib/formatters.js'
 import { AUCTION_TIME_SECONDS, estimateRepPurchased, getForkStageDescription, getOutcomeActionLabel, getSystemStateLabel, getTimeRemaining, MIGRATION_TIME_SECONDS } from '../lib/forkAuction.js'
 import { isMainnetChain } from '../lib/network.js'
-import { getReportingOutcomeLabel, REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
+import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
 
 function getTruthAuctionWindow(details: ForkAuctionSectionProps['forkAuctionDetails']) {
@@ -113,36 +114,18 @@ export function ForkAuctionSection({
 							<div className='status-card'>
 								<p className='panel-label'>Fork Metrics</p>
 								<div className='escalation-metrics'>
-									<div>
-										<span className='metric-label'>REP At Fork</span>
-										<strong>
-											<CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' />
-										</strong>
-									</div>
-									<div>
-										<span className='metric-label'>Migrated REP</span>
-										<strong>
-											<CurrencyValue value={forkAuctionDetails.migratedRep} suffix='REP' />
-										</strong>
-									</div>
-									<div>
-										<span className='metric-label'>Collateral</span>
-										<strong>
-											<CurrencyValue value={forkAuctionDetails.completeSetCollateralAmount} suffix='REP' />
-										</strong>
-									</div>
-									<div>
-										<span className='metric-label'>Fork Type</span>
-										<strong>{forkAuctionDetails.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent/Zoltar fork'}</strong>
-									</div>
-									<div>
-										<span className='metric-label'>Migration Ends</span>
-										<strong>{forkAuctionDetails.migrationEndsAt === undefined ? 'Started/finished' : <TimestampValue timestamp={forkAuctionDetails.migrationEndsAt} />}</strong>
-									</div>
-									<div>
-										<span className='metric-label'>Migration Time Left</span>
-										<strong>{migrationTimeRemaining === undefined ? formatDuration(MIGRATION_TIME_SECONDS) : formatDuration(migrationTimeRemaining)}</strong>
-									</div>
+									<MetricField label='REP At Fork'>
+										<CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' />
+									</MetricField>
+									<MetricField label='Migrated REP'>
+										<CurrencyValue value={forkAuctionDetails.migratedRep} suffix='REP' />
+									</MetricField>
+									<MetricField label='Collateral'>
+										<CurrencyValue value={forkAuctionDetails.completeSetCollateralAmount} suffix='REP' />
+									</MetricField>
+									<MetricField label='Fork Type'>{forkAuctionDetails.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent/Zoltar fork'}</MetricField>
+									<MetricField label='Migration Ends'>{forkAuctionDetails.migrationEndsAt === undefined ? 'Started/finished' : <TimestampValue timestamp={forkAuctionDetails.migrationEndsAt} />}</MetricField>
+									<MetricField label='Migration Time Left'>{migrationTimeRemaining === undefined ? formatDuration(MIGRATION_TIME_SECONDS) : formatDuration(migrationTimeRemaining)}</MetricField>
 								</div>
 							</div>
 
@@ -150,56 +133,26 @@ export function ForkAuctionSection({
 								<div className='status-card'>
 									<p className='panel-label'>Truth Auction</p>
 									<div className='escalation-metrics'>
-										<div>
-											<span className='metric-label'>Auction Address</span>
-											<strong>
-												<AddressValue address={forkAuctionDetails.truthAuctionAddress} />
-											</strong>
-										</div>
-										<div>
-											<span className='metric-label'>Started</span>
-											<strong>
-												<TimestampValue timestamp={forkAuctionDetails.truthAuctionStartedAt} />
-											</strong>
-										</div>
-										<div>
-											<span className='metric-label'>Ends</span>
-											<strong>{auctionWindow === undefined ? 'Not started' : <TimestampValue timestamp={auctionWindow.endsAt} />}</strong>
-										</div>
-										<div>
-											<span className='metric-label'>Time Left</span>
-											<strong>{forkAuctionDetails.truthAuction.timeRemaining === undefined ? formatDuration(AUCTION_TIME_SECONDS) : formatDuration(forkAuctionDetails.truthAuction.timeRemaining)}</strong>
-										</div>
-										<div>
-											<span className='metric-label'>ETH Raised / Cap</span>
-											<strong>
-												<CurrencyValue value={forkAuctionDetails.truthAuction.ethRaised} suffix='ETH' /> / <CurrencyValue value={forkAuctionDetails.truthAuction.ethRaiseCap} suffix='ETH' />
-											</strong>
-										</div>
-										<div>
-											<span className='metric-label'>REP Purchased</span>
-											<strong>
-												<CurrencyValue value={forkAuctionDetails.truthAuction.totalRepPurchased} suffix='REP' />
-											</strong>
-										</div>
-										<div>
-											<span className='metric-label'>Clearing Tick</span>
-											<strong>{forkAuctionDetails.truthAuction.clearingTick?.toString() ?? 'Unavailable'}</strong>
-										</div>
-										<div>
-											<span className='metric-label'>Clearing Price</span>
-											<strong>
-												<CurrencyValue value={forkAuctionDetails.truthAuction.clearingPrice} suffix='REP' />
-											</strong>
-										</div>
-										<div>
-											<span className='metric-label'>Underfunded</span>
-											<strong>{forkAuctionDetails.truthAuction.underfunded ? 'Yes' : 'No'}</strong>
-										</div>
-										<div>
-											<span className='metric-label'>Finalized</span>
-											<strong>{forkAuctionDetails.truthAuction.finalized ? 'Yes' : 'No'}</strong>
-										</div>
+										<MetricField label='Auction Address'>
+											<AddressValue address={forkAuctionDetails.truthAuctionAddress} />
+										</MetricField>
+										<MetricField label='Started'>
+											<TimestampValue timestamp={forkAuctionDetails.truthAuctionStartedAt} />
+										</MetricField>
+										<MetricField label='Ends'>{auctionWindow === undefined ? 'Not started' : <TimestampValue timestamp={auctionWindow.endsAt} />}</MetricField>
+										<MetricField label='Time Left'>{forkAuctionDetails.truthAuction.timeRemaining === undefined ? formatDuration(AUCTION_TIME_SECONDS) : formatDuration(forkAuctionDetails.truthAuction.timeRemaining)}</MetricField>
+										<MetricField label='ETH Raised / Cap'>
+											<CurrencyValue value={forkAuctionDetails.truthAuction.ethRaised} suffix='ETH' /> / <CurrencyValue value={forkAuctionDetails.truthAuction.ethRaiseCap} suffix='ETH' />
+										</MetricField>
+										<MetricField label='REP Purchased'>
+											<CurrencyValue value={forkAuctionDetails.truthAuction.totalRepPurchased} suffix='REP' />
+										</MetricField>
+										<MetricField label='Clearing Tick'>{forkAuctionDetails.truthAuction.clearingTick?.toString() ?? 'Unavailable'}</MetricField>
+										<MetricField label='Clearing Price'>
+											<CurrencyValue value={forkAuctionDetails.truthAuction.clearingPrice} suffix='REP' />
+										</MetricField>
+										<MetricField label='Underfunded'>{forkAuctionDetails.truthAuction.underfunded ? 'Yes' : 'No'}</MetricField>
+										<MetricField label='Finalized'>{forkAuctionDetails.truthAuction.finalized ? 'Yes' : 'No'}</MetricField>
 									</div>
 									<p className='detail'>At the current clearing price, the entered bid amount would buy roughly {estimatedRep === undefined ? 'Unavailable' : <CurrencyValue value={estimatedRep} suffix='REP' />} ownership if it clears.</p>
 								</div>
@@ -241,7 +194,7 @@ export function ForkAuctionSection({
 
 						<label className='field'>
 							<span>Outcome</span>
-							<EnumDropdown options={REPORTING_OUTCOME_OPTIONS.map(option => ({ value: option.key, label: option.label }))} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
+							<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
 						</label>
 
 						<label className='field'>

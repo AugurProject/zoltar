@@ -5,6 +5,7 @@ import { createZoltarChildUniverse, loadAllZoltarQuestions, loadZoltarQuestionCo
 import { createConnectedReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { hasDeployedStep } from '../lib/marketCreation.js'
+import { runLoadRequest } from '../lib/loadState.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { DeploymentStatus, MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -65,33 +66,34 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		const requestedUniverseId = activeUniverseId
 		if (clearCurrentState) {
 			resetZoltarUniverseState()
-		} else {
-			loadingZoltarUniverse.value = true
 		}
-		try {
-			if (!hasDeployedStep(deploymentStatuses, 'zoltar')) {
+		return await runLoadRequest({
+			isCurrent,
+			setLoading: value => {
+				loadingZoltarUniverse.value = value
+			},
+			load: async () => {
+				if (!hasDeployedStep(deploymentStatuses, 'zoltar')) {
+					zoltarUniverseMissing.value = false
+					zoltarUniverse.value = undefined
+					zoltarUniverseLoadedId.value = undefined
+					zoltarChildUniverseError.value = undefined
+					return undefined
+				}
+				return await loadZoltarUniverseSummary(createConnectedReadClient(), requestedUniverseId)
+			},
+			onSuccess: universe => {
+				if (requestedUniverseId !== activeUniverseId) return
+				if (universe === undefined) {
+					zoltarUniverseMissing.value = requestedUniverseId !== 0n
+					return
+				}
 				zoltarUniverseMissing.value = false
-				zoltarUniverse.value = undefined
-				zoltarUniverseLoadedId.value = undefined
-				zoltarChildUniverseError.value = undefined
-				return undefined
-			}
-			const universe = await loadZoltarUniverseSummary(createConnectedReadClient(), requestedUniverseId)
-			if (!isCurrent()) return undefined
-			if (requestedUniverseId !== activeUniverseId) return undefined
-			if (universe === undefined) {
-				zoltarUniverseMissing.value = requestedUniverseId !== 0n
-				return undefined
-			}
-			zoltarUniverseMissing.value = false
-			zoltarUniverse.value = universe
-			zoltarUniverseLoadedId.value = requestedUniverseId
-			return universe
-		} finally {
-			if (isCurrent() && isMounted.current) {
-				loadingZoltarUniverse.value = false
-			}
-		}
+				zoltarUniverse.value = universe
+				zoltarUniverseLoadedId.value = requestedUniverseId
+			},
+			onError: () => undefined,
+		})
 	}
 
 	const refreshZoltarUniverse = async () => await loadZoltarUniverse({ clearCurrentState: false })
@@ -99,45 +101,52 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 	const loadZoltarQuestionCountData = async () => {
 		if (!isMounted.current) return
 		const isCurrent = nextQuestionCountLoad()
-		loadingZoltarQuestionCount.value = true
-		try {
-			const questionCount = await loadZoltarQuestionCount(createConnectedReadClient())
-			if (!isMounted.current) return
-			if (!isCurrent()) return
-			zoltarQuestionCount.value = questionCount
-		} finally {
-			if (isCurrent() && isMounted.current) {
-				loadingZoltarQuestionCount.value = false
-			}
-		}
+		await runLoadRequest({
+			isCurrent,
+			setLoading: value => {
+				loadingZoltarQuestionCount.value = value
+			},
+			load: async () => await loadZoltarQuestionCount(createConnectedReadClient()),
+			onSuccess: questionCount => {
+				if (!isMounted.current) return
+				zoltarQuestionCount.value = questionCount
+			},
+			onError: () => undefined,
+		})
 	}
 
 	const loadQuestions = async () => {
 		if (!isMounted.current) return
 		const isCountCurrent = nextQuestionCountLoad()
 		const isQuestionsCurrent = nextQuestionsLoad()
-		loadingZoltarQuestions.value = true
-		loadingZoltarQuestionCount.value = true
 		const readClient = createConnectedReadClient()
 
-		const countTask = loadZoltarQuestionCount(readClient)
-			.then(questionCount => {
-				if (!isMounted.current || !isCountCurrent()) return
+		const countTask = runLoadRequest({
+			isCurrent: isCountCurrent,
+			setLoading: value => {
+				loadingZoltarQuestionCount.value = value
+			},
+			load: async () => await loadZoltarQuestionCount(readClient),
+			onSuccess: questionCount => {
+				if (!isMounted.current) return
 				zoltarQuestionCount.value = questionCount
-			})
-			.finally(() => {
-				if (isCountCurrent() && isMounted.current) loadingZoltarQuestionCount.value = false
-			})
+			},
+			onError: () => undefined,
+		})
 
-		const questionsTask = loadAllZoltarQuestions(readClient)
-			.then(questions => {
-				if (!isMounted.current || !isQuestionsCurrent()) return
+		const questionsTask = runLoadRequest({
+			isCurrent: isQuestionsCurrent,
+			setLoading: value => {
+				loadingZoltarQuestions.value = value
+			},
+			load: async () => await loadAllZoltarQuestions(readClient),
+			onSuccess: questions => {
+				if (!isMounted.current) return
 				zoltarQuestions.value = questions
 				hasLoadedZoltarQuestions.value = true
-			})
-			.finally(() => {
-				if (isQuestionsCurrent() && isMounted.current) loadingZoltarQuestions.value = false
-			})
+			},
+			onError: () => undefined,
+		})
 
 		await Promise.allSettled([countTask, questionsTask])
 	}

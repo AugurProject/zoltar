@@ -3,6 +3,7 @@ import type { Address, Hash } from 'viem'
 import { loadOracleManagerDetails, requestOraclePrice } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { runLoadRequest } from '../lib/loadState.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '../types/contracts.js'
 
@@ -21,15 +22,21 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 	const poolPriceOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)
 
 	const loadPoolOracleManager = async (managerAddress: Address) => {
-		loadingPoolOracleManager.value = true
-		poolOracleManagerError.value = undefined
-		try {
-			poolOracleManagerDetails.value = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
-		} catch (error) {
-			poolOracleManagerError.value = getErrorMessage(error, 'Failed to load price oracle details')
-		} finally {
-			loadingPoolOracleManager.value = false
-		}
+		await runLoadRequest({
+			setLoading: value => {
+				loadingPoolOracleManager.value = value
+			},
+			onStart: () => {
+				poolOracleManagerError.value = undefined
+			},
+			load: async () => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
+			onSuccess: details => {
+				poolOracleManagerDetails.value = details
+			},
+			onError: error => {
+				poolOracleManagerError.value = getErrorMessage(error, 'Failed to load price oracle details')
+			},
+		})
 	}
 
 	const requestPoolPrice = async (managerAddress: Address) => {

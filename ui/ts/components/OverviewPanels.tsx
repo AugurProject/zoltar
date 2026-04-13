@@ -1,5 +1,6 @@
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
+import { MetricField } from './MetricField.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 
 const UNISWAP_EXPLORE = 'https://app.uniswap.org/explore/pools/ethereum'
@@ -36,66 +37,58 @@ export function OverviewPanels({
 							<h1 className='overview-app-title'>Augur PLACEHOLDER</h1>
 						</div>
 						<div className='overview-inline-metrics'>
-							<div className='overview-address-metric'>
-								<span className='metric-label'>Address</span>
-								<strong>
-									{isWalletLoading ? (
-										<span className='loading-value'>
-											<span className='spinner' aria-hidden='true' />
-											Connecting...
-										</span>
-									) : accountState.address === undefined ? (
-										'Not connected'
-									) : (
-										<AddressValue address={accountState.address} />
-									)}
-								</strong>
-							</div>
+							<MetricField className='overview-address-metric' label='Address'>
+								{isWalletLoading ? (
+									<span className='loading-value'>
+										<span className='spinner' aria-hidden='true' />
+										Connecting...
+									</span>
+								) : accountState.address === undefined ? (
+									'Not connected'
+								) : (
+									<AddressValue address={accountState.address} />
+								)}
+							</MetricField>
 							{showAccountBalances ? (
 								<>
-									<div>
-										<span className='metric-label'>ETH</span>
-										<strong>
-											<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix='ETH' />
-										</strong>
-									</div>
-									<div>
-										<span className='metric-label'>REP</span>
-										<strong>
-											<CurrencyValue value={universeRepBalance} loading={isLoadingUniverseRepBalance} suffix='REP' />
-										</strong>
-									</div>
+									<MetricField label='ETH'>
+										<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix='ETH' />
+									</MetricField>
+									<MetricField label='REP'>
+										<CurrencyValue value={universeRepBalance} loading={isLoadingUniverseRepBalance} suffix='REP' />
+									</MetricField>
 								</>
 							) : undefined}
-							<div>
-								<span className='metric-label'>
-									REP/ETH{' '}
-									{repEthSource === undefined ? undefined : (
-										<a href={repEthSource === 'v4' ? undefined : REP_ETH_V3_POOL_URL} title={repEthSource === 'v4' ? 'Price from Uniswap V4' : 'Price from Uniswap V3 (REP/WETH pool)'} target='_blank' rel='noreferrer'>
-											{`(u${repEthSource === 'v4' ? '4' : '3'})`}
-										</a>
-									)}
-								</span>
-								<strong>
-									<CurrencyValue value={repEthPrice} loading={isLoadingRepPrices} suffix='ETH' />
-								</strong>
-							</div>
-							<div>
-								<span className='metric-label'>
-									REP/USDC{' '}
-									{repUsdcSource === undefined ? undefined : (
-										<a href={repUsdcSource === 'v4' ? REP_USDC_V4_POOL_URL : undefined} title={repUsdcSource === 'v4' ? 'Price from Uniswap V4 (REP/USDC pool)' : 'Price from Uniswap V3 (REP/USDC pool)'} target='_blank' rel='noreferrer'>
-											{`(u${repUsdcSource === 'v4' ? '4' : '3'})`}
-										</a>
-									)}
-								</span>
-								<strong>
-									<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />
-								</strong>
-							</div>
-							<div>
-								<span className='metric-label'>Universe</span>
-								<strong className={universeErrorMessage === undefined ? undefined : 'overview-universe-error'}>{universeErrorMessage ?? universeLabel}</strong>
+							<MetricField
+								label={
+									<>
+										REP/ETH{' '}
+										{repEthSource === undefined ? undefined : (
+											<a href={repEthSource === 'v4' ? undefined : REP_ETH_V3_POOL_URL} title={repEthSource === 'v4' ? 'Price from Uniswap V4' : 'Price from Uniswap V3 (REP/WETH pool)'} target='_blank' rel='noreferrer'>
+												{`(u${repEthSource === 'v4' ? '4' : '3'})`}
+											</a>
+										)}
+									</>
+								}
+							>
+								<CurrencyValue value={repEthPrice} loading={isLoadingRepPrices} suffix='ETH' />
+							</MetricField>
+							<MetricField
+								label={
+									<>
+										REP/USDC{' '}
+										{repUsdcSource === undefined ? undefined : (
+											<a href={repUsdcSource === 'v4' ? REP_USDC_V4_POOL_URL : undefined} title={repUsdcSource === 'v4' ? 'Price from Uniswap V4 (REP/USDC pool)' : 'Price from Uniswap V3 (REP/USDC pool)'} target='_blank' rel='noreferrer'>
+												{`(u${repUsdcSource === 'v4' ? '4' : '3'})`}
+											</a>
+										)}
+									</>
+								}
+							>
+								<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />
+							</MetricField>
+							<MetricField label='Universe' valueClassName={universeErrorMessage === undefined ? undefined : 'overview-universe-error'}>
+								{universeErrorMessage ?? universeLabel}
 								{universeErrorMessage === undefined ? undefined : (
 									<div className='overview-universe-actions'>
 										<button className='secondary' onClick={onGoToGenesisUniverse}>
@@ -103,7 +96,7 @@ export function OverviewPanels({
 										</button>
 									</div>
 								)}
-							</div>
+							</MetricField>
 						</div>
 					</div>
 					<div className='actions overview-actions'>

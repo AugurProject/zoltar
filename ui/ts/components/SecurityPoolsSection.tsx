@@ -2,18 +2,21 @@ import { useState } from 'preact/hooks'
 import { SecurityPoolSection } from './SecurityPoolSection.js'
 import { SecurityPoolWorkflowSection } from './SecurityPoolWorkflowSection.js'
 import { SecurityPoolsOverviewSection } from './SecurityPoolsOverviewSection.js'
+import { resolveFirstMatchingValue } from '../lib/viewState.js'
 import type { SecurityPoolsSectionProps } from '../types/components.js'
 
 type SecurityPoolsView = 'browse' | 'create' | 'operate'
 
-function getInitialSecurityPoolsView({ createPool, workflow }: SecurityPoolsSectionProps): SecurityPoolsView {
-	if (workflow.securityPoolAddress !== '') return 'operate'
-	if (createPool.securityPoolForm.marketId !== '' || createPool.marketDetails !== undefined || createPool.securityPoolResult !== undefined) return 'create'
-	return 'browse'
-}
-
 export function SecurityPoolsSection({ createPool, overview, workflow }: SecurityPoolsSectionProps) {
-	const [view, setView] = useState<SecurityPoolsView>(() => getInitialSecurityPoolsView({ createPool, overview, workflow }))
+	const [view, setView] = useState<SecurityPoolsView>(() =>
+		resolveFirstMatchingValue<SecurityPoolsView>(
+			[
+				[workflow.securityPoolAddress !== '', 'operate'],
+				[createPool.securityPoolForm.marketId !== '' || createPool.marketDetails !== undefined || createPool.securityPoolResult !== undefined, 'create'],
+			],
+			'browse',
+		),
+	)
 
 	return (
 		<section className='panel market-panel'>

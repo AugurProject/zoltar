@@ -1,5 +1,7 @@
 import type { ForkAuctionDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '../types/contracts.js'
 import { assertNever } from './assert.js'
+import { getTimeRemaining as getSharedTimeRemaining } from './time.js'
+import { getReportingOutcomeLabel } from './reporting.js'
 
 const SECONDS_PER_WEEK = 7n * 24n * 60n * 60n
 
@@ -23,16 +25,7 @@ export function getSystemStateLabel(state: SecurityPoolSystemState) {
 }
 
 export function getOutcomeActionLabel(outcome: ReportingOutcomeKey) {
-	switch (outcome) {
-		case 'invalid':
-			return 'Invalid'
-		case 'yes':
-			return 'Yes'
-		case 'no':
-			return 'No'
-		default:
-			return assertNever(outcome)
-	}
+	return getReportingOutcomeLabel(outcome)
 }
 
 export function getForkStageDescription(details: ForkAuctionDetails) {
@@ -51,8 +44,7 @@ export function getForkStageDescription(details: ForkAuctionDetails) {
 }
 
 export function getTimeRemaining(targetTime: bigint | undefined, currentTime: bigint) {
-	if (targetTime === undefined) return undefined
-	return targetTime <= currentTime ? 0n : targetTime - currentTime
+	return getSharedTimeRemaining(targetTime, currentTime)
 }
 
 export function estimateRepPurchased(ethAmount: bigint, price: bigint) {

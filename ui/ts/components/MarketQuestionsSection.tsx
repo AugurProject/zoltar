@@ -1,6 +1,6 @@
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
-import { Question } from './Question.js'
+import { Question, getQuestionTitle } from './Question.js'
 import type { MarketDetails } from '../types/contracts.js'
 
 type MarketQuestionsSectionProps = {
@@ -19,10 +19,6 @@ type MarketQuestionsSectionProps = {
 export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, loadingZoltarQuestionCount, loadingZoltarQuestions, onLoadZoltarQuestions, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestionCount, zoltarQuestions }: MarketQuestionsSectionProps) {
 	const questionCountBadge = zoltarQuestionCount === undefined ? undefined : `${zoltarQuestionCount.toString()} questions`
 	const noQuestionsAvailable = zoltarQuestionCount === 0n
-
-	function getQuestionTitle(question: MarketDetails) {
-		return question.title.trim() === '' ? 'Untitled question' : question.title
-	}
 
 	return (
 		<EntityCard

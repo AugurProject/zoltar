@@ -3,7 +3,9 @@ import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
+import { MetricField } from './MetricField.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
+import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { approvalShortage } from '../lib/inputs.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -87,8 +89,8 @@ export function SecurityVaultSection({
 					redeemFees: 'Redeem Fees',
 					updateVaultFees: 'Update Fees',
 				}[securityVaultResult.action]
-	const autoLoadKey = `${selectedVaultAddress ?? ''}:${normalizedSecurityVaultForm.securityPoolAddress}`
-	const hasLoadedCurrentVault = securityVaultDetails !== undefined && selectedVaultAddress !== undefined && securityVaultDetails.vaultAddress.toLowerCase() === selectedVaultAddress.toLowerCase() && securityVaultDetails.securityPoolAddress.toLowerCase() === normalizedSecurityVaultForm.securityPoolAddress.toLowerCase()
+	const autoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
+	const hasLoadedCurrentVault = securityVaultDetails !== undefined && sameAddress(securityVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(securityVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
 	const lastAutoLoadKey = useRef<string | undefined>(undefined)
 
 	useEffect(() => {
@@ -105,46 +107,27 @@ export function SecurityVaultSection({
 		<div className='entity-card-subsection'>
 			{securityVaultDetails === undefined ? undefined : (
 				<div className='entity-metric-grid'>
-					<div className='entity-metric'>
-						<span className='metric-label'>Selected Vault</span>
-						<strong>
-							<AddressValue address={securityVaultDetails.vaultAddress} />
-						</strong>
-					</div>
-					<div className='entity-metric'>
-						<span className='metric-label'>REP Deposit Share</span>
-						<strong>
-							<CurrencyValue value={securityVaultDetails.repDepositShare} suffix='REP' />
-						</strong>
-					</div>
-					<div className='entity-metric'>
-						<span className='metric-label'>Approved REP</span>
-						<strong>{approvedRep === undefined ? <LoadingText>Loading...</LoadingText> : <CurrencyValue value={approvedRep} suffix='REP' />}</strong>
-					</div>
-					<div className='entity-metric'>
-						<span className='metric-label'>Security Bond Allowance</span>
-						<strong>
-							<CurrencyValue value={securityBondAllowance} suffix='REP' />
-						</strong>
-					</div>
-					<div className='entity-metric'>
-						<span className='metric-label'>Unpaid ETH Fees</span>
-						<strong>
-							<CurrencyValue value={securityVaultDetails.unpaidEthFees} suffix='ETH' />
-						</strong>
-					</div>
-					<div className='entity-metric'>
-						<span className='metric-label'>Locked REP</span>
-						<strong>
-							<CurrencyValue value={securityVaultDetails.lockedRepInEscalationGame} suffix='REP' />
-						</strong>
-					</div>
-					<div className='entity-metric'>
-						<span className='metric-label'>Total Security Bond Allowance</span>
-						<strong>
-							<CurrencyValue value={securityVaultDetails.totalSecurityBondAllowance} suffix='ETH' />
-						</strong>
-					</div>
+					<MetricField className='entity-metric' label='Selected Vault'>
+						<AddressValue address={securityVaultDetails.vaultAddress} />
+					</MetricField>
+					<MetricField className='entity-metric' label='REP Deposit Share'>
+						<CurrencyValue value={securityVaultDetails.repDepositShare} suffix='REP' />
+					</MetricField>
+					<MetricField className='entity-metric' label='Approved REP'>
+						{approvedRep === undefined ? <LoadingText>Loading...</LoadingText> : <CurrencyValue value={approvedRep} suffix='REP' />}
+					</MetricField>
+					<MetricField className='entity-metric' label='Security Bond Allowance'>
+						<CurrencyValue value={securityBondAllowance} suffix='REP' />
+					</MetricField>
+					<MetricField className='entity-metric' label='Unpaid ETH Fees'>
+						<CurrencyValue value={securityVaultDetails.unpaidEthFees} suffix='ETH' />
+					</MetricField>
+					<MetricField className='entity-metric' label='Locked REP'>
+						<CurrencyValue value={securityVaultDetails.lockedRepInEscalationGame} suffix='REP' />
+					</MetricField>
+					<MetricField className='entity-metric' label='Total Security Bond Allowance'>
+						<CurrencyValue value={securityVaultDetails.totalSecurityBondAllowance} suffix='ETH' />
+					</MetricField>
 				</div>
 			)}
 			{showSecurityPoolAddressInput ? (
@@ -172,12 +155,9 @@ export function SecurityVaultSection({
 					<h4>Set Security Bond Allowance</h4>
 				</div>
 				<div className='entity-metric-grid'>
-					<div className='entity-metric'>
-						<span className='metric-label'>Current Security Bond Allowance</span>
-						<strong>
-							<CurrencyValue value={securityBondAllowance} suffix='REP' />
-						</strong>
-					</div>
+					<MetricField className='entity-metric' label='Current Security Bond Allowance'>
+						<CurrencyValue value={securityBondAllowance} suffix='REP' />
+					</MetricField>
 				</div>
 				<label className='field'>
 					<span>Security Bond Allowance Amount</span>
@@ -253,12 +233,9 @@ export function SecurityVaultSection({
 				<p className='detail'>Refresh the vault to calculate withdrawable REP.</p>
 			) : (
 				<div className='entity-metric-grid'>
-					<div className='entity-metric'>
-						<span className='metric-label'>Withdrawable REP</span>
-						<strong>
-							<CurrencyValue value={withdrawableRepAmount} suffix='REP' />
-						</strong>
-					</div>
+					<MetricField className='entity-metric' label='Withdrawable REP'>
+						<CurrencyValue value={withdrawableRepAmount} suffix='REP' />
+					</MetricField>
 				</div>
 			)}
 			<p className='detail'>Withdrawals are queued through the oracle manager.</p>
@@ -318,16 +295,12 @@ export function SecurityVaultSection({
 					{securityVaultResult === undefined ? undefined : (
 						<EntityCard title='Latest Vault Action'>
 							<div className='entity-metric-grid'>
-								<div className='entity-metric'>
-									<span className='metric-label'>Action</span>
-									<strong>{securityVaultResult.action}</strong>
-								</div>
-								<div className='entity-metric'>
-									<span className='metric-label'>Transaction</span>
-									<strong>
-										<TransactionHashLink hash={securityVaultResult.hash} />
-									</strong>
-								</div>
+								<MetricField className='entity-metric' label='Action'>
+									{securityVaultResult.action}
+								</MetricField>
+								<MetricField className='entity-metric' label='Transaction'>
+									<TransactionHashLink hash={securityVaultResult.hash} />
+								</MetricField>
 							</div>
 						</EntityCard>
 					)}

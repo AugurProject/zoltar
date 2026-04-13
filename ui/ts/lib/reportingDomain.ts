@@ -1,7 +1,9 @@
 import type { EscalationSide, ReportingDetails } from '../types/contracts.js'
+import { getTimeRemaining } from './time.js'
+import { requireDefined } from './required.js'
 
 export function getEscalationTimeRemaining(details: ReportingDetails) {
-	return details.currentTime >= details.escalationEndTime ? 0n : details.escalationEndTime - details.currentTime
+	return requireDefined(getTimeRemaining(details.escalationEndTime, details.currentTime), 'Escalation end time is required')
 }
 
 export function getEscalationPhase(details: ReportingDetails) {

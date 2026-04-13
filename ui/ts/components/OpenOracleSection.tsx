@@ -6,29 +6,24 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { LoadingText } from './LoadingText.js'
+import { MetricField } from './MetricField.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOracleFeePercentage, formatOpenOracleMultiplier, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSelectedReportActionMode, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import { loadOpenOracleReportSummaries } from '../contracts.js'
+import { resolveFirstMatchingValue } from '../lib/viewState.js'
 import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
 import type { OpenOracleSectionProps, OpenOracleView } from '../types/components.js'
 
 const BROWSE_PAGE_SIZE = 10
 
-function getInitialOpenOracleView({ openOracleForm, initialView }: { openOracleForm: OpenOracleFormState; initialView: OpenOracleView | undefined }): OpenOracleView {
-	if (initialView !== undefined) return initialView
-	if (openOracleForm.reportId !== '') return 'selected-report'
-	return 'browse'
-}
-
 function renderReportField(label: string, value: ComponentChildren) {
 	return (
-		<div key={label}>
-			<span className='metric-label'>{label}</span>
-			<strong>{value}</strong>
-		</div>
+		<MetricField key={label} label={label}>
+			{value}
+		</MetricField>
 	)
 }
 
@@ -121,30 +116,18 @@ function renderSelectedReportActionSection(
 							Price source: <strong>{openOracleInitialReportState.loading ? 'Loading...' : initialReportSubmission.priceSource}</strong>
 						</p>
 						<div className='question-summary-grid'>
-							<div>
-								<span className='metric-label'>{`Required ${token1Symbol}`}</span>
-								<strong>
-									<CurrencyValue value={initialReportSubmission.amount1} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
-								</strong>
-							</div>
-							<div>
-								<span className='metric-label'>{`Required ${token2Symbol}`}</span>
-								<strong>
-									<CurrencyValue value={initialReportSubmission.amount2} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
-								</strong>
-							</div>
-							<div>
-								<span className='metric-label'>{`Approved ${token1Symbol}`}</span>
-								<strong>
-									<CurrencyValue value={initialReportSubmission.approvedToken1Amount} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
-								</strong>
-							</div>
-							<div>
-								<span className='metric-label'>{`Approved ${token2Symbol}`}</span>
-								<strong>
-									<CurrencyValue value={initialReportSubmission.approvedToken2Amount} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
-								</strong>
-							</div>
+							<MetricField label={`Required ${token1Symbol}`}>
+								<CurrencyValue value={initialReportSubmission.amount1} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
+							</MetricField>
+							<MetricField label={`Required ${token2Symbol}`}>
+								<CurrencyValue value={initialReportSubmission.amount2} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
+							</MetricField>
+							<MetricField label={`Approved ${token1Symbol}`}>
+								<CurrencyValue value={initialReportSubmission.approvedToken1Amount} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
+							</MetricField>
+							<MetricField label={`Approved ${token2Symbol}`}>
+								<CurrencyValue value={initialReportSubmission.approvedToken2Amount} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
+							</MetricField>
 						</div>
 						<div className='field-row'>
 							<label className='field'>
@@ -498,7 +481,15 @@ export function OpenOracleSection({
 	openOracleResult,
 	initialView,
 }: OpenOracleSectionProps) {
-	const [view, setView] = useState<OpenOracleView>(() => getInitialOpenOracleView({ openOracleForm, initialView }))
+	const [view, setView] = useState<OpenOracleView>(() =>
+		resolveFirstMatchingValue<OpenOracleView>(
+			[
+				[initialView !== undefined, initialView ?? 'browse'],
+				[openOracleForm.reportId !== '', 'selected-report'],
+			],
+			'browse',
+		),
+	)
 	const [browsePage, setBrowsePage] = useState<OpenOracleReportSummaryPage | undefined>(undefined)
 	const [browseError, setBrowseError] = useState<string | undefined>(undefined)
 	const [loadingBrowse, setLoadingBrowse] = useState(false)

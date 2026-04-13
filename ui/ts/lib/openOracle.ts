@@ -1,7 +1,7 @@
 import { maxUint256, zeroAddress } from 'viem'
 import type { OpenOracleReportSummary } from '../types/contracts.js'
 import { formatCurrencyInputBalance } from './formatters.js'
-import { parseDecimalInput } from './inputs.js'
+import { parseDecimalInput } from './decimal.js'
 import { ETH_ADDRESS, REP_ADDRESS, quoteExactInput, quoteRepForEthV3 } from './uniswapQuoter.js'
 
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 18n

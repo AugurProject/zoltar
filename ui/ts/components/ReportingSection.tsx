@@ -4,29 +4,21 @@ import { EnumDropdown } from './EnumDropdown.js'
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
 import { EscalationSide } from './EscalationSide.js'
+import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { formatDuration } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
-import { getReportingOutcomeLabel, REPORTING_OUTCOME_OPTIONS } from '../lib/reporting.js'
+import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome } from '../lib/reportingDomain.js'
 import { TimestampValue } from './TimestampValue.js'
+import { parseOptionalBigIntInput } from '../lib/inputs.js'
 import type { ReportingSectionProps } from '../types/components.js'
-
-function parseOptionalBigInt(value: string) {
-	try {
-		const trimmedValue = value.trim()
-		if (trimmedValue === '') return undefined
-		return BigInt(trimmedValue)
-	} catch {
-		return undefined
-	}
-}
 
 export function ReportingSection({ accountState, loadingReportingDetails, onLoadReporting, onReportOutcome, onReportingFormChange, onWithdrawEscalation, reportingDetails, reportingError, reportingForm, reportingResult, showHeader = true, showSecurityPoolAddressInput = true }: ReportingSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
-	const selectedAmount = parseOptionalBigInt(reportingForm.reportAmount)
+	const selectedAmount = parseOptionalBigIntInput(reportingForm.reportAmount)
 	const totalBalance = reportingDetails === undefined ? 0n : reportingDetails.sides.reduce((sum, side) => sum + side.balance, 0n)
 	const leadingOutcome = reportingDetails === undefined ? undefined : getLeadingEscalationOutcome(reportingDetails.sides)
 	const selectedSide = reportingDetails?.sides.find(side => side.key === reportingForm.selectedOutcome)
@@ -90,28 +82,16 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 
 							<EntityCard title='Escalation Metrics' badge={<span className='badge muted'>status</span>}>
 								<div className='escalation-metrics'>
-									<div>
-										<span className='metric-label'>Current Bond</span>
-										<strong>
-											<CurrencyValue value={reportingDetails.currentRequiredBond} suffix='REP' />
-										</strong>
-									</div>
-									<div>
-										<span className='metric-label'>Binding Capital</span>
-										<strong>
-											<CurrencyValue value={reportingDetails.bindingCapital} suffix='REP' />
-										</strong>
-									</div>
-									<div>
-										<span className='metric-label'>Threshold</span>
-										<strong>
-											<CurrencyValue value={reportingDetails.nonDecisionThreshold} suffix='REP' />
-										</strong>
-									</div>
-									<div>
-										<span className='metric-label'>Time Left</span>
-										<strong>{formatDuration(getEscalationTimeRemaining(reportingDetails))}</strong>
-									</div>
+									<MetricField label='Current Bond'>
+										<CurrencyValue value={reportingDetails.currentRequiredBond} suffix='REP' />
+									</MetricField>
+									<MetricField label='Binding Capital'>
+										<CurrencyValue value={reportingDetails.bindingCapital} suffix='REP' />
+									</MetricField>
+									<MetricField label='Threshold'>
+										<CurrencyValue value={reportingDetails.nonDecisionThreshold} suffix='REP' />
+									</MetricField>
+									<MetricField label='Time Left'>{formatDuration(getEscalationTimeRemaining(reportingDetails))}</MetricField>
 								</div>
 								<p className='detail'>
 									Game starts at <TimestampValue timestamp={reportingDetails.startingTime} /> and currently uses a start bond of <CurrencyValue value={reportingDetails.startBond} suffix='REP' />.
@@ -163,7 +143,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 
 							<label className='field'>
 								<span>Outcome Side</span>
-								<EnumDropdown options={REPORTING_OUTCOME_OPTIONS.map(option => ({ value: option.key, label: option.label }))} value={reportingForm.selectedOutcome} onChange={selectedOutcome => onReportingFormChange({ selectedOutcome })} />
+								<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={reportingForm.selectedOutcome} onChange={selectedOutcome => onReportingFormChange({ selectedOutcome })} />
 							</label>
 
 							<label className='field'>

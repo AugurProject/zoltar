@@ -6,6 +6,8 @@ import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getO
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOraclePriceInput, loadOpenOracleInitialReportPrice, OPEN_ORACLE_APPROVAL_AMOUNT } from '../lib/openOracle.js'
+import { runLoadRequest } from '../lib/loadState.js'
+import { requireDefined } from '../lib/required.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { parseAddressInput, parseBytes32Input, parseReportIdInput } from '../lib/inputs.js'
@@ -45,71 +47,83 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 			return
 		}
 
-		loadingOpenOracleInitialReportState.value = true
-		openOracleInitialReportToken1Allowance.value = undefined
-		openOracleInitialReportToken2Allowance.value = undefined
+		await runLoadRequest({
+			isCurrent,
+			setLoading: value => {
+				loadingOpenOracleInitialReportState.value = value
+			},
+			onStart: () => {
+				openOracleInitialReportToken1Allowance.value = undefined
+				openOracleInitialReportToken2Allowance.value = undefined
+			},
+			load: async () => {
+				const readClient = createConnectedReadClient()
+				const [initialPrice, token1Allowance, token2Allowance] = await Promise.all([
+					loadOpenOracleInitialReportPrice(readClient, currentDetails.token1, currentDetails.token2, currentDetails.exactToken1Report).catch(() => undefined),
+					accountAddress === undefined ? Promise.resolve(undefined) : loadErc20Allowance(readClient, currentDetails.token1, accountAddress, getOpenOracleAddress()).catch(() => undefined),
+					accountAddress === undefined ? Promise.resolve(undefined) : loadErc20Allowance(readClient, currentDetails.token2, accountAddress, getOpenOracleAddress()).catch(() => undefined),
+				])
 
-		try {
-			const readClient = createConnectedReadClient()
-			const [initialPrice, token1Allowance, token2Allowance] = await Promise.all([
-				loadOpenOracleInitialReportPrice(readClient, currentDetails.token1, currentDetails.token2, currentDetails.exactToken1Report).catch(() => undefined),
-				accountAddress === undefined ? Promise.resolve(undefined) : loadErc20Allowance(readClient, currentDetails.token1, accountAddress, getOpenOracleAddress()).catch(() => undefined),
-				accountAddress === undefined ? Promise.resolve(undefined) : loadErc20Allowance(readClient, currentDetails.token2, accountAddress, getOpenOracleAddress()).catch(() => undefined),
-			])
+				return { initialPrice, token1Allowance, token2Allowance }
+			},
+			onSuccess: ({ initialPrice, token1Allowance, token2Allowance }) => {
+				openOracleInitialReportDefaultPrice.value = initialPrice === undefined ? undefined : formatOpenOraclePriceInput(initialPrice.price)
+				openOracleInitialReportDefaultPriceSource.value = initialPrice?.priceSource
+				openOracleInitialReportToken1Allowance.value = token1Allowance
+				openOracleInitialReportToken2Allowance.value = token2Allowance
 
-			if (!isCurrent()) return
-
-			openOracleInitialReportDefaultPrice.value = initialPrice === undefined ? undefined : formatOpenOraclePriceInput(initialPrice.price)
-			openOracleInitialReportDefaultPriceSource.value = initialPrice?.priceSource
-			openOracleInitialReportToken1Allowance.value = token1Allowance
-			openOracleInitialReportToken2Allowance.value = token2Allowance
-
-			if (openOracleForm.value.price.trim() === '' || openOracleForm.value.reportId.trim() !== currentDetails.reportId.toString()) {
-				openOracleForm.value = {
-					...openOracleForm.value,
-					amount1: currentDetails.exactToken1Report.toString(),
-					amount2: initialPrice?.token2Amount?.toString() ?? openOracleForm.value.amount2,
-					price: initialPrice === undefined ? '' : formatOpenOraclePriceInput(initialPrice.price),
+				if (openOracleForm.value.price.trim() === '' || openOracleForm.value.reportId.trim() !== currentDetails.reportId.toString()) {
+					openOracleForm.value = {
+						...openOracleForm.value,
+						amount1: currentDetails.exactToken1Report.toString(),
+						amount2: initialPrice?.token2Amount?.toString() ?? openOracleForm.value.amount2,
+						price: initialPrice === undefined ? '' : formatOpenOraclePriceInput(initialPrice.price),
+					}
 				}
-			}
-		} finally {
-			if (isCurrent()) {
-				loadingOpenOracleInitialReportState.value = false
-			}
-		}
+			},
+			onError: () => undefined,
+		})
 	}
 
 	const loadOracleReport = async (reportIdInput?: string) => {
-		loadingOracleReport.value = true
-		openOracleError.value = undefined
-		try {
-			const reportIdValue = reportIdInput?.trim() ?? openOracleForm.value.reportId
-			const reportId = parseReportIdInput(reportIdValue)
-			if (reportIdInput !== undefined) {
+		await runLoadRequest({
+			setLoading: value => {
+				loadingOracleReport.value = value
+			},
+			onStart: () => {
+				openOracleError.value = undefined
+			},
+			load: async () => {
+				const reportIdValue = reportIdInput?.trim() ?? openOracleForm.value.reportId
+				const reportId = parseReportIdInput(reportIdValue)
+				if (reportIdInput !== undefined) {
+					openOracleForm.value = {
+						...openOracleForm.value,
+						reportId: reportIdValue,
+					}
+				}
+				const details = await loadOpenOracleReportDetails(createConnectedReadClient(), getOpenOracleAddress(), reportId)
+				return { details, reportId }
+			},
+			onSuccess: ({ details, reportId }) => {
+				openOracleReportDetails.value = details
+				loadedOpenOracleReportId.value = reportId
 				openOracleForm.value = {
 					...openOracleForm.value,
-					reportId: reportIdValue,
+					price: '',
+					stateHash: details.stateHash,
 				}
-			}
-			const details = await loadOpenOracleReportDetails(createConnectedReadClient(), getOpenOracleAddress(), reportId)
-			openOracleReportDetails.value = details
-			loadedOpenOracleReportId.value = reportId
-			openOracleForm.value = {
-				...openOracleForm.value,
-				price: '',
-				stateHash: details.stateHash,
-			}
-		} catch (error) {
-			openOracleReportDetails.value = undefined
-			loadedOpenOracleReportId.value = undefined
-			openOracleInitialReportDefaultPrice.value = undefined
-			openOracleInitialReportDefaultPriceSource.value = undefined
-			openOracleInitialReportToken1Allowance.value = undefined
-			openOracleInitialReportToken2Allowance.value = undefined
-			openOracleError.value = getErrorMessage(error, 'Failed to load oracle report')
-		} finally {
-			loadingOracleReport.value = false
-		}
+			},
+			onError: error => {
+				openOracleReportDetails.value = undefined
+				loadedOpenOracleReportId.value = undefined
+				openOracleInitialReportDefaultPrice.value = undefined
+				openOracleInitialReportDefaultPriceSource.value = undefined
+				openOracleInitialReportToken1Allowance.value = undefined
+				openOracleInitialReportToken2Allowance.value = undefined
+				openOracleError.value = getErrorMessage(error, 'Failed to load oracle report')
+			},
+		})
 	}
 
 	const ensureLoadedSelectedReport = async () => {
@@ -119,13 +133,11 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		}
 
 		await loadOracleReport()
-		if (openOracleReportDetails.value === undefined) {
-			throw new Error('Failed to load oracle report')
-		}
+		const loadedReportDetails = requireDefined(openOracleReportDetails.value, 'Failed to load oracle report')
 
 		return {
-			reportId: openOracleReportDetails.value.reportId,
-			details: openOracleReportDetails.value,
+			reportId: loadedReportDetails.reportId,
+			details: loadedReportDetails,
 		}
 	}
 
@@ -163,15 +175,13 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 
 	const approveToken1 = async () =>
 		await runOracleAction(async walletAddress => {
-			const reportDetails = openOracleReportDetails.value
-			if (reportDetails === undefined) throw new Error('Load an oracle report first')
+			const reportDetails = requireDefined(openOracleReportDetails.value, 'Load an oracle report first')
 			return await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), reportDetails.token1, getOpenOracleAddress(), parseApproveAmount(openOracleForm.value.approveAmount1), 'approveToken1')
 		}, 'Failed to approve token1')
 
 	const approveToken2 = async () =>
 		await runOracleAction(async walletAddress => {
-			const reportDetails = openOracleReportDetails.value
-			if (reportDetails === undefined) throw new Error('Load an oracle report first')
+			const reportDetails = requireDefined(openOracleReportDetails.value, 'Load an oracle report first')
 			return await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), reportDetails.token2, getOpenOracleAddress(), parseApproveAmount(openOracleForm.value.approveAmount2), 'approveToken2')
 		}, 'Failed to approve token2')
 
@@ -202,8 +212,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 
 	const submitInitialReport = async () =>
 		await runOracleAction(async walletAddress => {
-			const reportDetails = openOracleReportDetails.value
-			if (reportDetails === undefined) throw new Error('Load an oracle report first')
+			const reportDetails = requireDefined(openOracleReportDetails.value, 'Load an oracle report first')
 			const submission = deriveOpenOracleInitialReportSubmissionDetails({
 				approvedToken1Amount: openOracleInitialReportToken1Allowance.value,
 				approvedToken2Amount: openOracleInitialReportToken2Allowance.value,

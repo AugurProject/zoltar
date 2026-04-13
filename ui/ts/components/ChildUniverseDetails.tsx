@@ -1,4 +1,5 @@
 import { TimestampValue } from './TimestampValue.js'
+import { MetricField } from './MetricField.js'
 import type { ZoltarChildUniverseSummary } from '../types/contracts.js'
 
 type ChildUniverseDetailsProps = {
@@ -9,29 +10,13 @@ type ChildUniverseDetailsProps = {
 export function ChildUniverseDetails({ child, showOutcomeIndex = false }: ChildUniverseDetailsProps) {
 	return (
 		<div className='workflow-vault-grid'>
-			<div>
-				<span className='metric-label'>Outcome</span>
-				<strong>{child.outcomeLabel}</strong>
-			</div>
-			{showOutcomeIndex ? (
-				<div>
-					<span className='metric-label'>Outcome Index</span>
-					<strong>{child.outcomeIndex.toString()}</strong>
-				</div>
-			) : undefined}
-			{child.exists ? (
-				<div>
-					<span className='metric-label'>Reputation Token</span>
-					<strong>{child.reputationToken}</strong>
-				</div>
-			) : undefined}
+			<MetricField label='Outcome'>{child.outcomeLabel}</MetricField>
+			{showOutcomeIndex ? <MetricField label='Outcome Index'>{child.outcomeIndex.toString()}</MetricField> : undefined}
+			{child.exists ? <MetricField label='Reputation Token'>{child.reputationToken}</MetricField> : undefined}
 			{child.forkTime !== 0n ? (
-				<div>
-					<span className='metric-label'>Fork Time</span>
-					<strong>
-						<TimestampValue timestamp={child.forkTime} />
-					</strong>
-				</div>
+				<MetricField label='Fork Time'>
+					<TimestampValue timestamp={child.forkTime} />
+				</MetricField>
 			) : undefined}
 		</div>
 	)

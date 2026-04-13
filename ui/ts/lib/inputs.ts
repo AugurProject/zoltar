@@ -1,11 +1,17 @@
 import type { ReportingOutcomeKey } from '../types/contracts.js'
-import { getAddress, isHex, parseUnits, type Address, type Hex } from 'viem'
+import { getAddress, isHex, type Address, type Hex } from 'viem'
 import { parseBigIntInput } from './marketForm.js'
 
 export function parseAddressInput(value: string, label: string): Address {
 	const trimmed = value.trim()
 	if (trimmed === '') throw new Error(`${label} is required`)
 	return getAddress(trimmed)
+}
+
+export function resolveOptionalAddressInput(value: string | undefined, fallbackAddress: Address, label: string) {
+	const trimmed = value?.trim() ?? ''
+	if (trimmed === '') return fallbackAddress
+	return parseAddressInput(trimmed, label)
 }
 
 export function parseBytes32Input(value: string, label: string): Hex {
@@ -21,16 +27,14 @@ export function parseReportIdInput(value: string) {
 	return parseBigIntInput(value, 'Report ID')
 }
 
-export function parseDecimalInput(value: string, label: string, units: number = 18) {
+export function parseOptionalBigIntInput(value: string) {
 	const trimmed = value.trim()
-	if (trimmed === '') throw new Error(`${label} is required`)
-
-	const normalized = trimmed.startsWith('.') ? `0${trimmed}` : trimmed.endsWith('.') ? `${trimmed}0` : trimmed
+	if (trimmed === '') return undefined
 
 	try {
-		return parseUnits(normalized, units)
+		return BigInt(trimmed)
 	} catch {
-		throw new Error(`${label} must be a decimal number`)
+		return undefined
 	}
 }
 
@@ -45,6 +49,12 @@ function parseListInput<T>(value: string, label: string, parseItem: (entry: stri
 
 export function parseBigIntListInput(value: string, label: string) {
 	return parseListInput(value, label, (entry, index) => parseBigIntInput(entry, `${label} #${index + 1}`))
+}
+
+export function resolveOptionalBigIntListInput(value: string, fallback: bigint[], label: string) {
+	const trimmed = value.trim()
+	if (trimmed === '') return fallback
+	return parseBigIntListInput(trimmed, label)
 }
 
 export function parseReportingOutcomeInput(value: string): ReportingOutcomeKey {

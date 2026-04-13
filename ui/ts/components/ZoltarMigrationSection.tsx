@@ -4,6 +4,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
+import { MetricField } from './MetricField.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
@@ -217,23 +218,16 @@ export function ZoltarMigrationSection({
 		<>
 			<EntityCard title='Migrate REP'>
 				<div className='workflow-metric-grid'>
+					<MetricField label='Migration REP Balance'>
+						<CurrencyValue loading={loadingZoltarForkAccess && zoltarMigrationPreparedRepBalance === undefined} value={zoltarMigrationPreparedRepBalance} suffix='REP' />
+					</MetricField>
 					<div>
-						<span className='metric-label'>Migration REP Balance</span>
-						<strong>
-							<CurrencyValue loading={loadingZoltarForkAccess && zoltarMigrationPreparedRepBalance === undefined} value={zoltarMigrationPreparedRepBalance} suffix='REP' />
-						</strong>
-					</div>
-					<div>
-						<span className='metric-label'>Approved REP</span>
-						<strong>
+						<MetricField label='Approved REP'>
 							<CurrencyValue loading={loadingZoltarForkAccess && zoltarForkAllowance === undefined} value={zoltarForkAllowance} suffix='REP' />
-						</strong>
+						</MetricField>
 						{approvalShortage > 0n ? <p className='detail'>Need {formatCurrencyBalance(approvalShortage)} more REP approved before preparing the current amount.</p> : undefined}
 					</div>
-					<div>
-						<span className='metric-label'>Universe</span>
-						<strong>{rootUniverse === undefined ? <LoadingText>Loading universe data...</LoadingText> : <UniverseLink universeId={rootUniverse.universeId} />}</strong>
-					</div>
+					<MetricField label='Universe'>{rootUniverse === undefined ? <LoadingText>Loading universe data...</LoadingText> : <UniverseLink universeId={rootUniverse.universeId} />}</MetricField>
 				</div>
 				<div className='form-grid'>
 					<div className='field'>
@@ -277,26 +271,18 @@ export function ZoltarMigrationSection({
 			{zoltarMigrationResult === undefined ? undefined : (
 				<EntityCard title='Latest Migration Action' badge={<span className='badge muted'>{zoltarMigrationResult.action}</span>}>
 					<div className='entity-metric-grid'>
-						<div className='entity-metric'>
-							<span className='metric-label'>Action</span>
-							<strong>{zoltarMigrationResult.action}</strong>
-						</div>
-						<div className='entity-metric'>
-							<span className='metric-label'>Amount</span>
-							<strong>
-								<CurrencyValue value={zoltarMigrationResult.amount} suffix='REP' />
-							</strong>
-						</div>
-						<div className='entity-metric'>
-							<span className='metric-label'>Outcome Indexes</span>
-							<strong>{zoltarMigrationResult.outcomeIndexes.length === 0 ? 'None' : zoltarMigrationResult.outcomeIndexes.join(', ')}</strong>
-						</div>
-						<div className='entity-metric'>
-							<span className='metric-label'>Transaction</span>
-							<strong>
-								<TransactionHashLink hash={zoltarMigrationResult.hash} />
-							</strong>
-						</div>
+						<MetricField className='entity-metric' label='Action'>
+							{zoltarMigrationResult.action}
+						</MetricField>
+						<MetricField className='entity-metric' label='Amount'>
+							<CurrencyValue value={zoltarMigrationResult.amount} suffix='REP' />
+						</MetricField>
+						<MetricField className='entity-metric' label='Outcome Indexes'>
+							{zoltarMigrationResult.outcomeIndexes.length === 0 ? 'None' : zoltarMigrationResult.outcomeIndexes.join(', ')}
+						</MetricField>
+						<MetricField className='entity-metric' label='Transaction'>
+							<TransactionHashLink hash={zoltarMigrationResult.hash} />
+						</MetricField>
 					</div>
 				</EntityCard>
 			)}

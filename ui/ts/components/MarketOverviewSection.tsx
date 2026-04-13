@@ -7,6 +7,7 @@ import { ChildUniversesSection } from './ChildUniversesSection.js'
 import { LoadingText } from './LoadingText.js'
 import { LoadableValue } from './LoadableValue.js'
 import { Question } from './Question.js'
+import { MetricField } from './MetricField.js'
 import { ScalarDeploymentSection } from './ScalarDeploymentSection.js'
 import { TimestampValue } from './TimestampValue.js'
 import { formatUniverseCollectionLabel } from '../lib/universe.js'
@@ -54,34 +55,22 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 					<div className='workflow-question-grid market-overview-grid'>
 						{hasForked ? (
 							<>
-								<div>
-									<span className='metric-label'>Fork Time</span>
-									<strong>
-										<LoadableValue loading={loadingZoltarUniverse} placeholder='Loading...'>
-											<TimestampValue timestamp={rootUniverse.forkTime} />
-										</LoadableValue>
-									</strong>
-								</div>
-								<div>
-									<span className='metric-label'>Fork Threshold</span>
-									<strong>
-										<CurrencyValue value={rootUniverse.forkThreshold} suffix='REP' />
-									</strong>
-								</div>
+								<MetricField label='Fork Time'>
+									<LoadableValue loading={loadingZoltarUniverse} placeholder='Loading...'>
+										<TimestampValue timestamp={rootUniverse.forkTime} />
+									</LoadableValue>
+								</MetricField>
+								<MetricField label='Fork Threshold'>
+									<CurrencyValue value={rootUniverse.forkThreshold} suffix='REP' />
+								</MetricField>
 							</>
 						) : undefined}
-						<div>
-							<span className='metric-label'>Reputation Token</span>
-							<strong>
-								<AddressValue address={rootUniverse.reputationToken} />
-							</strong>
-						</div>
-						<div>
-							<span className='metric-label'>Total Theoretical Supply</span>
-							<strong>
-								<CurrencyValue value={rootUniverse.totalTheoreticalSupply} suffix='REP' />
-							</strong>
-						</div>
+						<MetricField label='Reputation Token'>
+							<AddressValue address={rootUniverse.reputationToken} />
+						</MetricField>
+						<MetricField label='Total Theoretical Supply'>
+							<CurrencyValue value={rootUniverse.totalTheoreticalSupply} suffix='REP' />
+						</MetricField>
 					</div>
 					{isScalarFork ? (
 						<ScalarDeploymentSection

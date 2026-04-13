@@ -1,5 +1,5 @@
-import { parseUnits } from 'viem'
 import type { ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
+import { parseDecimalInput } from './decimal.js'
 
 const DEFAULT_CURRENT_RETENTION_RATE = '10'
 
@@ -121,13 +121,7 @@ function validateAndTrim(value: string, label: string): string {
 }
 
 export function parseRepAmountInput(value: string, label: string) {
-	const trimmed = validateAndTrim(value, label)
-	const normalized = trimmed.startsWith('.') ? `0${trimmed}` : trimmed.endsWith('.') ? `${trimmed}0` : trimmed
-	try {
-		return parseUnits(normalized, 18)
-	} catch {
-		throw new Error(`${label} must be a decimal number`)
-	}
+	return parseDecimalInput(value, label, 18)
 }
 
 export function parseBigIntInput(value: string, label: string) {
