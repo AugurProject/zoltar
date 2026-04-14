@@ -21,7 +21,7 @@
 		"lib": ["ESNext", "DOM"],
 		"jsx": "react-jsx",
 		"jsxImportSource": "preact",
-		"types": ["node"],
+		"types": [],
 
 		"incremental": true,
 		"tsBuildInfoFile": "./.tsbuildinfo",
