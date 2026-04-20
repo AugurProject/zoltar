@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact'
 import { AddressValue } from './AddressValue.js'
 import { EntityCard } from './EntityCard.js'
+import { ErrorNotice } from './ErrorNotice.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
@@ -190,7 +191,7 @@ export function SecurityPoolSection({
 							{!duplicateOriginPoolExists && !hasMatchingSecurityMultiplier ? undefined : <p className='detail'>A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.</p>}
 							{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>Security pools can only be created for binary markets. Load a binary market to proceed.</p> : undefined}
 							{zoltarUniverseHasForked ? <p className='notice error'>Security pools cannot be created after Zoltar has forked.</p> : undefined}
-							{securityPoolError === undefined ? undefined : <p className='notice error'>{securityPoolError}</p>}
+							<ErrorNotice message={securityPoolError} />
 						</div>
 					</>
 				)}

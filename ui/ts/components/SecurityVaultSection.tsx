@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'preact/hooks'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
+import { ErrorNotice } from './ErrorNotice.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -272,7 +273,7 @@ export function SecurityVaultSection({
 				{vaultDepositSection}
 				{securityBondAllowanceSection}
 				{vaultRepSection}
-				{securityVaultError === undefined ? undefined : <p className='notice error'>{securityVaultError}</p>}
+				<ErrorNotice message={securityVaultError} />
 			</>
 		)
 	}
@@ -313,7 +314,7 @@ export function SecurityVaultSection({
 						{vaultRepSection}
 					</EntityCard>
 
-					{securityVaultError === undefined ? undefined : <p className='notice error'>{securityVaultError}</p>}
+					<ErrorNotice message={securityVaultError} />
 				</div>
 			</div>
 		</section>

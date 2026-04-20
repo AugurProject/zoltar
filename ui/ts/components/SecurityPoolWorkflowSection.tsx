@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { AddressValue } from './AddressValue.js'
 import { EntityCard } from './EntityCard.js'
+import { ErrorNotice } from './ErrorNotice.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
 import { LiquidationModal } from './LiquidationModal.js'
 import { LoadingText } from './LoadingText.js'
@@ -173,7 +174,7 @@ export function SecurityPoolWorkflowSection({
 									<h4>Price Oracle</h4>
 									{poolOracleManagerDetails === undefined ? undefined : <span className={`badge ${poolOracleManagerDetails.isPriceValid ? 'ok' : 'error'}`}>{poolOracleManagerDetails.isPriceValid ? 'Valid' : 'Invalid'}</span>}
 								</div>
-								{poolOracleManagerError === undefined ? undefined : <p className='notice error'>{poolOracleManagerError}</p>}
+								<ErrorNotice message={poolOracleManagerError} />
 								{poolPriceOracleResult === undefined ? undefined : (
 									<p className='notice success'>
 										Requested price: <TransactionHashLink hash={poolPriceOracleResult.hash} />

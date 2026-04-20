@@ -2,6 +2,7 @@ import { useMemo } from 'preact/hooks'
 import type { Address } from 'viem'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
+import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
@@ -209,7 +210,7 @@ export function ZoltarMigrationSection({
 				<EntityCard title='Migrate REP' badge={<span className='badge blocked'>Missing</span>}>
 					<p className='notice error'>The universe does not exist.</p>
 				</EntityCard>
-				{zoltarMigrationError === undefined ? undefined : <p className='notice error'>{zoltarMigrationError}</p>}
+				<ErrorNotice message={zoltarMigrationError} />
 			</>
 		)
 	}
@@ -287,7 +288,7 @@ export function ZoltarMigrationSection({
 				</EntityCard>
 			)}
 
-			{zoltarMigrationError === undefined ? undefined : <p className='notice error'>{zoltarMigrationError}</p>}
+			<ErrorNotice message={zoltarMigrationError} />
 		</>
 	)
 }

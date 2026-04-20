@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks'
 import type { Address } from 'viem'
 import { ChildUniversesSection } from './ChildUniversesSection.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
+import { ErrorNotice } from './ErrorNotice.js'
 import { useEffect } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
@@ -119,9 +120,9 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 						{selectedScalarChildExists ? 'Deployed' : scalarOutcomeInvalid ? 'Deploy Invalid Universe' : 'Deploy Universe'}
 					</button>
 				</div>
-				{scalarDeployError === undefined ? undefined : <p className='notice error'>{scalarDeployError}</p>}
+				<ErrorNotice message={scalarDeployError} />
 			</div>
-			{zoltarChildUniverseError === undefined ? undefined : <p className='notice error'>{zoltarChildUniverseError}</p>}
+			<ErrorNotice message={zoltarChildUniverseError} />
 		</div>
 	)
 }
