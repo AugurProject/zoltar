@@ -5,6 +5,7 @@ import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
+import { ErrorNotice } from './ErrorNotice.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -151,7 +152,7 @@ function renderSelectedReportActionSection(
 								</button>
 							</div>
 						</div>
-						{initialReportSubmission.blockReason === undefined ? undefined : <p className='notice error'>{initialReportSubmission.blockReason}</p>}
+						<ErrorNotice message={initialReportSubmission.blockReason} />
 						<div className='actions'>
 							<button className='primary' onClick={onSubmitInitialReport} disabled={!isConnected || !initialReportSubmission.canSubmit || openOracleInitialReportState.loading}>
 								Submit Initial Report
@@ -564,7 +565,7 @@ export function OpenOracleSection({
 									<LoadingText>Loading report summaries...</LoadingText>
 								</p>
 							) : undefined}
-							{browseError === undefined ? undefined : <p className='notice error'>{browseError}</p>}
+							<ErrorNotice message={browseError} />
 							{browsePage === undefined || browsePage.reports.length === 0 ? <p className='detail'>No Open Oracle games found.</p> : <div className='entity-card-list'>{browsePage.reports.map(report => renderReportSummaryCard(report, reportId => void openBrowseReport(reportId)))}</div>}
 						</EntityCard>
 					</div>
@@ -662,7 +663,7 @@ export function OpenOracleSection({
 							</div>
 						</EntityCard>
 
-						{openOracleError === undefined ? undefined : <p className='notice error'>{openOracleError}</p>}
+						<ErrorNotice message={openOracleError} />
 					</div>
 				</div>
 			) : undefined}
@@ -676,7 +677,7 @@ export function OpenOracleSection({
 				</div>
 			) : undefined}
 
-			{openOracleError === undefined ? undefined : <p className='notice error'>{openOracleError}</p>}
+			<ErrorNotice message={openOracleError} />
 		</section>
 	)
 }

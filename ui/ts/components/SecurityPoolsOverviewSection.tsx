@@ -1,6 +1,7 @@
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
+import { ErrorNotice } from './ErrorNotice.js'
 import { LiquidationModal } from './LiquidationModal.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
@@ -52,7 +53,7 @@ export function SecurityPoolsOverviewSection({
 						Queued liquidation for <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
 					</p>
 				)}
-				{securityPoolOverviewError === undefined ? undefined : <p className='notice error'>{securityPoolOverviewError}</p>}
+				<ErrorNotice message={securityPoolOverviewError} />
 
 				{securityPools.length === 0 ? (
 					<EntityCard title='No Pools Loaded' badge={<span className='badge pending'>Empty</span>}>

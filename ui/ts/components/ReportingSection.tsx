@@ -2,6 +2,7 @@ import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { EntityCard } from './EntityCard.js'
+import { ErrorNotice } from './ErrorNotice.js'
 import { LoadingText } from './LoadingText.js'
 import { EscalationSide } from './EscalationSide.js'
 import { MetricField } from './MetricField.js'
@@ -178,7 +179,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 						</div>
 					</EntityCard>
 
-					{reportingError === undefined ? undefined : <p className='notice error'>{reportingError}</p>}
+					<ErrorNotice message={reportingError} />
 				</div>
 			</div>
 		</section>

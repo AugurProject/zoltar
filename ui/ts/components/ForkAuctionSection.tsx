@@ -1,6 +1,7 @@
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
+import { ErrorNotice } from './ErrorNotice.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
@@ -321,7 +322,7 @@ export function ForkAuctionSection({
 						</div>
 					</div>
 
-					{forkAuctionError === undefined ? undefined : <p className='notice error'>{forkAuctionError}</p>}
+					<ErrorNotice message={forkAuctionError} />
 				</div>
 			</div>
 		</section>

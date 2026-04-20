@@ -1,6 +1,7 @@
 import type { Address } from 'viem'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
+import { ErrorNotice } from './ErrorNotice.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
@@ -62,7 +63,7 @@ export function ForkZoltarSection({
 				<EntityCard title='Fork Zoltar' badge={<span className='badge blocked'>Missing</span>}>
 					<p className='notice error'>The universe does not exist.</p>
 				</EntityCard>
-				{zoltarForkError === undefined ? undefined : <p className='notice error'>{zoltarForkError}</p>}
+				<ErrorNotice message={zoltarForkError} />
 			</>
 		)
 	}
@@ -116,7 +117,7 @@ export function ForkZoltarSection({
 				</div>
 			</EntityCard>
 
-			{zoltarForkError === undefined ? undefined : <p className='notice error'>{zoltarForkError}</p>}
+			<ErrorNotice message={zoltarForkError} />
 		</>
 	)
 }

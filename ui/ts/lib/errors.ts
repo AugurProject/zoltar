@@ -1,3 +1,5 @@
+const closeableErrorPatterns = ['user rejected the request', 'user rejected request', 'user denied transaction signature', 'user denied message signature', 'user denied account authorization']
+
 export function getErrorMessage(error: unknown, fallbackMessage: string) {
 	let detail: string | undefined
 
@@ -14,4 +16,13 @@ export function getErrorMessage(error: unknown, fallbackMessage: string) {
 	}
 
 	return detail === undefined || detail === '' ? fallbackMessage : `${fallbackMessage}: ${detail}`
+}
+
+export function isCloseableErrorMessage(message: string | undefined) {
+	if (message === undefined) return false
+
+	const normalizedMessage = message.toLowerCase()
+	if (normalizedMessage.includes('"code":4001') || normalizedMessage.includes("'code':4001") || normalizedMessage.includes('code 4001')) return true
+
+	return closeableErrorPatterns.some(pattern => normalizedMessage.includes(pattern))
 }

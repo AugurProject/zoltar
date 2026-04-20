@@ -1,5 +1,6 @@
 import { EnumDropdown } from './EnumDropdown.js'
 import { EntityCard } from './EntityCard.js'
+import { ErrorNotice } from './ErrorNotice.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -85,7 +86,7 @@ export function TradingSection({ accountState, onCreateCompleteSet, onMigrateSha
 						</div>
 					</EntityCard>
 
-					{tradingError === undefined ? undefined : <p className='notice error'>{tradingError}</p>}
+					<ErrorNotice message={tradingError} />
 				</div>
 			</div>
 		</section>

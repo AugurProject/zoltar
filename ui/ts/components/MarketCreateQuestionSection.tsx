@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks'
 import type { Address } from 'viem'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { EntityCard } from './EntityCard.js'
+import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
 import { Question, getQuestionTitle } from './Question.js'
@@ -209,7 +210,7 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 				</EntityCard>
 			) : undefined}
 
-			{marketError === undefined ? undefined : <p className='notice error'>{marketError}</p>}
+			<ErrorNotice message={marketError} />
 		</>
 	)
 }

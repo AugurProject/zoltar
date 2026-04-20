@@ -9,6 +9,7 @@ import { NotFoundSection } from './components/NotFoundSection.js'
 import { OpenOracleSection } from './components/OpenOracleSection.js'
 import { TabNavigation } from './components/TabNavigation.js'
 import { SecurityPoolsSection } from './components/SecurityPoolsSection.js'
+import { ErrorNotice } from './components/ErrorNotice.js'
 import { useDeploymentFlow } from './hooks/useDeploymentFlow.js'
 import { useForkAuctionOperations } from './hooks/useForkAuctionOperations.js'
 import { useHashRoute } from './hooks/useHashRoute.js'
@@ -491,7 +492,7 @@ export function App() {
 				) : undefined}
 				{showAugurPlaceHolderDeploymentWarning ? <div className='notice error'>Augur PLACEHOLDER contracts are not deployed yet. Deploy them before the application works.</div> : undefined}
 				{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected.</p>}
-				{errorMessage === undefined ? undefined : <p className='notice error'>{errorMessage}</p>}
+				<ErrorNotice message={errorMessage} />
 				{transactionState.value.transactionInFlightCount > 0 ? (
 					<p className='notice success'>
 						<span className='spinner' aria-hidden='true' />
