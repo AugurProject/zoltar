@@ -4,7 +4,6 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
 import { EntityCard } from './EntityCard.js'
 import { ChildUniversesSection } from './ChildUniversesSection.js'
-import { LoadingText } from './LoadingText.js'
 import { LoadableValue } from './LoadableValue.js'
 import { Question } from './Question.js'
 import { MetricField } from './MetricField.js'
@@ -43,12 +42,25 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 		<EntityCard className='market-overview-card' title={rootUniverse === undefined ? 'Universe' : (currentUniverseName ?? 'Universe')} badge={rootUniverse === undefined ? undefined : <span className='badge ok'>{hasForked ? 'Forked' : 'Unforked'}</span>}>
 			{rootUniverse === undefined ? (
 				<p className='detail'>
-					<LoadingText>Loading universe data...</LoadingText>
+					<span className='loading-value' role='status' aria-label='Loading universe data'>
+						<span className='spinner' aria-hidden='true' />
+					</span>
 				</p>
 			) : (
 				<>
 					{hasForked ? (
-						<EntityCard title='Fork Question' badge={<span className='badge muted'>{rootUniverse.forkQuestionDetails?.marketType ?? <LoadingText>Loading...</LoadingText>}</span>}>
+						<EntityCard
+							title='Fork Question'
+							badge={
+								<span className='badge muted'>
+									{rootUniverse.forkQuestionDetails?.marketType ?? (
+										<span className='loading-value' role='status' aria-label='Loading fork question type'>
+											<span className='spinner' aria-hidden='true' />
+										</span>
+									)}
+								</span>
+							}
+						>
 							<Question question={rootUniverse.forkQuestionDetails} loading={rootUniverse.forkQuestionDetails === undefined} />
 						</EntityCard>
 					) : undefined}
