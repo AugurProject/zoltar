@@ -2,10 +2,10 @@ import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
 import { createSecurityPool, loadMarketDetails, originSecurityPoolExists } from '../contracts.js'
+import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { runLoadRequest } from '../lib/loadState.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultSecurityPoolFormState, parseBigIntInput } from '../lib/marketForm.js'
@@ -24,7 +24,8 @@ type UseSecurityPoolCreationParameters = {
 }
 
 export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, zoltarUniverseHasForked }: UseSecurityPoolCreationParameters) {
-	const loadingMarketDetails = useSignal(false)
+	const marketDetailsLoad = useLoadController()
+	const duplicateOriginPoolCheckLoad = useLoadController()
 	const marketDetails = useSignal<MarketDetails | undefined>(undefined)
 	const poolCreationMarketDetails = useSignal<MarketDetails | undefined>(undefined)
 	const securityPoolCreating = useSignal(false)
@@ -32,7 +33,6 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 	const securityPoolForm = useSignal<SecurityPoolFormState>(getDefaultSecurityPoolFormState())
 	const securityPoolResult = useSignal<SecurityPoolCreationResult | undefined>(undefined)
 	const duplicateOriginPoolExists = useSignal(false)
-	const checkingDuplicateOriginPool = useSignal(false)
 	const nextMarketDetailsLoad = useRequestGuard()
 	const nextDuplicateCheck = useRequestGuard()
 
@@ -41,7 +41,6 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		const securityMultiplierInput = securityPoolForm.value.securityMultiplier.trim()
 		if (marketId === '' || securityMultiplierInput === '') {
 			duplicateOriginPoolExists.value = false
-			checkingDuplicateOriginPool.value = false
 			return
 		}
 
@@ -52,25 +51,20 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 			securityMultiplier = parseBigIntInput(securityMultiplierInput, 'Security multiplier')
 		} catch {
 			duplicateOriginPoolExists.value = false
-			checkingDuplicateOriginPool.value = false
 			return
 		}
 
 		const isCurrent = nextDuplicateCheck()
-		checkingDuplicateOriginPool.value = true
-
-		try {
-			const exists = await originSecurityPoolExists(createConnectedReadClient(), questionId, securityMultiplier)
-			if (!isCurrent()) return
-			duplicateOriginPoolExists.value = exists
-		} catch {
-			if (!isCurrent()) return
-			duplicateOriginPoolExists.value = false
-		} finally {
-			if (isCurrent()) {
-				checkingDuplicateOriginPool.value = false
+		await duplicateOriginPoolCheckLoad.track(async () => {
+			try {
+				const exists = await originSecurityPoolExists(createConnectedReadClient(), questionId, securityMultiplier)
+				if (!isCurrent()) return
+				duplicateOriginPoolExists.value = exists
+			} catch {
+				if (!isCurrent()) return
+				duplicateOriginPoolExists.value = false
 			}
-		}
+		})
 	}
 
 	const loadMarketById = async (marketId: string) => {
@@ -80,11 +74,8 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		}
 
 		const isCurrent = nextMarketDetailsLoad()
-		await runLoadRequest({
+		await marketDetailsLoad.run({
 			isCurrent,
-			setLoading: value => {
-				loadingMarketDetails.value = value
-			},
 			onStart: () => {
 				securityPoolError.value = undefined
 			},
@@ -182,11 +173,11 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 	}, [securityPoolForm.value.marketId, securityPoolForm.value.securityMultiplier])
 
 	return {
-		checkingDuplicateOriginPool: checkingDuplicateOriginPool.value,
+		checkingDuplicateOriginPool: duplicateOriginPoolCheckLoad.isLoading.value,
 		duplicateOriginPoolExists: duplicateOriginPoolExists.value,
 		loadMarketById,
 		loadMarket,
-		loadingMarketDetails: loadingMarketDetails.value,
+		loadingMarketDetails: marketDetailsLoad.isLoading.value,
 		marketDetails: marketDetails.value,
 		securityPoolCreating: securityPoolCreating.value,
 		securityPoolError: securityPoolError.value,

@@ -10,6 +10,7 @@ import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
+import { useLoadController } from '../hooks/useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOracleFeePercentage, formatOpenOracleMultiplier, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSelectedReportActionMode, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import { loadOpenOracleReportSummaries } from '../contracts.js'
@@ -493,8 +494,8 @@ export function OpenOracleSection({
 	)
 	const [browsePage, setBrowsePage] = useState<OpenOracleReportSummaryPage | undefined>(undefined)
 	const [browseError, setBrowseError] = useState<string | undefined>(undefined)
-	const [loadingBrowse, setLoadingBrowse] = useState(false)
 	const [browsePageIndex, setBrowsePageIndex] = useState(0)
+	const browseLoad = useLoadController()
 	const isConnected = accountState.address !== undefined
 
 	useEffect(() => {
@@ -509,19 +510,20 @@ export function OpenOracleSection({
 		if (!shouldLoadBrowse) return undefined
 
 		const loadBrowseReports = async () => {
-			setLoadingBrowse(true)
-			setBrowseError(undefined)
-			try {
-				const page = await loadOpenOracleReportSummaries(createConnectedReadClient(), browsePageIndex, BROWSE_PAGE_SIZE)
-				if (cancelled) return
-				setBrowsePage(page)
-			} catch (error) {
-				if (cancelled) return
-				setBrowsePage(undefined)
-				setBrowseError(error instanceof Error ? error.message : 'Failed to load Open Oracle reports')
-			} finally {
-				if (!cancelled) setLoadingBrowse(false)
-			}
+			await browseLoad.run({
+				isCurrent: () => !cancelled,
+				onStart: () => {
+					setBrowseError(undefined)
+				},
+				load: async () => await loadOpenOracleReportSummaries(createConnectedReadClient(), browsePageIndex, BROWSE_PAGE_SIZE),
+				onSuccess: page => {
+					setBrowsePage(page)
+				},
+				onError: error => {
+					setBrowsePage(undefined)
+					setBrowseError(error instanceof Error ? error.message : 'Failed to load Open Oracle reports')
+				},
+			})
 		}
 
 		void loadBrowseReports()
@@ -530,6 +532,7 @@ export function OpenOracleSection({
 		}
 	}, [browsePageIndex, openOracleResult?.action, openOracleResult?.hash, view])
 
+	const loadingBrowse = browseLoad.isLoading.value
 	const browseReportCount = browsePage?.reportCount ?? 0n
 	const browsePageCount = browsePage === undefined || browseReportCount === 0n ? 0 : Math.ceil(Number(browseReportCount) / BROWSE_PAGE_SIZE)
 	const browseHasPreviousPage = browsePageIndex > 0

@@ -1,12 +1,12 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { useFormState } from './useFormState.js'
+import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
 import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, loadErc20Allowance, loadOpenOracleReportDetails, settleOracleReport, submitInitialOracleReport } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOraclePriceInput, loadOpenOracleInitialReportPrice, OPEN_ORACLE_APPROVAL_AMOUNT } from '../lib/openOracle.js'
-import { runLoadRequest } from '../lib/loadState.js'
 import { requireDefined } from '../lib/required.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
@@ -19,8 +19,8 @@ type UseOpenOracleOperationsParameters = WriteOperationsParameters
 
 export function useOpenOracleOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters) {
 	const loadingOpenOracleCreate = useSignal(false)
-	const loadingOracleReport = useSignal(false)
-	const loadingOpenOracleInitialReportState = useSignal(false)
+	const oracleReportLoad = useLoadController()
+	const openOracleInitialReportStateLoad = useLoadController()
 	const { state: openOracleCreateForm, setState: setOpenOracleCreateForm } = useFormState<OpenOracleCreateFormState>(getDefaultOpenOracleCreateFormState())
 	const openOracleError = useSignal<string | undefined>(undefined)
 	const { state: openOracleForm, setState: setOpenOracleForm } = useFormState<OpenOracleFormState>(getDefaultOpenOracleFormState())
@@ -37,9 +37,6 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		const currentDetails = details
 		const isCurrent = nextOpenOracleInitialReportStateLoad()
 		if (currentDetails === undefined) {
-			if (isCurrent()) {
-				loadingOpenOracleInitialReportState.value = false
-			}
 			openOracleInitialReportDefaultPrice.value = undefined
 			openOracleInitialReportDefaultPriceSource.value = undefined
 			openOracleInitialReportToken1Allowance.value = undefined
@@ -47,11 +44,8 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 			return
 		}
 
-		await runLoadRequest({
+		await openOracleInitialReportStateLoad.run({
 			isCurrent,
-			setLoading: value => {
-				loadingOpenOracleInitialReportState.value = value
-			},
 			onStart: () => {
 				openOracleInitialReportToken1Allowance.value = undefined
 				openOracleInitialReportToken2Allowance.value = undefined
@@ -86,10 +80,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 	}
 
 	const loadOracleReport = async (reportIdInput?: string) => {
-		await runLoadRequest({
-			setLoading: value => {
-				loadingOracleReport.value = value
-			},
+		await oracleReportLoad.run({
 			onStart: () => {
 				openOracleError.value = undefined
 			},
@@ -265,14 +256,14 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		loadOracleReport,
 		refreshPrice: () => void refreshOpenOracleInitialReportState(openOracleReportDetails.value),
 		loadingOpenOracleCreate: loadingOpenOracleCreate.value,
-		loadingOracleReport: loadingOracleReport.value,
+		loadingOracleReport: oracleReportLoad.isLoading.value,
 		openOracleCreateForm: openOracleCreateForm.value,
 		openOracleError: openOracleError.value,
 		openOracleForm: openOracleForm.value,
 		openOracleInitialReportState: {
 			defaultPrice: openOracleInitialReportDefaultPrice.value,
 			defaultPriceSource: openOracleInitialReportDefaultPriceSource.value,
-			loading: loadingOpenOracleInitialReportState.value,
+			loading: openOracleInitialReportStateLoad.isLoading.value,
 			token1Allowance: openOracleInitialReportToken1Allowance.value,
 			token1Decimals: openOracleReportDetails.value?.token1Decimals,
 			token2Allowance: openOracleInitialReportToken2Allowance.value,

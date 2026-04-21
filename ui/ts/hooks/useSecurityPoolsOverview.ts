@@ -1,9 +1,9 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { loadAllSecurityPools, loadOracleManagerDetails, queueSecurityPoolLiquidation } from '../contracts.js'
+import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { runLoadRequest } from '../lib/loadState.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
@@ -24,16 +24,13 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 	const liquidationManagerAddress = useSignal<Address | undefined>(undefined)
 	const liquidationSecurityPoolAddress = useSignal<Address | undefined>(undefined)
 	const liquidationModalOpen = useSignal(false)
-	const loadingSecurityPools = useSignal(false)
+	const securityPoolsLoad = useLoadController()
 	const securityPoolOverviewError = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewResult = useSignal<SecurityPoolOverviewActionResult | undefined>(undefined)
 	const securityPools = useSignal<ListedSecurityPool[]>([])
 
 	const loadSecurityPools = async () => {
-		await runLoadRequest({
-			setLoading: value => {
-				loadingSecurityPools.value = value
-			},
+		await securityPoolsLoad.run({
 			onStart: () => {
 				securityPoolOverviewError.value = undefined
 			},
@@ -86,7 +83,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 		liquidationModalOpen: liquidationModalOpen.value,
 		liquidationTargetVault: liquidationTargetVault.value,
 		liquidationSecurityPoolAddress: liquidationSecurityPoolAddress.value,
-		loadingSecurityPools: loadingSecurityPools.value,
+		loadingSecurityPools: securityPoolsLoad.isLoading.value,
 		closeLiquidationModal,
 		openLiquidationModal,
 		queueLiquidation,
