@@ -16,57 +16,33 @@ type SecurityPoolFactoryAddressInputs = {
 	zoltarQuestionData: Address
 }
 
-type InfraContractAddressInputs = {
-	getEscalationGameFactoryByteCode: () => Hex
-	getSecurityPoolFactoryByteCode: (inputs: SecurityPoolFactoryAddressInputs) => Hex
-	getSecurityPoolForkerByteCode: (zoltarAddress: Address) => Hex
-	getShareTokenFactoryByteCode: (zoltarAddress: Address) => Hex
-	openOracleBytecode: Hex
-	priceOracleManagerAndOperatorQueuerFactoryBytecode: Hex
-	proxyDeployerAddress: Address
-	scalarOutcomesBytecode: Hex
-	securityPoolUtilsBytecode: Hex
-	uniformPriceDualCapBatchAuctionFactoryBytecode: Hex
-	zeroSalt: Hex
-	zoltar: Address
-	zoltarQuestionData: Address
-}
-
-type DeploymentStatusOracleAddressInputs = {
-	deploymentStatusOracleBytecode: Hex
-	proxyDeployerAddress: Address
-	zeroSalt: Hex
-}
-
-type ZoltarAddressInputs = {
+type ZoltarAddressConfig = {
 	getZoltarInitCode: (zoltarQuestionDataAddress: Address) => Hex
 	proxyDeployerAddress: Address
-	zeroSalt: Hex
-	zoltarQuestionDataAddress: Address
-}
-
-type ZoltarQuestionDataAddressInputs = {
-	proxyDeployerAddress: Address
-	zeroSalt: Hex
-	zoltarQuestionDataBytecode: Hex
-}
-
-type DeploymentAddressConfig = {
-	deploymentStatusOracleBytecode: () => Hex
-	getEscalationGameFactoryByteCode: () => Hex
-	getSecurityPoolFactoryByteCode: (inputs: SecurityPoolFactoryAddressInputs) => Hex
-	getSecurityPoolForkerByteCode: (zoltarAddress: Address) => Hex
-	getShareTokenFactoryByteCode: (zoltarAddress: Address) => Hex
-	getZoltarInitCode: (zoltarQuestionDataAddress: Address) => Hex
-	libraryReplacements: () => readonly LibraryReplacement[]
-	openOracleBytecode: Hex
-	priceOracleManagerAndOperatorQueuerFactoryBytecode: Hex
-	proxyDeployerAddress: Address
-	scalarOutcomesBytecode: Hex
-	securityPoolUtilsBytecode: Hex
-	uniformPriceDualCapBatchAuctionFactoryBytecode: Hex
 	zeroSalt: Hex
 	zoltarQuestionDataBytecode: () => Hex
+}
+
+type InfraContractAddressConfig = {
+	getEscalationGameFactoryByteCode: () => Hex
+	getSecurityPoolFactoryByteCode: (inputs: SecurityPoolFactoryAddressInputs) => Hex
+	getSecurityPoolForkerByteCode: (zoltarAddress: Address) => Hex
+	getShareTokenFactoryByteCode: (zoltarAddress: Address) => Hex
+	openOracleBytecode: Hex
+	priceOracleManagerAndOperatorQueuerFactoryBytecode: Hex
+	proxyDeployerAddress: Address
+	scalarOutcomesBytecode: Hex
+	securityPoolUtilsBytecode: Hex
+	uniformPriceDualCapBatchAuctionFactoryBytecode: Hex
+	zeroSalt: Hex
+	getZoltarAddress: () => Address
+	getZoltarQuestionDataAddress: () => Address
+}
+
+type DeploymentStatusOracleAddressConfig = {
+	deploymentStatusOracleBytecode: () => Hex
+	proxyDeployerAddress: Address
+	zeroSalt: Hex
 }
 
 export type InfraContractAddresses = {
@@ -99,112 +75,71 @@ export function applyLinkedLibraries(bytecode: string, replacements: readonly Li
 	return `0x${updatedBytecode}`
 }
 
-function getZoltarQuestionDataAddressBase({ proxyDeployerAddress, zeroSalt, zoltarQuestionDataBytecode }: ZoltarQuestionDataAddressInputs): Address {
-	return getProxyDeployerCreate2Address(proxyDeployerAddress, zeroSalt, zoltarQuestionDataBytecode)
-}
-
-function getZoltarAddressBase({ getZoltarInitCode, proxyDeployerAddress, zeroSalt, zoltarQuestionDataAddress }: ZoltarAddressInputs): Address {
-	return getProxyDeployerCreate2Address(proxyDeployerAddress, zeroSalt, getZoltarInitCode(zoltarQuestionDataAddress))
-}
-
-function getInfraContractAddressesBase({
-	getEscalationGameFactoryByteCode,
-	getSecurityPoolFactoryByteCode,
-	getSecurityPoolForkerByteCode,
-	getShareTokenFactoryByteCode,
-	openOracleBytecode,
-	priceOracleManagerAndOperatorQueuerFactoryBytecode,
-	proxyDeployerAddress,
-	scalarOutcomesBytecode,
-	securityPoolUtilsBytecode,
-	uniformPriceDualCapBatchAuctionFactoryBytecode,
-	zeroSalt,
-	zoltar,
-	zoltarQuestionData,
-}: InfraContractAddressInputs): InfraContractAddresses {
-	const addresses = {
-		securityPoolUtils: getProxyDeployerCreate2Address(proxyDeployerAddress, zeroSalt, securityPoolUtilsBytecode),
-		openOracle: getProxyDeployerCreate2Address(proxyDeployerAddress, zeroSalt, openOracleBytecode),
-		zoltarQuestionData,
-		zoltar,
-		shareTokenFactory: getProxyDeployerCreate2Address(proxyDeployerAddress, zeroSalt, getShareTokenFactoryByteCode(zoltar)),
-		priceOracleManagerAndOperatorQueuerFactory: getProxyDeployerCreate2Address(proxyDeployerAddress, zeroSalt, priceOracleManagerAndOperatorQueuerFactoryBytecode),
-		securityPoolForker: getProxyDeployerCreate2Address(proxyDeployerAddress, zeroSalt, getSecurityPoolForkerByteCode(zoltar)),
-		escalationGameFactory: getProxyDeployerCreate2Address(proxyDeployerAddress, zeroSalt, getEscalationGameFactoryByteCode()),
-		scalarOutcomes: getProxyDeployerCreate2Address(proxyDeployerAddress, zeroSalt, scalarOutcomesBytecode),
-		uniformPriceDualCapBatchAuctionFactory: getProxyDeployerCreate2Address(proxyDeployerAddress, zeroSalt, uniformPriceDualCapBatchAuctionFactoryBytecode),
-	}
+export function createApplyLinkedLibrariesHelper(libraryReplacements: () => readonly LibraryReplacement[]) {
+	const applyLibraries = (bytecode: string) => applyLinkedLibraries(bytecode, libraryReplacements())
 
 	return {
-		...addresses,
-		securityPoolFactory: getProxyDeployerCreate2Address(
-			proxyDeployerAddress,
-			zeroSalt,
-			getSecurityPoolFactoryByteCode({
-				escalationGameFactory: addresses.escalationGameFactory,
-				openOracle: addresses.openOracle,
-				priceOracleManagerAndOperatorQueuerFactory: addresses.priceOracleManagerAndOperatorQueuerFactory,
-				securityPoolForker: addresses.securityPoolForker,
-				shareTokenFactory: addresses.shareTokenFactory,
-				uniformPriceDualCapBatchAuctionFactory: addresses.uniformPriceDualCapBatchAuctionFactory,
-				zoltar: addresses.zoltar,
-				zoltarQuestionData: addresses.zoltarQuestionData,
-			}),
-		),
+		applyLibraries,
 	}
 }
 
-function getDeploymentStatusOracleAddressBase({ deploymentStatusOracleBytecode, proxyDeployerAddress, zeroSalt }: DeploymentStatusOracleAddressInputs): Address {
-	return getProxyDeployerCreate2Address(proxyDeployerAddress, zeroSalt, deploymentStatusOracleBytecode)
-}
-
-export function createDeploymentAddressHelpers(config: DeploymentAddressConfig) {
-	const applyLinkedLibrariesToBytecode = (bytecode: string) => applyLinkedLibraries(bytecode, config.libraryReplacements())
-
+export function createZoltarAddressHelpers(config: ZoltarAddressConfig) {
 	const getZoltarQuestionDataAddress = () =>
-		getZoltarQuestionDataAddressBase({
-			proxyDeployerAddress: config.proxyDeployerAddress,
-			zeroSalt: config.zeroSalt,
-			zoltarQuestionDataBytecode: config.zoltarQuestionDataBytecode(),
-		})
+		getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.zoltarQuestionDataBytecode())
 
 	const getZoltarAddress = () =>
-		getZoltarAddressBase({
-			getZoltarInitCode: config.getZoltarInitCode,
-			proxyDeployerAddress: config.proxyDeployerAddress,
-			zeroSalt: config.zeroSalt,
-			zoltarQuestionDataAddress: getZoltarQuestionDataAddress(),
-		})
-
-	const getInfraContractAddresses = () =>
-		getInfraContractAddressesBase({
-			getEscalationGameFactoryByteCode: config.getEscalationGameFactoryByteCode,
-			getSecurityPoolFactoryByteCode: config.getSecurityPoolFactoryByteCode,
-			getSecurityPoolForkerByteCode: config.getSecurityPoolForkerByteCode,
-			getShareTokenFactoryByteCode: config.getShareTokenFactoryByteCode,
-			openOracleBytecode: config.openOracleBytecode,
-			priceOracleManagerAndOperatorQueuerFactoryBytecode: config.priceOracleManagerAndOperatorQueuerFactoryBytecode,
-			proxyDeployerAddress: config.proxyDeployerAddress,
-			scalarOutcomesBytecode: config.scalarOutcomesBytecode,
-			securityPoolUtilsBytecode: config.securityPoolUtilsBytecode,
-			uniformPriceDualCapBatchAuctionFactoryBytecode: config.uniformPriceDualCapBatchAuctionFactoryBytecode,
-			zeroSalt: config.zeroSalt,
-			zoltar: getZoltarAddress(),
-			zoltarQuestionData: getZoltarQuestionDataAddress(),
-		})
-
-	const getDeploymentStatusOracleAddress = () =>
-		getDeploymentStatusOracleAddressBase({
-			deploymentStatusOracleBytecode: config.deploymentStatusOracleBytecode(),
-			proxyDeployerAddress: config.proxyDeployerAddress,
-			zeroSalt: config.zeroSalt,
-		})
+		getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getZoltarInitCode(getZoltarQuestionDataAddress()))
 
 	return {
-		applyLinkedLibraries: applyLinkedLibrariesToBytecode,
-		getDeploymentStatusOracleAddress,
-		getInfraContractAddresses,
 		getZoltarAddress,
 		getZoltarQuestionDataAddress,
+	}
+}
+
+export function createInfraContractAddressHelper(config: InfraContractAddressConfig) {
+	const getInfraContractAddresses = (): InfraContractAddresses => {
+		const addresses = {
+			securityPoolUtils: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolUtilsBytecode),
+			openOracle: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.openOracleBytecode),
+			zoltarQuestionData: config.getZoltarQuestionDataAddress(),
+			zoltar: config.getZoltarAddress(),
+			shareTokenFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getShareTokenFactoryByteCode(config.getZoltarAddress())),
+			priceOracleManagerAndOperatorQueuerFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.priceOracleManagerAndOperatorQueuerFactoryBytecode),
+			securityPoolForker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getSecurityPoolForkerByteCode(config.getZoltarAddress())),
+			escalationGameFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getEscalationGameFactoryByteCode()),
+			scalarOutcomes: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.scalarOutcomesBytecode),
+			uniformPriceDualCapBatchAuctionFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.uniformPriceDualCapBatchAuctionFactoryBytecode),
+		}
+
+		return {
+			...addresses,
+			securityPoolFactory: getProxyDeployerCreate2Address(
+				config.proxyDeployerAddress,
+				config.zeroSalt,
+				config.getSecurityPoolFactoryByteCode({
+					escalationGameFactory: addresses.escalationGameFactory,
+					openOracle: addresses.openOracle,
+					priceOracleManagerAndOperatorQueuerFactory: addresses.priceOracleManagerAndOperatorQueuerFactory,
+					securityPoolForker: addresses.securityPoolForker,
+					shareTokenFactory: addresses.shareTokenFactory,
+					uniformPriceDualCapBatchAuctionFactory: addresses.uniformPriceDualCapBatchAuctionFactory,
+					zoltar: addresses.zoltar,
+					zoltarQuestionData: addresses.zoltarQuestionData,
+				}),
+			),
+		}
+	}
+
+	return {
+		getInfraContractAddresses,
+	}
+}
+
+export function createDeploymentStatusOracleAddressHelper(config: DeploymentStatusOracleAddressConfig) {
+	const getDeploymentStatusOracleAddress = () =>
+		getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.deploymentStatusOracleBytecode())
+
+	return {
+		getDeploymentStatusOracleAddress,
 	}
 }

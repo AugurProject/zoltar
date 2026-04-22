@@ -1,15 +1,15 @@
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
-import { createAddressDerivationHelpers } from '../../../../../../shared/js/addressDerivation.js'
-import { createDeploymentAddressHelpers } from '../../../../../../shared/js/deploymentAddresses.js'
+import { createRepTokenAddressHelper } from '../../../../../../shared/js/addressDerivation.js'
+import { createZoltarAddressHelpers } from '../../../../../../shared/js/deploymentAddresses.js'
 import { ReadClient, WriteClient, writeContractAndWait } from '../viem'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
-import { encodeDeployData, getAddress, toHex } from 'viem'
+import { encodeDeployData, getAddress, type Address, type Hex, toHex } from 'viem'
 import { addressString } from '../bigint'
 import { ensureProxyDeployerDeployed } from '../utilities'
 
-const ZERO_SALT = toHex(0, { size: 32 })
+const ZERO_SALT: Hex = toHex(0, { size: 32 })
 
-function getZoltarInitCode(zoltarQuestionDataAddress: `0x${string}`): `0x${string}` {
+function getZoltarInitCode(zoltarQuestionDataAddress: Address): Hex {
 	return encodeDeployData({
 		abi: Zoltar_Zoltar.abi,
 		bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
@@ -17,74 +17,39 @@ function getZoltarInitCode(zoltarQuestionDataAddress: `0x${string}`): `0x${strin
 	})
 }
 
-const deploymentAddressHelpers = createDeploymentAddressHelpers({
-	deploymentStatusOracleBytecode: () => {
-		throw new Error('deploymentStatusOracleBytecode is not available in zoltar helper')
-	},
-	getEscalationGameFactoryByteCode: () => {
-		throw new Error('getEscalationGameFactoryByteCode is not available in zoltar helper')
-	},
-	getSecurityPoolFactoryByteCode: () => {
-		throw new Error('getSecurityPoolFactoryByteCode is not available in zoltar helper')
-	},
-	getSecurityPoolForkerByteCode: () => {
-		throw new Error('getSecurityPoolForkerByteCode is not available in zoltar helper')
-	},
-	getShareTokenFactoryByteCode: () => {
-		throw new Error('getShareTokenFactoryByteCode is not available in zoltar helper')
-	},
+export const { getZoltarAddress } = createZoltarAddressHelpers({
 	getZoltarInitCode,
-	libraryReplacements: () => [],
-	openOracleBytecode: '0x',
-	priceOracleManagerAndOperatorQueuerFactoryBytecode: '0x',
 	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
-	scalarOutcomesBytecode: '0x',
-	securityPoolUtilsBytecode: '0x',
-	uniformPriceDualCapBatchAuctionFactoryBytecode: '0x',
 	zeroSalt: ZERO_SALT,
 	zoltarQuestionDataBytecode: () => `0x${ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object}`,
 })
 
-export const { getZoltarAddress } = deploymentAddressHelpers
-const { getZoltarQuestionDataAddress } = deploymentAddressHelpers
+const { getZoltarQuestionDataAddress } = createZoltarAddressHelpers({
+	getZoltarInitCode,
+	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
+	zeroSalt: ZERO_SALT,
+	zoltarQuestionDataBytecode: () => `0x${ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object}`,
+})
 
-export const { getRepTokenAddress } = createAddressDerivationHelpers({
+export const { getRepTokenAddress } = createRepTokenAddressHelper({
 	genesisRepTokenAddress: getAddress(addressString(GENESIS_REPUTATION_TOKEN)),
-	getEscalationGameInitCode: () => {
-		throw new Error('getEscalationGameInitCode is not available in zoltar helper')
-	},
-	getInfraContracts: () => {
-		throw new Error('getInfraContracts is not available in zoltar helper')
-	},
-	getPriceOracleManagerAndOperatorQueuerInitCode: () => {
-		throw new Error('getPriceOracleManagerAndOperatorQueuerInitCode is not available in zoltar helper')
-	},
 	getReputationTokenInitCode: zoltarAddress =>
 		encodeDeployData({
 			abi: ReputationToken_ReputationToken.abi,
 			bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
 			args: [zoltarAddress],
 		}),
-	getSecurityPoolInitCode: () => {
-		throw new Error('getSecurityPoolInitCode is not available in zoltar helper')
-	},
-	getShareTokenInitCode: () => {
-		throw new Error('getShareTokenInitCode is not available in zoltar helper')
-	},
-	getTruthAuctionInitCode: () => {
-		throw new Error('getTruthAuctionInitCode is not available in zoltar helper')
-	},
-	getZoltarAddress: () => getZoltarAddress(),
+	getZoltarAddress,
 })
 
 const isZoltarQuestionDataDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${string}` = `0x${ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object}`
+	const expectedDeployedBytecode: Hex = `0x${ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object}`
 	const address = getZoltarQuestionDataAddress()
 	const deployedBytecode = await client.getCode({ address })
 	return deployedBytecode === expectedDeployedBytecode
 }
 
-const deployZoltarQuestionDataTransaction = (): { data: `0x${string}`; to: `0x${string}` } => ({
+const deployZoltarQuestionDataTransaction = (): { data: Hex; to: Address } => ({
 	data: `0x${ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object}`,
 	to: addressString(PROXY_DEPLOYER_ADDRESS),
 })
@@ -97,7 +62,7 @@ const ensureZoltarQuestionDataDeployed = async (client: WriteClient) => {
 }
 
 export const isZoltarDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: `0x${string}` = `0x${Zoltar_Zoltar.evm.deployedBytecode.object}`
+	const expectedDeployedBytecode: Hex = `0x${Zoltar_Zoltar.evm.deployedBytecode.object}`
 	const address = getZoltarAddress()
 	const deployedBytecode = await client.getCode({ address })
 	return deployedBytecode === expectedDeployedBytecode
@@ -156,7 +121,7 @@ export const splitMigrationRep = async (client: WriteClient, universeId: bigint,
 	)
 }
 
-export async function getTotalTheoreticalSupply(client: ReadClient, repToken: `0x${string}`) {
+export async function getTotalTheoreticalSupply(client: ReadClient, repToken: Address) {
 	return await client.readContract({
 		abi: ReputationToken_ReputationToken.abi,
 		functionName: 'getTotalTheoreticalSupply',
@@ -183,7 +148,7 @@ export const deployChild = async (client: WriteClient, universeId: bigint, outco
 		}),
 	)
 
-export const getMigrationRepBalance = async (client: ReadClient, universeId: bigint, address: `0x${string}`) => {
+export const getMigrationRepBalance = async (client: ReadClient, universeId: bigint, address: Address) => {
 	const repBalance = await client.readContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'getMigrationRepBalance',

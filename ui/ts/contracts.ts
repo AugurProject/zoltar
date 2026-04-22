@@ -1,7 +1,7 @@
 import { encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, parseAbiItem, toHex, zeroAddress, RpcError, type Address, type Hash, type Hex } from 'viem'
 import { ABIS } from './abis.js'
-import { createAddressDerivationHelpers } from '../../shared/js/addressDerivation.js'
-import { createDeploymentAddressHelpers } from '../../shared/js/deploymentAddresses.js'
+import { createRepTokenAddressHelper, createSecurityPoolAddressHelper } from '../../shared/js/addressDerivation.js'
+import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '../../shared/js/deploymentAddresses.js'
 import { assertNever } from './lib/assert.js'
 import { GENESIS_REPUTATION_TOKEN_ADDRESS } from './lib/universe.js'
 import {
@@ -250,23 +250,31 @@ function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracl
 	}
 }
 
-const deploymentAddressHelpers = createDeploymentAddressHelpers({
-	deploymentStatusOracleBytecode: getDeploymentStatusOracleByteCode,
+const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [
+	{
+		hash: keccak256(toHex('contracts/ScalarOutcomes.sol:ScalarOutcomes')).slice(2, 36),
+		address: getScalarOutcomesAddress(),
+	},
+	{
+		hash: keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36),
+		address: getSecurityPoolUtilsAddress(),
+	},
+])
+
+export const { getZoltarAddress, getZoltarQuestionDataAddress } = createZoltarAddressHelpers({
+	getZoltarInitCode,
+	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
+	zeroSalt: ZERO_SALT,
+	zoltarQuestionDataBytecode: getZoltarQuestionDataByteCode,
+})
+
+const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	getEscalationGameFactoryByteCode,
 	getSecurityPoolFactoryByteCode,
 	getSecurityPoolForkerByteCode,
 	getShareTokenFactoryByteCode,
-	getZoltarInitCode,
-	libraryReplacements: () => [
-		{
-			hash: keccak256(toHex('contracts/ScalarOutcomes.sol:ScalarOutcomes')).slice(2, 36),
-			address: getScalarOutcomesAddress(),
-		},
-		{
-			hash: keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36),
-			address: getSecurityPoolUtilsAddress(),
-		},
-	],
+	getZoltarAddress,
+	getZoltarQuestionDataAddress,
 	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
 	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
@@ -274,14 +282,26 @@ const deploymentAddressHelpers = createDeploymentAddressHelpers({
 	securityPoolUtilsBytecode: `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
 	uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
 	zeroSalt: ZERO_SALT,
-	zoltarQuestionDataBytecode: getZoltarQuestionDataByteCode,
 })
 
-export const { getZoltarAddress } = deploymentAddressHelpers
-const { applyLinkedLibraries: applyLibraries, getDeploymentStatusOracleAddress, getInfraContractAddresses } = deploymentAddressHelpers
+const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddressHelper({
+	deploymentStatusOracleBytecode: getDeploymentStatusOracleByteCode,
+	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
+	zeroSalt: ZERO_SALT,
+})
 
-const { getSecurityPoolAddresses } = createAddressDerivationHelpers({
+const { getRepTokenAddress } = createRepTokenAddressHelper({
 	genesisRepTokenAddress: GENESIS_REPUTATION_TOKEN_ADDRESS,
+	getReputationTokenInitCode: zoltarAddress =>
+		encodeDeployData({
+			abi: ReputationToken_ReputationToken.abi,
+			bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
+			args: [zoltarAddress],
+		}),
+	getZoltarAddress,
+})
+
+const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 	getEscalationGameInitCode: securityPool =>
 		encodeDeployData({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -295,12 +315,7 @@ const { getSecurityPoolAddresses } = createAddressDerivationHelpers({
 			bytecode: `0x${peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.evm.bytecode.object}`,
 			args: [openOracle, repToken],
 		}),
-	getReputationTokenInitCode: zoltarAddress =>
-		encodeDeployData({
-			abi: ReputationToken_ReputationToken.abi,
-			bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
-			args: [zoltarAddress],
-		}),
+	getRepTokenAddress,
 	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, securityMultiplier, securityPoolFactory, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
 		encodeDeployData({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -319,7 +334,6 @@ const { getSecurityPoolAddresses } = createAddressDerivationHelpers({
 			bytecode: `0x${peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.evm.bytecode.object}`,
 			args: [securityPoolForker],
 		}),
-	getZoltarAddress: () => getZoltarAddress(),
 })
 
 async function deployViaProxy(client: WriteClient, bytecode: Hex) {
