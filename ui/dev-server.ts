@@ -4,8 +4,20 @@ import * as path from 'node:path'
 import * as url from 'node:url'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const rootDirectory = directoryOfThisFile
+const uiRootDirectory = directoryOfThisFile
+const repositoryRootDirectory = path.resolve(uiRootDirectory, '..')
 const liveReloadClients = new Set()
+
+const getServedFilePath = requestPath => {
+	const urlPath = requestPath.endsWith('/') ? `${ requestPath }index.html` : requestPath
+	const relativeFilePath = decodeURI(urlPath).replace(/^\/+/, '')
+	const baseDirectory = relativeFilePath.startsWith('shared/') ? repositoryRootDirectory : uiRootDirectory
+	const filePath = path.resolve(baseDirectory, relativeFilePath)
+	if (filePath !== baseDirectory && !filePath.startsWith(`${ baseDirectory }${ path.sep }`)) {
+		return undefined
+	}
+	return filePath
+}
 
 const sendLiveReloadEvent = reason => {
 	for (const client of liveReloadClients) {
@@ -47,10 +59,8 @@ server.on('request', async (request, response) => {
 			response.end()
 			return
 		}
-		const urlPath = requestPath.endsWith('/') ? `${ requestPath }index.html` : requestPath
-		const relativeFilePath = decodeURI(urlPath).replace(/^\/+/, '')
-		const filePath = path.resolve(rootDirectory, relativeFilePath)
-		if (!filePath.startsWith(rootDirectory)) {
+		const filePath = getServedFilePath(requestPath)
+		if (filePath === undefined) {
 			response.writeHead(403)
 			response.end()
 			return
