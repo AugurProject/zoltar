@@ -141,6 +141,10 @@ export function SecurityVaultSection({
 					</MetricField>
 				</div>
 			)}
+			<label className='field'>
+				<span>Selected Vault Address</span>
+				<input value={normalizedSecurityVaultForm.selectedVaultAddress} onInput={event => onSecurityVaultFormChange({ selectedVaultAddress: event.currentTarget.value })} placeholder='0x...' />
+			</label>
 			{showSecurityPoolAddressInput ? (
 				<label className='field'>
 					<span>Security Pool Address</span>
