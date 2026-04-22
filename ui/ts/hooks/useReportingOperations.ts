@@ -42,7 +42,10 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 	const runReportingAction = async (action: (walletAddress: Address, securityPoolAddress: Address, currentForm: ReportingFormState) => Promise<ReportingActionResult>, errorFallback: string) => {
 		const currentForm = reportingForm.value
 		await runWriteAction(
-			buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, reportingError, 'Connect a wallet before reporting on a market'),
+			{
+				...buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, reportingError, 'Connect a wallet before reporting on a market'),
+				refreshErrorFallback: 'Reporting transaction succeeded, but refreshing reporting details failed',
+			},
 			async walletAddress => {
 				reportingResult.value = undefined
 				const securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')

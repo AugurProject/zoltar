@@ -263,7 +263,11 @@ function renderReportDetailsCard(
 		defaultPrice: openOracleInitialReportState.defaultPrice,
 		defaultPriceSource: openOracleInitialReportState.defaultPriceSource,
 		priceInput: openOracleForm.price,
+		quoteAttemptedSources: openOracleInitialReportState.quoteAttemptedSources,
+		quoteFailureReason: openOracleInitialReportState.quoteFailureReason,
 		reportDetails: openOracleReportDetails,
+		token1AllowanceError: openOracleInitialReportState.token1AllowanceError,
+		token2AllowanceError: openOracleInitialReportState.token2AllowanceError,
 		token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
 		token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
 	})
