@@ -24,6 +24,10 @@ type JsonRpcSuccess = {
 	error?: { code: number; message: string; data?: unknown }
 }
 
+type RpcBlock = {
+	readonly timestamp?: string
+}
+
 function hasJsonRpcBaseFields(value: unknown): value is { jsonrpc: string; id: number | string } {
 	return typeof value === 'object' && value !== null && 'jsonrpc' in value && 'id' in value && typeof value.jsonrpc === 'string' && (typeof value.id === 'number' || typeof value.id === 'string')
 }
@@ -54,6 +58,17 @@ function parseSnapshotId(value: unknown) {
 		throw new Error('Invalid anvil_snapshot response: expected string snapshot id')
 	}
 	return value
+}
+
+function parseBlockTimestamp(value: unknown): bigint | undefined {
+	if (typeof value !== 'object' || value === null || !('timestamp' in value)) {
+		return undefined
+	}
+	const { timestamp } = value as RpcBlock
+	if (typeof timestamp !== 'string') {
+		return undefined
+	}
+	return BigInt(timestamp)
 }
 
 export interface AnvilWindowEthereum {
@@ -113,6 +128,10 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				throw simulationError
 			}
 
+			const latestBlockTimestamp = parseBlockTimestamp(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
+			if (latestBlockTimestamp !== undefined) {
+				currentTimestamp = latestBlockTimestamp
+			}
 			nextBlockTimestamp = currentTimestamp + 1n
 			await request({
 				method: 'evm_setNextBlockTimestamp',
@@ -278,8 +297,9 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 	const resetToCleanState = async (): Promise<void> => {
 		await request({ method: 'anvil_reset', params: [] })
 		await request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
-		currentTimestamp = 0n
-		snapshotTimestamp = 0n
+		const latestBlockTimestamp = parseBlockTimestamp(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
+		currentTimestamp = latestBlockTimestamp ?? 0n
+		snapshotTimestamp = currentTimestamp
 	}
 
 	const setNextBlockBaseFeePerGasToZero = async (): Promise<void> => {

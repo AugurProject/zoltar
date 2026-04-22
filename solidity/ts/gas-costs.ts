@@ -1,4 +1,5 @@
 import { zeroAddress } from 'viem'
+import type { Hash } from 'viem'
 import { Zoltar_Zoltar } from './types/contractArtifact'
 import { getMockedEthSimulateWindowEthereum } from './testsuite/simulator/AnvilWindowEthereum'
 import { submitBid, refundLosingBids } from './testsuite/simulator/utils/contracts/auction'
@@ -71,13 +72,13 @@ const bob = createWriteClient(anvil, TEST_ADDRESSES[1], 0)
 const carol = createWriteClient(anvil, TEST_ADDRESSES[2], 0)
 const dave = createWriteClient(anvil, TEST_ADDRESSES[3], 0)
 
-const waitForGas = async (client: WriteClient, txHashPromise: Promise<`0x${string}`>) => {
+const waitForGas = async (client: WriteClient, txHashPromise: Promise<Hash>) => {
 	const hash = await txHashPromise
 	const receipt = await client.waitForTransactionReceipt({ hash })
 	return receipt.gasUsed
 }
 
-const confirmTx = async (client: WriteClient, txHashPromise: Promise<`0x${string}`>) => {
+const confirmTx = async (client: WriteClient, txHashPromise: Promise<Hash>) => {
 	const hash = await txHashPromise
 	await client.waitForTransactionReceipt({ hash })
 }

@@ -111,6 +111,7 @@ export type MarketDetails = QuestionData & {
 export type SecurityPoolCreationResult = {
 	deployPoolHash: Hash
 	questionId: string
+	securityPoolAddress: Address
 	securityMultiplier: bigint
 	universeId: bigint
 }

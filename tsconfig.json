@@ -28,6 +28,7 @@
 		"noEmit": true
 	},
 	"include": [
+		"shared/ts/**/*.ts",
 		"ui/ts/**/*.ts",
 		"ui/ts/**/*.tsx",
 	],

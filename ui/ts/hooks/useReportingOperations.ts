@@ -1,10 +1,10 @@
 import { useSignal } from '@preact/signals'
 import { useFormState } from './useFormState.js'
+import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
 import { loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { runLoadRequest } from '../lib/loadState.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput, resolveOptionalBigIntListInput } from '../lib/inputs.js'
 import { getDefaultReportingFormState, parseBigIntInput } from '../lib/marketForm.js'
@@ -14,17 +14,14 @@ import type { ReportingActionResult, ReportingDetails } from '../types/contracts
 type UseReportingOperationsParameters = WriteOperationsParameters
 
 export function useReportingOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseReportingOperationsParameters) {
-	const loadingReportingDetails = useSignal(false)
+	const reportingLoad = useLoadController()
 	const reportingDetails = useSignal<ReportingDetails | undefined>(undefined)
 	const reportingError = useSignal<string | undefined>(undefined)
 	const { state: reportingForm, setState: setReportingForm } = useFormState<ReportingFormState>(getDefaultReportingFormState())
 	const reportingResult = useSignal<ReportingActionResult | undefined>(undefined)
 
 	const loadReporting = async () => {
-		await runLoadRequest({
-			setLoading: value => {
-				loadingReportingDetails.value = value
-			},
+		await reportingLoad.run({
 			onStart: () => {
 				reportingError.value = undefined
 			},
@@ -81,7 +78,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		}, 'Failed to withdraw escalation deposits')
 
 	return {
-		loadingReportingDetails: loadingReportingDetails.value,
+		loadingReportingDetails: reportingLoad.isLoading.value,
 		loadReporting,
 		onReportOutcome: reportOutcome,
 		reportingDetails: reportingDetails.value,

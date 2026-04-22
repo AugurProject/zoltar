@@ -1,4 +1,6 @@
-export type AccountAddress = `0x${string}`
+import type { Address } from 'viem'
+
+export type AccountAddress = Address
 
 export enum QuestionOutcome {
 	Invalid,

@@ -12,3 +12,7 @@ export function isSelectedVaultOwnedByAccount(selectedVaultAddress: string | und
 	if (trimmedSelectedVaultAddress === '' || accountAddress === undefined) return false
 	return sameAddress(trimmedSelectedVaultAddress, accountAddress)
 }
+
+export function canManageSelectedVault(selectedVaultAddress: string | undefined, accountAddress: Address | undefined) {
+	return isSelectedVaultOwnedByAccount(selectedVaultAddress, accountAddress)
+}

@@ -42,7 +42,16 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 				/>
 			) : undefined}
 
-			{view === 'create' ? <SecurityPoolSection {...createPool} showHeader={false} /> : undefined}
+			{view === 'create' ? (
+				<SecurityPoolSection
+					{...createPool}
+					showHeader={false}
+					onOpenCreatedPool={securityPoolAddress => {
+						workflow.onSecurityPoolAddressChange(securityPoolAddress)
+						setView('operate')
+					}}
+				/>
+			) : undefined}
 
 			{view === 'operate' ? <SecurityPoolWorkflowSection {...workflow} showHeader={false} /> : undefined}
 		</section>

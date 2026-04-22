@@ -1,0 +1,26 @@
+{
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"rootDir": "ts",
+		"outDir": "js",
+		"sourceMap": false,
+		"inlineSources": false,
+		"declaration": true,
+		"declarationMap": false,
+		"noEmit": false,
+		"strict": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true,
+		"esModuleInterop": true,
+		"lib": ["ESNext", "DOM"],
+		"skipLibCheck": true,
+		"types": ["bun-types"]
+	},
+	"include": [
+		"./ts/**/*.ts"
+	]
+}

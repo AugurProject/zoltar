@@ -1,4 +1,5 @@
 import { createPublicClient, createWalletClient, custom, EIP1193Provider, http, publicActions } from 'viem'
+import type { Hash } from 'viem'
 import 'viem/window'
 import { addressString } from './bigint'
 import { mainnet } from 'viem/chains'
@@ -19,7 +20,7 @@ export const createWriteClient = (ethereum: EIP1193Provider | undefined | AnvilW
 export type WriteClient = ReturnType<typeof createWriteClient>
 export type ReadClient = ReturnType<typeof createReadClient> | ReturnType<typeof createWriteClient>
 
-export const writeContractAndWait = async (client: WriteClient, execute: () => Promise<`0x${string}`>) => {
+export const writeContractAndWait = async (client: WriteClient, execute: () => Promise<Hash>) => {
 	const hash = await execute()
 	await client.waitForTransactionReceipt({ hash })
 	return hash

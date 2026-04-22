@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { formatCurrencyInputBalance, formatRelativeTimestamp, formatRoundedCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
+import { formatCurrencyInputBalance, formatDuration, formatRelativeTimestamp, formatRoundedCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
 
 void describe('formatting helpers', () => {
 	void test('formatRoundedCurrencyBalance rounds positive balances without a decimal part when decimals are zero', () => {
@@ -34,16 +34,20 @@ void describe('formatting helpers', () => {
 			expect(formatRelativeTimestamp(1_000n, 1_000n)).toBe('now')
 		})
 
-		void test('formatRelativeTimestamp renders future values with an in-prefix', () => {
-			expect(formatRelativeTimestamp(1_001n, 1_000n)).toBe('in 1s')
+		void test('formatRelativeTimestamp renders sub-minute future values as less than a minute', () => {
+			expect(formatRelativeTimestamp(1_001n, 1_000n)).toBe('in less than a minute')
 		})
 
-		void test('formatRelativeTimestamp renders past values with an ago-suffix', () => {
-			expect(formatRelativeTimestamp(997n, 1_000n)).toBe('3s ago')
+		void test('formatRelativeTimestamp renders sub-minute past values as less than a minute ago', () => {
+			expect(formatRelativeTimestamp(997n, 1_000n)).toBe('less than a minute ago')
 		})
 
-		void test('formatRelativeTimestamp includes days, hours, minutes, and seconds', () => {
-			expect(formatRelativeTimestamp(90_061n, 0n)).toBe('in 1d 1h 1m 1s')
+		void test('formatRelativeTimestamp omits seconds for longer durations', () => {
+			expect(formatRelativeTimestamp(90_061n, 0n)).toBe('in 1d 1h 1m')
+		})
+
+		void test('formatDuration renders sub-minute values as less than a minute', () => {
+			expect(formatDuration(59n)).toBe('less than a minute')
 		})
 	})
 
