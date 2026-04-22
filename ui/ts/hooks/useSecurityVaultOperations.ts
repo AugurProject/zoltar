@@ -8,10 +8,9 @@ import { createConnectedReadClient, createWalletWriteClient } from '../lib/clien
 import { sameAddress } from '../lib/address.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
-import { parseBigIntInput } from '../lib/marketForm.js'
 import { getDefaultSecurityVaultFormState } from '../lib/marketForm.js'
 import { requireDefined } from '../lib/required.js'
-import { getSelectedVaultAddress } from '../lib/securityVault.js'
+import { getSelectedVaultAddress, parseSecurityVaultRepInputAmount } from '../lib/securityVault.js'
 import { runLoadRequest } from '../lib/loadState.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import type { SecurityVaultFormState, WriteOperationsParameters } from '../types/app.js'
@@ -120,7 +119,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 		await runVaultAction(
 			async (vaultAddress, securityPoolAddress) => {
 				const details = securityVaultDetails.value ?? (await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress))
-				const approvalAmount = amount ?? parseBigIntInput(securityVaultForm.value.depositAmount, 'REP deposit amount')
+				const approvalAmount = amount ?? parseSecurityVaultRepInputAmount(securityVaultForm.value.depositAmount, 'REP deposit amount')
 				return await approveErc20(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.repToken, securityPoolAddress, approvalAmount, 'approveRep')
 			},
 			'Failed to approve REP',
@@ -134,7 +133,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 
 	const depositRep = async () =>
 		await runVaultAction(
-			async (vaultAddress, securityPoolAddress) => await depositRepToSecurityPool(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, parseBigIntInput(securityVaultForm.value.depositAmount, 'REP deposit amount')),
+			async (vaultAddress, securityPoolAddress) => await depositRepToSecurityPool(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, parseSecurityVaultRepInputAmount(securityVaultForm.value.depositAmount, 'REP deposit amount')),
 			'Failed to deposit REP',
 			async (_result, securityPoolAddress, vaultAddress) => {
 				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
@@ -147,7 +146,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 	const setSecurityBondAllowance = async () =>
 		await runVaultAction(
 			async (vaultAddress, securityPoolAddress) => {
-				const amount = parseBigIntInput(securityVaultForm.value.securityBondAllowanceAmount, 'Security bond allowance')
+				const amount = parseSecurityVaultRepInputAmount(securityVaultForm.value.securityBondAllowanceAmount, 'Security bond allowance')
 				if (amount <= 0n) throw new Error('Security bond allowance must be greater than zero')
 				const details = securityVaultDetails.value ?? (await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress))
 				const managerDetails = await loadOracleManagerDetails(createConnectedReadClient(), details.managerAddress)
@@ -178,7 +177,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 	const withdrawRep = async () =>
 		await runVaultAction(
 			async (vaultAddress, securityPoolAddress) => {
-				const amount = parseBigIntInput(securityVaultForm.value.repWithdrawAmount, 'REP withdraw amount')
+				const amount = parseSecurityVaultRepInputAmount(securityVaultForm.value.repWithdrawAmount, 'REP withdraw amount')
 				if (amount <= 0n) throw new Error('REP withdraw amount must be greater than zero')
 
 				const details = securityVaultDetails.value ?? (await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress))

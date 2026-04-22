@@ -7,11 +7,10 @@ import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
-import { approvalShortage } from '../lib/inputs.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
+import { approvalShortage } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
-import { parseRepAmountInput } from '../lib/marketForm.js'
-import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
+import { formatSecurityVaultRepInputAmount, getSelectedVaultAddress, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT, parseSecurityVaultRepInputAmount } from '../lib/securityVault.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
 export function SecurityVaultSection({
@@ -48,14 +47,14 @@ export function SecurityVaultSection({
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddress, accountState.address)
 	const depositAmount = (() => {
 		try {
-			return parseRepAmountInput(normalizedSecurityVaultForm.depositAmount, 'REP deposit amount')
+			return parseSecurityVaultRepInputAmount(normalizedSecurityVaultForm.depositAmount, 'REP deposit amount')
 		} catch {
 			return undefined
 		}
 	})()
 	const securityBondAllowanceAmount = (() => {
 		try {
-			return parseRepAmountInput(normalizedSecurityVaultForm.securityBondAllowanceAmount, 'Security bond allowance')
+			return parseSecurityVaultRepInputAmount(normalizedSecurityVaultForm.securityBondAllowanceAmount, 'Security bond allowance')
 		} catch {
 			return undefined
 		}
@@ -64,6 +63,7 @@ export function SecurityVaultSection({
 	const approvedRep = securityVaultRepAllowance
 	const shortage = approvalShortage(depositAmount, approvedRep)
 	const withdrawableRepAmount = securityVaultDetails === undefined ? undefined : securityVaultDetails.repDepositShare > securityVaultDetails.lockedRepInEscalationGame ? securityVaultDetails.repDepositShare - securityVaultDetails.lockedRepInEscalationGame : 0n
+	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(securityVaultDetails?.repDepositShare, depositAmount)
 	const hasClaimableFees = securityVaultDetails !== undefined && securityVaultDetails.unpaidEthFees > 0n
 	const canClaimFees = selectedVaultIsOwnedByAccount && isMainnet && hasClaimableFees
 	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && approvedRep !== undefined && depositAmount !== undefined && depositAmount > 0n && approvedRep >= depositAmount
@@ -199,7 +199,7 @@ export function SecurityVaultSection({
 						type='button'
 						onClick={() => {
 							if (securityVaultRepBalance === undefined) return
-							const repAmount = securityVaultRepBalance.toString()
+							const repAmount = formatSecurityVaultRepInputAmount(securityVaultRepBalance)
 							onSecurityVaultFormChange({ depositAmount: repAmount })
 						}}
 						disabled={securityVaultRepBalance === undefined}
@@ -213,11 +213,15 @@ export function SecurityVaultSection({
 				<button className='secondary' title={approveButtonTitle} onClick={() => onApproveRep(shortage)} disabled={!canApproveRep}>
 					{approveButtonLabel}
 				</button>
-				<button className='primary' onClick={onDepositRep} disabled={!selectedVaultIsOwnedByAccount || accountState.address === undefined || !isMainnet || !hasSufficientDepositAllowance}>
+				<button className='primary' onClick={onDepositRep} disabled={!selectedVaultIsOwnedByAccount || accountState.address === undefined || !isMainnet || !hasSufficientDepositAllowance || isDepositBelowMinimum}>
 					Create / Deposit REP
 				</button>
 			</div>
-			{depositAmount === undefined ? undefined : shortage === undefined ? undefined : shortage > 0n ? (
+			{isDepositBelowMinimum ? (
+				<p className='detail'>
+					New vaults require at least <CurrencyValue value={MIN_SECURITY_VAULT_REP_DEPOSIT} suffix='REP' copyable={false} /> in the first deposit.
+				</p>
+			) : depositAmount === undefined ? undefined : shortage === undefined ? undefined : shortage > 0n ? (
 				<p className='detail'>Need {<CurrencyValue value={shortage} suffix='REP' copyable={false} />} more REP approved before depositing.</p>
 			) : (
 				<p className='detail'>No additional REP approval is needed for this deposit amount.</p>
@@ -249,7 +253,7 @@ export function SecurityVaultSection({
 						type='button'
 						onClick={() => {
 							if (withdrawableRepAmount === undefined) return
-							onSecurityVaultFormChange({ repWithdrawAmount: withdrawableRepAmount.toString() })
+							onSecurityVaultFormChange({ repWithdrawAmount: formatSecurityVaultRepInputAmount(withdrawableRepAmount) })
 						}}
 						disabled={withdrawableRepAmount === undefined}
 					>
