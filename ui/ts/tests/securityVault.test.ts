@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from 'viem'
 import { loadSecurityVaultDetails } from '../contracts.js'
-import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount } from '../lib/securityVault.js'
+import { canManageSelectedVault, getSelectedVaultAddress, isSelectedVaultOwnedByAccount } from '../lib/securityVault.js'
 
 void describe('security vault helpers', () => {
 	void test('defaults to the connected wallet vault when no explicit vault is selected', () => {
@@ -35,5 +35,12 @@ void describe('security vault helpers', () => {
 
 		await expect(loadSecurityVaultDetails(client, getAddress('0x00000000000000000000000000000000000000b1'), getAddress('0x00000000000000000000000000000000000000c1'))).resolves.toBeUndefined()
 		expect(readContractCalled).toBe(false)
+	})
+
+	void test('only allows management controls for the connected wallet vault', () => {
+		const accountAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		expect(canManageSelectedVault(accountAddress, accountAddress)).toBe(true)
+		expect(canManageSelectedVault(getAddress('0x00000000000000000000000000000000000000a2'), accountAddress)).toBe(false)
+		expect(canManageSelectedVault(undefined, accountAddress)).toBe(false)
 	})
 })

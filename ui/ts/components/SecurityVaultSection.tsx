@@ -11,7 +11,7 @@ import { approvalShortage } from '../lib/inputs.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
-import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
+import { canManageSelectedVault, getSelectedVaultAddress } from '../lib/securityVault.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
 export function SecurityVaultSection({
@@ -46,7 +46,7 @@ export function SecurityVaultSection({
 	}
 	const selectedVaultAddress = getSelectedVaultAddress(normalizedSecurityVaultForm.selectedVaultAddress, accountState.address)
 	const hasWithdrawAmount = normalizedSecurityVaultForm.repWithdrawAmount.trim() !== '' && normalizedSecurityVaultForm.repWithdrawAmount.trim() !== '0'
-	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddress, accountState.address)
+	const selectedVaultIsOwnedByAccount = canManageSelectedVault(selectedVaultAddress, accountState.address)
 	const depositAmount = (() => {
 		try {
 			return parseRepAmountInput(normalizedSecurityVaultForm.depositAmount, 'REP deposit amount')
@@ -151,11 +151,13 @@ export function SecurityVaultSection({
 				<button className='secondary' onClick={() => onLoadSecurityVault()} disabled={loadingSecurityVault}>
 					{loadingSecurityVault ? <LoadingText>Refreshing...</LoadingText> : 'Refresh'}
 				</button>
-				<button className='primary' onClick={onRedeemFees} disabled={!canClaimFees}>
-					Claim Fees
-				</button>
+				{selectedVaultIsOwnedByAccount ? (
+					<button className='primary' onClick={onRedeemFees} disabled={!canClaimFees}>
+						Claim Fees
+					</button>
+				) : undefined}
 			</div>
-			{selectedVaultIsOwnedByAccount ? undefined : <p className='detail'>Read-only vault. Refresh is available, but write actions are disabled.</p>}
+			{selectedVaultIsOwnedByAccount ? undefined : <p className='detail'>Read-only vault. Refresh is available, but write actions are hidden.</p>}
 		</div>
 	)
 
@@ -293,9 +295,9 @@ export function SecurityVaultSection({
 			<>
 				{vaultSummarySection}
 				{latestAction}
-				{vaultDepositSection}
-				{securityBondAllowanceSection}
-				{vaultRepSection}
+				{selectedVaultIsOwnedByAccount ? vaultDepositSection : undefined}
+				{selectedVaultIsOwnedByAccount ? securityBondAllowanceSection : undefined}
+				{selectedVaultIsOwnedByAccount ? vaultRepSection : undefined}
 				<ErrorNotice message={securityVaultError} />
 			</>
 		)
@@ -331,11 +333,13 @@ export function SecurityVaultSection({
 				</div>
 
 				<div className='market-column'>
-					<EntityCard title='Vault Actions'>
-						{vaultDepositSection}
-						{securityBondAllowanceSection}
-						{vaultRepSection}
-					</EntityCard>
+					{selectedVaultIsOwnedByAccount ? (
+						<EntityCard title='Vault Actions'>
+							{vaultDepositSection}
+							{securityBondAllowanceSection}
+							{vaultRepSection}
+						</EntityCard>
+					) : undefined}
 
 					<ErrorNotice message={securityVaultError} />
 				</div>

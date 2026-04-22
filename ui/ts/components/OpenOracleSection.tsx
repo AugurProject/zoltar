@@ -565,7 +565,9 @@ export function OpenOracleSection({
 							<p className='detail'>Browse every Open Oracle game and click a card to open its selected-report view.</p>
 							{loadingBrowse ? (
 								<p className='detail'>
-									<LoadingText>Loading report summaries...</LoadingText>
+									<span className='loading-value' role='status' aria-label='Loading report summaries'>
+										<span className='spinner' aria-hidden='true' />
+									</span>
 								</p>
 							) : undefined}
 							<ErrorNotice message={browseError} />

@@ -82,24 +82,23 @@ export function formatTimestamp(timestamp: bigint) {
 }
 
 function formatRelativeDuration(seconds: bigint) {
+	if (seconds < SECONDS_PER_MINUTE) {
+		return 'less than a minute'
+	}
+
 	const days = seconds / SECONDS_PER_DAY
 	const hours = (seconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR
 	const minutes = (seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE
-	const remainingSeconds = seconds % SECONDS_PER_MINUTE
 
 	if (days > 0n) {
-		return `${days}d ${hours}h ${minutes}m ${remainingSeconds}s`
+		return `${days}d ${hours}h ${minutes}m`
 	}
 
 	if (hours > 0n) {
-		return `${hours}h ${minutes}m ${remainingSeconds}s`
+		return `${hours}h ${minutes}m`
 	}
 
-	if (minutes > 0n) {
-		return `${minutes}m ${remainingSeconds}s`
-	}
-
-	return `${remainingSeconds}s`
+	return `${minutes}m`
 }
 
 export function formatRelativeTimestamp(timestamp: bigint, currentTimestamp: bigint = BigInt(Math.floor(Date.now() / MILLISECONDS_PER_SECOND))) {
@@ -111,6 +110,7 @@ export function formatRelativeTimestamp(timestamp: bigint, currentTimestamp: big
 
 export function formatDuration(seconds: bigint) {
 	if (seconds <= 0n) return '0m'
+	if (seconds < SECONDS_PER_MINUTE) return 'less than a minute'
 
 	const days = seconds / SECONDS_PER_DAY
 	const hours = (seconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR

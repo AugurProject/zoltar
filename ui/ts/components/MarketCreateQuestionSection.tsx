@@ -28,6 +28,7 @@ type MarketCreateQuestionSectionProps = {
 	marketError: string | undefined
 	marketForm: MarketFormState
 	marketResult: MarketCreationResult | undefined
+	loadingZoltarQuestions: boolean
 	onCreateMarket: () => void
 	onMarketFormChange: (update: Partial<MarketFormState>) => void
 	onOpenForkTab: () => void
@@ -49,7 +50,23 @@ function getScalarCreatePreviewDetails(marketForm: MarketFormState): ScalarCreat
 	}
 }
 
-export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainnet, marketCreating, marketError, marketForm, marketResult, onCreateMarket, onMarketFormChange, onOpenForkTab, onResetMarket, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestions }: MarketCreateQuestionSectionProps) {
+export function MarketCreateQuestionSection({
+	accountAddress,
+	hasForked,
+	isMainnet,
+	loadingZoltarQuestions,
+	marketCreating,
+	marketError,
+	marketForm,
+	marketResult,
+	onCreateMarket,
+	onMarketFormChange,
+	onOpenForkTab,
+	onResetMarket,
+	onUseQuestionForFork,
+	onUseQuestionForPool,
+	zoltarQuestions,
+}: MarketCreateQuestionSectionProps) {
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
 	const selectedQuestionDetails = useMemo(() => (marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)), [marketResult?.questionId, zoltarQuestions])
 	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(marketForm)
@@ -110,7 +127,17 @@ export function MarketCreateQuestionSection({ accountAddress, hasForked, isMainn
 					}
 				>
 					<div className='question-preview-body'>
-						{selectedQuestionDetails === undefined ? <p className='detail'>Question details are not loaded yet.</p> : <Question question={selectedQuestionDetails} showTitle={false} />}
+						{selectedQuestionDetails === undefined ? (
+							loadingZoltarQuestions ? (
+								<span className='loading-value' role='status' aria-label='Loading question details'>
+									<span className='spinner' aria-hidden='true' />
+								</span>
+							) : (
+								<p className='detail'>Question details are not loaded yet.</p>
+							)
+						) : (
+							<Question question={selectedQuestionDetails} showTitle={false} />
+						)}
 						<MetricField label='Creation transaction hash'>
 							<TransactionHashLink hash={marketResult.createQuestionHash} />
 						</MetricField>

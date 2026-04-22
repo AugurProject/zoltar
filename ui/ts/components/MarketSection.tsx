@@ -120,6 +120,7 @@ export function MarketSection({
 						accountAddress={accountState.address}
 						hasForked={hasForked}
 						isMainnet={isMainnet}
+						loadingZoltarQuestions={loadingZoltarQuestions}
 						marketCreating={marketCreating}
 						marketError={marketError}
 						marketForm={marketForm}
