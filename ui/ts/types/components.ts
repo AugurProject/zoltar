@@ -22,7 +22,7 @@ import type {
 	ZoltarMigrationActionResult,
 	ZoltarUniverseSummary,
 } from './contracts.js'
-import type { OpenOracleInitialReportPriceSource } from '../lib/openOracle.js'
+import type { OpenOracleInitialReportPriceSource, OpenOracleInitialReportQuoteFailureKind, OpenOracleInitialReportQuoteSource } from '../lib/openOracle.js'
 
 export type DeploymentSectionProps = {
 	title: string
@@ -257,9 +257,14 @@ export type OpenOracleRouteContentProps = {
 		defaultPrice: string | undefined
 		defaultPriceSource: OpenOracleInitialReportPriceSource | undefined
 		loading: boolean
+		quoteAttemptedSources: OpenOracleInitialReportQuoteSource[] | undefined
+		quoteFailureKind: OpenOracleInitialReportQuoteFailureKind | undefined
+		quoteFailureReason: string | undefined
 		token1Allowance: bigint | undefined
+		token1AllowanceError: string | undefined
 		token1Decimals: number | undefined
 		token2Allowance: bigint | undefined
+		token2AllowanceError: string | undefined
 		token2Decimals: number | undefined
 	}
 	openOracleCreateForm: OpenOracleCreateFormState

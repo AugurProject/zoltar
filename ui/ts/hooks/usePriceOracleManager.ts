@@ -45,6 +45,7 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 				onTransaction,
 				onTransactionFinished,
 				onTransactionRequested,
+				refreshErrorFallback: 'Price request succeeded, but refreshing price oracle details failed',
 				refreshState: async () => {
 					await loadPoolOracleManager(managerAddress)
 				},
