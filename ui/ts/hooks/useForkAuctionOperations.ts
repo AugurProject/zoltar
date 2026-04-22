@@ -1,5 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useFormState } from './useFormState.js'
+import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
 import {
 	claimSecurityPoolAuctionProceeds,
@@ -20,7 +21,6 @@ import {
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { getReportingOutcomeKey, parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, resolveOptionalAddressInput } from '../lib/inputs.js'
-import { runLoadRequest } from '../lib/loadState.js'
 import { requireDefined } from '../lib/required.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { getDefaultForkAuctionFormState, parseBigIntInput } from '../lib/marketForm.js'
@@ -34,13 +34,10 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 	const forkAuctionError = useSignal<string | undefined>(undefined)
 	const { state: forkAuctionForm, setState: setForkAuctionForm } = useFormState<ForkAuctionFormState>(getDefaultForkAuctionFormState())
 	const forkAuctionResult = useSignal<ForkAuctionActionResult | undefined>(undefined)
-	const loadingForkAuctionDetails = useSignal(false)
+	const forkAuctionLoad = useLoadController()
 
 	const loadForkAuction = async () => {
-		await runLoadRequest({
-			setLoading: value => {
-				loadingForkAuctionDetails.value = value
-			},
+		await forkAuctionLoad.run({
 			onStart: () => {
 				forkAuctionError.value = undefined
 			},
@@ -164,7 +161,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 		forkWithOwnEscalation,
 		initiateFork,
 		loadForkAuction,
-		loadingForkAuctionDetails: loadingForkAuctionDetails.value,
+		loadingForkAuctionDetails: forkAuctionLoad.isLoading.value,
 		migrateEscalation: migrateEscalation,
 		migrateRepToZoltar,
 		migrateVault,

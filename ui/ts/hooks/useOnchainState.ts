@@ -1,5 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
+import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot } from '../contracts.js'
 import { getInjectedEthereum } from '../injectedEthereum.js'
@@ -60,8 +61,8 @@ export function useOnchainState() {
 		})),
 	)
 	const hasInjectedWallet = useSignal(getInjectedEthereum() !== undefined)
-	const walletLoadCount = useSignal(0)
-	const deploymentStatusLoadCount = useSignal(0)
+	const walletStateLoad = useLoadController()
+	const deploymentStatusLoad = useLoadController()
 	const deploymentStatusesLoaded = useSignal(false)
 	const augurPlaceHolderDeployed = useSignal<boolean | undefined>(undefined)
 	const walletBootstrapComplete = useSignal(false)
@@ -82,66 +83,62 @@ export function useOnchainState() {
 		errorMessage.value = undefined
 
 		// Fire deployment status immediately — independent of wallet state
-		deploymentStatusLoadCount.value += 1
-		loadDeploymentStatusOracleSnapshot(createConnectedReadClient())
-			.then(snapshot => {
+		void deploymentStatusLoad.track(async () => {
+			try {
+				const snapshot = await loadDeploymentStatusOracleSnapshot(createConnectedReadClient())
 				if (!isCurrent()) return
 				augurPlaceHolderDeployed.value = snapshot.augurPlaceHolderDeployed
 				deploymentStatuses.value = snapshot.deploymentStatuses
 				deploymentStatusesLoaded.value = true
-			})
-			.catch(error => {
+			} catch (error) {
 				if (!isCurrent()) return
 				errorMessage.value = getErrorMessage(error, 'Failed to refresh deployment status')
-			})
-			.finally(() => {
-				deploymentStatusLoadCount.value = Math.max(0, deploymentStatusLoadCount.value - 1)
-			})
+			}
+		})
 
 		if (!shouldLoadWalletState) return
 
 		// Resolve connection state — address check completes bootstrap; balance/chainId load in background
-		walletLoadCount.value += 1
-		try {
-			const accountsResult = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' }).catch(() => [])
-			if (!isCurrent()) return
-			const accounts = Array.isArray(accountsResult) ? accountsResult : []
-			const connectedAddress = normalizeAccount(accounts[0])
-			accountState.value = {
-				address: connectedAddress,
-				chainId: accountState.value.chainId,
-				ethBalance: connectedAddress === accountState.value.address ? accountState.value.ethBalance : undefined,
-			}
+		await walletStateLoad.track(async () => {
+			try {
+				const accountsResult = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' }).catch(() => [])
+				if (!isCurrent()) return
+				const accounts = Array.isArray(accountsResult) ? accountsResult : []
+				const connectedAddress = normalizeAccount(accounts[0])
+				accountState.value = {
+					address: connectedAddress,
+					chainId: accountState.value.chainId,
+					ethBalance: connectedAddress === accountState.value.address ? accountState.value.ethBalance : undefined,
+				}
 
-			// Address is now known — unblock data loading regardless of wallet presence
-			walletBootstrapComplete.value = true
+				// Address is now known — unblock data loading regardless of wallet presence
+				walletBootstrapComplete.value = true
 
-			if (connectedAddress !== undefined && ethereum !== undefined) {
-				const chainIdPromise = ethereum.request({ method: 'eth_chainId' })
-				const balancePromise = createConnectedReadClient().getBalance({ address: connectedAddress })
-				await loadWalletState({
-					connectedAddress,
-					chainIdPromise,
-					balancePromise,
-					getAccountState: () => accountState.value,
-					isCurrent,
-					setAccountState: state => {
-						accountState.value = state
-					},
-					setErrorMessage: message => {
-						errorMessage.value = message
-					},
-				})
-			} else {
-				accountState.value = { ...accountState.value, chainId: MAINNET_CHAIN_ID }
+				if (connectedAddress !== undefined && ethereum !== undefined) {
+					const chainIdPromise = ethereum.request({ method: 'eth_chainId' })
+					const balancePromise = createConnectedReadClient().getBalance({ address: connectedAddress })
+					await loadWalletState({
+						connectedAddress,
+						chainIdPromise,
+						balancePromise,
+						getAccountState: () => accountState.value,
+						isCurrent,
+						setAccountState: state => {
+							accountState.value = state
+						},
+						setErrorMessage: message => {
+							errorMessage.value = message
+						},
+					})
+				} else {
+					accountState.value = { ...accountState.value, chainId: MAINNET_CHAIN_ID }
+				}
+			} catch (error) {
+				if (!isCurrent()) return
+				walletBootstrapComplete.value = true
+				errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
 			}
-		} catch (error) {
-			if (!isCurrent()) return
-			walletBootstrapComplete.value = true
-			errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
-		} finally {
-			walletLoadCount.value = Math.max(0, walletLoadCount.value - 1)
-		}
+		})
 	}
 
 	const connectWallet = async () => {
@@ -192,8 +189,8 @@ export function useOnchainState() {
 		errorMessage: errorMessage.value,
 		hasInjectedWallet: hasInjectedWallet.value,
 		hasLoadedDeploymentStatuses: deploymentStatusesLoaded.value,
-		isLoadingDeploymentStatuses: deploymentStatusLoadCount.value > 0,
-		isRefreshing: walletLoadCount.value > 0,
+		isLoadingDeploymentStatuses: deploymentStatusLoad.isLoading.value,
+		isRefreshing: walletStateLoad.isLoading.value,
 		augurPlaceHolderDeployed: augurPlaceHolderDeployed.value,
 		isConnectingWallet: isConnectingWallet.value,
 		setDeploymentStatuses,

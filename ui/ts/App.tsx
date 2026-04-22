@@ -110,7 +110,7 @@ export function App() {
 			deploymentStatuses,
 			zoltarUniverseHasForked,
 		})
-	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultRepAllowance, securityVaultRepBalance, securityVaultResult, setSecurityBondAllowance, setSecurityVaultForm, withdrawRep } =
+	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultMissing, securityVaultRepAllowance, securityVaultRepBalance, securityVaultResult, setSecurityBondAllowance, setSecurityVaultForm, withdrawRep } =
 		useSecurityVaultOperations(baseHookConfig)
 	const {
 		approveToken1,
@@ -373,6 +373,7 @@ export function App() {
 								securityVaultDetails,
 								securityVaultError,
 								securityVaultForm,
+								securityVaultMissing,
 								securityVaultRepAllowance,
 								securityVaultRepBalance,
 								securityVaultResult,

@@ -11,7 +11,7 @@ import { approvalShortage } from '../lib/inputs.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
-import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
+import { canManageSelectedVault, getSelectedVaultAddress } from '../lib/securityVault.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
 export function SecurityVaultSection({
@@ -29,6 +29,7 @@ export function SecurityVaultSection({
 	securityVaultDetails,
 	securityVaultError,
 	securityVaultForm,
+	securityVaultMissing,
 	securityVaultRepAllowance,
 	securityVaultRepBalance,
 	securityVaultResult,
@@ -45,7 +46,7 @@ export function SecurityVaultSection({
 	}
 	const selectedVaultAddress = getSelectedVaultAddress(normalizedSecurityVaultForm.selectedVaultAddress, accountState.address)
 	const hasWithdrawAmount = normalizedSecurityVaultForm.repWithdrawAmount.trim() !== '' && normalizedSecurityVaultForm.repWithdrawAmount.trim() !== '0'
-	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddress, accountState.address)
+	const selectedVaultIsOwnedByAccount = canManageSelectedVault(selectedVaultAddress, accountState.address)
 	const depositAmount = (() => {
 		try {
 			return parseRepAmountInput(normalizedSecurityVaultForm.depositAmount, 'REP deposit amount')
@@ -74,6 +75,7 @@ export function SecurityVaultSection({
 		if (accountState.address === undefined) return 'Connect a wallet before approving REP.'
 		if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
 		if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to approve REP.'
+		if (securityVaultMissing) return 'Load an existing security pool before approving REP.'
 		if (securityVaultDetails === undefined) return 'Load the vault to calculate the required approval amount.'
 		if (depositAmount === undefined || depositAmount <= 0n) return 'Enter a deposit amount greater than zero.'
 		if (shortage === 0n) return 'No additional REP approval is needed for this deposit amount.'
@@ -93,6 +95,13 @@ export function SecurityVaultSection({
 	const autoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = securityVaultDetails !== undefined && sameAddress(securityVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(securityVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
 	const lastAutoLoadKey = useRef<string | undefined>(undefined)
+	const vaultLoadNotice = loadingSecurityVault ? (
+		<p className='detail'>
+			<LoadingText>Loading vault...</LoadingText>
+		</p>
+	) : securityVaultMissing ? (
+		<p className='notice error'>Security pool does not exist.</p>
+	) : undefined
 
 	useEffect(() => {
 		if (!autoLoadVault) return
@@ -106,6 +115,7 @@ export function SecurityVaultSection({
 
 	const vaultSummarySection = (
 		<div className='entity-card-subsection'>
+			{vaultLoadNotice}
 			{securityVaultDetails === undefined ? undefined : (
 				<div className='entity-metric-grid'>
 					<MetricField className='entity-metric' label='Selected Vault'>
@@ -141,11 +151,13 @@ export function SecurityVaultSection({
 				<button className='secondary' onClick={() => onLoadSecurityVault()} disabled={loadingSecurityVault}>
 					{loadingSecurityVault ? <LoadingText>Refreshing...</LoadingText> : 'Refresh'}
 				</button>
-				<button className='primary' onClick={onRedeemFees} disabled={!canClaimFees}>
-					Claim Fees
-				</button>
+				{selectedVaultIsOwnedByAccount ? (
+					<button className='primary' onClick={onRedeemFees} disabled={!canClaimFees}>
+						Claim Fees
+					</button>
+				) : undefined}
 			</div>
-			{selectedVaultIsOwnedByAccount ? undefined : <p className='detail'>Read-only vault. Refresh is available, but write actions are disabled.</p>}
+			{selectedVaultIsOwnedByAccount ? undefined : <p className='detail'>Read-only vault. Refresh is available, but write actions are hidden.</p>}
 		</div>
 	)
 
@@ -208,7 +220,20 @@ export function SecurityVaultSection({
 					</button>
 				</div>
 			</label>
-			<p className='detail'>Available REP: {securityVaultRepBalance === undefined ? selectedVaultIsOwnedByAccount ? 'Refresh the vault to fetch your balance.' : 'Unavailable for read-only vaults.' : <CurrencyValue value={securityVaultRepBalance} suffix='REP' copyable={false} />}</p>
+			<p className='detail'>
+				Available REP:{' '}
+				{securityVaultMissing ? (
+					'Unavailable because the security pool does not exist.'
+				) : securityVaultRepBalance === undefined ? (
+					selectedVaultIsOwnedByAccount ? (
+						'Refresh the vault to fetch your balance.'
+					) : (
+						'Unavailable for read-only vaults.'
+					)
+				) : (
+					<CurrencyValue value={securityVaultRepBalance} suffix='REP' copyable={false} />
+				)}
+			</p>
 			<div className='actions'>
 				<button className='secondary' title={approveButtonTitle} onClick={() => onApproveRep(shortage)} disabled={!canApproveRep}>
 					{approveButtonLabel}
@@ -270,9 +295,9 @@ export function SecurityVaultSection({
 			<>
 				{vaultSummarySection}
 				{latestAction}
-				{vaultDepositSection}
-				{securityBondAllowanceSection}
-				{vaultRepSection}
+				{selectedVaultIsOwnedByAccount ? vaultDepositSection : undefined}
+				{selectedVaultIsOwnedByAccount ? securityBondAllowanceSection : undefined}
+				{selectedVaultIsOwnedByAccount ? vaultRepSection : undefined}
 				<ErrorNotice message={securityVaultError} />
 			</>
 		)
@@ -308,11 +333,13 @@ export function SecurityVaultSection({
 				</div>
 
 				<div className='market-column'>
-					<EntityCard title='Vault Actions'>
-						{vaultDepositSection}
-						{securityBondAllowanceSection}
-						{vaultRepSection}
-					</EntityCard>
+					{selectedVaultIsOwnedByAccount ? (
+						<EntityCard title='Vault Actions'>
+							{vaultDepositSection}
+							{securityBondAllowanceSection}
+							{vaultRepSection}
+						</EntityCard>
+					) : undefined}
 
 					<ErrorNotice message={securityVaultError} />
 				</div>

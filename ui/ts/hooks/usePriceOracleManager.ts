@@ -1,9 +1,9 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { loadOracleManagerDetails, requestOraclePrice } from '../contracts.js'
+import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { runLoadRequest } from '../lib/loadState.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '../types/contracts.js'
 
@@ -16,16 +16,13 @@ type UsePriceOracleManagerParameters = {
 }
 
 export function usePriceOracleManager({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted }: UsePriceOracleManagerParameters) {
-	const loadingPoolOracleManager = useSignal(false)
+	const poolOracleManagerLoad = useLoadController()
 	const poolOracleManagerDetails = useSignal<OracleManagerDetails | undefined>(undefined)
 	const poolOracleManagerError = useSignal<string | undefined>(undefined)
 	const poolPriceOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)
 
 	const loadPoolOracleManager = async (managerAddress: Address) => {
-		await runLoadRequest({
-			setLoading: value => {
-				loadingPoolOracleManager.value = value
-			},
+		await poolOracleManagerLoad.run({
 			onStart: () => {
 				poolOracleManagerError.value = undefined
 			},
@@ -67,7 +64,7 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 	}
 
 	return {
-		loadingPoolOracleManager: loadingPoolOracleManager.value,
+		loadingPoolOracleManager: poolOracleManagerLoad.isLoading.value,
 		loadPoolOracleManager,
 		poolOracleManagerDetails: poolOracleManagerDetails.value,
 		poolOracleManagerError: poolOracleManagerError.value,

@@ -224,6 +224,7 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultDetails: SecurityVaultDetails | undefined
 	securityVaultError: string | undefined
 	securityVaultForm: SecurityVaultFormState
+	securityVaultMissing: boolean
 	securityVaultRepAllowance: bigint | undefined
 	securityVaultRepBalance: bigint | undefined
 	securityVaultResult: SecurityVaultActionResult | undefined

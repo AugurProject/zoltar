@@ -364,6 +364,11 @@ async function readSecurityPoolUniverseId(client: Pick<ReadClient, 'readContract
 	})
 }
 
+async function securityPoolExists(client: Pick<ReadClient, 'getCode'>, securityPoolAddress: Address) {
+	const code = await client.getCode({ address: securityPoolAddress })
+	return code !== undefined && code !== '0x'
+}
+
 async function ensureProxyDeployerDeployed(client: WriteClient) {
 	const code = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
 	if (code !== undefined && code !== '0x') return undefined
@@ -1111,7 +1116,9 @@ export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode
 	return code !== undefined && code !== '0x'
 }
 
-export async function loadSecurityVaultDetails(client: ReadClient, securityPoolAddress: Address, vaultAddress: Address): Promise<SecurityVaultDetails> {
+export async function loadSecurityVaultDetails(client: ReadClient, securityPoolAddress: Address, vaultAddress: Address): Promise<SecurityVaultDetails | undefined> {
+	if (!(await securityPoolExists(client, securityPoolAddress))) return undefined
+
 	const [currentRetentionRate, managerAddress, poolOwnershipDenominator, repToken, totalSecurityBondAllowance, universeId, vaultData] = await Promise.all([
 		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,

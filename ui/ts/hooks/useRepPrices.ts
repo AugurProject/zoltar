@@ -1,5 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
+import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { quoteRepForEth, quoteRepForEthV3, quoteRepForUsdcV4 } from '../lib/uniswapQuoter.js'
 
@@ -31,15 +32,15 @@ export function useRepPrices(): RepPrices {
 	const repEthSource = useSignal<PriceSource | undefined>(undefined)
 	const repUsdcPrice = useSignal<bigint | undefined>(undefined)
 	const repUsdcSource = useSignal<PriceSource | undefined>(undefined)
-	const isLoadingRepPrices = useSignal(false)
+	const repPricesLoad = useLoadController()
 
 	useEffect(() => {
 		let cancelled = false
 		const client = createConnectedReadClient()
-		isLoadingRepPrices.value = true
 
-		void Promise.all([fetchRepEthPrice(client), quoteRepForUsdcV4(client, ONE_REP)])
-			.then(([{ price: ethPrice, source: ethSource }, usdcPrice]) => {
+		void repPricesLoad
+			.track(async () => {
+				const [{ price: ethPrice, source: ethSource }, usdcPrice] = await Promise.all([fetchRepEthPrice(client), quoteRepForUsdcV4(client, ONE_REP)])
 				if (cancelled) return
 				repEthPrice.value = ethPrice
 				repEthSource.value = ethSource
@@ -48,9 +49,6 @@ export function useRepPrices(): RepPrices {
 			})
 			.catch(() => {
 				// prices unavailable — leave as undefined
-			})
-			.finally(() => {
-				if (!cancelled) isLoadingRepPrices.value = false
 			})
 
 		return () => {
@@ -63,6 +61,6 @@ export function useRepPrices(): RepPrices {
 		repEthSource: repEthSource.value,
 		repUsdcPrice: repUsdcPrice.value,
 		repUsdcSource: repUsdcSource.value,
-		isLoadingRepPrices: isLoadingRepPrices.value,
+		isLoadingRepPrices: repPricesLoad.isLoading.value,
 	}
 }
