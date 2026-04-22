@@ -4,8 +4,19 @@ import * as path from 'node:path'
 import * as url from 'node:url'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const rootDirectory = directoryOfThisFile
+const uiRootDirectory = directoryOfThisFile
+const repositoryRootDirectory = path.resolve(uiRootDirectory, '..')
 const liveReloadClients = new Set()
+
+const resolveStaticFilePath = relativeFilePath => {
+	const candidateRoots = [uiRootDirectory, repositoryRootDirectory]
+	for (const candidateRoot of candidateRoots) {
+		const candidateFilePath = path.resolve(candidateRoot, relativeFilePath)
+		if (!candidateFilePath.startsWith(candidateRoot)) continue
+		return candidateFilePath
+	}
+	return undefined
+}
 
 const sendLiveReloadEvent = reason => {
 	for (const client of liveReloadClients) {
@@ -49,13 +60,21 @@ server.on('request', async (request, response) => {
 		}
 		const urlPath = requestPath.endsWith('/') ? `${ requestPath }index.html` : requestPath
 		const relativeFilePath = decodeURI(urlPath).replace(/^\/+/, '')
-		const filePath = path.resolve(rootDirectory, relativeFilePath)
-		if (!filePath.startsWith(rootDirectory)) {
+		const filePath = resolveStaticFilePath(relativeFilePath)
+		if (filePath === undefined) {
 			response.writeHead(403)
 			response.end()
 			return
 		}
-		const fileContents = await filesystem.readFile(filePath)
+		let fileContents
+		try {
+			fileContents = await filesystem.readFile(filePath)
+		} catch (error) {
+			if (error.code !== 'ENOENT' || filePath.startsWith(uiRootDirectory) === false) throw error
+			const fallbackFilePath = path.resolve(repositoryRootDirectory, relativeFilePath)
+			if (!fallbackFilePath.startsWith(repositoryRootDirectory)) throw error
+			fileContents = await filesystem.readFile(fallbackFilePath)
+		}
 		const extension = filePath.split('.').pop()
 		const mimeType = extension === undefined ? 'text/plain' : mimeTypes[extension]
 		if (mimeType !== undefined) {
