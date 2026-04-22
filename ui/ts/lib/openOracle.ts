@@ -10,7 +10,7 @@ export const OPEN_ORACLE_APPROVAL_AMOUNT = maxUint256
 
 type OpenOracleReportStatus = 'Awaiting Initial Report' | 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'initial-report' | 'dispute' | 'read-only'
-export type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3 fallback' | 'Manual override' | 'Unavailable'
+export type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3' | 'Manual' | 'Not ready'
 
 type OpenOracleInitialReportSubmissionDetails = {
 	amount1: bigint | undefined
@@ -60,12 +60,12 @@ export function getOpenOracleSelectedReportActionMode(report: Pick<OpenOracleRep
 }
 
 export function formatOpenOracleFeePercentage(feePercentage: bigint | undefined) {
-	if (feePercentage === undefined) return 'Unavailable'
+	if (feePercentage === undefined) return '—'
 	return `${(Number(feePercentage) / 100000).toLocaleString(undefined, { maximumFractionDigits: 6 })}%`
 }
 
 export function formatOpenOracleMultiplier(multiplier: bigint | undefined) {
-	if (multiplier === undefined) return 'Unavailable'
+	if (multiplier === undefined) return '—'
 	return `${(Number(multiplier) / 100).toFixed(2)}x`
 }
 
@@ -92,7 +92,7 @@ export async function loadOpenOracleInitialReportPrice(
 	token1: Parameters<typeof quoteExactInput>[1],
 	token2: Parameters<typeof quoteExactInput>[2],
 	token1Amount: bigint,
-): Promise<{ price: bigint; priceSource: Exclude<OpenOracleInitialReportPriceSource, 'Manual override' | 'Unavailable'>; token2Amount: bigint } | undefined> {
+): Promise<{ price: bigint; priceSource: Exclude<OpenOracleInitialReportPriceSource, 'Manual' | 'Not ready'>; token2Amount: bigint } | undefined> {
 	try {
 		const token2Amount = await quoteExactInput(client, token1, token2, token1Amount)
 		const price = calculateOpenOraclePrice(token1Amount, token2Amount)
@@ -105,14 +105,14 @@ export async function loadOpenOracleInitialReportPrice(
 				const token2Amount = (token1Amount * ethPerRep) / ONE_REP
 				const price = calculateOpenOraclePrice(token1Amount, token2Amount)
 				if (price === undefined) return undefined
-				return { price, priceSource: 'Uniswap V3 fallback', token2Amount }
+				return { price, priceSource: 'Uniswap V3', token2Amount }
 			}
 			if (token1 === ETH_ADDRESS && token2 === REP_ADDRESS) {
 				const ethPerRep = await quoteRepForEthV3(client, ONE_REP)
 				const token2Amount = (token1Amount * ONE_REP) / ethPerRep
 				const price = calculateOpenOraclePrice(token1Amount, token2Amount)
 				if (price === undefined) return undefined
-				return { price, priceSource: 'Uniswap V3 fallback', token2Amount }
+				return { price, priceSource: 'Uniswap V3', token2Amount }
 			}
 		} catch {
 			return undefined
@@ -154,19 +154,19 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 
 	const amount1 = reportDetails?.exactToken1Report
 	const amount2 = amount1 === undefined || price === undefined ? undefined : calculateOpenOracleToken2Amount(amount1, price)
-	const priceSource = priceInput.trim() === '' ? (defaultPrice === undefined ? 'Unavailable' : (defaultPriceSource ?? 'Manual override')) : defaultPrice !== undefined && priceInput.trim() === defaultPrice ? (defaultPriceSource ?? 'Manual override') : 'Manual override'
+	const priceSource = priceInput.trim() === '' ? (defaultPrice === undefined ? 'Not ready' : (defaultPriceSource ?? 'Manual')) : defaultPrice !== undefined && priceInput.trim() === defaultPrice ? (defaultPriceSource ?? 'Manual') : 'Manual'
 
 	let blockReason: string | undefined
 	if (reportDetails === undefined) {
-		blockReason = 'Load a report first'
+		blockReason = 'Open a report first.'
 	} else if (resolvedPriceInput === '') {
-		blockReason = 'Price unavailable'
+		blockReason = 'Fetch or enter a price.'
 	} else if (price === undefined || price <= 0n || amount2 === undefined || amount2 <= 0n) {
-		blockReason = 'Invalid price'
+		blockReason = 'Enter a valid price.'
 	} else if (amount1 === undefined || approvedToken1Amount === undefined || approvedToken1Amount < amount1) {
-		blockReason = 'Token1 approval required'
+		blockReason = 'Approve token 1.'
 	} else if (approvedToken2Amount === undefined || approvedToken2Amount < amount2) {
-		blockReason = 'Token2 approval required'
+		blockReason = 'Approve token 2.'
 	}
 
 	return {

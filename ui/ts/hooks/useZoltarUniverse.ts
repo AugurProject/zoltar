@@ -26,6 +26,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 	const questionsLoad = useLoadController()
 	const zoltarUniverseMissing = useSignal(false)
 	const zoltarUniverseLoadedId = useSignal<bigint | undefined>(undefined)
+	const zoltarUniverseResolvedId = useSignal<bigint | undefined>(undefined)
 	const hasLoadedZoltarQuestions = useSignal(false)
 	const zoltarQuestionCount = useSignal<bigint | undefined>(undefined)
 	const zoltarQuestions = useSignal<MarketDetails[]>([])
@@ -40,6 +41,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		zoltarUniverseMissing.value = false
 		zoltarUniverse.value = undefined
 		zoltarUniverseLoadedId.value = undefined
+		zoltarUniverseResolvedId.value = undefined
 		zoltarChildUniverseError.value = undefined
 		hasLoadedZoltarQuestions.value = false
 		zoltarQuestionCount.value = undefined
@@ -71,6 +73,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 					zoltarUniverseMissing.value = false
 					zoltarUniverse.value = undefined
 					zoltarUniverseLoadedId.value = undefined
+					zoltarUniverseResolvedId.value = undefined
 					zoltarChildUniverseError.value = undefined
 					return undefined
 				}
@@ -79,12 +82,14 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 			onSuccess: universe => {
 				if (requestedUniverseId !== activeUniverseId) return
 				if (universe === undefined) {
+					zoltarUniverseResolvedId.value = requestedUniverseId
 					zoltarUniverseMissing.value = requestedUniverseId !== 0n
 					return
 				}
 				zoltarUniverseMissing.value = false
 				zoltarUniverse.value = universe
 				zoltarUniverseLoadedId.value = requestedUniverseId
+				zoltarUniverseResolvedId.value = requestedUniverseId
 			},
 			onError: () => undefined,
 		})
@@ -140,11 +145,11 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		try {
 			getRequiredInjectedEthereum()
 		} catch {
-			zoltarChildUniverseError.value = 'No injected wallet found'
+			zoltarChildUniverseError.value = 'Connect wallet to continue.'
 			return
 		}
 		if (accountAddress === undefined) {
-			zoltarChildUniverseError.value = 'Connect a wallet before deploying a child universe'
+			zoltarChildUniverseError.value = 'Connect wallet to continue.'
 			return
 		}
 
@@ -193,6 +198,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		zoltarQuestions: zoltarQuestions.value,
 		zoltarUniverse: zoltarUniverseLoadedId.value === activeUniverseId ? zoltarUniverse.value : undefined,
 		zoltarUniverseLoadedId: zoltarUniverseLoadedId.value,
+		zoltarUniverseResolvedId: zoltarUniverseResolvedId.value,
 		zoltarUniverseMissing: zoltarUniverseMissing.value,
 	}
 }

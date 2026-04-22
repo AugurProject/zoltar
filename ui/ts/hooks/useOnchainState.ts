@@ -144,7 +144,7 @@ export function useOnchainState() {
 	const connectWallet = async () => {
 		const ethereum = getInjectedEthereum()
 		if (ethereum === undefined) {
-			errorMessage.value = 'No injected wallet found'
+			errorMessage.value = 'Connect wallet to continue.'
 			return
 		}
 		if (isConnectingWallet.value) return

@@ -28,7 +28,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 	const openOracleReportDetails = useSignal<OpenOracleReportDetails | undefined>(undefined)
 	const loadedOpenOracleReportId = useSignal<bigint | undefined>(undefined)
 	const openOracleInitialReportDefaultPrice = useSignal<string | undefined>(undefined)
-	const openOracleInitialReportDefaultPriceSource = useSignal<'Uniswap V4' | 'Uniswap V3 fallback' | undefined>(undefined)
+	const openOracleInitialReportDefaultPriceSource = useSignal<'Uniswap V4' | 'Uniswap V3' | undefined>(undefined)
 	const openOracleInitialReportToken1Allowance = useSignal<bigint | undefined>(undefined)
 	const openOracleInitialReportToken2Allowance = useSignal<bigint | undefined>(undefined)
 	const nextOpenOracleInitialReportStateLoad = useRequestGuard()

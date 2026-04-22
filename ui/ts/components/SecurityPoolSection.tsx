@@ -171,7 +171,7 @@ export function SecurityPoolSection({
 
 									<div className='actions'>
 										<button className='secondary' onClick={onLoadMarket} disabled={loadingMarketDetails || isPoolActionPending}>
-											{loadingMarketDetails ? <LoadingText>Loading Question...</LoadingText> : 'Load Question'}
+											{loadingMarketDetails ? <LoadingText>Loading question...</LoadingText> : 'Open question'}
 										</button>
 									</div>
 

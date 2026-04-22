@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { createLoadController, type LoadPhase } from '../lib/loadState.js'
+import { createLoadController, resolveLoadableValueState, resolveRequestedLoadableValueState, type LoadPhase } from '../lib/loadState.js'
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -142,5 +142,20 @@ void describe('load state helpers', () => {
 
 		expect(controller.phase.value).toBe('idle')
 		expect(controller.isLoading.value).toBe(false)
+	})
+
+	void test('resolves loadable value states without conflating unknown and missing', () => {
+		expect(resolveLoadableValueState({ hasLoaded: false, isLoading: false, value: undefined })).toBe('unknown')
+		expect(resolveLoadableValueState({ hasLoaded: false, isLoading: true, value: undefined })).toBe('loading')
+		expect(resolveLoadableValueState({ hasLoaded: true, isLoading: false, value: undefined })).toBe('missing')
+		expect(resolveLoadableValueState({ hasLoaded: true, isLoading: false, value: 42 })).toBe('ready')
+	})
+
+	void test('resolves requested loadable value states for the current key only', () => {
+		expect(resolveRequestedLoadableValueState({ currentKey: 'pool-a', isLoading: false, resolvedKey: undefined, value: undefined })).toBe('unknown')
+		expect(resolveRequestedLoadableValueState({ currentKey: 'pool-a', isLoading: true, resolvedKey: undefined, value: undefined })).toBe('loading')
+		expect(resolveRequestedLoadableValueState({ currentKey: 'pool-a', isLoading: false, resolvedKey: 'pool-b', value: undefined })).toBe('unknown')
+		expect(resolveRequestedLoadableValueState({ currentKey: 'pool-a', isLoading: false, resolvedKey: 'pool-a', value: undefined })).toBe('missing')
+		expect(resolveRequestedLoadableValueState({ currentKey: 'pool-a', isLoading: false, resolvedKey: 'pool-a', value: 42 })).toBe('ready')
 	})
 })

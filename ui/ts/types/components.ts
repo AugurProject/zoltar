@@ -23,6 +23,8 @@ import type {
 	ZoltarUniverseSummary,
 } from './contracts.js'
 import type { OpenOracleInitialReportPriceSource } from '../lib/openOracle.js'
+import type { LoadableValueState } from '../lib/loadState.js'
+import type { UserMessagePresentation } from '../lib/userCopy.js'
 
 export type DeploymentSectionProps = {
 	title: string
@@ -40,7 +42,7 @@ export type OverviewPanelsProps = {
 	walletBootstrapComplete: boolean
 	universeRepBalance: bigint | undefined
 	isLoadingUniverseRepBalance: boolean
-	universeErrorMessage: string | undefined
+	universePresentation: UserMessagePresentation | undefined
 	universeLabel: string
 	isRefreshing: boolean
 	repEthPrice: bigint | undefined
@@ -98,7 +100,7 @@ export type MarketRouteContentProps = {
 	hasLoadedZoltarQuestions: boolean
 	zoltarForkActiveAction: 'approve' | 'fork' | undefined
 	loadingZoltarUniverse: boolean
-	zoltarUniverseMissing: boolean
+	zoltarUniverseState: LoadableValueState
 	onLoadZoltarQuestions: () => void
 	onMarketFormChange: (update: Partial<MarketFormState>) => void
 	onUseQuestionForFork: (questionId: string) => void
@@ -165,6 +167,8 @@ type LiquidationControlsProps = {
 
 export type SecurityPoolsOverviewRouteContentProps = {
 	accountState: AccountState
+	checkedSecurityPoolAddress: string | undefined
+	hasLoadedSecurityPools: boolean
 	loadingSecurityPools: boolean
 	onSelectSecurityPool?: (securityPoolAddress: string) => void
 	onLoadSecurityPools: () => void
@@ -178,6 +182,7 @@ export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteConten
 export type SecurityPoolWorkflowRouteContentProps = {
 	accountState: AccountState
 	activeUniverseId: bigint
+	checkedSecurityPoolAddress: string | undefined
 	closeLiquidationModal: () => void
 	forkAuction: ForkAuctionRouteContentProps
 	liquidationAmount: string

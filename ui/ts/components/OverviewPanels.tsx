@@ -1,6 +1,7 @@
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { MetricField } from './MetricField.js'
+import { StateHint } from './StateHint.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 
 const UNISWAP_EXPLORE = 'https://app.uniswap.org/explore/pools/ethereum'
@@ -19,7 +20,7 @@ export function OverviewPanels({
 	repEthSource,
 	repUsdcPrice,
 	repUsdcSource,
-	universeErrorMessage,
+	universePresentation,
 	universeLabel,
 	universeRepBalance,
 	isRefreshing,
@@ -87,9 +88,9 @@ export function OverviewPanels({
 							>
 								<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />
 							</MetricField>
-							<MetricField label='Universe' valueClassName={universeErrorMessage === undefined ? undefined : 'overview-universe-error'}>
-								{universeErrorMessage ?? universeLabel}
-								{universeErrorMessage === undefined ? undefined : (
+							<MetricField label='Universe' valueClassName={universePresentation === undefined ? undefined : 'overview-universe-error'}>
+								{universePresentation === undefined ? universeLabel : <StateHint presentation={universePresentation} />}
+								{universePresentation === undefined ? undefined : (
 									<div className='overview-universe-actions'>
 										<button className='secondary' onClick={onGoToGenesisUniverse}>
 											Go to Genesis universe
@@ -105,7 +106,7 @@ export function OverviewPanels({
 						</button>
 						{accountState.address === undefined ? (
 							<button className='primary' onClick={onConnect} disabled={isConnectingWallet}>
-								{isWalletLoading ? 'Connecting...' : 'Connect Wallet'}
+								{isWalletLoading ? 'Connecting...' : 'Connect wallet'}
 							</button>
 						) : undefined}
 					</div>

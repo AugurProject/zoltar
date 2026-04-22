@@ -52,7 +52,7 @@ export function MarketSection({
 	zoltarQuestionCount,
 	zoltarQuestions,
 	zoltarUniverse,
-	zoltarUniverseMissing,
+	zoltarUniverseState,
 }: MarketSectionProps) {
 	const [view, setView] = useState<ZoltarView>(() => resolveEnumValue<ZoltarView>(readZoltarViewQueryParam(window.location.search), 'questions', ['questions', 'create', 'fork', 'migrate']))
 	const hasForked = zoltarUniverse?.hasForked === true
@@ -80,7 +80,7 @@ export function MarketSection({
 					onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex}
 					zoltarChildUniverseError={zoltarChildUniverseError}
 					zoltarUniverse={zoltarUniverse}
-					zoltarUniverseMissing={zoltarUniverseMissing}
+					zoltarUniverseState={zoltarUniverseState}
 				/>
 			</div>
 
@@ -138,10 +138,10 @@ export function MarketSection({
 				{view === 'fork' ? (
 					<ForkZoltarSection
 						accountAddress={accountState.address}
+						hasLoadedZoltarQuestions={hasLoadedZoltarQuestions}
 						isMainnet={isMainnet}
 						loadingZoltarForkAccess={loadingZoltarForkAccess}
 						loadingZoltarQuestions={loadingZoltarQuestions || loadingZoltarQuestionCount}
-						loadingZoltarUniverse={loadingZoltarUniverse}
 						onApproveZoltarForkRep={onApproveZoltarForkRep}
 						onForkZoltar={onForkZoltar}
 						onZoltarForkQuestionIdChange={onZoltarForkQuestionIdChange}
@@ -153,7 +153,7 @@ export function MarketSection({
 						zoltarForkRepBalance={zoltarForkRepBalance}
 						zoltarQuestions={zoltarQuestions}
 						zoltarUniverse={zoltarUniverse}
-						zoltarUniverseMissing={zoltarUniverseMissing}
+						zoltarUniverseState={zoltarUniverseState}
 					/>
 				) : undefined}
 
@@ -178,7 +178,7 @@ export function MarketSection({
 						zoltarMigrationPreparedRepBalance={zoltarMigrationPreparedRepBalance}
 						zoltarMigrationResult={zoltarMigrationResult}
 						zoltarUniverse={zoltarUniverse}
-						zoltarUniverseMissing={zoltarUniverseMissing}
+						zoltarUniverseState={zoltarUniverseState}
 						onApproveZoltarForkRep={onApproveZoltarForkRep}
 					/>
 				) : undefined}

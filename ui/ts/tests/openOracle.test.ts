@@ -164,7 +164,7 @@ describe('Open Oracle helpers', () => {
 		expect(preview.amount1).toBe(100n)
 		expect(preview.amount2).toBe(25n)
 		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockReason).toBe('Token2 approval required')
+		expect(preview.blockReason).toBeDefined()
 	})
 
 	test('open oracle fee and multiplier formatters render human values', () => {

@@ -1,4 +1,9 @@
+import { StateHint } from './StateHint.js'
+import { getPageNotFoundPresentation } from '../lib/userCopy.js'
+
 export function NotFoundSection() {
+	const presentation = getPageNotFoundPresentation()
+
 	return (
 		<section className='panel market-panel'>
 			<div className='not-found-shell'>
@@ -8,10 +13,10 @@ export function NotFoundSection() {
 				</div>
 
 				<div className='not-found-copy'>
-					<h2>That page is not in the map</h2>
-					<p className='detail'>The hash in the address bar does not match any known section of the app. Use one of the routes below to get back into the system.</p>
+					<h2>That page is not here</h2>
+					<StateHint presentation={presentation} />
 					<div className='hero-status'>
-						<span className='status-chip ready'>Unknown route</span>
+						<span className='status-chip ready'>Page not found</span>
 						<span className='status-chip muted'>Hash navigation</span>
 						<span className='status-chip muted'>Mainnet console</span>
 					</div>

@@ -9,15 +9,15 @@ import { getRequiredInjectedEthereum } from './clients.js'
  * Usage:
  *   if (!requireWallet(accountAddress, setError, 'creating a pool')) return
  */
-export function requireWallet(accountAddress: Address | undefined, setError: (message: string | undefined) => void, actionLabel: string): accountAddress is Address {
+export function requireWallet(accountAddress: Address | undefined, setError: (message: string | undefined) => void, _actionLabel: string): accountAddress is Address {
 	try {
 		getRequiredInjectedEthereum()
 	} catch {
-		setError('No injected wallet found')
+		setError('Connect wallet to continue.')
 		return false
 	}
 	if (accountAddress === undefined) {
-		setError(`Connect a wallet before ${actionLabel}`)
+		setError('Connect wallet to continue.')
 		return false
 	}
 	return true
