@@ -7,10 +7,11 @@ import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
-import { formatCurrencyBalance } from '../lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { approvalShortage } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
-import { formatSecurityVaultRepInputAmount, getSelectedVaultAddress, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT, parseSecurityVaultRepInputAmount } from '../lib/securityVault.js'
+import { parseRepAmountInput } from '../lib/marketForm.js'
+import { getSelectedVaultAddress, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
 export function SecurityVaultSection({
@@ -47,14 +48,14 @@ export function SecurityVaultSection({
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddress, accountState.address)
 	const depositAmount = (() => {
 		try {
-			return parseSecurityVaultRepInputAmount(normalizedSecurityVaultForm.depositAmount, 'REP deposit amount')
+			return parseRepAmountInput(normalizedSecurityVaultForm.depositAmount, 'REP deposit amount')
 		} catch {
 			return undefined
 		}
 	})()
 	const securityBondAllowanceAmount = (() => {
 		try {
-			return parseSecurityVaultRepInputAmount(normalizedSecurityVaultForm.securityBondAllowanceAmount, 'Security bond allowance')
+			return parseRepAmountInput(normalizedSecurityVaultForm.securityBondAllowanceAmount, 'Security bond allowance')
 		} catch {
 			return undefined
 		}
@@ -199,7 +200,7 @@ export function SecurityVaultSection({
 						type='button'
 						onClick={() => {
 							if (securityVaultRepBalance === undefined) return
-							const repAmount = formatSecurityVaultRepInputAmount(securityVaultRepBalance)
+							const repAmount = formatCurrencyInputBalance(securityVaultRepBalance)
 							onSecurityVaultFormChange({ depositAmount: repAmount })
 						}}
 						disabled={securityVaultRepBalance === undefined}
@@ -253,7 +254,7 @@ export function SecurityVaultSection({
 						type='button'
 						onClick={() => {
 							if (withdrawableRepAmount === undefined) return
-							onSecurityVaultFormChange({ repWithdrawAmount: formatSecurityVaultRepInputAmount(withdrawableRepAmount) })
+							onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(withdrawableRepAmount) })
 						}}
 						disabled={withdrawableRepAmount === undefined}
 					>
