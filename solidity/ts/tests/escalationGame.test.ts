@@ -1,4 +1,5 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
+import type { Address } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
@@ -22,7 +23,7 @@ describe('Escalation Game Test Suite', () => {
 	const reportBond = 1n * 10n ** 18n
 	const nonDecisionThreshold = 1000n * 10n ** 18n
 
-	const readIterativeAttritionCost = async (escalationGame: `0x${string}`, timeSinceStart: bigint) =>
+	const readIterativeAttritionCost = async (escalationGame: Address, timeSinceStart: bigint) =>
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'computeIterativeAttritionCost',
@@ -30,7 +31,7 @@ describe('Escalation Game Test Suite', () => {
 			args: [timeSinceStart],
 		})
 
-	const readTimeSinceStartFromAttritionCost = async (escalationGame: `0x${string}`, attritionCost: bigint) =>
+	const readTimeSinceStartFromAttritionCost = async (escalationGame: Address, attritionCost: bigint) =>
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'computeTimeSinceStartFromAttritionCost',

@@ -1,3 +1,5 @@
+import type { Address, Hex } from 'viem'
+
 export function bigintToDecimalString(value: bigint, power: bigint): string {
 	const sign = value < 0n ? '-' : ''
 	const magnitude = abs(value)
@@ -7,9 +9,9 @@ export function bigintToDecimalString(value: bigint, power: bigint): string {
 	return `${sign}${integerPart.toString(10)}.${fractionalPart.toString(10).padStart(Number(power), '0').replace(/0+$/, '')}`
 }
 
-export const addressString = (address: bigint): `0x${string}` => `0x${address.toString(16).padStart(40, '0')}`
+export const addressString = (address: bigint): Address => `0x${address.toString(16).padStart(40, '0')}`
 
-export const bytes32String = (bytes32: bigint): `0x${string}` => `0x${bytes32.toString(16).padStart(64, '0')}`
+export const bytes32String = (bytes32: bigint): Hex => `0x${bytes32.toString(16).padStart(64, '0')}`
 
 export const abs = (x: bigint) => (x < 0n ? -1n * x : x)
 

@@ -91,5 +91,7 @@ This test-driven approach ensures:
 
 - - This is a TypeScript project. Do not inspect or work from `js/` files anywhere in the repository when there is a corresponding TypeScript source file.
 - - The project compiles TypeScript sources to JavaScript before testing (`bun tsc`). This happens automatically via the test scripts.
+- - The `shared/js/` directory is generated build output from `shared/ts/` and must not be committed. Build it via `bun run shared:build` or by using the existing top-level setup/build scripts, which now run that step for you.
+- - On a fresh checkout, use `bun install --frozen-lockfile && bun run setup` for the full local install. For UI-only work, `bun install --frozen-lockfile && bun run ui:build` is sufficient and will also regenerate `shared/js/`.
 - - The root `bun tsc` runs the full generation pipeline before type-checking. UI-only changes still need to emit JS so the watcher reloads correctly; use `bun x tsc` instead of `--noEmit`.
 - - Never edit files directly in any `js/` directory. Changes may be overwritten by TypeScript compilation. Always use the corresponding `.ts` or `.tsx` source files.

@@ -128,7 +128,7 @@ export async function ensureProxyDeployerDeployed(client: WriteClient): Promise<
 	await client.waitForTransactionReceipt({ hash: deployHash })
 }
 
-export const contractExists = async (client: ReadClient, contract: `0x${string}`) => (await client.getCode({ address: contract })) !== undefined
+export const contractExists = async (client: ReadClient, contract: Address) => (await client.getCode({ address: contract })) !== undefined
 
 const uint248BitMask = (1n << 248n) - 1n
 export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint | QuestionOutcome): bigint {
