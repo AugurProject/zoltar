@@ -8,15 +8,21 @@ const uiRootDirectory = directoryOfThisFile
 const repositoryRootDirectory = path.resolve(uiRootDirectory, '..')
 const liveReloadClients = new Set()
 
-const getServedFilePath = requestPath => {
+const getServedFilePaths = requestPath => {
 	const urlPath = requestPath.endsWith('/') ? `${ requestPath }index.html` : requestPath
 	const relativeFilePath = decodeURI(urlPath).replace(/^\/+/, '')
-	const baseDirectory = relativeFilePath.startsWith('shared/') ? repositoryRootDirectory : uiRootDirectory
-	const filePath = path.resolve(baseDirectory, relativeFilePath)
-	if (filePath !== baseDirectory && !filePath.startsWith(`${ baseDirectory }${ path.sep }`)) {
-		return undefined
+	const candidateRoots = relativeFilePath.startsWith('shared/') ? [repositoryRootDirectory] : [uiRootDirectory, repositoryRootDirectory]
+
+	const candidateFilePaths = []
+	for (const candidateRoot of candidateRoots) {
+		const candidateFilePath = path.resolve(candidateRoot, relativeFilePath)
+		if (candidateFilePath !== candidateRoot && !candidateFilePath.startsWith(`${ candidateRoot }${ path.sep }`)) {
+			continue
+		}
+		candidateFilePaths.push(candidateFilePath)
 	}
-	return filePath
+
+	return candidateFilePaths
 }
 
 const sendLiveReloadEvent = reason => {
@@ -59,13 +65,28 @@ server.on('request', async (request, response) => {
 			response.end()
 			return
 		}
-		const filePath = getServedFilePath(requestPath)
-		if (filePath === undefined) {
+		const candidateFilePaths = getServedFilePaths(requestPath)
+		if (candidateFilePaths.length === 0) {
 			response.writeHead(403)
 			response.end()
 			return
 		}
-		const fileContents = await filesystem.readFile(filePath)
+
+		let filePath
+		let fileContents
+		let lastError
+		for (const candidateFilePath of candidateFilePaths) {
+			try {
+				fileContents = await filesystem.readFile(candidateFilePath)
+				filePath = candidateFilePath
+				break
+			} catch (error) {
+				if (error.code !== 'ENOENT') throw error
+				lastError = error
+			}
+		}
+		if (filePath === undefined || fileContents === undefined) throw lastError
+
 		const extension = filePath.split('.').pop()
 		const mimeType = extension === undefined ? 'text/plain' : mimeTypes[extension]
 		if (mimeType !== undefined) {
