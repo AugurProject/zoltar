@@ -4,7 +4,7 @@ import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
-import { Address } from 'viem'
+import type { Address } from 'viem'
 import { computeClearing, deployUniformPriceDualCapBatchAuction, finalize, getClearingTick, getMinBidSize, getTotalRepPurchased, simulateWithdrawBids, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids, getEthRaiseCap, getEthRaised } from '../testsuite/simulator/utils/contracts/auction'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
 import { priceToClosestTick, tickToPrice } from '../testsuite/simulator/utils/tickMath'
@@ -94,7 +94,7 @@ describe('Auction', () => {
 		await startAuction(client, auctionAddress, ethRaiseCapEth * ATTOETH_PER_ETH, maxRepBeingSold * ATTOETH_PER_ETH)
 	}
 
-	async function assertFairPayoutForUser(auctionCreator: WriteClient, auctionAddress: Address, userId: `0x${string}`, bids: { tick: bigint; bidSize: bigint; bidIndex: bigint }[], clearingTick: bigint, tolerance: bigint = DEFAULT_TOLERANCE): Promise<{ totalFilledRep: bigint; totalEthRefund: bigint }> {
+	async function assertFairPayoutForUser(auctionCreator: WriteClient, auctionAddress: Address, userId: Address, bids: { tick: bigint; bidSize: bigint; bidIndex: bigint }[], clearingTick: bigint, tolerance: bigint = DEFAULT_TOLERANCE): Promise<{ totalFilledRep: bigint; totalEthRefund: bigint }> {
 		const clearingPrice = tickToPrice(clearingTick)
 		let totalFilledRep = 0n
 		let totalEthRefund = 0n

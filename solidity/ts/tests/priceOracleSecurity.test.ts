@@ -1,5 +1,6 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from 'node:assert'
+import type { Address } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
@@ -22,7 +23,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	const repDeposit = 1000n * 10n ** 18n
 	const currentTimestamp = dateToBigintSeconds(new Date())
 	const questionEndDate = currentTimestamp + 365n * DAY
-	let priceOracle: `0x${string}`
+	let priceOracle: Address
 	const genesisUniverse = 0n
 	const securityMultiplier = 2n
 	const startingRepEthPrice = 10n
