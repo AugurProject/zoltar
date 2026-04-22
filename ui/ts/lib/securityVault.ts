@@ -1,6 +1,8 @@
 import type { Address } from 'viem'
 import { sameAddress } from './address.js'
 
+export const MIN_SECURITY_VAULT_REP_DEPOSIT = 10n * 10n ** 18n
+
 export function getSelectedVaultAddress(selectedVaultAddress: string | undefined, accountAddress: Address | undefined) {
 	const trimmedSelectedVaultAddress = selectedVaultAddress?.trim() ?? ''
 	if (trimmedSelectedVaultAddress !== '') return trimmedSelectedVaultAddress
@@ -13,6 +15,7 @@ export function isSelectedVaultOwnedByAccount(selectedVaultAddress: string | und
 	return sameAddress(trimmedSelectedVaultAddress, accountAddress)
 }
 
-export function canManageSelectedVault(selectedVaultAddress: string | undefined, accountAddress: Address | undefined) {
-	return isSelectedVaultOwnedByAccount(selectedVaultAddress, accountAddress)
+export function isSecurityVaultDepositBelowMinimum(currentRepDeposit: bigint | undefined, depositAmount: bigint | undefined) {
+	if (depositAmount === undefined || depositAmount <= 0n) return false
+	return (currentRepDeposit ?? 0n) === 0n && depositAmount < MIN_SECURITY_VAULT_REP_DEPOSIT
 }
