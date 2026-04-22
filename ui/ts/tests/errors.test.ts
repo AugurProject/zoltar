@@ -13,6 +13,10 @@ void describe('error helpers', () => {
 		expect(isCloseableErrorMessage('Failed to deploy SecurityPoolUtils: {"code":4001,"message":"Request rejected"}')).toBe(true)
 	})
 
+	void test('keeps the action prefix when a revert reason is available', () => {
+		expect(getErrorMessage(new Error('min deposit requirement'), 'Failed to deposit REP')).toBe('Failed to deposit REP: min deposit requirement')
+	})
+
 	void test('keeps blocking guidance errors non-closeable', () => {
 		expect(isCloseableErrorMessage('Augur PLACEHOLDER contracts are not deployed yet. Deploy them before the application works.')).toBe(false)
 		expect(isCloseableErrorMessage('Deploy SecurityPoolUtils first')).toBe(false)
