@@ -131,6 +131,7 @@ export type SecurityPoolRouteContentProps = {
 	onCreateSecurityPool: () => void
 	onLoadMarket: () => void
 	onLoadMarketById: (marketId: string) => Promise<void>
+	onOpenCreatedPool?: (securityPoolAddress: Address) => void
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
 	poolCreationMarketDetails: MarketDetails | undefined
@@ -223,6 +224,7 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultDetails: SecurityVaultDetails | undefined
 	securityVaultError: string | undefined
 	securityVaultForm: SecurityVaultFormState
+	securityVaultMissing: boolean
 	securityVaultRepAllowance: bigint | undefined
 	securityVaultRepBalance: bigint | undefined
 	securityVaultResult: SecurityVaultActionResult | undefined

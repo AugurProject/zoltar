@@ -1,4 +1,5 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
+import type { Address } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
@@ -24,7 +25,7 @@ const REP_TOTAL_SUPPLY_SLOT = '0x' + 5n.toString(16).padStart(64, '0')
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
-const getUserRepClaim = async (client: WriteClient, securityPoolAddress: `0x${string}`) => {
+const getUserRepClaim = async (client: WriteClient, securityPoolAddress: Address) => {
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
 	return await poolOwnershipToRep(client, securityPoolAddress, vault.repDepositShare)
 }
@@ -39,8 +40,8 @@ describe('Escalation Game Fork Threshold Test', () => {
 	const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
 	const questionEndDate = currentTimestamp + 365n * DAY
 	let securityPoolAddresses: {
-		securityPool: `0x${string}`
-		escalationGame: `0x${string}`
+		securityPool: Address
+		escalationGame: Address
 	}
 	let questionId: bigint
 

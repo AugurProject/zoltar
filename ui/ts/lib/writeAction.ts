@@ -26,7 +26,7 @@ export function buildWriteActionConfig(params: Omit<WriteOperationsParameters, '
 	}
 }
 
-export async function runWriteAction<TResult extends { hash: Hash }>(parameters: RunWriteActionParameters, action: (walletAddress: Address) => Promise<TResult>, errorFallback: string, onSuccess?: (result: TResult, walletAddress: Address) => Promise<void> | void) {
+export async function runWriteAction<TResult extends { hash: Hash }>(parameters: RunWriteActionParameters, action: (walletAddress: Address) => Promise<TResult | undefined>, errorFallback: string, onSuccess?: (result: TResult, walletAddress: Address) => Promise<void> | void) {
 	if (parameters.accountAddress === undefined) {
 		parameters.setErrorMessage(parameters.missingWalletMessage)
 		return
@@ -36,6 +36,7 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 		parameters.onTransactionRequested()
 		parameters.setErrorMessage(undefined)
 		const result = await action(parameters.accountAddress)
+		if (result === undefined) return
 		await Promise.resolve(parameters.onTransaction(result.hash))
 		await onSuccess?.(result, parameters.accountAddress)
 		await parameters.refreshState()

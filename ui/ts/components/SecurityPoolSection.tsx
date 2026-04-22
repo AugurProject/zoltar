@@ -21,6 +21,7 @@ export function SecurityPoolSection({
 	marketDetails,
 	onCreateSecurityPool,
 	onLoadMarket,
+	onOpenCreatedPool,
 	onSecurityPoolFormChange,
 	onResetSecurityPoolCreation,
 	securityPools,
@@ -78,6 +79,9 @@ export function SecurityPoolSection({
 							badge={<span className='badge ok'>Deployed</span>}
 							actions={
 								<div className='actions'>
+									<button className='primary' onClick={() => onOpenCreatedPool?.(securityPoolResult.securityPoolAddress)}>
+										Open Pool
+									</button>
 									<button className='secondary' onClick={onResetSecurityPoolCreation}>
 										Create Another Pool
 									</button>
@@ -86,6 +90,12 @@ export function SecurityPoolSection({
 						>
 							<Question question={createdQuestionDetails} loading={createdQuestionDetails === undefined} />
 							<ul className='status-list hashes'>
+								<li>
+									<span>Pool address</span>
+									<strong>
+										<AddressValue address={securityPoolResult.securityPoolAddress} />
+									</strong>
+								</li>
 								<li>
 									<span>Security Multiplier</span>
 									<strong>{securityPoolResult.securityMultiplier.toString()}</strong>

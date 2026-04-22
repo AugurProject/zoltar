@@ -1,3 +1,4 @@
+import type { Hex } from 'viem'
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from 'node:assert'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
@@ -18,7 +19,7 @@ describe('Deployment Status Oracle Test Suite', () => {
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 
-	const deployViaProxy = async (bytecode: `0x${string}`) => {
+	const deployViaProxy = async (bytecode: Hex) => {
 		const hash = await client.sendTransaction({
 			to: addressString(PROXY_DEPLOYER_ADDRESS),
 			data: bytecode,

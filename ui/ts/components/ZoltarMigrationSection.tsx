@@ -54,8 +54,8 @@ function getMigrationAmountSource(preparedRepBalance: bigint | undefined, repBal
 function getMigrationGuardMessage(accountAddress: Address | undefined, isMainnet: boolean, rootUniverse: ZoltarUniverseSummary | undefined, loadingZoltarForkAccess: boolean, hasForked: boolean, loadingZoltarUniverse: boolean, notForkedAction: string): string | undefined {
 	if (accountAddress === undefined) return 'Connect a wallet before using REP migration actions.'
 	if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
-	if (rootUniverse === undefined) return loadingZoltarUniverse ? 'Loading universe data...' : 'Load the universe first.'
-	if (loadingZoltarForkAccess) return 'Loading migration data...'
+	if (rootUniverse === undefined) return loadingZoltarUniverse ? undefined : 'Load the universe first.'
+	if (loadingZoltarForkAccess) return undefined
 	if (!hasForked) return notForkedAction
 	return undefined
 }
@@ -228,7 +228,15 @@ export function ZoltarMigrationSection({
 						</MetricField>
 						{approvalShortage > 0n ? <p className='detail'>Need {formatCurrencyBalance(approvalShortage)} more REP approved before preparing the current amount.</p> : undefined}
 					</div>
-					<MetricField label='Universe'>{rootUniverse === undefined ? <LoadingText>Loading universe data...</LoadingText> : <UniverseLink universeId={rootUniverse.universeId} />}</MetricField>
+					<MetricField label='Universe'>
+						{rootUniverse === undefined ? (
+							<span className='loading-value' role='status' aria-label='Loading universe data'>
+								<span className='spinner' aria-hidden='true' />
+							</span>
+						) : (
+							<UniverseLink universeId={rootUniverse.universeId} />
+						)}
+					</MetricField>
 				</div>
 				<div className='form-grid'>
 					<div className='field'>

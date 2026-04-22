@@ -1,5 +1,6 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from 'node:assert'
+import type { Address, Hash } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
@@ -53,11 +54,11 @@ describe('Peripherals Contract Test Suite', () => {
 	const PRICE_PRECISION = 1n * 10n ** 18n
 	const repDeposit = 1000n * 10n ** 18n
 	let securityPoolAddresses: {
-		securityPool: `0x${string}`
-		priceOracleManagerAndOperatorQueuer: `0x${string}`
-		shareToken: `0x${string}`
-		truthAuction: `0x${string}`
-		escalationGame: `0x${string}`
+		securityPool: Address
+		priceOracleManagerAndOperatorQueuer: Address
+		shareToken: Address
+		truthAuction: Address
+		escalationGame: Address
 	}
 	let questionEndDate: bigint
 	let questionData: {
@@ -79,7 +80,7 @@ describe('Peripherals Contract Test Suite', () => {
 	const outcomes = ['Yes', 'No']
 	let questionId: bigint
 
-	const sendEthAndWait = async (from: `0x${string}`, to: `0x${string}`, value: bigint) => {
+	const sendEthAndWait = async (from: Address, to: Address, value: bigint) => {
 		const hash = (await mockWindow.request({
 			method: 'eth_sendTransaction',
 			params: [
@@ -90,7 +91,7 @@ describe('Peripherals Contract Test Suite', () => {
 					gasPrice: '0x0',
 				},
 			],
-		})) as `0x${string}`
+		})) as Hash
 		await client.waitForTransactionReceipt({ hash })
 	}
 
