@@ -55,6 +55,8 @@ Repeat the cycle iteratively after each fix to ensure clean builds and avoid acc
 
 **Final requirement**: The codebase must have zero knip warnings, zero test failures and zero typescript errors.
 
+**Last step**: After the task PR is ready, merge the latest `main` into the branch and resolve any conflicts if they exist.
+
 # Package Guidelines
 
 - **Version pinning**: All dependency versions in `package.json` must be exact (no `^` or `~`). This ensures reproducible builds.
