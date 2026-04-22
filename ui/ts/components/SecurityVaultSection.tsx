@@ -208,7 +208,6 @@ export function SecurityVaultSection({
 					</button>
 				</div>
 			</label>
-			<p className='detail'>Available REP: {securityVaultRepBalance === undefined ? selectedVaultIsOwnedByAccount ? 'Refresh the vault to fetch your balance.' : 'Unavailable for read-only vaults.' : <CurrencyValue value={securityVaultRepBalance} suffix='REP' copyable={false} />}</p>
 			<div className='actions'>
 				<button className='secondary' title={approveButtonTitle} onClick={() => onApproveRep(shortage)} disabled={!canApproveRep}>
 					{approveButtonLabel}
