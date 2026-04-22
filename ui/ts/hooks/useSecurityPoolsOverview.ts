@@ -2,6 +2,7 @@ import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { loadAllSecurityPools, loadOracleManagerDetails, queueSecurityPoolLiquidation } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
+import { normalizeAddress } from '../lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
@@ -25,17 +26,22 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 	const liquidationSecurityPoolAddress = useSignal<Address | undefined>(undefined)
 	const liquidationModalOpen = useSignal(false)
 	const securityPoolsLoad = useLoadController()
+	const hasLoadedSecurityPools = useSignal(false)
+	const checkedSecurityPoolAddress = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewError = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewResult = useSignal<SecurityPoolOverviewActionResult | undefined>(undefined)
 	const securityPools = useSignal<ListedSecurityPool[]>([])
 
-	const loadSecurityPools = async () => {
+	const loadSecurityPools = async (securityPoolAddress?: string) => {
+		const normalizedCheckedAddress = normalizeAddress(securityPoolAddress)
 		await securityPoolsLoad.run({
 			onStart: () => {
 				securityPoolOverviewError.value = undefined
 			},
 			load: async () => await loadAllSecurityPools(createConnectedReadClient()),
 			onSuccess: pools => {
+				hasLoadedSecurityPools.value = true
+				checkedSecurityPoolAddress.value = normalizedCheckedAddress
 				securityPools.value = pools
 			},
 			onError: error => {
@@ -82,6 +88,8 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 		liquidationManagerAddress: liquidationManagerAddress.value,
 		liquidationModalOpen: liquidationModalOpen.value,
 		liquidationTargetVault: liquidationTargetVault.value,
+		checkedSecurityPoolAddress: checkedSecurityPoolAddress.value,
+		hasLoadedSecurityPools: hasLoadedSecurityPools.value,
 		liquidationSecurityPoolAddress: liquidationSecurityPoolAddress.value,
 		loadingSecurityPools: securityPoolsLoad.isLoading.value,
 		closeLiquidationModal,

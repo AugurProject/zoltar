@@ -8,7 +8,10 @@ import { LoadableValue } from './LoadableValue.js'
 import { Question } from './Question.js'
 import { MetricField } from './MetricField.js'
 import { ScalarDeploymentSection } from './ScalarDeploymentSection.js'
+import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
+import type { LoadableValueState } from '../lib/loadState.js'
+import { getUniversePresentation } from '../lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../lib/universe.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -19,21 +22,22 @@ type MarketOverviewSectionProps = {
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	zoltarChildUniverseError: string | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
-	zoltarUniverseMissing: boolean
+	zoltarUniverseState: LoadableValueState
 }
 
-export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltarUniverse, onCreateChildUniverseForOutcomeIndex, zoltarChildUniverseError, zoltarUniverse, zoltarUniverseMissing }: MarketOverviewSectionProps) {
+export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltarUniverse, onCreateChildUniverseForOutcomeIndex, zoltarChildUniverseError, zoltarUniverse, zoltarUniverseState }: MarketOverviewSectionProps) {
 	const rootUniverse = zoltarUniverse
-	const universeMissing = rootUniverse === undefined && zoltarUniverseMissing && !loadingZoltarUniverse
+	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
 	const currentUniverseName = rootUniverse === undefined ? undefined : formatUniverseCollectionLabel([rootUniverse.universeId])
 	const isScalarFork = rootUniverse?.forkQuestionDetails?.marketType === 'scalar'
 	const scalarQuestionDetails = rootUniverse?.forkQuestionDetails
 
 	if (universeMissing) {
+		const presentation = getUniversePresentation(zoltarUniverseState)
 		return (
-			<EntityCard className='market-overview-card' title='Zoltar universe missing' badge={<span className='badge blocked'>Missing</span>}>
-				<p className='notice error'>The universe does not exist.</p>
+			<EntityCard className='market-overview-card' title='Universe'>
+				{presentation === undefined ? undefined : <StateHint presentation={presentation} />}
 			</EntityCard>
 		)
 	}

@@ -5,6 +5,7 @@ import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
+import { StateHint } from './StateHint.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
@@ -12,6 +13,7 @@ import { approvalShortage } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
 import { getSelectedVaultAddress, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
+import { getWalletPresentation } from '../lib/userCopy.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
 export function SecurityVaultSection({
@@ -73,11 +75,11 @@ export function SecurityVaultSection({
 	const canSetSecurityBondAllowance = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > 0n
 	const approveButtonLabel = depositAmount === undefined || depositAmount <= 0n || shortage === undefined ? 'Approve REP' : shortage === 0n ? 'Approval Satisfied' : `Approve ${formatCurrencyBalance(shortage)} REP`
 	const approveButtonTitle = (() => {
-		if (accountState.address === undefined) return 'Connect a wallet before approving REP.'
-		if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
+		const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, isMainnet })
+		if (walletPresentation !== undefined) return walletPresentation.detail
 		if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to approve REP.'
-		if (securityVaultMissing) return 'Load an existing security pool before approving REP.'
-		if (securityVaultDetails === undefined) return 'Load the vault to calculate the required approval amount.'
+		if (securityVaultMissing) return 'Choose a pool first.'
+		if (securityVaultDetails === undefined) return 'Refresh the vault first.'
 		if (depositAmount === undefined || depositAmount <= 0n) return 'Enter a deposit amount greater than zero.'
 		if (shortage === 0n) return 'No additional REP approval is needed for this deposit amount.'
 		return `Approve ${formatCurrencyBalance(shortage)} more REP before depositing.`
@@ -101,7 +103,7 @@ export function SecurityVaultSection({
 			<LoadingText>Loading vault...</LoadingText>
 		</p>
 	) : securityVaultMissing ? (
-		<p className='notice error'>Security pool does not exist.</p>
+		<StateHint presentation={{ key: 'not_found', badgeLabel: 'Not found', badgeTone: 'blocked', detail: 'Try another pool address.' }} />
 	) : undefined
 
 	useEffect(() => {
@@ -162,7 +164,7 @@ export function SecurityVaultSection({
 					</button>
 				) : undefined}
 			</div>
-			{selectedVaultIsOwnedByAccount ? undefined : <p className='detail'>Read-only vault. Refresh is available, but write actions are hidden.</p>}
+			{selectedVaultIsOwnedByAccount ? undefined : <p className='detail'>Select your own vault to unlock actions.</p>}
 		</div>
 	)
 
@@ -251,7 +253,7 @@ export function SecurityVaultSection({
 				<h4>Withdraw REP</h4>
 			</div>
 			{withdrawableRepAmount === undefined ? (
-				<p className='detail'>Refresh the vault to calculate withdrawable REP.</p>
+				<p className='detail'>Refresh to see withdrawable REP.</p>
 			) : (
 				<div className='entity-metric-grid'>
 					<MetricField className='entity-metric' label='Withdrawable REP'>

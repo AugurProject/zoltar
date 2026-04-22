@@ -29,7 +29,7 @@ describe('runWriteAction', () => {
 			'Failed to report on outcome',
 		)
 
-		expect(errorMessage).toBe('Failed to report on outcome: execution reverted')
+		expect(errorMessage).toBe('Failed to report on outcome')
 	})
 
 	test('uses the refresh fallback when post-transaction refresh fails', async () => {
@@ -59,6 +59,6 @@ describe('runWriteAction', () => {
 		)
 
 		expect(onSuccessCalled).toBe(true)
-		expect(errorMessage).toBe('Reporting transaction succeeded, but refreshing reporting details failed: RPC unavailable')
+		expect(errorMessage).toBe('Reporting transaction succeeded, but refreshing reporting details failed')
 	})
 })

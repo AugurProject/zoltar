@@ -6,12 +6,15 @@ import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
+import { StateHint } from './StateHint.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
+import type { LoadableValueState } from '../lib/loadState.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { parseBigIntListInput } from '../lib/inputs.js'
 import { parseRepAmountInput as parseMigrationAmountInput } from '../lib/marketForm.js'
+import { getUniversePresentation, getWalletPresentation } from '../lib/userCopy.js'
 import type { ZoltarMigrationFormState } from '../types/app.js'
 import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -35,7 +38,7 @@ type ZoltarMigrationSectionProps = {
 	zoltarMigrationPreparedRepBalance: bigint | undefined
 	zoltarMigrationResult: ZoltarMigrationActionResult | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
-	zoltarUniverseMissing: boolean
+	zoltarUniverseState: LoadableValueState
 	onApproveZoltarForkRep: (amount?: bigint) => void
 }
 
@@ -52,9 +55,9 @@ function getMigrationAmountSource(preparedRepBalance: bigint | undefined, repBal
 }
 
 function getMigrationGuardMessage(accountAddress: Address | undefined, isMainnet: boolean, rootUniverse: ZoltarUniverseSummary | undefined, loadingZoltarForkAccess: boolean, hasForked: boolean, loadingZoltarUniverse: boolean, notForkedAction: string): string | undefined {
-	if (accountAddress === undefined) return 'Connect a wallet before using REP migration actions.'
-	if (!isMainnet) return 'Switch your wallet to Ethereum mainnet.'
-	if (rootUniverse === undefined) return loadingZoltarUniverse ? undefined : 'Load the universe first.'
+	const walletPresentation = getWalletPresentation({ accountAddress, isMainnet })
+	if (walletPresentation !== undefined) return walletPresentation.detail
+	if (rootUniverse === undefined) return loadingZoltarUniverse ? undefined : 'Refresh universe first.'
 	if (loadingZoltarForkAccess) return undefined
 	if (!hasForked) return notForkedAction
 	return undefined
@@ -85,11 +88,11 @@ export function ZoltarMigrationSection({
 	zoltarMigrationPreparedRepBalance,
 	zoltarMigrationResult,
 	zoltarUniverse,
-	zoltarUniverseMissing,
+	zoltarUniverseState,
 	onApproveZoltarForkRep,
 }: ZoltarMigrationSectionProps) {
 	const rootUniverse = zoltarUniverse
-	const universeMissing = rootUniverse === undefined && zoltarUniverseMissing && !loadingZoltarUniverse
+	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
 	const selectedOutcomeIndexes = useMemo(() => {
 		try {
@@ -205,11 +208,10 @@ export function ZoltarMigrationSection({
 	}
 
 	if (universeMissing) {
+		const presentation = getUniversePresentation(zoltarUniverseState)
 		return (
 			<>
-				<EntityCard title='Migrate REP' badge={<span className='badge blocked'>Missing</span>}>
-					<p className='notice error'>The universe does not exist.</p>
-				</EntityCard>
+				<EntityCard title='Migrate REP'>{presentation === undefined ? undefined : <StateHint presentation={presentation} />}</EntityCard>
 				<ErrorNotice message={zoltarMigrationError} />
 			</>
 		)

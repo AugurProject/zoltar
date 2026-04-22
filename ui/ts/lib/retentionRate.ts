@@ -6,7 +6,7 @@ function formatPercent(value: number) {
 }
 
 export function formatOpenInterestFeePerYearPercent(retentionRate: bigint | undefined) {
-	if (retentionRate === undefined) return 'Unavailable'
+	if (retentionRate === undefined) return '—'
 	if (retentionRate <= 0n) return '100%'
 
 	const retentionRateAsNumber = Number(retentionRate) / Number(PRICE_PRECISION)

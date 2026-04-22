@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { formatRelativeTimestamp, formatTimestamp } from '../lib/formatters.js'
+import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 
 type TimestampValueProps = {
 	className?: string
@@ -15,7 +16,7 @@ function getCurrentTimestamp() {
 	return BigInt(Math.floor(Date.now() / 1000))
 }
 
-export function TimestampValue({ className = '', currentTimestamp, loading = false, timestamp, undefinedText = 'Unavailable', zeroText }: TimestampValueProps) {
+export function TimestampValue({ className = '', currentTimestamp, loading = false, timestamp, undefinedText = getMetricPlaceholderPresentation(undefined)?.placeholder, zeroText }: TimestampValueProps) {
 	const [now, setNow] = useState(() => currentTimestamp ?? getCurrentTimestamp())
 
 	useEffect(() => {

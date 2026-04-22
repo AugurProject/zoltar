@@ -75,12 +75,12 @@ export function getOpenOracleSelectedReportActionMode(report: Pick<OpenOracleRep
 }
 
 export function formatOpenOracleFeePercentage(feePercentage: bigint | undefined) {
-	if (feePercentage === undefined) return 'Unavailable'
+	if (feePercentage === undefined) return '—'
 	return `${(Number(feePercentage) / 100000).toLocaleString(undefined, { maximumFractionDigits: 6 })}%`
 }
 
 export function formatOpenOracleMultiplier(multiplier: bigint | undefined) {
-	if (multiplier === undefined) return 'Unavailable'
+	if (multiplier === undefined) return '—'
 	return `${(Number(multiplier) / 100).toFixed(2)}x`
 }
 
@@ -177,7 +177,6 @@ export function formatOpenOracleInitialReportApprovalStatusUnavailableMessage({ 
 
 export async function loadOpenOracleInitialReportPriceResult(client: Parameters<typeof quoteExactInput>[0], token1: Parameters<typeof quoteExactInput>[1], token2: Parameters<typeof quoteExactInput>[2], token1Amount: bigint): Promise<OpenOracleInitialReportPriceLoadResult> {
 	const attemptedSources: OpenOracleInitialReportQuoteSource[] = ['Uniswap V4']
-
 	try {
 		const token2Amount = await quoteExactInput(client, token1, token2, token1Amount)
 		const price = calculateOpenOraclePrice(token1Amount, token2Amount)
@@ -290,7 +289,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 
 	let blockReason: string | undefined
 	if (reportDetails === undefined) {
-		blockReason = 'Load a report first'
+		blockReason = 'Open a report first.'
 	} else if (resolvedPriceInput === '') {
 		blockReason = formatOpenOracleInitialReportPriceUnavailableMessage({
 			attemptedSources: quoteAttemptedSources,

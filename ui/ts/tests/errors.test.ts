@@ -5,7 +5,8 @@ import { getErrorMessage, isCloseableErrorMessage } from '../lib/errors.js'
 
 void describe('error helpers', () => {
 	void test('marks user-rejected wallet errors as closeable', () => {
-		expect(isCloseableErrorMessage(getErrorMessage(new Error('User rejected the request.'), 'Failed to deploy SecurityPoolUtils'))).toBe(true)
+		expect(getErrorMessage(new Error('User rejected the request.'), 'Couldn’t deploy SecurityPoolUtils.')).toBe('Action canceled in wallet.')
+		expect(isCloseableErrorMessage(getErrorMessage(new Error('User rejected the request.'), 'Couldn’t deploy SecurityPoolUtils.'))).toBe(true)
 		expect(isCloseableErrorMessage('Wallet connection failed: User denied account authorization')).toBe(true)
 	})
 
@@ -13,8 +14,8 @@ void describe('error helpers', () => {
 		expect(isCloseableErrorMessage('Failed to deploy SecurityPoolUtils: {"code":4001,"message":"Request rejected"}')).toBe(true)
 	})
 
-	void test('keeps the action prefix when a revert reason is available', () => {
-		expect(getErrorMessage(new Error('min deposit requirement'), 'Failed to deposit REP')).toBe('Failed to deposit REP: min deposit requirement')
+	void test('hides raw technical details for unknown failures', () => {
+		expect(getErrorMessage(new Error('execution reverted: bad stuff'), 'Couldn’t refresh pools.')).toBe('Couldn’t refresh pools.')
 	})
 
 	void test('keeps blocking guidance errors non-closeable', () => {

@@ -5,15 +5,18 @@ import { ErrorNotice } from './ErrorNotice.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
+import { StateHint } from './StateHint.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
+import { resolveLoadableValueState, type LoadableValueState } from '../lib/loadState.js'
+import { getReportPresentation, getUniversePresentation } from '../lib/userCopy.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type ForkZoltarSectionProps = {
 	accountAddress: Address | undefined
+	hasLoadedZoltarQuestions: boolean
 	isMainnet: boolean
 	loadingZoltarForkAccess: boolean
 	loadingZoltarQuestions: boolean
-	loadingZoltarUniverse: boolean
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onForkZoltar: () => void
 	onZoltarForkQuestionIdChange: (questionId: string) => void
@@ -25,15 +28,15 @@ type ForkZoltarSectionProps = {
 	zoltarForkRepBalance: bigint | undefined
 	zoltarQuestions: MarketDetails[]
 	zoltarUniverse: ZoltarUniverseSummary | undefined
-	zoltarUniverseMissing: boolean
+	zoltarUniverseState: LoadableValueState
 }
 
 export function ForkZoltarSection({
 	accountAddress,
+	hasLoadedZoltarQuestions,
 	isMainnet,
 	loadingZoltarForkAccess,
 	loadingZoltarQuestions,
-	loadingZoltarUniverse,
 	onApproveZoltarForkRep,
 	onForkZoltar,
 	onZoltarForkQuestionIdChange,
@@ -45,24 +48,28 @@ export function ForkZoltarSection({
 	zoltarForkRepBalance,
 	zoltarQuestions,
 	zoltarUniverse,
-	zoltarUniverseMissing,
+	zoltarUniverseState,
 }: ForkZoltarSectionProps) {
 	const rootUniverse = zoltarUniverse
-	const universeMissing = rootUniverse === undefined && zoltarUniverseMissing && !loadingZoltarUniverse
+	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
 	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= rootUniverse.forkThreshold
 	const hasEnoughApproval = rootUniverse !== undefined && zoltarForkAllowance !== undefined && zoltarForkAllowance >= rootUniverse.forkThreshold
 	const selectedQuestionId = zoltarForkQuestionId.trim()
 	const selectedQuestion = selectedQuestionId === '' ? undefined : zoltarQuestions.find(question => sameCaseInsensitiveText(question.questionId, selectedQuestionId))
-	const showMissingQuestionMessage = !loadingZoltarQuestions && selectedQuestionId !== '' && selectedQuestion === undefined
+	const selectedQuestionLookupState = resolveLoadableValueState({
+		hasLoaded: hasLoadedZoltarQuestions,
+		isLoading: loadingZoltarQuestions,
+		value: selectedQuestion,
+	})
+	const selectedQuestionPresentation = selectedQuestionId !== '' && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
 	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && hasEnoughRep && hasEnoughApproval
 
 	if (universeMissing) {
+		const presentation = getUniversePresentation(zoltarUniverseState)
 		return (
 			<>
-				<EntityCard title='Fork Zoltar' badge={<span className='badge blocked'>Missing</span>}>
-					<p className='notice error'>The universe does not exist.</p>
-				</EntityCard>
+				<EntityCard title='Fork Zoltar'>{presentation === undefined ? undefined : <StateHint presentation={presentation} />}</EntityCard>
 				<ErrorNotice message={zoltarForkError} />
 			</>
 		)
@@ -95,7 +102,7 @@ export function ForkZoltarSection({
 							<Question question={selectedQuestion} />
 						</div>
 					)}
-					{showMissingQuestionMessage ? <p className='detail'>No loaded question matches this ID.</p> : undefined}
+					{selectedQuestionPresentation === undefined ? undefined : <StateHint presentation={selectedQuestionPresentation} />}
 
 					<div className='actions'>
 						{hasForked ? undefined : (
