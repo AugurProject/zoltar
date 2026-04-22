@@ -30,6 +30,10 @@ COPY ./ui/tsconfig.vendor.json /source/ui/tsconfig.vendor.json
 COPY ./ui/build/ /source/ui/build/
 COPY ./ui/index.html /source/ui/index.html
 
+# Shared TypeScript source used by both UI and simulator helpers
+COPY ./shared/tsconfig.json /source/shared/tsconfig.json
+COPY ./shared/ts/ /source/shared/ts/
+
 # Solidity contracts and TypeScript source
 COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json
 COPY ./solidity/tsconfig-compile.json /source/solidity/tsconfig-compile.json

@@ -1,13 +1,12 @@
 import { useSignal } from '@preact/signals'
 import { useCallback, useEffect } from 'preact/hooks'
 import { zeroAddress, type Address, type Hash } from 'viem'
-import { approveErc20, forkZoltarUniverse, getDeploymentSteps, loadErc20Allowance, loadErc20Balance, loadRepTokensMigratedRepBalance } from '../contracts.js'
+import { approveErc20, forkZoltarUniverse, getZoltarAddress, loadErc20Allowance, loadErc20Balance, loadRepTokensMigratedRepBalance } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { requireWallet } from '../lib/walletGuard.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import { GENESIS_REPUTATION_TOKEN_ADDRESS } from '../lib/universe.js'
-import { requireDefined } from '../lib/required.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -26,14 +25,6 @@ type UseZoltarForkParameters = {
 
 function formatQuestionId(questionId: bigint) {
 	return `0x${questionId.toString(16)}`
-}
-
-function getZoltarAddress() {
-	const zoltarStep = requireDefined(
-		getDeploymentSteps().find(step => step.id === 'zoltar'),
-		'Zoltar deployment step not found',
-	)
-	return zoltarStep.address
 }
 
 export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUniverse, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, refreshZoltarUniverse, zoltarUniverse }: UseZoltarForkParameters) {

@@ -1,6 +1,9 @@
-import { encodeAbiParameters, encodeDeployData, getAddress, getContractAddress, getCreate2Address, keccak256, numberToBytes, parseAbiItem, toHex, zeroAddress, RpcError, type Address, type Hash, type Hex } from 'viem'
+import { encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, parseAbiItem, toHex, zeroAddress, RpcError, type Address, type Hash, type Hex } from 'viem'
 import { ABIS } from './abis.js'
+import { createAddressDerivationHelpers } from '../../shared/js/addressDerivation.js'
+import { createDeploymentAddressHelpers } from '../../shared/js/deploymentAddresses.js'
 import { assertNever } from './lib/assert.js'
+import { GENESIS_REPUTATION_TOKEN_ADDRESS } from './lib/universe.js'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	ReputationToken_ReputationToken,
@@ -62,7 +65,7 @@ const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed85
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
-const ZERO_SALT = numberToBytes(0, { size: 32 })
+const ZERO_SALT = toHex(0, { size: 32 })
 const FUND_PROXY_DEPLOYER_SIGNER_AMOUNT = 10000000000000000n
 const LIQUIDATION_OPERATION_TYPE = 0
 const ESCALATION_TIME_LENGTH = 4_233_600n
@@ -165,56 +168,37 @@ const getSecurityPoolForkerByteCode = (zoltarAddress: Address) =>
 		args: [zoltarAddress],
 	})
 
-const getZoltarQuestionDataAddress = () =>
-	getContractAddress({
-		bytecode: `0x${ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object}`,
-		from: PROXY_DEPLOYER_ADDRESS,
-		opcode: 'CREATE2',
-		salt: ZERO_SALT,
-	})
-
-const getZoltarInitCode = (zoltarQuestionDataAddress: Address) =>
+const getZoltarInitCode = (zoltarQuestionDataAddress: Address): Hex =>
 	encodeDeployData({
 		abi: Zoltar_Zoltar.abi,
 		bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
 		args: [zoltarQuestionDataAddress],
 	})
 
-const getZoltarAddress = () => {
-	const zoltarQuestionDataAddress = getZoltarQuestionDataAddress()
-	return getCreate2Address({
-		from: PROXY_DEPLOYER_ADDRESS,
-		salt: ZERO_SALT,
-		bytecode: getZoltarInitCode(zoltarQuestionDataAddress),
-	})
-}
-
-const getSecurityPoolFactoryByteCode = (securityPoolForker: Address, questionData: Address, escalationGameFactory: Address, openOracle: Address, zoltar: Address, shareTokenFactory: Address, uniformPriceDualCapBatchAuctionFactory: Address, priceOracleManagerAndOperatorQueuerFactory: Address) =>
+const getSecurityPoolFactoryByteCode = ({
+	escalationGameFactory,
+	openOracle,
+	priceOracleManagerAndOperatorQueuerFactory,
+	securityPoolForker,
+	shareTokenFactory,
+	uniformPriceDualCapBatchAuctionFactory,
+	zoltar,
+	zoltarQuestionData,
+}: {
+	escalationGameFactory: Address
+	openOracle: Address
+	priceOracleManagerAndOperatorQueuerFactory: Address
+	securityPoolForker: Address
+	shareTokenFactory: Address
+	uniformPriceDualCapBatchAuctionFactory: Address
+	zoltar: Address
+	zoltarQuestionData: Address
+}) =>
 	encodeDeployData({
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
-		args: [securityPoolForker, questionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory],
+		args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory],
 	})
-
-function applyLibraries(bytecode: string): Hex {
-	const librariesToReplace = [
-		{
-			hash: keccak256(toHex('contracts/ScalarOutcomes.sol:ScalarOutcomes')).slice(2, 36),
-			address: getScalarOutcomesAddress(),
-		},
-		{
-			hash: keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36),
-			address: getSecurityPoolUtilsAddress(),
-		},
-	] as const
-
-	let updatedBytecode = bytecode
-	for (const { hash, address } of librariesToReplace) {
-		updatedBytecode = updatedBytecode.replaceAll(`__$${hash}$__`, address.slice(2).toLowerCase())
-	}
-
-	return `0x${updatedBytecode}`
-}
 
 function getDeploymentStatusOracleStepAddresses() {
 	const addresses = getInfraContractAddresses()
@@ -242,14 +226,6 @@ function getDeploymentStatusOracleByteCode() {
 	})
 }
 
-function getDeploymentStatusOracleAddress() {
-	return getCreate2Address({
-		bytecode: getDeploymentStatusOracleByteCode(),
-		from: PROXY_DEPLOYER_ADDRESS,
-		salt: ZERO_SALT,
-	})
-}
-
 function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracleDeployed: boolean): DeploymentStatusSnapshot {
 	const steps = getDeploymentSteps()
 	let maskIndex = 0n
@@ -274,36 +250,77 @@ function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracl
 	}
 }
 
-function getInfraContractAddresses() {
-	const getAddressForBytecode = (bytecode: Hex) =>
-		getCreate2Address({
-			bytecode,
-			from: PROXY_DEPLOYER_ADDRESS,
-			salt: ZERO_SALT,
-		})
+const deploymentAddressHelpers = createDeploymentAddressHelpers({
+	deploymentStatusOracleBytecode: getDeploymentStatusOracleByteCode,
+	getEscalationGameFactoryByteCode,
+	getSecurityPoolFactoryByteCode,
+	getSecurityPoolForkerByteCode,
+	getShareTokenFactoryByteCode,
+	getZoltarInitCode,
+	libraryReplacements: () => [
+		{
+			hash: keccak256(toHex('contracts/ScalarOutcomes.sol:ScalarOutcomes')).slice(2, 36),
+			address: getScalarOutcomesAddress(),
+		},
+		{
+			hash: keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36),
+			address: getSecurityPoolUtilsAddress(),
+		},
+	],
+	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
+	priceOracleManagerAndOperatorQueuerFactoryBytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
+	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
+	scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
+	securityPoolUtilsBytecode: `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
+	uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
+	zeroSalt: ZERO_SALT,
+	zoltarQuestionDataBytecode: getZoltarQuestionDataByteCode,
+})
 
-	const contracts = {
-		securityPoolUtils: getSecurityPoolUtilsAddress(),
-		openOracle: getAddressForBytecode(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`),
-		zoltarQuestionData: getAddressForBytecode(getZoltarQuestionDataByteCode()),
-		zoltar: getZoltarAddress(),
-		shareTokenFactory: getAddressForBytecode(getShareTokenFactoryByteCode(getZoltarAddress())),
-		priceOracleManagerAndOperatorQueuerFactory: getAddressForBytecode(`0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`),
-		securityPoolForker: getAddressForBytecode(getSecurityPoolForkerByteCode(getZoltarAddress())),
-		escalationGameFactory: getAddressForBytecode(getEscalationGameFactoryByteCode()),
-		scalarOutcomes: getScalarOutcomesAddress(),
-		uniformPriceDualCapBatchAuctionFactory: getAddressForBytecode(`0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`),
-	}
+export const { getZoltarAddress } = deploymentAddressHelpers
+const { applyLinkedLibraries: applyLibraries, getDeploymentStatusOracleAddress, getInfraContractAddresses } = deploymentAddressHelpers
 
-	return {
-		...contracts,
-		securityPoolFactory: getCreate2Address({
-			from: PROXY_DEPLOYER_ADDRESS,
-			salt: ZERO_SALT,
-			bytecode: getSecurityPoolFactoryByteCode(contracts.securityPoolForker, contracts.zoltarQuestionData, contracts.escalationGameFactory, contracts.openOracle, contracts.zoltar, contracts.shareTokenFactory, contracts.uniformPriceDualCapBatchAuctionFactory, contracts.priceOracleManagerAndOperatorQueuerFactory),
+const { getSecurityPoolAddresses } = createAddressDerivationHelpers({
+	genesisRepTokenAddress: GENESIS_REPUTATION_TOKEN_ADDRESS,
+	getEscalationGameInitCode: securityPool =>
+		encodeDeployData({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
+			args: [securityPool],
 		}),
-	}
-}
+	getInfraContracts: () => getInfraContractAddresses(),
+	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken) =>
+		encodeDeployData({
+			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+			bytecode: `0x${peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.evm.bytecode.object}`,
+			args: [openOracle, repToken],
+		}),
+	getReputationTokenInitCode: zoltarAddress =>
+		encodeDeployData({
+			abi: ReputationToken_ReputationToken.abi,
+			bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
+			args: [zoltarAddress],
+		}),
+	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, securityMultiplier, securityPoolFactory, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
+		encodeDeployData({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
+			args: [securityPoolForker, securityPoolFactory, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, truthAuction],
+		}),
+	getShareTokenInitCode: (securityPoolFactory, zoltarAddress, questionId) =>
+		encodeDeployData({
+			abi: peripherals_tokens_ShareToken_ShareToken.abi,
+			bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
+			args: [securityPoolFactory, zoltarAddress, questionId],
+		}),
+	getTruthAuctionInitCode: securityPoolForker =>
+		encodeDeployData({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			bytecode: `0x${peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.evm.bytecode.object}`,
+			args: [securityPoolForker],
+		}),
+	getZoltarAddress: () => getZoltarAddress(),
+})
 
 async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 	const hash = await client.sendTransaction({
@@ -467,7 +484,16 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			deploy: async client =>
 				await deployViaProxy(
 					client,
-					getSecurityPoolFactoryByteCode(addresses.securityPoolForker, addresses.zoltarQuestionData, addresses.escalationGameFactory, addresses.openOracle, addresses.zoltar, addresses.shareTokenFactory, addresses.uniformPriceDualCapBatchAuctionFactory, addresses.priceOracleManagerAndOperatorQueuerFactory),
+					getSecurityPoolFactoryByteCode({
+						escalationGameFactory: addresses.escalationGameFactory,
+						openOracle: addresses.openOracle,
+						priceOracleManagerAndOperatorQueuerFactory: addresses.priceOracleManagerAndOperatorQueuerFactory,
+						securityPoolForker: addresses.securityPoolForker,
+						shareTokenFactory: addresses.shareTokenFactory,
+						uniformPriceDualCapBatchAuctionFactory: addresses.uniformPriceDualCapBatchAuctionFactory,
+						zoltar: addresses.zoltar,
+						zoltarQuestionData: addresses.zoltarQuestionData,
+					}),
 				),
 		},
 	]
@@ -1057,6 +1083,7 @@ export async function createSecurityPool(
 	return {
 		deployPoolHash,
 		questionId: getQuestionIdHex(parameters.questionId),
+		securityPoolAddress: getSecurityPoolAddresses(zeroAddress, 0n, parameters.questionId, parameters.securityMultiplier).securityPool,
 		securityMultiplier: parameters.securityMultiplier,
 		universeId: 0n,
 	} satisfies SecurityPoolCreationResult
