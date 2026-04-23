@@ -29,7 +29,7 @@ import type { SecurityPoolWorkflowRouteContentProps } from '../types/components.
 
 type SelectedPoolView = 'vaults' | 'trading' | 'resolution'
 type SelectedVaultView = 'browse-vaults' | 'selected-vault'
-type SelectedPoolLookupDisplay = 'empty' | 'quiet' | 'loading' | 'missing' | 'ready'
+type SelectedPoolLookupDisplay = 'empty' | LoadableValueState
 
 export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolUniverseMismatch: boolean }) {
 	return hasSelectedPoolAddress && selectedPoolExists && !selectedPoolUniverseMismatch
@@ -40,19 +40,9 @@ export function getSelectedPoolCardTitle({ hasSelectedPoolAddress, resolvedPoolT
 	return hasSelectedPoolAddress ? 'Selected Pool' : 'Select a security pool'
 }
 
-export function getSelectedPoolLookupDisplay({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolLookupState }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolLookupState: LoadableValueState }): SelectedPoolLookupDisplay {
+export function getSelectedPoolLookupDisplay({ hasSelectedPoolAddress, selectedPoolLookupState }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState }): SelectedPoolLookupDisplay {
 	if (!hasSelectedPoolAddress) return 'empty'
-	if (selectedPoolExists) return 'ready'
-	switch (selectedPoolLookupState) {
-		case 'loading':
-			return 'loading'
-		case 'missing':
-			return 'missing'
-		case 'ready':
-			return 'ready'
-		case 'unknown':
-			return 'quiet'
-	}
+	return selectedPoolLookupState
 }
 
 export function SecurityPoolWorkflowSection({
@@ -119,7 +109,6 @@ export function SecurityPoolWorkflowSection({
 	})
 	const selectedPoolLookupDisplay = getSelectedPoolLookupDisplay({
 		hasSelectedPoolAddress,
-		selectedPoolExists: selectedPool !== undefined,
 		selectedPoolLookupState,
 	})
 	const lastAutoLoadedManagerAddress = useRef<string | undefined>(undefined)

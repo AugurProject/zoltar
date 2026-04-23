@@ -27,11 +27,10 @@ void describe('selected pool workflow lookup state', () => {
 		).toBe('Will REP exceed threshold?')
 	})
 
-	void test('maps selected pool lookup states to the redesigned display modes', () => {
+	void test('adds only the empty selected-pool state on top of loadable lookup states', () => {
 		expect(
 			getSelectedPoolLookupDisplay({
 				hasSelectedPoolAddress: false,
-				selectedPoolExists: false,
 				selectedPoolLookupState: 'unknown',
 			}),
 		).toBe('empty')
@@ -39,15 +38,13 @@ void describe('selected pool workflow lookup state', () => {
 		expect(
 			getSelectedPoolLookupDisplay({
 				hasSelectedPoolAddress: true,
-				selectedPoolExists: false,
 				selectedPoolLookupState: 'unknown',
 			}),
-		).toBe('quiet')
+		).toBe('unknown')
 
 		expect(
 			getSelectedPoolLookupDisplay({
 				hasSelectedPoolAddress: true,
-				selectedPoolExists: false,
 				selectedPoolLookupState: 'loading',
 			}),
 		).toBe('loading')
@@ -55,7 +52,6 @@ void describe('selected pool workflow lookup state', () => {
 		expect(
 			getSelectedPoolLookupDisplay({
 				hasSelectedPoolAddress: true,
-				selectedPoolExists: false,
 				selectedPoolLookupState: 'missing',
 			}),
 		).toBe('missing')
@@ -63,7 +59,6 @@ void describe('selected pool workflow lookup state', () => {
 		expect(
 			getSelectedPoolLookupDisplay({
 				hasSelectedPoolAddress: true,
-				selectedPoolExists: true,
 				selectedPoolLookupState: 'ready',
 			}),
 		).toBe('ready')
