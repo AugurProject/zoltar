@@ -2,6 +2,7 @@ import { useSignalEffect } from '@preact/signals'
 import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { formatAddress } from '../lib/addresses.js'
+import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 
 type AddressValueProps = {
 	address: string | undefined
@@ -50,9 +51,10 @@ export function AddressValue({ address, className = '' }: AddressValueProps) {
 	})
 
 	if (address === undefined) {
+		const placeholder = getMetricPlaceholderPresentation(address)?.placeholder
 		return (
-			<span className={`address-value ${className}`} title='Unavailable'>
-				Unavailable
+			<span className={`address-value ${className}`} title={placeholder}>
+				{placeholder}
 			</span>
 		)
 	}

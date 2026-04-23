@@ -8,6 +8,7 @@ type RunWriteActionParameters = {
 	onTransaction: (hash: Hash) => void
 	onTransactionFinished: () => void
 	onTransactionRequested: () => void
+	refreshErrorFallback?: string
 	refreshState: () => Promise<void>
 	setErrorMessage: (message: string | undefined) => void
 }
@@ -28,20 +29,29 @@ export function buildWriteActionConfig(params: Omit<WriteOperationsParameters, '
 
 export async function runWriteAction<TResult extends { hash: Hash }>(parameters: RunWriteActionParameters, action: (walletAddress: Address) => Promise<TResult | undefined>, errorFallback: string, onSuccess?: (result: TResult, walletAddress: Address) => Promise<void> | void) {
 	if (parameters.accountAddress === undefined) {
-		parameters.setErrorMessage(parameters.missingWalletMessage)
+		parameters.setErrorMessage('Connect wallet to continue.')
 		return
 	}
 
 	try {
-		parameters.onTransactionRequested()
-		parameters.setErrorMessage(undefined)
-		const result = await action(parameters.accountAddress)
-		if (result === undefined) return
-		await Promise.resolve(parameters.onTransaction(result.hash))
-		await onSuccess?.(result, parameters.accountAddress)
-		await parameters.refreshState()
-	} catch (error) {
-		parameters.setErrorMessage(getErrorMessage(error, errorFallback))
+		let result: TResult | undefined
+		try {
+			parameters.onTransactionRequested()
+			parameters.setErrorMessage(undefined)
+			result = await action(parameters.accountAddress)
+			if (result === undefined) return
+			await Promise.resolve(parameters.onTransaction(result.hash))
+		} catch (error) {
+			parameters.setErrorMessage(getErrorMessage(error, errorFallback))
+			return
+		}
+
+		try {
+			await onSuccess?.(result, parameters.accountAddress)
+			await parameters.refreshState()
+		} catch (error) {
+			parameters.setErrorMessage(getErrorMessage(error, parameters.refreshErrorFallback ?? 'Transaction succeeded, but refreshing the UI failed'))
+		}
 	} finally {
 		await Promise.resolve(parameters.onTransactionFinished())
 	}

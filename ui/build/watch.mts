@@ -7,7 +7,7 @@ import * as url from 'node:url'
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
 const REPOSITORY_ROOT_PATH = path.join(UI_ROOT_PATH, '..')
-const DEV_SERVER_PATH = path.join(UI_ROOT_PATH, 'dev-server.mjs')
+const DEV_SERVER_PATH = path.join(UI_ROOT_PATH, 'dev-server.ts')
 const INDEX_HTML_PATH = path.join(UI_ROOT_PATH, 'index.html')
 const TYPE_SCRIPT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'js')
 const TYPE_SCRIPT_SOURCE_PATH = path.join(UI_ROOT_PATH, 'ts')

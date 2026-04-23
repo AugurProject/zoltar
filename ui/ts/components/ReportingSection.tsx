@@ -32,7 +32,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 				<div className='market-header'>
 					<div>
 						<h2>Reporting & Escalation</h2>
-						<p className='detail'>Load a binary market’s security pool after the market has ended. Reporting is done by staking REP on Invalid, Yes, or No through the pool’s escalation game.</p>
+						<p className='detail'>Open a pool after market end to report on Invalid, Yes, or No.</p>
 					</div>
 				</div>
 			) : undefined}
@@ -138,7 +138,7 @@ export function ReportingSection({ accountState, loadingReportingDetails, onLoad
 
 							<div className='actions'>
 								<button className='secondary' onClick={onLoadReporting} disabled={loadingReportingDetails}>
-									{loadingReportingDetails ? <LoadingText>Loading Escalation...</LoadingText> : 'Load Reporting State'}
+									{loadingReportingDetails ? <LoadingText>Loading escalation...</LoadingText> : 'Refresh reporting'}
 								</button>
 							</div>
 

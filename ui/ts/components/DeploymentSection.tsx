@@ -31,7 +31,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 		if (accountAddress === undefined) {
 			return {
 				badgeClass: 'pending',
-				detail: 'Connect a wallet to deploy.',
+				detail: 'Connect wallet to continue.',
 				label: 'Not Deployed',
 				buttonLabel: 'Deploy',
 			}
@@ -39,7 +39,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 		if (!isMainnet) {
 			return {
 				badgeClass: 'pending',
-				detail: 'Switch your wallet to Ethereum mainnet.',
+				detail: 'Switch to Ethereum mainnet.',
 				label: 'Not Deployed',
 				buttonLabel: 'Deploy',
 			}

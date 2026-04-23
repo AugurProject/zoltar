@@ -37,7 +37,7 @@ function formatUtcTimestamp(timestamp: bigint) {
 }
 
 export function formatCurrencyBalance(value: bigint | undefined, units: number = 18) {
-	if (value === undefined) return 'Unavailable'
+	if (value === undefined) return '—'
 	assertInteger(units, 'Units')
 	const formattedValue = units === 18 ? formatEther(value) : formatUnits(value, units)
 	return formatDecimalString(formattedValue)
@@ -49,7 +49,7 @@ export function formatCurrencyInputBalance(value: bigint, units: number = 18) {
 }
 
 export function formatRoundedCurrencyBalance(value: bigint | undefined, units: number = 18, decimals: number = 2) {
-	if (value === undefined) return 'Unavailable'
+	if (value === undefined) return '—'
 	assertNonNegativeInteger(units, 'Units')
 	assertInteger(decimals, 'Decimals')
 	if (decimals < 0) return formatCurrencyBalance(value, units)

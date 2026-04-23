@@ -8,12 +8,14 @@ import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
+import { StateHint } from './StateHint.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { useLoadController } from '../hooks/useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOracleFeePercentage, formatOpenOracleMultiplier, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSelectedReportActionMode, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import { loadOpenOracleReportSummaries } from '../contracts.js'
+import { getReportPresentation } from '../lib/userCopy.js'
 import { resolveFirstMatchingValue } from '../lib/viewState.js'
 import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
@@ -52,7 +54,7 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 			actions={
 				<div className='actions'>
 					<button className='secondary' type='button' onClick={() => onSelectReport(report.reportId)}>
-						Open Report
+						Open report
 					</button>
 				</div>
 			}
@@ -224,8 +226,12 @@ function renderReportDetailsCard(
 	onSubmitInitialReport: () => void,
 ) {
 	if (openOracleReportDetails === undefined) {
+		const reportPresentation = getReportPresentation({
+			kind: 'report',
+			state: loadingOracleReport ? 'loading' : openOracleForm.reportId.trim() === '' ? 'unknown' : 'missing',
+		})
 		return (
-			<EntityCard className='selected-report-card' title='Selected Report' badge={<span className='badge muted'>Load a report</span>}>
+			<EntityCard className='selected-report-card' title='Selected Report'>
 				<div className='entity-card-subsection'>
 					<div className='entity-card-subsection-header'>
 						<h4>Report Controls</h4>
@@ -238,12 +244,12 @@ function renderReportDetailsCard(
 							</label>
 							<div className='actions'>
 								<button className='secondary' onClick={() => onLoadOracleReport(openOracleForm.reportId)} disabled={loadingOracleReport}>
-									{loadingOracleReport ? <LoadingText>Loading...</LoadingText> : 'Load Report'}
+									{loadingOracleReport ? <LoadingText>Loading...</LoadingText> : 'Open report'}
 								</button>
 							</div>
 						</div>
 					</div>
-					<p className='detail'>Choose a report id and load it to inspect the chain data.</p>
+					{reportPresentation === undefined ? undefined : <StateHint presentation={reportPresentation} />}
 				</div>
 			</EntityCard>
 		)
@@ -264,7 +270,11 @@ function renderReportDetailsCard(
 		defaultPriceError: openOracleInitialReportState.defaultPriceError,
 		defaultPriceSource: openOracleInitialReportState.defaultPriceSource,
 		priceInput: openOracleForm.price,
+		quoteAttemptedSources: openOracleInitialReportState.quoteAttemptedSources,
+		quoteFailureReason: openOracleInitialReportState.quoteFailureReason,
 		reportDetails: openOracleReportDetails,
+		token1AllowanceError: openOracleInitialReportState.token1AllowanceError,
+		token2AllowanceError: openOracleInitialReportState.token2AllowanceError,
 		token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
 		token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
 	})
@@ -283,7 +293,7 @@ function renderReportDetailsCard(
 						</label>
 						<div className='actions'>
 							<button className='secondary' onClick={() => onLoadOracleReport(openOracleForm.reportId)} disabled={loadingOracleReport}>
-								{loadingOracleReport ? <LoadingText>Loading...</LoadingText> : 'Load Report'}
+								{loadingOracleReport ? <LoadingText>Loading...</LoadingText> : 'Refresh report'}
 							</button>
 						</div>
 					</div>

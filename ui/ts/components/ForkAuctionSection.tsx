@@ -59,7 +59,7 @@ export function ForkAuctionSection({
 				<div className='market-header'>
 					<div>
 						<h2>Fork & Truth Auction</h2>
-						<p className='detail'>Load any security pool to inspect its universe, fork state, migration timer, truth auction progress, and the actions needed to move REP, vaults, and auction proceeds through the fork flow.</p>
+						<p className='detail'>Open a pool to inspect fork progress, migration, and the truth auction.</p>
 					</div>
 				</div>
 			) : undefined}
@@ -148,14 +148,14 @@ export function ForkAuctionSection({
 										<MetricField label='REP Purchased'>
 											<CurrencyValue value={forkAuctionDetails.truthAuction.totalRepPurchased} suffix='REP' />
 										</MetricField>
-										<MetricField label='Clearing Tick'>{forkAuctionDetails.truthAuction.clearingTick?.toString() ?? 'Unavailable'}</MetricField>
+										<MetricField label='Clearing Tick'>{forkAuctionDetails.truthAuction.clearingTick?.toString() ?? '—'}</MetricField>
 										<MetricField label='Clearing Price'>
 											<CurrencyValue value={forkAuctionDetails.truthAuction.clearingPrice} suffix='REP' />
 										</MetricField>
 										<MetricField label='Underfunded'>{forkAuctionDetails.truthAuction.underfunded ? 'Yes' : 'No'}</MetricField>
 										<MetricField label='Finalized'>{forkAuctionDetails.truthAuction.finalized ? 'Yes' : 'No'}</MetricField>
 									</div>
-									<p className='detail'>At the current clearing price, the entered bid amount would buy roughly {estimatedRep === undefined ? 'Unavailable' : <CurrencyValue value={estimatedRep} suffix='REP' />} ownership if it clears.</p>
+									<p className='detail'>At the current clearing price, this bid would buy roughly {estimatedRep === undefined ? '—' : <CurrencyValue value={estimatedRep} suffix='REP' />} if it clears.</p>
 								</div>
 							)}
 
@@ -189,7 +189,7 @@ export function ForkAuctionSection({
 
 						<div className='actions'>
 							<button className='secondary' onClick={onLoadForkAuction} disabled={loadingForkAuctionDetails}>
-								{loadingForkAuctionDetails ? <LoadingText>Loading Fork State...</LoadingText> : 'Load Fork & Auction State'}
+								{loadingForkAuctionDetails ? <LoadingText>Loading fork...</LoadingText> : 'Refresh fork'}
 							</button>
 						</div>
 

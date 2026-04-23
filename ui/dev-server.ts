@@ -8,14 +8,21 @@ const uiRootDirectory = directoryOfThisFile
 const repositoryRootDirectory = path.resolve(uiRootDirectory, '..')
 const liveReloadClients = new Set()
 
-const resolveStaticFilePath = relativeFilePath => {
-	const candidateRoots = [uiRootDirectory, repositoryRootDirectory]
+const getServedFilePaths = requestPath => {
+	const urlPath = requestPath.endsWith('/') ? `${ requestPath }index.html` : requestPath
+	const relativeFilePath = decodeURI(urlPath).replace(/^\/+/, '')
+	const candidateRoots = relativeFilePath.startsWith('shared/') ? [repositoryRootDirectory] : [uiRootDirectory, repositoryRootDirectory]
+
+	const candidateFilePaths = []
 	for (const candidateRoot of candidateRoots) {
 		const candidateFilePath = path.resolve(candidateRoot, relativeFilePath)
-		if (!candidateFilePath.startsWith(candidateRoot)) continue
-		return candidateFilePath
+		if (candidateFilePath !== candidateRoot && !candidateFilePath.startsWith(`${ candidateRoot }${ path.sep }`)) {
+			continue
+		}
+		candidateFilePaths.push(candidateFilePath)
 	}
-	return undefined
+
+	return candidateFilePaths
 }
 
 const sendLiveReloadEvent = reason => {
@@ -58,23 +65,28 @@ server.on('request', async (request, response) => {
 			response.end()
 			return
 		}
-		const urlPath = requestPath.endsWith('/') ? `${ requestPath }index.html` : requestPath
-		const relativeFilePath = decodeURI(urlPath).replace(/^\/+/, '')
-		const filePath = resolveStaticFilePath(relativeFilePath)
-		if (filePath === undefined) {
+		const candidateFilePaths = getServedFilePaths(requestPath)
+		if (candidateFilePaths.length === 0) {
 			response.writeHead(403)
 			response.end()
 			return
 		}
+
+		let filePath
 		let fileContents
-		try {
-			fileContents = await filesystem.readFile(filePath)
-		} catch (error) {
-			if (error.code !== 'ENOENT' || filePath.startsWith(uiRootDirectory) === false) throw error
-			const fallbackFilePath = path.resolve(repositoryRootDirectory, relativeFilePath)
-			if (!fallbackFilePath.startsWith(repositoryRootDirectory)) throw error
-			fileContents = await filesystem.readFile(fallbackFilePath)
+		let lastError
+		for (const candidateFilePath of candidateFilePaths) {
+			try {
+				fileContents = await filesystem.readFile(candidateFilePath)
+				filePath = candidateFilePath
+				break
+			} catch (error) {
+				if (error.code !== 'ENOENT') throw error
+				lastError = error
+			}
 		}
+		if (filePath === undefined || fileContents === undefined) throw lastError
+
 		const extension = filePath.split('.').pop()
 		const mimeType = extension === undefined ? 'text/plain' : mimeTypes[extension]
 		if (mimeType !== undefined) {

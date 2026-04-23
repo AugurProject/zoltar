@@ -32,7 +32,7 @@
 		"ui:setup": "bun install --frozen-lockfile && cd solidity && bun install --frozen-lockfile && bun run setup && cd .. && bun run generate && cd ui && bun install --frozen-lockfile && bun run build && bun run build:tests",
 		"ui:build": "bun run generate && cd ui && bun install --frozen-lockfile && bun run build && bun run build:tests",
 		"ui:watch": "bun run ui:build && bun ./ui/build/watch.mts",
-		"ui:serve": "bun run ui:build && bun ./ui/dev-server.mjs",
+		"ui:serve": "bun run ui:build && bun ./ui/dev-server.ts",
 		"ui:vendor": "cd ui && bun install --frozen-lockfile && bun ./build/vendor.mts",
 		"gas-costs": "cd solidity && bun run gas-costs",
 		"test": "bun run tsc && bun test --timeout 300000",

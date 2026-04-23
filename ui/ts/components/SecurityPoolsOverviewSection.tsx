@@ -6,15 +6,18 @@ import { LiquidationModal } from './LiquidationModal.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { Question, getQuestionTitle } from './Question.js'
+import { StateHint } from './StateHint.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
+import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 
 export function SecurityPoolsOverviewSection({
 	accountState,
 	closeLiquidationModal,
+	hasLoadedSecurityPools,
 	liquidationAmount,
 	liquidationManagerAddress,
 	liquidationModalOpen,
@@ -32,6 +35,12 @@ export function SecurityPoolsOverviewSection({
 	securityPools,
 }: SecurityPoolsOverviewSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
+	const registryPresentation = getPoolRegistryPresentation({
+		hasLoaded: hasLoadedSecurityPools,
+		isLoading: loadingSecurityPools,
+		mode: 'collection',
+		poolCount: securityPools.length,
+	})
 
 	return (
 		<section className='panel market-panel'>
@@ -41,11 +50,11 @@ export function SecurityPoolsOverviewSection({
 					badge={<span className='badge muted'>{securityPools.length} loaded</span>}
 					actions={
 						<button className='secondary' onClick={onLoadSecurityPools} disabled={loadingSecurityPools}>
-							{loadingSecurityPools ? <LoadingText>Loading Pools...</LoadingText> : 'Refresh Pool Registry'}
+							{loadingSecurityPools ? <LoadingText>Loading pools...</LoadingText> : 'Refresh pools'}
 						</button>
 					}
 				>
-					<p className='detail'>Displays all pools loaded from the on-chain registry.</p>
+					<p className='detail'>Browse pools and inspect vaults.</p>
 				</EntityCard>
 
 				{securityPoolOverviewResult === undefined ? undefined : (
@@ -56,9 +65,7 @@ export function SecurityPoolsOverviewSection({
 				<ErrorNotice message={securityPoolOverviewError} />
 
 				{securityPools.length === 0 ? (
-					<EntityCard title='No Pools Loaded' badge={<span className='badge pending'>Empty</span>}>
-						<p className='detail'>No pools loaded yet. Use Refresh Pool Registry to fetch them from the chain.</p>
-					</EntityCard>
+					<EntityCard title='Pools'>{registryPresentation === undefined ? undefined : <StateHint presentation={registryPresentation} />}</EntityCard>
 				) : (
 					<div className='entity-card-list'>
 						{securityPools.map(pool => (
@@ -112,7 +119,7 @@ export function SecurityPoolsOverviewSection({
 										<h4>Vaults</h4>
 									</div>
 									{pool.vaults.length === 0 ? (
-										<p className='detail'>No vaults</p>
+										<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />
 									) : (
 										<div className='entity-card-list'>
 											{pool.vaults.map(vault => (

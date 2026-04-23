@@ -2,6 +2,7 @@ import { useEffect } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { formatCurrencyBalance, formatRoundedCurrencyBalance } from '../lib/formatters.js'
+import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 
 type CurrencyValueProps = {
 	className?: string
@@ -27,7 +28,7 @@ export function CurrencyValue({ className = '', copyable = true, decimals = 2, l
 	}
 
 	if (value === undefined) {
-		return <span className={`currency-value unavailable ${className}`}>Unavailable</span>
+		return <span className={`currency-value unavailable ${className}`}>{getMetricPlaceholderPresentation(value)?.placeholder}</span>
 	}
 
 	const resolvedExactValue = exactValue ?? formatCurrencyBalance(value, units)

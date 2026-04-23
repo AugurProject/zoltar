@@ -25,10 +25,12 @@ import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.j
 import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { useUrlState } from './hooks/useUrlState.js'
 import { getDeploymentSections } from './lib/deployment.js'
+import { resolveRequestedLoadableValueState } from './lib/loadState.js'
 import { isMainnetChain } from './lib/network.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
 import type { TransactionState } from './lib/transactionState.js'
 import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
+import { getUniversePresentation, getWalletPresentation } from './lib/userCopy.js'
 import { formatUniverseCollectionLabel, formatUniverseLabel } from './lib/universe.js'
 import { TransactionHashLink } from './components/TransactionHashLink.js'
 import { TimestampValue } from './components/TimestampValue.js'
@@ -101,7 +103,7 @@ export function App() {
 		zoltarQuestionCount,
 		zoltarQuestions,
 		zoltarUniverse,
-		zoltarUniverseMissing,
+		zoltarUniverseResolvedId,
 	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } =
@@ -135,7 +137,9 @@ export function App() {
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
 	const { loadingPoolOracleManager, loadPoolOracleManager, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(baseHookConfig)
 	const {
+		checkedSecurityPoolAddress,
 		closeLiquidationModal,
+		hasLoadedSecurityPools,
 		liquidationAmount,
 		liquidationManagerAddress,
 		liquidationModalOpen,
@@ -178,16 +182,23 @@ export function App() {
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
 	const isMainnet = isMainnetChain(accountState.chainId)
-	const wrongNetworkMessage = accountState.address !== undefined && accountState.chainId !== undefined && !isMainnet ? 'Switch your wallet to Ethereum mainnet.' : undefined
+	const wrongNetworkMessage = accountState.address !== undefined && accountState.chainId !== undefined && !isMainnet ? 'Switch to Ethereum mainnet.' : undefined
 	const augurPlaceHolderDeploymentMissing = augurPlaceHolderDeployed === false
 	const showDeployTab = augurPlaceHolderDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 	const showAugurPlaceHolderDeploymentWarning = augurPlaceHolderDeploymentMissing
-	const showZoltarUniverseWarning = zoltarUniverseMissing
+	const zoltarUniverseState = resolveRequestedLoadableValueState({
+		currentKey: activeUniverseId.toString(),
+		isLoading: loadingZoltarUniverse,
+		resolvedKey: zoltarUniverseResolvedId?.toString(),
+		value: zoltarUniverse,
+	})
+	const showZoltarUniverseWarning = zoltarUniverseState === 'missing'
 	const showZoltarUniverseForkedWarning = zoltarUniverse?.hasForked === true
 	const disableRouteContent = route !== 'deploy' && (augurPlaceHolderDeploymentMissing || showZoltarUniverseWarning)
 	const isRouteContentDisabled = transactionState.value.transactionInFlightCount > 0 || disableRouteContent
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
-	const universeErrorMessage = showZoltarUniverseWarning ? 'The universe does not exist.' : undefined
+	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
+	const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, hasInjectedWallet, isMainnet })
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const renderRouteContent = () => {
 		if (wrongNetworkMessage !== undefined) {
@@ -219,7 +230,7 @@ export function App() {
 						loadingZoltarQuestionCount={loadingZoltarQuestionCount}
 						loadingZoltarQuestions={loadingZoltarQuestions}
 						loadingZoltarUniverse={loadingZoltarUniverse}
-						zoltarUniverseMissing={zoltarUniverseMissing}
+						zoltarUniverseState={zoltarUniverseState}
 						onCreateChildUniverseForOutcomeIndex={outcomeIndex => void createZoltarChildUniverse(outcomeIndex)}
 						marketForm={marketForm}
 						marketCreating={marketCreating}
@@ -279,7 +290,9 @@ export function App() {
 						}}
 						overview={{
 							accountState,
+							checkedSecurityPoolAddress,
 							closeLiquidationModal: () => closeLiquidationModal(),
+							hasLoadedSecurityPools,
 							liquidationAmount,
 							liquidationManagerAddress,
 							liquidationModalOpen,
@@ -298,6 +311,7 @@ export function App() {
 						workflow={{
 							accountState,
 							activeUniverseId,
+							checkedSecurityPoolAddress,
 							closeLiquidationModal: () => closeLiquidationModal(),
 							forkAuction: {
 								accountState,
@@ -449,7 +463,7 @@ export function App() {
 		setReportingForm(current => (current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress }))
 		if (!walletBootstrapComplete) return
 		if (!securityPoolAddress.startsWith('0x') || securityPoolAddress.length !== 42) return
-		void loadSecurityPools()
+		void loadSecurityPools(securityPoolAddress)
 		void loadReporting()
 		void loadForkAuction()
 	}, [securityPoolAddress, walletBootstrapComplete])
@@ -491,8 +505,8 @@ export function App() {
 						{formatUniverseLabel(zoltarUniverse.universeId)} has forked on <TimestampValue timestamp={zoltarUniverse.forkTime} />.
 					</div>
 				) : undefined}
-				{showAugurPlaceHolderDeploymentWarning ? <div className='notice error'>Augur PLACEHOLDER contracts are not deployed yet. Deploy them before the application works.</div> : undefined}
-				{hasInjectedWallet ? undefined : <p className='notice warning'>No injected wallet detected.</p>}
+				{showAugurPlaceHolderDeploymentWarning ? <div className='notice error'>Finish setup in Deploy before using the app.</div> : undefined}
+				{walletPresentation === undefined || hasInjectedWallet ? undefined : <p className='notice warning'>{walletPresentation.detail}</p>}
 				<ErrorNotice message={errorMessage} />
 				{transactionState.value.transactionInFlightCount > 0 ? (
 					<p className='notice success'>
@@ -523,7 +537,7 @@ export function App() {
 						repEthSource={repEthSource}
 						repUsdcPrice={repUsdcPrice}
 						repUsdcSource={repUsdcSource}
-						universeErrorMessage={universeErrorMessage}
+						universePresentation={universePresentation}
 						universeLabel={universeLabel}
 						universeRepBalance={zoltarForkRepBalance}
 						isRefreshing={isRefreshing}

@@ -1,6 +1,7 @@
 import { signal, type Signal } from '@preact/signals'
 
 export type LoadPhase = 'idle' | 'loading'
+export type LoadableValueState = 'unknown' | 'loading' | 'ready' | 'missing'
 
 type RunLoadOptions<TResult> = {
 	isCurrent?: () => boolean
@@ -15,6 +16,33 @@ export type LoadController = {
 	isLoading: Signal<boolean>
 	run<TResult>(options: RunLoadOptions<TResult>): Promise<TResult | undefined>
 	track<TResult>(work: () => Promise<TResult>): Promise<TResult>
+}
+
+type ResolveLoadableValueStateOptions<TValue> = {
+	hasLoaded: boolean
+	isLoading: boolean
+	value: TValue | undefined
+}
+
+export function resolveLoadableValueState<TValue>({ hasLoaded, isLoading, value }: ResolveLoadableValueStateOptions<TValue>): LoadableValueState {
+	if (value !== undefined) return 'ready'
+	if (isLoading) return 'loading'
+	if (hasLoaded) return 'missing'
+	return 'unknown'
+}
+
+type ResolveRequestedLoadableValueStateOptions<TValue, TKey> = {
+	currentKey: TKey | undefined
+	isLoading: boolean
+	resolvedKey: TKey | undefined
+	value: TValue | undefined
+}
+
+export function resolveRequestedLoadableValueState<TValue, TKey>({ currentKey, isLoading, resolvedKey, value }: ResolveRequestedLoadableValueStateOptions<TValue, TKey>): LoadableValueState {
+	if (value !== undefined) return 'ready'
+	if (isLoading) return 'loading'
+	if (currentKey !== undefined && resolvedKey !== undefined && currentKey === resolvedKey) return 'missing'
+	return 'unknown'
 }
 
 export function createLoadController(): LoadController {

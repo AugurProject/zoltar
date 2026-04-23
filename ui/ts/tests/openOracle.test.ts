@@ -3,7 +3,18 @@
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { getAddress, maxUint256, zeroAddress, type Address } from 'viem'
 import { createOpenOracleReportInstance, getOpenOracleAddress, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, requestOraclePrice, settleOracleReport, submitInitialOracleReport } from '../contracts.js'
-import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOracleFeePercentage, formatOpenOracleMultiplier, loadOpenOracleInitialReportPrice, OPEN_ORACLE_APPROVAL_AMOUNT, getOpenOracleReportStatus, getOpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
+import {
+	deriveOpenOracleInitialReportSubmissionDetails,
+	formatOpenOracleFeePercentage,
+	formatOpenOracleInitialReportApprovalStatusUnavailableMessage,
+	formatOpenOracleInitialReportPriceUnavailableMessage,
+	formatOpenOracleMultiplier,
+	getOpenOracleReportStatus,
+	getOpenOracleSelectedReportActionMode,
+	loadOpenOracleInitialReportPrice,
+	loadOpenOracleInitialReportPriceResult,
+	OPEN_ORACLE_APPROVAL_AMOUNT,
+} from '../lib/openOracle.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS } from '../lib/uniswapQuoter.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
@@ -37,6 +48,14 @@ const outcomes = ['Yes', 'No']
 function createQuoteClient(amountOut: bigint): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
 	return {
 		simulateContract: async () => ({ result: [amountOut, 100000n] }),
+	} as unknown as Parameters<typeof loadOpenOracleInitialReportPrice>[0]
+}
+
+function createFailingQuoteClient(message: string): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
+	return {
+		simulateContract: async () => {
+			throw new Error(message)
+		},
 	} as unknown as Parameters<typeof loadOpenOracleInitialReportPrice>[0]
 }
 
@@ -124,25 +143,24 @@ describe('Open Oracle helpers', () => {
 		expect(firstPage.reports.map(report => report.price)).toEqual([0n, 0n])
 	})
 
-	test('initial report price helpers derive a Uniswap default price and can fall back to manual input', async () => {
+	test('initial report price helpers derive a Uniswap default price and preserve quote failure metadata', async () => {
 		const quote = await loadOpenOracleInitialReportPrice(createQuoteClient(25n), getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000a2'), 100n)
 		expect(quote).toEqual({
 			price: 4_000_000_000_000_000_000n,
 			priceSource: 'Uniswap V4',
 			token2Amount: 25n,
 		})
-		await expect(
-			loadOpenOracleInitialReportPrice(
-				{
-					simulateContract: async () => {
-						throw new Error('no v3 pool')
-					},
-				} as unknown as Parameters<typeof loadOpenOracleInitialReportPrice>[0],
-				getAddress('0x00000000000000000000000000000000000000a1'),
-				getAddress('0x00000000000000000000000000000000000000a2'),
-				100n,
-			),
-		).rejects.toThrow('Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 fallback failed: no v3 pool')
+
+		const failure = await loadOpenOracleInitialReportPriceResult(createFailingQuoteClient('no pool'), getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000a2'), 100n)
+		expect(failure).toEqual({
+			attemptedSources: ['Uniswap V4', 'Uniswap V3 fallback'],
+			failureKind: 'quote-failed',
+			reason: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no pool. Uniswap V3 fallback failed: no pool',
+			status: 'failure',
+		})
+		await expect(loadOpenOracleInitialReportPrice(createFailingQuoteClient('no pool'), getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000a2'), 100n)).rejects.toThrow(
+			'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no pool. Uniswap V3 fallback failed: no pool',
+		)
 	})
 
 	test('initial report price helpers report both Uniswap V4 and V3 failures when fallback was attempted', async () => {
@@ -206,7 +224,11 @@ describe('Open Oracle helpers', () => {
 			defaultPriceError: undefined,
 			defaultPriceSource: 'Uniswap V4',
 			priceInput: '',
+			quoteAttemptedSources: undefined,
+			quoteFailureReason: undefined,
 			reportDetails: details,
+			token1AllowanceError: undefined,
+			token2AllowanceError: undefined,
 			token1Decimals: 18,
 			token2Decimals: 18,
 		})
@@ -216,6 +238,57 @@ describe('Open Oracle helpers', () => {
 		expect(preview.amount1).toBe(100n)
 		expect(preview.amount2).toBe(25n)
 		expect(preview.canSubmit).toBe(false)
+		expect(preview.blockReason).toBeDefined()
+	})
+
+	test('initial report submission helper explains exhausted quote paths with a short reason', () => {
+		const preview = deriveOpenOracleInitialReportSubmissionDetails({
+			approvedToken1Amount: 100n,
+			approvedToken2Amount: 100n,
+			defaultPrice: undefined,
+			defaultPriceError: undefined,
+			defaultPriceSource: undefined,
+			priceInput: '',
+			quoteAttemptedSources: ['Uniswap V4', 'Uniswap V3 fallback'],
+			quoteFailureReason: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: execution reverted for an unknown reason. Uniswap V3 fallback failed: no pool',
+			reportDetails: {
+				exactToken1Report: 100n,
+				token1Symbol: 'REP',
+				token2Symbol: 'ETH',
+			},
+			token1AllowanceError: undefined,
+			token2AllowanceError: undefined,
+			token1Decimals: 18,
+			token2Decimals: 18,
+		})
+
+		expect(preview.canSubmit).toBe(false)
+		expect(preview.blockReason).toBe('Automatic price quote unavailable for REP / ETH. Tried: Uniswap V4, then Uniswap V3 fallback. Reason: Uniswap V4 quote failed: execution reverted for an unknown reason. Uniswap V3 fallback failed: no pool. Enter a price manually to submit the initial report.')
+	})
+
+	test('manual price entry overrides automatic quote unavailability', () => {
+		const preview = deriveOpenOracleInitialReportSubmissionDetails({
+			approvedToken1Amount: 100n,
+			approvedToken2Amount: 24n,
+			defaultPrice: undefined,
+			defaultPriceError: undefined,
+			defaultPriceSource: undefined,
+			priceInput: '4.0',
+			quoteAttemptedSources: ['Uniswap V4'],
+			quoteFailureReason: 'no pool',
+			reportDetails: {
+				exactToken1Report: 100n,
+				token1Symbol: 'ABC',
+				token2Symbol: 'XYZ',
+			},
+			token1AllowanceError: undefined,
+			token2AllowanceError: undefined,
+			token1Decimals: 18,
+			token2Decimals: 18,
+		})
+
+		expect(preview.priceSource).toBe('Manual override')
+		expect(preview.price).toBe(4_000_000_000_000_000_000n)
 		expect(preview.blockReason).toBe('Token2 approval required')
 	})
 
@@ -227,15 +300,64 @@ describe('Open Oracle helpers', () => {
 			defaultPriceError: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 fallback failed: no v3 pool',
 			defaultPriceSource: undefined,
 			priceInput: '',
+			quoteAttemptedSources: ['Uniswap V4', 'Uniswap V3 fallback'],
+			quoteFailureReason: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 fallback failed: no v3 pool',
 			reportDetails: {
 				exactToken1Report: 100n,
 			},
+			token1AllowanceError: undefined,
+			token2AllowanceError: undefined,
 			token1Decimals: 18,
 			token2Decimals: 18,
 		})
 
 		expect(preview.canSubmit).toBe(false)
 		expect(preview.blockReason).toBe('Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 fallback failed: no v3 pool')
+	})
+
+	test('formats unavailable price messages with sanitized reasons and address fallback labels', () => {
+		expect(
+			formatOpenOracleInitialReportPriceUnavailableMessage({
+				attemptedSources: ['Uniswap V4'],
+				reason: 'Failed to load automatic price: execution reverted: pool not found',
+				token1Label: undefined,
+				token2Label: '0x00000000000000000000000000000000000000a2',
+			}),
+		).toBe('Automatic price quote unavailable for Token1 / 0x00000000000000000000000000000000000000a2. Tried: Uniswap V4. Reason: execution reverted: pool not found. Enter a price manually to submit the initial report.')
+	})
+
+	test('initial report submission helper surfaces allowance read failures separately from approval gating', () => {
+		const preview = deriveOpenOracleInitialReportSubmissionDetails({
+			approvedToken1Amount: undefined,
+			approvedToken2Amount: 25n,
+			defaultPrice: '4.0',
+			defaultPriceError: undefined,
+			defaultPriceSource: 'Uniswap V4',
+			priceInput: '',
+			quoteAttemptedSources: undefined,
+			quoteFailureReason: undefined,
+			reportDetails: {
+				exactToken1Report: 100n,
+				token1Symbol: 'REP',
+				token2Symbol: 'ETH',
+			},
+			token1AllowanceError: 'Failed to load token approval: request timed out',
+			token2AllowanceError: undefined,
+			token1Decimals: 18,
+			token2Decimals: 18,
+		})
+
+		expect(preview.canSubmit).toBe(false)
+		expect(preview.blockReason).toBe('Unable to verify REP approval for this report. Reason: request timed out. Retry loading the report or approval status before submitting the initial report.')
+	})
+
+	test('formats unavailable approval status messages with sanitized reasons', () => {
+		expect(
+			formatOpenOracleInitialReportApprovalStatusUnavailableMessage({
+				reason: 'Failed to load token approval: execution reverted',
+				tokenLabel: 'WETH',
+			}),
+		).toBe('Unable to verify WETH approval for this report. Reason: execution reverted. Retry loading the report or approval status before submitting the initial report.')
 	})
 
 	test('open oracle fee and multiplier formatters render human values', () => {
