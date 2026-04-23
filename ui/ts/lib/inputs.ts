@@ -87,6 +87,11 @@ export function approvalShortage(amount: bigint | undefined, allowance: bigint |
 	return amount > allowance ? amount - allowance : 0n
 }
 
+export function balanceShortage(amount: bigint | undefined, balance: bigint | undefined): bigint | undefined {
+	if (amount === undefined || balance === undefined) return undefined
+	return amount > balance ? amount - balance : 0n
+}
+
 export function parseReportingOutcomeListInput(value: string, label: string): ReportingOutcomeKey[] {
 	return parseListInput(value, label, entry => parseReportingOutcomeInput(entry.toLowerCase()))
 }

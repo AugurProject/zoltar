@@ -4,8 +4,9 @@ import { useErc20AllowanceLoader, useErc20BalanceLoader } from './useErc20Loader
 import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
-import { approveErc20, depositRepToSecurityPool, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation, redeemSecurityVaultFees, updateSecurityVaultFees } from '../contracts.js'
+import { approveErc20, depositRepToSecurityPool, loadErc20Balance, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation, redeemSecurityVaultFees, updateSecurityVaultFees } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { formatCurrencyBalance } from '../lib/formatters.js'
 import { sameAddress } from '../lib/address.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
@@ -159,12 +160,23 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 
 	const depositRep = async () =>
 		await runVaultAction(
-			async (vaultAddress, securityPoolAddress) => await depositRepToSecurityPool(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, parseRepAmountInput(securityVaultForm.value.depositAmount, 'REP deposit amount')),
+			async (vaultAddress, securityPoolAddress) => {
+				const depositAmount = parseRepAmountInput(securityVaultForm.value.depositAmount, 'REP deposit amount')
+				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist')
+				if (details === undefined) return undefined
+				const currentRepBalance = await loadErc20Balance(createConnectedReadClient(), details.repToken, vaultAddress)
+				repBalanceLoader.signal.value = currentRepBalance
+				if (currentRepBalance < depositAmount) {
+					throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalance(currentRepBalance)} REP but the deposit amount is ${formatCurrencyBalance(depositAmount)} REP.`)
+				}
+				return await depositRepToSecurityPool(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, depositAmount)
+			},
 			'Failed to deposit REP',
 			async (_result, securityPoolAddress, vaultAddress) => {
 				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
 				const details = securityVaultDetails.value
 				if (details === undefined) return
+				await reloadSecurityVaultRepBalance(details.repToken, vaultAddress)
 				await reloadSecurityVaultRepAllowance(details.repToken, vaultAddress, securityPoolAddress)
 			},
 		)
