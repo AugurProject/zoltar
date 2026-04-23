@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from 'viem'
-import { parseOptionalBigIntInput, resolveOptionalAddressInput, resolveOptionalBigIntListInput } from '../lib/inputs.js'
+import { balanceShortage, parseOptionalBigIntInput, resolveOptionalAddressInput, resolveOptionalBigIntListInput } from '../lib/inputs.js'
 
 void describe('input helpers', () => {
 	void test('parseOptionalBigIntInput returns undefined for empty input', () => {
@@ -26,5 +26,12 @@ void describe('input helpers', () => {
 		expect(resolveOptionalBigIntListInput('', [1n, 2n], 'Outcome indexes')).toEqual([1n, 2n])
 		expect(resolveOptionalBigIntListInput('  ', [1n, 2n], 'Outcome indexes')).toEqual([1n, 2n])
 		expect(resolveOptionalBigIntListInput('3, 4', [1n, 2n], 'Outcome indexes')).toEqual([3n, 4n])
+	})
+
+	void test('balanceShortage reports how much REP is missing for a deposit', () => {
+		expect(balanceShortage(undefined, 5n)).toBe(undefined)
+		expect(balanceShortage(5n, undefined)).toBe(undefined)
+		expect(balanceShortage(5n, 5n)).toBe(0n)
+		expect(balanceShortage(6n, 5n)).toBe(1n)
 	})
 })

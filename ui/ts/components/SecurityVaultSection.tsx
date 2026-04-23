@@ -9,7 +9,7 @@ import { StateHint } from './StateHint.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
-import { approvalShortage } from '../lib/inputs.js'
+import { approvalShortage, balanceShortage } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
 import { getSelectedVaultAddress, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
@@ -66,11 +66,13 @@ export function SecurityVaultSection({
 	const securityBondAllowance = securityVaultDetails?.securityBondAllowance ?? 0n
 	const approvedRep = securityVaultRepAllowance
 	const shortage = approvalShortage(depositAmount, approvedRep)
+	const repBalanceGap = balanceShortage(depositAmount, securityVaultRepBalance)
 	const withdrawableRepAmount = securityVaultDetails === undefined ? undefined : securityVaultDetails.repDepositShare > securityVaultDetails.lockedRepInEscalationGame ? securityVaultDetails.repDepositShare - securityVaultDetails.lockedRepInEscalationGame : 0n
 	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(securityVaultDetails?.repDepositShare, depositAmount)
 	const hasClaimableFees = securityVaultDetails !== undefined && securityVaultDetails.unpaidEthFees > 0n
 	const canClaimFees = selectedVaultIsOwnedByAccount && isMainnet && hasClaimableFees
 	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && approvedRep !== undefined && depositAmount !== undefined && depositAmount > 0n && approvedRep >= depositAmount
+	const hasInsufficientRepBalance = repBalanceGap !== undefined && repBalanceGap > 0n
 	const canApproveRep = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && depositAmount !== undefined && depositAmount > 0n && shortage !== undefined && shortage > 0n
 	const canSetSecurityBondAllowance = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > 0n
 	const approveButtonLabel = depositAmount === undefined || depositAmount <= 0n || shortage === undefined ? 'Approve REP' : shortage === 0n ? 'Approval Satisfied' : `Approve ${formatCurrencyBalance(shortage)} REP`
@@ -81,7 +83,7 @@ export function SecurityVaultSection({
 		if (securityVaultMissing) return 'Choose a pool first.'
 		if (securityVaultDetails === undefined) return 'Refresh the vault first.'
 		if (depositAmount === undefined || depositAmount <= 0n) return 'Enter a deposit amount greater than zero.'
-		if (shortage === 0n) return 'No additional REP approval is needed for this deposit amount.'
+		if (shortage === 0n) return 'This deposit amount is already approved.'
 		return `Approve ${formatCurrencyBalance(shortage)} more REP before depositing.`
 	})()
 	const latestActionLabel =
@@ -231,19 +233,19 @@ export function SecurityVaultSection({
 				<button className='secondary' title={approveButtonTitle} onClick={() => onApproveRep(shortage)} disabled={!canApproveRep}>
 					{approveButtonLabel}
 				</button>
-				<button className='primary' onClick={onDepositRep} disabled={!selectedVaultIsOwnedByAccount || accountState.address === undefined || !isMainnet || !hasSufficientDepositAllowance || isDepositBelowMinimum}>
+				<button className='primary' onClick={onDepositRep} disabled={!selectedVaultIsOwnedByAccount || accountState.address === undefined || !isMainnet || !hasSufficientDepositAllowance || hasInsufficientRepBalance || isDepositBelowMinimum}>
 					Create / Deposit REP
 				</button>
 			</div>
-			{isDepositBelowMinimum ? (
+			{repBalanceGap !== undefined && repBalanceGap > 0n ? (
+				<ErrorNotice message={`Insufficient REP balance. Deposit amount exceeds your wallet balance by ${formatCurrencyBalance(repBalanceGap)} REP.`} />
+			) : isDepositBelowMinimum ? (
 				<p className='detail'>
 					New vaults require at least <CurrencyValue value={MIN_SECURITY_VAULT_REP_DEPOSIT} suffix='REP' copyable={false} /> in the first deposit.
 				</p>
 			) : depositAmount === undefined ? undefined : shortage === undefined ? undefined : shortage > 0n ? (
 				<p className='detail'>Need {<CurrencyValue value={shortage} suffix='REP' copyable={false} />} more REP approved before depositing.</p>
-			) : (
-				<p className='detail'>No additional REP approval is needed for this deposit amount.</p>
-			)}
+			) : undefined}
 		</div>
 	)
 
