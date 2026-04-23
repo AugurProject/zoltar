@@ -25,8 +25,9 @@ import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.j
 import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { useUrlState } from './hooks/useUrlState.js'
 import { getDeploymentSections } from './lib/deployment.js'
-import { resolveRequestedLoadableValueState } from './lib/loadState.js'
+import { resolveMissingAwareLoadableValueState } from './lib/loadState.js'
 import { isMainnetChain } from './lib/network.js'
+import { getUseQuestionForPoolState } from './lib/securityPoolNavigation.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
 import type { TransactionState } from './lib/transactionState.js'
 import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
@@ -103,7 +104,7 @@ export function App() {
 		zoltarQuestionCount,
 		zoltarQuestions,
 		zoltarUniverse,
-		zoltarUniverseResolvedId,
+		zoltarUniverseMissing,
 	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } =
@@ -186,10 +187,9 @@ export function App() {
 	const augurPlaceHolderDeploymentMissing = augurPlaceHolderDeployed === false
 	const showDeployTab = augurPlaceHolderDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 	const showAugurPlaceHolderDeploymentWarning = augurPlaceHolderDeploymentMissing
-	const zoltarUniverseState = resolveRequestedLoadableValueState({
-		currentKey: activeUniverseId.toString(),
+	const zoltarUniverseState = resolveMissingAwareLoadableValueState({
 		isLoading: loadingZoltarUniverse,
-		resolvedKey: zoltarUniverseResolvedId?.toString(),
+		isMissing: zoltarUniverseMissing,
 		value: zoltarUniverse,
 	})
 	const showZoltarUniverseWarning = zoltarUniverseState === 'missing'
@@ -490,10 +490,12 @@ export function App() {
 	}
 
 	const onUseQuestionForPool = (questionId: string) => {
+		const { marketId, securityPoolAddress } = getUseQuestionForPoolState(questionId)
 		setSecurityPoolForm(current => ({
 			...current,
-			marketId: questionId,
+			marketId,
 		}))
+		setSecurityPoolAddress(securityPoolAddress)
 		navigate('security-pools')
 	}
 

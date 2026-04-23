@@ -20,7 +20,6 @@ export function SecurityPoolSection({
 	loadingMarketDetails,
 	marketDetails,
 	onCreateSecurityPool,
-	onLoadMarket,
 	onOpenCreatedPool,
 	onSecurityPoolFormChange,
 	onResetSecurityPoolCreation,
@@ -118,20 +117,10 @@ export function SecurityPoolSection({
 				) : (
 					<>
 						<div className='market-column'>
-							{marketDetails === undefined ? undefined : (
-								<EntityCard
-									title='Question'
-									badge={<span className='badge ok'>{marketDetails.marketType}</span>}
-									actions={
-										<div className='actions'>
-											<button className='secondary' onClick={onLoadMarket} disabled={loadingMarketDetails || isPoolActionPending}>
-												{loadingMarketDetails ? <LoadingText>Loading Question...</LoadingText> : 'Reload Question'}
-											</button>
-										</div>
-									}
-								>
-									<Question question={marketDetails} />
-									{marketDetails.marketType === 'scalar' ? undefined : (
+							{marketDetails === undefined && !loadingMarketDetails ? undefined : (
+								<EntityCard title='Question' badge={marketDetails === undefined ? undefined : <span className='badge ok'>{marketDetails.marketType}</span>}>
+									<Question question={marketDetails} loading={loadingMarketDetails && marketDetails === undefined} />
+									{marketDetails === undefined || marketDetails.marketType === 'scalar' ? undefined : (
 										<div className='question-chip-row'>
 											{marketDetails.outcomeLabels.map(label => (
 												<span key={label} className='status-chip muted'>
@@ -168,12 +157,11 @@ export function SecurityPoolSection({
 										<span>Question ID</span>
 										<input value={securityPoolForm.marketId} onInput={event => onSecurityPoolFormChange({ marketId: event.currentTarget.value })} placeholder='0x...' />
 									</label>
-
-									<div className='actions'>
-										<button className='secondary' onClick={onLoadMarket} disabled={loadingMarketDetails || isPoolActionPending}>
-											{loadingMarketDetails ? <LoadingText>Loading question...</LoadingText> : 'Open question'}
-										</button>
-									</div>
+									{loadingMarketDetails ? (
+										<p className='detail'>
+											<LoadingText>Loading question...</LoadingText>
+										</p>
+									) : undefined}
 
 									<label className='field'>
 										<span>Security Multiplier</span>

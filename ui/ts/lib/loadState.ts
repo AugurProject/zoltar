@@ -24,10 +24,23 @@ type ResolveLoadableValueStateOptions<TValue> = {
 	value: TValue | undefined
 }
 
+type ResolveMissingAwareLoadableValueStateOptions<TValue> = {
+	isLoading: boolean
+	isMissing: boolean
+	value: TValue | undefined
+}
+
 export function resolveLoadableValueState<TValue>({ hasLoaded, isLoading, value }: ResolveLoadableValueStateOptions<TValue>): LoadableValueState {
 	if (value !== undefined) return 'ready'
 	if (isLoading) return 'loading'
 	if (hasLoaded) return 'missing'
+	return 'unknown'
+}
+
+export function resolveMissingAwareLoadableValueState<TValue>({ isLoading, isMissing, value }: ResolveMissingAwareLoadableValueStateOptions<TValue>): LoadableValueState {
+	if (value !== undefined) return 'ready'
+	if (isLoading) return 'loading'
+	if (isMissing) return 'missing'
 	return 'unknown'
 }
 

@@ -23,6 +23,17 @@ type UseSecurityPoolCreationParameters = {
 	zoltarUniverseHasForked: boolean
 }
 
+export function resolveSecurityPoolQuestionLookupInput(marketIdInput: string) {
+	const marketId = marketIdInput.trim()
+	if (marketId === '') return undefined
+	try {
+		BigInt(marketId)
+		return marketId
+	} catch {
+		return undefined
+	}
+}
+
 export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, zoltarUniverseHasForked }: UseSecurityPoolCreationParameters) {
 	const marketDetailsLoad = useLoadController()
 	const duplicateOriginPoolCheckLoad = useLoadController()
@@ -67,17 +78,20 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		})
 	}
 
-	const loadMarketById = async (marketId: string) => {
+	const loadMarketById = async (marketId: string, options?: { clearExisting?: boolean; isCurrent?: () => boolean }) => {
 		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) {
 			securityPoolError.value = 'Deploy ZoltarQuestionData before loading a market'
 			return
 		}
 
-		const isCurrent = nextMarketDetailsLoad()
+		const isCurrent = options?.isCurrent ?? nextMarketDetailsLoad()
 		await marketDetailsLoad.run({
 			isCurrent,
 			onStart: () => {
 				securityPoolError.value = undefined
+				if (options?.clearExisting === true) {
+					marketDetails.value = undefined
+				}
 			},
 			load: async () => {
 				const { questionId } = createSecurityPoolParameters({
@@ -171,6 +185,19 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 	useEffect(() => {
 		void loadDuplicateOriginPoolState()
 	}, [securityPoolForm.value.marketId, securityPoolForm.value.securityMultiplier])
+
+	useEffect(() => {
+		const marketId = resolveSecurityPoolQuestionLookupInput(securityPoolForm.value.marketId)
+		const isCurrent = nextMarketDetailsLoad()
+
+		if (marketId === undefined) {
+			marketDetails.value = undefined
+			securityPoolError.value = undefined
+			return
+		}
+
+		void loadMarketById(marketId, { clearExisting: true, isCurrent })
+	}, [deploymentStatuses, securityPoolForm.value.marketId])
 
 	return {
 		checkingDuplicateOriginPool: duplicateOriginPoolCheckLoad.isLoading.value,

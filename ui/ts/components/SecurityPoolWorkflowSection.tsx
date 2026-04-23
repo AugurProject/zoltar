@@ -17,7 +17,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { TimestampValue } from './TimestampValue.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
-import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
+import { resolveRequestedLoadableValueState, type LoadableValueState } from '../lib/loadState.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
@@ -29,6 +29,31 @@ import type { SecurityPoolWorkflowRouteContentProps } from '../types/components.
 
 type SelectedPoolView = 'vaults' | 'trading' | 'resolution'
 type SelectedVaultView = 'browse-vaults' | 'selected-vault'
+type SelectedPoolLookupDisplay = 'empty' | 'quiet' | 'loading' | 'missing' | 'ready'
+
+export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolUniverseMismatch: boolean }) {
+	return hasSelectedPoolAddress && selectedPoolExists && !selectedPoolUniverseMismatch
+}
+
+export function getSelectedPoolCardTitle({ hasSelectedPoolAddress, resolvedPoolTitle }: { hasSelectedPoolAddress: boolean; resolvedPoolTitle: string | undefined }) {
+	if (resolvedPoolTitle !== undefined) return resolvedPoolTitle
+	return hasSelectedPoolAddress ? 'Selected Pool' : 'Select a security pool'
+}
+
+export function getSelectedPoolLookupDisplay({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolLookupState }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolLookupState: LoadableValueState }): SelectedPoolLookupDisplay {
+	if (!hasSelectedPoolAddress) return 'empty'
+	if (selectedPoolExists) return 'ready'
+	switch (selectedPoolLookupState) {
+		case 'loading':
+			return 'loading'
+		case 'missing':
+			return 'missing'
+		case 'ready':
+			return 'ready'
+		case 'unknown':
+			return 'quiet'
+	}
+}
 
 export function SecurityPoolWorkflowSection({
 	accountState,
@@ -78,18 +103,28 @@ export function SecurityPoolWorkflowSection({
 	const forkReady = selectedPoolState !== undefined && selectedPoolState !== 'operational'
 	const selectedPoolUniverseMismatch = selectedPool !== undefined && selectedPool.universeId !== activeUniverseId
 	const hasSelectedPoolAddress = securityPoolAddress.trim() !== ''
+	const showSelectedPoolWorkflowDetails = shouldShowSelectedPoolWorkflowDetails({
+		hasSelectedPoolAddress,
+		selectedPoolExists: selectedPool !== undefined,
+		selectedPoolUniverseMismatch,
+	})
 	const selectedPoolManagerAddress = selectedPool?.managerAddress
 	const selectedPoolManagerAddressKey = normalizeAddress(selectedPoolManagerAddress)
 	const selectedVaultAddress = getSelectedVaultAddress(securityVault.securityVaultForm.selectedVaultAddress, accountState.address) ?? ''
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddress, accountState.address)
-	const selectedPoolTitle = selectedPool !== undefined ? getQuestionTitle(selectedPool.marketDetails) : securityPoolAddress === '' ? 'Select a security pool' : <AddressValue address={securityPoolAddress} />
+	const resolvedSelectedPoolTitle = selectedPool === undefined ? undefined : getQuestionTitle(selectedPool.marketDetails)
+	const selectedPoolTitle = getSelectedPoolCardTitle({
+		hasSelectedPoolAddress,
+		resolvedPoolTitle: resolvedSelectedPoolTitle,
+	})
+	const selectedPoolLookupDisplay = getSelectedPoolLookupDisplay({
+		hasSelectedPoolAddress,
+		selectedPoolExists: selectedPool !== undefined,
+		selectedPoolLookupState,
+	})
 	const lastAutoLoadedManagerAddress = useRef<string | undefined>(undefined)
 	const lastSelectedPoolVaultDefaultKey = useRef<string | undefined>(undefined)
-	const selectedPoolPresentation = !hasSelectedPoolAddress
-		? { key: 'action_needed' as const, badgeLabel: 'Choose a pool', badgeTone: 'muted' as const, detail: 'Browse pools or paste an address.' }
-		: selectedPool === undefined
-			? getPoolRegistryPresentation({ mode: 'selection', state: selectedPoolLookupState })
-			: undefined
+	const selectedPoolBrowsePresentation = selectedPool === undefined ? getPoolRegistryPresentation({ mode: 'selection', state: selectedPoolLookupState }) : undefined
 	const loadedSelectedPool = selectedPool
 
 	useEffect(() => {
@@ -128,7 +163,7 @@ export function SecurityPoolWorkflowSection({
 			) : undefined}
 
 			<div className='workflow-stack'>
-				<EntityCard className='selected-pool-card' title={selectedPoolTitle} badge={selectedPoolState === undefined ? undefined : <span className='badge ok'>{selectedPoolState}</span>}>
+				<EntityCard className='selected-pool-card' title={selectedPoolTitle} badge={loadedSelectedPool?.systemState === undefined ? undefined : <span className='badge ok'>{loadedSelectedPool.systemState}</span>}>
 					<div className='form-grid'>
 						<label className='field'>
 							<span>Security Pool Address</span>
@@ -136,8 +171,18 @@ export function SecurityPoolWorkflowSection({
 						</label>
 					</div>
 
-					{selectedPoolPresentation !== undefined && loadedSelectedPool === undefined ? (
-						<StateHint presentation={selectedPoolPresentation} />
+					{selectedPoolLookupDisplay !== 'ready' ? (
+						selectedPoolLookupDisplay === 'empty' ? (
+							<p className='detail'>Paste a security pool address or browse pools.</p>
+						) : selectedPoolLookupDisplay === 'loading' ? (
+							<p className='detail'>
+								<LoadingText>Checking address...</LoadingText>
+							</p>
+						) : selectedPoolLookupDisplay === 'missing' ? (
+							<div className='notice error'>
+								<p>No security pool found at this address.</p>
+							</div>
+						) : undefined
 					) : (
 						<>
 							<div className='entity-card-subsection'>
@@ -238,7 +283,7 @@ export function SecurityPoolWorkflowSection({
 					</EntityCard>
 				)}
 
-				{!hasSelectedPoolAddress || selectedPoolUniverseMismatch ? undefined : (
+				{!showSelectedPoolWorkflowDetails ? undefined : (
 					<>
 						<div className='subtab-nav' role='tablist' aria-label='Selected pool views'>
 							<button className={`subtab-link ${view === 'vaults' ? 'active' : ''}`} type='button' onClick={() => setView('vaults')} aria-pressed={view === 'vaults'}>
@@ -266,8 +311,8 @@ export function SecurityPoolWorkflowSection({
 								{vaultView === 'browse-vaults' ? (
 									<EntityCard className='selected-pool-card' title='Browse Vaults' badge={<span className='badge muted'>{selectedPool?.vaultCount.toString() ?? '0'} vaults</span>}>
 										{selectedPool === undefined ? (
-											selectedPoolPresentation === undefined ? undefined : (
-												<StateHint presentation={selectedPoolPresentation} />
+											selectedPoolBrowsePresentation === undefined ? undefined : (
+												<StateHint presentation={selectedPoolBrowsePresentation} />
 											)
 										) : selectedPool.vaults.length === 0 ? (
 											<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />

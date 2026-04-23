@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { createLoadController, resolveLoadableValueState, resolveRequestedLoadableValueState, type LoadPhase } from '../lib/loadState.js'
+import { createLoadController, resolveLoadableValueState, resolveMissingAwareLoadableValueState, resolveRequestedLoadableValueState, type LoadPhase } from '../lib/loadState.js'
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -157,5 +157,12 @@ void describe('load state helpers', () => {
 		expect(resolveRequestedLoadableValueState({ currentKey: 'pool-a', isLoading: false, resolvedKey: 'pool-b', value: undefined })).toBe('unknown')
 		expect(resolveRequestedLoadableValueState({ currentKey: 'pool-a', isLoading: false, resolvedKey: 'pool-a', value: undefined })).toBe('missing')
 		expect(resolveRequestedLoadableValueState({ currentKey: 'pool-a', isLoading: false, resolvedKey: 'pool-a', value: 42 })).toBe('ready')
+	})
+
+	void test('resolves missing-aware value states from explicit missing truth', () => {
+		expect(resolveMissingAwareLoadableValueState({ isLoading: false, isMissing: false, value: undefined })).toBe('unknown')
+		expect(resolveMissingAwareLoadableValueState({ isLoading: true, isMissing: false, value: undefined })).toBe('loading')
+		expect(resolveMissingAwareLoadableValueState({ isLoading: false, isMissing: true, value: undefined })).toBe('missing')
+		expect(resolveMissingAwareLoadableValueState({ isLoading: false, isMissing: false, value: 42 })).toBe('ready')
 	})
 })

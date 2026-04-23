@@ -80,16 +80,13 @@ export function getPoolRegistryPresentation(
 			})
 		case 'unknown':
 			return createPresentation('not_checked', {
-				actionHint: 'Refresh pools',
 				badgeLabel: 'Not checked',
 				badgeTone: 'muted',
-				detail: 'Refresh pools to check this address.',
 			})
 		case 'missing':
 			return createPresentation('not_found', {
 				badgeLabel: 'Not found',
 				badgeTone: 'blocked',
-				detail: 'Refresh pools or try another address.',
 			})
 		case 'ready':
 			return undefined
