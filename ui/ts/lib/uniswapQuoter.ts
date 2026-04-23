@@ -9,7 +9,7 @@ const UNISWAP_V3_QUOTER_ADDRESS: Address = '0x61fFE014bA17989E743c5F6cB21bF96975
 export const REP_ADDRESS: Address = '0x221657776846890989a759BA2973e427DfF5C9bB'
 export const USDC_ADDRESS: Address = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
 // WETH — used for V3 quotes (V3 doesn't support native ETH, only WETH)
-const WETH_ADDRESS: Address = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
+export const WETH_ADDRESS: Address = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
 // ETH in Uniswap V4 is represented as address(0)
 export const ETH_ADDRESS: Address = zeroAddress
 
@@ -24,6 +24,15 @@ export const DEFAULT_POOL_CONFIG: PoolConfig = {
 	fee: 3000,
 	tickSpacing: 60,
 }
+
+const COMMON_V4_POOL_CONFIGS: readonly PoolConfig[] = [
+	{ fee: 100, tickSpacing: 1 },
+	{ fee: 500, tickSpacing: 10 },
+	{ fee: 3000, tickSpacing: 60 },
+	{ fee: 10000, tickSpacing: 200 },
+]
+
+const COMMON_V3_FEES = [100, 500, 3000, 10000] as const
 
 const QUOTER_ABI = [
 	{
@@ -90,6 +99,26 @@ export async function quoteExactInput(client: ReadClient, tokenIn: Address, toke
 	return result[0]
 }
 
+export async function quoteBestExactInput(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, poolConfigs: readonly PoolConfig[] = COMMON_V4_POOL_CONFIGS): Promise<bigint> {
+	let bestAmountOut: bigint | undefined
+	let lastError: unknown
+
+	for (const poolConfig of poolConfigs) {
+		try {
+			const amountOut = await quoteExactInput(client, tokenIn, tokenOut, amountIn, poolConfig)
+			if (bestAmountOut === undefined || amountOut > bestAmountOut) {
+				bestAmountOut = amountOut
+			}
+		} catch (error) {
+			lastError = error
+		}
+	}
+
+	if (bestAmountOut !== undefined) return bestAmountOut
+	if (lastError !== undefined) throw lastError
+	throw new Error('No Uniswap V4 quote was available for the tested pool configurations')
+}
+
 // Returns how much ETH (in wei) you receive for swapping `amountIn` of `token`
 export async function quoteTokenForEth(client: ReadClient, token: Address, amountIn: bigint, poolConfig: PoolConfig = DEFAULT_POOL_CONFIG): Promise<bigint> {
 	return quoteExactInput(client, token, ETH_ADDRESS, amountIn, poolConfig)
@@ -102,12 +131,12 @@ export async function quoteEthForToken(client: ReadClient, token: Address, amoun
 
 // Convenience: REP → ETH using the default pool config
 export async function quoteRepForEth(client: ReadClient, repAmount: bigint): Promise<bigint> {
-	return quoteTokenForEth(client, REP_ADDRESS, repAmount)
+	return quoteBestExactInput(client, REP_ADDRESS, ETH_ADDRESS, repAmount)
 }
 
 // Convenience: ETH → REP using the default pool config
 export async function quoteEthForRep(client: ReadClient, ethAmount: bigint): Promise<bigint> {
-	return quoteEthForToken(client, REP_ADDRESS, ethAmount)
+	return quoteBestExactInput(client, ETH_ADDRESS, REP_ADDRESS, ethAmount)
 }
 
 // ─── Uniswap V3 ───────────────────────────────────────────────────────────────
@@ -151,9 +180,36 @@ async function quoteV3ExactInput(client: ReadClient, tokenIn: Address, tokenOut:
 	return result[0]
 }
 
+function normalizeV3Token(token: Address) {
+	return token === ETH_ADDRESS ? WETH_ADDRESS : token
+}
+
+export async function quoteBestV3ExactInput(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, fees: readonly number[] = COMMON_V3_FEES): Promise<bigint> {
+	const normalizedTokenIn = normalizeV3Token(tokenIn)
+	const normalizedTokenOut = normalizeV3Token(tokenOut)
+
+	let bestAmountOut: bigint | undefined
+	let lastError: unknown
+
+	for (const fee of fees) {
+		try {
+			const amountOut = await quoteV3ExactInput(client, normalizedTokenIn, normalizedTokenOut, amountIn, fee)
+			if (bestAmountOut === undefined || amountOut > bestAmountOut) {
+				bestAmountOut = amountOut
+			}
+		} catch (error) {
+			lastError = error
+		}
+	}
+
+	if (bestAmountOut !== undefined) return bestAmountOut
+	if (lastError !== undefined) throw lastError
+	throw new Error('No Uniswap V3 quote was available for the tested fee tiers')
+}
+
 // Returns how much WETH (= ETH) you receive for `repAmount` REP via Uniswap V3 (1% pool).
 export async function quoteRepForEthV3(client: ReadClient, repAmount: bigint): Promise<bigint> {
-	return quoteV3ExactInput(client, REP_ADDRESS, WETH_ADDRESS, repAmount, 10000)
+	return quoteBestV3ExactInput(client, REP_ADDRESS, ETH_ADDRESS, repAmount)
 }
 
 // ─── Known V4 REP pools ───────────────────────────────────────────────────────

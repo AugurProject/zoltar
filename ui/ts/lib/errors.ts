@@ -1,6 +1,6 @@
 const closeableErrorPatterns = ['user rejected the request', 'user rejected request', 'user denied transaction signature', 'user denied message signature', 'user denied account authorization']
 
-export function getErrorMessage(error: unknown, fallbackMessage: string) {
+export function getErrorDetail(error: unknown) {
 	let detail: string | undefined
 
 	if (error instanceof Error) {
@@ -15,6 +15,11 @@ export function getErrorMessage(error: unknown, fallbackMessage: string) {
 		}
 	}
 
+	return detail
+}
+
+export function getErrorMessage(error: unknown, fallbackMessage: string) {
+	const detail = getErrorDetail(error)
 	return detail === undefined || detail === '' ? fallbackMessage : `${fallbackMessage}: ${detail}`
 }
 

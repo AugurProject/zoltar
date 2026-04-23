@@ -5,7 +5,7 @@ import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
 import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, loadErc20Allowance, loadOpenOracleReportDetails, settleOracleReport, submitInitialOracleReport } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { getErrorDetail, getErrorMessage } from '../lib/errors.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOraclePriceInput, loadOpenOracleInitialReportPrice, OPEN_ORACLE_APPROVAL_AMOUNT } from '../lib/openOracle.js'
 import { requireDefined } from '../lib/required.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
@@ -28,6 +28,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 	const openOracleReportDetails = useSignal<OpenOracleReportDetails | undefined>(undefined)
 	const loadedOpenOracleReportId = useSignal<bigint | undefined>(undefined)
 	const openOracleInitialReportDefaultPrice = useSignal<string | undefined>(undefined)
+	const openOracleInitialReportDefaultPriceError = useSignal<string | undefined>(undefined)
 	const openOracleInitialReportDefaultPriceSource = useSignal<'Uniswap V4' | 'Uniswap V3 fallback' | undefined>(undefined)
 	const openOracleInitialReportToken1Allowance = useSignal<bigint | undefined>(undefined)
 	const openOracleInitialReportToken2Allowance = useSignal<bigint | undefined>(undefined)
@@ -38,6 +39,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		const isCurrent = nextOpenOracleInitialReportStateLoad()
 		if (currentDetails === undefined) {
 			openOracleInitialReportDefaultPrice.value = undefined
+			openOracleInitialReportDefaultPriceError.value = undefined
 			openOracleInitialReportDefaultPriceSource.value = undefined
 			openOracleInitialReportToken1Allowance.value = undefined
 			openOracleInitialReportToken2Allowance.value = undefined
@@ -47,13 +49,16 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		await openOracleInitialReportStateLoad.run({
 			isCurrent,
 			onStart: () => {
+				openOracleInitialReportDefaultPriceError.value = undefined
 				openOracleInitialReportToken1Allowance.value = undefined
 				openOracleInitialReportToken2Allowance.value = undefined
 			},
 			load: async () => {
 				const readClient = createConnectedReadClient()
 				const [initialPrice, token1Allowance, token2Allowance] = await Promise.all([
-					loadOpenOracleInitialReportPrice(readClient, currentDetails.token1, currentDetails.token2, currentDetails.exactToken1Report).catch(() => undefined),
+					loadOpenOracleInitialReportPrice(readClient, currentDetails.token1, currentDetails.token2, currentDetails.exactToken1Report)
+						.then(result => ({ error: undefined, result }))
+						.catch(error => ({ error: getErrorDetail(error) ?? 'Failed to fetch price from Uniswap', result: undefined })),
 					accountAddress === undefined ? Promise.resolve(undefined) : loadErc20Allowance(readClient, currentDetails.token1, accountAddress, getOpenOracleAddress()).catch(() => undefined),
 					accountAddress === undefined ? Promise.resolve(undefined) : loadErc20Allowance(readClient, currentDetails.token2, accountAddress, getOpenOracleAddress()).catch(() => undefined),
 				])
@@ -61,8 +66,9 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				return { initialPrice, token1Allowance, token2Allowance }
 			},
 			onSuccess: ({ initialPrice, token1Allowance, token2Allowance }) => {
-				openOracleInitialReportDefaultPrice.value = initialPrice === undefined ? undefined : formatOpenOraclePriceInput(initialPrice.price)
-				openOracleInitialReportDefaultPriceSource.value = initialPrice?.priceSource
+				openOracleInitialReportDefaultPrice.value = initialPrice.result === undefined ? undefined : formatOpenOraclePriceInput(initialPrice.result.price)
+				openOracleInitialReportDefaultPriceError.value = initialPrice.error
+				openOracleInitialReportDefaultPriceSource.value = initialPrice.result?.priceSource
 				openOracleInitialReportToken1Allowance.value = token1Allowance
 				openOracleInitialReportToken2Allowance.value = token2Allowance
 
@@ -70,8 +76,8 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 					openOracleForm.value = {
 						...openOracleForm.value,
 						amount1: currentDetails.exactToken1Report.toString(),
-						amount2: initialPrice?.token2Amount?.toString() ?? openOracleForm.value.amount2,
-						price: initialPrice === undefined ? '' : formatOpenOraclePriceInput(initialPrice.price),
+						amount2: initialPrice.result?.token2Amount?.toString() ?? openOracleForm.value.amount2,
+						price: initialPrice.result === undefined ? '' : formatOpenOraclePriceInput(initialPrice.result.price),
 					}
 				}
 			},
@@ -109,6 +115,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				openOracleReportDetails.value = undefined
 				loadedOpenOracleReportId.value = undefined
 				openOracleInitialReportDefaultPrice.value = undefined
+				openOracleInitialReportDefaultPriceError.value = undefined
 				openOracleInitialReportDefaultPriceSource.value = undefined
 				openOracleInitialReportToken1Allowance.value = undefined
 				openOracleInitialReportToken2Allowance.value = undefined
@@ -208,6 +215,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				approvedToken1Amount: openOracleInitialReportToken1Allowance.value,
 				approvedToken2Amount: openOracleInitialReportToken2Allowance.value,
 				defaultPrice: openOracleInitialReportDefaultPrice.value,
+				defaultPriceError: openOracleInitialReportDefaultPriceError.value,
 				defaultPriceSource: openOracleInitialReportDefaultPriceSource.value,
 				priceInput: openOracleForm.value.price,
 				reportDetails,
@@ -262,6 +270,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		openOracleForm: openOracleForm.value,
 		openOracleInitialReportState: {
 			defaultPrice: openOracleInitialReportDefaultPrice.value,
+			defaultPriceError: openOracleInitialReportDefaultPriceError.value,
 			defaultPriceSource: openOracleInitialReportDefaultPriceSource.value,
 			loading: openOracleInitialReportStateLoad.isLoading.value,
 			token1Allowance: openOracleInitialReportToken1Allowance.value,

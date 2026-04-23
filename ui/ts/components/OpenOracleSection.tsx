@@ -261,6 +261,7 @@ function renderReportDetailsCard(
 		approvedToken1Amount: openOracleInitialReportState.token1Allowance,
 		approvedToken2Amount: openOracleInitialReportState.token2Allowance,
 		defaultPrice: openOracleInitialReportState.defaultPrice,
+		defaultPriceError: openOracleInitialReportState.defaultPriceError,
 		defaultPriceSource: openOracleInitialReportState.defaultPriceSource,
 		priceInput: openOracleForm.price,
 		reportDetails: openOracleReportDetails,

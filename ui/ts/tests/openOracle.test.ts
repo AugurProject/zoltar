@@ -5,6 +5,7 @@ import { getAddress, maxUint256, zeroAddress, type Address } from 'viem'
 import { createOpenOracleReportInstance, getOpenOracleAddress, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, requestOraclePrice, settleOracleReport, submitInitialOracleReport } from '../contracts.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOracleFeePercentage, formatOpenOracleMultiplier, loadOpenOracleInitialReportPrice, OPEN_ORACLE_APPROVAL_AMOUNT, getOpenOracleReportStatus, getOpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS } from '../lib/uniswapQuoter.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS, TEST_ADDRESSES } from '../../../solidity/ts/testsuite/simulator/utils/constants'
 import { addressString } from '../../../solidity/ts/testsuite/simulator/utils/bigint'
@@ -134,14 +135,64 @@ describe('Open Oracle helpers', () => {
 			loadOpenOracleInitialReportPrice(
 				{
 					simulateContract: async () => {
-						throw new Error('no pool')
+						throw new Error('no v3 pool')
 					},
 				} as unknown as Parameters<typeof loadOpenOracleInitialReportPrice>[0],
 				getAddress('0x00000000000000000000000000000000000000a1'),
 				getAddress('0x00000000000000000000000000000000000000a2'),
 				100n,
 			),
-		).resolves.toBeUndefined()
+		).rejects.toThrow('Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 fallback failed: no v3 pool')
+	})
+
+	test('initial report price helpers report both Uniswap V4 and V3 failures when fallback was attempted', async () => {
+		let callCount = 0
+		const failingClient = {
+			simulateContract: async () => {
+				callCount += 1
+				throw new Error(callCount <= 4 ? 'no v4 pool' : 'v3 quote reverted')
+			},
+		} as unknown as Parameters<typeof loadOpenOracleInitialReportPrice>[0]
+
+		await expect(loadOpenOracleInitialReportPrice(failingClient, REP_ADDRESS, ETH_ADDRESS, 100n)).rejects.toThrow('Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v4 pool. Uniswap V3 fallback failed: v3 quote reverted')
+	})
+
+	test('initial report price helpers use the V3 fallback for REP/WETH pairs', async () => {
+		let callCount = 0
+		const fallbackClient = {
+			simulateContract: async () => {
+				callCount += 1
+				if (callCount <= 4) {
+					throw new Error('no v4 pool')
+				}
+				return { result: [200_000_000_000_000_000n, 0n, 0, 0n] }
+			},
+		} as unknown as Parameters<typeof loadOpenOracleInitialReportPrice>[0]
+
+		await expect(loadOpenOracleInitialReportPrice(fallbackClient, REP_ADDRESS, WETH_ADDRESS, 100n * 10n ** 18n)).resolves.toEqual({
+			price: 500_000_000_000_000_000_000n,
+			priceSource: 'Uniswap V3 fallback',
+			token2Amount: 200_000_000_000_000_000n,
+		})
+	})
+
+	test('initial report price helpers use the V3 fallback for non-REP pairs too', async () => {
+		let callCount = 0
+		const fallbackClient = {
+			simulateContract: async () => {
+				callCount += 1
+				if (callCount <= 4) {
+					throw new Error('no v4 pool')
+				}
+				return { result: [50n, 0n, 0, 0n] }
+			},
+		} as unknown as Parameters<typeof loadOpenOracleInitialReportPrice>[0]
+
+		await expect(loadOpenOracleInitialReportPrice(fallbackClient, USDC_ADDRESS, WETH_ADDRESS, 100n)).resolves.toEqual({
+			price: 2_000_000_000_000_000_000n,
+			priceSource: 'Uniswap V3 fallback',
+			token2Amount: 50n,
+		})
 	})
 
 	test('initial report submission helper computes preview amounts and approval gating', () => {
@@ -152,6 +203,7 @@ describe('Open Oracle helpers', () => {
 			approvedToken1Amount: 100n,
 			approvedToken2Amount: 24n,
 			defaultPrice: '4.0',
+			defaultPriceError: undefined,
 			defaultPriceSource: 'Uniswap V4',
 			priceInput: '',
 			reportDetails: details,
@@ -165,6 +217,25 @@ describe('Open Oracle helpers', () => {
 		expect(preview.amount2).toBe(25n)
 		expect(preview.canSubmit).toBe(false)
 		expect(preview.blockReason).toBe('Token2 approval required')
+	})
+
+	test('initial report submission helper surfaces the fetch price failure reason when no default price is available', () => {
+		const preview = deriveOpenOracleInitialReportSubmissionDetails({
+			approvedToken1Amount: 100n,
+			approvedToken2Amount: 100n,
+			defaultPrice: undefined,
+			defaultPriceError: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 fallback failed: no v3 pool',
+			defaultPriceSource: undefined,
+			priceInput: '',
+			reportDetails: {
+				exactToken1Report: 100n,
+			},
+			token1Decimals: 18,
+			token2Decimals: 18,
+		})
+
+		expect(preview.canSubmit).toBe(false)
+		expect(preview.blockReason).toBe('Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 fallback failed: no v3 pool')
 	})
 
 	test('open oracle fee and multiplier formatters render human values', () => {

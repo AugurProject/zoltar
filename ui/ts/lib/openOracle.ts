@@ -1,11 +1,11 @@
 import { maxUint256, zeroAddress } from 'viem'
 import type { OpenOracleReportSummary } from '../types/contracts.js'
+import { getErrorDetail } from './errors.js'
 import { formatCurrencyInputBalance } from './formatters.js'
 import { parseDecimalInput } from './decimal.js'
-import { ETH_ADDRESS, REP_ADDRESS, quoteExactInput, quoteRepForEthV3 } from './uniswapQuoter.js'
+import { quoteBestExactInput, quoteBestV3ExactInput, quoteExactInput } from './uniswapQuoter.js'
 
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 18n
-const ONE_REP = 10n ** 18n
 export const OPEN_ORACLE_APPROVAL_AMOUNT = maxUint256
 
 type OpenOracleReportStatus = 'Awaiting Initial Report' | 'Pending' | 'Disputed' | 'Settled'
@@ -24,6 +24,18 @@ type OpenOracleInitialReportSubmissionDetails = {
 	priceSource: OpenOracleInitialReportPriceSource
 	token1Decimals: number | undefined
 	token2Decimals: number | undefined
+}
+
+function formatOpenOraclePriceLoadError(v4Error: unknown, v3Error?: unknown) {
+	const v4Detail = getErrorDetail(v4Error)
+	const v3Detail = getErrorDetail(v3Error)
+	const v4Message = v4Detail === undefined ? 'Uniswap V4 quote failed.' : `Uniswap V4 quote failed: ${v4Detail}.`
+
+	if (v3Error !== undefined) {
+		const v3Message = v3Detail === undefined ? 'Uniswap V3 fallback failed.' : `Uniswap V3 fallback failed: ${v3Detail}`
+		return `Failed to fetch price from Uniswap. ${v4Message} ${v3Message}`
+	}
+	return `Failed to fetch price from Uniswap. ${v4Message} Uniswap V3 fallback did not run.`
 }
 
 export function getOpenOracleReportStatus(report: Pick<OpenOracleReportSummary, 'currentReporter' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp'>): OpenOracleReportStatus {
@@ -94,30 +106,19 @@ export async function loadOpenOracleInitialReportPrice(
 	token1Amount: bigint,
 ): Promise<{ price: bigint; priceSource: Exclude<OpenOracleInitialReportPriceSource, 'Manual override' | 'Unavailable'>; token2Amount: bigint } | undefined> {
 	try {
-		const token2Amount = await quoteExactInput(client, token1, token2, token1Amount)
+		const token2Amount = await quoteBestExactInput(client, token1, token2, token1Amount)
 		const price = calculateOpenOraclePrice(token1Amount, token2Amount)
 		if (price === undefined) return undefined
 		return { price, priceSource: 'Uniswap V4', token2Amount }
-	} catch {
+	} catch (v4Error) {
 		try {
-			if (token1 === REP_ADDRESS && token2 === ETH_ADDRESS) {
-				const ethPerRep = await quoteRepForEthV3(client, ONE_REP)
-				const token2Amount = (token1Amount * ethPerRep) / ONE_REP
-				const price = calculateOpenOraclePrice(token1Amount, token2Amount)
-				if (price === undefined) return undefined
-				return { price, priceSource: 'Uniswap V3 fallback', token2Amount }
-			}
-			if (token1 === ETH_ADDRESS && token2 === REP_ADDRESS) {
-				const ethPerRep = await quoteRepForEthV3(client, ONE_REP)
-				const token2Amount = (token1Amount * ONE_REP) / ethPerRep
-				const price = calculateOpenOraclePrice(token1Amount, token2Amount)
-				if (price === undefined) return undefined
-				return { price, priceSource: 'Uniswap V3 fallback', token2Amount }
-			}
-		} catch {
-			return undefined
+			const token2Amount = await quoteBestV3ExactInput(client, token1, token2, token1Amount)
+			const price = calculateOpenOraclePrice(token1Amount, token2Amount)
+			if (price === undefined) return undefined
+			return { price, priceSource: 'Uniswap V3 fallback', token2Amount }
+		} catch (v3Error) {
+			throw new Error(formatOpenOraclePriceLoadError(v4Error, v3Error))
 		}
-		return undefined
 	}
 }
 
@@ -125,6 +126,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	approvedToken1Amount,
 	approvedToken2Amount,
 	defaultPrice,
+	defaultPriceError,
 	defaultPriceSource,
 	priceInput,
 	reportDetails,
@@ -134,6 +136,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	approvedToken1Amount: bigint | undefined
 	approvedToken2Amount: bigint | undefined
 	defaultPrice: string | undefined
+	defaultPriceError: string | undefined
 	defaultPriceSource: OpenOracleInitialReportPriceSource | undefined
 	priceInput: string
 	reportDetails:
@@ -160,7 +163,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	if (reportDetails === undefined) {
 		blockReason = 'Load a report first'
 	} else if (resolvedPriceInput === '') {
-		blockReason = 'Price unavailable'
+		blockReason = defaultPriceError ?? 'Price unavailable'
 	} else if (price === undefined || price <= 0n || amount2 === undefined || amount2 <= 0n) {
 		blockReason = 'Invalid price'
 	} else if (amount1 === undefined || approvedToken1Amount === undefined || approvedToken1Amount < amount1) {
