@@ -5,7 +5,7 @@ import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
 import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, loadErc20Allowance, loadOpenOracleReportDetails, settleOracleReport, submitInitialOracleReport } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { getErrorDetail, getErrorMessage } from '../lib/errors.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOraclePriceInput, loadOpenOracleInitialReportPriceResult, OPEN_ORACLE_APPROVAL_AMOUNT } from '../lib/openOracle.js'
 import { requireDefined } from '../lib/required.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
@@ -28,6 +28,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 	const openOracleReportDetails = useSignal<OpenOracleReportDetails | undefined>(undefined)
 	const loadedOpenOracleReportId = useSignal<bigint | undefined>(undefined)
 	const openOracleInitialReportDefaultPrice = useSignal<string | undefined>(undefined)
+	const openOracleInitialReportDefaultPriceError = useSignal<string | undefined>(undefined)
 	const openOracleInitialReportDefaultPriceSource = useSignal<'Uniswap V4' | 'Uniswap V3 fallback' | undefined>(undefined)
 	const openOracleInitialReportQuoteAttemptedSources = useSignal<('Uniswap V4' | 'Uniswap V3 fallback')[] | undefined>(undefined)
 	const openOracleInitialReportQuoteFailureKind = useSignal<'unsupported-pair' | 'quote-failed' | undefined>(undefined)
@@ -43,6 +44,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		const isCurrent = nextOpenOracleInitialReportStateLoad()
 		if (currentDetails === undefined) {
 			openOracleInitialReportDefaultPrice.value = undefined
+			openOracleInitialReportDefaultPriceError.value = undefined
 			openOracleInitialReportDefaultPriceSource.value = undefined
 			openOracleInitialReportQuoteAttemptedSources.value = undefined
 			openOracleInitialReportQuoteFailureKind.value = undefined
@@ -58,6 +60,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 			isCurrent,
 			onStart: () => {
 				openOracleInitialReportDefaultPrice.value = undefined
+				openOracleInitialReportDefaultPriceError.value = undefined
 				openOracleInitialReportDefaultPriceSource.value = undefined
 				openOracleInitialReportQuoteAttemptedSources.value = undefined
 				openOracleInitialReportQuoteFailureKind.value = undefined
@@ -80,9 +83,10 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 							error: undefined,
 						}
 					} catch (error) {
+						const errorDetail = getErrorDetail(error)
 						return {
 							allowance: undefined,
-							error: getErrorMessage(error, 'Failed to load token approval'),
+							error: errorDetail === undefined ? 'Failed to load token approval' : `Failed to load token approval: ${errorDetail}`,
 						}
 					}
 				}
@@ -96,6 +100,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				const priceFailure = initialPriceResult.status === 'failure' ? initialPriceResult : undefined
 
 				openOracleInitialReportDefaultPrice.value = initialPrice === undefined ? undefined : formatOpenOraclePriceInput(initialPrice.price)
+				openOracleInitialReportDefaultPriceError.value = priceFailure?.reason
 				openOracleInitialReportDefaultPriceSource.value = initialPrice?.priceSource
 				openOracleInitialReportQuoteAttemptedSources.value = priceFailure?.attemptedSources
 				openOracleInitialReportQuoteFailureKind.value = priceFailure?.failureKind
@@ -148,6 +153,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				openOracleReportDetails.value = undefined
 				loadedOpenOracleReportId.value = undefined
 				openOracleInitialReportDefaultPrice.value = undefined
+				openOracleInitialReportDefaultPriceError.value = undefined
 				openOracleInitialReportDefaultPriceSource.value = undefined
 				openOracleInitialReportQuoteAttemptedSources.value = undefined
 				openOracleInitialReportQuoteFailureKind.value = undefined
@@ -255,6 +261,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				approvedToken1Amount: openOracleInitialReportToken1Allowance.value,
 				approvedToken2Amount: openOracleInitialReportToken2Allowance.value,
 				defaultPrice: openOracleInitialReportDefaultPrice.value,
+				defaultPriceError: openOracleInitialReportDefaultPriceError.value,
 				defaultPriceSource: openOracleInitialReportDefaultPriceSource.value,
 				priceInput: openOracleForm.value.price,
 				quoteAttemptedSources: openOracleInitialReportQuoteAttemptedSources.value,
@@ -313,6 +320,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		openOracleForm: openOracleForm.value,
 		openOracleInitialReportState: {
 			defaultPrice: openOracleInitialReportDefaultPrice.value,
+			defaultPriceError: openOracleInitialReportDefaultPriceError.value,
 			defaultPriceSource: openOracleInitialReportDefaultPriceSource.value,
 			loading: openOracleInitialReportStateLoad.isLoading.value,
 			quoteAttemptedSources: openOracleInitialReportQuoteAttemptedSources.value,

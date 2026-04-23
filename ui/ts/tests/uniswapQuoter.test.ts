@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from 'viem'
-import { DEFAULT_POOL_CONFIG, ETH_ADDRESS, REP_ADDRESS, UNISWAP_V4_QUOTER_ADDRESS, quoteEthForRep, quoteEthForToken, quoteExactInput, quoteRepForEth, quoteTokenForEth } from '../lib/uniswapQuoter.js'
+import { DEFAULT_POOL_CONFIG, ETH_ADDRESS, REP_ADDRESS, UNISWAP_V4_QUOTER_ADDRESS, WETH_ADDRESS, quoteBestExactInput, quoteBestV3ExactInput, quoteEthForRep, quoteEthForToken, quoteExactInput, quoteRepForEth, quoteTokenForEth } from '../lib/uniswapQuoter.js'
 import type { ReadClient } from '../lib/clients.js'
 
 type SimulateArgs = Parameters<ReadClient['simulateContract']>[0]
@@ -47,6 +47,32 @@ function createCapturingClient(amountOut: bigint): { client: ReadClient; capture
 		},
 	} as unknown as ReadClient
 	return { client, captured }
+}
+
+function createPoolAwareClient(amountsByFee: Partial<Record<number, bigint>>): ReadClient {
+	return {
+		simulateContract: async (args: SimulateArgs) => {
+			const { fee } = extractParams(args)
+			const amountOut = amountsByFee[fee]
+			if (amountOut === undefined) {
+				throw new Error(`no pool for fee ${fee}`)
+			}
+			return { result: [amountOut, 100000n] }
+		},
+	} as unknown as ReadClient
+}
+
+function createV3FeeAwareClient(amountsByFee: Partial<Record<number, bigint>>): ReadClient {
+	return {
+		simulateContract: async (args: SimulateArgs) => {
+			const [param] = args.args as unknown as [{ tokenIn: string; tokenOut: string; amountIn: bigint; fee: number; sqrtPriceLimitX96: bigint }]
+			const amountOut = amountsByFee[param.fee]
+			if (amountOut === undefined) {
+				throw new Error(`no v3 pool for fee ${param.fee}`)
+			}
+			return { result: [amountOut, 0n, 0, 0n] }
+		},
+	} as unknown as ReadClient
 }
 
 void describe('quoteExactInput', () => {
@@ -113,6 +139,58 @@ void describe('quoteExactInput', () => {
 		await quoteExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n)
 		expect(captured.fee).toBe(DEFAULT_POOL_CONFIG.fee)
 		expect(captured.tickSpacing).toBe(DEFAULT_POOL_CONFIG.tickSpacing)
+	})
+})
+
+void describe('quoteBestExactInput', () => {
+	void test('returns the best successful quote across tested V4 pool configs', async () => {
+		const client = createPoolAwareClient({
+			100: 9n,
+			500: 12n,
+			3000: 7n,
+		})
+
+		const result = await quoteBestExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n)
+		expect(result).toBe(12n)
+	})
+
+	void test('throws when every tested V4 pool config fails', async () => {
+		const client = createPoolAwareClient({})
+		await expect(quoteBestExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n)).rejects.toThrow('no pool for fee 10000')
+	})
+})
+
+void describe('quoteBestV3ExactInput', () => {
+	void test('returns the best successful quote across tested V3 fee tiers', async () => {
+		const client = createV3FeeAwareClient({
+			500: 9n,
+			3000: 12n,
+			10000: 7n,
+		})
+
+		const result = await quoteBestV3ExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n)
+		expect(result).toBe(12n)
+	})
+
+	void test('normalizes ETH to WETH for V3 quotes', async () => {
+		const captured: { tokenIn?: string; tokenOut?: string } = {}
+		const client = {
+			simulateContract: async (args: SimulateArgs) => {
+				const [param] = args.args as unknown as [{ tokenIn: string; tokenOut: string; amountIn: bigint; fee: number; sqrtPriceLimitX96: bigint }]
+				captured.tokenIn = param.tokenIn
+				captured.tokenOut = param.tokenOut
+				return { result: [1n, 0n, 0, 0n] }
+			},
+		} as unknown as ReadClient
+
+		await quoteBestV3ExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n, [100])
+		expect(captured.tokenIn).toBe(WETH_ADDRESS)
+		expect(captured.tokenOut).toBe(REP_ADDRESS)
+	})
+
+	void test('throws when every tested V3 fee tier fails', async () => {
+		const client = createV3FeeAwareClient({})
+		await expect(quoteBestV3ExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n)).rejects.toThrow('no v3 pool for fee 10000')
 	})
 })
 

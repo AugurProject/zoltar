@@ -14,6 +14,10 @@ function readErrorDetail(error: unknown) {
 	}
 }
 
+export function getErrorDetail(error: unknown) {
+	return readErrorDetail(error)
+}
+
 export function getErrorMessage(error: unknown, fallbackMessage: string) {
 	const detail = readErrorDetail(error)
 	if (detail === undefined || detail === '') return fallbackMessage

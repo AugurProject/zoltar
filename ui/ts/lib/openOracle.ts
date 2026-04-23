@@ -1,11 +1,11 @@
 import { maxUint256, zeroAddress } from 'viem'
 import type { OpenOracleReportSummary } from '../types/contracts.js'
-import { formatCurrencyInputBalance } from './formatters.js'
 import { parseDecimalInput } from './decimal.js'
-import { ETH_ADDRESS, REP_ADDRESS, quoteExactInput, quoteRepForEthV3 } from './uniswapQuoter.js'
+import { getErrorDetail } from './errors.js'
+import { formatCurrencyInputBalance } from './formatters.js'
+import { quoteBestExactInput, quoteBestV3ExactInput, quoteExactInput } from './uniswapQuoter.js'
 
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 18n
-const ONE_REP = 10n ** 18n
 export const OPEN_ORACLE_APPROVAL_AMOUNT = maxUint256
 
 type OpenOracleReportStatus = 'Awaiting Initial Report' | 'Pending' | 'Disputed' | 'Settled'
@@ -13,6 +13,7 @@ export type OpenOracleSelectedReportActionMode = 'initial-report' | 'dispute' | 
 export type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3 fallback' | 'Manual override' | 'Unavailable'
 export type OpenOracleInitialReportQuoteSource = Exclude<OpenOracleInitialReportPriceSource, 'Manual override' | 'Unavailable'>
 export type OpenOracleInitialReportQuoteFailureKind = 'unsupported-pair' | 'quote-failed'
+
 type OpenOracleInitialReportPriceLoadResult =
 	| {
 			status: 'success'
@@ -39,6 +40,19 @@ type OpenOracleInitialReportSubmissionDetails = {
 	priceSource: OpenOracleInitialReportPriceSource
 	token1Decimals: number | undefined
 	token2Decimals: number | undefined
+}
+
+function formatOpenOraclePriceLoadError(v4Error: unknown, v3Error?: unknown) {
+	const v4Detail = getErrorDetail(v4Error)
+	const v3Detail = getErrorDetail(v3Error)
+	const v4Message = v4Detail === undefined ? 'Uniswap V4 quote failed.' : `Uniswap V4 quote failed: ${v4Detail}.`
+
+	if (v3Error !== undefined) {
+		const v3Message = v3Detail === undefined ? 'Uniswap V3 fallback failed.' : `Uniswap V3 fallback failed: ${v3Detail}`
+		return `Failed to fetch price from Uniswap. ${v4Message} ${v3Message}`
+	}
+
+	return `Failed to fetch price from Uniswap. ${v4Message} Uniswap V3 fallback did not run.`
 }
 
 export function getOpenOracleReportStatus(report: Pick<OpenOracleReportSummary, 'currentReporter' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp'>): OpenOracleReportStatus {
@@ -102,20 +116,6 @@ export function formatOpenOraclePriceInput(price: bigint | undefined) {
 	return price === undefined ? '' : formatCurrencyInputBalance(price)
 }
 
-function supportsOpenOracleV3Fallback(token1: Parameters<typeof quoteExactInput>[1], token2: Parameters<typeof quoteExactInput>[2]) {
-	return (token1 === REP_ADDRESS && token2 === ETH_ADDRESS) || (token1 === ETH_ADDRESS && token2 === REP_ADDRESS)
-}
-
-function extractOpenOracleQuoteFailureReason(error: unknown) {
-	if (error instanceof Error) return error.message
-	if (typeof error === 'string') return error
-	try {
-		return JSON.stringify(error)
-	} catch {
-		return undefined
-	}
-}
-
 function sanitizeOpenOracleFailureReason(reason: string | undefined) {
 	if (reason === undefined) return undefined
 
@@ -124,7 +124,7 @@ function sanitizeOpenOracleFailureReason(reason: string | undefined) {
 		return undefined
 	}
 
-	sanitized = sanitized.replace(/^(failed to [^:]+:\s*)+/i, '')
+	sanitized = sanitized.replace(/^(failed to [^:.]+[:.]\s*)+/i, '')
 	sanitized = sanitized.replace(/\.$/, '')
 	if (sanitized === '') return undefined
 
@@ -176,62 +176,47 @@ export function formatOpenOracleInitialReportApprovalStatusUnavailableMessage({ 
 }
 
 export async function loadOpenOracleInitialReportPriceResult(client: Parameters<typeof quoteExactInput>[0], token1: Parameters<typeof quoteExactInput>[1], token2: Parameters<typeof quoteExactInput>[2], token1Amount: bigint): Promise<OpenOracleInitialReportPriceLoadResult> {
-	const attemptedSources: OpenOracleInitialReportQuoteSource[] = ['Uniswap V4']
+	let v4Failure: unknown = 'Uniswap V4 returned an unusable quote'
+
 	try {
-		const token2Amount = await quoteExactInput(client, token1, token2, token1Amount)
+		const token2Amount = await quoteBestExactInput(client, token1, token2, token1Amount)
 		const price = calculateOpenOraclePrice(token1Amount, token2Amount)
 		if (price !== undefined) {
 			return { price, priceSource: 'Uniswap V4', status: 'success', token2Amount }
 		}
-		return { attemptedSources, failureKind: 'quote-failed', reason: 'Uniswap V4 returned an unusable quote', status: 'failure' }
 	} catch (error) {
-		if (!supportsOpenOracleV3Fallback(token1, token2)) {
-			return {
-				attemptedSources,
-				failureKind: 'unsupported-pair',
-				reason: extractOpenOracleQuoteFailureReason(error),
-				status: 'failure',
-			}
+		v4Failure = error
+	}
+
+	const attemptedSources: OpenOracleInitialReportQuoteSource[] = ['Uniswap V4', 'Uniswap V3 fallback']
+	try {
+		const token2Amount = await quoteBestV3ExactInput(client, token1, token2, token1Amount)
+		const price = calculateOpenOraclePrice(token1Amount, token2Amount)
+		if (price !== undefined) {
+			return { price, priceSource: 'Uniswap V3 fallback', status: 'success', token2Amount }
 		}
 
-		attemptedSources.push('Uniswap V3 fallback')
-		try {
-			if (token1 === REP_ADDRESS && token2 === ETH_ADDRESS) {
-				const ethPerRep = await quoteRepForEthV3(client, ONE_REP)
-				const token2Amount = (token1Amount * ethPerRep) / ONE_REP
-				const price = calculateOpenOraclePrice(token1Amount, token2Amount)
-				if (price !== undefined) {
-					return { price, priceSource: 'Uniswap V3 fallback', status: 'success', token2Amount }
-				}
-			}
-			if (token1 === ETH_ADDRESS && token2 === REP_ADDRESS) {
-				const ethPerRep = await quoteRepForEthV3(client, ONE_REP)
-				const token2Amount = (token1Amount * ONE_REP) / ethPerRep
-				const price = calculateOpenOraclePrice(token1Amount, token2Amount)
-				if (price !== undefined) {
-					return { price, priceSource: 'Uniswap V3 fallback', status: 'success', token2Amount }
-				}
-			}
-			return { attemptedSources, failureKind: 'quote-failed', reason: 'Uniswap V3 fallback returned an unusable quote', status: 'failure' }
-		} catch (fallbackError) {
-			return {
-				attemptedSources,
-				failureKind: 'quote-failed',
-				reason: extractOpenOracleQuoteFailureReason(fallbackError),
-				status: 'failure',
-			}
+		return {
+			attemptedSources,
+			failureKind: 'quote-failed',
+			reason: formatOpenOraclePriceLoadError(v4Failure, 'Uniswap V3 fallback returned an unusable quote'),
+			status: 'failure',
+		}
+	} catch (v3Error) {
+		return {
+			attemptedSources,
+			failureKind: 'quote-failed',
+			reason: formatOpenOraclePriceLoadError(v4Failure, v3Error),
+			status: 'failure',
 		}
 	}
 }
 
-export async function loadOpenOracleInitialReportPrice(
-	client: Parameters<typeof quoteExactInput>[0],
-	token1: Parameters<typeof quoteExactInput>[1],
-	token2: Parameters<typeof quoteExactInput>[2],
-	token1Amount: bigint,
-): Promise<{ price: bigint; priceSource: OpenOracleInitialReportQuoteSource; token2Amount: bigint } | undefined> {
+export async function loadOpenOracleInitialReportPrice(client: Parameters<typeof quoteExactInput>[0], token1: Parameters<typeof quoteExactInput>[1], token2: Parameters<typeof quoteExactInput>[2], token1Amount: bigint): Promise<{ price: bigint; priceSource: OpenOracleInitialReportQuoteSource; token2Amount: bigint }> {
 	const result = await loadOpenOracleInitialReportPriceResult(client, token1, token2, token1Amount)
-	if (result.status === 'failure') return undefined
+	if (result.status === 'failure') {
+		throw new Error(result.reason ?? 'Failed to fetch price from Uniswap')
+	}
 
 	return {
 		price: result.price,
@@ -244,6 +229,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	approvedToken1Amount,
 	approvedToken2Amount,
 	defaultPrice,
+	defaultPriceError,
 	defaultPriceSource,
 	priceInput,
 	quoteAttemptedSources,
@@ -257,6 +243,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	approvedToken1Amount: bigint | undefined
 	approvedToken2Amount: bigint | undefined
 	defaultPrice: string | undefined
+	defaultPriceError: string | undefined
 	defaultPriceSource: OpenOracleInitialReportPriceSource | undefined
 	priceInput: string
 	quoteAttemptedSources: OpenOracleInitialReportQuoteSource[] | undefined
@@ -275,7 +262,8 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	token1Decimals: number | undefined
 	token2Decimals: number | undefined
 }): OpenOracleInitialReportSubmissionDetails {
-	const resolvedPriceInput = priceInput.trim() === '' ? (defaultPrice ?? '') : priceInput.trim()
+	const trimmedPriceInput = priceInput.trim()
+	const resolvedPriceInput = trimmedPriceInput === '' ? (defaultPrice ?? '') : trimmedPriceInput
 	let price: bigint | undefined
 	try {
 		price = resolvedPriceInput === '' ? undefined : parseOpenOraclePriceInput(resolvedPriceInput)
@@ -285,18 +273,20 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 
 	const amount1 = reportDetails?.exactToken1Report
 	const amount2 = amount1 === undefined || price === undefined ? undefined : calculateOpenOracleToken2Amount(amount1, price)
-	const priceSource = priceInput.trim() === '' ? (defaultPrice === undefined ? 'Unavailable' : (defaultPriceSource ?? 'Manual override')) : defaultPrice !== undefined && priceInput.trim() === defaultPrice ? (defaultPriceSource ?? 'Manual override') : 'Manual override'
+	const priceSource = trimmedPriceInput === '' ? (defaultPrice === undefined ? 'Unavailable' : (defaultPriceSource ?? 'Manual override')) : defaultPrice !== undefined && trimmedPriceInput === defaultPrice ? (defaultPriceSource ?? 'Manual override') : 'Manual override'
 
 	let blockReason: string | undefined
 	if (reportDetails === undefined) {
-		blockReason = 'Open a report first.'
+		blockReason = 'Load a report first'
 	} else if (resolvedPriceInput === '') {
-		blockReason = formatOpenOracleInitialReportPriceUnavailableMessage({
-			attemptedSources: quoteAttemptedSources,
-			reason: quoteFailureReason,
-			token1Label: reportDetails.token1Symbol ?? reportDetails.token1,
-			token2Label: reportDetails.token2Symbol ?? reportDetails.token2,
-		})
+		blockReason =
+			defaultPriceError ??
+			formatOpenOracleInitialReportPriceUnavailableMessage({
+				attemptedSources: quoteAttemptedSources,
+				reason: quoteFailureReason,
+				token1Label: reportDetails.token1Symbol ?? reportDetails.token1,
+				token2Label: reportDetails.token2Symbol ?? reportDetails.token2,
+			})
 	} else if (price === undefined || price <= 0n || amount2 === undefined || amount2 <= 0n) {
 		blockReason = 'Invalid price'
 	} else if (approvedToken1Amount === undefined && token1AllowanceError !== undefined) {
