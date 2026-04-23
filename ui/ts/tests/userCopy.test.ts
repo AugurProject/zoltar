@@ -6,8 +6,11 @@ import { getMetricPlaceholderPresentation, getPoolRegistryPresentation, getRepor
 void describe('user copy helpers', () => {
 	void test('maps pool selection states semantically', () => {
 		expect(getPoolRegistryPresentation({ mode: 'selection', state: 'unknown' })?.key).toBe('not_checked')
+		expect(getPoolRegistryPresentation({ mode: 'selection', state: 'unknown' })?.detail).toBeUndefined()
+		expect(getPoolRegistryPresentation({ mode: 'selection', state: 'unknown' })?.actionHint).toBeUndefined()
 		expect(getPoolRegistryPresentation({ mode: 'selection', state: 'loading' })?.key).toBe('loading')
 		expect(getPoolRegistryPresentation({ mode: 'selection', state: 'missing' })?.key).toBe('not_found')
+		expect(getPoolRegistryPresentation({ mode: 'selection', state: 'missing' })?.detail).toBeUndefined()
 		expect(getPoolRegistryPresentation({ mode: 'selection', state: 'ready' })).toBeUndefined()
 	})
 

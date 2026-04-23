@@ -19,15 +19,15 @@ export type LoadController = {
 }
 
 type ResolveLoadableValueStateOptions<TValue> = {
-	hasLoaded: boolean
 	isLoading: boolean
+	isMissing: boolean
 	value: TValue | undefined
 }
 
-export function resolveLoadableValueState<TValue>({ hasLoaded, isLoading, value }: ResolveLoadableValueStateOptions<TValue>): LoadableValueState {
+export function resolveLoadableValueState<TValue>({ isLoading, isMissing, value }: ResolveLoadableValueStateOptions<TValue>): LoadableValueState {
 	if (value !== undefined) return 'ready'
 	if (isLoading) return 'loading'
-	if (hasLoaded) return 'missing'
+	if (isMissing) return 'missing'
 	return 'unknown'
 }
 

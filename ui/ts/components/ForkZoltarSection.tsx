@@ -56,13 +56,14 @@ export function ForkZoltarSection({
 	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= rootUniverse.forkThreshold
 	const hasEnoughApproval = rootUniverse !== undefined && zoltarForkAllowance !== undefined && zoltarForkAllowance >= rootUniverse.forkThreshold
 	const selectedQuestionId = zoltarForkQuestionId.trim()
+	const hasSelectedQuestionId = selectedQuestionId !== ''
 	const selectedQuestion = selectedQuestionId === '' ? undefined : zoltarQuestions.find(question => sameCaseInsensitiveText(question.questionId, selectedQuestionId))
 	const selectedQuestionLookupState = resolveLoadableValueState({
-		hasLoaded: hasLoadedZoltarQuestions,
 		isLoading: loadingZoltarQuestions,
+		isMissing: hasSelectedQuestionId && hasLoadedZoltarQuestions && selectedQuestion === undefined,
 		value: selectedQuestion,
 	})
-	const selectedQuestionPresentation = selectedQuestionId !== '' && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
+	const selectedQuestionPresentation = hasSelectedQuestionId && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
 	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && hasEnoughRep && hasEnoughApproval
 
 	if (universeMissing) {

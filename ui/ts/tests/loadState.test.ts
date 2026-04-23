@@ -144,11 +144,11 @@ void describe('load state helpers', () => {
 		expect(controller.isLoading.value).toBe(false)
 	})
 
-	void test('resolves loadable value states without conflating unknown and missing', () => {
-		expect(resolveLoadableValueState({ hasLoaded: false, isLoading: false, value: undefined })).toBe('unknown')
-		expect(resolveLoadableValueState({ hasLoaded: false, isLoading: true, value: undefined })).toBe('loading')
-		expect(resolveLoadableValueState({ hasLoaded: true, isLoading: false, value: undefined })).toBe('missing')
-		expect(resolveLoadableValueState({ hasLoaded: true, isLoading: false, value: 42 })).toBe('ready')
+	void test('resolves loadable value states from explicit missing truth', () => {
+		expect(resolveLoadableValueState({ isLoading: false, isMissing: false, value: undefined })).toBe('unknown')
+		expect(resolveLoadableValueState({ isLoading: true, isMissing: false, value: undefined })).toBe('loading')
+		expect(resolveLoadableValueState({ isLoading: false, isMissing: true, value: undefined })).toBe('missing')
+		expect(resolveLoadableValueState({ isLoading: false, isMissing: false, value: 42 })).toBe('ready')
 	})
 
 	void test('resolves requested loadable value states for the current key only', () => {
