@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { createLoadController, resolveLoadableValueState, resolveMissingAwareLoadableValueState, resolveRequestedLoadableValueState, type LoadPhase } from '../lib/loadState.js'
+import { createLoadController, resolveLoadableValueState, resolveRequestedLoadableValueState, type LoadPhase } from '../lib/loadState.js'
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -144,11 +144,11 @@ void describe('load state helpers', () => {
 		expect(controller.isLoading.value).toBe(false)
 	})
 
-	void test('resolves loadable value states without conflating unknown and missing', () => {
-		expect(resolveLoadableValueState({ hasLoaded: false, isLoading: false, value: undefined })).toBe('unknown')
-		expect(resolveLoadableValueState({ hasLoaded: false, isLoading: true, value: undefined })).toBe('loading')
-		expect(resolveLoadableValueState({ hasLoaded: true, isLoading: false, value: undefined })).toBe('missing')
-		expect(resolveLoadableValueState({ hasLoaded: true, isLoading: false, value: 42 })).toBe('ready')
+	void test('resolves loadable value states from explicit missing truth', () => {
+		expect(resolveLoadableValueState({ isLoading: false, isMissing: false, value: undefined })).toBe('unknown')
+		expect(resolveLoadableValueState({ isLoading: true, isMissing: false, value: undefined })).toBe('loading')
+		expect(resolveLoadableValueState({ isLoading: false, isMissing: true, value: undefined })).toBe('missing')
+		expect(resolveLoadableValueState({ isLoading: false, isMissing: false, value: 42 })).toBe('ready')
 	})
 
 	void test('resolves requested loadable value states for the current key only', () => {
@@ -157,12 +157,5 @@ void describe('load state helpers', () => {
 		expect(resolveRequestedLoadableValueState({ currentKey: 'pool-a', isLoading: false, resolvedKey: 'pool-b', value: undefined })).toBe('unknown')
 		expect(resolveRequestedLoadableValueState({ currentKey: 'pool-a', isLoading: false, resolvedKey: 'pool-a', value: undefined })).toBe('missing')
 		expect(resolveRequestedLoadableValueState({ currentKey: 'pool-a', isLoading: false, resolvedKey: 'pool-a', value: 42 })).toBe('ready')
-	})
-
-	void test('resolves missing-aware value states from explicit missing truth', () => {
-		expect(resolveMissingAwareLoadableValueState({ isLoading: false, isMissing: false, value: undefined })).toBe('unknown')
-		expect(resolveMissingAwareLoadableValueState({ isLoading: true, isMissing: false, value: undefined })).toBe('loading')
-		expect(resolveMissingAwareLoadableValueState({ isLoading: false, isMissing: true, value: undefined })).toBe('missing')
-		expect(resolveMissingAwareLoadableValueState({ isLoading: false, isMissing: false, value: 42 })).toBe('ready')
 	})
 })

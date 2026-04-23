@@ -25,7 +25,7 @@ import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.j
 import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { useUrlState } from './hooks/useUrlState.js'
 import { getDeploymentSections } from './lib/deployment.js'
-import { resolveMissingAwareLoadableValueState } from './lib/loadState.js'
+import { resolveLoadableValueState } from './lib/loadState.js'
 import { isMainnetChain } from './lib/network.js'
 import { getUseQuestionForPoolState } from './lib/securityPoolNavigation.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
@@ -187,7 +187,7 @@ export function App() {
 	const augurPlaceHolderDeploymentMissing = augurPlaceHolderDeployed === false
 	const showDeployTab = augurPlaceHolderDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 	const showAugurPlaceHolderDeploymentWarning = augurPlaceHolderDeploymentMissing
-	const zoltarUniverseState = resolveMissingAwareLoadableValueState({
+	const zoltarUniverseState = resolveLoadableValueState({
 		isLoading: loadingZoltarUniverse,
 		isMissing: zoltarUniverseMissing,
 		value: zoltarUniverse,
