@@ -105,7 +105,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		// first vault migrater creates new pool and transfers all REP to it
 		uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(parent.universeId(), outcomeIndex))));
 		uint256 retentionRate = SecurityPoolUtils.calculateRetentionRate(parent.completeSetCollateralAmount(), parent.totalSecurityBondAllowance());
-		(ISecurityPool child, UniformPriceDualCapBatchAuction truthAuction) = parent.securityPoolFactory().deployChildSecurityPool(parent, parent.shareToken(), childUniverseId, parent.questionId(), parent.securityMultiplier(), retentionRate, parent.priceOracleManagerAndOperatorQueuer().lastPrice(), 0);
+		(ISecurityPool child, UniformPriceDualCapBatchAuction truthAuction) = parent.securityPoolFactory().deployChildSecurityPool(parent, parent.shareToken(), childUniverseId, parent.questionId(), parent.securityMultiplier(), retentionRate, 0);
 		forkDataByPool[child].outcomeIndex = outcomeIndex;
 		forkDataByPool[child].truthAuction = truthAuction;
 		trustedAuctionAddresses[address(truthAuction)] = true;

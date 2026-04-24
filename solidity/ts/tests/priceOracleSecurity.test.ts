@@ -26,7 +26,6 @@ describe('Price Oracle Refund Security Tests', () => {
 	let priceOracle: Address
 	const genesisUniverse = 0n
 	const securityMultiplier = 2n
-	const startingRepEthPrice = 10n
 	const MAX_RETENTION_RATE = 999_999_996_848_000_000n
 	const EXTRA_INFO = 'test question!'
 
@@ -50,7 +49,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const outcomes = ['Yes', 'No']
 		await createQuestion(client, questionData, outcomes)
 		const questionId = getQuestionId(questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE)
 		await approveAndDepositRep(client, repDeposit, questionId)
 		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
 		priceOracle = addresses.priceOracleManagerAndOperatorQueuer

@@ -234,6 +234,5 @@ export function createSecurityPoolParameters(form: SecurityPoolFormState) {
 		currentRetentionRate: parseOpenInterestFeePerYearPercentInput(form.currentRetentionRate, 'Open interest fee per year'),
 		questionId: parseQuestionIdInput(form.marketId),
 		securityMultiplier: parseBigIntInput(form.securityMultiplier, 'Security multiplier'),
-		startingRepEthPrice: parseBigIntInput(form.startingRepEthPrice, 'Starting REP/ETH price'),
 	}
 }

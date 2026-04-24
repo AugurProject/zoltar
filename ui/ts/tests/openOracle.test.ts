@@ -42,7 +42,7 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
 const genesisUniverse = 0n
 const securityMultiplier = 2n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n
-const startingRepEthPrice = 10n
+const reportedRepEthPrice = 10n
 const outcomes = ['Yes', 'No']
 
 function createQuoteClient(amountOut: bigint): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
@@ -91,7 +91,7 @@ describe('Open Oracle helpers', () => {
 		}
 		const questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE)
 		managerAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer
 	})
 
@@ -380,7 +380,7 @@ describe('Open Oracle helpers', () => {
 		expect(details.managerAddress).toBe(managerAddress)
 		expect(details.openOracleAddress).toBe(getOpenOracleAddress())
 		expect(details.pendingReportId).toBe(0n)
-		expect(details.lastPrice).toBe(startingRepEthPrice)
+		expect(details.lastPrice).toBe(0n)
 		expect(details.lastSettlementTimestamp).toBe(0n)
 		expect(details.isPriceValid).toBe(false)
 	})
@@ -414,7 +414,7 @@ describe('Open Oracle helpers', () => {
 		const { exactToken1Report } = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 		const PRICE_PRECISION = 10n ** 18n
 		const amount1 = exactToken1Report
-		const amount2 = (amount1 * PRICE_PRECISION) / startingRepEthPrice
+		const amount2 = (amount1 * PRICE_PRECISION) / reportedRepEthPrice
 
 		const openOracleAddress = getOpenOracleAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracleAddress)

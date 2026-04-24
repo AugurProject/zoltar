@@ -36,7 +36,6 @@ describe('Escalation Game Fork Threshold Test', () => {
 	let client: WriteClient
 	const genesisUniverse = 0n
 	const securityMultiplier = 2n
-	const startingRepEthPrice = 10n
 	const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
 	const questionEndDate = currentTimestamp + 365n * DAY
 	let securityPoolAddresses: {
@@ -66,7 +65,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
 
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE)
 		await approveAndDepositRep(client, 1000n * 10n ** 18n, questionId)
 
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)

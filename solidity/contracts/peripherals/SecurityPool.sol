@@ -119,12 +119,13 @@ contract SecurityPool is ISecurityPool {
 		}
 	}
 
-	function setStartingParams(uint256 _currentRetentionRate, uint256 _repEthPrice, uint256 _completeSetCollateralAmount) external {
+	function setStartingParams(uint256 _currentRetentionRate, uint256 _completeSetCollateralAmount) external {
 		require(msg.sender == address(securityPoolFactory), 'only callable by securityPoolFactory');
 		lastUpdatedFeeAccumulator = block.timestamp;
 		currentRetentionRate = _currentRetentionRate;
 		completeSetCollateralAmount = _completeSetCollateralAmount;
-		priceOracleManagerAndOperatorQueuer.setRepEthPrice(_repEthPrice);
+		uint256 initialOraclePrice = address(parent) == address(0x0) ? 0 : parent.priceOracleManagerAndOperatorQueuer().lastPrice();
+		priceOracleManagerAndOperatorQueuer.setRepEthPrice(initialOraclePrice);
 	}
 
 	function updateCollateralAmount() public {

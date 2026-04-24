@@ -73,7 +73,7 @@ describe('Peripherals Contract Test Suite', () => {
 	}
 	const genesisUniverse = 0n
 	const securityMultiplier = 2n
-	const startingRepEthPrice = 10n
+	const reportedRepEthPrice = 10n
 	const testInternalSenderBalance = 10n ** 18n
 	const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
 	const EXTRA_INFO = 'test question!'
@@ -115,14 +115,14 @@ describe('Peripherals Contract Test Suite', () => {
 		}
 		questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE)
 		await approveAndDepositRep(client, repDeposit, questionId)
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
 	})
 
 	test('can deposit rep and withdraw it', async () => {
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit, startingRepEthPrice)
-		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), startingRepEthPrice, 'Price was not set!')
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit, reportedRepEthPrice)
+		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), reportedRepEthPrice, 'Price was not set!')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
 		const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance, 100n, 'Did not get rep back')
@@ -170,7 +170,6 @@ describe('Peripherals Contract Test Suite', () => {
 			securityMultiplier: storedSecurityMultiplier,
 			securityPool: securityPoolAddress,
 			shareToken: shareTokenAddress,
-			startingRepEthPrice: storedStartingRepEthPrice,
 			truthAuction: truthAuctionAddress,
 			universeId,
 		} = deployment
@@ -186,8 +185,8 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(storedQuestionId, questionId, 'stored question id should match')
 		strictEqualTypeSafe(storedSecurityMultiplier, securityMultiplier, 'stored security multiplier should match')
 		strictEqualTypeSafe(storedCurrentRetentionRate, MAX_RETENTION_RATE, 'stored retention rate should match')
-		strictEqualTypeSafe(storedStartingRepEthPrice, startingRepEthPrice, 'stored starting price should match')
 		strictEqualTypeSafe(completeSetCollateralAmount, 0n, 'origin deployments should not have complete set collateral')
+		strictEqualTypeSafe(await getLastPrice(client, managerAddress), 0n, 'origin manager should start with a zero price')
 	})
 
 	test('deployment status oracle returns the deployment bitmask in one read', async () => {
@@ -451,7 +450,6 @@ describe('Peripherals Contract Test Suite', () => {
 			securityMultiplier: childStoredSecurityMultiplier,
 			securityPool: childSecurityPoolAddress,
 			shareToken: childShareTokenAddress,
-			startingRepEthPrice: childStartingRepEthPrice,
 			truthAuction: childTruthAuctionAddress,
 			universeId: childStoredUniverseId,
 		} = matchingChildDeployment
@@ -466,8 +464,8 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(childStoredQuestionId, questionId, 'child question id should match')
 		strictEqualTypeSafe(childStoredSecurityMultiplier, securityMultiplier, 'child multiplier should match')
 		strictEqualTypeSafe(childCurrentRetentionRate, MAX_RETENTION_RATE, 'child retention rate should match')
-		strictEqualTypeSafe(childStartingRepEthPrice > 0n, true, 'child starting price should be recorded')
 		strictEqualTypeSafe(childCompleteSetCollateralAmount, 0n, 'child complete set collateral should default to zero during fork')
+		strictEqualTypeSafe(await getLastPrice(client, childManagerAddress), await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 'child manager should inherit the parent price')
 	})
 
 	test('Can Liquidate', async () => {
@@ -1085,7 +1083,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// Attempt to deploy security pool with non-binary question should fail
 		// The first outcome must be "Yes", so it will fail with that message
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, multiOutcomeQuestionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice), /First outcome must be "Yes"/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, multiOutcomeQuestionId, securityMultiplier, MAX_RETENTION_RATE), /First outcome must be "Yes"/)
 	})
 
 	test('cannot deploy security pool with scalar question', async () => {
@@ -1106,7 +1104,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// Attempt to deploy security pool with scalar question should fail
 		// For scalar questions, getOutcomeLabels returns an empty array, first outcome will be empty string, not "Yes"
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, scalarQuestionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice), /First outcome must be "Yes"/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, scalarQuestionId, securityMultiplier, MAX_RETENTION_RATE), /First outcome must be "Yes"/)
 	})
 
 	test('cannot deploy security pool with non-existent question', async () => {
@@ -1114,7 +1112,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const nonExistentQuestionId = 999999999999n
 
 		// Attempt to deploy security pool with non-existent question should fail
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, nonExistentQuestionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice), /Question does not exist/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, nonExistentQuestionId, securityMultiplier, MAX_RETENTION_RATE), /Question does not exist/)
 	})
 
 	test('can fork security pool using separate initiate and migrate calls with multiple migrations', async () => {

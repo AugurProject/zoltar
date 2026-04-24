@@ -281,14 +281,14 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!(await contractExists(client, getDeploymentStatusOracleAddress()))) throw new Error('deploymentStatusOracle does not exist even though we deployed it')
 }
 
-export const deployOriginSecurityPool = async (client: WriteClient, universeId: bigint, questionId: bigint, securityMultiplier: bigint, startingRetentionRate: bigint, startingRepEthPrice: bigint) => {
+export const deployOriginSecurityPool = async (client: WriteClient, universeId: bigint, questionId: bigint, securityMultiplier: bigint, startingRetentionRate: bigint) => {
 	const infraAddresses = getInfraContractAddresses()
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			functionName: 'deployOriginSecurityPool',
 			address: infraAddresses.securityPoolFactory,
-			args: [universeId, questionId, securityMultiplier, startingRetentionRate, startingRepEthPrice],
+			args: [universeId, questionId, securityMultiplier, startingRetentionRate],
 		}),
 	)
 }

@@ -235,7 +235,6 @@ export type ListedSecurityPool = {
 	questionId: string
 	securityMultiplier: bigint
 	securityPoolAddress: Address
-	startingRepEthPrice: bigint
 	systemState: SecurityPoolSystemState
 	truthAuctionAddress: Address
 	truthAuctionStartedAt: bigint
