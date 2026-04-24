@@ -3,6 +3,7 @@ import { ABIS } from './abis.js'
 import { createRepTokenAddressHelper, createSecurityPoolAddressHelper } from '../../shared/js/addressDerivation.js'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '../../shared/js/deploymentAddresses.js'
 import { assertNever } from './lib/assert.js'
+import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
 import { addOpenOracleBountyBuffer } from './lib/openOracle.js'
 import { GENESIS_REPUTATION_TOKEN_ADDRESS } from './lib/universe.js'
 import {
@@ -1399,12 +1400,13 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	return {
 		callbackStateHash,
 		exactToken1Report,
-		isPriceValid: pendingReportId === 0n ? false : rawIsPriceValid,
+		isPriceValid: lastSettlementTimestamp > 0n && rawIsPriceValid,
 		lastPrice,
 		lastSettlementTimestamp,
 		managerAddress,
 		openOracleAddress: resolvedOracleAddress,
 		pendingReportId,
+		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
 		requestPriceEthCost,
 		token1,
 		token2,

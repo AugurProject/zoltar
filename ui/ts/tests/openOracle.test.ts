@@ -16,6 +16,7 @@ import {
 	loadOpenOracleInitialReportPriceResult,
 	OPEN_ORACLE_APPROVAL_AMOUNT,
 } from '../lib/openOracle.js'
+import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS } from '../lib/uniswapQuoter.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
@@ -389,6 +390,7 @@ describe('Open Oracle helpers', () => {
 		expect(details.lastPrice).toBe(0n)
 		expect(details.lastSettlementTimestamp).toBe(0n)
 		expect(details.isPriceValid).toBe(false)
+		expect(details.priceValidUntilTimestamp).toBe(undefined)
 	})
 
 	test('requestOraclePrice creates a pending report visible via loadOpenOracleReportDetails', async () => {
@@ -439,5 +441,11 @@ describe('Open Oracle helpers', () => {
 		reportDetails = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
 		expect(reportDetails.settlementTimestamp).toBeGreaterThan(0n)
 		expect(getOpenOracleReportStatus(reportDetails)).toBe('Settled')
+
+		const managerDetails = await loadOracleManagerDetails(uiReadClient, managerAddress)
+		expect(managerDetails.pendingReportId).toBe(0n)
+		expect(managerDetails.lastSettlementTimestamp).toBeGreaterThan(0n)
+		expect(managerDetails.isPriceValid).toBe(true)
+		expect(managerDetails.priceValidUntilTimestamp).toBe(managerDetails.lastSettlementTimestamp + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS)
 	})
 })

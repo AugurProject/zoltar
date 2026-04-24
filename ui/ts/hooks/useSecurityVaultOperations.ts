@@ -4,7 +4,7 @@ import { useErc20AllowanceLoader, useErc20BalanceLoader } from './useErc20Loader
 import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
-import { approveErc20, depositRepToSecurityPool, loadErc20Balance, loadSecurityVaultDetails, queueOracleManagerOperation, redeemSecurityVaultFees, updateSecurityVaultFees } from '../contracts.js'
+import { approveErc20, depositRepToSecurityPool, loadErc20Balance, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation, redeemSecurityVaultFees, updateSecurityVaultFees } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { sameAddress } from '../lib/address.js'
@@ -188,6 +188,8 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 				if (amount <= 0n) throw new Error('Security bond allowance must be greater than zero')
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist')
 				if (details === undefined) return undefined
+				const managerDetails = await loadOracleManagerDetails(createConnectedReadClient(), details.managerAddress)
+				if (!managerDetails.isPriceValid) throw new Error('A valid oracle price is required before setting the security bond allowance')
 				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'setSecurityBondsAllowance', vaultAddress, amount)
 				return {
 					action: 'queueSetSecurityBondAllowance',
@@ -220,6 +222,8 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist')
 				if (details === undefined) return undefined
+				const managerDetails = await loadOracleManagerDetails(createConnectedReadClient(), details.managerAddress)
+				if (!managerDetails.isPriceValid) throw new Error('A valid oracle price is required before withdrawing REP')
 				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'withdrawRep', vaultAddress, amount)
 				return {
 					action: 'queueWithdrawRep',

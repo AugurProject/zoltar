@@ -354,7 +354,7 @@ export function SecurityPoolWorkflowSection({
 									</EntityCard>
 								) : (
 									<EntityCard className='selected-pool-card' title='Selected Vault' badge={<span className={`badge ${selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}`}>{selectedVaultIsOwnedByAccount ? 'Owned' : 'Read only'}</span>}>
-										<SecurityVaultSection {...securityVault} autoLoadVault compactLayout showHeader={false} showSecurityPoolAddressInput={false} />
+										<SecurityVaultSection {...securityVault} autoLoadVault compactLayout oracleManagerDetails={sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress) ? poolOracleManagerDetails : undefined} showHeader={false} showSecurityPoolAddressInput={false} />
 									</EntityCard>
 								)}
 							</div>

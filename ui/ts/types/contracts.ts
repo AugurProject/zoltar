@@ -144,6 +144,7 @@ export type OracleManagerDetails = {
 	managerAddress: Address
 	openOracleAddress: Address
 	pendingReportId: bigint
+	priceValidUntilTimestamp: bigint | undefined
 	requestPriceEthCost: bigint
 	token1: Address | undefined
 	token2: Address | undefined
