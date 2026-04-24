@@ -534,7 +534,6 @@ export function App() {
 						isLoadingUniverseRepBalance={loadingZoltarForkAccess}
 						onConnect={() => void connectWallet()}
 						onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
-						onRefresh={() => refreshState()}
 						repEthPrice={repEthPrice}
 						repEthSource={repEthSource}
 						repUsdcPrice={repUsdcPrice}
