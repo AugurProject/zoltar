@@ -124,7 +124,6 @@ type SecurityPoolDeploymentQueryResult = {
 	securityMultiplier: bigint
 	securityPool: Address
 	shareToken: Address
-	startingRepEthPrice: bigint
 	truthAuction: Address
 	universeId: bigint
 }
@@ -1130,14 +1129,13 @@ export async function createSecurityPool(
 		currentRetentionRate: bigint
 		questionId: bigint
 		securityMultiplier: bigint
-		startingRepEthPrice: bigint
 	},
 ) {
 	const deployPoolHash = await writeContractAndWait(client, () => ({
 		address: getDeploymentStep('securityPoolFactory').address,
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deployOriginSecurityPool',
-		args: [0n, parameters.questionId, parameters.securityMultiplier, parameters.currentRetentionRate, parameters.startingRepEthPrice],
+		args: [0n, parameters.questionId, parameters.securityMultiplier, parameters.currentRetentionRate],
 	}))
 
 	return {
@@ -2088,7 +2086,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 
 	return await Promise.all(
 		deployments.map(async deployment => {
-			const { currentRetentionRate, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, startingRepEthPrice, truthAuction: truthAuctionAddress, universeId } = deployment
+			const { currentRetentionRate, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
 			const [systemState, forkData, marketDetails] = await Promise.all([
 				client.readContract({
 					abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -2119,7 +2117,6 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 				questionId: getQuestionIdHex(questionId),
 				securityMultiplier,
 				securityPoolAddress,
-				startingRepEthPrice,
 				systemState: getSecurityPoolSystemState(systemState),
 				truthAuctionAddress,
 				truthAuctionStartedAt,

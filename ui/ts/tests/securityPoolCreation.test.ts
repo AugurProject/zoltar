@@ -60,7 +60,6 @@ describe('security pool creation helper', () => {
 			currentRetentionRate: 999_999_996_848_000_000n,
 			questionId,
 			securityMultiplier: 2n,
-			startingRepEthPrice: 10n,
 		})
 
 		const expectedAddresses = getSecurityPoolAddresses(zeroAddress, 0n, questionId, 2n)

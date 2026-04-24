@@ -173,11 +173,6 @@ export function SecurityPoolSection({
 										<input value={securityPoolForm.currentRetentionRate} onInput={event => onSecurityPoolFormChange({ currentRetentionRate: event.currentTarget.value })} placeholder={formatOpenInterestFeePerYearPercent(999999996848000000n)} />
 									</label>
 
-									<label className='field'>
-										<span>Starting REP / ETH Price</span>
-										<input value={securityPoolForm.startingRepEthPrice} onInput={event => onSecurityPoolFormChange({ startingRepEthPrice: event.currentTarget.value })} />
-									</label>
-
 									<div className='actions'>
 										<button className='primary' onClick={onCreateSecurityPool} disabled={isCreateDisabled}>
 											{createButtonLabel}
