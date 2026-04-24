@@ -5,6 +5,7 @@ import { getAddress, maxUint256, zeroAddress, type Address } from 'viem'
 import { createOpenOracleReportInstance, getOpenOracleAddress, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, requestOraclePrice, settleOracleReport, submitInitialOracleReport } from '../contracts.js'
 import {
 	deriveOpenOracleInitialReportSubmissionDetails,
+	addOpenOracleBountyBuffer,
 	formatOpenOracleFeePercentage,
 	formatOpenOracleInitialReportApprovalStatusUnavailableMessage,
 	formatOpenOracleInitialReportPriceUnavailableMessage,
@@ -43,7 +44,7 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
 const genesisUniverse = 0n
 const securityMultiplier = 2n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n
-const startingRepEthPrice = 10n
+const reportedRepEthPrice = 10n
 const outcomes = ['Yes', 'No']
 
 function createQuoteClient(amountOut: bigint): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
@@ -92,7 +93,7 @@ describe('Open Oracle helpers', () => {
 		}
 		const questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE, startingRepEthPrice)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE)
 		managerAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer
 	})
 
@@ -367,6 +368,11 @@ describe('Open Oracle helpers', () => {
 		expect(OPEN_ORACLE_APPROVAL_AMOUNT).toBe(maxUint256)
 	})
 
+	test('oracle bounty buffer adds a 20% headroom and rounds up', () => {
+		expect(addOpenOracleBountyBuffer(101n)).toBe(122n)
+		expect(addOpenOracleBountyBuffer(1_000n)).toBe(1_200n)
+	})
+
 	test('selected report action mode follows the report lifecycle', () => {
 		expect(getOpenOracleSelectedReportActionMode({ currentReporter: zeroAddress, disputeOccurred: false, isDistributed: false, reportTimestamp: 0n })).toBe('initial-report')
 		const reporter = getAddress(addressString(TEST_ADDRESSES[1]))
@@ -381,16 +387,14 @@ describe('Open Oracle helpers', () => {
 		expect(details.managerAddress).toBe(managerAddress)
 		expect(details.openOracleAddress).toBe(getOpenOracleAddress())
 		expect(details.pendingReportId).toBe(0n)
-		expect(details.lastPrice).toBe(startingRepEthPrice)
+		expect(details.lastPrice).toBe(0n)
 		expect(details.lastSettlementTimestamp).toBe(0n)
 		expect(details.isPriceValid).toBe(false)
 		expect(details.priceValidUntilTimestamp).toBe(undefined)
 	})
 
 	test('requestOraclePrice creates a pending report visible via loadOpenOracleReportDetails', async () => {
-		const { requestPriceEthCost } = await loadOracleManagerDetails(uiReadClient, managerAddress)
-
-		await requestOraclePrice(uiWriteClient, managerAddress, requestPriceEthCost)
+		await requestOraclePrice(uiWriteClient, managerAddress)
 
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		const reportId = details.pendingReportId
@@ -409,14 +413,13 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('submitted and settled reports are tracked in loadOpenOracleReportDetails', async () => {
-		const { requestPriceEthCost } = await loadOracleManagerDetails(uiReadClient, managerAddress)
-		await requestOraclePrice(uiWriteClient, managerAddress, requestPriceEthCost)
+		await requestOraclePrice(uiWriteClient, managerAddress)
 
 		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
 		const { exactToken1Report } = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 		const PRICE_PRECISION = 10n ** 18n
 		const amount1 = exactToken1Report
-		const amount2 = (amount1 * PRICE_PRECISION) / startingRepEthPrice
+		const amount2 = (amount1 * PRICE_PRECISION) / reportedRepEthPrice
 
 		const openOracleAddress = getOpenOracleAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracleAddress)

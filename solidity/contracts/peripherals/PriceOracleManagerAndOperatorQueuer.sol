@@ -118,7 +118,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 	}
 
 	function isPriceValid() public view returns (bool) {
-		return lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
+		return lastSettlementTimestamp != 0 && lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
 	}
 
 	function requestPriceIfNeededAndQueueOperation(OperationType operation, address targetVault, uint256 amount) public payable {

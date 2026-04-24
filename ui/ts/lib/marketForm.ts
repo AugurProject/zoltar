@@ -23,7 +23,6 @@ export function getDefaultSecurityPoolFormState(): SecurityPoolFormState {
 		currentRetentionRate: DEFAULT_CURRENT_RETENTION_RATE,
 		marketId: '',
 		securityMultiplier: '2',
-		startingRepEthPrice: '10',
 	}
 }
 

@@ -54,8 +54,8 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 				},
 			},
 			async walletAddress => {
-				const details = poolOracleManagerDetails.value ?? (await loadOracleManagerDetails(createConnectedReadClient(), managerAddress))
-				return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, details.requestPriceEthCost)
+				poolOracleManagerDetails.value ??= await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
+				return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress)
 			},
 			'Failed to request price',
 			result => {

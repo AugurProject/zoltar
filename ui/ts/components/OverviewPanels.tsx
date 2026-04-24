@@ -15,7 +15,6 @@ export function OverviewPanels({
 	isLoadingUniverseRepBalance,
 	onConnect,
 	onGoToGenesisUniverse,
-	onRefresh,
 	repEthPrice,
 	repEthSource,
 	repUsdcPrice,
@@ -101,9 +100,6 @@ export function OverviewPanels({
 						</div>
 					</div>
 					<div className='actions overview-actions'>
-						<button className='secondary' onClick={onRefresh} disabled={isRefreshing}>
-							{isRefreshing ? 'Refreshing...' : 'Refresh'}
-						</button>
 						{accountState.address === undefined ? (
 							<button className='primary' onClick={onConnect} disabled={isConnectingWallet}>
 								{isWalletLoading ? 'Connecting...' : 'Connect wallet'}

@@ -19,7 +19,6 @@ import { createWriteClient, WriteClient, writeContractAndWait } from './testsuit
 const genesisUniverse = 0n
 const securityMultiplier = 2n
 const maxRetentionRate = 999_999_996_848_000_000n
-const startingRepEthPrice = 10n
 const repDepositAmount = 1_000n * 10n ** 18n
 const securityBondAllowance = repDepositAmount / 4n
 const openInterestAmount = 100n * 10n ** 18n
@@ -151,7 +150,7 @@ const setupPool = async (title: string): Promise<PoolContext> => {
 	const questionData = await buildQuestionData(title)
 	const questionId = getQuestionId(questionData, questionOutcomes)
 	await confirmTx(alice, createQuestion(alice, questionData, [...questionOutcomes]))
-	await confirmTx(alice, deployOriginSecurityPool(alice, genesisUniverse, questionId, securityMultiplier, maxRetentionRate, startingRepEthPrice))
+	await confirmTx(alice, deployOriginSecurityPool(alice, genesisUniverse, questionId, securityMultiplier, maxRetentionRate))
 	const addresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier)
 	return { questionData, questionId, addresses }
 }
@@ -299,7 +298,7 @@ const scenarios: Scenario[] = [
 			const questionData = await buildQuestionData('Gas deploy pool')
 			const questionId = getQuestionId(questionData, questionOutcomes)
 			await confirmTx(alice, createQuestion(alice, questionData, [...questionOutcomes]))
-			return await waitForGas(alice, deployOriginSecurityPool(alice, genesisUniverse, questionId, securityMultiplier, maxRetentionRate, startingRepEthPrice))
+			return await waitForGas(alice, deployOriginSecurityPool(alice, genesisUniverse, questionId, securityMultiplier, maxRetentionRate))
 		},
 	},
 	{

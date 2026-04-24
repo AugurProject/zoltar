@@ -10,7 +10,7 @@ import { TimestampValue } from './TimestampValue.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
-import { approvalShortage, balanceShortage } from '../lib/inputs.js'
+import { approvalShortage, approvalTargetAmount, balanceShortage } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
 import { getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
@@ -70,6 +70,7 @@ export function SecurityVaultSection({
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
 	const approvedRep = securityVaultRepAllowance
 	const shortage = approvalShortage(depositAmount, approvedRep)
+	const approvalTargetRep = approvalTargetAmount(depositAmount, approvedRep)
 	const repBalanceGap = balanceShortage(depositAmount, securityVaultRepBalance)
 	const withdrawableRepAmount = securityVaultDetails === undefined ? undefined : securityVaultDetails.repDepositShare > securityVaultDetails.lockedRepInEscalationGame ? securityVaultDetails.repDepositShare - securityVaultDetails.lockedRepInEscalationGame : 0n
 	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(securityVaultDetails?.repDepositShare, depositAmount)
@@ -77,10 +78,10 @@ export function SecurityVaultSection({
 	const canClaimFees = selectedVaultIsOwnedByAccount && isMainnet && hasClaimableFees
 	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && approvedRep !== undefined && depositAmount !== undefined && depositAmount > 0n && approvedRep >= depositAmount
 	const hasInsufficientRepBalance = repBalanceGap !== undefined && repBalanceGap > 0n
-	const canApproveRep = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && depositAmount !== undefined && depositAmount > 0n && shortage !== undefined && shortage > 0n
+	const canApproveRep = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && approvalTargetRep !== undefined
 	const canSetSecurityBondAllowance = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && hasValidOraclePrice && securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > 0n
 	const canWithdrawRep = selectedVaultIsOwnedByAccount && accountState.address !== undefined && isMainnet && hasValidOraclePrice && hasWithdrawAmount && withdrawableRepAmount !== undefined && withdrawableRepAmount > 0n
-	const approveButtonLabel = depositAmount === undefined || depositAmount <= 0n || shortage === undefined ? 'Approve REP' : shortage === 0n ? 'Approval Satisfied' : `Approve ${formatCurrencyBalance(shortage)} REP`
+	const approveButtonLabel = depositAmount === undefined || depositAmount <= 0n || shortage === undefined ? 'Approve REP' : shortage === 0n ? 'Approval Satisfied' : `Approve ${formatCurrencyBalance(approvalTargetRep)} REP`
 	const approveButtonTitle = (() => {
 		const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, isMainnet })
 		if (walletPresentation !== undefined) return walletPresentation.detail
@@ -88,8 +89,9 @@ export function SecurityVaultSection({
 		if (securityVaultMissing) return 'Choose a pool first.'
 		if (securityVaultDetails === undefined) return 'Refresh the vault first.'
 		if (depositAmount === undefined || depositAmount <= 0n) return 'Enter a deposit amount greater than zero.'
+		if (shortage === undefined) return 'Loading current REP approval.'
 		if (shortage === 0n) return 'This deposit amount is already approved.'
-		return `Approve ${formatCurrencyBalance(shortage)} more REP before depositing.`
+		return `Approve ${formatCurrencyBalance(approvalTargetRep)} REP to cover this deposit amount. Current allowance is short by ${formatCurrencyBalance(shortage)} REP.`
 	})()
 	const latestActionLabel =
 		securityVaultResult === undefined
@@ -131,7 +133,7 @@ export function SecurityVaultSection({
 					<MetricField className='entity-metric' label='Selected Vault'>
 						<AddressValue address={securityVaultDetails.vaultAddress} />
 					</MetricField>
-					<MetricField className='entity-metric' label='REP Deposit Share'>
+					<MetricField className='entity-metric' label='Rep Deposit'>
 						<CurrencyValue value={securityVaultDetails.repDepositShare} suffix='REP' />
 					</MetricField>
 					<MetricField className='entity-metric' label='Approved REP'>
@@ -241,7 +243,7 @@ export function SecurityVaultSection({
 				</div>
 			</label>
 			<div className='actions'>
-				<button className='secondary' title={approveButtonTitle} onClick={() => onApproveRep(shortage)} disabled={!canApproveRep}>
+				<button className='secondary' title={approveButtonTitle} onClick={() => onApproveRep(approvalTargetRep)} disabled={!canApproveRep}>
 					{approveButtonLabel}
 				</button>
 				<button className='primary' onClick={onDepositRep} disabled={!selectedVaultIsOwnedByAccount || accountState.address === undefined || !isMainnet || !hasSufficientDepositAllowance || hasInsufficientRepBalance || isDepositBelowMinimum}>
@@ -255,7 +257,9 @@ export function SecurityVaultSection({
 					New vaults require at least <CurrencyValue value={MIN_SECURITY_VAULT_REP_DEPOSIT} suffix='REP' copyable={false} /> in the first deposit.
 				</p>
 			) : depositAmount === undefined ? undefined : shortage === undefined ? undefined : shortage > 0n ? (
-				<p className='detail'>Need {<CurrencyValue value={shortage} suffix='REP' copyable={false} />} more REP approved before depositing.</p>
+				<p className='detail'>
+					Need <CurrencyValue value={shortage} suffix='REP' copyable={false} /> more REP approved before depositing. Approving will set the allowance to <CurrencyValue value={approvalTargetRep ?? depositAmount} suffix='REP' copyable={false} />.
+				</p>
 			) : undefined}
 		</div>
 	)

@@ -62,7 +62,7 @@ interface ISecurityPool {
 	function repToPoolOwnership(uint256 repAmount) external view returns (uint256);
 	function poolOwnershipToRep(uint256 poolOwnership) external view returns (uint256);
 
-	function setStartingParams(uint256 currentRetentionRate, uint256 repEthPrice, uint256 completeSetCollateralAmount) external;
+	function setStartingParams(uint256 currentRetentionRate, uint256 completeSetCollateralAmount) external;
 
 	function updateCollateralAmount() external;
 	function updateRetentionRate() external;
@@ -107,12 +107,11 @@ interface ISecurityPoolFactory {
 		uint256 questionId;
 		uint256 securityMultiplier;
 		uint256 currentRetentionRate;
-		uint256 startingRepEthPrice;
 		uint256 completeSetCollateralAmount;
 	}
 
-	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction);
-	function deployOriginSecurityPool(uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 startingRepEthPrice) external returns (ISecurityPool securityPool);
+	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction);
+	function deployOriginSecurityPool(uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate) external returns (ISecurityPool securityPool);
 	function securityPoolDeploymentCount() external view returns (uint256);
 	function securityPoolDeploymentsRange(uint256 startIndex, uint256 count) external view returns (SecurityPoolDeployment[] memory deployments);
 }

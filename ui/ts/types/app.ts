@@ -35,7 +35,6 @@ export type SecurityPoolFormState = {
 	currentRetentionRate: string
 	marketId: string
 	securityMultiplier: string
-	startingRepEthPrice: string
 }
 
 export type SecurityVaultFormState = {
