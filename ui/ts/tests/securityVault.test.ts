@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from 'viem'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
-import { getSelectedVaultAddress, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
+import { getOracleManagerPriceValidUntilTimestamp, getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount, MIN_SECURITY_VAULT_REP_DEPOSIT, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 import { loadSecurityVaultDetails } from '../contracts.js'
 
 void describe('security vault helpers', () => {
@@ -43,6 +43,27 @@ void describe('security vault helpers', () => {
 		expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT)).toBe(false)
 		expect(isSecurityVaultDepositBelowMinimum(1n, 1n)).toBe(false)
 		expect(isSecurityVaultDepositBelowMinimum(MIN_SECURITY_VAULT_REP_DEPOSIT, 5n * 10n ** 17n)).toBe(false)
+	})
+
+	void test('requires matching valid oracle manager details for queued vault actions', () => {
+		const managerAddress = getAddress('0x00000000000000000000000000000000000000d1')
+		const otherManagerAddress = getAddress('0x00000000000000000000000000000000000000d2')
+		const validOracleManagerDetails = {
+			isPriceValid: true,
+			managerAddress,
+		}
+
+		expect(hasValidSecurityVaultOraclePrice(managerAddress, validOracleManagerDetails)).toBe(true)
+		expect(hasValidSecurityVaultOraclePrice(managerAddress, { ...validOracleManagerDetails, isPriceValid: false })).toBe(false)
+		expect(hasValidSecurityVaultOraclePrice(managerAddress, { ...validOracleManagerDetails, managerAddress: otherManagerAddress })).toBe(false)
+		expect(hasValidSecurityVaultOraclePrice(undefined, validOracleManagerDetails)).toBe(false)
+		expect(hasValidSecurityVaultOraclePrice(managerAddress, undefined)).toBe(false)
+	})
+
+	void test('derives the oracle price expiry timestamp from the last settlement time', () => {
+		expect(getOracleManagerPriceValidUntilTimestamp(undefined)).toBe(undefined)
+		expect(getOracleManagerPriceValidUntilTimestamp(0n)).toBe(undefined)
+		expect(getOracleManagerPriceValidUntilTimestamp(15n)).toBe(15n + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS)
 	})
 
 	void test('returns undefined for a missing security pool without reading contract state', async () => {

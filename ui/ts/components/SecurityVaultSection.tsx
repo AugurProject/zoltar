@@ -6,13 +6,14 @@ import { ErrorNotice } from './ErrorNotice.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { StateHint } from './StateHint.js'
+import { TimestampValue } from './TimestampValue.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { approvalShortage, balanceShortage } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
-import { getSelectedVaultAddress, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
+import { getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
 import { getWalletPresentation } from '../lib/userCopy.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
@@ -27,6 +28,7 @@ export function SecurityVaultSection({
 	onRedeemFees,
 	onSetSecurityBondAllowance,
 	onSecurityVaultFormChange,
+	oracleManagerDetails,
 	onWithdrawRep,
 	securityVaultDetails,
 	securityVaultError,
@@ -64,6 +66,8 @@ export function SecurityVaultSection({
 		}
 	})()
 	const securityBondAllowance = securityVaultDetails?.securityBondAllowance ?? 0n
+	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(securityVaultDetails?.managerAddress, oracleManagerDetails)
+	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
 	const approvedRep = securityVaultRepAllowance
 	const shortage = approvalShortage(depositAmount, approvedRep)
 	const repBalanceGap = balanceShortage(depositAmount, securityVaultRepBalance)
@@ -74,7 +78,8 @@ export function SecurityVaultSection({
 	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && approvedRep !== undefined && depositAmount !== undefined && depositAmount > 0n && approvedRep >= depositAmount
 	const hasInsufficientRepBalance = repBalanceGap !== undefined && repBalanceGap > 0n
 	const canApproveRep = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && depositAmount !== undefined && depositAmount > 0n && shortage !== undefined && shortage > 0n
-	const canSetSecurityBondAllowance = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > 0n
+	const canSetSecurityBondAllowance = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && hasValidOraclePrice && securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > 0n
+	const canWithdrawRep = selectedVaultIsOwnedByAccount && accountState.address !== undefined && isMainnet && hasValidOraclePrice && hasWithdrawAmount && withdrawableRepAmount !== undefined && withdrawableRepAmount > 0n
 	const approveButtonLabel = depositAmount === undefined || depositAmount <= 0n || shortage === undefined ? 'Approve REP' : shortage === 0n ? 'Approval Satisfied' : `Approve ${formatCurrencyBalance(shortage)} REP`
 	const approveButtonTitle = (() => {
 		const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, isMainnet })
@@ -180,6 +185,11 @@ export function SecurityVaultSection({
 					<MetricField className='entity-metric' label='Current Security Bond Allowance'>
 						<CurrencyValue value={securityBondAllowance} suffix='REP' />
 					</MetricField>
+					{oraclePriceValidUntilTimestamp === undefined ? undefined : (
+						<MetricField className='entity-metric' label='Price Valid Until'>
+							<TimestampValue timestamp={oraclePriceValidUntilTimestamp} />
+						</MetricField>
+					)}
 				</div>
 				<label className='field'>
 					<span>Security Bond Allowance Amount</span>
@@ -190,6 +200,7 @@ export function SecurityVaultSection({
 						Set Security Bond Allowance
 					</button>
 				</div>
+				{hasValidOraclePrice ? undefined : <p className='detail'>A valid oracle price is required before setting the security bond allowance.</p>}
 			</div>
 		)
 
@@ -261,9 +272,13 @@ export function SecurityVaultSection({
 					<MetricField className='entity-metric' label='Withdrawable REP'>
 						<CurrencyValue value={withdrawableRepAmount} suffix='REP' />
 					</MetricField>
+					{oraclePriceValidUntilTimestamp === undefined ? undefined : (
+						<MetricField className='entity-metric' label='Price Valid Until'>
+							<TimestampValue timestamp={oraclePriceValidUntilTimestamp} />
+						</MetricField>
+					)}
 				</div>
 			)}
-			<p className='detail'>Withdrawals are queued through the oracle manager.</p>
 			<label className='field'>
 				<span>REP Withdraw Amount</span>
 				<div className='field-inline'>
@@ -282,10 +297,11 @@ export function SecurityVaultSection({
 				</div>
 			</label>
 			<div className='actions'>
-				<button className='secondary' onClick={onWithdrawRep} disabled={!selectedVaultIsOwnedByAccount || accountState.address === undefined || !isMainnet || !hasWithdrawAmount || withdrawableRepAmount === 0n}>
+				<button className='secondary' onClick={onWithdrawRep} disabled={!canWithdrawRep}>
 					Withdraw REP
 				</button>
 			</div>
+			{hasValidOraclePrice ? undefined : <p className='detail'>A valid oracle price is required before withdrawing REP.</p>}
 		</div>
 	)
 

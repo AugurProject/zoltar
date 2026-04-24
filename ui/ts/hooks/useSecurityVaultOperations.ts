@@ -189,6 +189,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist')
 				if (details === undefined) return undefined
 				const managerDetails = await loadOracleManagerDetails(createConnectedReadClient(), details.managerAddress)
+				if (!managerDetails.isPriceValid) throw new Error('A valid oracle price is required before setting the security bond allowance')
 				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'setSecurityBondsAllowance', vaultAddress, amount, managerDetails.requestPriceEthCost)
 				return {
 					action: 'queueSetSecurityBondAllowance',
@@ -222,6 +223,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist')
 				if (details === undefined) return undefined
 				const managerDetails = await loadOracleManagerDetails(createConnectedReadClient(), details.managerAddress)
+				if (!managerDetails.isPriceValid) throw new Error('A valid oracle price is required before withdrawing REP')
 				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'withdrawRep', vaultAddress, amount, managerDetails.requestPriceEthCost)
 				return {
 					action: 'queueWithdrawRep',

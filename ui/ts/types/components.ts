@@ -239,6 +239,7 @@ export type SecurityVaultRouteContentProps = {
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	compactLayout?: boolean
+	oracleManagerDetails?: OracleManagerDetails | undefined
 	autoLoadVault?: boolean
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean
