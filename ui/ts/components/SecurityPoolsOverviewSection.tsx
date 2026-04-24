@@ -134,7 +134,7 @@ export function SecurityPoolsOverviewSection({
 													}
 												>
 													<div className='workflow-vault-grid'>
-														<MetricField label='REP Deposit Share'>
+														<MetricField label='Rep Deposit'>
 															<CurrencyValue value={vault.repDepositShare} suffix='REP' />
 														</MetricField>
 														<MetricField label='Pool Ownership'>{vault.poolOwnership.toString()}</MetricField>
