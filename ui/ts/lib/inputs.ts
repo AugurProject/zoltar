@@ -87,6 +87,11 @@ export function approvalShortage(amount: bigint | undefined, allowance: bigint |
 	return amount > allowance ? amount - allowance : 0n
 }
 
+export function approvalTargetAmount(amount: bigint | undefined, allowance: bigint | undefined): bigint | undefined {
+	if (amount === undefined || amount <= 0n || allowance === undefined) return undefined
+	return amount > allowance ? amount : undefined
+}
+
 export function balanceShortage(amount: bigint | undefined, balance: bigint | undefined): bigint | undefined {
 	if (amount === undefined || balance === undefined) return undefined
 	return amount > balance ? amount - balance : 0n
