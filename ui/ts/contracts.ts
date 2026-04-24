@@ -3,6 +3,7 @@ import { ABIS } from './abis.js'
 import { createRepTokenAddressHelper, createSecurityPoolAddressHelper } from '../../shared/js/addressDerivation.js'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '../../shared/js/deploymentAddresses.js'
 import { assertNever } from './lib/assert.js'
+import { addOpenOracleBountyBuffer } from './lib/openOracle.js'
 import { GENESIS_REPUTATION_TOKEN_ADDRESS } from './lib/universe.js'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
@@ -1588,13 +1589,24 @@ export async function createOpenOracleReportInstance(
 	} satisfies OpenOracleActionResult
 }
 
-export async function requestOraclePrice(client: WriteClient, managerAddress: Address, ethCost: bigint) {
+async function loadBufferedOracleRequestEthCost(client: WriteClient, managerAddress: Address) {
+	const requestPriceEthCost = await client.readContract({
+		address: managerAddress,
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+		functionName: 'getRequestPriceEthCost',
+		args: [],
+	})
+
+	return addOpenOracleBountyBuffer(requestPriceEthCost)
+}
+
+export async function requestOraclePrice(client: WriteClient, managerAddress: Address) {
 	const callParams = {
 		address: managerAddress,
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'requestPrice',
 		args: [],
-		value: ethCost,
+		value: await loadBufferedOracleRequestEthCost(client, managerAddress),
 	}
 	const hash = await writeContractAndWait(client, () => callParams)
 	return {
@@ -2119,13 +2131,13 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 	)
 }
 
-export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, ethCost: bigint) {
+export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint) {
 	const callParams = {
 		address: managerAddress,
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'requestPriceIfNeededAndQueueOperation',
 		args: [LIQUIDATION_OPERATION_TYPE, targetVault, amount],
-		value: ethCost,
+		value: await loadBufferedOracleRequestEthCost(client, managerAddress),
 	}
 	const hash = await writeContractAndWait(client, () => callParams)
 	return hash
@@ -2162,13 +2174,13 @@ function getShareTokenId(universeId: bigint, outcome: ReportingOutcomeKey) {
 	return ((universeId & universeMask) << 8n) | (getShareMigrationOutcomeValue(outcome) & 255n)
 }
 
-export async function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint, ethCost: bigint) {
+export async function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint) {
 	const callParams = {
 		address: managerAddress,
 		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'requestPriceIfNeededAndQueueOperation',
 		args: [getOracleOperationType(operation), targetVault, amount],
-		value: ethCost,
+		value: await loadBufferedOracleRequestEthCost(client, managerAddress),
 	}
 	const hash = await writeContractAndWait(client, () => callParams)
 	return {

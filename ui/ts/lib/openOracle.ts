@@ -7,6 +7,8 @@ import { quoteBestExactInput, quoteBestV3ExactInput, quoteExactInput } from './u
 
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 18n
 export const OPEN_ORACLE_APPROVAL_AMOUNT = maxUint256
+const OPEN_ORACLE_BOUNTY_BUFFER_NUMERATOR = 12n
+const OPEN_ORACLE_BOUNTY_BUFFER_DENOMINATOR = 10n
 
 type OpenOracleReportStatus = 'Awaiting Initial Report' | 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'initial-report' | 'dispute' | 'read-only'
@@ -96,6 +98,11 @@ export function formatOpenOracleFeePercentage(feePercentage: bigint | undefined)
 export function formatOpenOracleMultiplier(multiplier: bigint | undefined) {
 	if (multiplier === undefined) return '—'
 	return `${(Number(multiplier) / 100).toFixed(2)}x`
+}
+
+export function addOpenOracleBountyBuffer(requiredBounty: bigint) {
+	if (requiredBounty <= 0n) return requiredBounty
+	return (requiredBounty * OPEN_ORACLE_BOUNTY_BUFFER_NUMERATOR + OPEN_ORACLE_BOUNTY_BUFFER_DENOMINATOR - 1n) / OPEN_ORACLE_BOUNTY_BUFFER_DENOMINATOR
 }
 
 function calculateOpenOraclePrice(token1Amount: bigint, token2Amount: bigint) {
