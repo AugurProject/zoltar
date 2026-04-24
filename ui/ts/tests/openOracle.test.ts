@@ -5,6 +5,7 @@ import { getAddress, maxUint256, zeroAddress, type Address } from 'viem'
 import { createOpenOracleReportInstance, getOpenOracleAddress, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, requestOraclePrice, settleOracleReport, submitInitialOracleReport } from '../contracts.js'
 import {
 	deriveOpenOracleInitialReportSubmissionDetails,
+	addOpenOracleBountyBuffer,
 	formatOpenOracleFeePercentage,
 	formatOpenOracleInitialReportApprovalStatusUnavailableMessage,
 	formatOpenOracleInitialReportPriceUnavailableMessage,
@@ -366,6 +367,11 @@ describe('Open Oracle helpers', () => {
 		expect(OPEN_ORACLE_APPROVAL_AMOUNT).toBe(maxUint256)
 	})
 
+	test('oracle bounty buffer adds a 20% headroom and rounds up', () => {
+		expect(addOpenOracleBountyBuffer(101n)).toBe(122n)
+		expect(addOpenOracleBountyBuffer(1_000n)).toBe(1_200n)
+	})
+
 	test('selected report action mode follows the report lifecycle', () => {
 		expect(getOpenOracleSelectedReportActionMode({ currentReporter: zeroAddress, disputeOccurred: false, isDistributed: false, reportTimestamp: 0n })).toBe('initial-report')
 		const reporter = getAddress(addressString(TEST_ADDRESSES[1]))
@@ -386,9 +392,7 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('requestOraclePrice creates a pending report visible via loadOpenOracleReportDetails', async () => {
-		const { requestPriceEthCost } = await loadOracleManagerDetails(uiReadClient, managerAddress)
-
-		await requestOraclePrice(uiWriteClient, managerAddress, requestPriceEthCost)
+		await requestOraclePrice(uiWriteClient, managerAddress)
 
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		const reportId = details.pendingReportId
@@ -407,8 +411,7 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('submitted and settled reports are tracked in loadOpenOracleReportDetails', async () => {
-		const { requestPriceEthCost } = await loadOracleManagerDetails(uiReadClient, managerAddress)
-		await requestOraclePrice(uiWriteClient, managerAddress, requestPriceEthCost)
+		await requestOraclePrice(uiWriteClient, managerAddress)
 
 		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
 		const { exactToken1Report } = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)

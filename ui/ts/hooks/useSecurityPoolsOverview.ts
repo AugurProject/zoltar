@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
-import { loadAllSecurityPools, loadOracleManagerDetails, queueSecurityPoolLiquidation } from '../contracts.js'
+import { loadAllSecurityPools, queueSecurityPoolLiquidation } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { normalizeAddress } from '../lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
@@ -68,8 +68,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 			async walletAddress => {
 				const targetVault = parseAddressInput(liquidationTargetVault.value, 'Target vault')
 				const amount = parseBigIntInput(liquidationAmount.value, 'Liquidation amount')
-				const oracleDetails = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
-				const hash = await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount, oracleDetails.requestPriceEthCost)
+				const hash = await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount)
 				return { hash }
 			},
 			'Failed to queue liquidation',
