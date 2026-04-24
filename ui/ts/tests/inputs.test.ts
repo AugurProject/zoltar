@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from 'viem'
-import { balanceShortage, parseOptionalBigIntInput, resolveOptionalAddressInput, resolveOptionalBigIntListInput } from '../lib/inputs.js'
+import { approvalShortage, approvalTargetAmount, balanceShortage, parseOptionalBigIntInput, resolveOptionalAddressInput, resolveOptionalBigIntListInput } from '../lib/inputs.js'
 
 void describe('input helpers', () => {
 	void test('parseOptionalBigIntInput returns undefined for empty input', () => {
@@ -33,5 +33,13 @@ void describe('input helpers', () => {
 		expect(balanceShortage(5n, undefined)).toBe(undefined)
 		expect(balanceShortage(5n, 5n)).toBe(0n)
 		expect(balanceShortage(6n, 5n)).toBe(1n)
+	})
+
+	void test('approvalTargetAmount returns the full target approval when allowance is short', () => {
+		expect(approvalShortage(11n, 10n)).toBe(1n)
+		expect(approvalTargetAmount(11n, 10n)).toBe(11n)
+		expect(approvalTargetAmount(10n, 10n)).toBe(undefined)
+		expect(approvalTargetAmount(10n, undefined)).toBe(undefined)
+		expect(approvalTargetAmount(0n, 0n)).toBe(undefined)
 	})
 })

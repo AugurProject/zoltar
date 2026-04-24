@@ -12,7 +12,7 @@ import { UniverseLink } from './UniverseLink.js'
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
-import { parseBigIntListInput } from '../lib/inputs.js'
+import { approvalShortage, approvalTargetAmount, parseBigIntListInput } from '../lib/inputs.js'
 import { parseRepAmountInput as parseMigrationAmountInput } from '../lib/marketForm.js'
 import { getUniversePresentation, getWalletPresentation } from '../lib/userCopy.js'
 import type { ZoltarMigrationFormState } from '../types/app.js'
@@ -116,24 +116,25 @@ export function ZoltarMigrationSection({
 	const amountExceedsAvailableRep = hasValidAmount && migrationAmount !== undefined && migrationAmount > totalRepAvailable
 	const hasEnoughRep = hasValidAmount && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= missingPreparationAmount
 	const hasPreparedBalance = hasValidAmount && zoltarMigrationPreparedRepBalance !== undefined && zoltarMigrationPreparedRepBalance >= migrationAmount
-	const approvedRep = zoltarForkAllowance ?? 0n
-	const approvalShortage = missingPreparationAmount > approvedRep ? missingPreparationAmount - approvedRep : 0n
-	const hasSufficientAllowance = zoltarForkAllowance !== undefined && approvalShortage === 0n
+	const approvalGap = approvalShortage(missingPreparationAmount, zoltarForkAllowance)
+	const approvalTargetRep = approvalTargetAmount(missingPreparationAmount, zoltarForkAllowance)
+	const hasSufficientAllowance = approvalGap !== undefined && approvalGap === 0n
 	const hasValidOutcomeIndexes = selectedOutcomeIndexes.length > 0
 	const needsAdditionalPreparation = missingPreparationAmount > 0n
 	const splitLimit = useMemo(() => getMigrationOutcomeSplitLimit(rootUniverse?.childUniverses ?? [], zoltarMigrationChildRepBalances, zoltarMigrationPreparedRepBalance, selectedOutcomeIndexSet), [rootUniverse?.childUniverses, selectedOutcomeIndexSet, zoltarMigrationChildRepBalances, zoltarMigrationPreparedRepBalance])
 	const hasSufficientSplitLimit = migrationAmount !== undefined && splitLimit !== undefined && migrationAmount <= splitLimit
 	const canPrepare = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && needsAdditionalPreparation && hasEnoughRep && hasSufficientAllowance
-	const canApproveRep = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarForkPending && hasValidAmount && approvalShortage > 0n
+	const canApproveRep = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarForkPending && approvalTargetRep !== undefined
 	const canSplit = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && hasPreparedBalance && hasValidOutcomeIndexes && hasSufficientSplitLimit
 	const migrationAmountSource = getMigrationAmountSource(zoltarMigrationPreparedRepBalance, zoltarForkRepBalance)
-	const approveButtonLabel = !hasValidAmount || migrationAmount === undefined ? 'Approve REP' : approvalShortage > 0n ? `Approve ${formatCurrencyBalance(approvalShortage)} REP` : 'Approval Satisfied'
+	const approveButtonLabel = !hasValidAmount || migrationAmount === undefined || approvalGap === undefined ? 'Approve REP' : approvalGap > 0n ? `Approve ${formatCurrencyBalance(approvalTargetRep)} REP` : 'Approval Satisfied'
 	const approveButtonTitle = (() => {
 		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before preparing REP.')
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return 'Enter an amount greater than zero.'
-		if (approvalShortage === 0n) return 'No additional REP approval is needed for this amount.'
-		return `Approve ${formatCurrencyBalance(approvalShortage)} more REP for Zoltar before preparing the selected amount.`
+		if (approvalGap === undefined) return 'Loading current REP approval.'
+		if (approvalGap === 0n) return 'No additional REP approval is needed for this amount.'
+		return `Approve ${formatCurrencyBalance(approvalTargetRep)} REP for Zoltar to cover the selected amount. Current allowance is short by ${formatCurrencyBalance(approvalGap)} REP.`
 	})()
 	const getAlreadyPreparedHint = () => {
 		if (hasValidOutcomeIndexes && splitLimit === 0n) {
@@ -149,8 +150,11 @@ export function ZoltarMigrationSection({
 		if (zoltarForkRepBalance === undefined || zoltarForkRepBalance < missingPreparationAmount) {
 			return `Need ${formatCurrencyBalance(missingPreparationAmount)} more REP in this universe to prepare the selected amount.`
 		}
-		if (approvalShortage > 0n) {
-			return `Approve ${formatCurrencyBalance(approvalShortage)} more REP for Zoltar before preparing the selected amount.`
+		if (approvalGap === undefined) {
+			return 'Loading current REP approval before preparing the selected amount.'
+		}
+		if (approvalGap > 0n) {
+			return `Approve ${formatCurrencyBalance(approvalTargetRep)} REP for Zoltar to cover the selected amount. Current allowance is short by ${formatCurrencyBalance(approvalGap)} REP.`
 		}
 		if (!hasSufficientAllowance) {
 			return 'Waiting for approved REP amount before preparing the selected amount.'
@@ -228,7 +232,11 @@ export function ZoltarMigrationSection({
 						<MetricField label='Approved REP'>
 							<CurrencyValue loading={loadingZoltarForkAccess && zoltarForkAllowance === undefined} value={zoltarForkAllowance} suffix='REP' />
 						</MetricField>
-						{approvalShortage > 0n ? <p className='detail'>Need {formatCurrencyBalance(approvalShortage)} more REP approved before preparing the current amount.</p> : undefined}
+						{approvalGap === undefined || approvalGap === 0n ? undefined : (
+							<p className='detail'>
+								Need {formatCurrencyBalance(approvalGap)} more REP approved before preparing the current amount. Approving will set the allowance to {formatCurrencyBalance(approvalTargetRep ?? missingPreparationAmount)} REP.
+							</p>
+						)}
 					</div>
 					<MetricField label='Universe'>
 						{rootUniverse === undefined ? (
@@ -266,7 +274,7 @@ export function ZoltarMigrationSection({
 					)}
 
 					<div className='actions'>
-						<button className='secondary' title={approveButtonTitle} onClick={() => onApproveZoltarForkRep(approvalShortage)} disabled={!canApproveRep || zoltarForkActiveAction === 'approve'}>
+						<button className='secondary' title={approveButtonTitle} onClick={() => onApproveZoltarForkRep(approvalTargetRep)} disabled={!canApproveRep || zoltarForkActiveAction === 'approve'}>
 							{zoltarForkActiveAction === 'approve' ? <LoadingText>Approving REP...</LoadingText> : approveButtonLabel}
 						</button>
 						<button className='secondary' title={prepareHintMessage} onClick={onPrepareRepForMigration} disabled={!canPrepare}>
