@@ -126,7 +126,7 @@ export function SecurityVaultSection({
 					<MetricField className='entity-metric' label='Selected Vault'>
 						<AddressValue address={securityVaultDetails.vaultAddress} />
 					</MetricField>
-					<MetricField className='entity-metric' label='REP Deposit Share'>
+					<MetricField className='entity-metric' label='Rep Deposit'>
 						<CurrencyValue value={securityVaultDetails.repDepositShare} suffix='REP' />
 					</MetricField>
 					<MetricField className='entity-metric' label='Approved REP'>
