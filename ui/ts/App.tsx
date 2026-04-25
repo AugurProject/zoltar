@@ -200,6 +200,13 @@ export function App() {
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
 	const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, hasInjectedWallet, isMainnet })
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
+	const refreshSelectedPoolData = () => {
+		if (!walletBootstrapComplete) return
+		if (!securityPoolAddress.startsWith('0x') || securityPoolAddress.length !== 42) return
+		void loadSecurityPools(securityPoolAddress)
+		void loadReporting()
+		void loadForkAuction()
+	}
 	const renderRouteContent = () => {
 		if (wrongNetworkMessage !== undefined) {
 			return <MainnetGateSection message={wrongNetworkMessage} />
@@ -349,6 +356,7 @@ export function App() {
 							loadingSecurityPools,
 							onLoadPoolOracleManager: managerAddress => void loadPoolOracleManager(managerAddress),
 							onRequestPoolPrice: managerAddress => void requestPoolPrice(managerAddress),
+							onRefreshSelectedPoolData: refreshSelectedPoolData,
 							onViewPendingReport: reportId => {
 								setOpenOracleForm(current => ({ ...current, reportId: reportId.toString() }))
 								navigate('open-oracle')
@@ -461,11 +469,7 @@ export function App() {
 		setTradingForm(current => (current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress }))
 		setForkAuctionForm(current => (current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress }))
 		setReportingForm(current => (current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress }))
-		if (!walletBootstrapComplete) return
-		if (!securityPoolAddress.startsWith('0x') || securityPoolAddress.length !== 42) return
-		void loadSecurityPools(securityPoolAddress)
-		void loadReporting()
-		void loadForkAuction()
+		refreshSelectedPoolData()
 	}, [securityPoolAddress, walletBootstrapComplete])
 
 	useEffect(() => {
