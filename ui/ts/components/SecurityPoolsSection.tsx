@@ -7,6 +7,10 @@ import type { SecurityPoolsSectionProps } from '../types/components.js'
 
 type SecurityPoolsView = 'browse' | 'create' | 'operate'
 
+export function shouldRefreshSelectedPoolDataOnViewOpen({ nextView, securityPoolAddress }: { nextView: SecurityPoolsView; securityPoolAddress: string }) {
+	return nextView === 'operate' && securityPoolAddress.trim() !== ''
+}
+
 export function SecurityPoolsSection({ createPool, overview, workflow }: SecurityPoolsSectionProps) {
 	const [view, setView] = useState<SecurityPoolsView>(() =>
 		resolveFirstMatchingValue<SecurityPoolsView>(
@@ -17,17 +21,22 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 			'browse',
 		),
 	)
+	const openView = (nextView: SecurityPoolsView) => {
+		setView(nextView)
+		if (!shouldRefreshSelectedPoolDataOnViewOpen({ nextView, securityPoolAddress: workflow.securityPoolAddress })) return
+		workflow.onRefreshSelectedPoolData()
+	}
 
 	return (
 		<section className='panel market-panel'>
 			<div className='subtab-nav' role='tablist' aria-label='Security Pools views'>
-				<button className={`subtab-link ${view === 'browse' ? 'active' : ''}`} type='button' onClick={() => setView('browse')} aria-pressed={view === 'browse'}>
+				<button className={`subtab-link ${view === 'browse' ? 'active' : ''}`} type='button' onClick={() => openView('browse')} aria-pressed={view === 'browse'}>
 					Browse Pools
 				</button>
-				<button className={`subtab-link ${view === 'create' ? 'active' : ''}`} type='button' onClick={() => setView('create')} aria-pressed={view === 'create'}>
+				<button className={`subtab-link ${view === 'create' ? 'active' : ''}`} type='button' onClick={() => openView('create')} aria-pressed={view === 'create'}>
 					Create Pool
 				</button>
-				<button className={`subtab-link ${view === 'operate' ? 'active' : ''}`} type='button' onClick={() => setView('operate')} aria-pressed={view === 'operate'}>
+				<button className={`subtab-link ${view === 'operate' ? 'active' : ''}`} type='button' onClick={() => openView('operate')} aria-pressed={view === 'operate'}>
 					Selected Pool
 				</button>
 			</div>

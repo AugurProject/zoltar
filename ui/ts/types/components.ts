@@ -197,6 +197,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
+	onRefreshSelectedPoolData: () => void
 	onRequestPoolPrice: (managerAddress: Address) => void
 	onViewPendingReport: (reportId: bigint) => void
 	poolOracleManagerDetails: OracleManagerDetails | undefined
