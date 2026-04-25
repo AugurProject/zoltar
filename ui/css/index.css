@@ -1697,12 +1697,6 @@ button.currency-value.copyable:hover:not(:disabled) {
 	overflow-wrap: anywhere;
 }
 
-.question-chip-row {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.75rem;
-}
-
 .entity-card {
 	position: relative;
 	display: grid;
