@@ -120,15 +120,6 @@ export function SecurityPoolSection({
 							{marketDetails === undefined && !loadingMarketDetails ? undefined : (
 								<EntityCard title='Question' badge={marketDetails === undefined ? undefined : <span className='badge ok'>{marketDetails.marketType}</span>}>
 									<Question question={marketDetails} loading={loadingMarketDetails && marketDetails === undefined} />
-									{marketDetails === undefined || marketDetails.marketType === 'scalar' ? undefined : (
-										<div className='question-chip-row'>
-											{marketDetails.outcomeLabels.map(label => (
-												<span key={label} className='status-chip muted'>
-													{label}
-												</span>
-											))}
-										</div>
-									)}
 								</EntityCard>
 							)}
 
