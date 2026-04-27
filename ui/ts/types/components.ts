@@ -299,6 +299,7 @@ export type ReportingRouteContentProps = {
 }
 
 export type ReportingSectionProps = ReportingRouteContentProps & {
+	embedInCard?: boolean
 	showHeader?: boolean
 	showSecurityPoolAddressInput?: boolean
 }
@@ -310,12 +311,14 @@ export type TradingRouteContentProps = {
 	onRedeemCompleteSet: () => void
 	onRedeemShares: () => void
 	onTradingFormChange: (update: Partial<TradingFormState>) => void
+	selectedPool: ListedSecurityPool | undefined
 	tradingError: string | undefined
 	tradingForm: TradingFormState
 	tradingResult: TradingActionResult | undefined
 }
 
 export type TradingSectionProps = TradingRouteContentProps & {
+	embedInCard?: boolean
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean
 }
