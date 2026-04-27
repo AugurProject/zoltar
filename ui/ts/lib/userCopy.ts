@@ -10,6 +10,7 @@ export type UserMessagePresentation = {
 	badgeLabel?: string
 	badgeTone?: UserMessageTone
 	detail?: string
+	detailIsLoading?: boolean
 	key: UserMessageKey
 	placeholder?: string
 }
@@ -149,9 +150,8 @@ export function getReportPresentation({ kind, state }: { kind: 'question' | 'rep
 	switch (state) {
 		case 'loading':
 			return createPresentation('loading', {
-				badgeLabel: 'Loading',
-				badgeTone: 'pending',
-				detail: 'Checking this ID.',
+				detail: 'retrieving...',
+				detailIsLoading: true,
 			})
 		case 'unknown':
 			return createPresentation('not_checked', {
