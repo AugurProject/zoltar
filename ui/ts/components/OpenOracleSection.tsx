@@ -16,6 +16,7 @@ import { useLoadController } from '../hooks/useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOracleFeePercentage, formatOpenOracleMultiplier, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSelectedReportActionMode, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import { loadOpenOracleReportSummaries } from '../contracts.js'
+import { formatCurrencyBalance } from '../lib/formatters.js'
 import { getReportPresentation } from '../lib/userCopy.js'
 import { resolveFirstMatchingValue } from '../lib/viewState.js'
 import type { OpenOracleFormState } from '../types/app.js'
@@ -94,11 +95,13 @@ function renderSelectedReportActionSection(
 	onRefreshPrice: () => void,
 	onSettleReport: () => void,
 	onSubmitInitialReport: () => void,
+	onWrapEthToWeth: () => void,
 ) {
 	const disputeTokenOptions: EnumDropdownOption<OpenOracleFormState['disputeTokenToSwap']>[] = [
 		{ value: 'token1', label: token1Symbol },
 		{ value: 'token2', label: token2Symbol },
 	]
+	const wrapPending = openOracleActiveAction === 'wrapEthToWeth'
 	switch (actionMode) {
 		case 'initial-report':
 			return (
@@ -121,6 +124,25 @@ function renderSelectedReportActionSection(
 						<p className='detail'>
 							Price source: <strong>{openOracleInitialReportState.loading ? 'Loading...' : initialReportSubmission.priceSource}</strong>
 						</p>
+						<div className='question-summary-grid'>
+							<MetricField label={`Required ${token1Symbol}`}>
+								<CurrencyValue value={initialReportSubmission.amount1} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
+							</MetricField>
+							<MetricField label={`Required ${token2Symbol}`}>
+								<CurrencyValue value={initialReportSubmission.amount2} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
+							</MetricField>
+							<MetricField label={`Wallet ${token1Symbol}`}>
+								<CurrencyValue value={initialReportSubmission.token1Balance} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
+							</MetricField>
+							<MetricField label={`Wallet ${token2Symbol}`}>
+								<CurrencyValue value={initialReportSubmission.token2Balance} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
+							</MetricField>
+							{initialReportSubmission.requiredWrapEthAmount !== undefined || initialReportSubmission.ethBalance !== undefined ? (
+								<MetricField label='Wallet ETH'>
+									<CurrencyValue value={initialReportSubmission.ethBalance} suffix='ETH' copyable={false} />
+								</MetricField>
+							) : undefined}
+						</div>
 						<div className='entity-card-subsection'>
 							<div className='entity-card-subsection-header'>
 								<h4>{`${token1Symbol} Approval`}</h4>
@@ -161,6 +183,13 @@ function renderSelectedReportActionSection(
 							/>
 						</div>
 						<ErrorNotice message={initialReportSubmission.blockReason} />
+						{initialReportSubmission.requiredWrapEthAmount === undefined ? undefined : (
+							<div className='actions'>
+								<button className='secondary' onClick={onWrapEthToWeth} disabled={!isConnected || !initialReportSubmission.canWrapEthToWeth || openOracleInitialReportState.loading || wrapPending}>
+									{wrapPending ? 'Wrapping ETH...' : `Wrap ${formatCurrencyBalance(initialReportSubmission.requiredWrapEthAmount)} ETH to WETH`}
+								</button>
+							</div>
+						)}
 						<div className='actions'>
 							<button className='primary' onClick={onSubmitInitialReport} disabled={!isConnected || !initialReportSubmission.canSubmit || openOracleInitialReportState.loading}>
 								Submit Initial Report
@@ -230,6 +259,7 @@ function renderReportDetailsCard(
 	onRefreshPrice: () => void,
 	onSettleReport: () => void,
 	onSubmitInitialReport: () => void,
+	onWrapEthToWeth: () => void,
 ) {
 	if (openOracleReportDetails === undefined) {
 		const reportPresentation = getReportPresentation({
@@ -275,12 +305,19 @@ function renderReportDetailsCard(
 		defaultPrice: openOracleInitialReportState.defaultPrice,
 		defaultPriceError: openOracleInitialReportState.defaultPriceError,
 		defaultPriceSource: openOracleInitialReportState.defaultPriceSource,
+		ethBalance: openOracleInitialReportState.ethBalance,
+		ethBalanceError: openOracleInitialReportState.ethBalanceError,
+		hasConnectedWallet: isConnected,
 		priceInput: openOracleForm.price,
 		quoteAttemptedSources: openOracleInitialReportState.quoteAttemptedSources,
 		quoteFailureReason: openOracleInitialReportState.quoteFailureReason,
 		reportDetails: openOracleReportDetails,
 		token1AllowanceError: openOracleInitialReportState.token1Approval.error,
+		token1Balance: openOracleInitialReportState.token1Balance,
+		token1BalanceError: openOracleInitialReportState.token1BalanceError,
 		token2AllowanceError: openOracleInitialReportState.token2Approval.error,
+		token2Balance: openOracleInitialReportState.token2Balance,
+		token2BalanceError: openOracleInitialReportState.token2BalanceError,
 		token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
 		token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
 	})
@@ -461,6 +498,7 @@ function renderReportDetailsCard(
 				onRefreshPrice,
 				onSettleReport,
 				onSubmitInitialReport,
+				onWrapEthToWeth,
 			)}
 		</EntityCard>
 	)
@@ -492,6 +530,7 @@ export function OpenOracleSection({
 	onRefreshPrice,
 	onSettleReport,
 	onSubmitInitialReport,
+	onWrapEthToWeth,
 	loadingOpenOracleCreate,
 	openOracleActiveAction,
 	openOracleCreateForm,
@@ -695,7 +734,23 @@ export function OpenOracleSection({
 			{view === 'selected-report' ? (
 				<div className='market-grid'>
 					<div className='market-column'>
-						{renderReportDetailsCard(openOracleReportDetails, openOracleForm, openOracleInitialReportState, openOracleActiveAction, loadingOracleReport, isConnected, onApproveToken1, onApproveToken2, onDisputeReport, onLoadOracleReport, onOpenOracleFormChange, onRefreshPrice, onSettleReport, onSubmitInitialReport)}
+						{renderReportDetailsCard(
+							openOracleReportDetails,
+							openOracleForm,
+							openOracleInitialReportState,
+							openOracleActiveAction,
+							loadingOracleReport,
+							isConnected,
+							onApproveToken1,
+							onApproveToken2,
+							onDisputeReport,
+							onLoadOracleReport,
+							onOpenOracleFormChange,
+							onRefreshPrice,
+							onSettleReport,
+							onSubmitInitialReport,
+							onWrapEthToWeth,
+						)}
 						{renderLatestActionCard(openOracleResult)}
 					</div>
 				</div>

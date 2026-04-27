@@ -2,12 +2,13 @@
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { getAddress, zeroAddress, type Address } from 'viem'
-import { createOpenOracleReportInstance, getOpenOracleAddress, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, requestOraclePrice, settleOracleReport, submitInitialOracleReport } from '../contracts.js'
+import { createOpenOracleReportInstance, getOpenOracleAddress, loadErc20Balance, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, requestOraclePrice, settleOracleReport, submitInitialOracleReport, wrapEthToWeth } from '../contracts.js'
 import {
 	deriveOpenOracleInitialReportSubmissionDetails,
 	addOpenOracleBountyBuffer,
 	formatOpenOracleFeePercentage,
 	formatOpenOracleInitialReportApprovalStatusUnavailableMessage,
+	formatOpenOracleInitialReportBalanceStatusUnavailableMessage,
 	formatOpenOracleInitialReportPriceUnavailableMessage,
 	formatOpenOracleMultiplier,
 	getOpenOracleReportStatus,
@@ -28,7 +29,7 @@ import { createWriteClient, type WriteClient } from '../../../solidity/ts/testsu
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../solidity/ts/testsuite/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltarQuestionData'
-import { getOpenOracleExtraData, wrapWeth } from '../../../solidity/ts/testsuite/simulator/utils/contracts/peripherals'
+import { getOpenOracleExtraData } from '../../../solidity/ts/testsuite/simulator/utils/contracts/peripherals'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -246,6 +247,74 @@ describe('Open Oracle helpers', () => {
 		expect(preview.blockReason).toBe('Need 1 more ETH approved before submitting the initial report. Approving will set the allowance to 25 ETH.')
 	})
 
+	test('initial report submission helper blocks when the connected wallet is short on token1 balance', () => {
+		const preview = deriveOpenOracleInitialReportSubmissionDetails({
+			approvedToken1Amount: 100n * ONE,
+			approvedToken2Amount: 25n * ONE,
+			defaultPrice: '4.0',
+			defaultPriceError: undefined,
+			defaultPriceSource: 'Uniswap V4',
+			ethBalance: 0n,
+			ethBalanceError: undefined,
+			hasConnectedWallet: true,
+			priceInput: '',
+			quoteAttemptedSources: undefined,
+			quoteFailureReason: undefined,
+			reportDetails: {
+				exactToken1Report: 100n * ONE,
+				token1Symbol: 'REP',
+				token2: WETH_ADDRESS,
+				token2Symbol: 'WETH',
+			},
+			token1AllowanceError: undefined,
+			token1Balance: 40n * ONE,
+			token1BalanceError: undefined,
+			token2AllowanceError: undefined,
+			token2Balance: 25n * ONE,
+			token2BalanceError: undefined,
+			token1Decimals: 18,
+			token2Decimals: 18,
+		})
+
+		expect(preview.canSubmit).toBe(false)
+		expect(preview.blockReason).toBe('Insufficient REP balance. Need 100 REP for the initial report and only 40 REP is available in the connected wallet.')
+	})
+
+	test('initial report submission helper can require wrapping ETH to WETH before submit', () => {
+		const preview = deriveOpenOracleInitialReportSubmissionDetails({
+			approvedToken1Amount: 100n * ONE,
+			approvedToken2Amount: 25n * ONE,
+			defaultPrice: '4.0',
+			defaultPriceError: undefined,
+			defaultPriceSource: 'Uniswap V4',
+			ethBalance: 20n * ONE,
+			ethBalanceError: undefined,
+			hasConnectedWallet: true,
+			priceInput: '',
+			quoteAttemptedSources: undefined,
+			quoteFailureReason: undefined,
+			reportDetails: {
+				exactToken1Report: 100n * ONE,
+				token1Symbol: 'REP',
+				token2: WETH_ADDRESS,
+				token2Symbol: 'WETH',
+			},
+			token1AllowanceError: undefined,
+			token1Balance: 100n * ONE,
+			token1BalanceError: undefined,
+			token2AllowanceError: undefined,
+			token2Balance: 10n * ONE,
+			token2BalanceError: undefined,
+			token1Decimals: 18,
+			token2Decimals: 18,
+		})
+
+		expect(preview.canSubmit).toBe(false)
+		expect(preview.canWrapEthToWeth).toBe(true)
+		expect(preview.requiredWrapEthAmount).toBe(15n * ONE)
+		expect(preview.blockReason).toBe('Need 15 more WETH for this initial report. Wrap 15 ETH to WETH, then submit the initial report.')
+	})
+
 	test('initial report submission helper explains exhausted quote paths with a short reason', () => {
 		const preview = deriveOpenOracleInitialReportSubmissionDetails({
 			approvedToken1Amount: 100n * ONE,
@@ -365,6 +434,15 @@ describe('Open Oracle helpers', () => {
 		).toBe('Unable to verify WETH approval before submitting the initial report. Reason: execution reverted. Retry loading the approval status before continuing.')
 	})
 
+	test('formats unavailable balance status messages with sanitized reasons', () => {
+		expect(
+			formatOpenOracleInitialReportBalanceStatusUnavailableMessage({
+				reason: 'Failed to load wallet balance: execution reverted',
+				tokenLabel: 'ETH',
+			}),
+		).toBe('Unable to verify ETH wallet balance for this report. Reason: execution reverted. Retry loading the report or wallet balance before submitting the initial report.')
+	})
+
 	test('open oracle fee and multiplier formatters render human values', () => {
 		expect(formatOpenOracleFeePercentage(10_000n)).toBe('0.1%')
 		expect(formatOpenOracleMultiplier(140n)).toBe('1.40x')
@@ -426,7 +504,12 @@ describe('Open Oracle helpers', () => {
 		const openOracleAddress = getOpenOracleAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracleAddress)
 		await approveToken(client, WETH_ADDRESS, openOracleAddress)
-		await wrapWeth(client, amount2)
+		const walletAddress = addressString(TEST_ADDRESSES[0])
+		const wethBalanceBefore = await loadErc20Balance(uiReadClient, WETH_ADDRESS, walletAddress)
+		const wrapResult = await wrapEthToWeth(uiWriteClient, amount2)
+		expect(wrapResult.action).toBe('wrapEthToWeth')
+		const wethBalanceAfter = await loadErc20Balance(uiReadClient, WETH_ADDRESS, walletAddress)
+		expect(wethBalanceAfter - wethBalanceBefore).toBe(amount2)
 
 		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash
 		await submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, stateHash)
