@@ -5,7 +5,7 @@ import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
-import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalPartialMessage, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput } from '../lib/tokenApproval.js'
+import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalPartialMessage, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, shouldDisplayMaxTokenApprovalAmount } from '../lib/tokenApproval.js'
 
 type TokenApprovalControlProps = {
 	actionLabel: string
@@ -53,6 +53,7 @@ function resolveApprovalButtonLabel({
 export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoading, approvedAmount, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
 	const [draftAmount, setDraftAmount] = useState('')
 	const requirement = useMemo(() => deriveTokenApprovalRequirement(requiredAmount, approvedAmount), [approvedAmount, requiredAmount])
+	const displayApprovedAmountAsMax = shouldDisplayMaxTokenApprovalAmount(approvedAmount)
 
 	useEffect(() => {
 		setDraftAmount('')
@@ -112,7 +113,13 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 					<CurrencyValue value={requiredAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
 				</MetricField>
 				<MetricField label={`Approved ${tokenSymbol}`}>
-					<CurrencyValue loading={allowanceLoading} value={approvedAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
+					{displayApprovedAmountAsMax && !allowanceLoading ? (
+						<span className='currency-value' title='Approval exceeds max(uint200)'>
+							max
+						</span>
+					) : (
+						<CurrencyValue loading={allowanceLoading} value={approvedAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
+					)}
 				</MetricField>
 				<MetricField label={`Need More ${tokenSymbol} Approved`}>
 					<CurrencyValue value={requirement.neededAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />

@@ -2,6 +2,8 @@ import { maxUint256 } from 'viem'
 import { parseDecimalInput } from './decimal.js'
 import { formatCurrencyBalance } from './formatters.js'
 
+export const maxUint200 = 2n ** 200n - 1n
+
 export type TokenApprovalState = {
 	error: string | undefined
 	loading: boolean
@@ -70,6 +72,10 @@ export function parseTokenApprovalAmountInput(value: string, label: string, unit
 		kind: 'custom',
 		amount: parseDecimalInput(trimmed, label, units),
 	}
+}
+
+export function shouldDisplayMaxTokenApprovalAmount(amount: bigint | undefined) {
+	return amount !== undefined && amount > maxUint200
 }
 
 export function formatTokenApprovalUnavailableMessage({ actionLabel, reason, tokenLabel }: { actionLabel?: string | undefined; reason: string | undefined; tokenLabel: string | undefined }) {
