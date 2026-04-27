@@ -3,7 +3,7 @@ import { useEffect } from 'preact/hooks'
 import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
-import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, loadErc20Allowance, loadOpenOracleReportDetails, settleOracleReport, submitInitialOracleReport } from '../contracts.js'
+import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, loadErc20Allowance, loadErc20Balance, loadOpenOracleReportDetails, settleOracleReport, submitInitialOracleReport, wrapEthToWeth } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorDetail, getErrorMessage } from '../lib/errors.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOraclePriceInput, loadOpenOracleInitialReportPriceResult } from '../lib/openOracle.js'
@@ -35,20 +35,33 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 	const openOracleInitialReportQuoteAttemptedSources = useSignal<('Uniswap V4' | 'Uniswap V3 fallback')[] | undefined>(undefined)
 	const openOracleInitialReportQuoteFailureKind = useSignal<'unsupported-pair' | 'quote-failed' | undefined>(undefined)
 	const openOracleInitialReportQuoteFailureReason = useSignal<string | undefined>(undefined)
+	const openOracleInitialReportEthBalance = useSignal<bigint | undefined>(undefined)
+	const openOracleInitialReportEthBalanceError = useSignal<string | undefined>(undefined)
 	const openOracleInitialReportToken1Approval = useSignal<TokenApprovalState>({
 		error: undefined,
 		loading: false,
 		value: undefined,
 	})
+	const openOracleInitialReportToken1Balance = useSignal<bigint | undefined>(undefined)
+	const openOracleInitialReportToken1BalanceError = useSignal<string | undefined>(undefined)
 	const openOracleInitialReportToken2Approval = useSignal<TokenApprovalState>({
 		error: undefined,
 		loading: false,
 		value: undefined,
 	})
+	const openOracleInitialReportToken2Balance = useSignal<bigint | undefined>(undefined)
+	const openOracleInitialReportToken2BalanceError = useSignal<string | undefined>(undefined)
 	const nextOpenOracleInitialReportStateLoad = useRequestGuard()
+	type BalanceState = {
+		error: string | undefined
+		value: bigint | undefined
+	}
 	type OpenOracleInitialReportStateResult = {
+		ethBalanceResult: BalanceState
 		initialPriceResult: Awaited<ReturnType<typeof loadOpenOracleInitialReportPriceResult>>
+		token1BalanceResult: BalanceState
 		token1ApprovalResult: TokenApprovalState
+		token2BalanceResult: BalanceState
 		token2ApprovalResult: TokenApprovalState
 	}
 
@@ -65,6 +78,15 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		}
 	}
 
+	const resetOpenOracleTokenBalanceState = () => {
+		openOracleInitialReportEthBalance.value = undefined
+		openOracleInitialReportEthBalanceError.value = undefined
+		openOracleInitialReportToken1Balance.value = undefined
+		openOracleInitialReportToken1BalanceError.value = undefined
+		openOracleInitialReportToken2Balance.value = undefined
+		openOracleInitialReportToken2BalanceError.value = undefined
+	}
+
 	const refreshOpenOracleInitialReportState = async (details: OpenOracleReportDetails | undefined) => {
 		const currentDetails = details
 		const isCurrent = nextOpenOracleInitialReportStateLoad()
@@ -76,6 +98,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 			openOracleInitialReportQuoteFailureKind.value = undefined
 			openOracleInitialReportQuoteFailureReason.value = undefined
 			resetOpenOracleTokenApprovalState(false)
+			resetOpenOracleTokenBalanceState()
 			return
 		}
 
@@ -89,6 +112,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				openOracleInitialReportQuoteFailureKind.value = undefined
 				openOracleInitialReportQuoteFailureReason.value = undefined
 				resetOpenOracleTokenApprovalState(accountAddress !== undefined)
+				resetOpenOracleTokenBalanceState()
 			},
 			load: async () => {
 				const readClient = createConnectedReadClient()
@@ -117,11 +141,62 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 					}
 				}
 
-				const [initialPriceResult, token1ApprovalResult, token2ApprovalResult] = await Promise.all([loadOpenOracleInitialReportPriceResult(readClient, currentDetails.token1, currentDetails.token2, currentDetails.exactToken1Report), loadAllowance(currentDetails.token1), loadAllowance(currentDetails.token2)])
+				const loadBalance = async (tokenAddress: Address) => {
+					if (accountAddress === undefined) {
+						return {
+							error: undefined,
+							value: undefined,
+						} satisfies BalanceState
+					}
 
-				return { initialPriceResult, token1ApprovalResult, token2ApprovalResult }
+					try {
+						return {
+							error: undefined,
+							value: await loadErc20Balance(readClient, tokenAddress, accountAddress),
+						} satisfies BalanceState
+					} catch (error) {
+						const errorDetail = getErrorDetail(error)
+						return {
+							error: errorDetail === undefined ? 'Failed to load wallet balance' : `Failed to load wallet balance: ${errorDetail}`,
+							value: undefined,
+						} satisfies BalanceState
+					}
+				}
+
+				const loadEthBalance = async () => {
+					if (accountAddress === undefined) {
+						return {
+							error: undefined,
+							value: undefined,
+						} satisfies BalanceState
+					}
+
+					try {
+						return {
+							error: undefined,
+							value: await readClient.getBalance({ address: accountAddress }),
+						} satisfies BalanceState
+					} catch (error) {
+						const errorDetail = getErrorDetail(error)
+						return {
+							error: errorDetail === undefined ? 'Failed to load wallet balance' : `Failed to load wallet balance: ${errorDetail}`,
+							value: undefined,
+						} satisfies BalanceState
+					}
+				}
+
+				const [ethBalanceResult, initialPriceResult, token1ApprovalResult, token1BalanceResult, token2ApprovalResult, token2BalanceResult] = await Promise.all([
+					loadEthBalance(),
+					loadOpenOracleInitialReportPriceResult(readClient, currentDetails.token1, currentDetails.token2, currentDetails.exactToken1Report),
+					loadAllowance(currentDetails.token1),
+					loadBalance(currentDetails.token1),
+					loadAllowance(currentDetails.token2),
+					loadBalance(currentDetails.token2),
+				])
+
+				return { ethBalanceResult, initialPriceResult, token1ApprovalResult, token1BalanceResult, token2ApprovalResult, token2BalanceResult }
 			},
-			onSuccess: ({ initialPriceResult, token1ApprovalResult, token2ApprovalResult }: OpenOracleInitialReportStateResult) => {
+			onSuccess: ({ ethBalanceResult, initialPriceResult, token1ApprovalResult, token1BalanceResult, token2ApprovalResult, token2BalanceResult }: OpenOracleInitialReportStateResult) => {
 				const initialPrice = initialPriceResult.status === 'success' ? initialPriceResult : undefined
 				const priceFailure = initialPriceResult.status === 'failure' ? initialPriceResult : undefined
 
@@ -131,8 +206,14 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				openOracleInitialReportQuoteAttemptedSources.value = priceFailure?.attemptedSources
 				openOracleInitialReportQuoteFailureKind.value = priceFailure?.failureKind
 				openOracleInitialReportQuoteFailureReason.value = priceFailure?.reason
+				openOracleInitialReportEthBalance.value = ethBalanceResult.value
+				openOracleInitialReportEthBalanceError.value = ethBalanceResult.error
 				openOracleInitialReportToken1Approval.value = token1ApprovalResult
+				openOracleInitialReportToken1Balance.value = token1BalanceResult.value
+				openOracleInitialReportToken1BalanceError.value = token1BalanceResult.error
 				openOracleInitialReportToken2Approval.value = token2ApprovalResult
+				openOracleInitialReportToken2Balance.value = token2BalanceResult.value
+				openOracleInitialReportToken2BalanceError.value = token2BalanceResult.error
 
 				if (openOracleForm.value.price.trim() === '' || openOracleForm.value.reportId.trim() !== currentDetails.reportId.toString()) {
 					openOracleForm.value = {
@@ -183,6 +264,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				openOracleInitialReportQuoteFailureKind.value = undefined
 				openOracleInitialReportQuoteFailureReason.value = undefined
 				resetOpenOracleTokenApprovalState(false)
+				resetOpenOracleTokenBalanceState()
 				openOracleError.value = getErrorMessage(error, 'Failed to load oracle report')
 			},
 		})
@@ -224,7 +306,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 					if (result.action !== 'createReportInstance' && openOracleForm.value.reportId.trim() !== '') {
 						await ensureLoadedSelectedReport()
 					}
-					if (result.action === 'approveToken1' || result.action === 'approveToken2') {
+					if (result.action === 'approveToken1' || result.action === 'approveToken2' || result.action === 'wrapEthToWeth') {
 						await refreshOpenOracleInitialReportState(openOracleReportDetails.value)
 					}
 				},
@@ -241,12 +323,19 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 			defaultPrice: openOracleInitialReportDefaultPrice.value,
 			defaultPriceError: openOracleInitialReportDefaultPriceError.value,
 			defaultPriceSource: openOracleInitialReportDefaultPriceSource.value,
+			ethBalance: openOracleInitialReportEthBalance.value,
+			ethBalanceError: openOracleInitialReportEthBalanceError.value,
+			hasConnectedWallet: accountAddress !== undefined,
 			priceInput: openOracleForm.value.price,
 			quoteAttemptedSources: openOracleInitialReportQuoteAttemptedSources.value,
 			quoteFailureReason: openOracleInitialReportQuoteFailureReason.value,
 			reportDetails,
 			token1AllowanceError: openOracleInitialReportToken1Approval.value.error,
+			token1Balance: openOracleInitialReportToken1Balance.value,
+			token1BalanceError: openOracleInitialReportToken1BalanceError.value,
 			token2AllowanceError: openOracleInitialReportToken2Approval.value.error,
+			token2Balance: openOracleInitialReportToken2Balance.value,
+			token2BalanceError: openOracleInitialReportToken2BalanceError.value,
 			token1Decimals: reportDetails.token1Decimals,
 			token2Decimals: reportDetails.token2Decimals,
 		})
@@ -312,6 +401,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 			'submitInitialReport',
 			async walletAddress => {
 				const reportDetails = requireDefined(openOracleReportDetails.value, 'Load an oracle report first')
+				await refreshOpenOracleInitialReportState(reportDetails)
 				const submission = getInitialReportSubmission(reportDetails)
 				if (!submission.canSubmit || submission.amount1 === undefined || submission.amount2 === undefined) {
 					throw new Error(submission.blockReason ?? 'Invalid price')
@@ -320,6 +410,22 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				return await submitInitialOracleReport(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), getOpenOracleAddress(), reportDetails.reportId, submission.amount1, submission.amount2, parseBytes32Input(openOracleForm.value.stateHash, 'State hash'))
 			},
 			'Failed to submit initial report',
+		)
+
+	const wrapRequiredEthToWeth = async () =>
+		await runOracleAction(
+			'wrapEthToWeth',
+			async walletAddress => {
+				const reportDetails = requireDefined(openOracleReportDetails.value, 'Load an oracle report first')
+				await refreshOpenOracleInitialReportState(reportDetails)
+				const submission = getInitialReportSubmission(reportDetails)
+				if (submission.requiredWrapEthAmount === undefined || !submission.canWrapEthToWeth) {
+					throw new Error(submission.blockReason ?? 'No WETH wrapping is required for the selected report')
+				}
+
+				return await wrapEthToWeth(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), submission.requiredWrapEthAmount)
+			},
+			'Failed to wrap ETH to WETH',
 		)
 
 	const settleReport = async () => await runOracleAction('settle', async walletAddress => await settleOracleReport(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), getOpenOracleAddress(), parseReportIdInput(openOracleForm.value.reportId)), 'Failed to settle report')
@@ -370,13 +476,19 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 			defaultPrice: openOracleInitialReportDefaultPrice.value,
 			defaultPriceError: openOracleInitialReportDefaultPriceError.value,
 			defaultPriceSource: openOracleInitialReportDefaultPriceSource.value,
+			ethBalance: openOracleInitialReportEthBalance.value,
+			ethBalanceError: openOracleInitialReportEthBalanceError.value,
 			loading: openOracleInitialReportStateLoad.isLoading.value,
 			quoteAttemptedSources: openOracleInitialReportQuoteAttemptedSources.value,
 			quoteFailureKind: openOracleInitialReportQuoteFailureKind.value,
 			quoteFailureReason: openOracleInitialReportQuoteFailureReason.value,
 			token1Approval: openOracleInitialReportToken1Approval.value,
+			token1Balance: openOracleInitialReportToken1Balance.value,
+			token1BalanceError: openOracleInitialReportToken1BalanceError.value,
 			token1Decimals: openOracleReportDetails.value?.token1Decimals,
 			token2Approval: openOracleInitialReportToken2Approval.value,
+			token2Balance: openOracleInitialReportToken2Balance.value,
+			token2BalanceError: openOracleInitialReportToken2BalanceError.value,
 			token2Decimals: openOracleReportDetails.value?.token2Decimals,
 		},
 		openOracleReportDetails: openOracleReportDetails.value,
@@ -388,5 +500,6 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		setOpenOracleForm,
 		settleReport,
 		submitInitialReport,
+		wrapRequiredEthToWeth,
 	}
 }

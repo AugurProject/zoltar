@@ -260,6 +260,7 @@ export type OpenOracleRouteContentProps = {
 	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
 	onSettleReport: () => void
 	onSubmitInitialReport: () => void
+	onWrapEthToWeth: () => void
 	loadingOpenOracleCreate: boolean
 	openOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	openOracleError: string | undefined
@@ -267,13 +268,19 @@ export type OpenOracleRouteContentProps = {
 		defaultPrice: string | undefined
 		defaultPriceError: string | undefined
 		defaultPriceSource: OpenOracleInitialReportPriceSource | undefined
+		ethBalance: bigint | undefined
+		ethBalanceError: string | undefined
 		loading: boolean
 		quoteAttemptedSources: OpenOracleInitialReportQuoteSource[] | undefined
 		quoteFailureKind: OpenOracleInitialReportQuoteFailureKind | undefined
 		quoteFailureReason: string | undefined
 		token1Approval: TokenApprovalState
+		token1Balance: bigint | undefined
+		token1BalanceError: string | undefined
 		token1Decimals: number | undefined
 		token2Approval: TokenApprovalState
+		token2Balance: bigint | undefined
+		token2BalanceError: string | undefined
 		token2Decimals: number | undefined
 	}
 	openOracleCreateForm: OpenOracleCreateFormState

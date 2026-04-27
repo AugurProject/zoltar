@@ -151,6 +151,7 @@ export function App() {
 		setOpenOracleForm,
 		settleReport,
 		submitInitialReport,
+		wrapRequiredEthToWeth,
 	} = useOpenOracleOperations(baseHookConfig)
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
 	const { loadingPoolOracleManager, loadPoolOracleManager, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(baseHookConfig)
@@ -450,6 +451,7 @@ export function App() {
 						onOpenOracleFormChange={update => setOpenOracleForm(current => ({ ...current, ...update }))}
 						onSettleReport={() => void settleReport()}
 						onSubmitInitialReport={() => void submitInitialReport()}
+						onWrapEthToWeth={() => void wrapRequiredEthToWeth()}
 						loadingOpenOracleCreate={loadingOpenOracleCreate}
 						openOracleActiveAction={openOracleActiveAction}
 						openOracleError={openOracleError}
