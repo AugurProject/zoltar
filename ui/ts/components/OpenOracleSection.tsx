@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
+import { ApprovedAmountValue } from './ApprovedAmountValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
@@ -39,6 +40,20 @@ function renderReportSection(title: string, fields: Array<{ label: string; value
 			</div>
 			<div className='question-summary-grid'>{fields.map(field => renderReportField(field.label, field.value))}</div>
 		</div>
+	)
+}
+
+function renderInitialPriceSourceLabel(priceSource: string, priceSourceUrl: string | undefined) {
+	if (priceSourceUrl === undefined) {
+		return <strong>{priceSource}</strong>
+	}
+
+	return (
+		<strong>
+			<a href={priceSourceUrl} target='_blank' rel='noreferrer'>
+				{priceSource}
+			</a>
+		</strong>
 	)
 }
 
@@ -92,6 +107,7 @@ function renderSelectedReportActionSection(
 	onRefreshPrice: () => void,
 	onSettleReport: () => void,
 	onSubmitInitialReport: () => void,
+	onWrapWethForInitialReport: () => void,
 ) {
 	const disputeTokenOptions: EnumDropdownOption<OpenOracleFormState['disputeTokenToSwap']>[] = [
 		{ value: 'token1', label: token1Symbol },
@@ -112,13 +128,11 @@ function renderSelectedReportActionSection(
 							</label>
 							<div className='actions'>
 								<button className='secondary' onClick={onRefreshPrice} disabled={openOracleInitialReportState.loading}>
-									{openOracleInitialReportState.loading ? 'Fetching...' : 'Fetch Price'}
+									{openOracleInitialReportState.loading ? 'Fetching...' : 'Fetch price from Uniswap'}
 								</button>
 							</div>
 						</div>
-						<p className='detail'>
-							Price source: <strong>{openOracleInitialReportState.loading ? 'Loading...' : initialReportSubmission.priceSource}</strong>
-						</p>
+						<p className='detail'>Price source: {openOracleInitialReportState.loading ? <strong>Loading...</strong> : renderInitialPriceSourceLabel(initialReportSubmission.priceSource, initialReportSubmission.priceSourceUrl)}</p>
 						<div className='question-summary-grid'>
 							<MetricField label={`Required ${token1Symbol}`}>
 								<CurrencyValue value={initialReportSubmission.amount1} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
@@ -127,12 +141,25 @@ function renderSelectedReportActionSection(
 								<CurrencyValue value={initialReportSubmission.amount2} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
 							</MetricField>
 							<MetricField label={`Approved ${token1Symbol}`}>
-								<CurrencyValue value={initialReportSubmission.approvedToken1Amount} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
+								<ApprovedAmountValue value={initialReportSubmission.approvedToken1Amount} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
 							</MetricField>
 							<MetricField label={`Approved ${token2Symbol}`}>
-								<CurrencyValue value={initialReportSubmission.approvedToken2Amount} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
+								<ApprovedAmountValue value={initialReportSubmission.approvedToken2Amount} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
 							</MetricField>
 						</div>
+						{initialReportSubmission.requiredWethWrapAmount === undefined || initialReportSubmission.requiredWethWrapAmount <= 0n ? undefined : (
+							<div className='entity-card-subsection'>
+								<p className='detail'>
+									Need <CurrencyValue value={initialReportSubmission.requiredWethWrapAmount} suffix='WETH' copyable={false} /> more WETH for this report.
+								</p>
+								{initialReportSubmission.wrapRequiredWethDisabledReason === undefined ? undefined : <p className='detail'>{initialReportSubmission.wrapRequiredWethDisabledReason}</p>}
+								<div className='actions'>
+									<button className='secondary' onClick={onWrapWethForInitialReport} disabled={!isConnected || !initialReportSubmission.canWrapRequiredWeth || openOracleInitialReportState.loading} title={initialReportSubmission.wrapRequiredWethDisabledReason}>
+										Wrap needed ETH to WETH
+									</button>
+								</div>
+							</div>
+						)}
 						<div className='field-row'>
 							<label className='field'>
 								<span>{`${token1Symbol} Approve Amount (leave empty for max)`}</span>
@@ -211,6 +238,7 @@ function renderSelectedReportActionSection(
 }
 
 function renderReportDetailsCard(
+	accountEthBalance: bigint | undefined,
 	openOracleReportDetails: OpenOracleReportDetails | undefined,
 	openOracleForm: OpenOracleFormState,
 	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
@@ -224,6 +252,7 @@ function renderReportDetailsCard(
 	onRefreshPrice: () => void,
 	onSettleReport: () => void,
 	onSubmitInitialReport: () => void,
+	onWrapWethForInitialReport: () => void,
 ) {
 	if (openOracleReportDetails === undefined) {
 		const reportPresentation = getReportPresentation({
@@ -269,14 +298,20 @@ function renderReportDetailsCard(
 		defaultPrice: openOracleInitialReportState.defaultPrice,
 		defaultPriceError: openOracleInitialReportState.defaultPriceError,
 		defaultPriceSource: openOracleInitialReportState.defaultPriceSource,
+		defaultPriceSourceUrl: openOracleInitialReportState.defaultPriceSourceUrl,
 		priceInput: openOracleForm.price,
 		quoteAttemptedSources: openOracleInitialReportState.quoteAttemptedSources,
 		quoteFailureReason: openOracleInitialReportState.quoteFailureReason,
 		reportDetails: openOracleReportDetails,
+		token1Balance: openOracleInitialReportState.token1Balance,
+		token1BalanceError: openOracleInitialReportState.token1BalanceError,
 		token1AllowanceError: openOracleInitialReportState.token1AllowanceError,
 		token2AllowanceError: openOracleInitialReportState.token2AllowanceError,
+		token2Balance: openOracleInitialReportState.token2Balance,
+		token2BalanceError: openOracleInitialReportState.token2BalanceError,
 		token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
 		token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
+		walletEthBalance: accountEthBalance,
 	})
 
 	return (
@@ -454,6 +489,7 @@ function renderReportDetailsCard(
 				onRefreshPrice,
 				onSettleReport,
 				onSubmitInitialReport,
+				onWrapWethForInitialReport,
 			)}
 		</EntityCard>
 	)
@@ -485,6 +521,7 @@ export function OpenOracleSection({
 	onRefreshPrice,
 	onSettleReport,
 	onSubmitInitialReport,
+	onWrapWethForInitialReport,
 	loadingOpenOracleCreate,
 	openOracleCreateForm,
 	openOracleError,
@@ -687,7 +724,23 @@ export function OpenOracleSection({
 			{view === 'selected-report' ? (
 				<div className='market-grid'>
 					<div className='market-column'>
-						{renderReportDetailsCard(openOracleReportDetails, openOracleForm, openOracleInitialReportState, loadingOracleReport, isConnected, onApproveToken1, onApproveToken2, onDisputeReport, onLoadOracleReport, onOpenOracleFormChange, onRefreshPrice, onSettleReport, onSubmitInitialReport)}
+						{renderReportDetailsCard(
+							accountState.ethBalance,
+							openOracleReportDetails,
+							openOracleForm,
+							openOracleInitialReportState,
+							loadingOracleReport,
+							isConnected,
+							onApproveToken1,
+							onApproveToken2,
+							onDisputeReport,
+							onLoadOracleReport,
+							onOpenOracleFormChange,
+							onRefreshPrice,
+							onSettleReport,
+							onSubmitInitialReport,
+							onWrapWethForInitialReport,
+						)}
 						{renderLatestActionCard(openOracleResult)}
 					</div>
 				</div>

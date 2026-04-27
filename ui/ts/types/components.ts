@@ -48,8 +48,10 @@ export type OverviewPanelsProps = {
 	isRefreshing: boolean
 	repEthPrice: bigint | undefined
 	repEthSource: 'v4' | 'v3' | undefined
+	repEthSourceUrl: string | undefined
 	repUsdcPrice: bigint | undefined
 	repUsdcSource: 'v4' | 'v3' | undefined
+	repUsdcSourceUrl: string | undefined
 	isLoadingRepPrices: boolean
 	onConnect: () => void
 	onGoToGenesisUniverse: () => void
@@ -258,21 +260,27 @@ export type OpenOracleRouteContentProps = {
 	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
 	onSettleReport: () => void
 	onSubmitInitialReport: () => void
+	onWrapWethForInitialReport: () => void
 	loadingOpenOracleCreate: boolean
 	openOracleError: string | undefined
 	openOracleInitialReportState: {
 		defaultPrice: string | undefined
 		defaultPriceError: string | undefined
 		defaultPriceSource: OpenOracleInitialReportPriceSource | undefined
+		defaultPriceSourceUrl: string | undefined
 		loading: boolean
 		quoteAttemptedSources: OpenOracleInitialReportQuoteSource[] | undefined
 		quoteFailureKind: OpenOracleInitialReportQuoteFailureKind | undefined
 		quoteFailureReason: string | undefined
 		token1Allowance: bigint | undefined
 		token1AllowanceError: string | undefined
+		token1Balance: bigint | undefined
+		token1BalanceError: string | undefined
 		token1Decimals: number | undefined
 		token2Allowance: bigint | undefined
 		token2AllowanceError: string | undefined
+		token2Balance: bigint | undefined
+		token2BalanceError: string | undefined
 		token2Decimals: number | undefined
 	}
 	openOracleCreateForm: OpenOracleCreateFormState

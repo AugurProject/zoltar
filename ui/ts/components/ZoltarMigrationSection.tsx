@@ -1,5 +1,6 @@
 import { useMemo } from 'preact/hooks'
 import type { Address } from 'viem'
+import { ApprovedAmountValue } from './ApprovedAmountValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -230,7 +231,7 @@ export function ZoltarMigrationSection({
 					</MetricField>
 					<div>
 						<MetricField label='Approved REP'>
-							<CurrencyValue loading={loadingZoltarForkAccess && zoltarForkAllowance === undefined} value={zoltarForkAllowance} suffix='REP' />
+							<ApprovedAmountValue loading={loadingZoltarForkAccess && zoltarForkAllowance === undefined} value={zoltarForkAllowance} suffix='REP' />
 						</MetricField>
 						{approvalGap === undefined || approvalGap === 0n ? undefined : (
 							<p className='detail'>

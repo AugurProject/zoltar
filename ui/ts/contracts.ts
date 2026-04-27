@@ -5,6 +5,7 @@ import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHe
 import { assertNever } from './lib/assert.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
 import { addOpenOracleBountyBuffer } from './lib/openOracle.js'
+import { WETH_ADDRESS } from './lib/uniswapQuoter.js'
 import { GENESIS_REPUTATION_TOKEN_ADDRESS } from './lib/universe.js'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
@@ -1611,6 +1612,27 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action: 'requestPrice',
+		hash,
+	} satisfies OpenOracleActionResult
+}
+
+export async function wrapWeth(client: WriteClient, amount: bigint) {
+	const hash = await writeContractAndWait(client, () => ({
+		address: WETH_ADDRESS,
+		abi: [
+			{
+				type: 'function',
+				name: 'deposit',
+				stateMutability: 'payable',
+				inputs: [],
+				outputs: [],
+			},
+		],
+		functionName: 'deposit',
+		value: amount,
+	}))
+	return {
+		action: 'wrapWeth',
 		hash,
 	} satisfies OpenOracleActionResult
 }

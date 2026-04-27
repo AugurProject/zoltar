@@ -134,6 +134,7 @@ export function App() {
 		setOpenOracleForm,
 		settleReport,
 		submitInitialReport,
+		wrapWethForInitialReport,
 	} = useOpenOracleOperations(baseHookConfig)
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
 	const { loadingPoolOracleManager, loadPoolOracleManager, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(baseHookConfig)
@@ -179,7 +180,7 @@ export function App() {
 		submitBid,
 		withdrawBids,
 	} = useForkAuctionOperations(baseHookConfig)
-	const { repEthPrice, repEthSource, repUsdcPrice, repUsdcSource, isLoadingRepPrices } = useRepPrices()
+	const { repEthPrice, repEthSource, repEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices } = useRepPrices()
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
 	const isMainnet = isMainnetChain(accountState.chainId)
@@ -431,6 +432,7 @@ export function App() {
 						onOpenOracleFormChange={update => setOpenOracleForm(current => ({ ...current, ...update }))}
 						onSettleReport={() => void settleReport()}
 						onSubmitInitialReport={() => void submitInitialReport()}
+						onWrapWethForInitialReport={() => void wrapWethForInitialReport()}
 						loadingOpenOracleCreate={loadingOpenOracleCreate}
 						openOracleError={openOracleError}
 						openOracleCreateForm={openOracleCreateForm}
@@ -540,8 +542,10 @@ export function App() {
 						onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
 						repEthPrice={repEthPrice}
 						repEthSource={repEthSource}
+						repEthSourceUrl={repEthSourceUrl}
 						repUsdcPrice={repUsdcPrice}
 						repUsdcSource={repUsdcSource}
+						repUsdcSourceUrl={repUsdcSourceUrl}
 						universePresentation={universePresentation}
 						universeLabel={universeLabel}
 						universeRepBalance={zoltarForkRepBalance}

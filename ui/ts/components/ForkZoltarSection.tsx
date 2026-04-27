@@ -1,4 +1,5 @@
 import type { Address } from 'viem'
+import { ApprovedAmountValue } from './ApprovedAmountValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -84,7 +85,7 @@ export function ForkZoltarSection({
 						<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThreshold} suffix='REP' />
 					</MetricField>
 					<MetricField label='REP Approved To Zoltar'>
-						<CurrencyValue loading={loadingZoltarForkAccess} value={zoltarForkAllowance} suffix='REP' />
+						<ApprovedAmountValue loading={loadingZoltarForkAccess} value={zoltarForkAllowance} suffix='REP' />
 					</MetricField>
 				</div>
 

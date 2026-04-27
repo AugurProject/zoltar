@@ -151,7 +151,7 @@ export type OracleManagerDetails = {
 }
 
 export type OpenOracleActionResult = ActionResult & {
-	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'queueOperation' | 'requestPrice' | 'settle' | 'submitInitialReport'
+	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'queueOperation' | 'requestPrice' | 'settle' | 'submitInitialReport' | 'wrapWeth'
 }
 
 export type OpenOracleReportSummary = {

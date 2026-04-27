@@ -81,7 +81,7 @@ void describe('Uniswap V4 Quoter — integration', () => {
 	})
 
 	// REP/WETH V3 1% pool is the live source used as fallback when V4 is unavailable
-	void describe('REP/ETH — Uniswap V3 fallback (1% pool)', () => {
+	void describe('REP/ETH — Uniswap V3 (1% pool)', () => {
 		void test('quoteRepForEthV3 returns a plausible REP price in ETH', async () => {
 			const ethOut = await quoteRepForEthV3(client, ONE_REP)
 			// At time of writing REP is roughly $0.40 and ETH ~$2 191 → ~0.00018 ETH per REP
