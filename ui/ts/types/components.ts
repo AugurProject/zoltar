@@ -271,6 +271,8 @@ export type OpenOracleRouteContentProps = {
 		defaultPriceError: string | undefined
 		defaultPriceSource: OpenOracleInitialReportPriceSource | undefined
 		defaultPriceSourceUrl: string | undefined
+		ethBalance: bigint | undefined
+		ethBalanceError: string | undefined
 		loading: boolean
 		quoteAttemptedSources: OpenOracleInitialReportQuoteSource[] | undefined
 		quoteFailureKind: OpenOracleInitialReportQuoteFailureKind | undefined

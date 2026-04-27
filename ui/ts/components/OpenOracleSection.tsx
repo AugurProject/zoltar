@@ -257,7 +257,6 @@ function renderSelectedReportActionSection(
 }
 
 function renderReportDetailsCard(
-	accountEthBalance: bigint | undefined,
 	openOracleReportDetails: OpenOracleReportDetails | undefined,
 	openOracleForm: OpenOracleFormState,
 	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
@@ -331,7 +330,7 @@ function renderReportDetailsCard(
 		token2AllowanceError: openOracleInitialReportState.token2Approval.error,
 		token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
 		token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
-		walletEthBalance: accountEthBalance,
+		walletEthBalance: openOracleInitialReportState.ethBalance,
 	})
 
 	return (
@@ -747,7 +746,6 @@ export function OpenOracleSection({
 				<div className='market-grid'>
 					<div className='market-column'>
 						{renderReportDetailsCard(
-							accountState.ethBalance,
 							openOracleReportDetails,
 							openOracleForm,
 							openOracleInitialReportState,

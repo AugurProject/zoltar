@@ -1,3 +1,4 @@
+import { LoadingText } from './LoadingText.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 
 type StateHintProps = {
@@ -13,7 +14,7 @@ export function StateHint({ className = '', presentation }: StateHintProps) {
 					<span className={`badge ${presentation.badgeTone ?? 'muted'}`}>{presentation.badgeLabel}</span>
 				</p>
 			)}
-			{presentation.detail === undefined ? undefined : <p className='detail'>{presentation.detail}</p>}
+			{presentation.detail === undefined ? undefined : <p className='detail'>{presentation.detailIsLoading ? <LoadingText>{presentation.detail}</LoadingText> : presentation.detail}</p>}
 			{presentation.actionHint === undefined ? undefined : <p className='detail'>{presentation.actionHint}</p>}
 		</div>
 	)
