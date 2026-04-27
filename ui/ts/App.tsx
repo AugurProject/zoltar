@@ -408,6 +408,7 @@ export function App() {
 								onRedeemCompleteSet: () => void redeemCompleteSet(),
 								onRedeemShares: () => void redeemShares(),
 								onTradingFormChange: update => setTradingForm(current => ({ ...current, ...update })),
+								selectedPool,
 								tradingError,
 								tradingForm,
 								tradingResult,
@@ -476,6 +477,11 @@ export function App() {
 		if (securityPoolResult === undefined) return
 		void loadSecurityPools()
 	}, [securityPoolResult?.deployPoolHash])
+
+	useEffect(() => {
+		if (tradingResult === undefined) return
+		refreshSelectedPoolData()
+	}, [tradingResult?.hash])
 
 	useEffect(() => {
 		if (!augurPlaceHolderDeploymentMissing) return
