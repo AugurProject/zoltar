@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { getAddress, maxUint256, zeroAddress, type Address } from 'viem'
+import { getAddress, zeroAddress, type Address } from 'viem'
 import { createOpenOracleReportInstance, getOpenOracleAddress, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, requestOraclePrice, settleOracleReport, submitInitialOracleReport } from '../contracts.js'
 import {
 	deriveOpenOracleInitialReportSubmissionDetails,
@@ -14,7 +14,6 @@ import {
 	getOpenOracleSelectedReportActionMode,
 	loadOpenOracleInitialReportPrice,
 	loadOpenOracleInitialReportPriceResult,
-	OPEN_ORACLE_APPROVAL_AMOUNT,
 } from '../lib/openOracle.js'
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
@@ -46,6 +45,7 @@ const securityMultiplier = 2n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n
 const reportedRepEthPrice = 10n
 const outcomes = ['Yes', 'No']
+const ONE = 10n ** 18n
 
 function createQuoteClient(amountOut: bigint): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
 	return {
@@ -217,11 +217,13 @@ describe('Open Oracle helpers', () => {
 
 	test('initial report submission helper computes preview amounts and approval gating', () => {
 		const details = {
-			exactToken1Report: 100n,
+			exactToken1Report: 100n * ONE,
+			token1Symbol: 'REP',
+			token2Symbol: 'ETH',
 		}
 		const preview = deriveOpenOracleInitialReportSubmissionDetails({
-			approvedToken1Amount: 100n,
-			approvedToken2Amount: 24n,
+			approvedToken1Amount: 100n * ONE,
+			approvedToken2Amount: 24n * ONE,
 			defaultPrice: '4.0',
 			defaultPriceError: undefined,
 			defaultPriceSource: 'Uniswap V4',
@@ -237,16 +239,17 @@ describe('Open Oracle helpers', () => {
 
 		expect(preview.priceSource).toBe('Uniswap V4')
 		expect(preview.price).toBe(4_000_000_000_000_000_000n)
-		expect(preview.amount1).toBe(100n)
-		expect(preview.amount2).toBe(25n)
+		expect(preview.amount1).toBe(100n * ONE)
+		expect(preview.amount2).toBe(25n * ONE)
+		expect(preview.token2Approval.neededAmount).toBe(ONE)
 		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockReason).toBeDefined()
+		expect(preview.blockReason).toBe('Need 1 more ETH approved before submitting the initial report. Approving will set the allowance to 25 ETH.')
 	})
 
 	test('initial report submission helper explains exhausted quote paths with a short reason', () => {
 		const preview = deriveOpenOracleInitialReportSubmissionDetails({
-			approvedToken1Amount: 100n,
-			approvedToken2Amount: 100n,
+			approvedToken1Amount: 100n * ONE,
+			approvedToken2Amount: 100n * ONE,
 			defaultPrice: undefined,
 			defaultPriceError: undefined,
 			defaultPriceSource: undefined,
@@ -254,7 +257,7 @@ describe('Open Oracle helpers', () => {
 			quoteAttemptedSources: ['Uniswap V4', 'Uniswap V3 fallback'],
 			quoteFailureReason: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: execution reverted for an unknown reason. Uniswap V3 fallback failed: no pool',
 			reportDetails: {
-				exactToken1Report: 100n,
+				exactToken1Report: 100n * ONE,
 				token1Symbol: 'REP',
 				token2Symbol: 'ETH',
 			},
@@ -270,8 +273,8 @@ describe('Open Oracle helpers', () => {
 
 	test('manual price entry overrides automatic quote unavailability', () => {
 		const preview = deriveOpenOracleInitialReportSubmissionDetails({
-			approvedToken1Amount: 100n,
-			approvedToken2Amount: 24n,
+			approvedToken1Amount: 100n * ONE,
+			approvedToken2Amount: 24n * ONE,
 			defaultPrice: undefined,
 			defaultPriceError: undefined,
 			defaultPriceSource: undefined,
@@ -279,7 +282,7 @@ describe('Open Oracle helpers', () => {
 			quoteAttemptedSources: ['Uniswap V4'],
 			quoteFailureReason: 'no pool',
 			reportDetails: {
-				exactToken1Report: 100n,
+				exactToken1Report: 100n * ONE,
 				token1Symbol: 'ABC',
 				token2Symbol: 'XYZ',
 			},
@@ -291,13 +294,13 @@ describe('Open Oracle helpers', () => {
 
 		expect(preview.priceSource).toBe('Manual override')
 		expect(preview.price).toBe(4_000_000_000_000_000_000n)
-		expect(preview.blockReason).toBe('Token2 approval required')
+		expect(preview.blockReason).toBe('Need 1 more XYZ approved before submitting the initial report. Approving will set the allowance to 25 XYZ.')
 	})
 
 	test('initial report submission helper surfaces the fetch price failure reason when no default price is available', () => {
 		const preview = deriveOpenOracleInitialReportSubmissionDetails({
-			approvedToken1Amount: 100n,
-			approvedToken2Amount: 100n,
+			approvedToken1Amount: 100n * ONE,
+			approvedToken2Amount: 100n * ONE,
 			defaultPrice: undefined,
 			defaultPriceError: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 fallback failed: no v3 pool',
 			defaultPriceSource: undefined,
@@ -305,7 +308,7 @@ describe('Open Oracle helpers', () => {
 			quoteAttemptedSources: ['Uniswap V4', 'Uniswap V3 fallback'],
 			quoteFailureReason: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 fallback failed: no v3 pool',
 			reportDetails: {
-				exactToken1Report: 100n,
+				exactToken1Report: 100n * ONE,
 			},
 			token1AllowanceError: undefined,
 			token2AllowanceError: undefined,
@@ -331,7 +334,7 @@ describe('Open Oracle helpers', () => {
 	test('initial report submission helper surfaces allowance read failures separately from approval gating', () => {
 		const preview = deriveOpenOracleInitialReportSubmissionDetails({
 			approvedToken1Amount: undefined,
-			approvedToken2Amount: 25n,
+			approvedToken2Amount: 25n * ONE,
 			defaultPrice: '4.0',
 			defaultPriceError: undefined,
 			defaultPriceSource: 'Uniswap V4',
@@ -339,7 +342,7 @@ describe('Open Oracle helpers', () => {
 			quoteAttemptedSources: undefined,
 			quoteFailureReason: undefined,
 			reportDetails: {
-				exactToken1Report: 100n,
+				exactToken1Report: 100n * ONE,
 				token1Symbol: 'REP',
 				token2Symbol: 'ETH',
 			},
@@ -350,7 +353,7 @@ describe('Open Oracle helpers', () => {
 		})
 
 		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockReason).toBe('Unable to verify REP approval for this report. Reason: request timed out. Retry loading the report or approval status before submitting the initial report.')
+		expect(preview.blockReason).toBe('Unable to verify REP approval before submitting the initial report. Reason: request timed out. Retry loading the approval status before continuing.')
 	})
 
 	test('formats unavailable approval status messages with sanitized reasons', () => {
@@ -359,13 +362,12 @@ describe('Open Oracle helpers', () => {
 				reason: 'Failed to load token approval: execution reverted',
 				tokenLabel: 'WETH',
 			}),
-		).toBe('Unable to verify WETH approval for this report. Reason: execution reverted. Retry loading the report or approval status before submitting the initial report.')
+		).toBe('Unable to verify WETH approval before submitting the initial report. Reason: execution reverted. Retry loading the approval status before continuing.')
 	})
 
 	test('open oracle fee and multiplier formatters render human values', () => {
 		expect(formatOpenOracleFeePercentage(10_000n)).toBe('0.1%')
 		expect(formatOpenOracleMultiplier(140n)).toBe('1.40x')
-		expect(OPEN_ORACLE_APPROVAL_AMOUNT).toBe(maxUint256)
 	})
 
 	test('oracle bounty buffer adds a 20% headroom and rounds up', () => {

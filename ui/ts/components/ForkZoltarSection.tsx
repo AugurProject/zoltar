@@ -6,9 +6,11 @@ import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
 import { StateHint } from './StateHint.js'
+import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { resolveLoadableValueState, type LoadableValueState } from '../lib/loadState.js'
-import { getReportPresentation, getUniversePresentation } from '../lib/userCopy.js'
+import { deriveTokenApprovalRequirement, type TokenApprovalState } from '../lib/tokenApproval.js'
+import { getReportPresentation, getUniversePresentation, getWalletPresentation } from '../lib/userCopy.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type ForkZoltarSectionProps = {
@@ -21,7 +23,7 @@ type ForkZoltarSectionProps = {
 	onForkZoltar: () => void
 	onZoltarForkQuestionIdChange: (questionId: string) => void
 	zoltarForkActiveAction: 'approve' | 'fork' | undefined
-	zoltarForkAllowance: bigint | undefined
+	zoltarForkApproval: TokenApprovalState
 	zoltarForkError: string | undefined
 	zoltarForkPending: boolean
 	zoltarForkQuestionId: string
@@ -41,7 +43,7 @@ export function ForkZoltarSection({
 	onForkZoltar,
 	onZoltarForkQuestionIdChange,
 	zoltarForkActiveAction,
-	zoltarForkAllowance,
+	zoltarForkApproval,
 	zoltarForkError,
 	zoltarForkPending,
 	zoltarForkQuestionId,
@@ -54,7 +56,8 @@ export function ForkZoltarSection({
 	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
 	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= rootUniverse.forkThreshold
-	const hasEnoughApproval = rootUniverse !== undefined && zoltarForkAllowance !== undefined && zoltarForkAllowance >= rootUniverse.forkThreshold
+	const approvalRequirement = deriveTokenApprovalRequirement(rootUniverse?.forkThreshold, zoltarForkApproval.value)
+	const hasEnoughApproval = rootUniverse !== undefined && approvalRequirement.hasSufficientApproval
 	const selectedQuestionId = zoltarForkQuestionId.trim()
 	const hasSelectedQuestionId = selectedQuestionId !== ''
 	const selectedQuestion = selectedQuestionId === '' ? undefined : zoltarQuestions.find(question => sameCaseInsensitiveText(question.questionId, selectedQuestionId))
@@ -65,6 +68,13 @@ export function ForkZoltarSection({
 	})
 	const selectedQuestionPresentation = hasSelectedQuestionId && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
 	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && hasEnoughRep && hasEnoughApproval
+	const approvalGuardMessage = (() => {
+		const walletPresentation = getWalletPresentation({ accountAddress, isMainnet })
+		if (walletPresentation !== undefined) return walletPresentation.detail
+		if (rootUniverse === undefined) return undefined
+		if (hasForked) return 'Zoltar is already forked.'
+		return undefined
+	})()
 
 	if (universeMissing) {
 		const presentation = getUniversePresentation(zoltarUniverseState)
@@ -83,12 +93,26 @@ export function ForkZoltarSection({
 					<MetricField label='Fork Threshold'>
 						<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThreshold} suffix='REP' />
 					</MetricField>
-					<MetricField label='REP Approved To Zoltar'>
-						<CurrencyValue loading={loadingZoltarForkAccess} value={zoltarForkAllowance} suffix='REP' />
-					</MetricField>
 				</div>
 
 				<div className='form-grid'>
+					{hasForked ? undefined : (
+						<TokenApprovalControl
+							actionLabel='forking Zoltar'
+							allowanceError={zoltarForkApproval.error}
+							allowanceLoading={zoltarForkApproval.loading}
+							approvedAmount={zoltarForkApproval.value}
+							guardMessage={approvalGuardMessage}
+							onApprove={amount => onApproveZoltarForkRep(amount)}
+							pending={zoltarForkActiveAction === 'approve'}
+							pendingLabel='Approving REP Threshold...'
+							requiredAmount={rootUniverse?.forkThreshold}
+							resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThreshold.toString() ?? ''}`}
+							tokenSymbol='REP'
+							tokenUnits={18}
+						/>
+					)}
+
 					<label className='field'>
 						<span>Fork Question ID</span>
 						<input value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder='0x...' disabled={hasForked || zoltarForkPending} />
@@ -106,11 +130,6 @@ export function ForkZoltarSection({
 					{selectedQuestionPresentation === undefined ? undefined : <StateHint presentation={selectedQuestionPresentation} />}
 
 					<div className='actions'>
-						{hasForked ? undefined : (
-							<button className='secondary' onClick={() => onApproveZoltarForkRep()} disabled={accountAddress === undefined || !isMainnet || rootUniverse === undefined || zoltarForkPending || hasEnoughApproval}>
-								{zoltarForkActiveAction === 'approve' ? <LoadingText>Approving REP Threshold...</LoadingText> : hasEnoughApproval ? 'Threshold Approved' : 'Approve REP Threshold'}
-							</button>
-						)}
 						<button
 							className='primary'
 							onClick={() => {

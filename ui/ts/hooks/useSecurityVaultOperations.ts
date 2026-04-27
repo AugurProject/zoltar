@@ -27,6 +27,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 	const { state: securityVaultForm, setState: updateSecurityVaultForm } = useFormState<SecurityVaultFormState>(getDefaultSecurityVaultFormState())
 	const repBalanceLoader = useErc20BalanceLoader()
 	const repAllowanceLoader = useErc20AllowanceLoader()
+	const securityVaultActiveAction = useSignal<SecurityVaultActionResult['action'] | undefined>(undefined)
 	const securityVaultResult = useSignal<SecurityVaultActionResult | undefined>(undefined)
 
 	const resolveSelectedVaultAddress = () => {
@@ -65,7 +66,11 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 		securityVaultDetails.value = undefined
 		securityVaultMissing.value = true
 		repBalanceLoader.signal.value = undefined
-		repAllowanceLoader.signal.value = undefined
+		repAllowanceLoader.signal.value = {
+			error: undefined,
+			loading: false,
+			value: undefined,
+		}
 		securityVaultError.value = missingPoolMessage
 		return undefined
 	}
@@ -90,7 +95,11 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 				securityVaultMissing.value = details === undefined
 				if (details === undefined) {
 					repBalanceLoader.signal.value = undefined
-					repAllowanceLoader.signal.value = undefined
+					repAllowanceLoader.signal.value = {
+						error: undefined,
+						loading: false,
+						value: undefined,
+					}
 					return undefined
 				}
 				if (sameAddress(vaultAddress, accountAddress)) {
@@ -98,51 +107,70 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 					await reloadSecurityVaultRepAllowance(details.repToken, vaultAddress, securityPoolAddress)
 				} else {
 					repBalanceLoader.signal.value = undefined
-					repAllowanceLoader.signal.value = undefined
+					repAllowanceLoader.signal.value = {
+						error: undefined,
+						loading: false,
+						value: undefined,
+					}
 				}
 				return details
 			},
 			onSuccess: () => undefined,
-			onError: error => {
+			onError: (error: unknown) => {
 				securityVaultDetails.value = undefined
 				securityVaultMissing.value = false
 				repBalanceLoader.signal.value = undefined
-				repAllowanceLoader.signal.value = undefined
+				repAllowanceLoader.signal.value = {
+					error: undefined,
+					loading: false,
+					value: undefined,
+				}
 				securityVaultError.value = getErrorMessage(error, 'Failed to load security vault')
 			},
 		})
 	}
 
-	const runVaultAction = async (action: (ethereumAddress: Address, securityPoolAddress: Address) => Promise<SecurityVaultActionResult | undefined>, errorFallback: string, onSuccess?: (result: SecurityVaultActionResult, securityPoolAddress: Address, walletAddress: Address) => Promise<void> | void) => {
+	const runVaultAction = async (
+		actionName: SecurityVaultActionResult['action'],
+		action: (ethereumAddress: Address, securityPoolAddress: Address) => Promise<SecurityVaultActionResult | undefined>,
+		errorFallback: string,
+		onSuccess?: (result: SecurityVaultActionResult, securityPoolAddress: Address, walletAddress: Address) => Promise<void> | void,
+	) => {
 		let securityPoolAddress: Address | undefined
-		await runWriteAction(
-			buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, securityVaultError, 'Connect a wallet before operating a security vault'),
-			async walletAddress => {
-				const currentForm = securityVaultForm.value
-				securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
-				if (securityVaultMissing.value) {
-					securityVaultError.value = 'Security pool does not exist'
-					return undefined
-				}
-				const selectedVaultAddress = resolveSelectedVaultAddress()
-				if (!sameAddress(selectedVaultAddress, walletAddress)) {
-					throw new Error('Selected vault is read-only')
-				}
-				securityVaultError.value = undefined
-				securityVaultResult.value = undefined
-				return await action(selectedVaultAddress, securityPoolAddress)
-			},
-			errorFallback,
-			async (result, walletAddress) => {
-				const resolvedSecurityPoolAddress = requireDefined(securityPoolAddress, 'Security pool address is required')
-				securityVaultResult.value = result
-				await onSuccess?.(result, resolvedSecurityPoolAddress, walletAddress)
-			},
-		)
+		try {
+			await runWriteAction(
+				buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, securityVaultError, 'Connect a wallet before operating a security vault'),
+				async walletAddress => {
+					const currentForm = securityVaultForm.value
+					securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
+					if (securityVaultMissing.value) {
+						securityVaultError.value = 'Security pool does not exist'
+						return undefined
+					}
+					const selectedVaultAddress = resolveSelectedVaultAddress()
+					if (!sameAddress(selectedVaultAddress, walletAddress)) {
+						throw new Error('Selected vault is read-only')
+					}
+					securityVaultError.value = undefined
+					securityVaultResult.value = undefined
+					securityVaultActiveAction.value = actionName
+					return await action(selectedVaultAddress, securityPoolAddress)
+				},
+				errorFallback,
+				async (result, walletAddress) => {
+					const resolvedSecurityPoolAddress = requireDefined(securityPoolAddress, 'Security pool address is required')
+					securityVaultResult.value = result
+					await onSuccess?.(result, resolvedSecurityPoolAddress, walletAddress)
+				},
+			)
+		} finally {
+			securityVaultActiveAction.value = undefined
+		}
 	}
 
 	const approveRep = async (amount?: bigint) =>
 		await runVaultAction(
+			'approveRep',
 			async (vaultAddress, securityPoolAddress) => {
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist')
 				if (details === undefined) return undefined
@@ -160,6 +188,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 
 	const depositRep = async () =>
 		await runVaultAction(
+			'depositRep',
 			async (vaultAddress, securityPoolAddress) => {
 				const depositAmount = parseRepAmountInput(securityVaultForm.value.depositAmount, 'REP deposit amount')
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist')
@@ -183,6 +212,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 
 	const setSecurityBondAllowance = async () =>
 		await runVaultAction(
+			'queueSetSecurityBondAllowance',
 			async (vaultAddress, securityPoolAddress) => {
 				const amount = parseRepAmountInput(securityVaultForm.value.securityBondAllowanceAmount, 'Security bond allowance')
 				if (amount <= 0n) throw new Error('Security bond allowance must be greater than zero')
@@ -204,6 +234,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 
 	const redeemFees = async () =>
 		await runVaultAction(
+			'redeemFees',
 			async (vaultAddress, securityPoolAddress) => {
 				await refreshVaultFees(vaultAddress, securityPoolAddress)
 				return await redeemSecurityVaultFees(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress)
@@ -216,6 +247,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 
 	const withdrawRep = async () =>
 		await runVaultAction(
+			'queueWithdrawRep',
 			async (vaultAddress, securityPoolAddress) => {
 				const amount = parseRepAmountInput(securityVaultForm.value.repWithdrawAmount, 'REP withdraw amount')
 				if (amount <= 0n) throw new Error('REP withdraw amount must be greater than zero')
@@ -240,13 +272,21 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 		const selectedVaultAddress = securityVaultForm.value.selectedVaultAddress.trim()
 		if (accountAddress === undefined || securityVaultDetails.value === undefined || selectedVaultAddress === '') {
 			repBalanceLoader.signal.value = undefined
-			repAllowanceLoader.signal.value = undefined
+			repAllowanceLoader.signal.value = {
+				error: undefined,
+				loading: false,
+				value: undefined,
+			}
 			return
 		}
 
 		if (!sameAddress(securityVaultDetails.value.vaultAddress, selectedVaultAddress) || !sameAddress(selectedVaultAddress, accountAddress)) {
 			repBalanceLoader.signal.value = undefined
-			repAllowanceLoader.signal.value = undefined
+			repAllowanceLoader.signal.value = {
+				error: undefined,
+				loading: false,
+				value: undefined,
+			}
 			return
 		}
 
@@ -260,9 +300,10 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 		loadSecurityVault,
 		loadingSecurityVault: securityVaultLoad.isLoading.value,
 		redeemFees,
+		securityVaultActiveAction: securityVaultActiveAction.value,
 		setSecurityBondAllowance,
 		withdrawRep,
-		securityVaultRepAllowance: repAllowanceLoader.signal.value,
+		securityVaultRepApproval: repAllowanceLoader.signal.value,
 		securityVaultDetails: securityVaultDetails.value,
 		securityVaultError: securityVaultError.value,
 		securityVaultForm: securityVaultForm.value,
