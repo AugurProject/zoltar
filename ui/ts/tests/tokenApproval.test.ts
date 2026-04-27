@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { maxUint256 } from 'viem'
-import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalPartialMessage, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput } from '../lib/tokenApproval.js'
+import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalPartialMessage, formatTokenApprovalUnavailableMessage, maxUint200, parseTokenApprovalAmountInput, shouldDisplayMaxTokenApprovalAmount } from '../lib/tokenApproval.js'
 
 const ONE = 10n ** 18n
 
@@ -42,6 +42,12 @@ describe('token approval helpers', () => {
 			amount: maxUint256,
 			kind: 'max',
 		})
+	})
+
+	test('flags approvals above uint200 max for compact max display', () => {
+		expect(shouldDisplayMaxTokenApprovalAmount(maxUint200)).toBe(false)
+		expect(shouldDisplayMaxTokenApprovalAmount(maxUint200 + 1n)).toBe(true)
+		expect(shouldDisplayMaxTokenApprovalAmount(undefined)).toBe(false)
 	})
 
 	test('parses custom approval input using token decimals', () => {
