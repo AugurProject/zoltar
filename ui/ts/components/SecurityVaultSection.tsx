@@ -8,13 +8,15 @@ import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
+import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
-import { approvalShortage, approvalTargetAmount, balanceShortage } from '../lib/inputs.js'
+import { balanceShortage } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
 import { getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
+import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
 import { getWalletPresentation } from '../lib/userCopy.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
@@ -35,7 +37,8 @@ export function SecurityVaultSection({
 	securityVaultError,
 	securityVaultForm,
 	securityVaultMissing,
-	securityVaultRepAllowance,
+	securityVaultActiveAction,
+	securityVaultRepApproval,
 	securityVaultRepBalance,
 	securityVaultResult,
 	showHeader = true,
@@ -69,30 +72,24 @@ export function SecurityVaultSection({
 	const securityBondAllowance = securityVaultDetails?.securityBondAllowance ?? 0n
 	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(securityVaultDetails?.managerAddress, oracleManagerDetails)
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
-	const approvedRep = securityVaultRepAllowance
-	const shortage = approvalShortage(depositAmount, approvedRep)
-	const approvalTargetRep = approvalTargetAmount(depositAmount, approvedRep)
+	const approvalRequirement = deriveTokenApprovalRequirement(depositAmount, securityVaultRepApproval.value)
 	const repBalanceGap = balanceShortage(depositAmount, securityVaultRepBalance)
 	const withdrawableRepAmount = securityVaultDetails === undefined ? undefined : securityVaultDetails.repDepositShare > securityVaultDetails.lockedRepInEscalationGame ? securityVaultDetails.repDepositShare - securityVaultDetails.lockedRepInEscalationGame : 0n
 	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(securityVaultDetails?.repDepositShare, depositAmount)
 	const hasClaimableFees = securityVaultDetails !== undefined && securityVaultDetails.unpaidEthFees > 0n
 	const canClaimFees = selectedVaultIsOwnedByAccount && isMainnet && hasClaimableFees
-	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && approvedRep !== undefined && depositAmount !== undefined && depositAmount > 0n && approvedRep >= depositAmount
+	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && depositAmount !== undefined && depositAmount > 0n && approvalRequirement.hasSufficientApproval
 	const hasInsufficientRepBalance = repBalanceGap !== undefined && repBalanceGap > 0n
-	const canApproveRep = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && approvalTargetRep !== undefined
 	const canSetSecurityBondAllowance = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && hasValidOraclePrice && securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > 0n
 	const canWithdrawRep = selectedVaultIsOwnedByAccount && accountState.address !== undefined && isMainnet && hasValidOraclePrice && hasWithdrawAmount && withdrawableRepAmount !== undefined && withdrawableRepAmount > 0n
-	const approveButtonLabel = depositAmount === undefined || depositAmount <= 0n || shortage === undefined ? 'Approve REP' : shortage === 0n ? 'Approval Satisfied' : `Approve ${formatCurrencyBalance(approvalTargetRep)} REP`
-	const approveButtonTitle = (() => {
+	const approvalGuardMessage = (() => {
 		const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, isMainnet })
 		if (walletPresentation !== undefined) return walletPresentation.detail
 		if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to approve REP.'
 		if (securityVaultMissing) return 'Choose a pool first.'
 		if (securityVaultDetails === undefined) return 'Refresh the vault first.'
 		if (depositAmount === undefined || depositAmount <= 0n) return 'Enter a deposit amount greater than zero.'
-		if (shortage === undefined) return 'Loading current REP approval.'
-		if (shortage === 0n) return 'This deposit amount is already approved.'
-		return `Approve ${formatCurrencyBalance(approvalTargetRep)} REP to cover this deposit amount. Current allowance is short by ${formatCurrencyBalance(shortage)} REP.`
+		return undefined
 	})()
 	const latestActionLabel =
 		securityVaultResult === undefined
@@ -138,7 +135,7 @@ export function SecurityVaultSection({
 						<CurrencyValue value={securityVaultDetails.repDepositShare} suffix='REP' />
 					</MetricField>
 					<MetricField className='entity-metric' label='Approved REP'>
-						{approvedRep === undefined ? <LoadingText>Loading...</LoadingText> : <ApprovedAmountValue value={approvedRep} suffix='REP' />}
+						<ApprovedAmountValue loading={securityVaultRepApproval.loading} value={securityVaultRepApproval.value} suffix='REP' />
 					</MetricField>
 					<MetricField className='entity-metric' label='Security Bond Allowance'>
 						<CurrencyValue value={securityBondAllowance} suffix='REP' />
@@ -243,10 +240,21 @@ export function SecurityVaultSection({
 					</button>
 				</div>
 			</label>
+			<TokenApprovalControl
+				actionLabel='depositing REP'
+				allowanceError={securityVaultRepApproval.error}
+				allowanceLoading={securityVaultRepApproval.loading}
+				approvedAmount={securityVaultRepApproval.value}
+				guardMessage={approvalGuardMessage}
+				onApprove={amount => onApproveRep(amount)}
+				pending={securityVaultActiveAction === 'approveRep'}
+				pendingLabel='Approving REP...'
+				requiredAmount={depositAmount}
+				resetKey={`${securityVaultDetails?.repToken ?? ''}:${securityVaultDetails?.securityPoolAddress ?? ''}:${depositAmount?.toString() ?? ''}`}
+				tokenSymbol='REP'
+				tokenUnits={18}
+			/>
 			<div className='actions'>
-				<button className='secondary' title={approveButtonTitle} onClick={() => onApproveRep(approvalTargetRep)} disabled={!canApproveRep}>
-					{approveButtonLabel}
-				</button>
 				<button className='primary' onClick={onDepositRep} disabled={!selectedVaultIsOwnedByAccount || accountState.address === undefined || !isMainnet || !hasSufficientDepositAllowance || hasInsufficientRepBalance || isDepositBelowMinimum}>
 					Create / Deposit REP
 				</button>
@@ -256,10 +264,6 @@ export function SecurityVaultSection({
 			) : isDepositBelowMinimum ? (
 				<p className='detail'>
 					New vaults require at least <CurrencyValue value={MIN_SECURITY_VAULT_REP_DEPOSIT} suffix='REP' copyable={false} /> in the first deposit.
-				</p>
-			) : depositAmount === undefined ? undefined : shortage === undefined ? undefined : shortage > 0n ? (
-				<p className='detail'>
-					Need <CurrencyValue value={shortage} suffix='REP' copyable={false} /> more REP approved before depositing. Approving will set the allowance to <CurrencyValue value={approvalTargetRep ?? depositAmount} suffix='REP' copyable={false} />.
 				</p>
 			) : undefined}
 		</div>

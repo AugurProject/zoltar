@@ -6,6 +6,7 @@ import { ForkAuctionSection } from './ForkAuctionSection.js'
 import { LiquidationModal } from './LiquidationModal.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
+import { OpenInterestCapacityMetrics } from './OpenInterestCapacityMetrics.js'
 import { Question, getQuestionTitle } from './Question.js'
 import { ReportingSection } from './ReportingSection.js'
 import { SecurityVaultSection } from './SecurityVaultSection.js'
@@ -184,6 +185,7 @@ export function SecurityPoolWorkflowSection({
 									<MetricField label='Open Interest Fee / Year'>
 										<CurrencyValue value={openInterestFeePerYearBigint(loadedSelectedPool?.currentRetentionRate)} suffix='%' />
 									</MetricField>
+									<OpenInterestCapacityMetrics completeSetCollateralAmount={loadedSelectedPool?.completeSetCollateralAmount} totalSecurityBondAllowance={loadedSelectedPool?.totalSecurityBondAllowance} />
 									{reportingReady ? <MetricField label='Reporting'>Unlocked</MetricField> : undefined}
 									<MetricField label='Manager'>
 										<AddressValue address={loadedSelectedPool?.managerAddress} />
@@ -363,7 +365,7 @@ export function SecurityPoolWorkflowSection({
 						{view === 'trading' ? (
 							<div className='workflow-stack'>
 								<EntityCard className='selected-pool-card' title='Trading' badge={<span className='badge muted'>manage</span>}>
-									<TradingSection {...trading} showHeader={false} showSecurityPoolAddressInput={false} />
+									<TradingSection {...trading} embedInCard showHeader={false} showSecurityPoolAddressInput={false} />
 								</EntityCard>
 							</div>
 						) : undefined}
@@ -372,7 +374,7 @@ export function SecurityPoolWorkflowSection({
 							<div className='workflow-stack'>
 								{reportingReady ? (
 									<EntityCard className='selected-pool-card' title='Reporting' badge={<span className='badge ok'>Unlocked</span>}>
-										<ReportingSection {...reporting} showHeader={false} showSecurityPoolAddressInput={false} />
+										<ReportingSection {...reporting} embedInCard showHeader={false} showSecurityPoolAddressInput={false} />
 									</EntityCard>
 								) : undefined}
 

@@ -226,6 +226,7 @@ export type OpenOracleReportDetails = {
 }
 
 export type ListedSecurityPool = {
+	completeSetCollateralAmount: bigint
 	currentRetentionRate: bigint
 	forkOutcome: ReportingOutcomeKey | 'none'
 	forkOwnSecurityPool: boolean
@@ -237,6 +238,7 @@ export type ListedSecurityPool = {
 	securityMultiplier: bigint
 	securityPoolAddress: Address
 	systemState: SecurityPoolSystemState
+	totalSecurityBondAllowance: bigint
 	truthAuctionAddress: Address
 	truthAuctionStartedAt: bigint
 	universeId: bigint

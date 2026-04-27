@@ -24,6 +24,7 @@ import type {
 } from './contracts.js'
 import type { OpenOracleInitialReportPriceSource } from '../lib/openOracle.js'
 import type { LoadableValueState } from '../lib/loadState.js'
+import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 import type { OpenOracleInitialReportQuoteFailureKind, OpenOracleInitialReportQuoteSource } from '../lib/openOracle.js'
 
@@ -109,7 +110,7 @@ export type MarketRouteContentProps = {
 	onUseQuestionForPool: (questionId: string) => void
 	onZoltarMigrationFormChange: (update: Partial<ZoltarMigrationFormState>) => void
 	zoltarQuestionCount: bigint | undefined
-	zoltarForkAllowance: bigint | undefined
+	zoltarForkApproval: TokenApprovalState
 	zoltarForkError: string | undefined
 	loadingZoltarForkAccess: boolean
 	zoltarChildUniverseError: string | undefined
@@ -229,11 +230,12 @@ export type SecurityVaultRouteContentProps = {
 	onSetSecurityBondAllowance: () => void
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
 	onWithdrawRep: () => void
+	securityVaultActiveAction: SecurityVaultActionResult['action'] | undefined
 	securityVaultDetails: SecurityVaultDetails | undefined
 	securityVaultError: string | undefined
 	securityVaultForm: SecurityVaultFormState
 	securityVaultMissing: boolean
-	securityVaultRepAllowance: bigint | undefined
+	securityVaultRepApproval: TokenApprovalState
 	securityVaultRepBalance: bigint | undefined
 	securityVaultResult: SecurityVaultActionResult | undefined
 	securityPoolVaults?: SecurityPoolVaultSummary[] | undefined
@@ -250,8 +252,8 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 export type OpenOracleRouteContentProps = {
 	accountState: AccountState
 	loadingOracleReport: boolean
-	onApproveToken1: () => void
-	onApproveToken2: () => void
+	onApproveToken1: (amount?: bigint) => void
+	onApproveToken2: (amount?: bigint) => void
 	onCreateOpenOracleGame: () => void
 	onDisputeReport: () => void
 	onLoadOracleReport: (reportId?: string) => void
@@ -262,6 +264,7 @@ export type OpenOracleRouteContentProps = {
 	onSubmitInitialReport: () => void
 	onWrapWethForInitialReport: () => void
 	loadingOpenOracleCreate: boolean
+	openOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	openOracleError: string | undefined
 	openOracleInitialReportState: {
 		defaultPrice: string | undefined
@@ -272,13 +275,11 @@ export type OpenOracleRouteContentProps = {
 		quoteAttemptedSources: OpenOracleInitialReportQuoteSource[] | undefined
 		quoteFailureKind: OpenOracleInitialReportQuoteFailureKind | undefined
 		quoteFailureReason: string | undefined
-		token1Allowance: bigint | undefined
-		token1AllowanceError: string | undefined
+		token1Approval: TokenApprovalState
 		token1Balance: bigint | undefined
 		token1BalanceError: string | undefined
 		token1Decimals: number | undefined
-		token2Allowance: bigint | undefined
-		token2AllowanceError: string | undefined
+		token2Approval: TokenApprovalState
 		token2Balance: bigint | undefined
 		token2BalanceError: string | undefined
 		token2Decimals: number | undefined
@@ -307,6 +308,7 @@ export type ReportingRouteContentProps = {
 }
 
 export type ReportingSectionProps = ReportingRouteContentProps & {
+	embedInCard?: boolean
 	showHeader?: boolean
 	showSecurityPoolAddressInput?: boolean
 }
@@ -318,12 +320,14 @@ export type TradingRouteContentProps = {
 	onRedeemCompleteSet: () => void
 	onRedeemShares: () => void
 	onTradingFormChange: (update: Partial<TradingFormState>) => void
+	selectedPool: ListedSecurityPool | undefined
 	tradingError: string | undefined
 	tradingForm: TradingFormState
 	tradingResult: TradingActionResult | undefined
 }
 
 export type TradingSectionProps = TradingRouteContentProps & {
+	embedInCard?: boolean
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean
 }

@@ -5,6 +5,7 @@ import { ErrorNotice } from './ErrorNotice.js'
 import { LiquidationModal } from './LiquidationModal.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
+import { OpenInterestCapacityMetrics } from './OpenInterestCapacityMetrics.js'
 import { Question, getQuestionTitle } from './Question.js'
 import { StateHint } from './StateHint.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -105,6 +106,7 @@ export function SecurityPoolsOverviewSection({
 										<MetricField label='Open Interest Fee / Year'>
 											<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
 										</MetricField>
+										<OpenInterestCapacityMetrics completeSetCollateralAmount={pool.completeSetCollateralAmount} totalSecurityBondAllowance={pool.totalSecurityBondAllowance} />
 										<MetricField label='Manager'>
 											<AddressValue address={pool.managerAddress} />
 										</MetricField>

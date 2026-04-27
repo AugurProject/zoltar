@@ -2110,11 +2110,17 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 
 	return await Promise.all(
 		deployments.map(async deployment => {
-			const { currentRetentionRate, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
-			const [systemState, forkData, marketDetails] = await Promise.all([
+			const { parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
+			const [completeSetCollateralAmount, currentRetentionRate, forkData, marketDetails, systemState, totalSecurityBondAllowance] = await Promise.all([
 				client.readContract({
 					abi: peripherals_SecurityPool_SecurityPool.abi,
-					functionName: 'systemState',
+					functionName: 'completeSetCollateralAmount',
+					address: securityPoolAddress,
+					args: [],
+				}),
+				client.readContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					functionName: 'currentRetentionRate',
 					address: securityPoolAddress,
 					args: [],
 				}),
@@ -2125,12 +2131,25 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 					args: [securityPoolAddress],
 				}),
 				loadMarketDetails(client, questionId),
+				client.readContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					functionName: 'systemState',
+					address: securityPoolAddress,
+					args: [],
+				}),
+				client.readContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					functionName: 'totalSecurityBondAllowance',
+					address: securityPoolAddress,
+					args: [],
+				}),
 			])
 			const forkDataTuple: ForkDataTuple = forkData
 			const [, , truthAuctionStartedAt, migratedRep, , forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
 
 			const { vaultCount, vaults } = await loadSecurityPoolVaultSummaries(client, securityPoolAddress)
 			return {
+				completeSetCollateralAmount,
 				currentRetentionRate,
 				forkOutcome: getReportingOutcomeKey(forkOutcomeIndex),
 				forkOwnSecurityPool,
@@ -2142,6 +2161,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 				securityMultiplier,
 				securityPoolAddress,
 				systemState: getSecurityPoolSystemState(systemState),
+				totalSecurityBondAllowance,
 				truthAuctionAddress,
 				truthAuctionStartedAt,
 				universeId,

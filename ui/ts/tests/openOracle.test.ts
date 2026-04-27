@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { getAddress, maxUint256, zeroAddress, type Address } from 'viem'
+import { getAddress, zeroAddress, type Address } from 'viem'
 import { createOpenOracleReportInstance, getOpenOracleAddress, loadErc20Balance, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, requestOraclePrice, settleOracleReport, submitInitialOracleReport, wrapWeth as wrapUiWeth } from '../contracts.js'
 import {
 	addOpenOracleBountyBuffer,
@@ -15,7 +15,6 @@ import {
 	getOpenOracleSelectedReportActionMode,
 	loadOpenOracleInitialReportPrice,
 	loadOpenOracleInitialReportPriceResult,
-	OPEN_ORACLE_APPROVAL_AMOUNT,
 } from '../lib/openOracle.js'
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
@@ -257,6 +256,7 @@ describe('Open Oracle helpers', () => {
 		expect(preview.price).toBe(4_000_000_000_000_000_000n)
 		expect(preview.amount1).toBe(100n)
 		expect(preview.amount2).toBe(25n)
+		expect(preview.token2Approval.neededAmount).toBe(1n)
 		expect(preview.canSubmit).toBe(false)
 		expect(preview.blockReason).toBe('WETH approval required')
 	})
@@ -342,7 +342,7 @@ describe('Open Oracle helpers', () => {
 		})
 
 		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockReason).toBe('Unable to verify REP approval for this report. Reason: request timed out. Retry loading the report or approval status before submitting the initial report.')
+		expect(preview.blockReason).toBe('Unable to verify REP approval before submitting the initial report. Reason: request timed out. Retry loading the approval status before continuing.')
 	})
 
 	test('initial report submission helper surfaces balance read failures separately from approval gating', () => {
@@ -412,7 +412,7 @@ describe('Open Oracle helpers', () => {
 				reason: 'Failed to load token approval: execution reverted',
 				tokenLabel: 'WETH',
 			}),
-		).toBe('Unable to verify WETH approval for this report. Reason: execution reverted. Retry loading the report or approval status before submitting the initial report.')
+		).toBe('Unable to verify WETH approval before submitting the initial report. Reason: execution reverted. Retry loading the approval status before continuing.')
 	})
 
 	test('formats unavailable balance status messages with sanitized reasons', () => {
@@ -427,7 +427,6 @@ describe('Open Oracle helpers', () => {
 	test('open oracle fee and multiplier formatters render human values', () => {
 		expect(formatOpenOracleFeePercentage(10_000n)).toBe('0.1%')
 		expect(formatOpenOracleMultiplier(140n)).toBe('1.40x')
-		expect(OPEN_ORACLE_APPROVAL_AMOUNT).toBe(maxUint256)
 	})
 
 	test('oracle bounty buffer adds a 20% headroom and rounds up', () => {
@@ -461,7 +460,6 @@ describe('Open Oracle helpers', () => {
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		const reportId = details.pendingReportId
 
-		// The pending report should now be visible through the selected report loader.
 		expect(reportId).toBeGreaterThan(0n)
 
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)

@@ -35,11 +35,11 @@ void describe('input helpers', () => {
 		expect(balanceShortage(6n, 5n)).toBe(1n)
 	})
 
-	void test('approvalTargetAmount returns the full target approval when allowance is short', () => {
+	void test('approvalTargetAmount returns the next total allowance target for the shared approval flow', () => {
 		expect(approvalShortage(11n, 10n)).toBe(1n)
 		expect(approvalTargetAmount(11n, 10n)).toBe(11n)
 		expect(approvalTargetAmount(10n, 10n)).toBe(undefined)
-		expect(approvalTargetAmount(10n, undefined)).toBe(undefined)
+		expect(approvalTargetAmount(10n, undefined)).toBe(10n)
 		expect(approvalTargetAmount(0n, 0n)).toBe(undefined)
 	})
 })

@@ -1,6 +1,7 @@
 import type { ReportingOutcomeKey } from '../types/contracts.js'
 import { getAddress, isHex, type Address, type Hex } from 'viem'
 import { parseBigIntInput } from './marketForm.js'
+import { deriveTokenApprovalRequirement } from './tokenApproval.js'
 
 export function parseAddressInput(value: string, label: string): Address {
 	const trimmed = value.trim()
@@ -83,13 +84,11 @@ export function getReportingOutcomeKey(outcome: ReportingOutcomeKey | bigint): R
 }
 
 export function approvalShortage(amount: bigint | undefined, allowance: bigint | undefined): bigint | undefined {
-	if (amount === undefined || allowance === undefined) return undefined
-	return amount > allowance ? amount - allowance : 0n
+	return deriveTokenApprovalRequirement(amount, allowance).neededAmount
 }
 
 export function approvalTargetAmount(amount: bigint | undefined, allowance: bigint | undefined): bigint | undefined {
-	if (amount === undefined || amount <= 0n || allowance === undefined) return undefined
-	return amount > allowance ? amount : undefined
+	return deriveTokenApprovalRequirement(amount, allowance).targetAmount
 }
 
 export function balanceShortage(amount: bigint | undefined, balance: bigint | undefined): bigint | undefined {

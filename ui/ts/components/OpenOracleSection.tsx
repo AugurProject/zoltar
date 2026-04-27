@@ -10,6 +10,7 @@ import { ErrorNotice } from './ErrorNotice.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { StateHint } from './StateHint.js'
+import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { useLoadController } from '../hooks/useLoadController.js'
@@ -95,13 +96,14 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 function renderSelectedReportActionSection(
 	actionMode: OpenOracleSelectedReportActionMode,
 	isConnected: boolean,
+	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction'],
 	openOracleForm: OpenOracleFormState,
 	initialReportSubmission: ReturnType<typeof deriveOpenOracleInitialReportSubmissionDetails>,
 	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
 	token1Symbol: string,
 	token2Symbol: string,
-	onApproveToken1: () => void,
-	onApproveToken2: () => void,
+	onApproveToken1: (amount?: bigint) => void,
+	onApproveToken2: (amount?: bigint) => void,
 	onDisputeReport: () => void,
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void,
 	onRefreshPrice: () => void,
@@ -141,10 +143,10 @@ function renderSelectedReportActionSection(
 								<CurrencyValue value={initialReportSubmission.amount2} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
 							</MetricField>
 							<MetricField label={`Approved ${token1Symbol}`}>
-								<ApprovedAmountValue value={initialReportSubmission.approvedToken1Amount} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
+								<ApprovedAmountValue loading={openOracleInitialReportState.token1Approval.loading} value={initialReportSubmission.token1Approval.approvedAmount} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
 							</MetricField>
 							<MetricField label={`Approved ${token2Symbol}`}>
-								<ApprovedAmountValue value={initialReportSubmission.approvedToken2Amount} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
+								<ApprovedAmountValue loading={openOracleInitialReportState.token2Approval.loading} value={initialReportSubmission.token2Approval.approvedAmount} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
 							</MetricField>
 						</div>
 						{initialReportSubmission.requiredWethWrapAmount === undefined || initialReportSubmission.requiredWethWrapAmount <= 0n ? undefined : (
@@ -154,38 +156,55 @@ function renderSelectedReportActionSection(
 								</p>
 								{initialReportSubmission.wrapRequiredWethDisabledReason === undefined ? undefined : <p className='detail'>{initialReportSubmission.wrapRequiredWethDisabledReason}</p>}
 								<div className='actions'>
-									<button className='secondary' onClick={onWrapWethForInitialReport} disabled={!isConnected || !initialReportSubmission.canWrapRequiredWeth || openOracleInitialReportState.loading} title={initialReportSubmission.wrapRequiredWethDisabledReason}>
-										Wrap needed ETH to WETH
+									<button className='secondary' type='button' onClick={onWrapWethForInitialReport} disabled={!isConnected || !initialReportSubmission.canWrapRequiredWeth || openOracleInitialReportState.loading || openOracleActiveAction === 'wrapWeth'} title={initialReportSubmission.wrapRequiredWethDisabledReason}>
+										{openOracleActiveAction === 'wrapWeth' ? <LoadingText>Wrapping ETH...</LoadingText> : 'Wrap needed ETH to WETH'}
 									</button>
 								</div>
 							</div>
 						)}
-						<div className='field-row'>
-							<label className='field'>
-								<span>{`${token1Symbol} Approve Amount (leave empty for max)`}</span>
-								<input value={openOracleForm.approveAmount1} onInput={event => onOpenOracleFormChange({ approveAmount1: event.currentTarget.value })} placeholder='Max' />
-							</label>
-							<div className='actions'>
-								<button className='secondary' onClick={onApproveToken1} disabled={!isConnected || openOracleInitialReportState.loading}>
-									{`Approve ${token1Symbol}`}
-								</button>
+						<div className='entity-card-subsection'>
+							<div className='entity-card-subsection-header'>
+								<h4>{`${token1Symbol} Approval`}</h4>
 							</div>
+							<TokenApprovalControl
+								actionLabel='submitting the initial report'
+								allowanceError={openOracleInitialReportState.token1Approval.error}
+								allowanceLoading={openOracleInitialReportState.token1Approval.loading}
+								approvedAmount={openOracleInitialReportState.token1Approval.value}
+								guardMessage={!isConnected ? 'Connect a wallet before approving tokens.' : undefined}
+								onApprove={amount => onApproveToken1(amount)}
+								pending={openOracleActiveAction === 'approveToken1'}
+								pendingLabel={`Approving ${token1Symbol}...`}
+								requiredAmount={initialReportSubmission.amount1}
+								resetKey={`token1:${token1Symbol}:${initialReportSubmission.amount1?.toString() ?? ''}:${openOracleForm.reportId}`}
+								tokenSymbol={token1Symbol}
+								tokenUnits={initialReportSubmission.token1Decimals ?? 18}
+							/>
 						</div>
-						<div className='field-row'>
-							<label className='field'>
-								<span>{`${token2Symbol} Approve Amount (leave empty for max)`}</span>
-								<input value={openOracleForm.approveAmount2} onInput={event => onOpenOracleFormChange({ approveAmount2: event.currentTarget.value })} placeholder='Max' />
-							</label>
-							<div className='actions'>
-								<button className='secondary' onClick={onApproveToken2} disabled={!isConnected || openOracleInitialReportState.loading}>
-									{`Approve ${token2Symbol}`}
-								</button>
+
+						<div className='entity-card-subsection'>
+							<div className='entity-card-subsection-header'>
+								<h4>{`${token2Symbol} Approval`}</h4>
 							</div>
+							<TokenApprovalControl
+								actionLabel='submitting the initial report'
+								allowanceError={openOracleInitialReportState.token2Approval.error}
+								allowanceLoading={openOracleInitialReportState.token2Approval.loading}
+								approvedAmount={openOracleInitialReportState.token2Approval.value}
+								guardMessage={!isConnected ? 'Connect a wallet before approving tokens.' : initialReportSubmission.amount2 === undefined ? `Enter a valid ${token1Symbol} / ${token2Symbol} price before approving ${token2Symbol}.` : undefined}
+								onApprove={amount => onApproveToken2(amount)}
+								pending={openOracleActiveAction === 'approveToken2'}
+								pendingLabel={`Approving ${token2Symbol}...`}
+								requiredAmount={initialReportSubmission.amount2}
+								resetKey={`token2:${token2Symbol}:${initialReportSubmission.amount2?.toString() ?? ''}:${openOracleForm.reportId}`}
+								tokenSymbol={token2Symbol}
+								tokenUnits={initialReportSubmission.token2Decimals ?? 18}
+							/>
 						</div>
 						<ErrorNotice message={initialReportSubmission.blockReason} />
 						<div className='actions'>
-							<button className='primary' onClick={onSubmitInitialReport} disabled={!isConnected || !initialReportSubmission.canSubmit || openOracleInitialReportState.loading}>
-								Submit Initial Report
+							<button className='primary' onClick={onSubmitInitialReport} disabled={!isConnected || !initialReportSubmission.canSubmit || openOracleInitialReportState.loading || openOracleActiveAction === 'submitInitialReport'}>
+								{openOracleActiveAction === 'submitInitialReport' ? <LoadingText>Submitting...</LoadingText> : 'Submit Initial Report'}
 							</button>
 						</div>
 					</div>
@@ -242,10 +261,11 @@ function renderReportDetailsCard(
 	openOracleReportDetails: OpenOracleReportDetails | undefined,
 	openOracleForm: OpenOracleFormState,
 	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
+	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction'],
 	loadingOracleReport: boolean,
 	isConnected: boolean,
-	onApproveToken1: () => void,
-	onApproveToken2: () => void,
+	onApproveToken1: (amount?: bigint) => void,
+	onApproveToken2: (amount?: bigint) => void,
 	onDisputeReport: () => void,
 	onLoadOracleReport: (reportId?: string) => void,
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void,
@@ -293,8 +313,8 @@ function renderReportDetailsCard(
 	const statusTone = getOpenOracleReportStatusTone(status)
 	const actionMode = getOpenOracleSelectedReportActionMode(openOracleReportDetails)
 	const initialReportSubmission = deriveOpenOracleInitialReportSubmissionDetails({
-		approvedToken1Amount: openOracleInitialReportState.token1Allowance,
-		approvedToken2Amount: openOracleInitialReportState.token2Allowance,
+		approvedToken1Amount: openOracleInitialReportState.token1Approval.value,
+		approvedToken2Amount: openOracleInitialReportState.token2Approval.value,
 		defaultPrice: openOracleInitialReportState.defaultPrice,
 		defaultPriceError: openOracleInitialReportState.defaultPriceError,
 		defaultPriceSource: openOracleInitialReportState.defaultPriceSource,
@@ -305,10 +325,10 @@ function renderReportDetailsCard(
 		reportDetails: openOracleReportDetails,
 		token1Balance: openOracleInitialReportState.token1Balance,
 		token1BalanceError: openOracleInitialReportState.token1BalanceError,
-		token1AllowanceError: openOracleInitialReportState.token1AllowanceError,
-		token2AllowanceError: openOracleInitialReportState.token2AllowanceError,
+		token1AllowanceError: openOracleInitialReportState.token1Approval.error,
 		token2Balance: openOracleInitialReportState.token2Balance,
 		token2BalanceError: openOracleInitialReportState.token2BalanceError,
+		token2AllowanceError: openOracleInitialReportState.token2Approval.error,
 		token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
 		token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
 		walletEthBalance: accountEthBalance,
@@ -477,6 +497,7 @@ function renderReportDetailsCard(
 			{renderSelectedReportActionSection(
 				actionMode,
 				isConnected,
+				openOracleActiveAction,
 				openOracleForm,
 				initialReportSubmission,
 				openOracleInitialReportState,
@@ -523,6 +544,7 @@ export function OpenOracleSection({
 	onSubmitInitialReport,
 	onWrapWethForInitialReport,
 	loadingOpenOracleCreate,
+	openOracleActiveAction,
 	openOracleCreateForm,
 	openOracleError,
 	openOracleForm,
@@ -729,6 +751,7 @@ export function OpenOracleSection({
 							openOracleReportDetails,
 							openOracleForm,
 							openOracleInitialReportState,
+							openOracleActiveAction,
 							loadingOracleReport,
 							isConnected,
 							onApproveToken1,

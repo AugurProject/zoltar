@@ -4,6 +4,7 @@ import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
+import { OpenInterestCapacityMetrics } from './OpenInterestCapacityMetrics.js'
 import { Question } from './Question.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
@@ -133,6 +134,7 @@ export function SecurityPoolSection({
 													<MetricField label='Open Interest Fee / Year'>
 														<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
 													</MetricField>
+													<OpenInterestCapacityMetrics completeSetCollateralAmount={pool.completeSetCollateralAmount} totalSecurityBondAllowance={pool.totalSecurityBondAllowance} />
 												</div>
 											</EntityCard>
 										))}
