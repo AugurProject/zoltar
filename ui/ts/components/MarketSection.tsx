@@ -37,7 +37,7 @@ export function MarketSection({
 	onZoltarForkQuestionIdChange,
 	onZoltarMigrationFormChange,
 	zoltarChildUniverseError,
-	zoltarForkAllowance,
+	zoltarForkApproval,
 	zoltarForkError,
 	zoltarForkPending,
 	zoltarForkQuestionId,
@@ -146,7 +146,7 @@ export function MarketSection({
 						onForkZoltar={onForkZoltar}
 						onZoltarForkQuestionIdChange={onZoltarForkQuestionIdChange}
 						zoltarForkActiveAction={zoltarForkActiveAction}
-						zoltarForkAllowance={zoltarForkAllowance}
+						zoltarForkApproval={zoltarForkApproval}
 						zoltarForkError={zoltarForkError}
 						zoltarForkPending={zoltarForkPending}
 						zoltarForkQuestionId={zoltarForkQuestionId}
@@ -167,9 +167,8 @@ export function MarketSection({
 						onPrepareRepForMigration={onPrepareRepForMigration}
 						onZoltarMigrationFormChange={onZoltarMigrationFormChange}
 						zoltarForkRepBalance={zoltarForkRepBalance}
-						zoltarForkAllowance={zoltarForkAllowance}
+						zoltarForkApproval={zoltarForkApproval}
 						zoltarForkActiveAction={zoltarForkActiveAction}
-						zoltarForkPending={zoltarForkPending}
 						zoltarMigrationChildRepBalances={zoltarMigrationChildRepBalances}
 						zoltarMigrationActiveAction={zoltarMigrationActiveAction}
 						zoltarMigrationError={zoltarMigrationError}

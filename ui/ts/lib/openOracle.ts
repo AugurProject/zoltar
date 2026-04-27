@@ -1,12 +1,12 @@
-import { maxUint256, zeroAddress } from 'viem'
+import { zeroAddress } from 'viem'
 import type { OpenOracleReportSummary } from '../types/contracts.js'
 import { parseDecimalInput } from './decimal.js'
 import { getErrorDetail } from './errors.js'
 import { formatCurrencyInputBalance } from './formatters.js'
+import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
 import { quoteBestExactInput, quoteBestV3ExactInput, quoteExactInput } from './uniswapQuoter.js'
 
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 18n
-export const OPEN_ORACLE_APPROVAL_AMOUNT = maxUint256
 const OPEN_ORACLE_BOUNTY_BUFFER_NUMERATOR = 12n
 const OPEN_ORACLE_BOUNTY_BUFFER_DENOMINATOR = 10n
 
@@ -33,14 +33,14 @@ type OpenOracleInitialReportPriceLoadResult =
 type OpenOracleInitialReportSubmissionDetails = {
 	amount1: bigint | undefined
 	amount2: bigint | undefined
-	approvedToken1Amount: bigint | undefined
-	approvedToken2Amount: bigint | undefined
 	blockReason: string | undefined
 	canSubmit: boolean
 	price: bigint | undefined
 	priceInput: string
 	priceSource: OpenOracleInitialReportPriceSource
+	token1Approval: TokenApprovalRequirement
 	token1Decimals: number | undefined
+	token2Approval: TokenApprovalRequirement
 	token2Decimals: number | undefined
 }
 
@@ -170,16 +170,11 @@ export function formatOpenOracleInitialReportPriceUnavailableMessage({ attempted
 }
 
 export function formatOpenOracleInitialReportApprovalStatusUnavailableMessage({ reason, tokenLabel }: { reason: string | undefined; tokenLabel: string | undefined }) {
-	const resolvedTokenLabel = tokenLabel?.trim() || 'token'
-	const segments = [`Unable to verify ${resolvedTokenLabel} approval for this report.`]
-	const sanitizedReason = sanitizeOpenOracleFailureReason(reason)
-
-	if (sanitizedReason !== undefined) {
-		segments.push(`Reason: ${sanitizedReason}.`)
-	}
-	segments.push('Retry loading the report or approval status before submitting the initial report.')
-
-	return segments.join(' ')
+	return formatTokenApprovalUnavailableMessage({
+		actionLabel: 'submitting the initial report',
+		reason,
+		tokenLabel,
+	})
 }
 
 export async function loadOpenOracleInitialReportPriceResult(client: Parameters<typeof quoteExactInput>[0], token1: Parameters<typeof quoteExactInput>[1], token2: Parameters<typeof quoteExactInput>[2], token1Amount: bigint): Promise<OpenOracleInitialReportPriceLoadResult> {
@@ -281,6 +276,8 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	const amount1 = reportDetails?.exactToken1Report
 	const amount2 = amount1 === undefined || price === undefined ? undefined : calculateOpenOracleToken2Amount(amount1, price)
 	const priceSource = trimmedPriceInput === '' ? (defaultPrice === undefined ? 'Unavailable' : (defaultPriceSource ?? 'Manual override')) : defaultPrice !== undefined && trimmedPriceInput === defaultPrice ? (defaultPriceSource ?? 'Manual override') : 'Manual override'
+	const token1Approval = deriveTokenApprovalRequirement(amount1, approvedToken1Amount)
+	const token2Approval = deriveTokenApprovalRequirement(amount2, approvedToken2Amount)
 
 	let blockReason: string | undefined
 	if (reportDetails === undefined) {
@@ -301,28 +298,44 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 			reason: token1AllowanceError,
 			tokenLabel: reportDetails.token1Symbol ?? reportDetails.token1,
 		})
+	} else if (approvedToken1Amount === undefined) {
+		blockReason = `Loading current ${reportDetails.token1Symbol ?? reportDetails.token1 ?? 'Token1'} approval.`
 	} else if (approvedToken2Amount === undefined && token2AllowanceError !== undefined) {
 		blockReason = formatOpenOracleInitialReportApprovalStatusUnavailableMessage({
 			reason: token2AllowanceError,
 			tokenLabel: reportDetails.token2Symbol ?? reportDetails.token2,
 		})
-	} else if (amount1 === undefined || approvedToken1Amount === undefined || approvedToken1Amount < amount1) {
-		blockReason = 'Token1 approval required'
-	} else if (approvedToken2Amount === undefined || approvedToken2Amount < amount2) {
-		blockReason = 'Token2 approval required'
+	} else if (approvedToken2Amount === undefined) {
+		blockReason = `Loading current ${reportDetails.token2Symbol ?? reportDetails.token2 ?? 'Token2'} approval.`
+	} else if (!token1Approval.hasSufficientApproval) {
+		blockReason =
+			formatTokenApprovalNeededMessage({
+				actionLabel: 'submitting the initial report',
+				requirement: token1Approval,
+				tokenLabel: reportDetails.token1Symbol ?? reportDetails.token1 ?? 'Token1',
+				tokenUnits: token1Decimals ?? 18,
+			}) ?? 'Token1 approval required'
+	} else if (!token2Approval.hasSufficientApproval) {
+		blockReason =
+			formatTokenApprovalNeededMessage({
+				actionLabel: 'submitting the initial report',
+				requirement: token2Approval,
+				tokenLabel: reportDetails.token2Symbol ?? reportDetails.token2 ?? 'Token2',
+				tokenUnits: token2Decimals ?? 18,
+			}) ?? 'Token2 approval required'
 	}
 
 	return {
 		amount1,
 		amount2,
-		approvedToken1Amount,
-		approvedToken2Amount,
 		blockReason,
 		canSubmit: blockReason === undefined,
 		price,
 		priceInput: resolvedPriceInput,
 		priceSource,
+		token1Approval,
 		token1Decimals,
+		token2Approval,
 		token2Decimals,
 	}
 }

@@ -5,8 +5,9 @@ import { approveErc20, forkZoltarUniverse, getZoltarAddress, loadErc20Allowance,
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { requireWallet } from '../lib/walletGuard.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { getErrorDetail, getErrorMessage } from '../lib/errors.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
+import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import { GENESIS_REPUTATION_TOKEN_ADDRESS } from '../lib/universe.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
@@ -34,7 +35,11 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 	const zoltarForkPending = useSignal(false)
 	const zoltarForkQuestionId = useSignal('')
 	const zoltarForkResult = useSignal<ZoltarForkActionResult | undefined>(undefined)
-	const zoltarForkAllowance = useSignal<bigint | undefined>(undefined)
+	const zoltarForkApproval = useSignal<TokenApprovalState>({
+		error: undefined,
+		loading: false,
+		value: undefined,
+	})
 	const zoltarForkRepBalance = useSignal<bigint | undefined>(undefined)
 	const zoltarForkActiveAction = useSignal<'approve' | 'fork' | undefined>(undefined)
 	const zoltarMigrationPreparedRepBalance = useSignal<bigint | undefined>(undefined)
@@ -44,7 +49,11 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 	const loadZoltarForkAccess = async () => {
 		const reputationToken = zoltarUniverse?.reputationToken ?? (activeUniverseId === 0n ? GENESIS_REPUTATION_TOKEN_ADDRESS : undefined)
 		if (accountAddress === undefined || reputationToken === undefined || reputationToken === zeroAddress) {
-			zoltarForkAllowance.value = undefined
+			zoltarForkApproval.value = {
+				error: undefined,
+				loading: false,
+				value: undefined,
+			}
 			zoltarForkRepBalance.value = undefined
 			zoltarMigrationPreparedRepBalance.value = undefined
 			zoltarMigrationChildRepBalances.value = {}
@@ -65,11 +74,31 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 				}
 			}),
 			forkAccessLoad.track(async () => {
+				if (isCurrent()) {
+					zoltarForkApproval.value = {
+						...zoltarForkApproval.value,
+						error: undefined,
+						loading: true,
+					}
+				}
 				try {
 					const allowance = await loadErc20Allowance(readClient, reputationToken, accountAddress, getZoltarAddress())
-					if (isCurrent()) zoltarForkAllowance.value = allowance
-				} catch {
-					if (isCurrent()) zoltarForkAllowance.value = undefined
+					if (isCurrent()) {
+						zoltarForkApproval.value = {
+							error: undefined,
+							loading: false,
+							value: allowance,
+						}
+					}
+				} catch (error) {
+					if (isCurrent()) {
+						const errorDetail = getErrorDetail(error)
+						zoltarForkApproval.value = {
+							error: errorDetail === undefined ? 'Failed to load token approval' : `Failed to load token approval: ${errorDetail}`,
+							loading: false,
+							value: undefined,
+						}
+					}
 				}
 			}),
 			forkAccessLoad.track(async () => {
@@ -187,7 +216,7 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 		loadZoltarForkAccess,
 		loadingZoltarForkAccess: forkAccessLoad.isLoading.value,
 		zoltarForkActiveAction: zoltarForkActiveAction.value,
-		zoltarForkAllowance: zoltarForkAllowance.value,
+		zoltarForkApproval: zoltarForkApproval.value,
 		zoltarForkError: zoltarForkError.value,
 		zoltarForkPending: zoltarForkPending.value,
 		zoltarForkQuestionId: zoltarForkQuestionId.value,

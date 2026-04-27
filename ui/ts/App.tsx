@@ -88,7 +88,7 @@ export function App() {
 		setZoltarForkQuestionId,
 		setZoltarMigrationForm,
 		zoltarChildUniverseError,
-		zoltarForkAllowance,
+		zoltarForkApproval,
 		zoltarForkActiveAction,
 		zoltarForkError,
 		zoltarForkPending,
@@ -113,8 +113,24 @@ export function App() {
 			deploymentStatuses,
 			zoltarUniverseHasForked,
 		})
-	const { approveRep, depositRep, loadSecurityVault, loadingSecurityVault, redeemFees, securityVaultDetails, securityVaultError, securityVaultForm, securityVaultMissing, securityVaultRepAllowance, securityVaultRepBalance, securityVaultResult, setSecurityBondAllowance, setSecurityVaultForm, withdrawRep } =
-		useSecurityVaultOperations(baseHookConfig)
+	const {
+		approveRep,
+		depositRep,
+		loadSecurityVault,
+		loadingSecurityVault,
+		redeemFees,
+		securityVaultActiveAction,
+		securityVaultDetails,
+		securityVaultError,
+		securityVaultForm,
+		securityVaultMissing,
+		securityVaultRepApproval,
+		securityVaultRepBalance,
+		securityVaultResult,
+		setSecurityBondAllowance,
+		setSecurityVaultForm,
+		withdrawRep,
+	} = useSecurityVaultOperations(baseHookConfig)
 	const {
 		approveToken1,
 		approveToken2,
@@ -123,6 +139,7 @@ export function App() {
 		loadOracleReport,
 		loadingOpenOracleCreate,
 		loadingOracleReport,
+		openOracleActiveAction,
 		openOracleError,
 		openOracleCreateForm,
 		openOracleForm,
@@ -255,7 +272,7 @@ export function App() {
 						onUseQuestionForPool={onUseQuestionForPool}
 						onZoltarMigrationFormChange={update => setZoltarMigrationForm(current => ({ ...current, ...update }))}
 						zoltarQuestionCount={zoltarQuestionCount}
-						zoltarForkAllowance={zoltarForkAllowance}
+						zoltarForkApproval={zoltarForkApproval}
 						zoltarForkError={zoltarForkError}
 						zoltarChildUniverseError={zoltarChildUniverseError}
 						zoltarForkPending={zoltarForkPending}
@@ -392,11 +409,12 @@ export function App() {
 								onSetSecurityBondAllowance: () => void setSecurityBondAllowance(),
 								onSecurityVaultFormChange: update => setSecurityVaultForm(current => ({ ...current, ...update })),
 								onWithdrawRep: () => void withdrawRep(),
+								securityVaultActiveAction,
 								securityVaultDetails,
 								securityVaultError,
 								securityVaultForm,
 								securityVaultMissing,
-								securityVaultRepAllowance,
+								securityVaultRepApproval,
 								securityVaultRepBalance,
 								securityVaultResult,
 								securityPoolVaults: selectedPool?.vaults,
@@ -421,8 +439,8 @@ export function App() {
 						accountState={accountState}
 						initialView={urlOpenOracleReportId === '' && openOracleForm.reportId === '' ? 'browse' : 'selected-report'}
 						loadingOracleReport={loadingOracleReport}
-						onApproveToken1={() => void approveToken1()}
-						onApproveToken2={() => void approveToken2()}
+						onApproveToken1={amount => void approveToken1(amount)}
+						onApproveToken2={amount => void approveToken2(amount)}
 						onCreateOpenOracleGame={() => void createOpenOracleGame()}
 						onDisputeReport={() => void disputeReport()}
 						onLoadOracleReport={reportId => void loadOracleReport(reportId)}
@@ -432,6 +450,7 @@ export function App() {
 						onSettleReport={() => void settleReport()}
 						onSubmitInitialReport={() => void submitInitialReport()}
 						loadingOpenOracleCreate={loadingOpenOracleCreate}
+						openOracleActiveAction={openOracleActiveAction}
 						openOracleError={openOracleError}
 						openOracleCreateForm={openOracleCreateForm}
 						openOracleForm={openOracleForm}
