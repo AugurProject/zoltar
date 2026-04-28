@@ -142,6 +142,24 @@ function renderSelectedReportActionSection(
 							<MetricField label={`Required ${token2Symbol}`}>
 								<CurrencyValue value={initialReportSubmission.amount2} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
 							</MetricField>
+							<MetricField label={`Wallet ${token1Symbol}`}>
+								<CurrencyValue
+									loading={openOracleInitialReportState.loading && openOracleInitialReportState.token1Balance === undefined && openOracleInitialReportState.token1BalanceError === undefined}
+									value={openOracleInitialReportState.token1Balance}
+									units={initialReportSubmission.token1Decimals ?? 18}
+									suffix={token1Symbol}
+									copyable={false}
+								/>
+							</MetricField>
+							<MetricField label={`Wallet ${token2Symbol}`}>
+								<CurrencyValue
+									loading={openOracleInitialReportState.loading && openOracleInitialReportState.token2Balance === undefined && openOracleInitialReportState.token2BalanceError === undefined}
+									value={openOracleInitialReportState.token2Balance}
+									units={initialReportSubmission.token2Decimals ?? 18}
+									suffix={token2Symbol}
+									copyable={false}
+								/>
+							</MetricField>
 							<MetricField label={`Approved ${token1Symbol}`}>
 								<ApprovedAmountValue loading={openOracleInitialReportState.token1Approval.loading} value={initialReportSubmission.token1Approval.approvedAmount} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
 							</MetricField>
@@ -149,11 +167,15 @@ function renderSelectedReportActionSection(
 								<ApprovedAmountValue loading={openOracleInitialReportState.token2Approval.loading} value={initialReportSubmission.token2Approval.approvedAmount} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
 							</MetricField>
 						</div>
-						{initialReportSubmission.requiredWethWrapAmount === undefined || initialReportSubmission.requiredWethWrapAmount <= 0n ? undefined : (
+						{!initialReportSubmission.hasWethWrapAction ? undefined : (
 							<div className='entity-card-subsection'>
-								<p className='detail'>
-									Need <CurrencyValue value={initialReportSubmission.requiredWethWrapAmount} suffix='WETH' copyable={false} /> more WETH for this report.
-								</p>
+								{initialReportSubmission.requiredWethWrapAmount === undefined || initialReportSubmission.requiredWethWrapAmount <= 0n ? (
+									<p className='detail'>This report uses WETH for the initial report deposit.</p>
+								) : (
+									<p className='detail'>
+										Need <CurrencyValue value={initialReportSubmission.requiredWethWrapAmount} suffix='WETH' copyable={false} /> more WETH for this report.
+									</p>
+								)}
 								{initialReportSubmission.wrapRequiredWethDisabledReason === undefined ? undefined : <p className='detail'>{initialReportSubmission.wrapRequiredWethDisabledReason}</p>}
 								<div className='actions'>
 									<button className='secondary' type='button' onClick={onWrapWethForInitialReport} disabled={!isConnected || !initialReportSubmission.canWrapRequiredWeth || openOracleInitialReportState.loading || openOracleActiveAction === 'wrapWeth'} title={initialReportSubmission.wrapRequiredWethDisabledReason}>
