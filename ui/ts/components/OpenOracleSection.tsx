@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
+import { ApprovedAmountValue } from './ApprovedAmountValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
@@ -114,6 +115,8 @@ function renderSelectedReportActionSection(
 		{ value: 'token1', label: token1Symbol },
 		{ value: 'token2', label: token2Symbol },
 	]
+	const showQuoteLoadingPlaceholder = openOracleInitialReportState.quoteLoading && openOracleForm.price.trim() === '' && openOracleInitialReportState.defaultPrice === undefined && openOracleInitialReportState.defaultPriceError === undefined
+
 	switch (actionMode) {
 		case 'initial-report':
 			return (
@@ -122,6 +125,71 @@ function renderSelectedReportActionSection(
 						<h4>Initial Report</h4>
 					</div>
 					<div className='form-grid'>
+						<div className='field-row'>
+							<label className='field'>
+								<span>{`Price (${token1Symbol} / ${token2Symbol})`}</span>
+								<input value={openOracleForm.price} onInput={event => onOpenOracleFormChange({ price: event.currentTarget.value })} placeholder='1.00' />
+							</label>
+							<div className='actions'>
+								<button className='secondary' onClick={onRefreshPrice} disabled={openOracleInitialReportState.quoteLoading}>
+									{openOracleInitialReportState.quoteLoading ? 'Fetching...' : 'Fetch price from Uniswap'}
+								</button>
+							</div>
+						</div>
+						<p className='detail'>Price source: {showQuoteLoadingPlaceholder ? <strong>Loading...</strong> : renderInitialPriceSourceLabel(initialReportSubmission.priceSource, initialReportSubmission.priceSourceUrl)}</p>
+						<div className='question-summary-grid'>
+							<MetricField label={`Required ${token1Symbol}`}>
+								<CurrencyValue value={initialReportSubmission.amount1} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
+							</MetricField>
+							<MetricField label={`Required ${token2Symbol}`}>
+								<CurrencyValue value={initialReportSubmission.amount2} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
+							</MetricField>
+							<MetricField label={`Wallet ${token1Symbol}`}>
+								<CurrencyValue
+									loading={openOracleInitialReportState.tokenAccessLoadingInitial && openOracleInitialReportState.token1Balance === undefined && openOracleInitialReportState.token1BalanceError === undefined}
+									value={openOracleInitialReportState.token1Balance}
+									units={initialReportSubmission.token1Decimals ?? 18}
+									suffix={token1Symbol}
+									copyable={false}
+								/>
+							</MetricField>
+							<MetricField label={`Wallet ${token2Symbol}`}>
+								<CurrencyValue
+									loading={openOracleInitialReportState.tokenAccessLoadingInitial && openOracleInitialReportState.token2Balance === undefined && openOracleInitialReportState.token2BalanceError === undefined}
+									value={openOracleInitialReportState.token2Balance}
+									units={initialReportSubmission.token2Decimals ?? 18}
+									suffix={token2Symbol}
+									copyable={false}
+								/>
+							</MetricField>
+							<MetricField label={`Approved ${token1Symbol}`}>
+								<ApprovedAmountValue loading={openOracleInitialReportState.token1Approval.loading} value={initialReportSubmission.token1Approval.approvedAmount} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
+							</MetricField>
+							<MetricField label={`Approved ${token2Symbol}`}>
+								<ApprovedAmountValue loading={openOracleInitialReportState.token2Approval.loading} value={initialReportSubmission.token2Approval.approvedAmount} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
+							</MetricField>
+						</div>
+						{!initialReportSubmission.hasWethWrapAction ? undefined : (
+							<div className='entity-card-subsection'>
+								{initialReportSubmission.requiredWethWrapAmount === undefined || initialReportSubmission.requiredWethWrapAmount <= 0n ? undefined : (
+									<p className='detail'>
+										Need <CurrencyValue value={initialReportSubmission.requiredWethWrapAmount} suffix='WETH' copyable={false} /> more WETH for this report.
+									</p>
+								)}
+								{initialReportSubmission.wrapRequiredWethMessage?.kind !== 'visible' ? undefined : <p className='detail'>{initialReportSubmission.wrapRequiredWethMessage.message}</p>}
+								<div className='actions'>
+									<button
+										className='secondary'
+										type='button'
+										onClick={onWrapWethForInitialReport}
+										disabled={!isConnected || !initialReportSubmission.canWrapRequiredWeth || openOracleActiveAction === 'wrapWeth'}
+										title={initialReportSubmission.wrapRequiredWethMessage?.kind === 'visible' ? initialReportSubmission.wrapRequiredWethMessage.message : undefined}
+									>
+										{openOracleActiveAction === 'wrapWeth' ? <LoadingText>Wrapping ETH...</LoadingText> : 'Wrap needed ETH to WETH'}
+									</button>
+								</div>
+							</div>
+						)}
 						<div className='entity-card-subsection'>
 							<div className='entity-card-subsection-header'>
 								<h4>{`${token1Symbol} Approval`}</h4>
@@ -161,44 +229,9 @@ function renderSelectedReportActionSection(
 								tokenUnits={initialReportSubmission.token2Decimals ?? 18}
 							/>
 						</div>
-						<div className='field-row'>
-							<label className='field'>
-								<span>{`Price (${token1Symbol} / ${token2Symbol})`}</span>
-								<input value={openOracleForm.price} onInput={event => onOpenOracleFormChange({ price: event.currentTarget.value })} placeholder='1.00' />
-							</label>
-							<div className='actions'>
-								<button className='secondary' onClick={onRefreshPrice} disabled={openOracleInitialReportState.loading}>
-									{openOracleInitialReportState.loading ? 'Fetching...' : 'Fetch price from Uniswap'}
-								</button>
-							</div>
-						</div>
-						<p className='detail'>Price source: {openOracleInitialReportState.loading ? <strong>Loading...</strong> : renderInitialPriceSourceLabel(initialReportSubmission.priceSource, initialReportSubmission.priceSourceUrl)}</p>
 						<ErrorNotice message={initialReportSubmission.blockMessage?.kind === 'visible' ? initialReportSubmission.blockMessage.message : undefined} />
-						{!initialReportSubmission.hasWethWrapAction ? undefined : (
-							<>
-								{initialReportSubmission.requiredWethWrapAmount === undefined || initialReportSubmission.requiredWethWrapAmount <= 0n ? (
-									<p className='detail'>This report uses WETH for the initial report deposit.</p>
-								) : (
-									<p className='detail'>
-										Need <CurrencyValue value={initialReportSubmission.requiredWethWrapAmount} suffix='WETH' copyable={false} /> more WETH for this report.
-									</p>
-								)}
-								{initialReportSubmission.wrapRequiredWethMessage?.kind !== 'visible' ? undefined : <p className='detail'>{initialReportSubmission.wrapRequiredWethMessage.message}</p>}
-							</>
-						)}
 						<div className='actions'>
-							{!initialReportSubmission.hasWethWrapAction ? undefined : (
-								<button
-									className='secondary'
-									type='button'
-									onClick={onWrapWethForInitialReport}
-									disabled={!isConnected || !initialReportSubmission.canWrapRequiredWeth || openOracleInitialReportState.loading || openOracleActiveAction === 'wrapWeth'}
-									title={initialReportSubmission.wrapRequiredWethMessage?.kind === 'visible' ? initialReportSubmission.wrapRequiredWethMessage.message : undefined}
-								>
-									{openOracleActiveAction === 'wrapWeth' ? <LoadingText>Wrapping ETH...</LoadingText> : 'Wrap needed ETH to WETH'}
-								</button>
-							)}
-							<button className='primary' onClick={onSubmitInitialReport} disabled={!isConnected || !initialReportSubmission.canSubmit || openOracleInitialReportState.loading || openOracleActiveAction === 'submitInitialReport'}>
+							<button className='primary' onClick={onSubmitInitialReport} disabled={!isConnected || !initialReportSubmission.canSubmit || openOracleActiveAction === 'submitInitialReport'}>
 								{openOracleActiveAction === 'submitInitialReport' ? <LoadingText>Submitting...</LoadingText> : 'Submit Initial Report'}
 							</button>
 						</div>

@@ -285,7 +285,7 @@ export type OpenOracleRouteContentProps = {
 		defaultPriceSourceUrl: string | undefined
 		ethBalance: bigint | undefined
 		ethBalanceError: string | undefined
-		loading: boolean
+		quoteLoading: boolean
 		quoteAttemptedSources: OpenOracleInitialReportQuoteSource[] | undefined
 		quoteFailureKind: OpenOracleInitialReportQuoteFailureKind | undefined
 		quoteFailureReason: string | undefined
@@ -297,6 +297,8 @@ export type OpenOracleRouteContentProps = {
 		token2Balance: bigint | undefined
 		token2BalanceError: string | undefined
 		token2Decimals: number | undefined
+		tokenAccessLoadingInitial: boolean
+		tokenAccessRefreshing: boolean
 	}
 	openOracleCreateForm: OpenOracleCreateFormState
 	openOracleForm: OpenOracleFormState

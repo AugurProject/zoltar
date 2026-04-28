@@ -4,6 +4,7 @@ import type { WriteOperationsParameters } from '../types/app.js'
 
 type RunWriteActionParameters = {
 	accountAddress: Address | undefined
+	formatErrorMessage?: ((error: unknown, fallbackMessage: string) => string) | undefined
 	missingWalletMessage: string
 	onTransaction: (hash: Hash) => void
 	onTransactionFinished: () => void
@@ -42,7 +43,7 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			if (result === undefined) return
 			await Promise.resolve(parameters.onTransaction(result.hash))
 		} catch (error) {
-			parameters.setErrorMessage(getErrorMessage(error, errorFallback))
+			parameters.setErrorMessage(parameters.formatErrorMessage?.(error, errorFallback) ?? getErrorMessage(error, errorFallback))
 			return
 		}
 

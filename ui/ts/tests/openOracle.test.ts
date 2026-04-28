@@ -10,6 +10,7 @@ import {
 	formatOpenOracleInitialReportApprovalStatusUnavailableMessage,
 	formatOpenOracleInitialReportBalanceStatusUnavailableMessage,
 	formatOpenOracleInitialReportPriceUnavailableMessage,
+	formatOpenOracleInitialReportWriteErrorMessage,
 	formatOpenOracleMultiplier,
 	getOpenOracleReportStatus,
 	getOpenOracleSelectedReportActionMode,
@@ -73,7 +74,11 @@ function createInitialReportSubmissionPreview(overrides: Partial<Parameters<type
 		quoteAttemptedSources: undefined,
 		quoteFailureReason: undefined,
 		reportDetails: {
+			currentReporter: zeroAddress,
+			disputeOccurred: false,
 			exactToken1Report: 100n,
+			isDistributed: false,
+			reportTimestamp: 0n,
 			token1: REP_ADDRESS,
 			token1Symbol: 'REP',
 			token2: WETH_ADDRESS,
@@ -293,7 +298,11 @@ describe('Open Oracle helpers', () => {
 			quoteAttemptedSources: ['Uniswap V4', 'Uniswap V3'],
 			quoteFailureReason: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: execution reverted for an unknown reason. Uniswap V3 quote failed: no pool',
 			reportDetails: {
+				currentReporter: zeroAddress,
+				disputeOccurred: false,
 				exactToken1Report: 100n,
+				isDistributed: false,
+				reportTimestamp: 0n,
 				token1: REP_ADDRESS,
 				token1Symbol: 'REP',
 				token2: ETH_ADDRESS,
@@ -319,7 +328,11 @@ describe('Open Oracle helpers', () => {
 			quoteAttemptedSources: ['Uniswap V4'],
 			quoteFailureReason: 'no pool',
 			reportDetails: {
+				currentReporter: zeroAddress,
+				disputeOccurred: false,
 				exactToken1Report: 100n,
+				isDistributed: false,
+				reportTimestamp: 0n,
 				token1: getAddress('0x00000000000000000000000000000000000000a1'),
 				token1Symbol: 'ABC',
 				token2: getAddress('0x00000000000000000000000000000000000000a2'),
@@ -394,7 +407,11 @@ describe('Open Oracle helpers', () => {
 	test('initial report submission helper hides token balance loading states such as REPv2 balance refresh', () => {
 		const preview = createInitialReportSubmissionPreview({
 			reportDetails: {
+				currentReporter: zeroAddress,
+				disputeOccurred: false,
 				exactToken1Report: 100n,
+				isDistributed: false,
+				reportTimestamp: 0n,
 				token1: REP_ADDRESS,
 				token1Symbol: 'REPv2',
 				token2: WETH_ADDRESS,
@@ -441,7 +458,11 @@ describe('Open Oracle helpers', () => {
 			approvedToken2Amount: 11_000_000n,
 			defaultPrice: '1',
 			reportDetails: {
+				currentReporter: zeroAddress,
+				disputeOccurred: false,
 				exactToken1Report: 11_000_000n,
+				isDistributed: false,
+				reportTimestamp: 0n,
 				token1: REP_ADDRESS,
 				token1Symbol: 'REP',
 				token2: WETH_ADDRESS,
@@ -485,7 +506,11 @@ describe('Open Oracle helpers', () => {
 			approvedToken2Amount: 11_000_000n,
 			defaultPrice: '1',
 			reportDetails: {
+				currentReporter: zeroAddress,
+				disputeOccurred: false,
 				exactToken1Report: 11_000_000n,
+				isDistributed: false,
+				reportTimestamp: 0n,
 				token1: REP_ADDRESS,
 				token1Symbol: 'REP',
 				token2: WETH_ADDRESS,
@@ -542,10 +567,7 @@ describe('Open Oracle helpers', () => {
 		expect(preview.hasWethWrapAction).toBe(true)
 		expect(preview.requiredWethWrapAmount).toBeUndefined()
 		expect(preview.canWrapRequiredWeth).toBe(false)
-		expect(preview.wrapRequiredWethMessage).toEqual({
-			kind: 'visible',
-			message: 'No additional WETH is required for this report.',
-		})
+		expect(preview.wrapRequiredWethMessage).toBeUndefined()
 	})
 
 	test('initial report submission helper explains that a price is needed before determining a WETH wrap amount', () => {
@@ -573,6 +595,76 @@ describe('Open Oracle helpers', () => {
 
 		expect(preview.canSubmit).toBe(true)
 		expect(preview.blockMessage).toBeUndefined()
+	})
+
+	test('initial report submission helper blocks reports that already moved past initial reporting', () => {
+		const reporter = getAddress(addressString(TEST_ADDRESSES[1]))
+
+		const pendingPreview = createInitialReportSubmissionPreview({
+			reportDetails: {
+				currentReporter: reporter,
+				disputeOccurred: false,
+				exactToken1Report: 100n,
+				isDistributed: false,
+				reportTimestamp: 1n,
+				token1: REP_ADDRESS,
+				token1Symbol: 'REP',
+				token2: WETH_ADDRESS,
+				token2Symbol: 'WETH',
+			},
+		})
+		expect(pendingPreview.canSubmit).toBe(false)
+		expect(pendingPreview.blockMessage).toEqual({
+			kind: 'visible',
+			message: 'This report already has an initial report.',
+		})
+
+		const disputedPreview = createInitialReportSubmissionPreview({
+			reportDetails: {
+				currentReporter: reporter,
+				disputeOccurred: true,
+				exactToken1Report: 100n,
+				isDistributed: false,
+				reportTimestamp: 1n,
+				token1: REP_ADDRESS,
+				token1Symbol: 'REP',
+				token2: WETH_ADDRESS,
+				token2Symbol: 'WETH',
+			},
+		})
+		expect(disputedPreview.canSubmit).toBe(false)
+		expect(disputedPreview.blockMessage).toEqual({
+			kind: 'visible',
+			message: 'This report already has an initial report.',
+		})
+
+		const settledPreview = createInitialReportSubmissionPreview({
+			reportDetails: {
+				currentReporter: reporter,
+				disputeOccurred: false,
+				exactToken1Report: 100n,
+				isDistributed: true,
+				reportTimestamp: 1n,
+				token1: REP_ADDRESS,
+				token1Symbol: 'REP',
+				token2: WETH_ADDRESS,
+				token2Symbol: 'WETH',
+			},
+		})
+		expect(settledPreview.canSubmit).toBe(false)
+		expect(settledPreview.blockMessage).toEqual({
+			kind: 'visible',
+			message: 'This report is already settled and can no longer accept an initial report.',
+		})
+	})
+
+	test('maps initial report write failures into friendly guidance', () => {
+		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: report submitted'))).toBe('This report already has an initial report.')
+		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: report id'))).toBe('This report is no longer valid. Reload it before submitting the initial report again.')
+		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: token1 amount'))).toBe('The required token1 amount changed on-chain. Reload the report before submitting the initial report again.')
+		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: token2 amount'))).toBe('The selected price produces an invalid token2 amount for the initial report.')
+		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: state hash'))).toBe('This report changed on-chain. Reload the report before submitting the initial report again.')
+		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('ERC20: transfer amount exceeds allowance'))).toBe('Wallet balance or token approval changed since the last refresh. Reload the report and verify both token balances and approvals before submitting the initial report again.')
 	})
 
 	test('formats unavailable approval status messages with sanitized reasons', () => {
@@ -676,6 +768,46 @@ describe('Open Oracle helpers', () => {
 		expect(managerDetails.lastSettlementTimestamp).toBeGreaterThan(0n)
 		expect(managerDetails.isPriceValid).toBe(true)
 		expect(managerDetails.priceValidUntilTimestamp).toBe(managerDetails.lastSettlementTimestamp + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS)
+	})
+
+	test('submitInitialOracleReport rejects a second initial report for the same report', async () => {
+		await requestOraclePrice(uiWriteClient, managerAddress)
+
+		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
+		const { exactToken1Report } = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
+		const PRICE_PRECISION = 10n ** 18n
+		const amount1 = exactToken1Report
+		const amount2 = (amount1 * PRICE_PRECISION) / reportedRepEthPrice
+
+		const openOracleAddress = getOpenOracleAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracleAddress)
+		await approveToken(client, WETH_ADDRESS, openOracleAddress)
+		await wrapWethTestHelper(client, amount2)
+
+		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash
+		await submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, stateHash)
+
+		await expect(submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, stateHash)).rejects.toThrow(/report submitted/i)
+	})
+
+	test('submitInitialOracleReport rejects an invalid state hash', async () => {
+		await requestOraclePrice(uiWriteClient, managerAddress)
+
+		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
+		const { exactToken1Report } = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
+		const PRICE_PRECISION = 10n ** 18n
+		const amount1 = exactToken1Report
+		const amount2 = (amount1 * PRICE_PRECISION) / reportedRepEthPrice
+
+		const openOracleAddress = getOpenOracleAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracleAddress)
+		await approveToken(client, WETH_ADDRESS, openOracleAddress)
+		await wrapWethTestHelper(client, amount2)
+
+		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash
+		const invalidStateHash = stateHash === '0x0000000000000000000000000000000000000000000000000000000000000000' ? '0x0000000000000000000000000000000000000000000000000000000000000001' : '0x0000000000000000000000000000000000000000000000000000000000000000'
+
+		await expect(submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, invalidStateHash)).rejects.toThrow(/state hash/i)
 	})
 
 	test('ui wrapWeth helper deposits ETH into WETH and reports the wrap action', async () => {
