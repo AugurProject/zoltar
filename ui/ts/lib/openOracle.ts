@@ -1,7 +1,7 @@
-import { zeroAddress } from 'viem'
+import { zeroAddress, type Address } from 'viem'
 import type { OpenOracleReportSummary } from '../types/contracts.js'
 import { parseDecimalInput } from './decimal.js'
-import { getErrorDetail } from './errors.js'
+import { getErrorDetail, getErrorMessage } from './errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from './formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
 import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput, WETH_ADDRESS } from './uniswapQuoter.js'
@@ -52,6 +52,51 @@ type OpenOracleInitialReportSubmissionDetails = {
 	token2Approval: TokenApprovalRequirement
 	token2Decimals: number | undefined
 	wrapRequiredWethMessage: OpenOracleGateMessage | undefined
+}
+
+function formatOpenOracleInitialReportLifecycleMessage(status: OpenOracleReportStatus) {
+	switch (status) {
+		case 'Pending':
+		case 'Disputed':
+			return 'This report already has an initial report.'
+		case 'Settled':
+			return 'This report is already settled and can no longer accept an initial report.'
+		case 'Awaiting Initial Report':
+			return undefined
+	}
+}
+
+export function formatOpenOracleInitialReportWriteErrorMessage(error: unknown, fallbackMessage = 'Failed to submit initial report') {
+	const genericMessage = getErrorMessage(error, fallbackMessage)
+	if (genericMessage === 'Action canceled in wallet.') {
+		return genericMessage
+	}
+
+	const detail = sanitizeOpenOracleFailureReason(getErrorDetail(error))?.toLowerCase()
+	if (detail === undefined) {
+		return 'Unable to submit the initial report. Reload the report and verify the wallet balances and approvals before trying again.'
+	}
+
+	if (detail.includes('report submitted')) {
+		return 'This report already has an initial report.'
+	}
+	if (detail.includes('report id')) {
+		return 'This report is no longer valid. Reload it before submitting the initial report again.'
+	}
+	if (detail.includes('token1 amount')) {
+		return 'The required token1 amount changed on-chain. Reload the report before submitting the initial report again.'
+	}
+	if (detail.includes('token2 amount')) {
+		return 'The selected price produces an invalid token2 amount for the initial report.'
+	}
+	if (detail.includes('state hash')) {
+		return 'This report changed on-chain. Reload the report before submitting the initial report again.'
+	}
+	if (detail.includes('allowance') || detail.includes('balance') || detail.includes('transfer amount exceeds') || detail.includes('transferfrom') || detail.includes('transfer from') || detail.includes('erc20insufficientallowance') || detail.includes('erc20insufficientbalance') || detail.includes('safeerc20')) {
+		return 'Wallet balance or token approval changed since the last refresh. Reload the report and verify both token balances and approvals before submitting the initial report again.'
+	}
+
+	return 'Unable to submit the initial report. Reload the report and verify the wallet balances and approvals before trying again.'
 }
 
 function createHiddenLoadingGateMessage(message: string): OpenOracleGateMessage {
@@ -315,7 +360,11 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	quoteFailureReason: string | undefined
 	reportDetails:
 		| {
+				currentReporter: Address
+				disputeOccurred: boolean
 				exactToken1Report: bigint
+				isDistributed: boolean
+				reportTimestamp: bigint
 				token1?: string | undefined
 				token1Symbol?: string | undefined
 				token2?: string | undefined
@@ -355,6 +404,15 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 		tokenAddress: reportDetails?.token2,
 		tokenSymbol: reportDetails?.token2Symbol,
 	})
+	const reportStatus =
+		reportDetails === undefined
+			? undefined
+			: getOpenOracleReportStatus({
+					currentReporter: reportDetails.currentReporter,
+					disputeOccurred: reportDetails.disputeOccurred,
+					isDistributed: reportDetails.isDistributed,
+					reportTimestamp: reportDetails.reportTimestamp,
+				})
 	const token1Approval = deriveTokenApprovalRequirement(amount1, approvedToken1Amount)
 	const token2Approval = deriveTokenApprovalRequirement(amount2, approvedToken2Amount)
 	const token1BalanceShortage = amount1 === undefined || token1Balance === undefined || token1Balance >= amount1 ? undefined : amount1 - token1Balance
@@ -381,11 +439,13 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 				? createVisibleGateMessage(`Enter a valid ${token1Label} / ${token2Label} price to determine whether this report needs more WETH.`)
 				: (isCanonicalMainnetWeth(reportDetails?.token1) && token1Balance === undefined) || (isCanonicalMainnetWeth(reportDetails?.token2) && token2Balance === undefined)
 					? createHiddenLoadingGateMessage('Loading current WETH balance.')
-					: createVisibleGateMessage('No additional WETH is required for this report.')
+					: undefined
 
 	let blockMessage: OpenOracleGateMessage | undefined
 	if (reportDetails === undefined) {
 		blockMessage = createVisibleGateMessage('Load a report first')
+	} else if (reportStatus !== undefined && reportStatus !== 'Awaiting Initial Report') {
+		blockMessage = createVisibleGateMessage(formatOpenOracleInitialReportLifecycleMessage(reportStatus) ?? 'This report already has an initial report.')
 	} else if (resolvedPriceInput === '') {
 		blockMessage =
 			defaultPriceError !== undefined
