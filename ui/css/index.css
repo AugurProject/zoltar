@@ -649,6 +649,14 @@ button.currency-value.copyable:hover:not(:disabled) {
 	outline-offset: 2px;
 }
 
+.currency-value.approval-sufficient {
+	color: var(--success);
+}
+
+.currency-value.approval-insufficient {
+	color: var(--danger);
+}
+
 .timestamp-value {
 	font: inherit;
 	color: inherit;
@@ -1933,6 +1941,27 @@ button.currency-value.copyable:hover:not(:disabled) {
 
 .field-inline > .field-inline-action {
 	flex: 0 0 auto;
+}
+
+.approval-amount-field {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.75rem 1rem;
+}
+
+.approval-amount-field > .approval-amount-label {
+	flex: 0 1 auto;
+	min-width: 0;
+}
+
+.approval-amount-field > .approval-amount-controls {
+	flex: 1 1 18rem;
+	min-width: min(100%, 18rem);
+}
+
+.approval-amount-controls > .field-inline-input {
+	min-width: 0;
 }
 
 .field span {
