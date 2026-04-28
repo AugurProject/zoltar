@@ -22,6 +22,11 @@ void describe('user copy helpers', () => {
 	void test('maps universe and report lookup states semantically', () => {
 		expect(getUniversePresentation('missing')?.key).toBe('not_found')
 		expect(getReportPresentation({ kind: 'question', state: 'unknown' })?.actionHint).toBe('Refresh questions')
+		expect(getReportPresentation({ kind: 'question', state: 'loading' })).toEqual({
+			detail: 'retrieving...',
+			detailIsLoading: true,
+			key: 'loading',
+		})
 	})
 
 	void test('maps wallet and placeholder states semantically', () => {

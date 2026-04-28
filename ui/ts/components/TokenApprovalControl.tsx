@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
+import { ApprovedAmountValue } from './ApprovedAmountValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
@@ -112,7 +113,7 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 					<CurrencyValue value={requiredAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
 				</MetricField>
 				<MetricField label={`Approved ${tokenSymbol}`}>
-					<CurrencyValue loading={allowanceLoading} value={approvedAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
+					<ApprovedAmountValue loading={allowanceLoading} value={approvedAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
 				</MetricField>
 				<MetricField label={`Need More ${tokenSymbol} Approved`}>
 					<CurrencyValue value={requirement.neededAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
