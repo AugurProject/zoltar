@@ -176,9 +176,15 @@ function renderSelectedReportActionSection(
 										Need <CurrencyValue value={initialReportSubmission.requiredWethWrapAmount} suffix='WETH' copyable={false} /> more WETH for this report.
 									</p>
 								)}
-								{initialReportSubmission.wrapRequiredWethDisabledReason === undefined ? undefined : <p className='detail'>{initialReportSubmission.wrapRequiredWethDisabledReason}</p>}
+								{initialReportSubmission.wrapRequiredWethMessage?.kind !== 'visible' ? undefined : <p className='detail'>{initialReportSubmission.wrapRequiredWethMessage.message}</p>}
 								<div className='actions'>
-									<button className='secondary' type='button' onClick={onWrapWethForInitialReport} disabled={!isConnected || !initialReportSubmission.canWrapRequiredWeth || openOracleInitialReportState.loading || openOracleActiveAction === 'wrapWeth'} title={initialReportSubmission.wrapRequiredWethDisabledReason}>
+									<button
+										className='secondary'
+										type='button'
+										onClick={onWrapWethForInitialReport}
+										disabled={!isConnected || !initialReportSubmission.canWrapRequiredWeth || openOracleInitialReportState.loading || openOracleActiveAction === 'wrapWeth'}
+										title={initialReportSubmission.wrapRequiredWethMessage?.kind === 'visible' ? initialReportSubmission.wrapRequiredWethMessage.message : undefined}
+									>
 										{openOracleActiveAction === 'wrapWeth' ? <LoadingText>Wrapping ETH...</LoadingText> : 'Wrap needed ETH to WETH'}
 									</button>
 								</div>
@@ -223,7 +229,7 @@ function renderSelectedReportActionSection(
 								tokenUnits={initialReportSubmission.token2Decimals ?? 18}
 							/>
 						</div>
-						<ErrorNotice message={initialReportSubmission.blockReason} />
+						<ErrorNotice message={initialReportSubmission.blockMessage?.kind === 'visible' ? initialReportSubmission.blockMessage.message : undefined} />
 						<div className='actions'>
 							<button className='primary' onClick={onSubmitInitialReport} disabled={!isConnected || !initialReportSubmission.canSubmit || openOracleInitialReportState.loading || openOracleActiveAction === 'submitInitialReport'}>
 								{openOracleActiveAction === 'submitInitialReport' ? <LoadingText>Submitting...</LoadingText> : 'Submit Initial Report'}

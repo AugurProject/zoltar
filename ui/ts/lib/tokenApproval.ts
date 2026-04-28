@@ -91,6 +91,48 @@ export function formatTokenApprovalUnavailableMessage({ actionLabel, reason, tok
 	return segments.join(' ')
 }
 
+export function resolveTokenApprovalStatusMessage({
+	actionLabel,
+	amountValidationMessage,
+	draftAmount,
+	guardMessage,
+	nextApprovalAmount,
+	requiredAmount,
+	requirement,
+	tokenLabel,
+	tokenUnits,
+}: {
+	actionLabel: string
+	amountValidationMessage: string | undefined
+	draftAmount: string
+	guardMessage: string | undefined
+	nextApprovalAmount: bigint | undefined
+	requiredAmount: bigint | undefined
+	requirement: TokenApprovalRequirement
+	tokenLabel: string
+	tokenUnits: number
+}) {
+	if (guardMessage !== undefined) return guardMessage
+	if (amountValidationMessage !== undefined) return amountValidationMessage
+	if (draftAmount.trim() === '') {
+		return formatTokenApprovalNeededMessage({
+			actionLabel,
+			requirement,
+			tokenLabel,
+			tokenUnits,
+		})
+	}
+	if (nextApprovalAmount === undefined || requiredAmount === undefined) return undefined
+
+	return formatTokenApprovalPartialMessage({
+		actionLabel,
+		nextApprovedAmount: nextApprovalAmount,
+		requiredAmount,
+		tokenLabel,
+		tokenUnits,
+	})
+}
+
 export function formatTokenApprovalNeededMessage({ actionLabel, requirement, tokenLabel, tokenUnits }: { actionLabel: string; requirement: TokenApprovalRequirement; tokenLabel: string; tokenUnits: number }) {
 	if (requirement.neededAmount === undefined || requirement.neededAmount <= 0n) return undefined
 	const targetAmount = requirement.targetAmount ?? requirement.requiredAmount

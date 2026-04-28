@@ -6,7 +6,7 @@ import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
-import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalPartialMessage, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput } from '../lib/tokenApproval.js'
+import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../lib/tokenApproval.js'
 
 type TokenApprovalControlProps = {
 	actionLabel: string
@@ -73,24 +73,17 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 	const nextApprovalAmount = parsedAmount.kind === 'default' ? requirement.targetAmount : parsedAmount.kind === 'invalid' ? undefined : parsedAmount.amount
 
 	const amountValidationMessage = parsedAmount.kind === 'invalid' ? parsedAmount.error : parsedAmount.kind === 'default' || approvedAmount === undefined || parsedAmount.amount > approvedAmount ? undefined : `Approval amount must be greater than the current approved ${tokenSymbol} amount.`
-
-	const partialApprovalMessage =
-		nextApprovalAmount === undefined || requiredAmount === undefined || draftAmount.trim() === '' || amountValidationMessage !== undefined
-			? undefined
-			: formatTokenApprovalPartialMessage({
-					actionLabel,
-					nextApprovedAmount: nextApprovalAmount,
-					requiredAmount,
-					tokenLabel: tokenSymbol,
-					tokenUnits,
-				})
-
-	const statusMessage =
-		guardMessage ??
-		amountValidationMessage ??
-		(amountValidationMessage === undefined && draftAmount.trim() === '' ? formatTokenApprovalNeededMessage({ actionLabel, requirement, tokenLabel: tokenSymbol, tokenUnits }) : undefined) ??
-		partialApprovalMessage ??
-		(allowanceLoading ? `Loading current ${tokenSymbol} approval.` : undefined)
+	const statusMessage = resolveTokenApprovalStatusMessage({
+		actionLabel,
+		amountValidationMessage,
+		draftAmount,
+		guardMessage,
+		nextApprovalAmount,
+		requiredAmount,
+		requirement,
+		tokenLabel: tokenSymbol,
+		tokenUnits,
+	})
 
 	const allowanceMessage = allowanceError === undefined ? undefined : formatTokenApprovalUnavailableMessage({ actionLabel, reason: allowanceError, tokenLabel: tokenSymbol })
 	const canApprove = !pending && guardMessage === undefined && allowanceMessage === undefined && !allowanceLoading && requiredAmount !== undefined && amountValidationMessage === undefined && nextApprovalAmount !== undefined && (parsedAmount.kind !== 'default' || !requirement.hasSufficientApproval)

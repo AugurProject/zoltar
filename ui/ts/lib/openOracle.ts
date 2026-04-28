@@ -15,6 +15,10 @@ export type OpenOracleSelectedReportActionMode = 'initial-report' | 'dispute' | 
 export type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3' | 'Manual override' | 'Unavailable'
 export type OpenOracleInitialReportQuoteSource = Exclude<OpenOracleInitialReportPriceSource, 'Manual override' | 'Unavailable'>
 export type OpenOracleInitialReportQuoteFailureKind = 'unsupported-pair' | 'quote-failed'
+type OpenOracleGateMessage = {
+	kind: 'hidden-loading' | 'visible'
+	message: string
+}
 
 type OpenOracleInitialReportPriceLoadResult =
 	| {
@@ -34,7 +38,7 @@ type OpenOracleInitialReportPriceLoadResult =
 type OpenOracleInitialReportSubmissionDetails = {
 	amount1: bigint | undefined
 	amount2: bigint | undefined
-	blockReason: string | undefined
+	blockMessage: OpenOracleGateMessage | undefined
 	canSubmit: boolean
 	canWrapRequiredWeth: boolean
 	hasWethWrapAction: boolean
@@ -47,7 +51,15 @@ type OpenOracleInitialReportSubmissionDetails = {
 	token1Decimals: number | undefined
 	token2Approval: TokenApprovalRequirement
 	token2Decimals: number | undefined
-	wrapRequiredWethDisabledReason: string | undefined
+	wrapRequiredWethMessage: OpenOracleGateMessage | undefined
+}
+
+function createHiddenLoadingGateMessage(message: string): OpenOracleGateMessage {
+	return { kind: 'hidden-loading', message }
+}
+
+function createVisibleGateMessage(message: string): OpenOracleGateMessage {
+	return { kind: 'visible', message }
 }
 
 function formatOpenOraclePriceLoadError(v4Error: unknown, v3Error?: unknown) {
@@ -357,89 +369,106 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 					? token2BalanceShortage
 					: undefined
 	const canWrapRequiredWeth = requiredWethWrapAmount !== undefined && requiredWethWrapAmount > 0n && walletEthBalance !== undefined && walletEthBalance >= requiredWethWrapAmount
-	const wrapRequiredWethDisabledReason = !hasWethWrapAction
+	const wrapRequiredWethMessage = !hasWethWrapAction
 		? undefined
 		: requiredWethWrapAmount !== undefined && requiredWethWrapAmount > 0n
 			? walletEthBalance === undefined
-				? 'Loading wallet ETH balance.'
+				? createHiddenLoadingGateMessage('Loading wallet ETH balance.')
 				: walletEthBalance < requiredWethWrapAmount
-					? `Wallet has ${formatCurrencyBalance(walletEthBalance)} ETH, need ${formatCurrencyBalance(requiredWethWrapAmount)} ETH to wrap the required WETH.`
+					? createVisibleGateMessage(`Wallet has ${formatCurrencyBalance(walletEthBalance)} ETH, need ${formatCurrencyBalance(requiredWethWrapAmount)} ETH to wrap the required WETH.`)
 					: undefined
 			: amount1 === undefined || amount2 === undefined
-				? `Enter a valid ${token1Label} / ${token2Label} price to determine whether this report needs more WETH.`
+				? createVisibleGateMessage(`Enter a valid ${token1Label} / ${token2Label} price to determine whether this report needs more WETH.`)
 				: (isCanonicalMainnetWeth(reportDetails?.token1) && token1Balance === undefined) || (isCanonicalMainnetWeth(reportDetails?.token2) && token2Balance === undefined)
-					? 'Loading current WETH balance.'
-					: 'No additional WETH is required for this report.'
+					? createHiddenLoadingGateMessage('Loading current WETH balance.')
+					: createVisibleGateMessage('No additional WETH is required for this report.')
 
-	let blockReason: string | undefined
+	let blockMessage: OpenOracleGateMessage | undefined
 	if (reportDetails === undefined) {
-		blockReason = 'Load a report first'
+		blockMessage = createVisibleGateMessage('Load a report first')
 	} else if (resolvedPriceInput === '') {
-		blockReason =
-			defaultPriceError ??
-			formatOpenOracleInitialReportPriceUnavailableMessage({
-				attemptedSources: quoteAttemptedSources,
-				reason: quoteFailureReason,
-				token1Label,
-				token2Label,
-			})
+		blockMessage =
+			defaultPriceError !== undefined
+				? createVisibleGateMessage(defaultPriceError)
+				: quoteAttemptedSources === undefined && quoteFailureReason === undefined
+					? createHiddenLoadingGateMessage('Loading automatic price quote.')
+					: createVisibleGateMessage(
+							formatOpenOracleInitialReportPriceUnavailableMessage({
+								attemptedSources: quoteAttemptedSources,
+								reason: quoteFailureReason,
+								token1Label,
+								token2Label,
+							}),
+						)
 	} else if (price === undefined || price <= 0n || amount2 === undefined || amount2 <= 0n) {
-		blockReason = 'Invalid price'
+		blockMessage = createVisibleGateMessage('Invalid price')
 	} else if (approvedToken1Amount === undefined && token1AllowanceError !== undefined) {
-		blockReason = formatOpenOracleInitialReportApprovalStatusUnavailableMessage({
-			reason: token1AllowanceError,
-			tokenLabel: token1Label,
-		})
+		blockMessage = createVisibleGateMessage(
+			formatOpenOracleInitialReportApprovalStatusUnavailableMessage({
+				reason: token1AllowanceError,
+				tokenLabel: token1Label,
+			}),
+		)
 	} else if (approvedToken2Amount === undefined && token2AllowanceError !== undefined) {
-		blockReason = formatOpenOracleInitialReportApprovalStatusUnavailableMessage({
-			reason: token2AllowanceError,
-			tokenLabel: token2Label,
-		})
+		blockMessage = createVisibleGateMessage(
+			formatOpenOracleInitialReportApprovalStatusUnavailableMessage({
+				reason: token2AllowanceError,
+				tokenLabel: token2Label,
+			}),
+		)
 	} else if (token1Balance === undefined && token1BalanceError !== undefined) {
-		blockReason = formatOpenOracleInitialReportBalanceStatusUnavailableMessage({
-			reason: token1BalanceError,
-			tokenLabel: token1Label,
-		})
+		blockMessage = createVisibleGateMessage(
+			formatOpenOracleInitialReportBalanceStatusUnavailableMessage({
+				reason: token1BalanceError,
+				tokenLabel: token1Label,
+			}),
+		)
 	} else if (token2Balance === undefined && token2BalanceError !== undefined) {
-		blockReason = formatOpenOracleInitialReportBalanceStatusUnavailableMessage({
-			reason: token2BalanceError,
-			tokenLabel: token2Label,
-		})
+		blockMessage = createVisibleGateMessage(
+			formatOpenOracleInitialReportBalanceStatusUnavailableMessage({
+				reason: token2BalanceError,
+				tokenLabel: token2Label,
+			}),
+		)
 	} else if (token1Balance === undefined) {
-		blockReason = `Loading current ${token1Label} balance.`
+		blockMessage = createHiddenLoadingGateMessage(`Loading current ${token1Label} balance.`)
 	} else if (token2Balance === undefined) {
-		blockReason = `Loading current ${token2Label} balance.`
+		blockMessage = createHiddenLoadingGateMessage(`Loading current ${token2Label} balance.`)
 	} else if (amount1 !== undefined && token1Balance < amount1) {
-		blockReason = formatOpenOracleInitialReportInsufficientBalanceMessage({
-			available: token1Balance,
-			required: amount1,
-			tokenAddress: reportDetails.token1,
-			tokenDecimals: token1Decimals,
-			tokenLabel: token1Label,
-		})
+		blockMessage = createVisibleGateMessage(
+			formatOpenOracleInitialReportInsufficientBalanceMessage({
+				available: token1Balance,
+				required: amount1,
+				tokenAddress: reportDetails.token1,
+				tokenDecimals: token1Decimals,
+				tokenLabel: token1Label,
+			}),
+		)
 	} else if (amount2 !== undefined && token2Balance < amount2) {
-		blockReason = formatOpenOracleInitialReportInsufficientBalanceMessage({
-			available: token2Balance,
-			required: amount2,
-			tokenAddress: reportDetails.token2,
-			tokenDecimals: token2Decimals,
-			tokenLabel: token2Label,
-		})
+		blockMessage = createVisibleGateMessage(
+			formatOpenOracleInitialReportInsufficientBalanceMessage({
+				available: token2Balance,
+				required: amount2,
+				tokenAddress: reportDetails.token2,
+				tokenDecimals: token2Decimals,
+				tokenLabel: token2Label,
+			}),
+		)
 	} else if (approvedToken1Amount === undefined) {
-		blockReason = `Loading current ${token1Label} approval.`
+		blockMessage = createHiddenLoadingGateMessage(`Loading current ${token1Label} approval.`)
 	} else if (approvedToken2Amount === undefined) {
-		blockReason = `Loading current ${token2Label} approval.`
+		blockMessage = createHiddenLoadingGateMessage(`Loading current ${token2Label} approval.`)
 	} else if (!token1Approval.hasSufficientApproval) {
-		blockReason = `${token1Label} approval required`
+		blockMessage = createVisibleGateMessage(`${token1Label} approval required`)
 	} else if (!token2Approval.hasSufficientApproval) {
-		blockReason = `${token2Label} approval required`
+		blockMessage = createVisibleGateMessage(`${token2Label} approval required`)
 	}
 
 	return {
 		amount1,
 		amount2,
-		blockReason,
-		canSubmit: blockReason === undefined,
+		blockMessage,
+		canSubmit: blockMessage === undefined,
 		canWrapRequiredWeth,
 		hasWethWrapAction,
 		price,
@@ -451,6 +480,6 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 		token1Decimals,
 		token2Approval,
 		token2Decimals,
-		wrapRequiredWethDisabledReason,
+		wrapRequiredWethMessage,
 	}
 }
