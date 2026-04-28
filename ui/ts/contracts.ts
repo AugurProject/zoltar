@@ -2216,22 +2216,22 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 }
 
 export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {
+	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
+
 	if (accountAddress === undefined) {
 		return {
 			maxRedeemableCompleteSets: undefined,
 			shareBalances: undefined,
+			universeId,
 		}
 	}
 
-	const [shareTokenAddress, universeId] = await Promise.all([
-		client.readContract({
-			address: securityPoolAddress,
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'shareToken',
-			args: [],
-		}),
-		readSecurityPoolUniverseId(client, securityPoolAddress),
-	])
+	const shareTokenAddress = await client.readContract({
+		address: securityPoolAddress,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'shareToken',
+		args: [],
+	})
 
 	const shareBalancesResult = await client.readContract({
 		address: shareTokenAddress,
@@ -2251,6 +2251,7 @@ export async function loadTradingDetails(client: ReadClient, securityPoolAddress
 	return {
 		maxRedeemableCompleteSets: getMinBigintValue([shareBalances.invalid, shareBalances.yes, shareBalances.no]),
 		shareBalances,
+		universeId,
 	}
 }
 
@@ -2328,7 +2329,7 @@ export async function redeemSharesInSecurityPool(client: WriteClient, securityPo
 	} satisfies TradingActionResult
 }
 
-export async function migrateSharesFromUniverse(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey) {
+export async function migrateSharesFromUniverse(client: WriteClient, securityPoolAddress: Address, shareOutcome: ReportingOutcomeKey, targetOutcomeIndexes: bigint[]) {
 	const [universeId, shareTokenAddress] = await Promise.all([
 		readSecurityPoolUniverseId(client, securityPoolAddress),
 		client.readContract({
@@ -2342,12 +2343,14 @@ export async function migrateSharesFromUniverse(client: WriteClient, securityPoo
 		address: shareTokenAddress,
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'migrate',
-		args: [getShareTokenId(universeId, outcome)],
+		args: [getShareTokenId(universeId, shareOutcome), targetOutcomeIndexes],
 	}))
 	return {
 		action: 'migrateShares',
 		hash,
 		securityPoolAddress,
+		shareOutcome,
+		targetOutcomeIndexes,
 		universeId,
 	} satisfies TradingActionResult
 }

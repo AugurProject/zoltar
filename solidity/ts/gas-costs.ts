@@ -641,9 +641,10 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			const prepared = await prepareYesChildFinalized()
 			await confirmTx(alice, claimAuctionProceeds(alice, prepared.yesPool.securityPool, dave.account.address, [{ tick: 0n, bidIndex: 0n }]))
-			await confirmTx(carol, migrateShares(carol, prepared.context.addresses.shareToken, genesisUniverse, QuestionOutcome.Invalid))
-			await confirmTx(carol, migrateShares(carol, prepared.context.addresses.shareToken, genesisUniverse, QuestionOutcome.Yes))
-			await confirmTx(carol, migrateShares(carol, prepared.context.addresses.shareToken, genesisUniverse, QuestionOutcome.No))
+			const binaryTargetOutcomes = [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]
+			await confirmTx(carol, migrateShares(carol, prepared.context.addresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, binaryTargetOutcomes))
+			await confirmTx(carol, migrateShares(carol, prepared.context.addresses.shareToken, genesisUniverse, QuestionOutcome.Yes, binaryTargetOutcomes))
+			await confirmTx(carol, migrateShares(carol, prepared.context.addresses.shareToken, genesisUniverse, QuestionOutcome.No, binaryTargetOutcomes))
 			return await waitForGas(carol, redeemShares(carol, prepared.yesPool.securityPool))
 		},
 	},

@@ -75,7 +75,8 @@ export type TradingFormState = {
 	completeSetAmount: string
 	redeemAmount: string
 	securityPoolAddress: string
-	selectedOutcome: ReportingOutcomeKey
+	selectedShareOutcome: ReportingOutcomeKey
+	targetOutcomeIndexes: string
 }
 
 export type ReportingFormState = {

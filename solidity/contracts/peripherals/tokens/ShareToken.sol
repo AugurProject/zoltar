@@ -103,7 +103,7 @@ contract ShareToken is ERC1155, IShareToken {
 		_burn(_owner, _tokenId, balance);
 	}
 
-	function getChildUniverseId(uint248 universeId, uint8 outcomeIndex) public pure returns (uint248) {
+	function getChildUniverseId(uint248 universeId, uint256 outcomeIndex) public pure returns (uint248) {
 		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
 	}
 
@@ -135,9 +135,10 @@ contract ShareToken is ERC1155, IShareToken {
 		return TokenId.unpackTokenId(_tokenId);
 	}
 
-	function migrate(uint256 fromId) external {
+	function migrate(uint256 fromId, uint256[] memory targetOutcomeIndexes) external {
 		uint248 universeId = getUniverseId(fromId);
 		require(universeHasForked(universeId), 'Universe has not forked');
+		require(targetOutcomeIndexes.length > 0, 'No target outcomes');
 
 		uint256 fromIdBalance = balanceOf(msg.sender, fromId);
 		require(fromIdBalance > 0, 'No balance to migrate');
@@ -145,9 +146,16 @@ contract ShareToken is ERC1155, IShareToken {
 		// Burn from the old token ID using the base ERC1155 _burn function
 		_burn(msg.sender, fromId, fromIdBalance);
 
-		// Mint to the new child universe token IDs using the base ERC1155 _mint function
-		for (uint8 i = 0; i < Constants.NUM_OUTCOMES; i++) {
-			uint256 toId = getChildId(fromId, getChildUniverseId(universeId, i));
+		(, uint256 questionId, , , ) = zoltar.universes(universeId);
+		for (uint256 i = 0; i < targetOutcomeIndexes.length; i++) {
+			uint256 outcomeIndex = targetOutcomeIndexes[i];
+			require(!zoltar.zoltarQuestionData().isMalformedAnswerOption(questionId, outcomeIndex), 'Malformed');
+
+			for (uint256 j = 0; j < i; j++) {
+				require(targetOutcomeIndexes[j] != outcomeIndex, 'Duplicate target outcome');
+			}
+
+			uint256 toId = getChildId(fromId, getChildUniverseId(universeId, outcomeIndex));
 			_mint(msg.sender, toId, fromIdBalance);
 			emit Migrate(msg.sender, fromId, toId, fromIdBalance);
 		}

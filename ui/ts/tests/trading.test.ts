@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
+import { zeroAddress } from 'viem'
 import {
 	MARKET_NOT_FINALIZED_MESSAGE,
 	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
@@ -8,6 +9,7 @@ import {
 	SHARE_MIGRATION_AFTER_FORK_MESSAGE,
 	getCollateralizationDisplayState,
 	getCollateralizationTone,
+	getDefaultShareMigrationTargetOutcomeIndexes,
 	getMaxRedeemableCompleteSets,
 	getPoolCollateralizationPercent,
 	getRemainingMintCapacity,
@@ -20,6 +22,8 @@ import {
 	getVaultCollateralizationPercent,
 	hasRepBackedPoolWithNoActiveAllowance,
 } from '../lib/trading.js'
+import { getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
+import type { ZoltarUniverseSummary } from '../types/contracts.js'
 
 const TOKEN_PRECISION = 10n ** 18n
 
@@ -29,6 +33,86 @@ void describe('trading helpers', () => {
 		no: 4n * 10n ** 18n,
 		yes: 3n * 10n ** 18n,
 	}
+	const binaryForkUniverse = {
+		childUniverses: [
+			{
+				exists: true,
+				forkTime: 1n,
+				outcomeIndex: 0n,
+				outcomeLabel: 'Invalid',
+				parentUniverseId: 0n,
+				reputationToken: zeroAddress,
+				universeId: 10n,
+			},
+			{
+				exists: true,
+				forkTime: 1n,
+				outcomeIndex: 1n,
+				outcomeLabel: 'Yes',
+				parentUniverseId: 0n,
+				reputationToken: zeroAddress,
+				universeId: 11n,
+			},
+			{
+				exists: true,
+				forkTime: 1n,
+				outcomeIndex: 2n,
+				outcomeLabel: 'No',
+				parentUniverseId: 0n,
+				reputationToken: zeroAddress,
+				universeId: 12n,
+			},
+		],
+		forkThreshold: 1n,
+		forkQuestionDetails: {
+			answerUnit: '',
+			createdAt: 1n,
+			description: '',
+			displayValueMax: 0n,
+			displayValueMin: 0n,
+			endTime: 1n,
+			exists: true,
+			marketType: 'binary',
+			numTicks: 0n,
+			outcomeLabels: ['Yes', 'No'],
+			questionId: '0x0000000000000000000000000000000000000000000000000000000000000001',
+			startTime: 0n,
+			title: 'Binary fork',
+		},
+		forkTime: 1n,
+		forkingOutcomeIndex: 1n,
+		hasForked: true,
+		parentUniverseId: 0n,
+		reputationToken: zeroAddress,
+		totalTheoreticalSupply: 100n,
+		universeId: 0n,
+	} satisfies ZoltarUniverseSummary
+	const scalarForkUniverse = {
+		childUniverses: [],
+		forkThreshold: 1n,
+		forkQuestionDetails: {
+			answerUnit: 'km',
+			createdAt: 1n,
+			description: '',
+			displayValueMax: 10n,
+			displayValueMin: 0n,
+			endTime: 1n,
+			exists: true,
+			marketType: 'scalar',
+			numTicks: 10n,
+			outcomeLabels: [],
+			questionId: '0x0000000000000000000000000000000000000000000000000000000000000002',
+			startTime: 0n,
+			title: 'Scalar fork',
+		},
+		forkTime: 1n,
+		forkingOutcomeIndex: 0n,
+		hasForked: true,
+		parentUniverseId: 0n,
+		reputationToken: zeroAddress,
+		totalTheoreticalSupply: 100n,
+		universeId: 0n,
+	} satisfies ZoltarUniverseSummary
 
 	void test('computes remaining mint capacity from total bond allowance and minted open interest', () => {
 		expect(getRemainingMintCapacity(10n, 4n)).toBe(6n)
@@ -77,6 +161,8 @@ void describe('trading helpers', () => {
 		expect(getSelectedOutcomeShareBalance(shareBalances, 'yes')).toBe(3n * 10n ** 18n)
 		expect(getSelectedOutcomeShareBalance(shareBalances, 'no')).toBe(4n * 10n ** 18n)
 		expect(getSelectedOutcomeShareBalance(shareBalances, 'invalid')).toBe(2n * 10n ** 18n)
+		expect(getDefaultShareMigrationTargetOutcomeIndexes(binaryForkUniverse)).toBe('0, 1, 2')
+		expect(getDefaultShareMigrationTargetOutcomeIndexes(scalarForkUniverse)).toBe('')
 	})
 
 	void test('suppresses only the targeted trading guard copy in the UI', () => {
@@ -373,15 +459,18 @@ void describe('trading helpers', () => {
 		).toBeUndefined()
 	})
 
-	void test('only enables share migration after a fork and when the selected outcome balance is positive', () => {
+	void test('only enables share migration after a fork with valid target universes and a positive share balance', () => {
 		expect(
 			getTradingMigrateSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
 				isMainnet: true,
+				loadingTradingForkUniverse: false,
 				loadingTradingDetails: false,
-				selectedOutcome: 'yes',
+				selectedShareOutcome: 'yes',
 				shareBalances,
+				targetOutcomeIndexesInput: '0, 1, 2',
+				tradingForkUniverse: binaryForkUniverse,
 				universeHasForked: false,
 			}),
 		).toBe('Share migration is only available after this universe has forked.')
@@ -391,13 +480,16 @@ void describe('trading helpers', () => {
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
 				isMainnet: true,
+				loadingTradingForkUniverse: false,
 				loadingTradingDetails: false,
-				selectedOutcome: 'invalid',
+				selectedShareOutcome: 'invalid',
 				shareBalances: {
 					invalid: 0n,
 					no: 4n * 10n ** 18n,
 					yes: 3n * 10n ** 18n,
 				},
+				targetOutcomeIndexesInput: '0, 1, 2',
+				tradingForkUniverse: binaryForkUniverse,
 				universeHasForked: true,
 			}),
 		).toBe('No Invalid shares available to migrate.')
@@ -407,12 +499,60 @@ void describe('trading helpers', () => {
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
 				isMainnet: true,
+				loadingTradingForkUniverse: false,
 				loadingTradingDetails: false,
-				selectedOutcome: 'yes',
+				selectedShareOutcome: 'yes',
 				shareBalances,
+				targetOutcomeIndexesInput: '',
+				tradingForkUniverse: binaryForkUniverse,
+				universeHasForked: true,
+			}),
+		).toBe('Select at least one target child universe.')
+
+		expect(
+			getTradingMigrateSharesGuardMessage({
+				accountAddress: '0x1234567890123456789012345678901234567890',
+				hasSelectedPool: true,
+				isMainnet: true,
+				loadingTradingForkUniverse: false,
+				loadingTradingDetails: false,
+				selectedShareOutcome: 'yes',
+				shareBalances,
+				targetOutcomeIndexesInput: '9',
+				tradingForkUniverse: binaryForkUniverse,
+				universeHasForked: true,
+			}),
+		).toBe('Select valid target child universes.')
+
+		expect(
+			getTradingMigrateSharesGuardMessage({
+				accountAddress: '0x1234567890123456789012345678901234567890',
+				hasSelectedPool: true,
+				isMainnet: true,
+				loadingTradingForkUniverse: false,
+				loadingTradingDetails: false,
+				selectedShareOutcome: 'yes',
+				shareBalances,
+				targetOutcomeIndexesInput: getScalarOutcomeIndex(scalarForkUniverse.forkQuestionDetails, 5n).toString(),
+				tradingForkUniverse: scalarForkUniverse,
 				universeHasForked: true,
 			}),
 		).toBeUndefined()
+
+		expect(
+			getTradingMigrateSharesGuardMessage({
+				accountAddress: '0x1234567890123456789012345678901234567890',
+				hasSelectedPool: true,
+				isMainnet: true,
+				loadingTradingForkUniverse: false,
+				loadingTradingDetails: false,
+				selectedShareOutcome: 'yes',
+				shareBalances,
+				targetOutcomeIndexesInput: '5',
+				tradingForkUniverse: scalarForkUniverse,
+				universeHasForked: true,
+			}),
+		).toBe('Select valid target child universes.')
 	})
 
 	void test('only enables resolved-share redemption after finalization', () => {

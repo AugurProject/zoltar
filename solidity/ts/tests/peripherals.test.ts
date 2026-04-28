@@ -12,6 +12,7 @@ import { deployOriginSecurityPool, ensureDeploymentStatusOracleDeployed, ensureI
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 
 import { balanceOfShares, balanceOfSharesInCash, getEthRaiseCap, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndQueueOperation } from '../testsuite/simulator/utils/contracts/peripherals'
+import { getScalarOutcomeIndex } from '../testsuite/simulator/utils/contracts/scalarOutcome'
 import { tickToPrice } from '../testsuite/simulator/utils/tickMath'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes'
@@ -798,9 +799,9 @@ describe('Peripherals Contract Test Suite', () => {
 			openInterestArray.map(x => x - feesOwed),
 			'Shares exist after fork',
 		)
-		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes)
-		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No)
-		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Invalid)
+		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
+		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
+		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
 
 		const actualShares = await balanceOfSharesInCash(client, yesSecurityPool.securityPool, yesSecurityPool.shareToken, yesUniverse, addressString(TEST_ADDRESSES[2]))
 		assert.strictEqual(actualShares.length, 3, 'should have 3 outcomes')
@@ -916,6 +917,84 @@ describe('Peripherals Contract Test Suite', () => {
 		approximatelyEqual(actualInvalidSharesAfterRedeem2[1], expectedInvalidSharesAfterRedeem2[1], expectedInvalidSharesAfterRedeem2[1], 'invalid after redeem2 share1 should match')
 		approximatelyEqual(actualInvalidSharesAfterRedeem2[2], expectedInvalidSharesAfterRedeem2[2], expectedInvalidSharesAfterRedeem2[2], 'invalid after redeem2 share2 should match')
 		approximatelyEqual(await getETHBalance(client, addressString(TEST_ADDRESSES[4])), balancePriorInvalidRedeemal2 + ensureDefined(currentShares[0], 'currentShares[0] is undefined'), openInterestAmount * 1000n, 'did not gain eth after redeeming invalid shares')
+	})
+
+	test('can migrate shares into arbitrary scalar child universes after an external scalar fork', async () => {
+		const openInterestAmount = 5n * 10n ** 18n
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const scalarForkQuestion = {
+			title: 'scalar fork',
+			description: '',
+			startTime: 0n,
+			endTime: await mockWindow.getTime(),
+			numTicks: 10n,
+			displayValueMin: 0n,
+			displayValueMax: 10n,
+			answerUnit: 'km',
+		}
+		const scalarQuestionId = getQuestionId(scalarForkQuestion, [])
+
+		await createQuestion(client, scalarForkQuestion, [])
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, openInterestAmount)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, genesisUniverse, scalarQuestionId)
+
+		const lowScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 3n)
+		const highScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 7n)
+		const holderAddress = addressString(TEST_ADDRESSES[2])
+		const parentBalancesBeforeMigration = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
+		const parentYesBalance = ensureDefined(parentBalancesBeforeMigration[1], 'parent yes balance is undefined')
+
+		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [lowScalarOutcome, highScalarOutcome])
+
+		const parentBalancesAfterMigration = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
+		strictEqualTypeSafe(parentBalancesAfterMigration[1], 0n, 'parent yes shares should be burned after migration')
+
+		const lowScalarUniverse = getChildUniverseId(genesisUniverse, lowScalarOutcome)
+		const lowScalarBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, lowScalarUniverse, holderAddress)
+		strictEqualTypeSafe(lowScalarBalances[0], 0n, 'invalid shares should stay at zero in the low scalar child universe')
+		strictEqualTypeSafe(lowScalarBalances[1], parentYesBalance, 'yes shares should migrate into the low scalar child universe')
+		strictEqualTypeSafe(lowScalarBalances[2], 0n, 'no shares should stay at zero in the low scalar child universe')
+
+		const highScalarUniverse = getChildUniverseId(genesisUniverse, highScalarOutcome)
+		const highScalarBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, highScalarUniverse, holderAddress)
+		strictEqualTypeSafe(highScalarBalances[0], 0n, 'invalid shares should stay at zero in the high scalar child universe')
+		strictEqualTypeSafe(highScalarBalances[1], parentYesBalance, 'yes shares should migrate into the high scalar child universe')
+		strictEqualTypeSafe(highScalarBalances[2], 0n, 'no shares should stay at zero in the high scalar child universe')
+	})
+
+	test('rejects malformed and duplicate share migration target outcomes', async () => {
+		const openInterestAmount = 5n * 10n ** 18n
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const scalarForkQuestion = {
+			title: 'scalar fork',
+			description: '',
+			startTime: 0n,
+			endTime: await mockWindow.getTime(),
+			numTicks: 10n,
+			displayValueMin: 0n,
+			displayValueMax: 10n,
+			answerUnit: 'km',
+		}
+		const scalarQuestionId = getQuestionId(scalarForkQuestion, [])
+
+		await createQuestion(client, scalarForkQuestion, [])
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, openInterestAmount)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, genesisUniverse, scalarQuestionId)
+
+		const holderAddress = addressString(TEST_ADDRESSES[2])
+		const validScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 5n)
+		const parentBalancesBeforeFailedMigrations = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
+		const parentYesBalance = ensureDefined(parentBalancesBeforeFailedMigrations[1], 'parent yes balance is undefined')
+
+		await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [5n]), /Malformed/)
+		await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [validScalarOutcome, validScalarOutcome]), /Duplicate target outcome/)
+
+		const parentBalancesAfterFailedMigrations = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
+		strictEqualTypeSafe(parentBalancesAfterFailedMigrations[1], parentYesBalance, 'failed migrations should preserve the parent yes share balance')
 	})
 
 	test('can fork zero rep pools', async () => {

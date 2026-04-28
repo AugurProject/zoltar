@@ -331,6 +331,7 @@ export type ReportingSectionProps = ReportingRouteContentProps & {
 
 export type TradingRouteContentProps = {
 	accountState: AccountState
+	loadingTradingForkUniverse: boolean
 	loadingTradingDetails: boolean
 	onCreateCompleteSet: () => void
 	onMigrateShares: () => void
@@ -343,6 +344,7 @@ export type TradingRouteContentProps = {
 	selectedPool: ListedSecurityPool | undefined
 	tradingDetails: TradingDetails | undefined
 	tradingError: string | undefined
+	tradingForkUniverse: ZoltarUniverseSummary | undefined
 	tradingForm: TradingFormState
 	tradingResult: TradingActionResult | undefined
 }

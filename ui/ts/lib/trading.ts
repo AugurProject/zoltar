@@ -1,8 +1,10 @@
 import type { Address } from 'viem'
 import { formatCurrencyBalance } from './formatters.js'
+import { parseBigIntListInput } from './inputs.js'
 import { parseTradingAmountInput } from './marketForm.js'
 import { getReportingOutcomeLabel } from './reporting.js'
-import type { ReportingOutcomeKey, SecurityPoolSystemState, TradingShareBalances } from '../types/contracts.js'
+import { isValidScalarOutcomeIndex } from './scalarOutcome.js'
+import type { ReportingOutcomeKey, SecurityPoolSystemState, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
 
 const PRICE_PRECISION = 10n ** 18n
 const PERCENT_MULTIPLIER = 100n
@@ -76,6 +78,25 @@ export function getTradingGuardDisplayMessage(message: string | undefined) {
 	}
 
 	return message
+}
+
+function areShareMigrationTargetOutcomeIndexesValid(tradingForkUniverse: ZoltarUniverseSummary, targetOutcomeIndexes: bigint[]) {
+	const forkQuestionDetails = tradingForkUniverse.forkQuestionDetails
+	if (forkQuestionDetails === undefined) return false
+
+	if (forkQuestionDetails.marketType === 'scalar') {
+		const scalarQuestion = forkQuestionDetails
+		return targetOutcomeIndexes.every(outcomeIndex => isValidScalarOutcomeIndex(scalarQuestion, outcomeIndex))
+	}
+
+	const availableOutcomeIndexSet = new Set(tradingForkUniverse.childUniverses.map(child => child.outcomeIndex.toString()))
+	return targetOutcomeIndexes.every(outcomeIndex => availableOutcomeIndexSet.has(outcomeIndex.toString()))
+}
+
+export function getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse: ZoltarUniverseSummary | undefined) {
+	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return ''
+	if (tradingForkUniverse.forkQuestionDetails?.marketType === 'scalar') return ''
+	return tradingForkUniverse.childUniverses.map(child => child.outcomeIndex.toString()).join(', ')
 }
 
 export function getTradingMintGuardMessage({
@@ -183,28 +204,45 @@ export function getTradingMigrateSharesGuardMessage({
 	accountAddress,
 	hasSelectedPool,
 	isMainnet,
+	loadingTradingForkUniverse,
 	loadingTradingDetails,
-	selectedOutcome,
+	selectedShareOutcome,
 	shareBalances,
+	targetOutcomeIndexesInput,
+	tradingForkUniverse,
 	universeHasForked,
 }: {
 	accountAddress: Address | undefined
 	hasSelectedPool: boolean
 	isMainnet: boolean
+	loadingTradingForkUniverse: boolean
 	loadingTradingDetails: boolean
-	selectedOutcome: ReportingOutcomeKey
+	selectedShareOutcome: ReportingOutcomeKey
 	shareBalances: TradingShareBalances | undefined
+	targetOutcomeIndexesInput: string
+	tradingForkUniverse: ZoltarUniverseSummary | undefined
 	universeHasForked: boolean | undefined
 }) {
 	if (!hasSelectedPool) return 'Load a pool before migrating shares.'
 	if (accountAddress === undefined) return 'Connect a wallet before migrating shares.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before migrating shares.'
 	if (universeHasForked !== true) return SHARE_MIGRATION_AFTER_FORK_MESSAGE
+	if (loadingTradingForkUniverse) return 'Loading fork target universes.'
+	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return 'Refresh the fork target universes.'
+
+	let targetOutcomeIndexes: bigint[]
+	try {
+		targetOutcomeIndexes = parseBigIntListInput(targetOutcomeIndexesInput, 'Target child universes')
+	} catch {
+		return targetOutcomeIndexesInput.trim() === '' ? 'Select at least one target child universe.' : 'Select valid target child universes.'
+	}
+
+	if (!areShareMigrationTargetOutcomeIndexesValid(tradingForkUniverse, targetOutcomeIndexes)) return 'Select valid target child universes.'
 	if (loadingTradingDetails) return 'Loading wallet share balances.'
 
-	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, selectedOutcome)
+	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, selectedShareOutcome)
 	if (selectedOutcomeBalance === undefined) return 'Loading wallet share balances.'
-	if (selectedOutcomeBalance === 0n) return `No ${getReportingOutcomeLabel(selectedOutcome)} shares available to migrate.`
+	if (selectedOutcomeBalance === 0n) return `No ${getReportingOutcomeLabel(selectedShareOutcome)} shares available to migrate.`
 	return undefined
 }
 

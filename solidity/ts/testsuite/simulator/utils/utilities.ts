@@ -132,5 +132,5 @@ export const contractExists = async (client: ReadClient, contract: Address) => (
 
 const uint248BitMask = (1n << 248n) - 1n
 export function getChildUniverseId(parentUniverseId: bigint, outcome: bigint | QuestionOutcome): bigint {
-	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint8' }], [parentUniverseId, Number(outcome)]))) & uint248BitMask
+	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [parentUniverseId, BigInt(outcome)]))) & uint248BitMask
 }
