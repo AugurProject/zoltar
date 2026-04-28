@@ -85,10 +85,8 @@ export function getDefaultReportingFormState(): ReportingFormState {
 
 export function getDefaultForkAuctionFormState(): ForkAuctionFormState {
 	return {
-		bidAmount: '0',
-		bidIndex: '0',
-		bidTick: '0',
-		claimVaultAddress: '',
+		claimBidIndex: '0',
+		claimBidTick: '0',
 		depositIndexes: '',
 		directForkQuestionId: '',
 		directForkUniverseId: '0',
@@ -97,6 +95,9 @@ export function getDefaultForkAuctionFormState(): ForkAuctionFormState {
 		repMigrationOutcomes: 'yes',
 		securityPoolAddress: '',
 		selectedOutcome: 'yes',
+		submitBidAmount: '0',
+		submitBidTick: '0',
+		vaultAddress: '',
 		withdrawBidIndex: '0',
 		withdrawForAddress: '',
 		withdrawTick: '0',

@@ -88,7 +88,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 
 	const migrateEscalation = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {
-			const vaultAddress = resolveOptionalAddressInput(forkAuctionForm.value.claimVaultAddress, walletAddress, 'Vault address')
+			const vaultAddress = resolveOptionalAddressInput(forkAuctionForm.value.vaultAddress, walletAddress, 'Vault address')
 			return await migrateEscalationDeposits(
 				createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
 				details.securityPoolAddress,
@@ -104,7 +104,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 	const submitBid = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {
 			const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
-			return await submitTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, parseBigIntInput(forkAuctionForm.value.bidTick, 'Bid tick'), parseBigIntInput(forkAuctionForm.value.bidAmount, 'Bid amount'))
+			return await submitTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, parseBigIntInput(forkAuctionForm.value.submitBidTick, 'Bid tick'), parseBigIntInput(forkAuctionForm.value.submitBidAmount, 'Bid amount'))
 		}, 'Failed to submit truth auction bid')
 
 	const refundLosingBids = async () =>
@@ -124,8 +124,8 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 
 	const claimAuctionProceeds = async () =>
 		await runForkAuctionAction(async (walletAddress, details) => {
-			const vaultAddress = resolveOptionalAddressInput(forkAuctionForm.value.claimVaultAddress, walletAddress, 'Vault address')
-			return await claimSecurityPoolAuctionProceeds(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, vaultAddress, parseBigIntInput(forkAuctionForm.value.bidTick, 'Bid tick'), parseBigIntInput(forkAuctionForm.value.bidIndex, 'Bid index'))
+			const vaultAddress = resolveOptionalAddressInput(forkAuctionForm.value.vaultAddress, walletAddress, 'Vault address')
+			return await claimSecurityPoolAuctionProceeds(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, vaultAddress, parseBigIntInput(forkAuctionForm.value.claimBidTick, 'Bid tick'), parseBigIntInput(forkAuctionForm.value.claimBidIndex, 'Bid index'))
 		}, 'Failed to claim auction proceeds')
 
 	const forkUniverse = async () =>

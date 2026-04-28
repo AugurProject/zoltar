@@ -6,12 +6,14 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
+import { LatestActionSection } from './LatestActionSection.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { StateHint } from './StateHint.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
+import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { useLoadController } from '../hooks/useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOracleFeePercentage, formatOpenOracleMultiplier, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSelectedReportActionMode, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
@@ -34,12 +36,9 @@ function renderReportField(label: string, value: ComponentChildren) {
 
 function renderReportSection(title: string, fields: Array<{ label: string; value: ComponentChildren }>) {
 	return (
-		<div className='entity-card-subsection'>
-			<div className='entity-card-subsection-header'>
-				<h4>{title}</h4>
-			</div>
+		<WorkflowSubsection title={title}>
 			<div className='question-summary-grid'>{fields.map(field => renderReportField(field.label, field.value))}</div>
-		</div>
+		</WorkflowSubsection>
 	)
 }
 
@@ -514,12 +513,14 @@ function renderLatestActionCard(action: OpenOracleSectionProps['openOracleResult
 	if (action === undefined) return undefined
 
 	return (
-		<EntityCard title='Latest Oracle Action' badge={<span className='badge ok'>{action.action}</span>}>
-			<p className='detail'>Action: {action.action}</p>
-			<p className='detail'>
-				Transaction: <TransactionHashLink hash={action.hash} />
-			</p>
-		</EntityCard>
+		<LatestActionSection
+			title='Latest Oracle Action'
+			badge={<span className='badge ok'>{action.action}</span>}
+			rows={[
+				{ label: 'Action', value: action.action },
+				{ label: 'Transaction', value: <TransactionHashLink hash={action.hash} /> },
+			]}
+		/>
 	)
 }
 

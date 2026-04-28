@@ -4,6 +4,7 @@ import { EnumDropdown } from './EnumDropdown.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { EscalationSide } from './EscalationSide.js'
+import { LatestActionSection } from './LatestActionSection.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
@@ -189,38 +190,19 @@ export function ReportingSection({
 			</div>
 		)
 	const latestReportingAction =
-		reportingResult === undefined ? undefined : embedInCard ? (
-			<div className='entity-card-subsection'>
-				<div className='entity-card-subsection-header'>
-					<h4>Latest Reporting Action</h4>
-					<span className='badge ok'>{getReportingOutcomeLabel(reportingResult.outcome)}</span>
-				</div>
-				<p className='detail'>Action: {reportingResult.action}</p>
-				<p className='detail'>Outcome: {getReportingOutcomeLabel(reportingResult.outcome)}</p>
-				<p className='detail'>
-					Pool: <AddressValue address={reportingResult.securityPoolAddress} />
-				</p>
-				<p className='detail'>
-					Universe: <UniverseLink universeId={reportingResult.universeId} />
-				</p>
-				<p className='detail'>
-					Transaction: <TransactionHashLink hash={reportingResult.hash} />
-				</p>
-			</div>
-		) : (
-			<EntityCard title='Latest Reporting Action' badge={<span className='badge ok'>{getReportingOutcomeLabel(reportingResult.outcome)}</span>}>
-				<p className='detail'>Action: {reportingResult.action}</p>
-				<p className='detail'>Outcome: {getReportingOutcomeLabel(reportingResult.outcome)}</p>
-				<p className='detail'>
-					Pool: <AddressValue address={reportingResult.securityPoolAddress} />
-				</p>
-				<p className='detail'>
-					Universe: <UniverseLink universeId={reportingResult.universeId} />
-				</p>
-				<p className='detail'>
-					Transaction: <TransactionHashLink hash={reportingResult.hash} />
-				</p>
-			</EntityCard>
+		reportingResult === undefined ? undefined : (
+			<LatestActionSection
+				title='Latest Reporting Action'
+				badge={<span className='badge ok'>{getReportingOutcomeLabel(reportingResult.outcome)}</span>}
+				embedInCard={embedInCard}
+				rows={[
+					{ label: 'Action', value: reportingResult.action },
+					{ label: 'Outcome', value: getReportingOutcomeLabel(reportingResult.outcome) },
+					{ label: 'Pool', value: <AddressValue address={reportingResult.securityPoolAddress} /> },
+					{ label: 'Universe', value: <UniverseLink universeId={reportingResult.universeId} /> },
+					{ label: 'Transaction', value: <TransactionHashLink hash={reportingResult.hash} /> },
+				]}
+			/>
 		)
 	const actionsSection = (
 		<div className='form-grid'>

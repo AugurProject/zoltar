@@ -1855,6 +1855,53 @@ button.currency-value.copyable:hover:not(:disabled) {
 	opacity: 0.72;
 }
 
+.fork-summary-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+	gap: 0.75rem;
+}
+
+.fork-stage-nav {
+	margin-top: 0.15rem;
+	padding-bottom: 0;
+	border-bottom: 0;
+}
+
+.fork-stage-panel {
+	display: grid;
+	gap: 0.85rem;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.fork-stage-panel:disabled {
+	opacity: 0.72;
+}
+
+.fork-stage-panel .entity-card-subsection {
+	gap: 0.95rem;
+	margin: 0;
+	padding: 0.95rem 1rem 1rem;
+	border: 1px solid var(--border-default);
+	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-card-end) 100%);
+	box-shadow:
+		var(--glow-inset-subtle),
+		0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+.fork-stage-panel .entity-card-subsection-header {
+	margin-bottom: -0.15rem;
+}
+
+.fork-stage-panel .entity-card-subsection-header h4 {
+	font-size: var(--font-base);
+}
+
+.fork-stage-panel .detail {
+	line-height: 1.45;
+}
+
 .workflow-create-section {
 	border-top-color: var(--border-strong);
 	padding-top: 1.25rem;
@@ -2254,6 +2301,7 @@ button:focus-visible {
 	.escalation-metrics,
 	.escalation-sides,
 	.categorical-outcome-row,
+	.fork-summary-grid,
 	.field-row,
 	.market-grid {
 		grid-template-columns: 1fr;

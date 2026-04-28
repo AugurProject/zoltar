@@ -86,10 +86,8 @@ export type ReportingFormState = {
 }
 
 export type ForkAuctionFormState = {
-	bidAmount: string
-	bidIndex: string
-	bidTick: string
-	claimVaultAddress: string
+	claimBidIndex: string
+	claimBidTick: string
 	depositIndexes: string
 	directForkQuestionId: string
 	directForkUniverseId: string
@@ -98,6 +96,9 @@ export type ForkAuctionFormState = {
 	repMigrationOutcomes: string
 	securityPoolAddress: string
 	selectedOutcome: ReportingOutcomeKey
+	submitBidAmount: string
+	submitBidTick: string
+	vaultAddress: string
 	withdrawBidIndex: string
 	withdrawForAddress: string
 	withdrawTick: string

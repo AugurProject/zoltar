@@ -103,6 +103,7 @@ void describe('selected pool workflow visibility', () => {
 	void test('disables the fork workflow only while the selected pool remains operational', () => {
 		expect(isForkWorkflowDisabled(undefined)).toBe(true)
 		expect(isForkWorkflowDisabled('operational')).toBe(true)
+		expect(isForkWorkflowDisabled('operational', true)).toBe(false)
 		expect(isForkWorkflowDisabled('poolForked')).toBe(false)
 		expect(isForkWorkflowDisabled('forkMigration')).toBe(false)
 		expect(isForkWorkflowDisabled('forkTruthAuction')).toBe(false)
