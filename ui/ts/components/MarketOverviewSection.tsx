@@ -53,18 +53,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 			) : (
 				<>
 					{hasForked ? (
-						<EntityCard
-							title='Fork Question'
-							badge={
-								<span className='badge muted'>
-									{rootUniverse.forkQuestionDetails?.marketType ?? (
-										<span className='loading-value' role='status' aria-label='Loading fork question type'>
-											<span className='spinner' aria-hidden='true' />
-										</span>
-									)}
-								</span>
-							}
-						>
+						<EntityCard title='Fork Question'>
 							<Question question={rootUniverse.forkQuestionDetails} loading={rootUniverse.forkQuestionDetails === undefined} />
 						</EntityCard>
 					) : undefined}

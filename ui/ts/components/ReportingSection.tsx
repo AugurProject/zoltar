@@ -79,7 +79,6 @@ export function ReportingSection({
 				<div className='entity-card-subsection'>
 					<div className='entity-card-subsection-header'>
 						<h4>Question</h4>
-						<span className='badge muted'>{reportingDetails.marketDetails.marketType}</span>
 					</div>
 					<Question question={reportingDetails.marketDetails} />
 				</div>
@@ -119,7 +118,6 @@ export function ReportingSection({
 				<div className='entity-card-subsection'>
 					<div className='entity-card-subsection-header'>
 						<h4>Question</h4>
-						<span className='badge muted'>{reportingDetails.marketDetails.marketType}</span>
 					</div>
 					<Question question={reportingDetails.marketDetails} />
 				</div>

@@ -122,7 +122,7 @@ export function SecurityPoolSection({
 					<>
 						<div className='market-column'>
 							{marketDetails === undefined && !loadingMarketDetails ? undefined : (
-								<EntityCard title='Question' badge={marketDetails === undefined ? undefined : <span className='badge ok'>{marketDetails.marketType}</span>}>
+								<EntityCard title='Question'>
 									<Question question={marketDetails} loading={loadingMarketDetails && marketDetails === undefined} />
 								</EntityCard>
 							)}

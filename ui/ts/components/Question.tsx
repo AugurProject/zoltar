@@ -11,6 +11,18 @@ type QuestionProps = {
 	showTitle?: boolean
 }
 
+type QuestionSummaryField =
+	| {
+			kind: 'text'
+			label: string
+			value: string
+	  }
+	| {
+			kind: 'timestamp'
+			label: string
+			value: bigint
+	  }
+
 export function getQuestionTitle(question: MarketDetails) {
 	return question.title.trim() === '' ? 'Untitled question' : question.title
 }
@@ -29,13 +41,34 @@ function getDisplayRange(question: MarketDetails) {
 	return question.answerUnit === '' ? `${question.displayValueMin.toString()} to ${question.displayValueMax.toString()}` : `${question.displayValueMin.toString()} to ${question.displayValueMax.toString()} ${question.answerUnit}`
 }
 
-function renderScalarQuestionFields(question: MarketDetails) {
+export function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {
+	const fields: QuestionSummaryField[] = [
+		{ kind: 'text', label: 'Question ID', value: question.questionId },
+		{ kind: 'timestamp', label: 'Created', value: question.createdAt },
+		{ kind: 'timestamp', label: 'End Time', value: question.endTime },
+		{ kind: 'text', label: 'Outcomes', value: getDisplayedOutcomes(question).join(', ') },
+	]
+
+	if (question.marketType === 'scalar') {
+		fields.push({ kind: 'text', label: 'Ticks', value: question.numTicks.toString() }, { kind: 'text', label: 'Display Range', value: getDisplayRange(question) }, { kind: 'text', label: 'Answer Unit', value: question.answerUnit === '' ? 'None' : question.answerUnit })
+	}
+
+	return fields
+}
+
+function renderQuestionSummaryField(field: QuestionSummaryField) {
+	if (field.kind === 'timestamp') {
+		return (
+			<MetricField key={field.label} label={field.label}>
+				<TimestampValue timestamp={field.value} />
+			</MetricField>
+		)
+	}
+
 	return (
-		<>
-			<MetricField label='Ticks'>{question.numTicks.toString()}</MetricField>
-			<MetricField label='Display Range'>{getDisplayRange(question)}</MetricField>
-			<MetricField label='Answer Unit'>{question.answerUnit === '' ? 'None' : question.answerUnit}</MetricField>
-		</>
+		<MetricField key={field.label} label={field.label}>
+			{field.value}
+		</MetricField>
 	)
 }
 
@@ -52,6 +85,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 
 	const title = getQuestionTitle(question)
 	const description = getQuestionDescription(question)
+	const summaryFields = getQuestionSummaryFields(question)
 
 	return (
 		<div className={`question-summary ${className}`}>
@@ -63,18 +97,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 			) : (
 				<p className='detail'>{description}</p>
 			)}
-			<div className='question-summary-grid'>
-				<MetricField label='Question ID'>{question.questionId}</MetricField>
-				<MetricField label='Type'>{question.marketType}</MetricField>
-				<MetricField label='Created'>
-					<TimestampValue timestamp={question.createdAt} />
-				</MetricField>
-				<MetricField label='End Time'>
-					<TimestampValue timestamp={question.endTime} />
-				</MetricField>
-				<MetricField label='Outcomes'>{getDisplayedOutcomes(question).join(', ')}</MetricField>
-				{question.marketType === 'scalar' ? renderScalarQuestionFields(question) : undefined}
-			</div>
+			<div className='question-summary-grid'>{summaryFields.map(renderQuestionSummaryField)}</div>
 		</div>
 	)
 }

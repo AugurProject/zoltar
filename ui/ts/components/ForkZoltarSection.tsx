@@ -122,7 +122,6 @@ export function ForkZoltarSection({
 						<div className='entity-card-subsection'>
 							<div className='entity-card-subsection-header'>
 								<h4>Question</h4>
-								<span className='badge muted'>{selectedQuestion.marketType}</span>
 							</div>
 							<Question question={selectedQuestion} />
 						</div>
