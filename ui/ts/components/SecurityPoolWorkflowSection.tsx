@@ -185,7 +185,7 @@ export function SecurityPoolWorkflowSection({
 									<MetricField label='Open Interest Fee / Year'>
 										<CurrencyValue value={openInterestFeePerYearBigint(loadedSelectedPool?.currentRetentionRate)} suffix='%' />
 									</MetricField>
-									<OpenInterestCapacityMetrics completeSetCollateralAmount={loadedSelectedPool?.completeSetCollateralAmount} totalSecurityBondAllowance={loadedSelectedPool?.totalSecurityBondAllowance} />
+									<OpenInterestCapacityMetrics completeSetCollateralAmount={loadedSelectedPool?.completeSetCollateralAmount} lastOraclePrice={loadedSelectedPool?.lastOraclePrice} totalRepDeposit={loadedSelectedPool?.totalRepDeposit} totalSecurityBondAllowance={loadedSelectedPool?.totalSecurityBondAllowance} />
 									{reportingReady ? <MetricField label='Reporting'>Unlocked</MetricField> : undefined}
 									<MetricField label='Manager'>
 										<AddressValue address={loadedSelectedPool?.managerAddress} />

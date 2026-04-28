@@ -106,7 +106,7 @@ export function SecurityPoolsOverviewSection({
 										<MetricField label='Open Interest Fee / Year'>
 											<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
 										</MetricField>
-										<OpenInterestCapacityMetrics completeSetCollateralAmount={pool.completeSetCollateralAmount} totalSecurityBondAllowance={pool.totalSecurityBondAllowance} />
+										<OpenInterestCapacityMetrics completeSetCollateralAmount={pool.completeSetCollateralAmount} lastOraclePrice={pool.lastOraclePrice} totalRepDeposit={pool.totalRepDeposit} totalSecurityBondAllowance={pool.totalSecurityBondAllowance} />
 										<MetricField label='Manager'>
 											<AddressValue address={pool.managerAddress} />
 										</MetricField>

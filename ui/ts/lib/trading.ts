@@ -2,9 +2,20 @@ import type { Address } from 'viem'
 import { formatCurrencyBalance } from './formatters.js'
 import type { SecurityPoolSystemState } from '../types/contracts.js'
 
+const PRICE_PRECISION = 10n ** 18n
+
 export function getRemainingMintCapacity(totalSecurityBondAllowance: bigint | undefined, completeSetCollateralAmount: bigint | undefined) {
 	if (totalSecurityBondAllowance === undefined || completeSetCollateralAmount === undefined) return undefined
 	return totalSecurityBondAllowance > completeSetCollateralAmount ? totalSecurityBondAllowance - completeSetCollateralAmount : 0n
+}
+
+export function getAllowanceBackedRep(totalSecurityBondAllowance: bigint | undefined, lastOraclePrice: bigint | undefined) {
+	if (totalSecurityBondAllowance === undefined || lastOraclePrice === undefined) return undefined
+	return (totalSecurityBondAllowance * lastOraclePrice) / PRICE_PRECISION
+}
+
+export function hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit: bigint | undefined, totalSecurityBondAllowance: bigint | undefined) {
+	return (totalRepDeposit ?? 0n) > 0n && (totalSecurityBondAllowance ?? 0n) === 0n
 }
 
 export function getTradingMintGuardMessage({
@@ -14,6 +25,7 @@ export function getTradingMintGuardMessage({
 	isMainnet,
 	mintAmountInput,
 	systemState,
+	totalRepDeposit,
 	totalSecurityBondAllowance,
 }: {
 	accountAddress: Address | undefined
@@ -22,6 +34,7 @@ export function getTradingMintGuardMessage({
 	isMainnet: boolean
 	mintAmountInput: string
 	systemState: SecurityPoolSystemState | undefined
+	totalRepDeposit: bigint | undefined
 	totalSecurityBondAllowance: bigint | undefined
 }) {
 	if (accountAddress === undefined) return 'Connect a wallet before minting complete sets.'
@@ -30,7 +43,13 @@ export function getTradingMintGuardMessage({
 
 	const remainingCapacity = getRemainingMintCapacity(totalSecurityBondAllowance, completeSetCollateralAmount)
 	if (remainingCapacity === undefined) return 'Loading pool mint capacity.'
-	if (remainingCapacity === 0n) return 'This pool has no remaining mint capacity.'
+	if (remainingCapacity === 0n) {
+		if (hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit, totalSecurityBondAllowance)) {
+			return 'This pool has no remaining mint capacity because its vaults currently have no active security bond allowance. Deposited REP alone does not create mint capacity.'
+		}
+
+		return 'This pool has no remaining mint capacity.'
+	}
 
 	const trimmedAmount = mintAmountInput.trim()
 	if (trimmedAmount === '') return 'Enter a mint amount greater than zero.'

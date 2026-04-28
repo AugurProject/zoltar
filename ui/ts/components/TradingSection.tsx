@@ -23,6 +23,7 @@ export function TradingSection({ accountState, embedInCard = false, onCreateComp
 		isMainnet,
 		mintAmountInput: tradingForm.completeSetAmount,
 		systemState: selectedPool?.systemState,
+		totalRepDeposit: selectedPool?.totalRepDeposit,
 		totalSecurityBondAllowance: selectedPool?.totalSecurityBondAllowance,
 	})
 	const redeemCompleteSetGuardMessage = (() => {
@@ -114,7 +115,7 @@ export function TradingSection({ accountState, embedInCard = false, onCreateComp
 						<MetricField label='Universe'>
 							<UniverseLink universeId={selectedPool.universeId} />
 						</MetricField>
-						<OpenInterestCapacityMetrics completeSetCollateralAmount={selectedPool.completeSetCollateralAmount} totalSecurityBondAllowance={selectedPool.totalSecurityBondAllowance} />
+						<OpenInterestCapacityMetrics completeSetCollateralAmount={selectedPool.completeSetCollateralAmount} lastOraclePrice={selectedPool.lastOraclePrice} totalRepDeposit={selectedPool.totalRepDeposit} totalSecurityBondAllowance={selectedPool.totalSecurityBondAllowance} />
 					</div>
 				)}
 			</div>

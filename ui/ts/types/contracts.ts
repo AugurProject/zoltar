@@ -230,6 +230,7 @@ export type ListedSecurityPool = {
 	currentRetentionRate: bigint
 	forkOutcome: ReportingOutcomeKey | 'none'
 	forkOwnSecurityPool: boolean
+	lastOraclePrice: bigint | undefined
 	managerAddress: Address
 	marketDetails: MarketDetails
 	migratedRep: bigint
@@ -238,6 +239,7 @@ export type ListedSecurityPool = {
 	securityMultiplier: bigint
 	securityPoolAddress: Address
 	systemState: SecurityPoolSystemState
+	totalRepDeposit: bigint
 	totalSecurityBondAllowance: bigint
 	truthAuctionAddress: Address
 	truthAuctionStartedAt: bigint
