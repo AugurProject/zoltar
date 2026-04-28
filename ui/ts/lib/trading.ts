@@ -10,6 +10,13 @@ const PERCENT_MULTIPLIER = 100n
 type CollateralizationDisplayState = 'value' | 'noActiveAllowance' | 'unavailable'
 type CollateralizationTone = 'success' | 'danger'
 
+export const NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE = 'No mint capacity. No active security bond allowance.'
+export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
+export const SHARE_MIGRATION_AFTER_FORK_MESSAGE = 'Share migration is only available after this universe has forked.'
+export const MARKET_NOT_FINALIZED_MESSAGE = 'This market has not finalized yet.'
+
+const HIDDEN_TRADING_GUARD_MESSAGES = [NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE, MARKET_NOT_FINALIZED_MESSAGE]
+
 export function getRemainingMintCapacity(totalSecurityBondAllowance: bigint | undefined, completeSetCollateralAmount: bigint | undefined) {
 	if (totalSecurityBondAllowance === undefined || completeSetCollateralAmount === undefined) return undefined
 	return totalSecurityBondAllowance > completeSetCollateralAmount ? totalSecurityBondAllowance - completeSetCollateralAmount : 0n
@@ -61,6 +68,16 @@ export function getSelectedOutcomeShareBalance(shareBalances: TradingShareBalanc
 	}
 }
 
+export function getTradingGuardDisplayMessage(message: string | undefined) {
+	if (message === undefined) return undefined
+
+	for (const hiddenMessage of HIDDEN_TRADING_GUARD_MESSAGES) {
+		if (message === hiddenMessage) return undefined
+	}
+
+	return message
+}
+
 export function getTradingMintGuardMessage({
 	accountAddress,
 	completeSetCollateralAmount,
@@ -94,7 +111,7 @@ export function getTradingMintGuardMessage({
 	if (remainingCapacity === undefined) return 'Loading mint capacity.'
 	if (remainingCapacity === 0n) {
 		if (hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit, totalSecurityBondAllowance)) {
-			return 'No mint capacity. No active security bond allowance.'
+			return NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
 		}
 
 		return 'No mint capacity remaining.'
@@ -145,7 +162,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 
 	const maxRedeemableCompleteSets = getMaxRedeemableCompleteSets(shareBalances)
 	if (maxRedeemableCompleteSets === undefined) return 'Loading wallet share balances.'
-	if (maxRedeemableCompleteSets === 0n) return 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
+	if (maxRedeemableCompleteSets === 0n) return NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
 
 	const trimmedAmount = redeemAmountInput.trim()
 	if (trimmedAmount === '') return 'Enter a redeem amount greater than zero.'
@@ -182,7 +199,7 @@ export function getTradingMigrateSharesGuardMessage({
 	if (!hasSelectedPool) return 'Load a pool before migrating shares.'
 	if (accountAddress === undefined) return 'Connect a wallet before migrating shares.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before migrating shares.'
-	if (universeHasForked !== true) return 'Share migration is only available after this universe has forked.'
+	if (universeHasForked !== true) return SHARE_MIGRATION_AFTER_FORK_MESSAGE
 	if (loadingTradingDetails) return 'Loading wallet share balances.'
 
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, selectedOutcome)
@@ -211,6 +228,6 @@ export function getTradingRedeemSharesGuardMessage({
 	if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming shares.'
 	if (universeHasForked === true) return 'Redeeming shares is unavailable after this universe has forked.'
 	if (systemState !== undefined && systemState !== 'operational') return 'Redeeming shares is only available while the pool is operational.'
-	if (questionOutcome === undefined || questionOutcome === 'none') return 'This market has not finalized yet.'
+	if (questionOutcome === undefined || questionOutcome === 'none') return MARKET_NOT_FINALIZED_MESSAGE
 	return undefined
 }

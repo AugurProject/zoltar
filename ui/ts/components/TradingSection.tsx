@@ -9,7 +9,7 @@ import { UniverseLink } from './UniverseLink.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
-import { getRemainingMintCapacity, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage } from '../lib/trading.js'
+import { getRemainingMintCapacity, getTradingGuardDisplayMessage, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage } from '../lib/trading.js'
 import type { TradingSectionProps } from '../types/components.js'
 
 export function TradingSection({
@@ -76,6 +76,10 @@ export function TradingSection({
 		systemState: selectedPool?.systemState,
 		universeHasForked: selectedPool?.universeHasForked,
 	})
+	const mintGuardDisplayMessage = getTradingGuardDisplayMessage(mintGuardMessage)
+	const redeemCompleteSetGuardDisplayMessage = getTradingGuardDisplayMessage(redeemCompleteSetGuardMessage)
+	const migrateSharesGuardDisplayMessage = getTradingGuardDisplayMessage(migrateSharesGuardMessage)
+	const redeemSharesGuardDisplayMessage = getTradingGuardDisplayMessage(redeemSharesGuardMessage)
 	const renderShareMetricValue = (value: bigint | undefined) => {
 		if (loadingTradingDetails) return 'Loading...'
 		if (value === undefined) return '—'
@@ -155,7 +159,7 @@ export function TradingSection({
 					<MetricField label='Yes'>{renderShareMetricValue(shareBalances?.yes)}</MetricField>
 					<MetricField label='No'>{renderShareMetricValue(shareBalances?.no)}</MetricField>
 					<MetricField label='Invalid'>{renderShareMetricValue(shareBalances?.invalid)}</MetricField>
-					<MetricField label='Max Complete Sets'>{renderShareMetricValue(maxRedeemableCompleteSets)}</MetricField>
+					<MetricField label='Total Complete Sets'>{renderShareMetricValue(maxRedeemableCompleteSets)}</MetricField>
 				</div>
 			</div>
 		)
@@ -170,11 +174,11 @@ export function TradingSection({
 				<input value={tradingForm.completeSetAmount} inputMode='decimal' onInput={event => onTradingFormChange({ completeSetAmount: event.currentTarget.value })} />
 			</label>
 			<div className='actions'>
-				<button className='primary' title={mintGuardMessage} onClick={onCreateCompleteSet} disabled={mintGuardMessage !== undefined}>
+				<button className='primary' title={mintGuardDisplayMessage} onClick={onCreateCompleteSet} disabled={mintGuardMessage !== undefined}>
 					Mint Complete Sets
 				</button>
 			</div>
-			{mintGuardMessage === undefined ? undefined : <p className='detail'>{mintGuardMessage}</p>}
+			{mintGuardDisplayMessage === undefined ? undefined : <p className='detail'>{mintGuardDisplayMessage}</p>}
 		</div>
 	)
 	const redeemCompleteSetSection = (
@@ -200,11 +204,11 @@ export function TradingSection({
 				</div>
 			</label>
 			<div className='actions'>
-				<button className='secondary' title={redeemCompleteSetGuardMessage} onClick={onRedeemCompleteSet} disabled={redeemCompleteSetGuardMessage !== undefined}>
+				<button className='secondary' title={redeemCompleteSetGuardDisplayMessage} onClick={onRedeemCompleteSet} disabled={redeemCompleteSetGuardMessage !== undefined}>
 					Redeem Complete Sets
 				</button>
 			</div>
-			{redeemCompleteSetGuardMessage === undefined ? undefined : <p className='detail'>{redeemCompleteSetGuardMessage}</p>}
+			{redeemCompleteSetGuardDisplayMessage === undefined ? undefined : <p className='detail'>{redeemCompleteSetGuardDisplayMessage}</p>}
 		</div>
 	)
 	const migrateSharesSection = (
@@ -217,11 +221,11 @@ export function TradingSection({
 				<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={tradingForm.selectedOutcome} onChange={selectedOutcome => onTradingFormChange({ selectedOutcome })} />
 			</label>
 			<div className='actions'>
-				<button className='secondary' title={migrateSharesGuardMessage} onClick={onMigrateShares} disabled={migrateSharesGuardMessage !== undefined}>
+				<button className='secondary' title={migrateSharesGuardDisplayMessage} onClick={onMigrateShares} disabled={migrateSharesGuardMessage !== undefined}>
 					Migrate Shares
 				</button>
 			</div>
-			{migrateSharesGuardMessage === undefined ? undefined : <p className='detail'>{migrateSharesGuardMessage}</p>}
+			{migrateSharesGuardDisplayMessage === undefined ? undefined : <p className='detail'>{migrateSharesGuardDisplayMessage}</p>}
 		</div>
 	)
 	const redeemSharesSection = (
@@ -230,11 +234,11 @@ export function TradingSection({
 				<h4>Redeem Resolved Shares</h4>
 			</div>
 			<div className='actions'>
-				<button className='secondary' title={redeemSharesGuardMessage} onClick={onRedeemShares} disabled={redeemSharesGuardMessage !== undefined}>
+				<button className='secondary' title={redeemSharesGuardDisplayMessage} onClick={onRedeemShares} disabled={redeemSharesGuardMessage !== undefined}>
 					Redeem Shares
 				</button>
 			</div>
-			{redeemSharesGuardMessage === undefined ? undefined : <p className='detail'>{redeemSharesGuardMessage}</p>}
+			{redeemSharesGuardDisplayMessage === undefined ? undefined : <p className='detail'>{redeemSharesGuardDisplayMessage}</p>}
 		</div>
 	)
 	const tradingSections = (
