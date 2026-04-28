@@ -41,6 +41,7 @@ type OpenOracleInitialReportSubmissionDetails = {
 	blockMessage: OpenOracleGateMessage | undefined
 	canSubmit: boolean
 	canWrapRequiredWeth: boolean
+	hasWethWrapAction: boolean
 	price: bigint | undefined
 	priceInput: string
 	priceSource: OpenOracleInitialReportPriceSource
@@ -358,6 +359,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	const token2Approval = deriveTokenApprovalRequirement(amount2, approvedToken2Amount)
 	const token1BalanceShortage = amount1 === undefined || token1Balance === undefined || token1Balance >= amount1 ? undefined : amount1 - token1Balance
 	const token2BalanceShortage = amount2 === undefined || token2Balance === undefined || token2Balance >= amount2 ? undefined : amount2 - token2Balance
+	const hasWethWrapAction = reportDetails !== undefined && (isCanonicalMainnetWeth(reportDetails.token1) || isCanonicalMainnetWeth(reportDetails.token2))
 	const requiredWethWrapAmount =
 		reportDetails === undefined
 			? undefined
@@ -367,14 +369,19 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 					? token2BalanceShortage
 					: undefined
 	const canWrapRequiredWeth = requiredWethWrapAmount !== undefined && requiredWethWrapAmount > 0n && walletEthBalance !== undefined && walletEthBalance >= requiredWethWrapAmount
-	const wrapRequiredWethMessage =
-		requiredWethWrapAmount === undefined || requiredWethWrapAmount <= 0n
-			? undefined
-			: walletEthBalance === undefined
+	const wrapRequiredWethMessage = !hasWethWrapAction
+		? undefined
+		: requiredWethWrapAmount !== undefined && requiredWethWrapAmount > 0n
+			? walletEthBalance === undefined
 				? createHiddenLoadingGateMessage('Loading wallet ETH balance.')
 				: walletEthBalance < requiredWethWrapAmount
 					? createVisibleGateMessage(`Wallet has ${formatCurrencyBalance(walletEthBalance)} ETH, need ${formatCurrencyBalance(requiredWethWrapAmount)} ETH to wrap the required WETH.`)
 					: undefined
+			: amount1 === undefined || amount2 === undefined
+				? createVisibleGateMessage(`Enter a valid ${token1Label} / ${token2Label} price to determine whether this report needs more WETH.`)
+				: (isCanonicalMainnetWeth(reportDetails?.token1) && token1Balance === undefined) || (isCanonicalMainnetWeth(reportDetails?.token2) && token2Balance === undefined)
+					? createHiddenLoadingGateMessage('Loading current WETH balance.')
+					: createVisibleGateMessage('No additional WETH is required for this report.')
 
 	let blockMessage: OpenOracleGateMessage | undefined
 	if (reportDetails === undefined) {
@@ -463,6 +470,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 		blockMessage,
 		canSubmit: blockMessage === undefined,
 		canWrapRequiredWeth,
+		hasWethWrapAction,
 		price,
 		priceInput: resolvedPriceInput,
 		priceSource,

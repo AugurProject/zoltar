@@ -106,16 +106,13 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 					<CurrencyValue value={requiredAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
 				</MetricField>
 				<MetricField label={`Approved ${tokenSymbol}`}>
-					<ApprovedAmountValue loading={allowanceLoading} value={approvedAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
-				</MetricField>
-				<MetricField label={`Need More ${tokenSymbol} Approved`}>
-					<CurrencyValue value={requirement.neededAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
+					<ApprovedAmountValue loading={allowanceLoading} value={approvedAmount} requiredAmount={requiredAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
 				</MetricField>
 			</div>
 
-			<label className='field'>
-				<span>{`${tokenSymbol} Approval Amount`}</span>
-				<div className='field-inline'>
+			<label className='field approval-amount-field'>
+				<span className='approval-amount-label'>{`${tokenSymbol} Approval Amount`}</span>
+				<div className='field-inline approval-amount-controls'>
 					<FormInput className='field-inline-input' value={draftAmount} onInput={event => setDraftAmount(event.currentTarget.value)} placeholder='Leave blank for required total' invalid={amountValidationMessage !== undefined} disabled={pending} />
 					<button className='quiet field-inline-action' type='button' onClick={() => setDraftAmount('max')} disabled={pending}>
 						Max
