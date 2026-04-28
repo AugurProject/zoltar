@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getSelectedPoolCardTitle, getSelectedPoolLookupDisplay, isForkWorkflowDisabled, shouldShowSelectedPoolWorkflowDetails } from '../components/SecurityPoolWorkflowSection.js'
+import { getOracleLastPriceDisplay, getSelectedPoolCardTitle, getSelectedPoolLookupDisplay, isForkWorkflowDisabled, shouldShowSelectedPoolWorkflowDetails } from '../components/SecurityPoolWorkflowSection.js'
 
 void describe('selected pool workflow lookup state', () => {
 	void test('uses a stable card title until a pool resolves', () => {
@@ -106,5 +106,32 @@ void describe('selected pool workflow visibility', () => {
 		expect(isForkWorkflowDisabled('poolForked')).toBe(false)
 		expect(isForkWorkflowDisabled('forkMigration')).toBe(false)
 		expect(isForkWorkflowDisabled('forkTruthAuction')).toBe(false)
+	})
+})
+
+void describe('selected pool oracle price display', () => {
+	void test('shows a dash when the oracle price has never been settled', () => {
+		expect(
+			getOracleLastPriceDisplay({
+				lastPrice: 0n,
+				lastSettlementTimestamp: 0n,
+			}),
+		).toBe('-')
+	})
+
+	void test('keeps settled prices numeric, including zero', () => {
+		expect(
+			getOracleLastPriceDisplay({
+				lastPrice: 0n,
+				lastSettlementTimestamp: 1n,
+			}),
+		).toBe('0')
+
+		expect(
+			getOracleLastPriceDisplay({
+				lastPrice: 42n,
+				lastSettlementTimestamp: 1n,
+			}),
+		).toBe('42')
 	})
 })

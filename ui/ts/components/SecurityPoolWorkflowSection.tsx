@@ -53,6 +53,11 @@ export function isForkWorkflowDisabled(selectedPoolState: SecurityPoolSystemStat
 	return selectedPoolState === undefined || selectedPoolState === 'operational'
 }
 
+export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }: { lastPrice: bigint; lastSettlementTimestamp: bigint }) {
+	if (lastSettlementTimestamp === 0n) return '-'
+	return lastPrice.toString()
+}
+
 export function SecurityPoolWorkflowSection({
 	accountState,
 	activeUniverseId,
@@ -251,7 +256,7 @@ export function SecurityPoolWorkflowSection({
 								) : (
 									<>
 										<div className='workflow-metric-grid'>
-											<MetricField label='Last Price'>{poolOracleManagerDetails.lastPrice.toString()}</MetricField>
+											<MetricField label='Last Price'>{getOracleLastPriceDisplay(poolOracleManagerDetails)}</MetricField>
 											<MetricField label='Set At'>
 												<TimestampValue timestamp={poolOracleManagerDetails.lastSettlementTimestamp} zeroText='Never' />
 											</MetricField>
