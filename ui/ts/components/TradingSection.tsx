@@ -6,64 +6,78 @@ import { MetricField } from './MetricField.js'
 import { OpenInterestCapacityMetrics } from './OpenInterestCapacityMetrics.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
-import { getRemainingMintCapacity, getTradingMintGuardMessage } from '../lib/trading.js'
+import { getRemainingMintCapacity, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage } from '../lib/trading.js'
 import type { TradingSectionProps } from '../types/components.js'
 
-export function TradingSection({ accountState, embedInCard = false, onCreateCompleteSet, onMigrateShares, onRedeemCompleteSet, onRedeemShares, onTradingFormChange, selectedPool, tradingError, tradingForm, tradingResult, showHeader = true, showSecurityPoolAddressInput = true }: TradingSectionProps) {
+export function TradingSection({
+	accountState,
+	embedInCard = false,
+	loadingTradingDetails,
+	onCreateCompleteSet,
+	onMigrateShares,
+	onRedeemCompleteSet,
+	onRedeemShares,
+	onTradingFormChange,
+	selectedPool,
+	tradingDetails,
+	tradingError,
+	tradingForm,
+	tradingResult,
+	showHeader = true,
+	showSecurityPoolAddressInput = true,
+}: TradingSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
-	const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
+	const hasSelectedPool = selectedPool !== undefined
 	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.totalSecurityBondAllowance, selectedPool?.completeSetCollateralAmount)
-	const marketHasEnded = selectedPool?.marketDetails.endTime === undefined ? undefined : selectedPool.marketDetails.endTime <= currentTimestamp
+	const shareBalances = tradingDetails?.shareBalances
+	const maxRedeemableCompleteSets = tradingDetails?.maxRedeemableCompleteSets
 	const mintGuardMessage = getTradingMintGuardMessage({
 		accountAddress: accountState.address,
 		completeSetCollateralAmount: selectedPool?.completeSetCollateralAmount,
 		ethBalance: accountState.ethBalance,
+		hasSelectedPool,
 		isMainnet,
 		mintAmountInput: tradingForm.completeSetAmount,
 		systemState: selectedPool?.systemState,
 		totalRepDeposit: selectedPool?.totalRepDeposit,
 		totalSecurityBondAllowance: selectedPool?.totalSecurityBondAllowance,
+		universeHasForked: selectedPool?.universeHasForked,
 	})
-	const redeemCompleteSetGuardMessage = (() => {
-		if (accountState.address === undefined) return 'Connect a wallet before redeeming complete sets.'
-		if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming complete sets.'
-		if (selectedPool !== undefined && selectedPool.systemState !== 'operational') return 'Redeeming complete sets is only available while the pool is operational.'
-
-		const trimmedAmount = tradingForm.redeemAmount.trim()
-		if (trimmedAmount === '') return 'Enter a redeem amount greater than zero.'
-
-		try {
-			if (BigInt(trimmedAmount) <= 0n) return 'Enter a redeem amount greater than zero.'
-		} catch {
-			return 'Enter a valid whole-number redeem amount.'
-		}
-
-		return undefined
-	})()
-	const migrateSharesGuardMessage = (() => {
-		if (accountState.address === undefined) return 'Connect a wallet before migrating shares.'
-		if (!isMainnet) return 'Switch to Ethereum mainnet before migrating shares.'
-
-		const trimmedUniverseId = tradingForm.fromUniverseId.trim()
-		if (trimmedUniverseId === '') return 'Enter a source universe ID to migrate shares from.'
-
-		try {
-			if (BigInt(trimmedUniverseId) < 0n) return 'Enter a valid non-negative universe ID.'
-		} catch {
-			return 'Enter a valid whole-number universe ID.'
-		}
-
-		return undefined
-	})()
-	const redeemSharesGuardMessage = (() => {
-		if (accountState.address === undefined) return 'Connect a wallet before redeeming shares.'
-		if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming shares.'
-		if (selectedPool !== undefined && selectedPool.systemState !== 'operational') return 'Redeeming shares is only available while the pool is operational.'
-		if (marketHasEnded === false) return 'Wait until the market end time before redeeming resolved shares.'
-		return undefined
-	})()
+	const redeemCompleteSetGuardMessage = getTradingRedeemCompleteSetGuardMessage({
+		accountAddress: accountState.address,
+		hasSelectedPool,
+		isMainnet,
+		loadingTradingDetails,
+		redeemAmountInput: tradingForm.redeemAmount,
+		shareBalances,
+		systemState: selectedPool?.systemState,
+		universeHasForked: selectedPool?.universeHasForked,
+	})
+	const migrateSharesGuardMessage = getTradingMigrateSharesGuardMessage({
+		accountAddress: accountState.address,
+		hasSelectedPool,
+		isMainnet,
+		loadingTradingDetails,
+		selectedOutcome: tradingForm.selectedOutcome,
+		shareBalances,
+		universeHasForked: selectedPool?.universeHasForked,
+	})
+	const redeemSharesGuardMessage = getTradingRedeemSharesGuardMessage({
+		accountAddress: accountState.address,
+		hasSelectedPool,
+		isMainnet,
+		questionOutcome: selectedPool?.questionOutcome,
+		systemState: selectedPool?.systemState,
+		universeHasForked: selectedPool?.universeHasForked,
+	})
+	const renderShareMetricValue = (value: bigint | undefined) => {
+		if (loadingTradingDetails) return 'Loading...'
+		if (value === undefined) return '—'
+		return formatCurrencyBalance(value)
+	}
 	const latestTradingAction =
 		tradingResult === undefined ? undefined : embedInCard ? (
 			<div className='entity-card-subsection'>
@@ -106,7 +120,7 @@ export function TradingSection({ accountState, embedInCard = false, onCreateComp
 					</label>
 				) : undefined}
 				{selectedPool === undefined ? (
-					<p className='detail'>Load a pool to inspect live mint capacity and trading status.</p>
+					<p className='detail'>Load a pool to inspect live trading state.</p>
 				) : (
 					<div className='workflow-metric-grid'>
 						<MetricField label='Pool'>
@@ -120,6 +134,20 @@ export function TradingSection({ accountState, embedInCard = false, onCreateComp
 				)}
 			</div>
 		)
+	const shareBalancesSection =
+		selectedPool === undefined ? undefined : (
+			<div className='entity-card-subsection'>
+				<div className='entity-card-subsection-header'>
+					<h4>Your Shares</h4>
+				</div>
+				<div className='workflow-metric-grid'>
+					<MetricField label='Yes'>{renderShareMetricValue(shareBalances?.yes)}</MetricField>
+					<MetricField label='No'>{renderShareMetricValue(shareBalances?.no)}</MetricField>
+					<MetricField label='Invalid'>{renderShareMetricValue(shareBalances?.invalid)}</MetricField>
+					<MetricField label='Max Complete Sets'>{renderShareMetricValue(maxRedeemableCompleteSets)}</MetricField>
+				</div>
+			</div>
+		)
 	const mintSection = (
 		<div className='entity-card-subsection'>
 			<div className='entity-card-subsection-header'>
@@ -128,15 +156,14 @@ export function TradingSection({ accountState, embedInCard = false, onCreateComp
 			</div>
 			<label className='field'>
 				<span>Mint Complete Sets Amount</span>
-				<input value={tradingForm.completeSetAmount} onInput={event => onTradingFormChange({ completeSetAmount: event.currentTarget.value })} />
+				<input value={tradingForm.completeSetAmount} inputMode='decimal' onInput={event => onTradingFormChange({ completeSetAmount: event.currentTarget.value })} />
 			</label>
-			<p className='detail'>Minting sends ETH directly to the pool. No token approval step is required.</p>
-			<p className='detail'>{mintGuardMessage ?? 'This amount will mint complete sets against the pool&apos;s remaining bond-backed capacity.'}</p>
 			<div className='actions'>
 				<button className='primary' title={mintGuardMessage} onClick={onCreateCompleteSet} disabled={mintGuardMessage !== undefined}>
 					Mint Complete Sets
 				</button>
 			</div>
+			{mintGuardMessage === undefined ? undefined : <p className='detail'>{mintGuardMessage}</p>}
 		</div>
 	)
 	const redeemCompleteSetSection = (
@@ -146,9 +173,21 @@ export function TradingSection({ accountState, embedInCard = false, onCreateComp
 			</div>
 			<label className='field'>
 				<span>Redeem Complete Sets Amount</span>
-				<input value={tradingForm.redeemAmount} onInput={event => onTradingFormChange({ redeemAmount: event.currentTarget.value })} />
+				<div className='field-inline'>
+					<input className='field-inline-input' value={tradingForm.redeemAmount} inputMode='decimal' onInput={event => onTradingFormChange({ redeemAmount: event.currentTarget.value })} />
+					<button
+						className='quiet field-inline-action'
+						type='button'
+						onClick={() => {
+							if (maxRedeemableCompleteSets === undefined) return
+							onTradingFormChange({ redeemAmount: formatCurrencyInputBalance(maxRedeemableCompleteSets) })
+						}}
+						disabled={maxRedeemableCompleteSets === undefined || maxRedeemableCompleteSets <= 0n}
+					>
+						Max
+					</button>
+				</div>
 			</label>
-			<p className='detail'>Burn complete sets from this universe to withdraw the matching ETH collateral.</p>
 			<div className='actions'>
 				<button className='secondary' title={redeemCompleteSetGuardMessage} onClick={onRedeemCompleteSet} disabled={redeemCompleteSetGuardMessage !== undefined}>
 					Redeem Complete Sets
@@ -162,17 +201,10 @@ export function TradingSection({ accountState, embedInCard = false, onCreateComp
 			<div className='entity-card-subsection-header'>
 				<h4>Migrate Forked Shares</h4>
 			</div>
-			<div className='field-row'>
-				<label className='field'>
-					<span>From Universe ID</span>
-					<input value={tradingForm.fromUniverseId} onInput={event => onTradingFormChange({ fromUniverseId: event.currentTarget.value })} />
-				</label>
-				<label className='field'>
-					<span>Outcome To Migrate</span>
-					<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={tradingForm.selectedOutcome} onChange={selectedOutcome => onTradingFormChange({ selectedOutcome })} />
-				</label>
-			</div>
-			<p className='detail'>Use this after a fork to move shares from an older universe into the current pool universe.</p>
+			<label className='field'>
+				<span>Outcome To Migrate</span>
+				<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={tradingForm.selectedOutcome} onChange={selectedOutcome => onTradingFormChange({ selectedOutcome })} />
+			</label>
 			<div className='actions'>
 				<button className='secondary' title={migrateSharesGuardMessage} onClick={onMigrateShares} disabled={migrateSharesGuardMessage !== undefined}>
 					Migrate Shares
@@ -186,7 +218,6 @@ export function TradingSection({ accountState, embedInCard = false, onCreateComp
 			<div className='entity-card-subsection-header'>
 				<h4>Redeem Resolved Shares</h4>
 			</div>
-			<p className='detail'>Redeem the finalized winning shares you hold once the question has fully resolved.</p>
 			<div className='actions'>
 				<button className='secondary' title={redeemSharesGuardMessage} onClick={onRedeemShares} disabled={redeemSharesGuardMessage !== undefined}>
 					Redeem Shares
@@ -199,6 +230,7 @@ export function TradingSection({ accountState, embedInCard = false, onCreateComp
 		<>
 			{poolSection}
 			{latestTradingAction}
+			{shareBalancesSection}
 			{mintSection}
 			{redeemCompleteSetSection}
 			{migrateSharesSection}
@@ -221,7 +253,6 @@ export function TradingSection({ accountState, embedInCard = false, onCreateComp
 				<div className='market-header'>
 					<div>
 						<h2>Trading</h2>
-						<p className='detail'>Use a security pool address to create complete sets with collateral or redeem complete sets back out of the pool.</p>
 					</div>
 				</div>
 			) : undefined}

@@ -19,6 +19,7 @@ import type {
 	SecurityVaultActionResult,
 	SecurityVaultDetails,
 	TradingActionResult,
+	TradingDetails,
 	ZoltarMigrationActionResult,
 	ZoltarUniverseSummary,
 } from './contracts.js'
@@ -317,12 +318,14 @@ export type ReportingSectionProps = ReportingRouteContentProps & {
 
 export type TradingRouteContentProps = {
 	accountState: AccountState
+	loadingTradingDetails: boolean
 	onCreateCompleteSet: () => void
 	onMigrateShares: () => void
 	onRedeemCompleteSet: () => void
 	onRedeemShares: () => void
 	onTradingFormChange: (update: Partial<TradingFormState>) => void
 	selectedPool: ListedSecurityPool | undefined
+	tradingDetails: TradingDetails | undefined
 	tradingError: string | undefined
 	tradingForm: TradingFormState
 	tradingResult: TradingActionResult | undefined

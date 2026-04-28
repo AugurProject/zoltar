@@ -68,7 +68,6 @@ export function getDefaultOpenOracleCreateFormState(): OpenOracleCreateFormState
 export function getDefaultTradingFormState(): TradingFormState {
 	return {
 		completeSetAmount: '0',
-		fromUniverseId: '0',
 		redeemAmount: '0',
 		securityPoolAddress: '',
 		selectedOutcome: 'yes',
@@ -128,6 +127,10 @@ export function parseBigIntInput(value: string, label: string) {
 	} catch {
 		throw new Error(`${label} must be a whole number`)
 	}
+}
+
+export function parseTradingAmountInput(value: string, label: string) {
+	return parseDecimalInput(value, label, 18)
 }
 
 export function parseTimestampInput(value: string, label: string) {

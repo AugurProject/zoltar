@@ -73,7 +73,6 @@ export type OpenOracleCreateFormState = {
 
 export type TradingFormState = {
 	completeSetAmount: string
-	fromUniverseId: string
 	redeemAmount: string
 	securityPoolAddress: string
 	selectedOutcome: ReportingOutcomeKey
