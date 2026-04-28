@@ -1287,12 +1287,10 @@ async function loadSecurityPoolVaultSummaries(client: ReadClient, securityPoolAd
 				address: securityPoolAddress,
 				args: [vaultAddress],
 			})
-			const [poolOwnership, securityBondAllowance, unpaidEthFees, feeIndex, lockedRepInEscalationGame] = vaultData
+			const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = vaultData
 			const repDepositShare = await poolOwnershipToRep(client, securityPoolAddress, poolOwnership)
 			return {
-				feeIndex,
 				lockedRepInEscalationGame,
-				poolOwnership,
 				repDepositShare,
 				securityBondAllowance,
 				unpaidEthFees,

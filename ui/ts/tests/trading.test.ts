@@ -2,16 +2,21 @@
 
 import { describe, expect, test } from 'bun:test'
 import {
-	getAllowanceBackedRep,
+	getCollateralizationDisplayState,
+	getCollateralizationTone,
 	getMaxRedeemableCompleteSets,
+	getPoolCollateralizationPercent,
 	getRemainingMintCapacity,
 	getSelectedOutcomeShareBalance,
 	getTradingMigrateSharesGuardMessage,
 	getTradingMintGuardMessage,
 	getTradingRedeemCompleteSetGuardMessage,
 	getTradingRedeemSharesGuardMessage,
+	getVaultCollateralizationPercent,
 	hasRepBackedPoolWithNoActiveAllowance,
 } from '../lib/trading.js'
+
+const TOKEN_PRECISION = 10n ** 18n
 
 void describe('trading helpers', () => {
 	const shareBalances = {
@@ -27,10 +32,32 @@ void describe('trading helpers', () => {
 		expect(getRemainingMintCapacity(undefined, 12n)).toBeUndefined()
 	})
 
-	void test('converts allowance to REP using the latest oracle price', () => {
-		expect(getAllowanceBackedRep(2n * 10n ** 18n, 2_500n * 10n ** 18n)).toBe(5_000n * 10n ** 18n)
-		expect(getAllowanceBackedRep(undefined, 2_500n * 10n ** 18n)).toBeUndefined()
-		expect(getAllowanceBackedRep(2n * 10n ** 18n, undefined)).toBeUndefined()
+	void test('computes pool collateralization as a percentage using the Uniswap REP price', () => {
+		expect(getPoolCollateralizationPercent(3n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, TOKEN_PRECISION)).toBe(150n * TOKEN_PRECISION)
+		expect(getPoolCollateralizationPercent(undefined, 2n * TOKEN_PRECISION, TOKEN_PRECISION)).toBeUndefined()
+		expect(getPoolCollateralizationPercent(3n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, undefined)).toBeUndefined()
+	})
+
+	void test('computes vault collateralization as a percentage using the Uniswap REP price', () => {
+		expect(getVaultCollateralizationPercent(4n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, 150n * 10n ** 16n)).toBe(300n * TOKEN_PRECISION)
+		expect(getVaultCollateralizationPercent(4n * TOKEN_PRECISION, undefined, TOKEN_PRECISION)).toBeUndefined()
+	})
+
+	void test('marks collateralization green only when it is strictly above the security multiplier threshold', () => {
+		expect(getCollateralizationTone(201n * TOKEN_PRECISION, 2n)).toBe('success')
+		expect(getCollateralizationTone(200n * TOKEN_PRECISION, 2n)).toBe('danger')
+		expect(getCollateralizationTone(199n * TOKEN_PRECISION, 2n)).toBe('danger')
+		expect(getCollateralizationTone(undefined, 2n)).toBeUndefined()
+	})
+
+	void test('surfaces no active allowance separately from unavailable quotes', () => {
+		expect(getCollateralizationDisplayState(0n, undefined)).toBe('noActiveAllowance')
+		expect(getCollateralizationDisplayState(TOKEN_PRECISION, undefined)).toBe('unavailable')
+		expect(getCollateralizationDisplayState(TOKEN_PRECISION, 150n * TOKEN_PRECISION)).toBe('value')
+	})
+
+	void test('returns zero percent when REP backing is zero but allowance is active', () => {
+		expect(getPoolCollateralizationPercent(0n, TOKEN_PRECISION, TOKEN_PRECISION)).toBe(0n)
 	})
 
 	void test('detects pools that have REP backing but no active allowance', () => {

@@ -312,6 +312,9 @@ export function App() {
 							securityPoolError,
 							securityPoolForm,
 							securityPoolResult,
+							repEthPrice,
+							repEthSource,
+							repEthSourceUrl,
 						}}
 						overview={{
 							accountState,
@@ -332,6 +335,9 @@ export function App() {
 							securityPoolOverviewError,
 							securityPoolOverviewResult,
 							securityPools,
+							repEthPrice,
+							repEthSource,
+							repEthSourceUrl,
 						}}
 						workflow={{
 							accountState,
@@ -386,6 +392,9 @@ export function App() {
 							onSecurityPoolAddressChange: value => {
 								setSecurityPoolAddress(value)
 							},
+							repEthPrice,
+							repEthSource,
+							repEthSourceUrl,
 							reporting: {
 								accountState,
 								loadingReportingDetails,
@@ -418,6 +427,10 @@ export function App() {
 								securityVaultRepApproval,
 								securityVaultRepBalance,
 								securityVaultResult,
+								selectedPoolSecurityMultiplier: selectedPool?.securityMultiplier,
+								repEthPrice,
+								repEthSource,
+								repEthSourceUrl,
 								securityPoolVaults: selectedPool?.vaults,
 							},
 							trading: {
@@ -428,6 +441,9 @@ export function App() {
 								onRedeemCompleteSet: () => void redeemCompleteSet(),
 								onRedeemShares: () => void redeemShares(),
 								onTradingFormChange: update => setTradingForm(current => ({ ...current, ...update })),
+								repEthPrice,
+								repEthSource,
+								repEthSourceUrl,
 								selectedPool,
 								tradingDetails,
 								tradingError,
