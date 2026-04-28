@@ -251,9 +251,7 @@ export type ListedSecurityPool = {
 }
 
 export type SecurityPoolVaultSummary = {
-	feeIndex: bigint
 	lockedRepInEscalationGame: bigint
-	poolOwnership: bigint
 	repDepositShare: bigint
 	securityBondAllowance: bigint
 	unpaidEthFees: bigint

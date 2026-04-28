@@ -29,6 +29,12 @@ import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 import type { OpenOracleInitialReportQuoteFailureKind, OpenOracleInitialReportQuoteSource } from '../lib/openOracle.js'
 
+type RepEthPriceProps = {
+	repEthPrice: bigint | undefined
+	repEthSource: 'v4' | 'v3' | undefined
+	repEthSourceUrl: string | undefined
+}
+
 export type DeploymentSectionProps = {
 	title: string
 	steps: DeploymentStatus[]
@@ -48,16 +54,13 @@ export type OverviewPanelsProps = {
 	universePresentation: UserMessagePresentation | undefined
 	universeLabel: string
 	isRefreshing: boolean
-	repEthPrice: bigint | undefined
-	repEthSource: 'v4' | 'v3' | undefined
-	repEthSourceUrl: string | undefined
 	repUsdcPrice: bigint | undefined
 	repUsdcSource: 'v4' | 'v3' | undefined
 	repUsdcSourceUrl: string | undefined
 	isLoadingRepPrices: boolean
 	onConnect: () => void
 	onGoToGenesisUniverse: () => void
-}
+} & RepEthPriceProps
 
 export type TabNavigationProps = {
 	route: Route
@@ -149,7 +152,7 @@ export type SecurityPoolRouteContentProps = {
 	securityPoolError: string | undefined
 	securityPoolForm: SecurityPoolFormState
 	securityPoolResult: SecurityPoolCreationResult | undefined
-}
+} & RepEthPriceProps
 
 export type MarketSectionProps = MarketRouteContentProps
 export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
@@ -179,7 +182,8 @@ export type SecurityPoolsOverviewRouteContentProps = {
 	securityPoolOverviewError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	securityPools: ListedSecurityPool[]
-} & LiquidationControlsProps
+} & LiquidationControlsProps &
+	RepEthPriceProps
 
 export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
@@ -210,6 +214,9 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	securityPoolAddress: string
 	onSecurityPoolAddressChange: (value: string) => void
 	reporting: ReportingRouteContentProps
+	repEthPrice: bigint | undefined
+	repEthSource: 'v4' | 'v3' | undefined
+	repEthSourceUrl: string | undefined
 	securityPools: ListedSecurityPool[]
 	securityVault: SecurityVaultRouteContentProps
 	trading: TradingRouteContentProps
@@ -239,6 +246,10 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultRepApproval: TokenApprovalState
 	securityVaultRepBalance: bigint | undefined
 	securityVaultResult: SecurityVaultActionResult | undefined
+	selectedPoolSecurityMultiplier: bigint | undefined
+	repEthPrice: bigint | undefined
+	repEthSource: 'v4' | 'v3' | undefined
+	repEthSourceUrl: string | undefined
 	securityPoolVaults?: SecurityPoolVaultSummary[] | undefined
 }
 
@@ -324,6 +335,9 @@ export type TradingRouteContentProps = {
 	onRedeemCompleteSet: () => void
 	onRedeemShares: () => void
 	onTradingFormChange: (update: Partial<TradingFormState>) => void
+	repEthPrice: bigint | undefined
+	repEthSource: 'v4' | 'v3' | undefined
+	repEthSourceUrl: string | undefined
 	selectedPool: ListedSecurityPool | undefined
 	tradingDetails: TradingDetails | undefined
 	tradingError: string | undefined

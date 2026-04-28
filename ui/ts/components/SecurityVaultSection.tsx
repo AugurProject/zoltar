@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { AddressValue } from './AddressValue.js'
 import { ApprovedAmountValue } from './ApprovedAmountValue.js'
+import { CollateralizationMetricField } from './CollateralizationMetricField.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -16,6 +17,7 @@ import { balanceShortage } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
 import { getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
+import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
 import { getWalletPresentation } from '../lib/userCopy.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
@@ -41,6 +43,10 @@ export function SecurityVaultSection({
 	securityVaultRepApproval,
 	securityVaultRepBalance,
 	securityVaultResult,
+	selectedPoolSecurityMultiplier,
+	repEthPrice,
+	repEthSource,
+	repEthSourceUrl,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 }: SecurityVaultSectionProps) {
@@ -138,8 +144,15 @@ export function SecurityVaultSection({
 						<ApprovedAmountValue loading={securityVaultRepApproval.loading} value={securityVaultRepApproval.value} suffix='REP' />
 					</MetricField>
 					<MetricField className='entity-metric' label='Security Bond Allowance'>
-						<CurrencyValue value={securityBondAllowance} suffix='REP' />
+						<CurrencyValue value={securityBondAllowance} suffix='ETH' />
 					</MetricField>
+					<CollateralizationMetricField
+						collateralizationPercent={getVaultCollateralizationPercent(securityVaultDetails.repDepositShare, securityBondAllowance, repEthPrice)}
+						repEthSource={repEthSource}
+						repEthSourceUrl={repEthSourceUrl}
+						securityBondAllowance={securityBondAllowance}
+						securityMultiplier={selectedPoolSecurityMultiplier}
+					/>
 					<MetricField className='entity-metric' label='Unpaid ETH Fees'>
 						<CurrencyValue value={securityVaultDetails.unpaidEthFees} suffix='ETH' />
 					</MetricField>
@@ -183,7 +196,7 @@ export function SecurityVaultSection({
 				</div>
 				<div className='entity-metric-grid'>
 					<MetricField className='entity-metric' label='Current Security Bond Allowance'>
-						<CurrencyValue value={securityBondAllowance} suffix='REP' />
+						<CurrencyValue value={securityBondAllowance} suffix='ETH' />
 					</MetricField>
 					{oraclePriceValidUntilTimestamp === undefined ? undefined : (
 						<MetricField className='entity-metric' label='Price Valid Until'>

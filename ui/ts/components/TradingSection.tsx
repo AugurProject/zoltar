@@ -21,8 +21,11 @@ export function TradingSection({
 	onRedeemCompleteSet,
 	onRedeemShares,
 	onTradingFormChange,
-	selectedPool,
 	tradingDetails,
+	repEthPrice,
+	repEthSource,
+	repEthSourceUrl,
+	selectedPool,
 	tradingError,
 	tradingForm,
 	tradingResult,
@@ -129,7 +132,15 @@ export function TradingSection({
 						<MetricField label='Universe'>
 							<UniverseLink universeId={selectedPool.universeId} />
 						</MetricField>
-						<OpenInterestCapacityMetrics completeSetCollateralAmount={selectedPool.completeSetCollateralAmount} lastOraclePrice={selectedPool.lastOraclePrice} totalRepDeposit={selectedPool.totalRepDeposit} totalSecurityBondAllowance={selectedPool.totalSecurityBondAllowance} />
+						<OpenInterestCapacityMetrics
+							completeSetCollateralAmount={selectedPool.completeSetCollateralAmount}
+							repEthPrice={repEthPrice}
+							repEthSource={repEthSource}
+							repEthSourceUrl={repEthSourceUrl}
+							securityMultiplier={selectedPool.securityMultiplier}
+							totalRepDeposit={selectedPool.totalRepDeposit}
+							totalSecurityBondAllowance={selectedPool.totalSecurityBondAllowance}
+						/>
 					</div>
 				)}
 			</div>

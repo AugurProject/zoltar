@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { AddressValue } from './AddressValue.js'
+import { CollateralizationMetricField } from './CollateralizationMetricField.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
@@ -22,6 +23,7 @@ import { resolveRequestedLoadableValueState, type LoadableValueState } from '../
 import { isMainnetChain } from '../lib/network.js'
 import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
+import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import { readSelectedPoolViewQueryParam, writeSelectedPoolViewQueryParam } from '../lib/urlParams.js'
@@ -75,6 +77,9 @@ export function SecurityPoolWorkflowSection({
 	poolOracleManagerError,
 	poolPriceOracleResult,
 	onSecurityPoolAddressChange,
+	repEthPrice,
+	repEthSource,
+	repEthSourceUrl,
 	reporting,
 	securityPoolAddress,
 	securityPools,
@@ -190,7 +195,15 @@ export function SecurityPoolWorkflowSection({
 									<MetricField label='Open Interest Fee / Year'>
 										<CurrencyValue value={openInterestFeePerYearBigint(loadedSelectedPool?.currentRetentionRate)} suffix='%' />
 									</MetricField>
-									<OpenInterestCapacityMetrics completeSetCollateralAmount={loadedSelectedPool?.completeSetCollateralAmount} lastOraclePrice={loadedSelectedPool?.lastOraclePrice} totalRepDeposit={loadedSelectedPool?.totalRepDeposit} totalSecurityBondAllowance={loadedSelectedPool?.totalSecurityBondAllowance} />
+									<OpenInterestCapacityMetrics
+										completeSetCollateralAmount={loadedSelectedPool?.completeSetCollateralAmount}
+										repEthPrice={repEthPrice}
+										repEthSource={repEthSource}
+										repEthSourceUrl={repEthSourceUrl}
+										securityMultiplier={loadedSelectedPool?.securityMultiplier}
+										totalRepDeposit={loadedSelectedPool?.totalRepDeposit}
+										totalSecurityBondAllowance={loadedSelectedPool?.totalSecurityBondAllowance}
+									/>
 									{reportingReady ? <MetricField label='Reporting'>Unlocked</MetricField> : undefined}
 									<MetricField label='Manager'>
 										<AddressValue address={loadedSelectedPool?.managerAddress} />
@@ -342,17 +355,22 @@ export function SecurityPoolWorkflowSection({
 															<MetricField label='Rep Deposit'>
 																<CurrencyValue value={vault.repDepositShare} suffix='REP' />
 															</MetricField>
-															<MetricField label='Pool Ownership'>{vault.poolOwnership.toString()}</MetricField>
 															<MetricField label='Security Bond Allowance'>
-																<CurrencyValue value={vault.securityBondAllowance} suffix='REP' />
+																<CurrencyValue value={vault.securityBondAllowance} suffix='ETH' />
 															</MetricField>
+															<CollateralizationMetricField
+																collateralizationPercent={getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repEthPrice)}
+																repEthSource={repEthSource}
+																repEthSourceUrl={repEthSourceUrl}
+																securityBondAllowance={vault.securityBondAllowance}
+																securityMultiplier={selectedPool.securityMultiplier}
+															/>
 															<MetricField label='Unpaid ETH Fees'>
 																<CurrencyValue value={vault.unpaidEthFees} suffix='ETH' />
 															</MetricField>
 															<MetricField label='Locked REP'>
 																<CurrencyValue value={vault.lockedRepInEscalationGame} suffix='REP' />
 															</MetricField>
-															<MetricField label='Fee Index'>{vault.feeIndex.toString()}</MetricField>
 														</div>
 													</EntityCard>
 												))}

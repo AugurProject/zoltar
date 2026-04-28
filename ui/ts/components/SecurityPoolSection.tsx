@@ -24,6 +24,9 @@ export function SecurityPoolSection({
 	onOpenCreatedPool,
 	onSecurityPoolFormChange,
 	onResetSecurityPoolCreation,
+	repEthPrice,
+	repEthSource,
+	repEthSourceUrl,
 	securityPools,
 	securityPoolCreating,
 	securityPoolError,
@@ -134,7 +137,15 @@ export function SecurityPoolSection({
 													<MetricField label='Open Interest Fee / Year'>
 														<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
 													</MetricField>
-													<OpenInterestCapacityMetrics completeSetCollateralAmount={pool.completeSetCollateralAmount} lastOraclePrice={pool.lastOraclePrice} totalRepDeposit={pool.totalRepDeposit} totalSecurityBondAllowance={pool.totalSecurityBondAllowance} />
+													<OpenInterestCapacityMetrics
+														completeSetCollateralAmount={pool.completeSetCollateralAmount}
+														repEthPrice={repEthPrice}
+														repEthSource={repEthSource}
+														repEthSourceUrl={repEthSourceUrl}
+														securityMultiplier={pool.securityMultiplier}
+														totalRepDeposit={pool.totalRepDeposit}
+														totalSecurityBondAllowance={pool.totalSecurityBondAllowance}
+													/>
 												</div>
 											</EntityCard>
 										))}

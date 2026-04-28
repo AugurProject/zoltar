@@ -1,4 +1,5 @@
 import { AddressValue } from './AddressValue.js'
+import { CollateralizationMetricField } from './CollateralizationMetricField.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -12,6 +13,7 @@ import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
+import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 
@@ -31,6 +33,9 @@ export function SecurityPoolsOverviewSection({
 	onOpenLiquidationModal,
 	onQueueLiquidation,
 	onSelectSecurityPool,
+	repEthPrice,
+	repEthSource,
+	repEthSourceUrl,
 	securityPoolOverviewError,
 	securityPoolOverviewResult,
 	securityPools,
@@ -106,7 +111,15 @@ export function SecurityPoolsOverviewSection({
 										<MetricField label='Open Interest Fee / Year'>
 											<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
 										</MetricField>
-										<OpenInterestCapacityMetrics completeSetCollateralAmount={pool.completeSetCollateralAmount} lastOraclePrice={pool.lastOraclePrice} totalRepDeposit={pool.totalRepDeposit} totalSecurityBondAllowance={pool.totalSecurityBondAllowance} />
+										<OpenInterestCapacityMetrics
+											completeSetCollateralAmount={pool.completeSetCollateralAmount}
+											repEthPrice={repEthPrice}
+											repEthSource={repEthSource}
+											repEthSourceUrl={repEthSourceUrl}
+											securityMultiplier={pool.securityMultiplier}
+											totalRepDeposit={pool.totalRepDeposit}
+											totalSecurityBondAllowance={pool.totalSecurityBondAllowance}
+										/>
 										<MetricField label='Manager'>
 											<AddressValue address={pool.managerAddress} />
 										</MetricField>
@@ -139,10 +152,16 @@ export function SecurityPoolsOverviewSection({
 														<MetricField label='Rep Deposit'>
 															<CurrencyValue value={vault.repDepositShare} suffix='REP' />
 														</MetricField>
-														<MetricField label='Pool Ownership'>{vault.poolOwnership.toString()}</MetricField>
 														<MetricField label='Security Bond Allowance'>
-															<CurrencyValue value={vault.securityBondAllowance} suffix='REP' />
+															<CurrencyValue value={vault.securityBondAllowance} suffix='ETH' />
 														</MetricField>
+														<CollateralizationMetricField
+															collateralizationPercent={getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repEthPrice)}
+															repEthSource={repEthSource}
+															repEthSourceUrl={repEthSourceUrl}
+															securityBondAllowance={vault.securityBondAllowance}
+															securityMultiplier={pool.securityMultiplier}
+														/>
 														<MetricField label='Unpaid ETH Fees'>
 															<CurrencyValue value={vault.unpaidEthFees} suffix='ETH' />
 														</MetricField>

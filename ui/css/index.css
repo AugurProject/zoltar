@@ -842,6 +842,14 @@ button.currency-value.copyable:hover:not(:disabled) {
 	color: var(--danger);
 }
 
+.metric-value-success {
+	color: var(--success);
+}
+
+.metric-value-danger {
+	color: var(--danger);
+}
+
 .overview-universe-actions {
 	margin-top: 0.5rem;
 }

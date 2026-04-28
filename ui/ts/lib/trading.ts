@@ -5,15 +5,37 @@ import { getReportingOutcomeLabel } from './reporting.js'
 import type { ReportingOutcomeKey, SecurityPoolSystemState, TradingShareBalances } from '../types/contracts.js'
 
 const PRICE_PRECISION = 10n ** 18n
+const PERCENT_MULTIPLIER = 100n
+
+type CollateralizationDisplayState = 'value' | 'noActiveAllowance' | 'unavailable'
+type CollateralizationTone = 'success' | 'danger'
 
 export function getRemainingMintCapacity(totalSecurityBondAllowance: bigint | undefined, completeSetCollateralAmount: bigint | undefined) {
 	if (totalSecurityBondAllowance === undefined || completeSetCollateralAmount === undefined) return undefined
 	return totalSecurityBondAllowance > completeSetCollateralAmount ? totalSecurityBondAllowance - completeSetCollateralAmount : 0n
 }
 
-export function getAllowanceBackedRep(totalSecurityBondAllowance: bigint | undefined, lastOraclePrice: bigint | undefined) {
-	if (totalSecurityBondAllowance === undefined || lastOraclePrice === undefined) return undefined
-	return (totalSecurityBondAllowance * lastOraclePrice) / PRICE_PRECISION
+function getCollateralizationPercent(repDeposit: bigint | undefined, securityBondAllowance: bigint | undefined, repEthPrice: bigint | undefined) {
+	if (repDeposit === undefined || securityBondAllowance === undefined || repEthPrice === undefined || securityBondAllowance === 0n) return undefined
+	return (repDeposit * repEthPrice * PERCENT_MULTIPLIER) / securityBondAllowance
+}
+
+export function getPoolCollateralizationPercent(totalRepDeposit: bigint | undefined, totalSecurityBondAllowance: bigint | undefined, repEthPrice: bigint | undefined) {
+	return getCollateralizationPercent(totalRepDeposit, totalSecurityBondAllowance, repEthPrice)
+}
+
+export function getVaultCollateralizationPercent(repDepositShare: bigint | undefined, securityBondAllowance: bigint | undefined, repEthPrice: bigint | undefined) {
+	return getCollateralizationPercent(repDepositShare, securityBondAllowance, repEthPrice)
+}
+
+export function getCollateralizationTone(collateralizationPercent: bigint | undefined, securityMultiplier: bigint | undefined): CollateralizationTone | undefined {
+	if (collateralizationPercent === undefined || securityMultiplier === undefined) return undefined
+	return collateralizationPercent > securityMultiplier * PERCENT_MULTIPLIER * PRICE_PRECISION ? 'success' : 'danger'
+}
+
+export function getCollateralizationDisplayState(securityBondAllowance: bigint | undefined, collateralizationPercent: bigint | undefined): CollateralizationDisplayState {
+	if (securityBondAllowance === 0n) return 'noActiveAllowance'
+	return collateralizationPercent === undefined ? 'unavailable' : 'value'
 }
 
 export function hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit: bigint | undefined, totalSecurityBondAllowance: bigint | undefined) {
