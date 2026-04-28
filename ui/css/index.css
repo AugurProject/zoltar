@@ -1835,6 +1835,18 @@ button.currency-value.copyable:hover:not(:disabled) {
 	line-height: 1.45;
 }
 
+.fork-auction-controls {
+	display: grid;
+	gap: 0.85rem;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.fork-auction-controls:disabled {
+	opacity: 0.72;
+}
+
 .workflow-create-section {
 	border-top-color: var(--border-strong);
 	padding-top: 1.25rem;

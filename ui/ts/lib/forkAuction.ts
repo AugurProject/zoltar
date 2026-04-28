@@ -1,4 +1,4 @@
-import type { ForkAuctionDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '../types/contracts.js'
+import type { ForkAuctionDetails, ListedSecurityPool, ReportingOutcomeKey, SecurityPoolSystemState } from '../types/contracts.js'
 import { assertNever } from './assert.js'
 import { getTimeRemaining as getSharedTimeRemaining } from './time.js'
 import { getReportingOutcomeLabel } from './reporting.js'
@@ -28,8 +28,8 @@ export function getOutcomeActionLabel(outcome: ReportingOutcomeKey) {
 	return getReportingOutcomeLabel(outcome)
 }
 
-export function getForkStageDescription(details: ForkAuctionDetails) {
-	switch (details.systemState) {
+export function getForkStageDescriptionForState(state: SecurityPoolSystemState) {
+	switch (state) {
 		case 'operational':
 			return 'This pool is operational. If it is a child universe, the fork and auction path has completed.'
 		case 'poolForked':
@@ -39,8 +39,16 @@ export function getForkStageDescription(details: ForkAuctionDetails) {
 		case 'forkTruthAuction':
 			return 'Truth auction is active. Bidders compete to buy REP exposure for the unresolved collateral.'
 		default:
-			return assertNever(details.systemState)
+			return assertNever(state)
 	}
+}
+
+export function getForkStageDescription(details: ForkAuctionDetails) {
+	return getForkStageDescriptionForState(details.systemState)
+}
+
+export function hasForkActivity(pool: Pick<ListedSecurityPool, 'forkOutcome' | 'migratedRep' | 'systemState' | 'truthAuctionStartedAt'>) {
+	return pool.systemState !== 'operational' || pool.truthAuctionStartedAt > 0n || pool.migratedRep > 0n || pool.forkOutcome !== 'none'
 }
 
 export function getTimeRemaining(targetTime: bigint | undefined, currentTime: bigint) {

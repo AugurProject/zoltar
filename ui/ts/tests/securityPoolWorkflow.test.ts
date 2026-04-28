@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getSelectedPoolCardTitle, getSelectedPoolLookupDisplay, shouldShowSelectedPoolWorkflowDetails } from '../components/SecurityPoolWorkflowSection.js'
+import { getSelectedPoolCardTitle, getSelectedPoolLookupDisplay, isForkWorkflowDisabled, shouldShowSelectedPoolWorkflowDetails } from '../components/SecurityPoolWorkflowSection.js'
 
 void describe('selected pool workflow lookup state', () => {
 	void test('uses a stable card title until a pool resolves', () => {
@@ -98,5 +98,13 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolUniverseMismatch: false,
 			}),
 		).toBe(true)
+	})
+
+	void test('disables the fork workflow only while the selected pool remains operational', () => {
+		expect(isForkWorkflowDisabled(undefined)).toBe(true)
+		expect(isForkWorkflowDisabled('operational')).toBe(true)
+		expect(isForkWorkflowDisabled('poolForked')).toBe(false)
+		expect(isForkWorkflowDisabled('forkMigration')).toBe(false)
+		expect(isForkWorkflowDisabled('forkTruthAuction')).toBe(false)
 	})
 })

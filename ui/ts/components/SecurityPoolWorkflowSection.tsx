@@ -26,6 +26,7 @@ import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import { readSelectedPoolViewQueryParam, writeSelectedPoolViewQueryParam } from '../lib/urlParams.js'
 import { resolveEnumValue } from '../lib/viewState.js'
+import type { SecurityPoolSystemState } from '../types/contracts.js'
 import type { SecurityPoolWorkflowRouteContentProps } from '../types/components.js'
 
 type SelectedPoolView = 'vaults' | 'trading' | 'resolution'
@@ -44,6 +45,10 @@ export function getSelectedPoolCardTitle({ hasSelectedPoolAddress, resolvedPoolT
 export function getSelectedPoolLookupDisplay({ hasSelectedPoolAddress, selectedPoolLookupState }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState }): SelectedPoolLookupDisplay {
 	if (!hasSelectedPoolAddress) return 'empty'
 	return selectedPoolLookupState
+}
+
+export function isForkWorkflowDisabled(selectedPoolState: SecurityPoolSystemState | undefined) {
+	return selectedPoolState === undefined || selectedPoolState === 'operational'
 }
 
 export function SecurityPoolWorkflowSection({
@@ -91,7 +96,7 @@ export function SecurityPoolWorkflowSection({
 	const selectedPoolState = selectedPool?.systemState ?? forkAuction.forkAuctionDetails?.systemState
 	const currentTimestamp = reporting.reportingDetails?.currentTime ?? BigInt(Math.floor(Date.now() / 1000))
 	const reportingReady = marketDetails !== undefined && marketDetails.endTime <= currentTimestamp
-	const forkReady = selectedPoolState !== undefined && selectedPoolState !== 'operational'
+	const forkWorkflowDisabled = isForkWorkflowDisabled(selectedPoolState)
 	const selectedPoolUniverseMismatch = selectedPool !== undefined && selectedPool.universeId !== activeUniverseId
 	const hasSelectedPoolAddress = securityPoolAddress.trim() !== ''
 	const showSelectedPoolWorkflowDetails = shouldShowSelectedPoolWorkflowDetails({
@@ -190,7 +195,7 @@ export function SecurityPoolWorkflowSection({
 									<MetricField label='Manager'>
 										<AddressValue address={loadedSelectedPool?.managerAddress} />
 									</MetricField>
-									{forkReady ? (
+									{!forkWorkflowDisabled ? (
 										<>
 											<MetricField label='Fork Flow'>Forked / active</MetricField>
 											<MetricField label='Truth Auction'>
@@ -378,14 +383,8 @@ export function SecurityPoolWorkflowSection({
 									</EntityCard>
 								) : undefined}
 
-								<EntityCard className='selected-pool-card' title='Fork & Truth Auction' badge={<span className={`badge ${forkReady ? 'ok' : 'blocked'}`}>{forkReady ? 'Available' : 'Locked until fork'}</span>}>
-									{forkReady ? (
-										<ForkAuctionSection {...forkAuction} showHeader={false} showSecurityPoolAddressInput={false} />
-									) : (
-										<EntityCard title='Fork flow is locked' badge={<span className='badge blocked'>Operational</span>}>
-											<p className='detail'>The pool must enter a non-operational state (forked or in escalation) before the fork & auction flow becomes available.</p>
-										</EntityCard>
-									)}
+								<EntityCard className='selected-pool-card' title='Fork & Truth Auction' badge={<span className={`badge ${forkWorkflowDisabled ? 'blocked' : 'ok'}`}>{forkWorkflowDisabled ? 'Locked until fork' : 'Available'}</span>}>
+									<ForkAuctionSection {...forkAuction} disabled={forkWorkflowDisabled} disabledMessage={forkWorkflowDisabled ? 'This pool is currently operational, so fork and truth auction actions are read only.' : undefined} previewPool={selectedPool} showHeader={false} showSecurityPoolAddressInput={false} />
 								</EntityCard>
 							</div>
 						) : undefined}
