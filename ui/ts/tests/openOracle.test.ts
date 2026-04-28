@@ -364,6 +364,30 @@ describe('Open Oracle helpers', () => {
 		expect(preview.blockReason).toBe('Insufficient REP balance for this report. Need 100, wallet has 99.')
 	})
 
+	test('initial report submission helper disables submit for tiny insufficient REP balances', () => {
+		const preview = createInitialReportSubmissionPreview({
+			approvedToken1Amount: 11_000_000n,
+			approvedToken2Amount: 11_000_000n,
+			defaultPrice: '1',
+			reportDetails: {
+				exactToken1Report: 11_000_000n,
+				token1: REP_ADDRESS,
+				token1Symbol: 'REP',
+				token2: WETH_ADDRESS,
+				token2Symbol: 'WETH',
+			},
+			token1Balance: 10_000_000n,
+			token1Decimals: 18,
+			token2Balance: 11_000_000n,
+			token2Decimals: 18,
+			walletEthBalance: 0n,
+		})
+
+		expect(preview.amount1).toBe(11_000_000n)
+		expect(preview.canSubmit).toBe(false)
+		expect(preview.blockReason).toBe('Insufficient REP balance for this report. Need 0.000000000011, wallet has 0.00000000001.')
+	})
+
 	test('initial report submission helper surfaces insufficient WETH balances and exposes wrap details', () => {
 		const preview = createInitialReportSubmissionPreview({
 			token2Balance: 24n,
@@ -371,10 +395,37 @@ describe('Open Oracle helpers', () => {
 		})
 
 		expect(preview.canSubmit).toBe(false)
+		expect(preview.hasWethWrapAction).toBe(true)
 		expect(preview.blockReason).toBe('Insufficient WETH balance for this report. Need 25, wallet has 24. Wrap ETH into WETH first.')
 		expect(preview.requiredWethWrapAmount).toBe(1n)
 		expect(preview.canWrapRequiredWeth).toBe(true)
 		expect(preview.wrapRequiredWethDisabledReason).toBeUndefined()
+	})
+
+	test('initial report submission helper disables submit for tiny insufficient WETH balances', () => {
+		const preview = createInitialReportSubmissionPreview({
+			approvedToken1Amount: 11_000_000n,
+			approvedToken2Amount: 11_000_000n,
+			defaultPrice: '1',
+			reportDetails: {
+				exactToken1Report: 11_000_000n,
+				token1: REP_ADDRESS,
+				token1Symbol: 'REP',
+				token2: WETH_ADDRESS,
+				token2Symbol: 'WETH',
+			},
+			token1Balance: 11_000_000n,
+			token1Decimals: 18,
+			token2Balance: 10_000_000n,
+			token2Decimals: 18,
+			walletEthBalance: 1_000_000n,
+		})
+
+		expect(preview.amount2).toBe(11_000_000n)
+		expect(preview.canSubmit).toBe(false)
+		expect(preview.blockReason).toBe('Insufficient WETH balance for this report. Need 0.000000000011, wallet has 0.00000000001. Wrap ETH into WETH first.')
+		expect(preview.requiredWethWrapAmount).toBe(1_000_000n)
+		expect(preview.canWrapRequiredWeth).toBe(true)
 	})
 
 	test('initial report submission helper reports when wallet ETH is insufficient to wrap the required WETH', () => {
@@ -397,6 +448,32 @@ describe('Open Oracle helpers', () => {
 		expect(preview.requiredWethWrapAmount).toBe(1n)
 		expect(preview.canWrapRequiredWeth).toBe(false)
 		expect(preview.wrapRequiredWethDisabledReason).toBe('Loading wallet ETH balance.')
+	})
+
+	test('initial report submission helper keeps the WETH wrap action visible when no top-up is needed', () => {
+		const preview = createInitialReportSubmissionPreview()
+
+		expect(preview.hasWethWrapAction).toBe(true)
+		expect(preview.requiredWethWrapAmount).toBeUndefined()
+		expect(preview.canWrapRequiredWeth).toBe(false)
+		expect(preview.wrapRequiredWethDisabledReason).toBe('No additional WETH is required for this report.')
+	})
+
+	test('initial report submission helper explains that a price is needed before determining a WETH wrap amount', () => {
+		const preview = createInitialReportSubmissionPreview({
+			defaultPrice: undefined,
+			defaultPriceError: undefined,
+			defaultPriceSource: undefined,
+			defaultPriceSourceUrl: undefined,
+			priceInput: '',
+			quoteAttemptedSources: ['Uniswap V4'],
+			quoteFailureReason: 'no pool',
+		})
+
+		expect(preview.hasWethWrapAction).toBe(true)
+		expect(preview.requiredWethWrapAmount).toBeUndefined()
+		expect(preview.canWrapRequiredWeth).toBe(false)
+		expect(preview.wrapRequiredWethDisabledReason).toBe('Enter a valid REP / WETH price to determine whether this report needs more WETH.')
 	})
 
 	test('initial report submission helper allows submit when balances and approvals are sufficient', () => {
