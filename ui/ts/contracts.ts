@@ -56,6 +56,8 @@ import type {
 	SecurityVaultActionResult,
 	SecurityVaultDetails,
 	TradingActionResult,
+	TradingDetails,
+	TradingShareBalances,
 	TruthAuctionMetrics,
 	WriteClient,
 	ZoltarChildUniverseActionResult,
@@ -111,6 +113,20 @@ function isEscalationDepositPage(value: unknown): value is readonly { amount: bi
 
 function isBigintTriple(value: unknown): value is [bigint, bigint, bigint] {
 	return Array.isArray(value) && value.length === 3 && value.every(item => typeof item === 'bigint')
+}
+
+function getMinBigintValue(values: bigint[]) {
+	const [firstValue, ...restValues] = values
+	if (firstValue === undefined) return undefined
+
+	let minValue = firstValue
+	for (const value of restValues) {
+		if (value < minValue) {
+			minValue = value
+		}
+	}
+
+	return minValue
 }
 
 function hasTimestamp(value: unknown): value is { timestamp: bigint } {
@@ -2111,7 +2127,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 	return await Promise.all(
 		deployments.map(async deployment => {
 			const { parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
-			const [completeSetCollateralAmount, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, marketDetails, systemState, totalSecurityBondAllowance] = await Promise.all([
+			const [completeSetCollateralAmount, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, marketDetails, questionOutcome, systemState, totalSecurityBondAllowance, universeForkTime] = await Promise.all([
 				client.readContract({
 					abi: peripherals_SecurityPool_SecurityPool.abi,
 					functionName: 'completeSetCollateralAmount',
@@ -2144,6 +2160,12 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 				}),
 				loadMarketDetails(client, questionId),
 				client.readContract({
+					abi: QUESTION_OUTCOME_ABI,
+					functionName: 'getQuestionOutcome',
+					address: getInfraContractAddresses().securityPoolForker,
+					args: [securityPoolAddress],
+				}),
+				client.readContract({
 					abi: peripherals_SecurityPool_SecurityPool.abi,
 					functionName: 'systemState',
 					address: securityPoolAddress,
@@ -2154,6 +2176,12 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 					functionName: 'totalSecurityBondAllowance',
 					address: securityPoolAddress,
 					args: [],
+				}),
+				client.readContract({
+					abi: Zoltar_Zoltar.abi,
+					functionName: 'getForkTime',
+					address: getInfraContractAddresses().zoltar,
+					args: [universeId],
 				}),
 			])
 			const forkDataTuple: ForkDataTuple = forkData
@@ -2171,6 +2199,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 				marketDetails,
 				migratedRep,
 				parent,
+				questionOutcome: getReportingOutcomeKey(questionOutcome),
 				questionId: getQuestionIdHex(questionId),
 				securityMultiplier,
 				securityPoolAddress,
@@ -2179,12 +2208,52 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 				totalSecurityBondAllowance,
 				truthAuctionAddress,
 				truthAuctionStartedAt,
+				universeHasForked: universeForkTime > 0n,
 				universeId,
 				vaultCount,
 				vaults,
 			}
 		}),
 	)
+}
+
+export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {
+	if (accountAddress === undefined) {
+		return {
+			maxRedeemableCompleteSets: undefined,
+			shareBalances: undefined,
+		}
+	}
+
+	const [shareTokenAddress, universeId] = await Promise.all([
+		client.readContract({
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'shareToken',
+			args: [],
+		}),
+		readSecurityPoolUniverseId(client, securityPoolAddress),
+	])
+
+	const shareBalancesResult = await client.readContract({
+		address: shareTokenAddress,
+		abi: peripherals_tokens_ShareToken_ShareToken.abi,
+		functionName: 'balanceOfShares',
+		args: [universeId, accountAddress],
+	})
+
+	if (!isBigintTriple(shareBalancesResult)) throw new Error('Unexpected trading share balances response')
+
+	const shareBalances: TradingShareBalances = {
+		invalid: shareBalancesResult[0],
+		no: shareBalancesResult[2],
+		yes: shareBalancesResult[1],
+	}
+
+	return {
+		maxRedeemableCompleteSets: getMinBigintValue([shareBalances.invalid, shareBalances.yes, shareBalances.no]),
+		shareBalances,
+	}
 }
 
 export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint) {
@@ -2261,7 +2330,7 @@ export async function redeemSharesInSecurityPool(client: WriteClient, securityPo
 	} satisfies TradingActionResult
 }
 
-export async function migrateSharesFromUniverse(client: WriteClient, securityPoolAddress: Address, fromUniverseId: bigint, outcome: ReportingOutcomeKey) {
+export async function migrateSharesFromUniverse(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey) {
 	const [universeId, shareTokenAddress] = await Promise.all([
 		readSecurityPoolUniverseId(client, securityPoolAddress),
 		client.readContract({
@@ -2275,7 +2344,7 @@ export async function migrateSharesFromUniverse(client: WriteClient, securityPoo
 		address: shareTokenAddress,
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'migrate',
-		args: [getShareTokenId(fromUniverseId, outcome)],
+		args: [getShareTokenId(universeId, outcome)],
 	}))
 	return {
 		action: 'migrateShares',

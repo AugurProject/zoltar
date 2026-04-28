@@ -235,6 +235,7 @@ export type ListedSecurityPool = {
 	marketDetails: MarketDetails
 	migratedRep: bigint
 	parent: Address
+	questionOutcome: ReportingOutcomeKey | 'none'
 	questionId: string
 	securityMultiplier: bigint
 	securityPoolAddress: Address
@@ -243,6 +244,7 @@ export type ListedSecurityPool = {
 	totalSecurityBondAllowance: bigint
 	truthAuctionAddress: Address
 	truthAuctionStartedAt: bigint
+	universeHasForked: boolean
 	universeId: bigint
 	vaultCount: bigint
 	vaults: SecurityPoolVaultSummary[]
@@ -261,6 +263,17 @@ export type SecurityPoolVaultSummary = {
 export type SecurityPoolOverviewActionResult = ActionResult & {
 	action: 'queueLiquidation'
 	securityPoolAddress: Address
+}
+
+export type TradingShareBalances = {
+	invalid: bigint
+	no: bigint
+	yes: bigint
+}
+
+export type TradingDetails = {
+	maxRedeemableCompleteSets: bigint | undefined
+	shareBalances: TradingShareBalances | undefined
 }
 
 export type TradingActionResult = ActionResult & {
