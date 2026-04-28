@@ -405,7 +405,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				await refreshOpenOracleInitialReportState(reportDetails)
 				const submission = getInitialReportSubmission(reportDetails)
 				if (!submission.canSubmit || submission.amount1 === undefined || submission.amount2 === undefined) {
-					throw new Error(submission.blockReason ?? 'Invalid price')
+					throw new Error(submission.blockMessage?.message ?? 'Invalid price')
 				}
 
 				return await submitInitialOracleReport(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), getOpenOracleAddress(), reportDetails.reportId, submission.amount1, submission.amount2, parseBytes32Input(openOracleForm.value.stateHash, 'State hash'))
@@ -422,7 +422,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				const submission = getInitialReportSubmission(reportDetails)
 				const wrapAmount = submission.requiredWethWrapAmount
 				if (wrapAmount === undefined || wrapAmount <= 0n || !submission.canWrapRequiredWeth) {
-					throw new Error(submission.wrapRequiredWethDisabledReason ?? 'No WETH wrap is required for this report')
+					throw new Error(submission.wrapRequiredWethMessage?.message ?? 'No WETH wrap is required for this report')
 				}
 
 				return await wrapWeth(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), wrapAmount)

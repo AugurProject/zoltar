@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { maxUint256 } from 'viem'
-import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalPartialMessage, formatTokenApprovalUnavailableMessage, maxUint200, parseTokenApprovalAmountInput, shouldDisplayMaxTokenApprovalAmount } from '../lib/tokenApproval.js'
+import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalPartialMessage, formatTokenApprovalUnavailableMessage, maxUint200, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../lib/tokenApproval.js'
 
 const ONE = 10n ** 18n
 
@@ -78,6 +78,88 @@ describe('token approval helpers', () => {
 				actionLabel: 'submitting the initial report',
 				nextApprovedAmount: 24_500_000_000_000_000_000n,
 				requiredAmount: 25n * ONE,
+				tokenLabel: 'ETH',
+				tokenUnits: 18,
+			}),
+		).toBe('Approving 24.5 ETH will still leave 0.5 more ETH needed before submitting the initial report.')
+	})
+
+	test('resolveTokenApprovalStatusMessage hides loading-only approval states', () => {
+		const requirement = deriveTokenApprovalRequirement(25n * ONE, undefined)
+
+		expect(
+			resolveTokenApprovalStatusMessage({
+				actionLabel: 'submitting the initial report',
+				amountValidationMessage: undefined,
+				draftAmount: '',
+				guardMessage: undefined,
+				nextApprovalAmount: requirement.targetAmount,
+				requiredAmount: requirement.requiredAmount,
+				requirement,
+				tokenLabel: 'ETH',
+				tokenUnits: 18,
+			}),
+		).toBeUndefined()
+	})
+
+	test('resolveTokenApprovalStatusMessage prioritizes guard and validation messages', () => {
+		const requirement = deriveTokenApprovalRequirement(25n * ONE, 24n * ONE)
+
+		expect(
+			resolveTokenApprovalStatusMessage({
+				actionLabel: 'submitting the initial report',
+				amountValidationMessage: undefined,
+				draftAmount: '',
+				guardMessage: 'Connect a wallet before approving tokens.',
+				nextApprovalAmount: requirement.targetAmount,
+				requiredAmount: requirement.requiredAmount,
+				requirement,
+				tokenLabel: 'ETH',
+				tokenUnits: 18,
+			}),
+		).toBe('Connect a wallet before approving tokens.')
+
+		expect(
+			resolveTokenApprovalStatusMessage({
+				actionLabel: 'submitting the initial report',
+				amountValidationMessage: 'Approval amount must be greater than the current approved ETH amount.',
+				draftAmount: '24',
+				guardMessage: undefined,
+				nextApprovalAmount: 24n * ONE,
+				requiredAmount: requirement.requiredAmount,
+				requirement,
+				tokenLabel: 'ETH',
+				tokenUnits: 18,
+			}),
+		).toBe('Approval amount must be greater than the current approved ETH amount.')
+	})
+
+	test('resolveTokenApprovalStatusMessage preserves needed and partial approval copy', () => {
+		const requirement = deriveTokenApprovalRequirement(25n * ONE, 24n * ONE)
+
+		expect(
+			resolveTokenApprovalStatusMessage({
+				actionLabel: 'submitting the initial report',
+				amountValidationMessage: undefined,
+				draftAmount: '',
+				guardMessage: undefined,
+				nextApprovalAmount: requirement.targetAmount,
+				requiredAmount: requirement.requiredAmount,
+				requirement,
+				tokenLabel: 'ETH',
+				tokenUnits: 18,
+			}),
+		).toBe('Need 1 more ETH approved before submitting the initial report. Approving will set the allowance to 25 ETH.')
+
+		expect(
+			resolveTokenApprovalStatusMessage({
+				actionLabel: 'submitting the initial report',
+				amountValidationMessage: undefined,
+				draftAmount: '24.5',
+				guardMessage: undefined,
+				nextApprovalAmount: 24_500_000_000_000_000_000n,
+				requiredAmount: 25n * ONE,
+				requirement,
 				tokenLabel: 'ETH',
 				tokenUnits: 18,
 			}),

@@ -258,7 +258,28 @@ describe('Open Oracle helpers', () => {
 		expect(preview.amount2).toBe(25n)
 		expect(preview.token2Approval.neededAmount).toBe(1n)
 		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockReason).toBe('WETH approval required')
+		expect(preview.blockMessage).toEqual({
+			kind: 'visible',
+			message: 'WETH approval required',
+		})
+	})
+
+	test('initial report submission helper hides the automatic quote loading state', () => {
+		const preview = createInitialReportSubmissionPreview({
+			defaultPrice: undefined,
+			defaultPriceError: undefined,
+			defaultPriceSource: undefined,
+			defaultPriceSourceUrl: undefined,
+			priceInput: '',
+			quoteAttemptedSources: undefined,
+			quoteFailureReason: undefined,
+		})
+
+		expect(preview.canSubmit).toBe(false)
+		expect(preview.blockMessage).toEqual({
+			kind: 'hidden-loading',
+			message: 'Loading automatic price quote.',
+		})
 	})
 
 	test('initial report submission helper explains exhausted quote paths with a short reason', () => {
@@ -281,7 +302,10 @@ describe('Open Oracle helpers', () => {
 		})
 
 		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockReason).toBe('Automatic price quote unavailable for REP / ETH. Tried: Uniswap V4, then Uniswap V3. Reason: Uniswap V4 quote failed: execution reverted for an unknown reason. Uniswap V3 quote failed: no pool. Enter a price manually to submit the initial report.')
+		expect(preview.blockMessage).toEqual({
+			kind: 'visible',
+			message: 'Automatic price quote unavailable for REP / ETH. Tried: Uniswap V4, then Uniswap V3. Reason: Uniswap V4 quote failed: execution reverted for an unknown reason. Uniswap V3 quote failed: no pool. Enter a price manually to submit the initial report.',
+		})
 	})
 
 	test('manual price entry overrides automatic quote unavailability', () => {
@@ -305,7 +329,10 @@ describe('Open Oracle helpers', () => {
 
 		expect(preview.priceSource).toBe('Manual override')
 		expect(preview.price).toBe(4_000_000_000_000_000_000n)
-		expect(preview.blockReason).toBe('XYZ approval required')
+		expect(preview.blockMessage).toEqual({
+			kind: 'visible',
+			message: 'XYZ approval required',
+		})
 	})
 
 	test('initial report submission helper surfaces the fetch price failure reason when no default price is available', () => {
@@ -321,7 +348,10 @@ describe('Open Oracle helpers', () => {
 		})
 
 		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockReason).toBe('Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 quote failed: no v3 pool')
+		expect(preview.blockMessage).toEqual({
+			kind: 'visible',
+			message: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 quote failed: no v3 pool',
+		})
 	})
 
 	test('formats unavailable price messages with sanitized reasons and address fallback labels', () => {
@@ -342,7 +372,10 @@ describe('Open Oracle helpers', () => {
 		})
 
 		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockReason).toBe('Unable to verify REP approval before submitting the initial report. Reason: request timed out. Retry loading the approval status before continuing.')
+		expect(preview.blockMessage).toEqual({
+			kind: 'visible',
+			message: 'Unable to verify REP approval before submitting the initial report. Reason: request timed out. Retry loading the approval status before continuing.',
+		})
 	})
 
 	test('initial report submission helper surfaces balance read failures separately from approval gating', () => {
@@ -352,7 +385,42 @@ describe('Open Oracle helpers', () => {
 		})
 
 		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockReason).toBe('Unable to verify WETH balance for this report. Reason: request timed out. Retry loading the report or balance status before submitting the initial report.')
+		expect(preview.blockMessage).toEqual({
+			kind: 'visible',
+			message: 'Unable to verify WETH balance for this report. Reason: request timed out. Retry loading the report or balance status before submitting the initial report.',
+		})
+	})
+
+	test('initial report submission helper hides token balance loading states such as REPv2 balance refresh', () => {
+		const preview = createInitialReportSubmissionPreview({
+			reportDetails: {
+				exactToken1Report: 100n,
+				token1: REP_ADDRESS,
+				token1Symbol: 'REPv2',
+				token2: WETH_ADDRESS,
+				token2Symbol: 'WETH',
+			},
+			token1Balance: undefined,
+		})
+
+		expect(preview.canSubmit).toBe(false)
+		expect(preview.blockMessage).toEqual({
+			kind: 'hidden-loading',
+			message: 'Loading current REPv2 balance.',
+		})
+	})
+
+	test('initial report submission helper hides token approval loading states', () => {
+		const preview = createInitialReportSubmissionPreview({
+			approvedToken1Amount: undefined,
+			token1AllowanceError: undefined,
+		})
+
+		expect(preview.canSubmit).toBe(false)
+		expect(preview.blockMessage).toEqual({
+			kind: 'hidden-loading',
+			message: 'Loading current REP approval.',
+		})
 	})
 
 	test('initial report submission helper surfaces token-specific insufficient token1 balances', () => {
@@ -361,7 +429,10 @@ describe('Open Oracle helpers', () => {
 		})
 
 		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockReason).toBe('Insufficient REP balance for this report. Need 100, wallet has 99.')
+		expect(preview.blockMessage).toEqual({
+			kind: 'visible',
+			message: 'Insufficient REP balance for this report. Need 100, wallet has 99.',
+		})
 	})
 
 	test('initial report submission helper surfaces insufficient WETH balances and exposes wrap details', () => {
@@ -371,10 +442,13 @@ describe('Open Oracle helpers', () => {
 		})
 
 		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockReason).toBe('Insufficient WETH balance for this report. Need 25, wallet has 24. Wrap ETH into WETH first.')
+		expect(preview.blockMessage).toEqual({
+			kind: 'visible',
+			message: 'Insufficient WETH balance for this report. Need 25, wallet has 24. Wrap ETH into WETH first.',
+		})
 		expect(preview.requiredWethWrapAmount).toBe(1n)
 		expect(preview.canWrapRequiredWeth).toBe(true)
-		expect(preview.wrapRequiredWethDisabledReason).toBeUndefined()
+		expect(preview.wrapRequiredWethMessage).toBeUndefined()
 	})
 
 	test('initial report submission helper reports when wallet ETH is insufficient to wrap the required WETH', () => {
@@ -385,7 +459,10 @@ describe('Open Oracle helpers', () => {
 
 		expect(preview.requiredWethWrapAmount).toBe(1n)
 		expect(preview.canWrapRequiredWeth).toBe(false)
-		expect(preview.wrapRequiredWethDisabledReason).toBe('Wallet has 0 ETH, need 0.000000000000000001 ETH to wrap the required WETH.')
+		expect(preview.wrapRequiredWethMessage).toEqual({
+			kind: 'visible',
+			message: 'Wallet has 0 ETH, need 0.000000000000000001 ETH to wrap the required WETH.',
+		})
 	})
 
 	test('initial report submission helper reports when wallet ETH balance is still loading for WETH wrap', () => {
@@ -396,14 +473,17 @@ describe('Open Oracle helpers', () => {
 
 		expect(preview.requiredWethWrapAmount).toBe(1n)
 		expect(preview.canWrapRequiredWeth).toBe(false)
-		expect(preview.wrapRequiredWethDisabledReason).toBe('Loading wallet ETH balance.')
+		expect(preview.wrapRequiredWethMessage).toEqual({
+			kind: 'hidden-loading',
+			message: 'Loading wallet ETH balance.',
+		})
 	})
 
 	test('initial report submission helper allows submit when balances and approvals are sufficient', () => {
 		const preview = createInitialReportSubmissionPreview()
 
 		expect(preview.canSubmit).toBe(true)
-		expect(preview.blockReason).toBeUndefined()
+		expect(preview.blockMessage).toBeUndefined()
 	})
 
 	test('formats unavailable approval status messages with sanitized reasons', () => {
