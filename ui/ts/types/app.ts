@@ -16,6 +16,7 @@ export type AccountState = {
 	address: Address | undefined
 	chainId: string | undefined
 	ethBalance: bigint | undefined
+	wethBalance: bigint | undefined
 }
 
 export type MarketFormState = {
