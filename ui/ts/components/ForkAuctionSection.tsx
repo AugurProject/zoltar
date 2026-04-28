@@ -153,7 +153,6 @@ export function ForkAuctionSection({
 									<div className='entity-card-subsection'>
 										<div className='entity-card-subsection-header'>
 											<h4>Question</h4>
-											<span className='badge muted'>{question.marketType}</span>
 										</div>
 										<Question question={question} />
 									</div>

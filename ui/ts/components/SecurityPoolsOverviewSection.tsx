@@ -90,7 +90,6 @@ export function SecurityPoolsOverviewSection({
 								<div className='entity-card-subsection'>
 									<div className='entity-card-subsection-header'>
 										<h4>Question</h4>
-										<span className='badge muted'>{pool.marketDetails.marketType}</span>
 									</div>
 									<Question question={pool.marketDetails} />
 								</div>

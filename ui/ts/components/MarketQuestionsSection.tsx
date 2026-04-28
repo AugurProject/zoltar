@@ -40,7 +40,6 @@ export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, lo
 						<EntityCard
 							key={question.questionId}
 							title={getQuestionTitle(question)}
-							badge={<span className='badge ok'>{question.marketType}</span>}
 							actions={
 								<div className='actions'>
 									<button

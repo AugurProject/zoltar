@@ -225,7 +225,6 @@ export function SecurityPoolWorkflowSection({
 								<div className='entity-card-subsection'>
 									<div className='entity-card-subsection-header'>
 										<h4>Question</h4>
-										<span className='badge muted'>{marketDetails.marketType}</span>
 									</div>
 									<Question question={marketDetails} />
 								</div>

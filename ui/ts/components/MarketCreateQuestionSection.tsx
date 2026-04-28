@@ -103,7 +103,6 @@ export function MarketCreateQuestionSection({
 			{marketResult === undefined ? undefined : (
 				<EntityCard
 					title={selectedQuestionTitle}
-					badge={<span className='badge ok'>{marketResult.marketType}</span>}
 					actions={
 						<div className='actions'>
 							<button
