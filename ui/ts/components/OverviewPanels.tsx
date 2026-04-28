@@ -4,10 +4,6 @@ import { MetricField } from './MetricField.js'
 import { StateHint } from './StateHint.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 
-const UNISWAP_EXPLORE = 'https://app.uniswap.org/explore/pools/ethereum'
-const REP_ETH_V3_POOL_URL = `${UNISWAP_EXPLORE}/0xb055103b7633b61518CD806D95beeB2d4Cd217E7`
-const REP_USDC_V4_POOL_URL = `${UNISWAP_EXPLORE}/0x75d479eb83b7c9008ab854e74625a01841e5b3e06af40a89c10998ad2664f356`
-
 export function OverviewPanels({
 	accountState,
 	isConnectingWallet,
@@ -17,8 +13,10 @@ export function OverviewPanels({
 	onGoToGenesisUniverse,
 	repEthPrice,
 	repEthSource,
+	repEthSourceUrl,
 	repUsdcPrice,
 	repUsdcSource,
+	repUsdcSourceUrl,
 	universePresentation,
 	universeLabel,
 	universeRepBalance,
@@ -27,6 +25,15 @@ export function OverviewPanels({
 }: OverviewPanelsProps) {
 	const isWalletLoading = isConnectingWallet || (!walletBootstrapComplete && accountState.address === undefined)
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
+	const renderSourceLink = (source: 'v3' | 'v4', sourceUrl: string | undefined) => {
+		const label = `u${source === 'v4' ? '4' : '3'}`
+		if (sourceUrl === undefined) return `(${label})`
+		return (
+			<a href={sourceUrl} title={source === 'v4' ? 'Price from Uniswap V4' : 'Price from Uniswap V3'} target='_blank' rel='noreferrer'>
+				{`(${label})`}
+			</a>
+		)
+	}
 
 	return (
 		<section className='overview-shell'>
@@ -59,32 +66,10 @@ export function OverviewPanels({
 									</MetricField>
 								</>
 							) : undefined}
-							<MetricField
-								label={
-									<>
-										REP/ETH{' '}
-										{repEthSource === undefined ? undefined : (
-											<a href={repEthSource === 'v4' ? undefined : REP_ETH_V3_POOL_URL} title={repEthSource === 'v4' ? 'Price from Uniswap V4' : 'Price from Uniswap V3 (REP/WETH pool)'} target='_blank' rel='noreferrer'>
-												{`(u${repEthSource === 'v4' ? '4' : '3'})`}
-											</a>
-										)}
-									</>
-								}
-							>
+							<MetricField label={<>REP/ETH {repEthSource === undefined ? undefined : renderSourceLink(repEthSource, repEthSourceUrl)}</>}>
 								<CurrencyValue value={repEthPrice} loading={isLoadingRepPrices} suffix='ETH' />
 							</MetricField>
-							<MetricField
-								label={
-									<>
-										REP/USDC{' '}
-										{repUsdcSource === undefined ? undefined : (
-											<a href={repUsdcSource === 'v4' ? REP_USDC_V4_POOL_URL : undefined} title={repUsdcSource === 'v4' ? 'Price from Uniswap V4 (REP/USDC pool)' : 'Price from Uniswap V3 (REP/USDC pool)'} target='_blank' rel='noreferrer'>
-												{`(u${repUsdcSource === 'v4' ? '4' : '3'})`}
-											</a>
-										)}
-									</>
-								}
-							>
+							<MetricField label={<>REP/USDC {repUsdcSource === undefined ? undefined : renderSourceLink(repUsdcSource, repUsdcSourceUrl)}</>}>
 								<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />
 							</MetricField>
 							<MetricField label='Universe' valueClassName={universePresentation === undefined ? undefined : 'overview-universe-error'}>

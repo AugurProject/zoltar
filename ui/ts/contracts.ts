@@ -1616,16 +1616,23 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 	} satisfies OpenOracleActionResult
 }
 
-export async function wrapEthToWeth(client: WriteClient, amount: bigint) {
+export async function wrapWeth(client: WriteClient, amount: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: WETH_ADDRESS,
-		abi: [parseAbiItem('function deposit() payable')],
+		abi: [
+			{
+				type: 'function',
+				name: 'deposit',
+				stateMutability: 'payable',
+				inputs: [],
+				outputs: [],
+			},
+		],
 		functionName: 'deposit',
-		args: [],
 		value: amount,
 	}))
 	return {
-		action: 'wrapEthToWeth',
+		action: 'wrapWeth',
 		hash,
 	} satisfies OpenOracleActionResult
 }

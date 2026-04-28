@@ -3,8 +3,8 @@ import type { OpenOracleReportSummary } from '../types/contracts.js'
 import { parseDecimalInput } from './decimal.js'
 import { getErrorDetail } from './errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from './formatters.js'
-import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
-import { quoteBestExactInput, quoteBestV3ExactInput, quoteExactInput, WETH_ADDRESS } from './uniswapQuoter.js'
+import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
+import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput, WETH_ADDRESS } from './uniswapQuoter.js'
 
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 18n
 const OPEN_ORACLE_BOUNTY_BUFFER_NUMERATOR = 12n
@@ -12,7 +12,7 @@ const OPEN_ORACLE_BOUNTY_BUFFER_DENOMINATOR = 10n
 
 type OpenOracleReportStatus = 'Awaiting Initial Report' | 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'initial-report' | 'dispute' | 'read-only'
-export type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3 fallback' | 'Manual override' | 'Unavailable'
+export type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3' | 'Manual override' | 'Unavailable'
 export type OpenOracleInitialReportQuoteSource = Exclude<OpenOracleInitialReportPriceSource, 'Manual override' | 'Unavailable'>
 export type OpenOracleInitialReportQuoteFailureKind = 'unsupported-pair' | 'quote-failed'
 
@@ -21,6 +21,7 @@ type OpenOracleInitialReportPriceLoadResult =
 			status: 'success'
 			price: bigint
 			priceSource: OpenOracleInitialReportQuoteSource
+			priceSourceUrl: string | undefined
 			token2Amount: bigint
 	  }
 	| {
@@ -35,18 +36,17 @@ type OpenOracleInitialReportSubmissionDetails = {
 	amount2: bigint | undefined
 	blockReason: string | undefined
 	canSubmit: boolean
-	canWrapEthToWeth: boolean
-	ethBalance: bigint | undefined
+	canWrapRequiredWeth: boolean
 	price: bigint | undefined
 	priceInput: string
 	priceSource: OpenOracleInitialReportPriceSource
-	requiredWrapEthAmount: bigint | undefined
+	priceSourceUrl: string | undefined
+	requiredWethWrapAmount: bigint | undefined
 	token1Approval: TokenApprovalRequirement
-	token1Balance: bigint | undefined
 	token1Decimals: number | undefined
 	token2Approval: TokenApprovalRequirement
-	token2Balance: bigint | undefined
 	token2Decimals: number | undefined
+	wrapRequiredWethDisabledReason: string | undefined
 }
 
 function formatOpenOraclePriceLoadError(v4Error: unknown, v3Error?: unknown) {
@@ -55,11 +55,11 @@ function formatOpenOraclePriceLoadError(v4Error: unknown, v3Error?: unknown) {
 	const v4Message = v4Detail === undefined ? 'Uniswap V4 quote failed.' : `Uniswap V4 quote failed: ${v4Detail}.`
 
 	if (v3Error !== undefined) {
-		const v3Message = v3Detail === undefined ? 'Uniswap V3 fallback failed.' : `Uniswap V3 fallback failed: ${v3Detail}`
+		const v3Message = v3Detail === undefined ? 'Uniswap V3 quote failed.' : `Uniswap V3 quote failed: ${v3Detail}`
 		return `Failed to fetch price from Uniswap. ${v4Message} ${v3Message}`
 	}
 
-	return `Failed to fetch price from Uniswap. ${v4Message} Uniswap V3 fallback did not run.`
+	return `Failed to fetch price from Uniswap. ${v4Message} Uniswap V3 did not run.`
 }
 
 export function getOpenOracleReportStatus(report: Pick<OpenOracleReportSummary, 'currentReporter' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp'>): OpenOracleReportStatus {
@@ -128,6 +128,20 @@ export function formatOpenOraclePriceInput(price: bigint | undefined) {
 	return price === undefined ? '' : formatCurrencyInputBalance(price)
 }
 
+function resolveOpenOracleTokenLabel({ fallbackLabel, tokenAddress, tokenSymbol }: { fallbackLabel: string; tokenAddress: string | undefined; tokenSymbol: string | undefined }) {
+	const resolvedSymbol = tokenSymbol?.trim()
+	if (resolvedSymbol !== undefined && resolvedSymbol !== '') return resolvedSymbol
+
+	const resolvedAddress = tokenAddress?.trim()
+	if (resolvedAddress !== undefined && resolvedAddress !== '') return resolvedAddress
+
+	return fallbackLabel
+}
+
+function isCanonicalMainnetWeth(tokenAddress: string | undefined) {
+	return tokenAddress?.toLowerCase() === WETH_ADDRESS.toLowerCase()
+}
+
 function sanitizeOpenOracleFailureReason(reason: string | undefined) {
 	if (reason === undefined) return undefined
 
@@ -184,68 +198,53 @@ export function formatOpenOracleInitialReportApprovalStatusUnavailableMessage({ 
 
 export function formatOpenOracleInitialReportBalanceStatusUnavailableMessage({ reason, tokenLabel }: { reason: string | undefined; tokenLabel: string | undefined }) {
 	const resolvedTokenLabel = tokenLabel?.trim() || 'token'
-	const segments = [`Unable to verify ${resolvedTokenLabel} wallet balance for this report.`]
+	const segments = [`Unable to verify ${resolvedTokenLabel} balance for this report.`]
 	const sanitizedReason = sanitizeOpenOracleFailureReason(reason)
 
 	if (sanitizedReason !== undefined) {
 		segments.push(`Reason: ${sanitizedReason}.`)
 	}
-	segments.push('Retry loading the report or wallet balance before submitting the initial report.')
+	segments.push('Retry loading the report or balance status before submitting the initial report.')
 
 	return segments.join(' ')
 }
 
-function isWethToken(tokenAddress: string | undefined) {
-	return tokenAddress?.toLowerCase() === WETH_ADDRESS.toLowerCase()
-}
+function formatOpenOracleInitialReportInsufficientBalanceMessage({ available, required, tokenAddress, tokenDecimals, tokenLabel }: { available: bigint; required: bigint; tokenAddress: string | undefined; tokenDecimals: number | undefined; tokenLabel: string }) {
+	const resolvedDecimals = tokenDecimals ?? 18
+	const segments = [`Insufficient ${tokenLabel} balance for this report. Need ${formatCurrencyBalance(required, resolvedDecimals)}, wallet has ${formatCurrencyBalance(available, resolvedDecimals)}.`]
 
-function getOpenOracleTokenUnits(tokenAddress: string | undefined, tokenDecimals: number | undefined) {
-	if (isWethToken(tokenAddress)) return 18
-	return tokenDecimals ?? 18
-}
+	if (isCanonicalMainnetWeth(tokenAddress)) {
+		segments.push('Wrap ETH into WETH first.')
+	}
 
-function formatOpenOracleTokenAmount(amount: bigint, tokenAddress: string | undefined, tokenDecimals: number | undefined) {
-	return formatCurrencyBalance(amount, getOpenOracleTokenUnits(tokenAddress, tokenDecimals))
-}
-
-function formatOpenOracleInitialReportInsufficientBalanceMessage({ availableAmount, requiredAmount, tokenAddress, tokenDecimals, tokenLabel }: { availableAmount: bigint; requiredAmount: bigint; tokenAddress: string | undefined; tokenDecimals: number | undefined; tokenLabel: string | undefined }) {
-	const resolvedTokenLabel = tokenLabel?.trim() || 'token'
-	return `Insufficient ${resolvedTokenLabel} balance. Need ${formatOpenOracleTokenAmount(requiredAmount, tokenAddress, tokenDecimals)} ${resolvedTokenLabel} for the initial report and only ${formatOpenOracleTokenAmount(availableAmount, tokenAddress, tokenDecimals)} ${resolvedTokenLabel} is available in the connected wallet.`
-}
-
-function formatOpenOracleInitialReportWrapRequiredMessage(shortfallAmount: bigint) {
-	return `Need ${formatOpenOracleTokenAmount(shortfallAmount, WETH_ADDRESS, 18)} more WETH for this initial report. Wrap ${formatOpenOracleTokenAmount(shortfallAmount, WETH_ADDRESS, 18)} ETH to WETH, then submit the initial report.`
-}
-
-function formatOpenOracleInitialReportInsufficientEthToWrapMessage(shortfallAmount: bigint, ethBalance: bigint) {
-	return `Need ${formatOpenOracleTokenAmount(shortfallAmount, WETH_ADDRESS, 18)} more WETH for this initial report, but only ${formatOpenOracleTokenAmount(ethBalance, WETH_ADDRESS, 18)} ETH is available to wrap.`
+	return segments.join(' ')
 }
 
 export async function loadOpenOracleInitialReportPriceResult(client: Parameters<typeof quoteExactInput>[0], token1: Parameters<typeof quoteExactInput>[1], token2: Parameters<typeof quoteExactInput>[2], token1Amount: bigint): Promise<OpenOracleInitialReportPriceLoadResult> {
 	let v4Failure: unknown = 'Uniswap V4 returned an unusable quote'
 
 	try {
-		const token2Amount = await quoteBestExactInput(client, token1, token2, token1Amount)
+		const { amountOut: token2Amount, source } = await quoteBestExactInputWithSource(client, token1, token2, token1Amount)
 		const price = calculateOpenOraclePrice(token1Amount, token2Amount)
 		if (price !== undefined) {
-			return { price, priceSource: 'Uniswap V4', status: 'success', token2Amount }
+			return { price, priceSource: 'Uniswap V4', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
 		}
 	} catch (error) {
 		v4Failure = error
 	}
 
-	const attemptedSources: OpenOracleInitialReportQuoteSource[] = ['Uniswap V4', 'Uniswap V3 fallback']
+	const attemptedSources: OpenOracleInitialReportQuoteSource[] = ['Uniswap V4', 'Uniswap V3']
 	try {
-		const token2Amount = await quoteBestV3ExactInput(client, token1, token2, token1Amount)
+		const { amountOut: token2Amount, source } = await quoteBestV3ExactInputWithSource(client, token1, token2, token1Amount)
 		const price = calculateOpenOraclePrice(token1Amount, token2Amount)
 		if (price !== undefined) {
-			return { price, priceSource: 'Uniswap V3 fallback', status: 'success', token2Amount }
+			return { price, priceSource: 'Uniswap V3', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
 		}
 
 		return {
 			attemptedSources,
 			failureKind: 'quote-failed',
-			reason: formatOpenOraclePriceLoadError(v4Failure, 'Uniswap V3 fallback returned an unusable quote'),
+			reason: formatOpenOraclePriceLoadError(v4Failure, 'Uniswap V3 returned an unusable quote'),
 			status: 'failure',
 		}
 	} catch (v3Error) {
@@ -277,30 +276,27 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	defaultPrice,
 	defaultPriceError,
 	defaultPriceSource,
-	ethBalance,
-	ethBalanceError,
-	hasConnectedWallet = false,
+	defaultPriceSourceUrl,
 	priceInput,
 	quoteAttemptedSources,
 	quoteFailureReason,
 	reportDetails,
-	token1AllowanceError,
 	token1Balance,
 	token1BalanceError,
+	token1AllowanceError,
 	token2AllowanceError,
 	token2Balance,
 	token2BalanceError,
 	token1Decimals,
 	token2Decimals,
+	walletEthBalance,
 }: {
 	approvedToken1Amount: bigint | undefined
 	approvedToken2Amount: bigint | undefined
 	defaultPrice: string | undefined
 	defaultPriceError: string | undefined
 	defaultPriceSource: OpenOracleInitialReportPriceSource | undefined
-	ethBalance?: bigint | undefined
-	ethBalanceError?: string | undefined
-	hasConnectedWallet?: boolean
+	defaultPriceSourceUrl: string | undefined
 	priceInput: string
 	quoteAttemptedSources: OpenOracleInitialReportQuoteSource[] | undefined
 	quoteFailureReason: string | undefined
@@ -313,14 +309,15 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 				token2Symbol?: string | undefined
 		  }
 		| undefined
+	token1Balance: bigint | undefined
+	token1BalanceError: string | undefined
 	token1AllowanceError: string | undefined
-	token1Balance?: bigint | undefined
-	token1BalanceError?: string | undefined
 	token2AllowanceError: string | undefined
-	token2Balance?: bigint | undefined
-	token2BalanceError?: string | undefined
+	token2Balance: bigint | undefined
+	token2BalanceError: string | undefined
 	token1Decimals: number | undefined
 	token2Decimals: number | undefined
+	walletEthBalance: bigint | undefined
 }): OpenOracleInitialReportSubmissionDetails {
 	const trimmedPriceInput = priceInput.trim()
 	const resolvedPriceInput = trimmedPriceInput === '' ? (defaultPrice ?? '') : trimmedPriceInput
@@ -334,15 +331,38 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	const amount1 = reportDetails?.exactToken1Report
 	const amount2 = amount1 === undefined || price === undefined ? undefined : calculateOpenOracleToken2Amount(amount1, price)
 	const priceSource = trimmedPriceInput === '' ? (defaultPrice === undefined ? 'Unavailable' : (defaultPriceSource ?? 'Manual override')) : defaultPrice !== undefined && trimmedPriceInput === defaultPrice ? (defaultPriceSource ?? 'Manual override') : 'Manual override'
-	const token1IsWeth = isWethToken(reportDetails?.token1)
-	const token2IsWeth = isWethToken(reportDetails?.token2)
-	const resolvedToken1Decimals = getOpenOracleTokenUnits(reportDetails?.token1, token1Decimals)
-	const resolvedToken2Decimals = getOpenOracleTokenUnits(reportDetails?.token2, token2Decimals)
+	const priceSourceUrl = priceSource === 'Uniswap V4' || priceSource === 'Uniswap V3' ? defaultPriceSourceUrl : undefined
+	const token1Label = resolveOpenOracleTokenLabel({
+		fallbackLabel: 'Token1',
+		tokenAddress: reportDetails?.token1,
+		tokenSymbol: reportDetails?.token1Symbol,
+	})
+	const token2Label = resolveOpenOracleTokenLabel({
+		fallbackLabel: 'Token2',
+		tokenAddress: reportDetails?.token2,
+		tokenSymbol: reportDetails?.token2Symbol,
+	})
 	const token1Approval = deriveTokenApprovalRequirement(amount1, approvedToken1Amount)
 	const token2Approval = deriveTokenApprovalRequirement(amount2, approvedToken2Amount)
-	const requiredWethAmount = (token1IsWeth ? (amount1 ?? 0n) : 0n) + (token2IsWeth ? (amount2 ?? 0n) : 0n)
-	const currentWethBalance = token1IsWeth ? token1Balance : token2IsWeth ? token2Balance : undefined
-	const requiredWrapEthAmount = requiredWethAmount <= 0n || currentWethBalance === undefined || currentWethBalance >= requiredWethAmount ? undefined : requiredWethAmount - currentWethBalance
+	const token1BalanceShortage = amount1 === undefined || token1Balance === undefined || token1Balance >= amount1 ? undefined : amount1 - token1Balance
+	const token2BalanceShortage = amount2 === undefined || token2Balance === undefined || token2Balance >= amount2 ? undefined : amount2 - token2Balance
+	const requiredWethWrapAmount =
+		reportDetails === undefined
+			? undefined
+			: isCanonicalMainnetWeth(reportDetails.token1) && token1BalanceShortage !== undefined && token1BalanceShortage > 0n
+				? token1BalanceShortage
+				: isCanonicalMainnetWeth(reportDetails.token2) && token2BalanceShortage !== undefined && token2BalanceShortage > 0n
+					? token2BalanceShortage
+					: undefined
+	const canWrapRequiredWeth = requiredWethWrapAmount !== undefined && requiredWethWrapAmount > 0n && walletEthBalance !== undefined && walletEthBalance >= requiredWethWrapAmount
+	const wrapRequiredWethDisabledReason =
+		requiredWethWrapAmount === undefined || requiredWethWrapAmount <= 0n
+			? undefined
+			: walletEthBalance === undefined
+				? 'Loading wallet ETH balance.'
+				: walletEthBalance < requiredWethWrapAmount
+					? `Wallet has ${formatCurrencyBalance(walletEthBalance)} ETH, need ${formatCurrencyBalance(requiredWethWrapAmount)} ETH to wrap the required WETH.`
+					: undefined
 
 	let blockReason: string | undefined
 	if (reportDetails === undefined) {
@@ -353,82 +373,59 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 			formatOpenOracleInitialReportPriceUnavailableMessage({
 				attemptedSources: quoteAttemptedSources,
 				reason: quoteFailureReason,
-				token1Label: reportDetails.token1Symbol ?? reportDetails.token1,
-				token2Label: reportDetails.token2Symbol ?? reportDetails.token2,
+				token1Label,
+				token2Label,
 			})
 	} else if (price === undefined || price <= 0n || amount2 === undefined || amount2 <= 0n) {
 		blockReason = 'Invalid price'
 	} else if (approvedToken1Amount === undefined && token1AllowanceError !== undefined) {
 		blockReason = formatOpenOracleInitialReportApprovalStatusUnavailableMessage({
 			reason: token1AllowanceError,
-			tokenLabel: reportDetails.token1Symbol ?? reportDetails.token1,
+			tokenLabel: token1Label,
 		})
-	} else if (approvedToken1Amount === undefined) {
-		blockReason = `Loading current ${reportDetails.token1Symbol ?? reportDetails.token1 ?? 'Token1'} approval.`
 	} else if (approvedToken2Amount === undefined && token2AllowanceError !== undefined) {
 		blockReason = formatOpenOracleInitialReportApprovalStatusUnavailableMessage({
 			reason: token2AllowanceError,
-			tokenLabel: reportDetails.token2Symbol ?? reportDetails.token2,
+			tokenLabel: token2Label,
 		})
-	} else if (approvedToken2Amount === undefined) {
-		blockReason = `Loading current ${reportDetails.token2Symbol ?? reportDetails.token2 ?? 'Token2'} approval.`
-	} else if (hasConnectedWallet && token1Balance === undefined && token1BalanceError !== undefined) {
+	} else if (token1Balance === undefined && token1BalanceError !== undefined) {
 		blockReason = formatOpenOracleInitialReportBalanceStatusUnavailableMessage({
 			reason: token1BalanceError,
-			tokenLabel: reportDetails.token1Symbol ?? reportDetails.token1,
+			tokenLabel: token1Label,
 		})
-	} else if (hasConnectedWallet && token1Balance === undefined) {
-		blockReason = `Loading current ${reportDetails.token1Symbol ?? reportDetails.token1 ?? 'Token1'} balance.`
-	} else if (hasConnectedWallet && token2Balance === undefined && token2BalanceError !== undefined) {
+	} else if (token2Balance === undefined && token2BalanceError !== undefined) {
 		blockReason = formatOpenOracleInitialReportBalanceStatusUnavailableMessage({
 			reason: token2BalanceError,
-			tokenLabel: reportDetails.token2Symbol ?? reportDetails.token2,
+			tokenLabel: token2Label,
 		})
-	} else if (hasConnectedWallet && token2Balance === undefined) {
-		blockReason = `Loading current ${reportDetails.token2Symbol ?? reportDetails.token2 ?? 'Token2'} balance.`
-	} else if (hasConnectedWallet && !token1IsWeth && amount1 !== undefined && token1Balance !== undefined && token1Balance < amount1) {
+	} else if (token1Balance === undefined) {
+		blockReason = `Loading current ${token1Label} balance.`
+	} else if (token2Balance === undefined) {
+		blockReason = `Loading current ${token2Label} balance.`
+	} else if (amount1 !== undefined && token1Balance < amount1) {
 		blockReason = formatOpenOracleInitialReportInsufficientBalanceMessage({
-			availableAmount: token1Balance,
-			requiredAmount: amount1,
+			available: token1Balance,
+			required: amount1,
 			tokenAddress: reportDetails.token1,
-			tokenDecimals: resolvedToken1Decimals,
-			tokenLabel: reportDetails.token1Symbol ?? reportDetails.token1,
+			tokenDecimals: token1Decimals,
+			tokenLabel: token1Label,
 		})
-	} else if (hasConnectedWallet && !token2IsWeth && amount2 !== undefined && token2Balance !== undefined && token2Balance < amount2) {
+	} else if (amount2 !== undefined && token2Balance < amount2) {
 		blockReason = formatOpenOracleInitialReportInsufficientBalanceMessage({
-			availableAmount: token2Balance,
-			requiredAmount: amount2,
+			available: token2Balance,
+			required: amount2,
 			tokenAddress: reportDetails.token2,
-			tokenDecimals: resolvedToken2Decimals,
-			tokenLabel: reportDetails.token2Symbol ?? reportDetails.token2,
+			tokenDecimals: token2Decimals,
+			tokenLabel: token2Label,
 		})
-	} else if (hasConnectedWallet && requiredWrapEthAmount !== undefined && ethBalance === undefined && ethBalanceError !== undefined) {
-		blockReason = formatOpenOracleInitialReportBalanceStatusUnavailableMessage({
-			reason: ethBalanceError,
-			tokenLabel: 'ETH',
-		})
-	} else if (hasConnectedWallet && requiredWrapEthAmount !== undefined && ethBalance === undefined) {
-		blockReason = 'Loading current ETH balance.'
-	} else if (hasConnectedWallet && requiredWrapEthAmount !== undefined && ethBalance !== undefined && ethBalance >= requiredWrapEthAmount) {
-		blockReason = formatOpenOracleInitialReportWrapRequiredMessage(requiredWrapEthAmount)
-	} else if (hasConnectedWallet && requiredWrapEthAmount !== undefined) {
-		blockReason = formatOpenOracleInitialReportInsufficientEthToWrapMessage(requiredWrapEthAmount, ethBalance ?? 0n)
+	} else if (approvedToken1Amount === undefined) {
+		blockReason = `Loading current ${token1Label} approval.`
+	} else if (approvedToken2Amount === undefined) {
+		blockReason = `Loading current ${token2Label} approval.`
 	} else if (!token1Approval.hasSufficientApproval) {
-		blockReason =
-			formatTokenApprovalNeededMessage({
-				actionLabel: 'submitting the initial report',
-				requirement: token1Approval,
-				tokenLabel: reportDetails.token1Symbol ?? reportDetails.token1 ?? 'Token1',
-				tokenUnits: resolvedToken1Decimals,
-			}) ?? 'Token1 approval required'
+		blockReason = `${token1Label} approval required`
 	} else if (!token2Approval.hasSufficientApproval) {
-		blockReason =
-			formatTokenApprovalNeededMessage({
-				actionLabel: 'submitting the initial report',
-				requirement: token2Approval,
-				tokenLabel: reportDetails.token2Symbol ?? reportDetails.token2 ?? 'Token2',
-				tokenUnits: resolvedToken2Decimals,
-			}) ?? 'Token2 approval required'
+		blockReason = `${token2Label} approval required`
 	}
 
 	return {
@@ -436,17 +433,16 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 		amount2,
 		blockReason,
 		canSubmit: blockReason === undefined,
-		canWrapEthToWeth: requiredWrapEthAmount !== undefined && ethBalance !== undefined && ethBalance >= requiredWrapEthAmount,
-		ethBalance,
+		canWrapRequiredWeth,
 		price,
 		priceInput: resolvedPriceInput,
 		priceSource,
-		requiredWrapEthAmount,
+		priceSourceUrl,
+		requiredWethWrapAmount,
 		token1Approval,
-		token1Balance,
-		token1Decimals: resolvedToken1Decimals,
+		token1Decimals,
 		token2Approval,
-		token2Balance,
-		token2Decimals: resolvedToken2Decimals,
+		token2Decimals,
+		wrapRequiredWethDisabledReason,
 	}
 }

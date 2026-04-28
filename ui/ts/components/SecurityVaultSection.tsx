@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { AddressValue } from './AddressValue.js'
+import { ApprovedAmountValue } from './ApprovedAmountValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -134,7 +135,7 @@ export function SecurityVaultSection({
 						<CurrencyValue value={securityVaultDetails.repDepositShare} suffix='REP' />
 					</MetricField>
 					<MetricField className='entity-metric' label='Approved REP'>
-						<CurrencyValue loading={securityVaultRepApproval.loading} value={securityVaultRepApproval.value} suffix='REP' />
+						<ApprovedAmountValue loading={securityVaultRepApproval.loading} value={securityVaultRepApproval.value} suffix='REP' />
 					</MetricField>
 					<MetricField className='entity-metric' label='Security Bond Allowance'>
 						<CurrencyValue value={securityBondAllowance} suffix='REP' />

@@ -1,8 +1,26 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from 'viem'
-import { DEFAULT_POOL_CONFIG, ETH_ADDRESS, REP_ADDRESS, UNISWAP_V4_QUOTER_ADDRESS, WETH_ADDRESS, quoteBestExactInput, quoteBestV3ExactInput, quoteEthForRep, quoteEthForToken, quoteExactInput, quoteRepForEth, quoteTokenForEth } from '../lib/uniswapQuoter.js'
+import { getAddress, zeroAddress, type Address } from 'viem'
+import {
+	DEFAULT_POOL_CONFIG,
+	ETH_ADDRESS,
+	REP_ADDRESS,
+	UNISWAP_V4_QUOTER_ADDRESS,
+	WETH_ADDRESS,
+	buildUniswapV3PoolUrl,
+	buildUniswapV4PoolId,
+	buildUniswapV4PoolUrl,
+	quoteBestExactInput,
+	quoteBestExactInputWithSource,
+	quoteBestV3ExactInput,
+	quoteBestV3ExactInputWithSource,
+	quoteEthForRep,
+	quoteEthForToken,
+	quoteExactInput,
+	quoteRepForEth,
+	quoteTokenForEth,
+} from '../lib/uniswapQuoter.js'
 import type { ReadClient } from '../lib/clients.js'
 
 type SimulateArgs = Parameters<ReadClient['simulateContract']>[0]
@@ -160,6 +178,33 @@ void describe('quoteBestExactInput', () => {
 	})
 })
 
+void describe('quoteBestExactInputWithSource', () => {
+	void test('returns the best successful quote together with exact V4 pool metadata', async () => {
+		const poolConfigs = [
+			{ fee: 100, tickSpacing: 1 },
+			{ fee: 500, tickSpacing: 10 },
+			{ fee: 3000, tickSpacing: 60 },
+		] as const
+		const client = createPoolAwareClient({
+			100: 9n,
+			500: 12n,
+			3000: 7n,
+		})
+
+		const result = await quoteBestExactInputWithSource(client, ETH_ADDRESS, REP_ADDRESS, 1n, poolConfigs)
+
+		expect(result).toEqual({
+			amountOut: 12n,
+			source: {
+				poolConfig: poolConfigs[1],
+				poolId: buildUniswapV4PoolId(ETH_ADDRESS, REP_ADDRESS, poolConfigs[1]),
+				poolUrl: buildUniswapV4PoolUrl(ETH_ADDRESS, REP_ADDRESS, poolConfigs[1]),
+				protocol: 'v4',
+			},
+		})
+	})
+})
+
 void describe('quoteBestV3ExactInput', () => {
 	void test('returns the best successful quote across tested V3 fee tiers', async () => {
 		const client = createV3FeeAwareClient({
@@ -191,6 +236,47 @@ void describe('quoteBestV3ExactInput', () => {
 	void test('throws when every tested V3 fee tier fails', async () => {
 		const client = createV3FeeAwareClient({})
 		await expect(quoteBestV3ExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n)).rejects.toThrow('no v3 pool for fee 10000')
+	})
+})
+
+void describe('quoteBestV3ExactInputWithSource', () => {
+	void test('returns the best successful quote together with exact V3 pool metadata from the factory', async () => {
+		const poolAddress = getAddress('0x0000000000000000000000000000000000000abc')
+		const factoryCalls: Array<{ fee: number; tokenA: Address; tokenB: Address }> = []
+		const client = {
+			simulateContract: async (args: SimulateArgs) => {
+				const [param] = args.args as unknown as [{ tokenIn: string; tokenOut: string; amountIn: bigint; fee: number; sqrtPriceLimitX96: bigint }]
+				const amountOut = param.fee === 500 ? 9n : param.fee === 3000 ? 12n : undefined
+				if (amountOut === undefined) {
+					throw new Error(`no v3 pool for fee ${param.fee}`)
+				}
+				return { result: [amountOut, 0n, 0, 0n] }
+			},
+			readContract: async (args: { args?: unknown[] }) => {
+				const [tokenA, tokenB, fee] = args.args as [Address, Address, number]
+				factoryCalls.push({ fee, tokenA, tokenB })
+				return poolAddress
+			},
+		} as unknown as ReadClient
+
+		const result = await quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, REP_ADDRESS, 1n, [500, 3000])
+
+		expect(result).toEqual({
+			amountOut: 12n,
+			source: {
+				fee: 3000,
+				poolAddress,
+				poolUrl: buildUniswapV3PoolUrl(poolAddress),
+				protocol: 'v3',
+			},
+		})
+		expect(factoryCalls).toEqual([
+			{
+				fee: 3000,
+				tokenA: REP_ADDRESS,
+				tokenB: WETH_ADDRESS,
+			},
+		])
 	})
 })
 

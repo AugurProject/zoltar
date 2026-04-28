@@ -49,8 +49,10 @@ export type OverviewPanelsProps = {
 	isRefreshing: boolean
 	repEthPrice: bigint | undefined
 	repEthSource: 'v4' | 'v3' | undefined
+	repEthSourceUrl: string | undefined
 	repUsdcPrice: bigint | undefined
 	repUsdcSource: 'v4' | 'v3' | undefined
+	repUsdcSourceUrl: string | undefined
 	isLoadingRepPrices: boolean
 	onConnect: () => void
 	onGoToGenesisUniverse: () => void
@@ -260,7 +262,7 @@ export type OpenOracleRouteContentProps = {
 	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
 	onSettleReport: () => void
 	onSubmitInitialReport: () => void
-	onWrapEthToWeth: () => void
+	onWrapWethForInitialReport: () => void
 	loadingOpenOracleCreate: boolean
 	openOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	openOracleError: string | undefined
@@ -268,6 +270,7 @@ export type OpenOracleRouteContentProps = {
 		defaultPrice: string | undefined
 		defaultPriceError: string | undefined
 		defaultPriceSource: OpenOracleInitialReportPriceSource | undefined
+		defaultPriceSourceUrl: string | undefined
 		ethBalance: bigint | undefined
 		ethBalanceError: string | undefined
 		loading: boolean
