@@ -2,12 +2,17 @@
 
 import { describe, expect, test } from 'bun:test'
 import {
+	MARKET_NOT_FINALIZED_MESSAGE,
+	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
+	NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE,
+	SHARE_MIGRATION_AFTER_FORK_MESSAGE,
 	getCollateralizationDisplayState,
 	getCollateralizationTone,
 	getMaxRedeemableCompleteSets,
 	getPoolCollateralizationPercent,
 	getRemainingMintCapacity,
 	getSelectedOutcomeShareBalance,
+	getTradingGuardDisplayMessage,
 	getTradingMigrateSharesGuardMessage,
 	getTradingMintGuardMessage,
 	getTradingRedeemCompleteSetGuardMessage,
@@ -72,6 +77,15 @@ void describe('trading helpers', () => {
 		expect(getSelectedOutcomeShareBalance(shareBalances, 'yes')).toBe(3n * 10n ** 18n)
 		expect(getSelectedOutcomeShareBalance(shareBalances, 'no')).toBe(4n * 10n ** 18n)
 		expect(getSelectedOutcomeShareBalance(shareBalances, 'invalid')).toBe(2n * 10n ** 18n)
+	})
+
+	void test('suppresses only the targeted trading guard copy in the UI', () => {
+		expect(getTradingGuardDisplayMessage(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)).toBeUndefined()
+		expect(getTradingGuardDisplayMessage(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)).toBeUndefined()
+		expect(getTradingGuardDisplayMessage(SHARE_MIGRATION_AFTER_FORK_MESSAGE)).toBeUndefined()
+		expect(getTradingGuardDisplayMessage(MARKET_NOT_FINALIZED_MESSAGE)).toBeUndefined()
+		expect(getTradingGuardDisplayMessage('Loading wallet share balances.')).toBe('Loading wallet share balances.')
+		expect(getTradingGuardDisplayMessage(undefined)).toBeUndefined()
 	})
 
 	void test('blocks minting until a pool is loaded and the wallet is connected on mainnet', () => {
