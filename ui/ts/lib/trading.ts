@@ -7,6 +7,10 @@ export function getRemainingMintCapacity(totalSecurityBondAllowance: bigint | un
 	return totalSecurityBondAllowance > completeSetCollateralAmount ? totalSecurityBondAllowance - completeSetCollateralAmount : 0n
 }
 
+export function hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit: bigint | undefined, totalSecurityBondAllowance: bigint | undefined) {
+	return (totalRepDeposit ?? 0n) > 0n && (totalSecurityBondAllowance ?? 0n) === 0n
+}
+
 export function getTradingMintGuardMessage({
 	accountAddress,
 	completeSetCollateralAmount,
@@ -14,6 +18,7 @@ export function getTradingMintGuardMessage({
 	isMainnet,
 	mintAmountInput,
 	systemState,
+	totalRepDeposit,
 	totalSecurityBondAllowance,
 }: {
 	accountAddress: Address | undefined
@@ -22,6 +27,7 @@ export function getTradingMintGuardMessage({
 	isMainnet: boolean
 	mintAmountInput: string
 	systemState: SecurityPoolSystemState | undefined
+	totalRepDeposit: bigint | undefined
 	totalSecurityBondAllowance: bigint | undefined
 }) {
 	if (accountAddress === undefined) return 'Connect a wallet before minting complete sets.'
@@ -30,7 +36,13 @@ export function getTradingMintGuardMessage({
 
 	const remainingCapacity = getRemainingMintCapacity(totalSecurityBondAllowance, completeSetCollateralAmount)
 	if (remainingCapacity === undefined) return 'Loading pool mint capacity.'
-	if (remainingCapacity === 0n) return 'This pool has no remaining mint capacity.'
+	if (remainingCapacity === 0n) {
+		if (hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit, totalSecurityBondAllowance)) {
+			return 'This pool has no remaining mint capacity because its vaults currently have no active security bond allowance. Deposited REP alone does not create mint capacity.'
+		}
+
+		return 'This pool has no remaining mint capacity.'
+	}
 
 	const trimmedAmount = mintAmountInput.trim()
 	if (trimmedAmount === '') return 'Enter a mint amount greater than zero.'

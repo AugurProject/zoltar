@@ -238,6 +238,7 @@ export type ListedSecurityPool = {
 	securityMultiplier: bigint
 	securityPoolAddress: Address
 	systemState: SecurityPoolSystemState
+	totalRepDeposit: bigint
 	totalSecurityBondAllowance: bigint
 	truthAuctionAddress: Address
 	truthAuctionStartedAt: bigint

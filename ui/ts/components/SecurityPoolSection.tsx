@@ -134,7 +134,7 @@ export function SecurityPoolSection({
 													<MetricField label='Open Interest Fee / Year'>
 														<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
 													</MetricField>
-													<OpenInterestCapacityMetrics completeSetCollateralAmount={pool.completeSetCollateralAmount} totalSecurityBondAllowance={pool.totalSecurityBondAllowance} />
+													<OpenInterestCapacityMetrics completeSetCollateralAmount={pool.completeSetCollateralAmount} totalRepDeposit={pool.totalRepDeposit} totalSecurityBondAllowance={pool.totalSecurityBondAllowance} />
 												</div>
 											</EntityCard>
 										))}

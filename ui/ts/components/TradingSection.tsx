@@ -8,13 +8,14 @@ import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
-import { getRemainingMintCapacity, getTradingMintGuardMessage } from '../lib/trading.js'
+import { getRemainingMintCapacity, getTradingMintGuardMessage, hasRepBackedPoolWithNoActiveAllowance } from '../lib/trading.js'
 import type { TradingSectionProps } from '../types/components.js'
 
 export function TradingSection({ accountState, embedInCard = false, onCreateCompleteSet, onMigrateShares, onRedeemCompleteSet, onRedeemShares, onTradingFormChange, selectedPool, tradingError, tradingForm, tradingResult, showHeader = true, showSecurityPoolAddressInput = true }: TradingSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
 	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.totalSecurityBondAllowance, selectedPool?.completeSetCollateralAmount)
+	const hasRepWithoutActiveAllowance = hasRepBackedPoolWithNoActiveAllowance(selectedPool?.totalRepDeposit, selectedPool?.totalSecurityBondAllowance)
 	const marketHasEnded = selectedPool?.marketDetails.endTime === undefined ? undefined : selectedPool.marketDetails.endTime <= currentTimestamp
 	const mintGuardMessage = getTradingMintGuardMessage({
 		accountAddress: accountState.address,
@@ -23,6 +24,7 @@ export function TradingSection({ accountState, embedInCard = false, onCreateComp
 		isMainnet,
 		mintAmountInput: tradingForm.completeSetAmount,
 		systemState: selectedPool?.systemState,
+		totalRepDeposit: selectedPool?.totalRepDeposit,
 		totalSecurityBondAllowance: selectedPool?.totalSecurityBondAllowance,
 	})
 	const redeemCompleteSetGuardMessage = (() => {
@@ -114,7 +116,7 @@ export function TradingSection({ accountState, embedInCard = false, onCreateComp
 						<MetricField label='Universe'>
 							<UniverseLink universeId={selectedPool.universeId} />
 						</MetricField>
-						<OpenInterestCapacityMetrics completeSetCollateralAmount={selectedPool.completeSetCollateralAmount} totalSecurityBondAllowance={selectedPool.totalSecurityBondAllowance} />
+						<OpenInterestCapacityMetrics completeSetCollateralAmount={selectedPool.completeSetCollateralAmount} totalRepDeposit={selectedPool.totalRepDeposit} totalSecurityBondAllowance={selectedPool.totalSecurityBondAllowance} />
 					</div>
 				)}
 			</div>
@@ -123,7 +125,7 @@ export function TradingSection({ accountState, embedInCard = false, onCreateComp
 		<div className='entity-card-subsection'>
 			<div className='entity-card-subsection-header'>
 				<h4>Mint Complete Sets</h4>
-				{remainingMintCapacity === undefined ? undefined : <span className={`badge ${remainingMintCapacity > 0n ? 'ok' : 'blocked'}`}>{remainingMintCapacity > 0n ? 'Capacity available' : 'Capacity full'}</span>}
+				{remainingMintCapacity === undefined ? undefined : hasRepWithoutActiveAllowance ? <span className='badge muted'>No active allowances</span> : <span className={`badge ${remainingMintCapacity > 0n ? 'ok' : 'blocked'}`}>{remainingMintCapacity > 0n ? 'Capacity available' : 'Capacity full'}</span>}
 			</div>
 			<label className='field'>
 				<span>Mint Complete Sets Amount</span>

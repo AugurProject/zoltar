@@ -2141,6 +2141,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 			const [, , truthAuctionStartedAt, migratedRep, , forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
 
 			const { vaultCount, vaults } = await loadSecurityPoolVaultSummaries(client, securityPoolAddress)
+			const totalRepDeposit = vaults.reduce((sum, vault) => sum + vault.repDepositShare, 0n)
 			return {
 				completeSetCollateralAmount,
 				currentRetentionRate,
@@ -2154,6 +2155,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 				securityMultiplier,
 				securityPoolAddress,
 				systemState: getSecurityPoolSystemState(systemState),
+				totalRepDeposit,
 				totalSecurityBondAllowance,
 				truthAuctionAddress,
 				truthAuctionStartedAt,
