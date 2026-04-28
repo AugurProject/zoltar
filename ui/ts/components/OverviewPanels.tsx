@@ -61,6 +61,9 @@ export function OverviewPanels({
 									<MetricField label='ETH'>
 										<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix='ETH' />
 									</MetricField>
+									<MetricField label='WETH'>
+										<CurrencyValue value={accountState.wethBalance} loading={isRefreshing && accountState.wethBalance === undefined} suffix='WETH' />
+									</MetricField>
 									<MetricField label='REP'>
 										<CurrencyValue value={universeRepBalance} loading={isLoadingUniverseRepBalance} suffix='REP' />
 									</MetricField>
