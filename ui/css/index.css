@@ -1923,6 +1923,10 @@ button.currency-value.copyable:hover:not(:disabled) {
 	gap: 1rem;
 }
 
+.field-row > .actions {
+	align-self: end;
+}
+
 .field {
 	display: grid;
 	gap: 0.5rem;
