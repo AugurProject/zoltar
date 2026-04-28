@@ -2,9 +2,16 @@ import type { Address } from 'viem'
 import { formatCurrencyBalance } from './formatters.js'
 import type { SecurityPoolSystemState } from '../types/contracts.js'
 
+const PRICE_PRECISION = 10n ** 18n
+
 export function getRemainingMintCapacity(totalSecurityBondAllowance: bigint | undefined, completeSetCollateralAmount: bigint | undefined) {
 	if (totalSecurityBondAllowance === undefined || completeSetCollateralAmount === undefined) return undefined
 	return totalSecurityBondAllowance > completeSetCollateralAmount ? totalSecurityBondAllowance - completeSetCollateralAmount : 0n
+}
+
+export function getAllowanceBackedRep(totalSecurityBondAllowance: bigint | undefined, lastOraclePrice: bigint | undefined) {
+	if (totalSecurityBondAllowance === undefined || lastOraclePrice === undefined) return undefined
+	return (totalSecurityBondAllowance * lastOraclePrice) / PRICE_PRECISION
 }
 
 export function hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit: bigint | undefined, totalSecurityBondAllowance: bigint | undefined) {

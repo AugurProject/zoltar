@@ -2111,7 +2111,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 	return await Promise.all(
 		deployments.map(async deployment => {
 			const { parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
-			const [completeSetCollateralAmount, currentRetentionRate, forkData, marketDetails, systemState, totalSecurityBondAllowance] = await Promise.all([
+			const [completeSetCollateralAmount, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, marketDetails, systemState, totalSecurityBondAllowance] = await Promise.all([
 				client.readContract({
 					abi: peripherals_SecurityPool_SecurityPool.abi,
 					functionName: 'completeSetCollateralAmount',
@@ -2129,6 +2129,18 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 					functionName: 'forkData',
 					address: getInfraContractAddresses().securityPoolForker,
 					args: [securityPoolAddress],
+				}),
+				client.readContract({
+					abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+					functionName: 'lastPrice',
+					address: managerAddress,
+					args: [],
+				}),
+				client.readContract({
+					abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+					functionName: 'lastSettlementTimestamp',
+					address: managerAddress,
+					args: [],
 				}),
 				loadMarketDetails(client, questionId),
 				client.readContract({
@@ -2154,6 +2166,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 				currentRetentionRate,
 				forkOutcome: getReportingOutcomeKey(forkOutcomeIndex),
 				forkOwnSecurityPool,
+				lastOraclePrice: lastSettlementTimestamp > 0n ? lastOraclePrice : undefined,
 				managerAddress,
 				marketDetails,
 				migratedRep,

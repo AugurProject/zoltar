@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getRemainingMintCapacity, getTradingMintGuardMessage, hasRepBackedPoolWithNoActiveAllowance } from '../lib/trading.js'
+import { getAllowanceBackedRep, getRemainingMintCapacity, getTradingMintGuardMessage, hasRepBackedPoolWithNoActiveAllowance } from '../lib/trading.js'
 
 void describe('trading helpers', () => {
 	void test('computes remaining mint capacity from total bond allowance and minted open interest', () => {
@@ -9,6 +9,12 @@ void describe('trading helpers', () => {
 		expect(getRemainingMintCapacity(10n, 10n)).toBe(0n)
 		expect(getRemainingMintCapacity(10n, 12n)).toBe(0n)
 		expect(getRemainingMintCapacity(undefined, 12n)).toBeUndefined()
+	})
+
+	void test('converts allowance to REP using the latest oracle price', () => {
+		expect(getAllowanceBackedRep(2n * 10n ** 18n, 2_500n * 10n ** 18n)).toBe(5_000n * 10n ** 18n)
+		expect(getAllowanceBackedRep(undefined, 2_500n * 10n ** 18n)).toBeUndefined()
+		expect(getAllowanceBackedRep(2n * 10n ** 18n, undefined)).toBeUndefined()
 	})
 
 	void test('detects pools that have REP backing but no active allowance', () => {
