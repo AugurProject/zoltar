@@ -380,6 +380,7 @@ export type ForkAuctionRouteContentProps = {
 export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
 	disabled?: boolean
 	disabledMessage?: string | undefined
+	embedInCard?: boolean
 	previewPool?: ListedSecurityPool | undefined
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean

@@ -19,6 +19,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { TimestampValue } from './TimestampValue.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
+import { hasForkActivity } from '../lib/forkAuction.js'
 import { resolveRequestedLoadableValueState, type LoadableValueState } from '../lib/loadState.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
@@ -49,8 +50,8 @@ export function getSelectedPoolLookupDisplay({ hasSelectedPoolAddress, selectedP
 	return selectedPoolLookupState
 }
 
-export function isForkWorkflowDisabled(selectedPoolState: SecurityPoolSystemState | undefined) {
-	return selectedPoolState === undefined || selectedPoolState === 'operational'
+export function isForkWorkflowDisabled(selectedPoolState: SecurityPoolSystemState | undefined, selectedPoolHasForkActivity = false) {
+	return selectedPoolState === undefined || (selectedPoolState === 'operational' && !selectedPoolHasForkActivity)
 }
 
 export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }: { lastPrice: bigint; lastSettlementTimestamp: bigint }) {
@@ -104,9 +105,10 @@ export function SecurityPoolWorkflowSection({
 	})
 	const marketDetails = selectedPool?.marketDetails ?? reporting.reportingDetails?.marketDetails ?? forkAuction.forkAuctionDetails?.marketDetails
 	const selectedPoolState = selectedPool?.systemState ?? forkAuction.forkAuctionDetails?.systemState
+	const selectedPoolHasForkActivity = selectedPool !== undefined ? hasForkActivity(selectedPool) : forkAuction.forkAuctionDetails !== undefined ? hasForkActivity(forkAuction.forkAuctionDetails) : false
 	const currentTimestamp = reporting.reportingDetails?.currentTime ?? BigInt(Math.floor(Date.now() / 1000))
 	const reportingReady = marketDetails !== undefined && marketDetails.endTime <= currentTimestamp
-	const forkWorkflowDisabled = isForkWorkflowDisabled(selectedPoolState)
+	const forkWorkflowDisabled = isForkWorkflowDisabled(selectedPoolState, selectedPoolHasForkActivity)
 	const selectedPoolUniverseMismatch = selectedPool !== undefined && selectedPool.universeId !== activeUniverseId
 	const hasSelectedPoolAddress = securityPoolAddress.trim() !== ''
 	const showSelectedPoolWorkflowDetails = shouldShowSelectedPoolWorkflowDetails({
@@ -406,7 +408,15 @@ export function SecurityPoolWorkflowSection({
 								) : undefined}
 
 								<EntityCard className='selected-pool-card' title='Fork & Truth Auction' badge={<span className={`badge ${forkWorkflowDisabled ? 'blocked' : 'ok'}`}>{forkWorkflowDisabled ? 'Locked until fork' : 'Available'}</span>}>
-									<ForkAuctionSection {...forkAuction} disabled={forkWorkflowDisabled} disabledMessage={forkWorkflowDisabled ? 'This pool is currently operational, so fork and truth auction actions are read only.' : undefined} previewPool={selectedPool} showHeader={false} showSecurityPoolAddressInput={false} />
+									<ForkAuctionSection
+										{...forkAuction}
+										disabled={forkWorkflowDisabled}
+										disabledMessage={forkWorkflowDisabled ? 'This pool is currently operational, so fork and truth auction actions are read only.' : undefined}
+										embedInCard
+										previewPool={selectedPool}
+										showHeader={false}
+										showSecurityPoolAddressInput={false}
+									/>
 								</EntityCard>
 							</div>
 						) : undefined}

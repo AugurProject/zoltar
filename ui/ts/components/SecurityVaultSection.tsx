@@ -5,6 +5,7 @@ import { CollateralizationMetricField } from './CollateralizationMetricField.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
+import { LatestActionSection } from './LatestActionSection.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { StateHint } from './StateHint.js'
@@ -219,15 +220,14 @@ export function SecurityVaultSection({
 
 	const latestAction =
 		securityVaultResult === undefined ? undefined : (
-			<div className='entity-card-subsection'>
-				<div className='entity-card-subsection-header'>
-					<h4>Latest Vault Action</h4>
-				</div>
-				<p className='detail'>Action: {latestActionLabel}</p>
-				<p className='detail'>
-					Transaction: <TransactionHashLink hash={securityVaultResult.hash} />
-				</p>
-			</div>
+			<LatestActionSection
+				title='Latest Vault Action'
+				embedInCard
+				rows={[
+					{ label: 'Action', value: latestActionLabel ?? securityVaultResult.action },
+					{ label: 'Transaction', value: <TransactionHashLink hash={securityVaultResult.hash} /> },
+				]}
+			/>
 		)
 
 	const vaultDepositSection = (
@@ -356,16 +356,13 @@ export function SecurityVaultSection({
 					<EntityCard title='Selected Vault'>{vaultSummarySection}</EntityCard>
 
 					{securityVaultResult === undefined ? undefined : (
-						<EntityCard title='Latest Vault Action'>
-							<div className='entity-metric-grid'>
-								<MetricField className='entity-metric' label='Action'>
-									{securityVaultResult.action}
-								</MetricField>
-								<MetricField className='entity-metric' label='Transaction'>
-									<TransactionHashLink hash={securityVaultResult.hash} />
-								</MetricField>
-							</div>
-						</EntityCard>
+						<LatestActionSection
+							title='Latest Vault Action'
+							rows={[
+								{ label: 'Action', value: latestActionLabel ?? securityVaultResult.action },
+								{ label: 'Transaction', value: <TransactionHashLink hash={securityVaultResult.hash} /> },
+							]}
+						/>
 					)}
 				</div>
 

@@ -2,6 +2,7 @@ import { AddressValue } from './AddressValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
+import { LatestActionSection } from './LatestActionSection.js'
 import { MetricField } from './MetricField.js'
 import { OpenInterestCapacityMetrics } from './OpenInterestCapacityMetrics.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -86,32 +87,18 @@ export function TradingSection({
 		return formatCurrencyBalance(value)
 	}
 	const latestTradingAction =
-		tradingResult === undefined ? undefined : embedInCard ? (
-			<div className='entity-card-subsection'>
-				<div className='entity-card-subsection-header'>
-					<h4>Latest Trading Action</h4>
-					<span className='badge ok'>{tradingResult.action}</span>
-				</div>
-				<p className='detail'>Action: {tradingResult.action}</p>
-				<p className='detail'>Pool: {tradingResult.securityPoolAddress}</p>
-				<p className='detail'>
-					Universe: <UniverseLink universeId={tradingResult.universeId} />
-				</p>
-				<p className='detail'>
-					Transaction: <TransactionHashLink hash={tradingResult.hash} />
-				</p>
-			</div>
-		) : (
-			<EntityCard title='Latest Trading Action' badge={<span className='badge ok'>{tradingResult.action}</span>}>
-				<p className='detail'>Action: {tradingResult.action}</p>
-				<p className='detail'>Pool: {tradingResult.securityPoolAddress}</p>
-				<p className='detail'>
-					Universe: <UniverseLink universeId={tradingResult.universeId} />
-				</p>
-				<p className='detail'>
-					Transaction: <TransactionHashLink hash={tradingResult.hash} />
-				</p>
-			</EntityCard>
+		tradingResult === undefined ? undefined : (
+			<LatestActionSection
+				title='Latest Trading Action'
+				badge={<span className='badge ok'>{tradingResult.action}</span>}
+				embedInCard={embedInCard}
+				rows={[
+					{ label: 'Action', value: tradingResult.action },
+					{ label: 'Pool', value: tradingResult.securityPoolAddress },
+					{ label: 'Universe', value: <UniverseLink universeId={tradingResult.universeId} /> },
+					{ label: 'Transaction', value: <TransactionHashLink hash={tradingResult.hash} /> },
+				]}
+			/>
 		)
 	const poolSection =
 		!showSecurityPoolAddressInput && selectedPool === undefined ? undefined : (

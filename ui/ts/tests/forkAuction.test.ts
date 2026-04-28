@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getForkStageDescriptionForState, getOutcomeActionLabel, hasForkActivity } from '../lib/forkAuction.js'
+import { getForkAuctionStageView, getForkStageDescriptionForState, getOutcomeActionLabel, hasForkActivity } from '../lib/forkAuction.js'
 
 void describe('fork auction helpers', () => {
 	void test('getOutcomeActionLabel reuses reporting labels', () => {
@@ -44,5 +44,51 @@ void describe('fork auction helpers', () => {
 				truthAuctionStartedAt: 0n,
 			}),
 		).toBe(true)
+	})
+
+	void test('derives lifecycle stage for pre-fork, migration, auction, and settlement states', () => {
+		expect(
+			getForkAuctionStageView({
+				claimingAvailable: false,
+				forkOutcome: 'none',
+				migratedRep: 0n,
+				systemState: 'operational',
+				truthAuction: undefined,
+				truthAuctionStartedAt: 0n,
+			}),
+		).toBe('initiate')
+
+		expect(
+			getForkAuctionStageView({
+				claimingAvailable: false,
+				forkOutcome: 'none',
+				migratedRep: 1n,
+				systemState: 'forkMigration',
+				truthAuction: undefined,
+				truthAuctionStartedAt: 0n,
+			}),
+		).toBe('migration')
+
+		expect(
+			getForkAuctionStageView({
+				claimingAvailable: false,
+				forkOutcome: 'none',
+				migratedRep: 1n,
+				systemState: 'forkTruthAuction',
+				truthAuction: { finalized: false },
+				truthAuctionStartedAt: 1n,
+			}),
+		).toBe('auction')
+
+		expect(
+			getForkAuctionStageView({
+				claimingAvailable: false,
+				forkOutcome: 'yes',
+				migratedRep: 1n,
+				systemState: 'operational',
+				truthAuction: undefined,
+				truthAuctionStartedAt: 1n,
+			}),
+		).toBe('settlement')
 	})
 })
