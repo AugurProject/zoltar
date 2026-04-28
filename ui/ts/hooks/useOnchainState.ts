@@ -25,38 +25,44 @@ type LoadWalletStateParameters = {
 	isCurrent: () => boolean
 	setAccountState: (state: AccountState) => void
 	setErrorMessage: (message: string | undefined) => void
+	trackLoad: <TResult>(work: () => Promise<TResult>) => Promise<TResult>
 }
 
-export async function loadWalletState({ chainIdPromise, connectedAddress, ethBalancePromise, getAccountState, isCurrent, setAccountState, setErrorMessage, wethBalancePromise }: LoadWalletStateParameters) {
+export async function loadWalletState({ chainIdPromise, connectedAddress, ethBalancePromise, getAccountState, isCurrent, setAccountState, setErrorMessage, trackLoad, wethBalancePromise }: LoadWalletStateParameters) {
 	if (connectedAddress === undefined || chainIdPromise === undefined || ethBalancePromise === undefined || wethBalancePromise === undefined) return
-	const chainIdTask = chainIdPromise
-		.then(chainId => {
+
+	void trackLoad(async () => {
+		try {
+			const chainId = await chainIdPromise
 			if (!isCurrent()) return
 			setAccountState({ ...getAccountState(), chainId })
-		})
-		.catch(() => {
+		} catch {
 			if (!isCurrent()) return
 			setAccountState({ ...getAccountState(), chainId: MAINNET_CHAIN_ID })
-		})
-	const ethBalanceTask = ethBalancePromise
-		.then(ethBalance => {
+		}
+	})
+
+	void trackLoad(async () => {
+		try {
+			const ethBalance = await ethBalancePromise
 			if (!isCurrent()) return
 			setAccountState({ ...getAccountState(), ethBalance })
-		})
-		.catch(error => {
+		} catch (error) {
 			if (!isCurrent()) return
 			setErrorMessage(getErrorMessage(error, 'Failed to refresh wallet balances'))
-		})
-	const wethBalanceTask = wethBalancePromise
-		.then(wethBalance => {
+		}
+	})
+
+	void trackLoad(async () => {
+		try {
+			const wethBalance = await wethBalancePromise
 			if (!isCurrent()) return
 			setAccountState({ ...getAccountState(), wethBalance })
-		})
-		.catch(error => {
+		} catch (error) {
 			if (!isCurrent()) return
 			setErrorMessage(getErrorMessage(error, 'Failed to refresh wallet balances'))
-		})
-	await Promise.all([chainIdTask, ethBalanceTask, wethBalanceTask])
+		}
+	})
 }
 
 export function useOnchainState() {
@@ -132,7 +138,7 @@ export function useOnchainState() {
 					const readClient = createConnectedReadClient()
 					const ethBalancePromise = readClient.getBalance({ address: connectedAddress })
 					const wethBalancePromise = loadErc20Balance(readClient, WETH_ADDRESS, connectedAddress)
-					await loadWalletState({
+					void loadWalletState({
 						connectedAddress,
 						chainIdPromise,
 						ethBalancePromise,
@@ -144,6 +150,7 @@ export function useOnchainState() {
 						setErrorMessage: message => {
 							errorMessage.value = message
 						},
+						trackLoad: walletStateLoad.track,
 						wethBalancePromise,
 					})
 				} else {
