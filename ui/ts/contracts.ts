@@ -1,6 +1,7 @@
 import { encodeAbiParameters, encodeDeployData, encodeFunctionData, getAddress, getCreate2Address, keccak256, parseAbiItem, toHex, zeroAddress, RpcError, type Abi, type Account, type Address, type Hash, type Hex } from 'viem'
 import { ABIS } from './abis.js'
 import { createRepTokenAddressHelper, createSecurityPoolAddressHelper } from '../../shared/js/addressDerivation.js'
+import { sortBigIntsAscending } from '../../shared/js/bigInt.js'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '../../shared/js/deploymentAddresses.js'
 import { assertNever } from './lib/assert.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
@@ -2330,7 +2331,7 @@ export async function redeemSharesInSecurityPool(client: WriteClient, securityPo
 }
 
 export async function migrateSharesFromUniverse(client: WriteClient, securityPoolAddress: Address, shareOutcome: ReportingOutcomeKey, targetOutcomeIndexes: bigint[]) {
-	const sortedTargetOutcomeIndexes = [...targetOutcomeIndexes].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+	const sortedTargetOutcomeIndexes = sortBigIntsAscending(targetOutcomeIndexes)
 	const [universeId, shareTokenAddress] = await Promise.all([
 		readSecurityPoolUniverseId(client, securityPoolAddress),
 		client.readContract({

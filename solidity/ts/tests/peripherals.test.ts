@@ -3,6 +3,7 @@ import assert from 'node:assert'
 import type { Address, Hash } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
+import { sortBigIntsAscending } from '../../../shared/js/bigInt.js'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, ensureProxyDeployerDeployed, setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
@@ -942,7 +943,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const lowScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 3n)
 		const highScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 7n)
-		const sortedScalarOutcomes = [lowScalarOutcome, highScalarOutcome].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+		const sortedScalarOutcomes = sortBigIntsAscending([lowScalarOutcome, highScalarOutcome])
 		const holderAddress = addressString(TEST_ADDRESSES[2])
 		const parentBalancesBeforeMigration = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
 		const parentYesBalance = ensureDefined(parentBalancesBeforeMigration[1], 'parent yes balance is undefined')
@@ -990,7 +991,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const lowScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 3n)
 		const validScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 5n)
 		const highScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 7n)
-		const sortedScalarOutcomes = [lowScalarOutcome, highScalarOutcome].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+		const sortedScalarOutcomes = sortBigIntsAscending([lowScalarOutcome, highScalarOutcome])
 		const parentBalancesBeforeFailedMigrations = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
 		const parentYesBalance = ensureDefined(parentBalancesBeforeFailedMigrations[1], 'parent yes balance is undefined')
 
