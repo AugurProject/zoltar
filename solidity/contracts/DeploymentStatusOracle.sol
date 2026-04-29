@@ -2,7 +2,7 @@
 pragma solidity 0.8.33;
 
 contract DeploymentStatusOracle {
-	uint256 private constant DEPLOYMENT_STEP_COUNT = 12;
+	uint256 private constant DEPLOYMENT_STEP_COUNT = 13;
 	address[] private deploymentAddresses;
 
 	constructor(address[] memory _deploymentAddresses) {

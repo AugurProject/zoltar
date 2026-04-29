@@ -720,11 +720,16 @@ describe('Open Oracle helpers', () => {
 
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		const reportId = details.pendingReportId
+		const extraData = await getOpenOracleExtraData(client, reportId)
 
 		expect(reportId).toBeGreaterThan(0n)
+		expect(details.callbackStateHash).toBe(extraData.stateHash)
+		expect(details.token1).toBe(getAddress(addressString(GENESIS_REPUTATION_TOKEN)))
+		expect(details.token2).toBe(getAddress(WETH_ADDRESS))
 
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 		expect(reportDetails.reportId).toBe(reportId)
+		expect(details.exactToken1Report).toBe(reportDetails.exactToken1Report)
 		expect(getAddress(reportDetails.token1)).toBe(getAddress(addressString(GENESIS_REPUTATION_TOKEN)))
 		expect(getAddress(reportDetails.token2)).toBe(getAddress(WETH_ADDRESS))
 		expect(reportDetails.settlementTimestamp).toBe(0n)

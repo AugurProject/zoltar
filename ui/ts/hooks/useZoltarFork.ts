@@ -1,7 +1,9 @@
 import { useSignal } from '@preact/signals'
 import { useCallback, useEffect } from 'preact/hooks'
 import { zeroAddress, type Address, type Hash } from 'viem'
-import { approveErc20, forkZoltarUniverse, getZoltarAddress, loadErc20Allowance, loadErc20Balance, loadRepTokensMigratedRepBalance } from '../contracts.js'
+import { ABIS } from '../abis.js'
+import { Zoltar_Zoltar } from '../contractArtifact.js'
+import { approveErc20, forkZoltarUniverse, getZoltarAddress, readOptionalMulticall } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { requireWallet } from '../lib/walletGuard.js'
@@ -23,6 +25,12 @@ type UseZoltarForkParameters = {
 	refreshState: () => Promise<void>
 	refreshZoltarUniverse: () => Promise<void>
 	zoltarUniverse: ZoltarUniverseSummary | undefined
+}
+
+type OptionalReadResult<TResult> = { result: TResult; status: 'success' } | { error: Error; result?: undefined; status: 'failure' }
+
+function toReadError(error: unknown) {
+	return error instanceof Error ? error : new Error('Unknown read error')
 }
 
 function formatQuestionId(questionId: bigint) {
@@ -63,71 +71,80 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 		const isCurrent = nextForkAccessLoad()
 		const readClient = createConnectedReadClient()
 		const universeId = zoltarUniverse?.universeId ?? activeUniverseId
-		const childUniverses = zoltarUniverse?.childUniverses ?? []
-		const tasks: Promise<unknown>[] = [
-			forkAccessLoad.track(async () => {
-				try {
-					const balance = await loadErc20Balance(readClient, reputationToken, accountAddress)
-					if (isCurrent()) zoltarForkRepBalance.value = balance
-				} catch {
-					// ignore balance read failures
-				}
-			}),
-			forkAccessLoad.track(async () => {
-				if (isCurrent()) {
-					zoltarForkApproval.value = {
-						...zoltarForkApproval.value,
-						error: undefined,
-						loading: true,
-					}
-				}
-				try {
-					const allowance = await loadErc20Allowance(readClient, reputationToken, accountAddress, getZoltarAddress())
-					if (isCurrent()) {
-						zoltarForkApproval.value = {
-							error: undefined,
-							loading: false,
-							value: allowance,
-						}
-					}
-				} catch (error) {
-					if (isCurrent()) {
-						const errorDetail = getErrorDetail(error)
-						zoltarForkApproval.value = {
-							error: errorDetail === undefined ? 'Failed to load token approval' : `Failed to load token approval: ${errorDetail}`,
-							loading: false,
-							value: undefined,
-						}
-					}
-				}
-			}),
-			forkAccessLoad.track(async () => {
-				try {
-					const preparedRepBalance = await loadRepTokensMigratedRepBalance(readClient, universeId, accountAddress)
-					if (isCurrent()) zoltarMigrationPreparedRepBalance.value = preparedRepBalance
-				} catch {
-					if (isCurrent()) zoltarMigrationPreparedRepBalance.value = undefined
-				}
-			}),
-		]
-
-		for (const child of childUniverses) {
-			if (child.reputationToken === zeroAddress) continue
-			const childId = child.universeId.toString()
-			tasks.push(
-				forkAccessLoad.track(async () => {
-					try {
-						const balance = await loadErc20Balance(readClient, child.reputationToken, accountAddress)
-						if (!isCurrent()) return
-						zoltarMigrationChildRepBalances.value = { ...zoltarMigrationChildRepBalances.value, [childId]: balance }
-					} catch {
-						// ignore child balance read failures
-					}
-				}),
-			)
+		const childUniverses = (zoltarUniverse?.childUniverses ?? []).filter(child => child.reputationToken !== zeroAddress)
+		if (isCurrent()) {
+			zoltarForkApproval.value = {
+				...zoltarForkApproval.value,
+				error: undefined,
+				loading: true,
+			}
 		}
 
-		await Promise.allSettled(tasks)
+		await forkAccessLoad.track(async () => {
+			const accessResults = (await readOptionalMulticall(readClient, [
+				{
+					abi: ABIS.mainnet.erc20,
+					functionName: 'balanceOf',
+					address: reputationToken,
+					args: [accountAddress],
+				},
+				{
+					abi: ABIS.mainnet.erc20,
+					functionName: 'allowance',
+					address: reputationToken,
+					args: [accountAddress, getZoltarAddress()],
+				},
+				{
+					abi: Zoltar_Zoltar.abi,
+					functionName: 'getMigrationRepBalance',
+					address: getZoltarAddress(),
+					args: [accountAddress, universeId],
+				},
+				...childUniverses.map(child => ({
+					abi: ABIS.mainnet.erc20,
+					functionName: 'balanceOf',
+					address: child.reputationToken,
+					args: [accountAddress],
+				})),
+			]).catch(error => {
+				const failureResult = {
+					error: toReadError(error),
+					status: 'failure',
+				} satisfies OptionalReadResult<bigint>
+				return [failureResult, failureResult, failureResult, ...childUniverses.map(() => failureResult)]
+			})) as OptionalReadResult<bigint>[]
+			const [repBalanceResult, approvalResult, preparedRepBalanceResult, ...childBalanceResults] = accessResults
+			if (!isCurrent()) return
+			if (repBalanceResult?.status === 'success') {
+				zoltarForkRepBalance.value = repBalanceResult.result
+			}
+			if (approvalResult?.status === 'success') {
+				zoltarForkApproval.value = {
+					error: undefined,
+					loading: false,
+					value: approvalResult.result,
+				}
+			} else {
+				const errorDetail = approvalResult === undefined ? undefined : getErrorDetail(approvalResult.error)
+				zoltarForkApproval.value = {
+					error: errorDetail === undefined ? 'Failed to load token approval' : `Failed to load token approval: ${errorDetail}`,
+					loading: false,
+					value: undefined,
+				}
+			}
+			if (preparedRepBalanceResult?.status === 'success') {
+				zoltarMigrationPreparedRepBalance.value = preparedRepBalanceResult.result
+			} else {
+				zoltarMigrationPreparedRepBalance.value = undefined
+			}
+			const nextChildBalances = { ...zoltarMigrationChildRepBalances.value }
+			for (const [index, child] of childUniverses.entries()) {
+				const childBalanceResult = childBalanceResults[index] as OptionalReadResult<bigint> | undefined
+				if (childBalanceResult?.status !== 'success') continue
+				nextChildBalances[child.universeId.toString()] = childBalanceResult.result
+			}
+			zoltarMigrationChildRepBalances.value = nextChildBalances
+		})
 	}
 
 	const runZoltarForkAction = async (actionName: 'approve' | 'fork', action: (walletAddress: Address, universe: ZoltarUniverseSummary, questionId: bigint) => Promise<ZoltarForkActionResult>, errorFallback: string, refreshAfter: boolean, options?: { requireQuestionIdInput?: boolean }) => {

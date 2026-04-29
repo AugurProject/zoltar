@@ -196,7 +196,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const deploymentMask = await loadDeploymentStatusOracleMask(client)
 
 		assert.notStrictEqual(await client.getCode({ address: deploymentStatusOracleAddress }), '0x', 'deployment status oracle should be deployed')
-		strictEqualTypeSafe(deploymentMask, (1n << 12n) - 1n, 'all deployment steps should be deployed after ensureInfraDeployed')
+		strictEqualTypeSafe(deploymentMask, (1n << 13n) - 1n, 'all deployment steps should be deployed after ensureInfraDeployed')
 	})
 
 	test('deployment status oracle reports missing contracts from a partial deployment', async () => {

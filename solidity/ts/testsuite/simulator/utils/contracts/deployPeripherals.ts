@@ -2,6 +2,7 @@ import 'viem/window'
 import { encodeDeployData, getCreate2Address, keccak256, type Address, type Hex, toHex } from 'viem'
 import { createSecurityPoolAddressHelper } from '../../../../../../shared/js/addressDerivation.js'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '../../../../../../shared/js/deploymentAddresses.js'
+import { MULTICALL3_CREATION_BYTECODE } from '../../../../../../shared/js/multicall3.js'
 import { WriteClient, writeContractAndWait } from '../viem'
 import { PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { addressString } from '../bigint'
@@ -123,6 +124,7 @@ export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	getShareTokenFactoryByteCode,
 	getZoltarAddress,
 	getZoltarQuestionDataAddress,
+	multicall3Bytecode: MULTICALL3_CREATION_BYTECODE,
 	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
 	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
@@ -195,6 +197,7 @@ function getDeploymentStatusOracleSteps() {
 	const infraContracts = getInfraContractAddresses()
 	return [
 		{ id: 'proxyDeployer', address: addressString(PROXY_DEPLOYER_ADDRESS) },
+		{ id: 'multicall3', address: infraContracts.multicall3 },
 		{ id: 'uniformPriceDualCapBatchAuctionFactory', address: infraContracts.uniformPriceDualCapBatchAuctionFactory },
 		{ id: 'scalarOutcomes', address: infraContracts.scalarOutcomes },
 		{ id: 'securityPoolUtils', address: infraContracts.securityPoolUtils },
@@ -220,6 +223,7 @@ function isDeploymentStatusOracleStepDeployed(deploymentMask: bigint, stepId: De
 async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key in keyof ReturnType<typeof getInfraContractAddresses>]: boolean }> {
 	const deploymentMask = await loadDeploymentStatusOracleMask(client)
 	return {
+		multicall3: isDeploymentStatusOracleStepDeployed(deploymentMask, 'multicall3'),
 		securityPoolUtils: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolUtils'),
 		openOracle: isDeploymentStatusOracleStepDeployed(deploymentMask, 'openOracle'),
 		zoltar: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltar'),
@@ -244,6 +248,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	await ensureDeploymentStatusOracleDeployed(client)
 	const existence = await getInfraDeployedInformation(client)
 
+	if (!existence.multicall3) await deployBytecode(MULTICALL3_CREATION_BYTECODE)
 	if (!existence.uniformPriceDualCapBatchAuctionFactory) await deployBytecode(`0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
 	if (!existence.scalarOutcomes) await deployBytecode(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
 	if (!existence.securityPoolUtils) await deployBytecode(`0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)

@@ -1,7 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getOracleLastPriceDisplay, getSelectedPoolCardTitle, getSelectedPoolLookupDisplay, isForkWorkflowDisabled, shouldShowSelectedPoolWorkflowDetails } from '../components/SecurityPoolWorkflowSection.js'
+import { getAddress, zeroAddress } from 'viem'
+import { getCurrentPoolOracleManagerDetails, getOracleLastPriceDisplay, getSelectedPoolCardTitle, getSelectedPoolLookupDisplay, getSelectedPoolOracleMetricValues, isForkWorkflowDisabled, shouldShowSelectedPoolWorkflowDetails } from '../components/SecurityPoolWorkflowSection.js'
 
 void describe('selected pool workflow lookup state', () => {
 	void test('uses a stable card title until a pool resolves', () => {
@@ -111,28 +112,87 @@ void describe('selected pool workflow visibility', () => {
 })
 
 void describe('selected pool oracle price display', () => {
+	void test('uses oracle manager details only when they match the selected pool manager', () => {
+		const poolOracleManagerDetails = {
+			callbackStateHash: undefined,
+			exactToken1Report: undefined,
+			isPriceValid: true,
+			lastPrice: 42n,
+			lastSettlementTimestamp: 1n,
+			managerAddress: zeroAddress,
+			openOracleAddress: zeroAddress,
+			pendingReportId: 0n,
+			priceValidUntilTimestamp: 2n,
+			requestPriceEthCost: 3n,
+			token1: undefined,
+			token2: undefined,
+		}
+
+		expect(
+			getCurrentPoolOracleManagerDetails({
+				poolOracleManagerDetails,
+				selectedPoolManagerAddress: zeroAddress,
+			}),
+		).toBe(poolOracleManagerDetails)
+
+		expect(
+			getCurrentPoolOracleManagerDetails({
+				poolOracleManagerDetails,
+				selectedPoolManagerAddress: '0x0000000000000000000000000000000000000001',
+			}),
+		).toBe(undefined)
+	})
+
+	void test('hides stale oracle manager details from a previously opened pool', () => {
+		expect(
+			getCurrentPoolOracleManagerDetails({
+				poolOracleManagerDetails: {
+					callbackStateHash: undefined,
+					exactToken1Report: undefined,
+					isPriceValid: false,
+					lastPrice: 0n,
+					lastSettlementTimestamp: 0n,
+					managerAddress: getAddress('0x0000000000000000000000000000000000000002'),
+					openOracleAddress: zeroAddress,
+					pendingReportId: 0n,
+					priceValidUntilTimestamp: undefined,
+					requestPriceEthCost: 0n,
+					token1: undefined,
+					token2: undefined,
+				},
+				selectedPoolManagerAddress: '0x0000000000000000000000000000000000000003',
+			}),
+		).toBe(undefined)
+	})
+
 	void test('shows a dash when the oracle price has never been settled', () => {
 		expect(
-			getOracleLastPriceDisplay({
-				lastPrice: 0n,
-				lastSettlementTimestamp: 0n,
-			}),
+			getOracleLastPriceDisplay(
+				getSelectedPoolOracleMetricValues({
+					lastOraclePrice: undefined,
+					lastOracleSettlementTimestamp: 0n,
+				}),
+			),
 		).toBe('-')
 	})
 
 	void test('keeps settled prices numeric, including zero', () => {
 		expect(
-			getOracleLastPriceDisplay({
-				lastPrice: 0n,
-				lastSettlementTimestamp: 1n,
-			}),
+			getOracleLastPriceDisplay(
+				getSelectedPoolOracleMetricValues({
+					lastOraclePrice: 0n,
+					lastOracleSettlementTimestamp: 1n,
+				}),
+			),
 		).toBe('0')
 
 		expect(
-			getOracleLastPriceDisplay({
-				lastPrice: 42n,
-				lastSettlementTimestamp: 1n,
-			}),
+			getOracleLastPriceDisplay(
+				getSelectedPoolOracleMetricValues({
+					lastOraclePrice: 42n,
+					lastOracleSettlementTimestamp: 1n,
+				}),
+			),
 		).toBe('42')
 	})
 })

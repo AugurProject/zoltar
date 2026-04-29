@@ -1,8 +1,9 @@
-import { encodeAbiParameters, encodeDeployData, encodeFunctionData, getAddress, getCreate2Address, keccak256, parseAbiItem, toHex, zeroAddress, RpcError, type Abi, type Account, type Address, type Hash, type Hex } from 'viem'
+import { encodeAbiParameters, encodeDeployData, encodeFunctionData, getAddress, getCreate2Address, keccak256, parseAbiItem, toHex, zeroAddress, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type Hex, type MulticallReturnType } from 'viem'
 import { ABIS } from './abis.js'
 import { createRepTokenAddressHelper, createSecurityPoolAddressHelper } from './shared/addressDerivation.js'
 import { sortBigIntsAscending } from './shared/bigInt.js'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from './shared/deploymentAddresses.js'
+import { MULTICALL3_CREATION_BYTECODE } from './shared/multicall3.js'
 import { assertNever } from './lib/assert.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
 import { addOpenOracleBountyBuffer } from './lib/openOracle.js'
@@ -95,6 +96,9 @@ type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint, bigint]
 type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
 type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
+type OpenOracleReportMetaTuple = readonly [bigint, bigint, bigint, bigint, Address, number, Address, boolean, number, number, number, number]
+type OpenOracleReportStatusTuple = readonly [bigint, bigint, bigint, Address, number, number, Address, number, boolean, boolean]
+type OpenOracleExtraDataTuple = readonly [Hex, Address, number, number, Hex, Address, boolean, boolean, boolean]
 
 function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${value.toString(16).padStart(40, '0')}`)
@@ -223,6 +227,7 @@ function getDeploymentStatusOracleStepAddresses() {
 	const addresses = getInfraContractAddresses()
 	return [
 		PROXY_DEPLOYER_ADDRESS,
+		addresses.multicall3,
 		addresses.uniformPriceDualCapBatchAuctionFactory,
 		addresses.scalarOutcomes,
 		addresses.securityPoolUtils,
@@ -294,6 +299,7 @@ const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	getShareTokenFactoryByteCode,
 	getZoltarAddress,
 	getZoltarQuestionDataAddress,
+	multicall3Bytecode: MULTICALL3_CREATION_BYTECODE,
 	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
 	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
@@ -354,6 +360,22 @@ const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 			args: [securityPoolForker],
 		}),
 })
+
+async function readRequiredMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts): Promise<MulticallReturnType<TContracts, false>> {
+	return (await client.multicall({
+		allowFailure: false,
+		contracts: contracts as readonly ContractFunctionParameters[],
+		multicallAddress: getMulticall3Address(),
+	})) as MulticallReturnType<TContracts, false>
+}
+
+export async function readOptionalMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts): Promise<MulticallReturnType<TContracts, true>> {
+	return (await client.multicall({
+		allowFailure: true,
+		contracts: contracts as readonly ContractFunctionParameters[],
+		multicallAddress: getMulticall3Address(),
+	})) as MulticallReturnType<TContracts, true>
+}
 
 async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 	const hash = await client.sendTransaction({
@@ -468,6 +490,10 @@ export function getOpenOracleAddress() {
 	return getInfraContractAddresses().openOracle
 }
 
+export function getMulticall3Address() {
+	return getInfraContractAddresses().multicall3
+}
+
 export function getDeploymentSteps(): DeploymentStep[] {
 	const addresses = getInfraContractAddresses()
 
@@ -488,6 +514,13 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			address: getDeploymentStatusOracleAddress(),
 			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, getDeploymentStatusOracleByteCode()),
+		},
+		{
+			id: 'multicall3',
+			label: 'Multicall3',
+			address: addresses.multicall3,
+			dependencies: ['proxyDeployer'],
+			deploy: async client => await deployViaProxy(client, MULTICALL3_CREATION_BYTECODE),
 		},
 		{
 			id: 'uniformPriceDualCapBatchAuctionFactory',
@@ -621,37 +654,6 @@ export async function loadErc20Allowance(client: ReadClient, tokenAddress: Addre
 		functionName: 'allowance',
 		address: tokenAddress,
 		args: [ownerAddress, spenderAddress],
-	})
-}
-
-async function loadErc20Decimals(client: ReadClient, tokenAddress: Address) {
-	return Number(
-		await client.readContract({
-			abi: ABIS.mainnet.erc20,
-			functionName: 'decimals',
-			address: tokenAddress,
-			args: [],
-		}),
-	)
-}
-
-async function loadErc20Symbol(client: ReadClient, tokenAddress: Address) {
-	return String(
-		await client.readContract({
-			abi: ABIS.mainnet.erc20,
-			functionName: 'symbol',
-			address: tokenAddress,
-			args: [],
-		}),
-	)
-}
-
-export async function loadRepTokensMigratedRepBalance(client: ReadClient, universeId: bigint, address: Address) {
-	return await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'getMigrationRepBalance',
-		address: getDeploymentStep('zoltar').address,
-		args: [address, universeId],
 	})
 }
 
@@ -811,19 +813,19 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 }
 
 export async function loadMarketDetails(client: ReadClient, questionId: bigint): Promise<MarketDetails> {
-	const [question, createdAt] = await Promise.all([
-		client.readContract({
+	const [question, createdAt] = await readRequiredMulticall(client, [
+		{
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'questions',
 			address: getDeploymentStep('zoltarQuestionData').address,
 			args: [questionId],
-		}),
-		client.readContract({
+		},
+		{
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'questionCreatedTimestamp',
 			address: getDeploymentStep('zoltarQuestionData').address,
 			args: [questionId],
-		}),
+		},
 	])
 	const questionData: QuestionTuple = question
 	const [title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit] = questionData
@@ -892,40 +894,40 @@ export async function loadZoltarQuestionCount(client: ReadClient) {
 
 export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint): Promise<ZoltarUniverseSummary | undefined> {
 	const zoltarAddress = getDeploymentStep('zoltar').address
-	const repToken = await client.readContract({
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'getRepToken',
-		address: zoltarAddress,
-		args: [universeId],
-	})
-	if (repToken === zeroAddress) return undefined
-
-	const [universe, forkTime, forkThreshold, totalTheoreticalSupply] = await Promise.all([
-		client.readContract({
+	const [repToken, universe, forkTime, forkThreshold] = await readRequiredMulticall(client, [
+		{
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'getRepToken',
+			address: zoltarAddress,
+			args: [universeId],
+		},
+		{
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'universes',
 			address: zoltarAddress,
 			args: [universeId],
-		}),
-		client.readContract({
+		},
+		{
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'getForkTime',
 			address: zoltarAddress,
 			args: [universeId],
-		}),
-		client.readContract({
+		},
+		{
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'getForkThreshold',
 			address: zoltarAddress,
 			args: [universeId],
-		}),
-		client.readContract({
-			abi: ReputationToken_ReputationToken.abi,
-			functionName: 'getTotalTheoreticalSupply',
-			address: repToken,
-			args: [],
-		}),
+		},
 	])
+	if (repToken === zeroAddress) return undefined
+
+	const totalTheoreticalSupply = await client.readContract({
+		abi: ReputationToken_ReputationToken.abi,
+		functionName: 'getTotalTheoreticalSupply',
+		address: repToken,
+		args: [],
+	})
 	const universeData: UniverseTuple = universe
 	const [storedForkTime, forkQuestionId, forkingOutcomeIndex, , parentUniverseId] = universeData
 	const hasForked = forkTime > 0n || storedForkTime > 0n
@@ -946,50 +948,77 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 					args: [universeId, currentIndex, CONTRACT_PAGE_SIZE],
 				})
 				const [outcomeIndexes, childUniverseIds, childUniverseTuples] = page
-				const pageChildren = await Promise.all(
-					outcomeIndexes.map(async (outcomeIndex, index) => {
-						const childUniverse = childUniverseTuples[index]
-						if (childUniverse === undefined) throw new Error('Unexpected deployed child universe response')
-						const { forkTime: childForkTime, parentUniverseId: childParentUniverseId, reputationToken: childReputationToken } = childUniverse
-						const outcomeLabel = await client.readContract({
-							abi: ANSWER_OPTION_ABI,
-							functionName: 'getAnswerOptionName',
-							address: getDeploymentStep('zoltarQuestionData').address,
-							args: [forkQuestionId, outcomeIndex],
-						})
-						const childUniverseId = childUniverseIds[index]
-						if (childUniverseId === undefined) throw new Error('Unexpected deployed child universe response')
-						return {
-							exists: childReputationToken !== zeroAddress,
-							forkTime: childForkTime,
-							outcomeIndex,
-							outcomeLabel,
-							parentUniverseId: childParentUniverseId,
-							reputationToken: childReputationToken,
-							universeId: childUniverseId,
-						}
-					}),
-				)
+				const outcomeLabels =
+					outcomeIndexes.length === 0
+						? []
+						: (
+								await readRequiredMulticall(
+									client,
+									outcomeIndexes.map(outcomeIndex => ({
+										abi: ANSWER_OPTION_ABI,
+										functionName: 'getAnswerOptionName',
+										address: getDeploymentStep('zoltarQuestionData').address,
+										args: [forkQuestionId, outcomeIndex],
+									})),
+								)
+							).map(outcomeLabel => String(outcomeLabel))
+				const pageChildren = outcomeIndexes.map((outcomeIndex, index) => {
+					const childUniverse = childUniverseTuples[index]
+					if (childUniverse === undefined) throw new Error('Unexpected deployed child universe response')
+					const { forkTime: childForkTime, parentUniverseId: childParentUniverseId, reputationToken: childReputationToken } = childUniverse
+					const outcomeLabel = outcomeLabels[index]
+					if (outcomeLabel === undefined) throw new Error('Unexpected outcome label response')
+					const childUniverseId = childUniverseIds[index]
+					if (childUniverseId === undefined) throw new Error('Unexpected deployed child universe response')
+					return {
+						exists: childReputationToken !== zeroAddress,
+						forkTime: childForkTime,
+						outcomeIndex,
+						outcomeLabel,
+						parentUniverseId: childParentUniverseId,
+						reputationToken: childReputationToken,
+						universeId: childUniverseId,
+					}
+				})
 				deployedChildUniverses.push(...pageChildren)
 				if (BigInt(pageChildren.length) !== CONTRACT_PAGE_SIZE) break
 				currentIndex += CONTRACT_PAGE_SIZE
 			}
 			childUniverses = deployedChildUniverses
 		} else {
-			const loadChildUniverse = async (outcomeIndex: bigint, outcomeLabel: string): Promise<ZoltarUniverseSummary['childUniverses'][number]> => {
-				const childUniverseId = await client.readContract({
-					abi: Zoltar_Zoltar.abi,
-					functionName: 'getChildUniverseId',
-					address: getDeploymentStep('zoltar').address,
-					args: [universeId, outcomeIndex],
-				})
-				const childUniverse = await client.readContract({
+			const childOutcomeEntries = [
+				{ outcomeIndex: 0n, outcomeLabel: 'Invalid' },
+				...marketDetails.outcomeLabels.map((outcomeLabel, outcomeIndex) => ({
+					outcomeIndex: BigInt(outcomeIndex + 1),
+					outcomeLabel,
+				})),
+			]
+			const childUniverseIds = (
+				await readRequiredMulticall(
+					client,
+					childOutcomeEntries.map(({ outcomeIndex }) => ({
+						abi: Zoltar_Zoltar.abi,
+						functionName: 'getChildUniverseId',
+						address: getDeploymentStep('zoltar').address,
+						args: [universeId, outcomeIndex],
+					})),
+				)
+			).map(childUniverseId => BigInt(childUniverseId))
+			const childUniverseTuples = (await readRequiredMulticall(
+				client,
+				childUniverseIds.map(childUniverseId => ({
 					abi: Zoltar_Zoltar.abi,
 					functionName: 'universes',
 					address: getDeploymentStep('zoltar').address,
 					args: [childUniverseId],
-				})
-				const childUniverseData: UniverseTuple = childUniverse
+				})),
+			)) as unknown as UniverseTuple[]
+
+			childUniverses = childOutcomeEntries.map(({ outcomeIndex, outcomeLabel }, index) => {
+				const childUniverseId = childUniverseIds[index]
+				if (childUniverseId === undefined) throw new Error('Unexpected child universe id response')
+				const childUniverseData = childUniverseTuples[index]
+				if (childUniverseData === undefined) throw new Error('Unexpected child universe response')
 				const [childForkTime, , , childReputationToken, childParentUniverseId] = childUniverseData
 				return {
 					exists: childReputationToken !== zeroAddress,
@@ -1000,9 +1029,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 					reputationToken: childReputationToken,
 					universeId: childUniverseId,
 				}
-			}
-
-			childUniverses = await Promise.all([loadChildUniverse(0n, 'Invalid'), ...marketDetails.outcomeLabels.map((outcomeLabel, outcomeIndex) => loadChildUniverse(BigInt(outcomeIndex + 1), outcomeLabel))])
+			})
 		}
 	}
 
@@ -1021,71 +1048,78 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 }
 
 export async function loadReportingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
-	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId] = await Promise.all([
-		client.readContract({
+	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId] = await readRequiredMulticall(client, [
+		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'questionId',
 			address: securityPoolAddress,
 			args: [],
-		}),
-		client.readContract({
+		},
+		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'escalationGame',
 			address: securityPoolAddress,
 			args: [],
-		}),
-		client.readContract({
+		},
+		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'completeSetCollateralAmount',
 			address: securityPoolAddress,
 			args: [],
-		}),
-		readSecurityPoolUniverseId(client, securityPoolAddress),
+		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'universeId',
+			address: securityPoolAddress,
+			args: [],
+		},
 	])
 
-	const [startBond, nonDecisionThreshold, startingTime, totalCost, bindingCapital, balances, resolution, block] = await Promise.all([
-		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'startBond',
-			address: escalationGameAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'nonDecisionThreshold',
-			address: escalationGameAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'startingTime',
-			address: escalationGameAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'totalCost',
-			address: escalationGameAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getBindingCapital',
-			address: escalationGameAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getBalances',
-			address: escalationGameAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getQuestionResolution',
-			address: escalationGameAddress,
-			args: [],
-		}),
+	const [[startBond, nonDecisionThreshold, startingTime, totalCost, bindingCapital, balances, resolution], block] = await Promise.all([
+		readRequiredMulticall(client, [
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'startBond',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'nonDecisionThreshold',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'startingTime',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'totalCost',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getBindingCapital',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getBalances',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getQuestionResolution',
+				address: escalationGameAddress,
+				args: [],
+			},
+		]),
 		client.getBlock(),
 	])
 	if (!isBigintTriple(balances)) throw new Error('Unexpected escalation balances response')
@@ -1191,44 +1225,49 @@ export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode
 export async function loadSecurityVaultDetails(client: ReadClient, securityPoolAddress: Address, vaultAddress: Address): Promise<SecurityVaultDetails | undefined> {
 	if (!(await securityPoolExists(client, securityPoolAddress))) return undefined
 
-	const [currentRetentionRate, managerAddress, poolOwnershipDenominator, repToken, totalSecurityBondAllowance, universeId, vaultData] = await Promise.all([
-		client.readContract({
+	const [currentRetentionRate, managerAddress, poolOwnershipDenominator, repToken, totalSecurityBondAllowance, universeId, vaultData] = await readRequiredMulticall(client, [
+		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'currentRetentionRate',
 			address: securityPoolAddress,
 			args: [],
-		}),
-		client.readContract({
+		},
+		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'priceOracleManagerAndOperatorQueuer',
 			address: securityPoolAddress,
 			args: [],
-		}),
-		client.readContract({
+		},
+		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'poolOwnershipDenominator',
 			address: securityPoolAddress,
 			args: [],
-		}),
-		client.readContract({
+		},
+		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'repToken',
 			address: securityPoolAddress,
 			args: [],
-		}),
-		client.readContract({
+		},
+		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'totalSecurityBondAllowance',
 			address: securityPoolAddress,
 			args: [],
-		}),
-		readSecurityPoolUniverseId(client, securityPoolAddress),
-		client.readContract({
+		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'universeId',
+			address: securityPoolAddress,
+			args: [],
+		},
+		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'securityVaults',
 			address: securityPoolAddress,
 			args: [vaultAddress],
-		}),
+		},
 	])
 	const vaultDataTuple: SecurityVaultTuple = vaultData
 	const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = vaultDataTuple
@@ -1280,25 +1319,55 @@ async function poolOwnershipToRep(client: ReadClient, securityPoolAddress: Addre
 async function loadSecurityPoolVaultSummaries(client: ReadClient, securityPoolAddress: Address): Promise<{ vaultCount: bigint; vaults: SecurityPoolVaultSummary[] }> {
 	const vaultCount = await getSecurityPoolVaultCount(client, securityPoolAddress)
 	const vaultAddresses = vaultCount === 0n ? [] : await getSecurityPoolVaults(client, securityPoolAddress, 0n, vaultCount)
-	const vaults = await Promise.all(
-		vaultAddresses.map(async (vaultAddress: Address) => {
-			const vaultData: SecurityVaultTuple = await client.readContract({
+	if (vaultAddresses.length === 0) return { vaultCount, vaults: [] }
+
+	const vaultDataContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'securityVaults',
+		address: securityPoolAddress,
+		args: [vaultAddress],
+	}))
+	const vaultDataResults = await readRequiredMulticall(client, vaultDataContracts)
+	const vaultData = vaultDataResults as unknown as SecurityVaultTuple[]
+	const poolOwnershipContracts: { contract: ContractFunctionParameters; index: number }[] = []
+	for (const [index, currentVaultData] of vaultData.entries()) {
+		const poolOwnership = currentVaultData[0]
+		if (poolOwnership === undefined || poolOwnership === 0n) continue
+		poolOwnershipContracts.push({
+			index,
+			contract: {
 				abi: peripherals_SecurityPool_SecurityPool.abi,
-				functionName: 'securityVaults',
+				functionName: 'poolOwnershipToRep',
 				address: securityPoolAddress,
-				args: [vaultAddress],
-			})
-			const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = vaultData
-			const repDepositShare = await poolOwnershipToRep(client, securityPoolAddress, poolOwnership)
-			return {
-				lockedRepInEscalationGame,
-				repDepositShare,
-				securityBondAllowance,
-				unpaidEthFees,
-				vaultAddress,
-			} satisfies SecurityPoolVaultSummary
-		}),
-	)
+				args: [poolOwnership],
+			},
+		})
+	}
+	const repDeposits = new Map<number, bigint>()
+	if (poolOwnershipContracts.length > 0) {
+		const repDepositResults = await readRequiredMulticall(
+			client,
+			poolOwnershipContracts.map(current => current.contract),
+		)
+		for (const [resultIndex, repDepositShare] of repDepositResults.entries()) {
+			const poolOwnershipContract = poolOwnershipContracts[resultIndex]
+			if (poolOwnershipContract === undefined) throw new Error('Unexpected pool ownership contract result')
+			repDeposits.set(poolOwnershipContract.index, BigInt(repDepositShare as bigint))
+		}
+	}
+
+	const vaults = vaultAddresses.map((vaultAddress, index) => {
+		const currentVaultData = vaultData[index]
+		if (currentVaultData === undefined) throw new Error('Unexpected vault data response')
+		const [, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = currentVaultData
+		return {
+			lockedRepInEscalationGame,
+			repDepositShare: repDeposits.get(index) ?? 0n,
+			securityBondAllowance,
+			unpaidEthFees,
+			vaultAddress,
+		} satisfies SecurityPoolVaultSummary
+	})
 	return { vaultCount, vaults }
 }
 
@@ -1352,37 +1421,37 @@ export async function redeemSecurityVaultFees(client: WriteClient, securityPoolA
 }
 
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp] = await Promise.all([
-		client.readContract({
+	const [lastPrice, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp] = await readRequiredMulticall(client, [
+		{
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 			functionName: 'lastPrice',
 			address: managerAddress,
 			args: [],
-		}),
-		client.readContract({
+		},
+		{
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 			functionName: 'pendingReportId',
 			address: managerAddress,
 			args: [],
-		}),
-		client.readContract({
+		},
+		{
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 			functionName: 'getRequestPriceEthCost',
 			address: managerAddress,
 			args: [],
-		}),
-		client.readContract({
+		},
+		{
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 			functionName: 'isPriceValid',
 			address: managerAddress,
 			args: [],
-		}),
-		client.readContract({
+		},
+		{
 			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 			functionName: 'lastSettlementTimestamp',
 			address: managerAddress,
 			args: [],
-		}),
+		},
 	])
 
 	const resolvedOracleAddress = openOracleAddress ?? getInfraContractAddresses().openOracle
@@ -1393,19 +1462,20 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	let token2: Address | undefined
 
 	if (pendingReportId > 0n) {
-		const extraData = await client.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-			functionName: 'extraData',
-			address: resolvedOracleAddress,
-			args: [pendingReportId],
-		})
-
-		const reportMeta = await client.readContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-			functionName: 'reportMeta',
-			address: resolvedOracleAddress,
-			args: [pendingReportId],
-		})
+		const [extraData, reportMeta] = await readRequiredMulticall(client, [
+			{
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'extraData',
+				address: resolvedOracleAddress,
+				args: [pendingReportId],
+			},
+			{
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'reportMeta',
+				address: resolvedOracleAddress,
+				args: [pendingReportId],
+			},
+		])
 
 		callbackStateHash = extraData[0]
 		exactToken1Report = reportMeta[0]
@@ -1430,70 +1500,95 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 }
 
 export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('./types/contracts.js').OpenOracleReportDetails> {
-	const meta = await client.readContract({
-		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-		functionName: 'reportMeta',
-		address: openOracleAddress,
-		args: [reportId],
-	})
-	if (meta[4] === zeroAddress) throw new Error(`Oracle report #${reportId.toString()} does not exist`)
-	const [status, extra, token1Decimals, token2Decimals, token1Symbol, token2Symbol] = await Promise.all([
-		client.readContract({
+	const [meta, status, extra] = await readRequiredMulticall(client, [
+		{
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'reportMeta',
+			address: openOracleAddress,
+			args: [reportId],
+		},
+		{
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'reportStatus',
 			address: openOracleAddress,
 			args: [reportId],
-		}),
-		client.readContract({
+		},
+		{
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'extraData',
 			address: openOracleAddress,
 			args: [reportId],
-		}),
-		loadErc20Decimals(client, meta[4]),
-		loadErc20Decimals(client, meta[6]),
-		loadErc20Symbol(client, meta[4]),
-		loadErc20Symbol(client, meta[6]),
+		},
+	])
+	const reportMeta = meta as OpenOracleReportMetaTuple
+	const reportStatus = status as OpenOracleReportStatusTuple
+	const reportExtra = extra as OpenOracleExtraDataTuple
+	if (reportMeta[4] === zeroAddress) throw new Error(`Oracle report #${reportId.toString()} does not exist`)
+	const [token1Decimals, token2Decimals, token1Symbol, token2Symbol] = await readRequiredMulticall(client, [
+		{
+			abi: ABIS.mainnet.erc20,
+			functionName: 'decimals',
+			address: reportMeta[4],
+			args: [],
+		},
+		{
+			abi: ABIS.mainnet.erc20,
+			functionName: 'decimals',
+			address: reportMeta[6],
+			args: [],
+		},
+		{
+			abi: ABIS.mainnet.erc20,
+			functionName: 'symbol',
+			address: reportMeta[4],
+			args: [],
+		},
+		{
+			abi: ABIS.mainnet.erc20,
+			functionName: 'symbol',
+			address: reportMeta[6],
+			args: [],
+		},
 	])
 
 	return {
 		reportId,
 		openOracleAddress,
-		exactToken1Report: meta[0],
-		escalationHalt: meta[1],
-		fee: meta[2],
-		settlerReward: meta[3],
-		token1: meta[4],
-		settlementTime: BigInt(meta[5]),
-		token2: meta[6],
-		timeType: meta[7],
-		feePercentage: BigInt(meta[8]),
-		protocolFee: BigInt(meta[9]),
-		multiplier: BigInt(meta[10]),
-		disputeDelay: BigInt(meta[11]),
-		currentAmount1: status[0],
-		currentAmount2: status[1],
-		price: status[2],
-		currentReporter: status[3],
-		reportTimestamp: BigInt(status[4]),
-		settlementTimestamp: BigInt(status[5]),
-		initialReporter: status[6],
-		disputeOccurred: status[8],
-		isDistributed: status[9],
-		stateHash: extra[0],
-		callbackContract: extra[1],
-		numReports: BigInt(extra[2]),
-		callbackGasLimit: Number(extra[3]),
-		callbackSelector: extra[4],
-		protocolFeeRecipient: extra[5],
-		trackDisputes: extra[6],
-		keepFee: extra[7],
-		feeToken: extra[8],
-		lastReportOppoTime: BigInt(status[7]),
-		token1Decimals,
-		token2Decimals,
-		token1Symbol,
-		token2Symbol,
+		exactToken1Report: reportMeta[0],
+		escalationHalt: reportMeta[1],
+		fee: reportMeta[2],
+		settlerReward: reportMeta[3],
+		token1: reportMeta[4],
+		settlementTime: BigInt(reportMeta[5]),
+		token2: reportMeta[6],
+		timeType: reportMeta[7],
+		feePercentage: BigInt(reportMeta[8]),
+		protocolFee: BigInt(reportMeta[9]),
+		multiplier: BigInt(reportMeta[10]),
+		disputeDelay: BigInt(reportMeta[11]),
+		currentAmount1: reportStatus[0],
+		currentAmount2: reportStatus[1],
+		price: reportStatus[2],
+		currentReporter: reportStatus[3],
+		reportTimestamp: BigInt(reportStatus[4]),
+		settlementTimestamp: BigInt(reportStatus[5]),
+		initialReporter: reportStatus[6],
+		disputeOccurred: reportStatus[8],
+		isDistributed: reportStatus[9],
+		stateHash: reportExtra[0],
+		callbackContract: reportExtra[1],
+		numReports: BigInt(reportExtra[2]),
+		callbackGasLimit: Number(reportExtra[3]),
+		callbackSelector: reportExtra[4],
+		protocolFeeRecipient: reportExtra[5],
+		trackDisputes: reportExtra[6],
+		keepFee: reportExtra[7],
+		feeToken: reportExtra[8],
+		lastReportOppoTime: BigInt(reportStatus[7]),
+		token1Decimals: Number(token1Decimals),
+		token2Decimals: Number(token2Decimals),
+		token1Symbol: String(token1Symbol),
+		token2Symbol: String(token2Symbol),
 	}
 }
 
@@ -1540,30 +1635,91 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		reportIds.push(reportId)
 		if (reportId === pageStartId) break
 	}
+	const [metaResults, statusResults] = await Promise.all([
+		readRequiredMulticall(
+			client,
+			reportIds.map(reportId => ({
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'reportMeta',
+				address: openOracleAddress,
+				args: [reportId],
+			})),
+		),
+		readRequiredMulticall(
+			client,
+			reportIds.map(reportId => ({
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'reportStatus',
+				address: openOracleAddress,
+				args: [reportId],
+			})),
+		),
+	])
+	const metas = metaResults as unknown as OpenOracleReportMetaTuple[]
+	const statuses = statusResults as unknown as OpenOracleReportStatusTuple[]
+	const tokenAddresses = new Set<Address>()
+	for (const meta of metas) {
+		if (meta[4] !== zeroAddress) tokenAddresses.add(meta[4])
+		if (meta[6] !== zeroAddress) tokenAddresses.add(meta[6])
+	}
+	const uniqueTokenAddresses = [...tokenAddresses]
+	const tokenMetadata = new Map<Address, { decimals: number; symbol: string }>()
+	if (uniqueTokenAddresses.length > 0) {
+		const tokenDecimals = await readRequiredMulticall(
+			client,
+			uniqueTokenAddresses.map(tokenAddress => ({
+				abi: ABIS.mainnet.erc20,
+				functionName: 'decimals',
+				address: tokenAddress,
+				args: [],
+			})),
+		)
+		const tokenSymbols = await readRequiredMulticall(
+			client,
+			uniqueTokenAddresses.map(tokenAddress => ({
+				abi: ABIS.mainnet.erc20,
+				functionName: 'symbol',
+				address: tokenAddress,
+				args: [],
+			})),
+		)
+		for (const [index, tokenAddress] of uniqueTokenAddresses.entries()) {
+			const decimals = tokenDecimals[index]
+			const symbol = tokenSymbols[index]
+			if (decimals === undefined || symbol === undefined) throw new Error('Unexpected token metadata response')
+			tokenMetadata.set(tokenAddress, {
+				decimals: Number(decimals),
+				symbol: String(symbol),
+			})
+		}
+	}
 
-	const reports = await Promise.all(
-		reportIds.map(async reportId => {
-			const details = await loadOpenOracleReportDetails(client, openOracleAddress, reportId)
-			return {
-				currentAmount1: details.currentAmount1,
-				currentAmount2: details.currentAmount2,
-				currentReporter: details.currentReporter,
-				disputeOccurred: details.disputeOccurred,
-				exactToken1Report: details.exactToken1Report,
-				isDistributed: details.isDistributed,
-				price: details.price,
-				reportId: details.reportId,
-				reportTimestamp: details.reportTimestamp,
-				settlementTimestamp: details.settlementTimestamp,
-				token1: details.token1,
-				token2: details.token2,
-				token1Decimals: details.token1Decimals,
-				token2Decimals: details.token2Decimals,
-				token1Symbol: details.token1Symbol,
-				token2Symbol: details.token2Symbol,
-			} satisfies OpenOracleReportSummary
-		}),
-	)
+	const reports = reportIds.map((reportId, index) => {
+		const meta = metas[index]
+		const status = statuses[index]
+		if (meta === undefined || status === undefined) throw new Error('Unexpected oracle report summary response')
+		const token1Metadata = tokenMetadata.get(meta[4])
+		const token2Metadata = tokenMetadata.get(meta[6])
+		if (token1Metadata === undefined || token2Metadata === undefined) throw new Error('Unexpected oracle token metadata response')
+		return {
+			currentAmount1: status[0],
+			currentAmount2: status[1],
+			currentReporter: status[3],
+			disputeOccurred: status[8],
+			exactToken1Report: meta[0],
+			isDistributed: status[9],
+			price: status[2],
+			reportId,
+			reportTimestamp: BigInt(status[4]),
+			settlementTimestamp: BigInt(status[5]),
+			token1: meta[4],
+			token2: meta[6],
+			token1Decimals: token1Metadata.decimals,
+			token2Decimals: token2Metadata.decimals,
+			token1Symbol: token1Metadata.symbol,
+			token2Symbol: token2Metadata.symbol,
+		} satisfies OpenOracleReportSummary
+	})
 
 	return {
 		nextReportId,
@@ -1692,118 +1848,130 @@ export async function disputeOracleReport(client: WriteClient, openOracleAddress
 }
 
 export async function loadForkAuctionDetails(client: ReadClient, securityPoolAddress: Address): Promise<ForkAuctionDetails> {
-	const [questionId, parentSecurityPoolAddress, universeId, systemStateValue, truthAuctionAddress, completeSetCollateralAmount, forkData, block, questionOutcome] = await Promise.all([
-		client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'questionId',
-			address: securityPoolAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'parent',
-			address: securityPoolAddress,
-			args: [],
-		}),
-		readSecurityPoolUniverseId(client, securityPoolAddress),
-		client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'systemState',
-			address: securityPoolAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'truthAuction',
-			address: securityPoolAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'completeSetCollateralAmount',
-			address: securityPoolAddress,
-			args: [],
-		}),
-		client.readContract({
-			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-			functionName: 'forkData',
-			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress],
-		}),
+	const [[questionId, parentSecurityPoolAddress, universeId, systemStateValue, truthAuctionAddress, completeSetCollateralAmount, forkData, questionOutcome], block] = await Promise.all([
+		readRequiredMulticall(client, [
+			{
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'questionId',
+				address: securityPoolAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'parent',
+				address: securityPoolAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'universeId',
+				address: securityPoolAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'systemState',
+				address: securityPoolAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'truthAuction',
+				address: securityPoolAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				functionName: 'completeSetCollateralAmount',
+				address: securityPoolAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				functionName: 'forkData',
+				address: getInfraContractAddresses().securityPoolForker,
+				args: [securityPoolAddress],
+			},
+			{
+				abi: QUESTION_OUTCOME_ABI,
+				functionName: 'getQuestionOutcome',
+				address: getInfraContractAddresses().securityPoolForker,
+				args: [securityPoolAddress],
+			},
+		]),
 		client.getBlock(),
-		client.readContract({
-			abi: QUESTION_OUTCOME_ABI,
-			functionName: 'getQuestionOutcome',
-			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress],
-		}),
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	const marketDetails = await loadMarketDetails(client, questionId)
 	const forkDataTuple: ForkDataTuple = forkData
 	const [repAtFork, , truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)
-	const migrationEndsAt =
+	const universeForkTime =
 		truthAuctionStartedAt > 0n
 			? undefined
-			: (await client.readContract({
-					abi: Zoltar_Zoltar.abi,
-					functionName: 'getForkTime',
-					address: getInfraContractAddresses().zoltar,
-					args: [universeId],
-				})) + MIGRATION_TIME_LENGTH
+			: (
+					await readRequiredMulticall(client, [
+						{
+							abi: Zoltar_Zoltar.abi,
+							functionName: 'getForkTime',
+							address: getInfraContractAddresses().zoltar,
+							args: [universeId],
+						},
+					])
+				)[0]
+	const migrationEndsAt = truthAuctionStartedAt > 0n || universeForkTime === undefined ? undefined : universeForkTime + MIGRATION_TIME_LENGTH
 
 	let truthAuction: TruthAuctionMetrics | undefined
 	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
-		const [computeClearingResult, ethRaiseCap, ethRaised, finalized, maxRepBeingSold, minBidSize, totalRepPurchased, underfunded] = await Promise.all([
-			client.readContract({
+		const [computeClearingResult, ethRaiseCap, ethRaised, finalized, maxRepBeingSold, minBidSize, totalRepPurchased, underfunded] = await readRequiredMulticall(client, [
+			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'computeClearing',
 				address: truthAuctionAddress,
 				args: [],
-			}),
-			client.readContract({
+			},
+			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'ethRaiseCap',
 				address: truthAuctionAddress,
 				args: [],
-			}),
-			client.readContract({
+			},
+			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'ethRaised',
 				address: truthAuctionAddress,
 				args: [],
-			}),
-			client.readContract({
+			},
+			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'finalized',
 				address: truthAuctionAddress,
 				args: [],
-			}),
-			client.readContract({
+			},
+			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'maxRepBeingSold',
 				address: truthAuctionAddress,
 				args: [],
-			}),
-			client.readContract({
+			},
+			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'minBidSize',
 				address: truthAuctionAddress,
 				args: [],
-			}),
-			client.readContract({
+			},
+			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'totalRepPurchased',
 				address: truthAuctionAddress,
 				args: [],
-			}),
-			client.readContract({
+			},
+			{
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'underfunded',
 				address: truthAuctionAddress,
 				args: [],
-			}),
+			},
 		])
 		const computeClearingTuple: AuctionClearingTuple = computeClearingResult
 		const [hitCap, clearingTick, accumulatedEth, ethAtClearingTick] = computeClearingTuple
@@ -2126,62 +2294,64 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 	return await Promise.all(
 		deployments.map(async deployment => {
 			const { parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
-			const [completeSetCollateralAmount, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, marketDetails, questionOutcome, systemState, totalSecurityBondAllowance, universeForkTime] = await Promise.all([
-				client.readContract({
-					abi: peripherals_SecurityPool_SecurityPool.abi,
-					functionName: 'completeSetCollateralAmount',
-					address: securityPoolAddress,
-					args: [],
-				}),
-				client.readContract({
-					abi: peripherals_SecurityPool_SecurityPool.abi,
-					functionName: 'currentRetentionRate',
-					address: securityPoolAddress,
-					args: [],
-				}),
-				client.readContract({
-					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-					functionName: 'forkData',
-					address: getInfraContractAddresses().securityPoolForker,
-					args: [securityPoolAddress],
-				}),
-				client.readContract({
-					abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-					functionName: 'lastPrice',
-					address: managerAddress,
-					args: [],
-				}),
-				client.readContract({
-					abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-					functionName: 'lastSettlementTimestamp',
-					address: managerAddress,
-					args: [],
-				}),
+			const [[completeSetCollateralAmount, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, questionOutcome, systemState, totalSecurityBondAllowance, universeForkTime], marketDetails] = await Promise.all([
+				readRequiredMulticall(client, [
+					{
+						abi: peripherals_SecurityPool_SecurityPool.abi,
+						functionName: 'completeSetCollateralAmount',
+						address: securityPoolAddress,
+						args: [],
+					},
+					{
+						abi: peripherals_SecurityPool_SecurityPool.abi,
+						functionName: 'currentRetentionRate',
+						address: securityPoolAddress,
+						args: [],
+					},
+					{
+						abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+						functionName: 'forkData',
+						address: getInfraContractAddresses().securityPoolForker,
+						args: [securityPoolAddress],
+					},
+					{
+						abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+						functionName: 'lastPrice',
+						address: managerAddress,
+						args: [],
+					},
+					{
+						abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+						functionName: 'lastSettlementTimestamp',
+						address: managerAddress,
+						args: [],
+					},
+					{
+						abi: QUESTION_OUTCOME_ABI,
+						functionName: 'getQuestionOutcome',
+						address: getInfraContractAddresses().securityPoolForker,
+						args: [securityPoolAddress],
+					},
+					{
+						abi: peripherals_SecurityPool_SecurityPool.abi,
+						functionName: 'systemState',
+						address: securityPoolAddress,
+						args: [],
+					},
+					{
+						abi: peripherals_SecurityPool_SecurityPool.abi,
+						functionName: 'totalSecurityBondAllowance',
+						address: securityPoolAddress,
+						args: [],
+					},
+					{
+						abi: Zoltar_Zoltar.abi,
+						functionName: 'getForkTime',
+						address: getInfraContractAddresses().zoltar,
+						args: [universeId],
+					},
+				]),
 				loadMarketDetails(client, questionId),
-				client.readContract({
-					abi: QUESTION_OUTCOME_ABI,
-					functionName: 'getQuestionOutcome',
-					address: getInfraContractAddresses().securityPoolForker,
-					args: [securityPoolAddress],
-				}),
-				client.readContract({
-					abi: peripherals_SecurityPool_SecurityPool.abi,
-					functionName: 'systemState',
-					address: securityPoolAddress,
-					args: [],
-				}),
-				client.readContract({
-					abi: peripherals_SecurityPool_SecurityPool.abi,
-					functionName: 'totalSecurityBondAllowance',
-					address: securityPoolAddress,
-					args: [],
-				}),
-				client.readContract({
-					abi: Zoltar_Zoltar.abi,
-					functionName: 'getForkTime',
-					address: getInfraContractAddresses().zoltar,
-					args: [universeId],
-				}),
 			])
 			const forkDataTuple: ForkDataTuple = forkData
 			const [, , truthAuctionStartedAt, migratedRep, , forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
@@ -2194,6 +2364,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 				forkOutcome: getReportingOutcomeKey(forkOutcomeIndex),
 				forkOwnSecurityPool,
 				lastOraclePrice: lastSettlementTimestamp > 0n ? lastOraclePrice : undefined,
+				lastOracleSettlementTimestamp: lastSettlementTimestamp,
 				managerAddress,
 				marketDetails,
 				migratedRep,
@@ -2217,9 +2388,8 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 }
 
 export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {
-	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
-
 	if (accountAddress === undefined) {
+		const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 		return {
 			maxRedeemableCompleteSets: undefined,
 			shareBalances: undefined,
@@ -2227,12 +2397,20 @@ export async function loadTradingDetails(client: ReadClient, securityPoolAddress
 		}
 	}
 
-	const shareTokenAddress = await client.readContract({
-		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'shareToken',
-		args: [],
-	})
+	const [universeId, shareTokenAddress] = await readRequiredMulticall(client, [
+		{
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'universeId',
+			args: [],
+		},
+		{
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'shareToken',
+			args: [],
+		},
+	])
 
 	const shareBalancesResult = await client.readContract({
 		address: shareTokenAddress,

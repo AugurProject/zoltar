@@ -28,6 +28,7 @@ type InfraContractAddressConfig = {
 	getSecurityPoolFactoryByteCode: (inputs: SecurityPoolFactoryAddressInputs) => Hex
 	getSecurityPoolForkerByteCode: (zoltarAddress: Address) => Hex
 	getShareTokenFactoryByteCode: (zoltarAddress: Address) => Hex
+	multicall3Bytecode: Hex
 	openOracleBytecode: Hex
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: Hex
 	proxyDeployerAddress: Address
@@ -47,6 +48,7 @@ type DeploymentStatusOracleAddressConfig = {
 
 export type InfraContractAddresses = {
 	escalationGameFactory: Address
+	multicall3: Address
 	openOracle: Address
 	priceOracleManagerAndOperatorQueuerFactory: Address
 	scalarOutcomes: Address
@@ -99,6 +101,7 @@ export function createZoltarAddressHelpers(config: ZoltarAddressConfig) {
 export function createInfraContractAddressHelper(config: InfraContractAddressConfig) {
 	const getInfraContractAddresses = (): InfraContractAddresses => {
 		const addresses = {
+			multicall3: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.multicall3Bytecode),
 			securityPoolUtils: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolUtilsBytecode),
 			openOracle: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.openOracleBytecode),
 			zoltarQuestionData: config.getZoltarQuestionDataAddress(),

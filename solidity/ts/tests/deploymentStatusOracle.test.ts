@@ -2,6 +2,7 @@ import type { Hex } from 'viem'
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from 'node:assert'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
+import { MULTICALL3_CREATION_BYTECODE } from '../../../shared/js/multicall3.js'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
@@ -39,19 +40,20 @@ describe('Deployment Status Oracle Test Suite', () => {
 
 		const deploymentMask = await loadDeploymentStatusOracleMask(client)
 
-		assert.strictEqual(getDeploymentStepAddresses().length, 12, 'oracle should monitor the 12 deterministic infra deployments')
+		assert.strictEqual(getDeploymentStepAddresses().length, 13, 'oracle should monitor the 13 deterministic infra deployments')
 		strictEqualTypeSafe(deploymentMask, 1n, 'only the proxy deployer should be deployed at bootstrap')
 	})
 
 	test('reports a mixed deployment mask after a subset of infra contracts is deployed', async () => {
 		await ensureDeploymentStatusOracleDeployed(client)
 
+		await deployViaProxy(MULTICALL3_CREATION_BYTECODE)
 		await deployViaProxy(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
 		await deployViaProxy(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
 
 		const deploymentMask = await loadDeploymentStatusOracleMask(client)
 
-		strictEqualTypeSafe(deploymentMask, 1n | (1n << 2n) | (1n << 4n), 'oracle should report the deployed subset of infra contracts')
+		strictEqualTypeSafe(deploymentMask, 1n | (1n << 1n) | (1n << 3n) | (1n << 5n), 'oracle should report the deployed subset of infra contracts')
 	})
 
 	test('ensureInfraDeployed repairs an out-of-order partial deployment', async () => {

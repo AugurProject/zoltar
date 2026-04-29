@@ -5,7 +5,7 @@ import { zeroAddress } from 'viem'
 import { findNextDeployableStep, getDeploymentSections, getPrerequisiteLabel } from '../lib/deployment.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
-import { getDeploymentSteps, getOpenOracleAddress, loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '../contracts.js'
+import { getDeploymentSteps, getMulticall3Address, getOpenOracleAddress, loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '../contracts.js'
 import type { DeploymentStatus, ReadClient } from '../types/contracts.js'
 import { AnvilWindowEthereum } from '../../../solidity/ts/testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../solidity/ts/testsuite/simulator/useIsolatedAnvilNode'
@@ -71,6 +71,7 @@ void describe('deployment helpers', () => {
 		expect(deploymentSteps.map(step => step.id)).toEqual([
 			'proxyDeployer',
 			'deploymentStatusOracle',
+			'multicall3',
 			'uniformPriceDualCapBatchAuctionFactory',
 			'scalarOutcomes',
 			'securityPoolUtils',
@@ -95,13 +96,19 @@ void describe('deployment helpers', () => {
 		const sections = getDeploymentSections(deploymentStatuses)
 		const proxyDeployerSection = sections.find(section => section.title === 'Utilities')
 
-		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle'])
+		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'multicall3'])
 	})
 
 	void test('getOpenOracleAddress matches the deterministic OpenOracle deployment step', () => {
 		const openOracleStep = getDeploymentSteps().find(step => step.id === 'openOracle')
 
 		expect(openOracleStep?.address).toBe(getOpenOracleAddress())
+	})
+
+	void test('getMulticall3Address matches the deterministic Multicall3 deployment step', () => {
+		const multicall3Step = getDeploymentSteps().find(step => step.id === 'multicall3')
+
+		expect(multicall3Step?.address).toBe(getMulticall3Address())
 	})
 
 	void test('loadDeploymentStatusOracleSnapshot returns the proxy deployer when the oracle is missing', async () => {
@@ -115,10 +122,9 @@ void describe('deployment helpers', () => {
 	void test('loadZoltarUniverseSummary returns undefined for an unknown universe id', async () => {
 		let callCount = 0
 		const mockReadClient = {
-			readContract: async ({ functionName }: { functionName: string }) => {
+			multicall: async () => {
 				callCount += 1
-				expect(functionName).toBe('getRepToken')
-				return zeroAddress
+				return [zeroAddress, [0n, 0n, 0n, zeroAddress, 0n], 0n, 0n]
 			},
 		} as unknown as ReadClient
 

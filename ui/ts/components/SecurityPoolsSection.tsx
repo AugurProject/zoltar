@@ -8,11 +8,10 @@ import type { SecurityPoolsSectionProps } from '../types/components.js'
 
 type SecurityPoolsView = 'browse' | 'create' | 'operate'
 
-export function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView }) {
+export function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolExists }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView; selectedPoolExists: boolean }) {
 	if (nextView !== 'operate') return false
 	const resolvedSecurityPoolAddress = nextSecurityPoolAddress ?? currentSecurityPoolAddress
-	if (resolvedSecurityPoolAddress.trim() === '') return false
-	return sameCaseInsensitiveText(currentSecurityPoolAddress, resolvedSecurityPoolAddress)
+	return resolvedSecurityPoolAddress.trim() !== '' && !selectedPoolExists
 }
 
 export function SecurityPoolsSection({ createPool, overview, workflow }: SecurityPoolsSectionProps) {
@@ -27,15 +26,9 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 	)
 	const openView = (nextView: SecurityPoolsView, nextSecurityPoolAddress?: string) => {
 		setView(nextView)
-		if (
-			!shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress: workflow.securityPoolAddress,
-				nextSecurityPoolAddress,
-				nextView,
-			})
-		) {
-			return
-		}
+		const resolvedSecurityPoolAddress = nextSecurityPoolAddress ?? workflow.securityPoolAddress
+		const selectedPoolExists = overview.securityPools.some(pool => sameCaseInsensitiveText(pool.securityPoolAddress, resolvedSecurityPoolAddress))
+		if (!shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress: workflow.securityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolExists })) return
 		workflow.onRefreshSelectedPoolData()
 	}
 
