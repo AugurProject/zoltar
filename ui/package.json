@@ -23,10 +23,11 @@
 		"link:shared-modules": "bun ./scripts/link-node-modules.mjs",
 		"contracts": "cd ../solidity && bun run setup",
 		"setup": "bun install --frozen-lockfile && bun run contracts && bun run build",
-		"build": "tsc",
+		"shared": "cd .. && bun run shared:build && bun run ui:shared",
+		"build": "bun run shared && tsc",
 		"build:tests": "bun ./build/tests.mts",
-		"watch": "tsc --watch",
-		"serve": "bun x tsc --project tsconfig.json && bun ./dev-server.ts",
+		"watch": "bun run shared && tsc --watch",
+		"serve": "bun run shared && bun x tsc --project tsconfig.json && bun ./dev-server.ts",
 		"vendor": "bun install --frozen-lockfile && bun --tsconfig-override=tsconfig.vendor.json ./build/vendor.mts"
 	}
 }
