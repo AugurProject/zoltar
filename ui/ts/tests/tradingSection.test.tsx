@@ -106,6 +106,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		lastOraclePrice: undefined,
+		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
 		migratedRep: 0n,

@@ -9,6 +9,7 @@ import { contractExists } from '../utilities'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	peripherals_EscalationGame_EscalationGame,
+	peripherals_Multicall3_Multicall3,
 	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
 	peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
 	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
@@ -29,6 +30,7 @@ import { objectEntries } from '../typescript'
 import { getRepTokenAddress } from './zoltar'
 
 const ZERO_SALT: Hex = toHex(0, { size: 32 })
+const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
 
 const getSecurityPoolUtilsAddress = () => getCreate2Address({ bytecode: `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: ZERO_SALT })
 
@@ -123,6 +125,7 @@ export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	getShareTokenFactoryByteCode,
 	getZoltarAddress,
 	getZoltarQuestionDataAddress,
+	multicall3Bytecode: MULTICALL3_BYTECODE,
 	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
 	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
@@ -195,6 +198,7 @@ function getDeploymentStatusOracleSteps() {
 	const infraContracts = getInfraContractAddresses()
 	return [
 		{ id: 'proxyDeployer', address: addressString(PROXY_DEPLOYER_ADDRESS) },
+		{ id: 'multicall3', address: infraContracts.multicall3 },
 		{ id: 'uniformPriceDualCapBatchAuctionFactory', address: infraContracts.uniformPriceDualCapBatchAuctionFactory },
 		{ id: 'scalarOutcomes', address: infraContracts.scalarOutcomes },
 		{ id: 'securityPoolUtils', address: infraContracts.securityPoolUtils },
@@ -220,6 +224,7 @@ function isDeploymentStatusOracleStepDeployed(deploymentMask: bigint, stepId: De
 async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key in keyof ReturnType<typeof getInfraContractAddresses>]: boolean }> {
 	const deploymentMask = await loadDeploymentStatusOracleMask(client)
 	return {
+		multicall3: isDeploymentStatusOracleStepDeployed(deploymentMask, 'multicall3'),
 		securityPoolUtils: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolUtils'),
 		openOracle: isDeploymentStatusOracleStepDeployed(deploymentMask, 'openOracle'),
 		zoltar: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltar'),
@@ -244,6 +249,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	await ensureDeploymentStatusOracleDeployed(client)
 	const existence = await getInfraDeployedInformation(client)
 
+	if (!existence.multicall3) await deployBytecode(MULTICALL3_BYTECODE)
 	if (!existence.uniformPriceDualCapBatchAuctionFactory) await deployBytecode(`0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
 	if (!existence.scalarOutcomes) await deployBytecode(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
 	if (!existence.securityPoolUtils) await deployBytecode(`0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)

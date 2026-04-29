@@ -8,7 +8,7 @@ type DeploymentSectionDefinition = {
 const DEPLOYMENT_SECTIONS: DeploymentSectionDefinition[] = [
 	{
 		title: 'Utilities',
-		stepIds: ['proxyDeployer', 'deploymentStatusOracle'],
+		stepIds: ['proxyDeployer', 'deploymentStatusOracle', 'multicall3'],
 	},
 	{
 		title: 'Zoltar',

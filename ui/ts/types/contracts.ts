@@ -5,6 +5,7 @@ export type { ReadClient, WriteClient } from '../lib/clients.js'
 export type DeploymentStepId =
 	| 'proxyDeployer'
 	| 'deploymentStatusOracle'
+	| 'multicall3'
 	| 'uniformPriceDualCapBatchAuctionFactory'
 	| 'scalarOutcomes'
 	| 'securityPoolUtils'
@@ -231,6 +232,7 @@ export type ListedSecurityPool = {
 	forkOutcome: ReportingOutcomeKey | 'none'
 	forkOwnSecurityPool: boolean
 	lastOraclePrice: bigint | undefined
+	lastOracleSettlementTimestamp: bigint
 	managerAddress: Address
 	marketDetails: MarketDetails
 	migratedRep: bigint

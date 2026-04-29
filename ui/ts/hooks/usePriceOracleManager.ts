@@ -3,7 +3,9 @@ import type { Address, Hash } from 'viem'
 import { loadOracleManagerDetails, requestOraclePrice } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { sameAddress } from '../lib/address.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { useRequestGuard } from '../lib/requestGuard.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '../types/contracts.js'
 
@@ -20,9 +22,12 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 	const poolOracleManagerDetails = useSignal<OracleManagerDetails | undefined>(undefined)
 	const poolOracleManagerError = useSignal<string | undefined>(undefined)
 	const poolPriceOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)
+	const nextPoolOracleManagerLoad = useRequestGuard()
 
 	const loadPoolOracleManager = async (managerAddress: Address) => {
+		const isCurrent = nextPoolOracleManagerLoad()
 		await poolOracleManagerLoad.run({
+			isCurrent,
 			onStart: () => {
 				poolOracleManagerError.value = undefined
 			},
@@ -54,7 +59,10 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 				},
 			},
 			async walletAddress => {
-				poolOracleManagerDetails.value ??= await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
+				const currentManagerDetails = poolOracleManagerDetails.value
+				if (currentManagerDetails === undefined || !sameAddress(currentManagerDetails.managerAddress, managerAddress)) {
+					poolOracleManagerDetails.value = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
+				}
 				return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress)
 			},
 			'Failed to request price',

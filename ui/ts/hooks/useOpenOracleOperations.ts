@@ -3,7 +3,8 @@ import type { Address } from 'viem'
 import { useEffect } from 'preact/hooks'
 import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
-import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, loadErc20Allowance, loadErc20Balance, loadOpenOracleReportDetails, settleOracleReport, submitInitialOracleReport, wrapWeth } from '../contracts.js'
+import { ABIS } from '../abis.js'
+import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, loadOpenOracleReportDetails, readOptionalMulticall, settleOracleReport, submitInitialOracleReport, wrapWeth } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorDetail, getErrorMessage } from '../lib/errors.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOracleInitialReportWriteErrorMessage, formatOpenOraclePriceInput, getOpenOracleSelectedReportActionMode, loadOpenOracleInitialReportPriceResult } from '../lib/openOracle.js'
@@ -40,6 +41,12 @@ type LoadedOracleReportResult = {
 
 type RefreshOpenOracleInitialReportOptions = {
 	preserveExisting?: boolean
+}
+
+type OptionalReadResult<TResult> = { result: TResult; status: 'success' } | { error: Error; result?: undefined; status: 'failure' }
+
+function toReadError(error: unknown) {
+	return error instanceof Error ? error : new Error('Unknown read error')
 }
 
 export function useOpenOracleOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters) {
@@ -130,58 +137,44 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		resetOpenOracleInitialReportTokenAccessState(approvalLoading)
 	}
 
-	const loadAllowance = async (tokenAddress: Address): Promise<TokenApprovalState> => {
-		if (accountAddress === undefined) {
+	const getTokenApprovalState = (result: OptionalReadResult<bigint>): TokenApprovalState => {
+		if (result.status === 'success') {
 			return {
 				error: undefined,
 				loading: false,
-				value: undefined,
+				value: result.result,
 			}
 		}
-
-		try {
-			return {
-				error: undefined,
-				loading: false,
-				value: await loadErc20Allowance(createConnectedReadClient(), tokenAddress, accountAddress, getOpenOracleAddress()),
-			}
-		} catch (error) {
-			const errorDetail = getErrorDetail(error)
-			return {
-				error: errorDetail === undefined ? 'Failed to load token approval' : `Failed to load token approval: ${errorDetail}`,
-				loading: false,
-				value: undefined,
-			}
+		const errorDetail = getErrorDetail(result.error)
+		return {
+			error: errorDetail === undefined ? 'Failed to load token approval' : `Failed to load token approval: ${errorDetail}`,
+			loading: false,
+			value: undefined,
 		}
 	}
 
-	const loadBalance = async (tokenAddress: Address): Promise<TokenAccessLoadResult> => {
+	const getTokenBalanceState = (result: OptionalReadResult<bigint>): TokenAccessLoadResult => {
+		if (result.status === 'success') {
+			return {
+				amount: result.result,
+				error: undefined,
+			}
+		}
+		const errorDetail = getErrorDetail(result.error)
+		return {
+			amount: undefined,
+			error: errorDetail === undefined ? 'Failed to load token balance' : `Failed to load token balance: ${errorDetail}`,
+		}
+	}
+
+	const loadEthBalance = async (readClient = createConnectedReadClient()): Promise<TokenAccessLoadResult> => {
 		if (accountAddress === undefined) {
 			return { amount: undefined, error: undefined }
 		}
 
 		try {
 			return {
-				amount: await loadErc20Balance(createConnectedReadClient(), tokenAddress, accountAddress),
-				error: undefined,
-			}
-		} catch (error) {
-			const errorDetail = getErrorDetail(error)
-			return {
-				amount: undefined,
-				error: errorDetail === undefined ? 'Failed to load token balance' : `Failed to load token balance: ${errorDetail}`,
-			}
-		}
-	}
-
-	const loadEthBalance = async (): Promise<TokenAccessLoadResult> => {
-		if (accountAddress === undefined) {
-			return { amount: undefined, error: undefined }
-		}
-
-		try {
-			return {
-				amount: await createConnectedReadClient().getBalance({ address: accountAddress }),
+				amount: await readClient.getBalance({ address: accountAddress }),
 				error: undefined,
 			}
 		} catch (error) {
@@ -273,14 +266,59 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 					}
 				},
 				load: async () => {
-					const [ethBalanceResult, token1ApprovalResult, token2ApprovalResult, token1BalanceResult, token2BalanceResult] = await Promise.all([loadEthBalance(), loadAllowance(currentDetails.token1), loadAllowance(currentDetails.token2), loadBalance(currentDetails.token1), loadBalance(currentDetails.token2)])
+					if (accountAddress === undefined) {
+						return {
+							ethBalanceResult: { amount: undefined, error: undefined },
+							token1ApprovalResult: { error: undefined, loading: false, value: undefined },
+							token2ApprovalResult: { error: undefined, loading: false, value: undefined },
+							token1BalanceResult: { amount: undefined, error: undefined },
+							token2BalanceResult: { amount: undefined, error: undefined },
+						} satisfies OpenOracleInitialReportTokenAccessLoadResult
+					}
+					const readClient = createConnectedReadClient()
+					const [ethBalanceResult, [token1ApprovalReadResult, token2ApprovalReadResult, token1BalanceReadResult, token2BalanceReadResult]] = await Promise.all([
+						loadEthBalance(readClient),
+						readOptionalMulticall(readClient, [
+							{
+								abi: ABIS.mainnet.erc20,
+								functionName: 'allowance',
+								address: currentDetails.token1,
+								args: [accountAddress, getOpenOracleAddress()],
+							},
+							{
+								abi: ABIS.mainnet.erc20,
+								functionName: 'allowance',
+								address: currentDetails.token2,
+								args: [accountAddress, getOpenOracleAddress()],
+							},
+							{
+								abi: ABIS.mainnet.erc20,
+								functionName: 'balanceOf',
+								address: currentDetails.token1,
+								args: [accountAddress],
+							},
+							{
+								abi: ABIS.mainnet.erc20,
+								functionName: 'balanceOf',
+								address: currentDetails.token2,
+								args: [accountAddress],
+							},
+						]).catch(error => {
+							const failureResult = {
+								error: toReadError(error),
+								status: 'failure',
+							} satisfies OptionalReadResult<bigint>
+							return [failureResult, failureResult, failureResult, failureResult]
+						}),
+					])
+					if (token1ApprovalReadResult === undefined || token2ApprovalReadResult === undefined || token1BalanceReadResult === undefined || token2BalanceReadResult === undefined) throw new Error('Unexpected token access response')
 
 					return {
 						ethBalanceResult,
-						token1ApprovalResult,
-						token2ApprovalResult,
-						token1BalanceResult,
-						token2BalanceResult,
+						token1ApprovalResult: getTokenApprovalState(token1ApprovalReadResult),
+						token2ApprovalResult: getTokenApprovalState(token2ApprovalReadResult),
+						token1BalanceResult: getTokenBalanceState(token1BalanceReadResult),
+						token2BalanceResult: getTokenBalanceState(token2BalanceReadResult),
 					} satisfies OpenOracleInitialReportTokenAccessLoadResult
 				},
 				onSuccess: ({ ethBalanceResult, token1ApprovalResult, token2ApprovalResult, token1BalanceResult, token2BalanceResult }: OpenOracleInitialReportTokenAccessLoadResult) => {

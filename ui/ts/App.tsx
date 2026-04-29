@@ -222,8 +222,6 @@ export function App() {
 		if (!walletBootstrapComplete) return
 		if (!securityPoolAddress.startsWith('0x') || securityPoolAddress.length !== 42) return
 		void loadSecurityPools(securityPoolAddress)
-		void loadReporting()
-		void loadForkAuction()
 	}
 	const renderRouteContent = () => {
 		if (wrongNetworkMessage !== undefined) {
@@ -511,8 +509,12 @@ export function App() {
 		setTradingForm(current => (current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress }))
 		setForkAuctionForm(current => (current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress }))
 		setReportingForm(current => (current.securityPoolAddress === securityPoolAddress ? current : { ...current, securityPoolAddress }))
+	}, [securityPoolAddress])
+
+	useEffect(() => {
+		if (selectedPool !== undefined) return
 		refreshSelectedPoolData()
-	}, [securityPoolAddress, walletBootstrapComplete])
+	}, [securityPoolAddress, selectedPool?.securityPoolAddress, walletBootstrapComplete])
 
 	useEffect(() => {
 		if (securityPoolResult === undefined) return
