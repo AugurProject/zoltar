@@ -135,27 +135,6 @@ export function renderSelectedReportActionSection(
 							</div>
 						</div>
 						<p className='detail'>Price source: {showQuoteLoadingPlaceholder ? <strong>Loading...</strong> : renderInitialPriceSourceLabel(initialReportSubmission.priceSource, initialReportSubmission.priceSourceUrl)}</p>
-						{!initialReportSubmission.hasWethWrapAction ? undefined : (
-							<div className='entity-card-subsection'>
-								{initialReportSubmission.requiredWethWrapAmount === undefined || initialReportSubmission.requiredWethWrapAmount <= 0n ? undefined : (
-									<p className='detail'>
-										Need <CurrencyValue value={initialReportSubmission.requiredWethWrapAmount} suffix='WETH' copyable={false} /> more WETH for this report.
-									</p>
-								)}
-								{initialReportSubmission.wrapRequiredWethMessage?.kind !== 'visible' ? undefined : <p className='detail'>{initialReportSubmission.wrapRequiredWethMessage.message}</p>}
-								<div className='actions'>
-									<button
-										className='secondary'
-										type='button'
-										onClick={onWrapWethForInitialReport}
-										disabled={!isConnected || !initialReportSubmission.canWrapRequiredWeth || openOracleActiveAction === 'wrapWeth'}
-										title={initialReportSubmission.wrapRequiredWethMessage?.kind === 'visible' ? initialReportSubmission.wrapRequiredWethMessage.message : undefined}
-									>
-										{openOracleActiveAction === 'wrapWeth' ? <LoadingText>Wrapping ETH...</LoadingText> : 'Wrap needed ETH to WETH'}
-									</button>
-								</div>
-							</div>
-						)}
 						<div className='entity-card-subsection'>
 							<div className='entity-card-subsection-header'>
 								<h4>{`${token1Symbol} Approval`}</h4>
@@ -195,9 +174,26 @@ export function renderSelectedReportActionSection(
 								tokenUnits={initialReportSubmission.token2Decimals ?? 18}
 							/>
 						</div>
+						{initialReportSubmission.requiredWethWrapAmount === undefined || initialReportSubmission.requiredWethWrapAmount <= 0n ? undefined : (
+							<p className='detail'>
+								Need <CurrencyValue value={initialReportSubmission.requiredWethWrapAmount} suffix='WETH' copyable={false} /> more WETH for this report.
+							</p>
+						)}
+						{initialReportSubmission.wrapRequiredWethMessage?.kind !== 'visible' ? undefined : <p className='detail'>{initialReportSubmission.wrapRequiredWethMessage.message}</p>}
 						<ErrorNotice message={initialReportSubmission.blockMessage?.kind === 'visible' ? initialReportSubmission.blockMessage.message : undefined} />
 						<div className='actions'>
-							<button className='primary' onClick={onSubmitInitialReport} disabled={!isConnected || !initialReportSubmission.canSubmit || openOracleActiveAction === 'submitInitialReport'}>
+							{!initialReportSubmission.hasWethWrapAction ? undefined : (
+								<button
+									className='secondary'
+									type='button'
+									onClick={onWrapWethForInitialReport}
+									disabled={!isConnected || !initialReportSubmission.canWrapRequiredWeth || openOracleActiveAction === 'wrapWeth'}
+									title={initialReportSubmission.wrapRequiredWethMessage?.kind === 'visible' ? initialReportSubmission.wrapRequiredWethMessage.message : undefined}
+								>
+									{openOracleActiveAction === 'wrapWeth' ? <LoadingText>Wrapping ETH...</LoadingText> : 'Wrap needed ETH to WETH'}
+								</button>
+							)}
+							<button className='primary' type='button' onClick={onSubmitInitialReport} disabled={!isConnected || !initialReportSubmission.canSubmit || openOracleActiveAction === 'submitInitialReport'}>
 								{openOracleActiveAction === 'submitInitialReport' ? <LoadingText>Submitting...</LoadingText> : 'Submit Initial Report'}
 							</button>
 						</div>

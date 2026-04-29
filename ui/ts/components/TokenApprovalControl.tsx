@@ -71,8 +71,8 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 	}, [draftAmount, tokenUnits])
 
 	const nextApprovalAmount = parsedAmount.kind === 'default' ? requirement.targetAmount : parsedAmount.kind === 'invalid' ? undefined : parsedAmount.amount
-
-	const amountValidationMessage = parsedAmount.kind === 'invalid' ? parsedAmount.error : parsedAmount.kind === 'default' || approvedAmount === undefined || parsedAmount.amount > approvedAmount ? undefined : `Approval amount must be greater than the current approved ${tokenSymbol} amount.`
+	const hasNonIncreasingCustomApproval = parsedAmount.kind === 'custom' && approvedAmount !== undefined && parsedAmount.amount <= approvedAmount
+	const amountValidationMessage = parsedAmount.kind === 'invalid' ? parsedAmount.error : undefined
 	const statusMessage = resolveTokenApprovalStatusMessage({
 		actionLabel,
 		amountValidationMessage,
@@ -84,9 +84,11 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 		tokenLabel: tokenSymbol,
 		tokenUnits,
 	})
+	const visibleStatusMessage = hasNonIncreasingCustomApproval ? undefined : statusMessage
 
 	const allowanceMessage = allowanceError === undefined ? undefined : formatTokenApprovalUnavailableMessage({ actionLabel, reason: allowanceError, tokenLabel: tokenSymbol })
-	const canApprove = !pending && guardMessage === undefined && allowanceMessage === undefined && !allowanceLoading && requiredAmount !== undefined && amountValidationMessage === undefined && nextApprovalAmount !== undefined && (parsedAmount.kind !== 'default' || !requirement.hasSufficientApproval)
+	const canApprove =
+		!pending && guardMessage === undefined && allowanceMessage === undefined && !allowanceLoading && requiredAmount !== undefined && amountValidationMessage === undefined && !hasNonIncreasingCustomApproval && nextApprovalAmount !== undefined && (parsedAmount.kind !== 'default' || !requirement.hasSufficientApproval)
 	const buttonLabel = resolveApprovalButtonLabel({
 		guardMessage,
 		isCustomAmount: parsedAmount.kind === 'custom',
@@ -127,7 +129,7 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 			</div>
 
 			{allowanceMessage === undefined ? undefined : <ErrorNotice message={allowanceMessage} />}
-			{allowanceMessage !== undefined || statusMessage === undefined ? undefined : <p className='detail'>{statusMessage}</p>}
+			{allowanceMessage !== undefined || visibleStatusMessage === undefined ? undefined : <p className='detail'>{visibleStatusMessage}</p>}
 		</div>
 	)
 }

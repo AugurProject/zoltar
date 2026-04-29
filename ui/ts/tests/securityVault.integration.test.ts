@@ -86,7 +86,7 @@ describe('Security vault integration', () => {
 		expect(depositResult.action).toBe('depositRep')
 
 		const endPoolRepBalance = await loadErc20Balance(uiReadClient, initialVaultDetails.repToken, securityPoolAddress)
-		expect(endPoolRepBalance - startPoolRepBalance).toBe(depositAmount)
+		expect(endPoolRepBalance - startPoolRepBalance).toEqual(depositAmount)
 
 		const vaultCount = await getVaultCount(client, securityPoolAddress)
 		expect(vaultCount).toBe(1n)

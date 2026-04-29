@@ -63,6 +63,15 @@ function findButton(node: unknown, label: string) {
 	return matchingButton
 }
 
+function getButtonLabels(node: unknown) {
+	const labels: string[] = []
+	visitTree(node, vnode => {
+		if (vnode.type !== 'button') return
+		labels.push(getTextContent(vnode.props['children']).trim())
+	})
+	return labels
+}
+
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
@@ -217,6 +226,8 @@ void describe('OpenOracleSection', () => {
 		const section = renderInitialReportActionSection()
 		const metricFieldLabels = getMetricFieldLabels(section)
 		const textContent = getTextContent(section)
+		const buttonLabels = getButtonLabels(section)
+		const wrapButton = findButton(section, 'Wrap needed ETH to WETH')
 		const submitButton = findButton(section, 'Submit Initial Report')
 
 		expect(metricFieldLabels).not.toContain('Wallet REPv2')
@@ -224,6 +235,10 @@ void describe('OpenOracleSection', () => {
 		expect(textContent).toContain('Initial Report')
 		expect(textContent).toContain('REPv2 Approval')
 		expect(textContent).toContain('WETH Approval')
+		expect(textContent).not.toContain('determine whether this report needs more WETH')
+		expect(buttonLabels.indexOf('Wrap needed ETH to WETH')).toBeGreaterThan(-1)
+		expect(buttonLabels.indexOf('Wrap needed ETH to WETH')).toBeLessThan(buttonLabels.indexOf('Submit Initial Report'))
+		expect(wrapButton).toBeDefined()
 		expect(submitButton).toBeDefined()
 	})
 })

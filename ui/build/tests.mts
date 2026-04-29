@@ -31,6 +31,8 @@ async function buildTests() {
 		const transformed = await esbuild.transform(source, {
 			format: 'esm',
 			loader: path.extname(testFile) === '.tsx' ? 'tsx' : 'ts',
+			jsx: 'automatic',
+			jsxImportSource: 'preact',
 			sourcefile: path.relative(UI_ROOT_PATH, testFile),
 			target: 'esnext',
 		})
