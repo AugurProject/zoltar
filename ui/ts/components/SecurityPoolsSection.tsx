@@ -2,13 +2,17 @@ import { useState } from 'preact/hooks'
 import { SecurityPoolSection } from './SecurityPoolSection.js'
 import { SecurityPoolWorkflowSection } from './SecurityPoolWorkflowSection.js'
 import { SecurityPoolsOverviewSection } from './SecurityPoolsOverviewSection.js'
+import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { resolveFirstMatchingValue } from '../lib/viewState.js'
 import type { SecurityPoolsSectionProps } from '../types/components.js'
 
 type SecurityPoolsView = 'browse' | 'create' | 'operate'
 
-export function shouldRefreshSelectedPoolDataOnViewOpen({ nextView, securityPoolAddress }: { nextView: SecurityPoolsView; securityPoolAddress: string }) {
-	return nextView === 'operate' && securityPoolAddress.trim() !== ''
+export function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView }) {
+	if (nextView !== 'operate') return false
+	const resolvedSecurityPoolAddress = nextSecurityPoolAddress ?? currentSecurityPoolAddress
+	if (resolvedSecurityPoolAddress.trim() === '') return false
+	return sameCaseInsensitiveText(currentSecurityPoolAddress, resolvedSecurityPoolAddress)
 }
 
 export function SecurityPoolsSection({ createPool, overview, workflow }: SecurityPoolsSectionProps) {
@@ -21,9 +25,17 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 			'browse',
 		),
 	)
-	const openView = (nextView: SecurityPoolsView) => {
+	const openView = (nextView: SecurityPoolsView, nextSecurityPoolAddress?: string) => {
 		setView(nextView)
-		if (!shouldRefreshSelectedPoolDataOnViewOpen({ nextView, securityPoolAddress: workflow.securityPoolAddress })) return
+		if (
+			!shouldRefreshSelectedPoolDataOnViewOpen({
+				currentSecurityPoolAddress: workflow.securityPoolAddress,
+				nextSecurityPoolAddress,
+				nextView,
+			})
+		) {
+			return
+		}
 		workflow.onRefreshSelectedPoolData()
 	}
 
@@ -46,7 +58,7 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 					{...overview}
 					onSelectSecurityPool={securityPoolAddress => {
 						workflow.onSecurityPoolAddressChange(securityPoolAddress)
-						setView('operate')
+						openView('operate', securityPoolAddress)
 					}}
 				/>
 			) : undefined}
@@ -57,7 +69,7 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 					showHeader={false}
 					onOpenCreatedPool={securityPoolAddress => {
 						workflow.onSecurityPoolAddressChange(securityPoolAddress)
-						setView('operate')
+						openView('operate', securityPoolAddress)
 					}}
 				/>
 			) : undefined}
