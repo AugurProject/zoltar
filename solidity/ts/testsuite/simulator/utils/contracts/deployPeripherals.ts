@@ -2,7 +2,6 @@ import 'viem/window'
 import { encodeDeployData, getCreate2Address, keccak256, type Address, type Hex, toHex } from 'viem'
 import { createSecurityPoolAddressHelper } from '../../../../../../shared/js/addressDerivation.js'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '../../../../../../shared/js/deploymentAddresses.js'
-import { MULTICALL3_CREATION_BYTECODE } from '../../../../../../shared/js/multicall3.js'
 import { WriteClient, writeContractAndWait } from '../viem'
 import { PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { addressString } from '../bigint'
@@ -10,6 +9,7 @@ import { contractExists } from '../utilities'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	peripherals_EscalationGame_EscalationGame,
+	peripherals_Multicall3_Multicall3,
 	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
 	peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
 	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
@@ -30,6 +30,7 @@ import { objectEntries } from '../typescript'
 import { getRepTokenAddress } from './zoltar'
 
 const ZERO_SALT: Hex = toHex(0, { size: 32 })
+const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
 
 const getSecurityPoolUtilsAddress = () => getCreate2Address({ bytecode: `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: ZERO_SALT })
 
@@ -124,7 +125,7 @@ export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	getShareTokenFactoryByteCode,
 	getZoltarAddress,
 	getZoltarQuestionDataAddress,
-	multicall3Bytecode: MULTICALL3_CREATION_BYTECODE,
+	multicall3Bytecode: MULTICALL3_BYTECODE,
 	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
 	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
@@ -248,7 +249,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	await ensureDeploymentStatusOracleDeployed(client)
 	const existence = await getInfraDeployedInformation(client)
 
-	if (!existence.multicall3) await deployBytecode(MULTICALL3_CREATION_BYTECODE)
+	if (!existence.multicall3) await deployBytecode(MULTICALL3_BYTECODE)
 	if (!existence.uniformPriceDualCapBatchAuctionFactory) await deployBytecode(`0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
 	if (!existence.scalarOutcomes) await deployBytecode(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
 	if (!existence.securityPoolUtils) await deployBytecode(`0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)

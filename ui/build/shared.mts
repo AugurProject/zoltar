@@ -30,16 +30,8 @@ const sharedArtifactCopyPaths = [
 		destinationPath: path.join(UI_ROOT_PATH, 'js', 'shared', 'deploymentAddresses.js'),
 	},
 	{
-		sourcePath: path.join(SHARED_OUTPUT_ROOT_PATH, 'multicall3.js'),
-		destinationPath: path.join(UI_ROOT_PATH, 'js', 'shared', 'multicall3.js'),
-	},
-	{
 		sourcePath: path.join(SHARED_OUTPUT_ROOT_PATH, 'deploymentAddresses.d.ts'),
 		destinationPath: path.join(UI_ROOT_PATH, 'ts', 'shared', 'deploymentAddresses.d.ts'),
-	},
-	{
-		sourcePath: path.join(SHARED_OUTPUT_ROOT_PATH, 'multicall3.d.ts'),
-		destinationPath: path.join(UI_ROOT_PATH, 'ts', 'shared', 'multicall3.d.ts'),
 	},
 ]
 
@@ -55,10 +47,6 @@ const sharedSourceShimFiles = [
 	{
 		destinationPath: path.join(UI_ROOT_PATH, 'ts', 'shared', 'deploymentAddresses.js'),
 		fileContents: "export * from '../../../shared/js/deploymentAddresses.js'\n",
-	},
-	{
-		destinationPath: path.join(UI_ROOT_PATH, 'ts', 'shared', 'multicall3.js'),
-		fileContents: "export * from '../../../shared/js/multicall3.js'\n",
 	},
 ]
 

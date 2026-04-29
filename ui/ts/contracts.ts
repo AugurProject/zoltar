@@ -3,7 +3,6 @@ import { ABIS } from './abis.js'
 import { createRepTokenAddressHelper, createSecurityPoolAddressHelper } from './shared/addressDerivation.js'
 import { sortBigIntsAscending } from './shared/bigInt.js'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from './shared/deploymentAddresses.js'
-import { MULTICALL3_CREATION_BYTECODE } from './shared/multicall3.js'
 import { assertNever } from './lib/assert.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
 import { addOpenOracleBountyBuffer } from './lib/openOracle.js'
@@ -16,6 +15,7 @@ import {
 	Zoltar_Zoltar,
 	ZoltarQuestionData_ZoltarQuestionData,
 	peripherals_EscalationGame_EscalationGame,
+	peripherals_Multicall3_Multicall3,
 	peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
@@ -73,6 +73,7 @@ const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
 const ZERO_SALT = toHex(0, { size: 32 })
+const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
 const FUND_PROXY_DEPLOYER_SIGNER_AMOUNT = 10000000000000000n
 const LIQUIDATION_OPERATION_TYPE = 0
 const ESCALATION_TIME_LENGTH = 4_233_600n
@@ -299,7 +300,7 @@ const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	getShareTokenFactoryByteCode,
 	getZoltarAddress,
 	getZoltarQuestionDataAddress,
-	multicall3Bytecode: MULTICALL3_CREATION_BYTECODE,
+	multicall3Bytecode: MULTICALL3_BYTECODE,
 	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
 	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
@@ -520,7 +521,7 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			label: 'Multicall3',
 			address: addresses.multicall3,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, MULTICALL3_CREATION_BYTECODE),
+			deploy: async client => await deployViaProxy(client, MULTICALL3_BYTECODE),
 		},
 		{
 			id: 'uniformPriceDualCapBatchAuctionFactory',
