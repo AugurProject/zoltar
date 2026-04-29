@@ -1,11 +1,11 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarSliderProgress, parseScalarFormInputs } from '../lib/scalarOutcome.js'
+import { formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor, getScalarSliderProgress, isValidScalarOutcomeIndex, parseScalarFormInputs } from '../lib/scalarOutcome.js'
 
 const scalarQuestion = {
 	answerUnit: 'km',
-	displayValueMax: 10n,
+	displayValueMax: 10n * 10n ** 18n,
 	displayValueMin: 0n,
 	numTicks: 10n,
 }
@@ -30,6 +30,26 @@ void describe('scalar outcome helpers', () => {
 			displayValueMin: 1n * 10n ** 18n,
 			numTicks: 90n,
 		})
+	})
+
+	void test('describes valid, invalid, and malformed scalar outcome indexes', () => {
+		const scalarOutcomeIndex = getScalarOutcomeIndex(scalarQuestion, 4n)
+		expect(getScalarOutcomeIndexDescriptor(scalarQuestion, scalarOutcomeIndex)).toEqual({
+			kind: 'tick',
+			tickIndex: 4n,
+		})
+		expect(getScalarOutcomeIndexDescriptor(scalarQuestion, 0n)).toEqual({
+			kind: 'invalid',
+		})
+		expect(getScalarOutcomeIndexDescriptor(scalarQuestion, 5n)).toEqual({
+			kind: 'malformed',
+		})
+		expect(isValidScalarOutcomeIndex(scalarQuestion, scalarOutcomeIndex)).toBe(true)
+		expect(isValidScalarOutcomeIndex(scalarQuestion, 0n)).toBe(true)
+		expect(isValidScalarOutcomeIndex(scalarQuestion, 5n)).toBe(false)
+		expect(formatScalarOutcomeIndexLabel(scalarQuestion, scalarOutcomeIndex)).toBe('4 km')
+		expect(formatScalarOutcomeIndexLabel(scalarQuestion, 0n)).toBe('Invalid')
+		expect(() => formatScalarOutcomeIndexLabel(scalarQuestion, 5n)).toThrow('Scalar outcome index is malformed')
 	})
 
 	void test('rejects scalar inputs that do not divide into whole ticks', () => {

@@ -70,7 +70,8 @@ export function getDefaultTradingFormState(): TradingFormState {
 		completeSetAmount: '0',
 		redeemAmount: '0',
 		securityPoolAddress: '',
-		selectedOutcome: 'yes',
+		selectedShareOutcome: 'yes',
+		targetOutcomeIndexes: '',
 	}
 }
 

@@ -5,17 +5,19 @@ import { ErrorNotice } from './ErrorNotice.js'
 import { LatestActionSection } from './LatestActionSection.js'
 import { MetricField } from './MetricField.js'
 import { OpenInterestCapacityMetrics } from './OpenInterestCapacityMetrics.js'
+import { ShareMigrationTargetsSection } from './ShareMigrationTargetsSection.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
-import { getRemainingMintCapacity, getTradingGuardDisplayMessage, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage } from '../lib/trading.js'
+import { getDefaultShareMigrationTargetOutcomeIndexes, getRemainingMintCapacity, getTradingGuardDisplayMessage, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage } from '../lib/trading.js'
 import type { TradingSectionProps } from '../types/components.js'
 
 export function TradingSection({
 	accountState,
 	embedInCard = false,
+	loadingTradingForkUniverse,
 	loadingTradingDetails,
 	onCreateCompleteSet,
 	onMigrateShares,
@@ -29,15 +31,28 @@ export function TradingSection({
 	selectedPool,
 	tradingError,
 	tradingForm,
+	tradingForkUniverse,
 	tradingResult,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 }: TradingSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const hasSelectedPool = selectedPool !== undefined
+	const poolUniverseHasForked = selectedPool?.universeHasForked === true || tradingForkUniverse?.hasForked === true
 	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.totalSecurityBondAllowance, selectedPool?.completeSetCollateralAmount)
 	const shareBalances = tradingDetails?.shareBalances
 	const maxRedeemableCompleteSets = tradingDetails?.maxRedeemableCompleteSets
+	let selectedTargetOutcomeIndexes: bigint[] = []
+	try {
+		selectedTargetOutcomeIndexes = tradingForm.targetOutcomeIndexes
+			.split(',')
+			.map(value => value.trim())
+			.filter(value => value !== '')
+			.map(value => BigInt(value))
+	} catch {
+		selectedTargetOutcomeIndexes = []
+	}
+	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
 	const mintGuardMessage = getTradingMintGuardMessage({
 		accountAddress: accountState.address,
 		completeSetCollateralAmount: selectedPool?.completeSetCollateralAmount,
@@ -48,7 +63,7 @@ export function TradingSection({
 		systemState: selectedPool?.systemState,
 		totalRepDeposit: selectedPool?.totalRepDeposit,
 		totalSecurityBondAllowance: selectedPool?.totalSecurityBondAllowance,
-		universeHasForked: selectedPool?.universeHasForked,
+		universeHasForked: poolUniverseHasForked,
 	})
 	const redeemCompleteSetGuardMessage = getTradingRedeemCompleteSetGuardMessage({
 		accountAddress: accountState.address,
@@ -58,16 +73,19 @@ export function TradingSection({
 		redeemAmountInput: tradingForm.redeemAmount,
 		shareBalances,
 		systemState: selectedPool?.systemState,
-		universeHasForked: selectedPool?.universeHasForked,
+		universeHasForked: poolUniverseHasForked,
 	})
 	const migrateSharesGuardMessage = getTradingMigrateSharesGuardMessage({
 		accountAddress: accountState.address,
 		hasSelectedPool,
 		isMainnet,
+		loadingTradingForkUniverse,
 		loadingTradingDetails,
-		selectedOutcome: tradingForm.selectedOutcome,
+		selectedShareOutcome: tradingForm.selectedShareOutcome,
 		shareBalances,
-		universeHasForked: selectedPool?.universeHasForked,
+		targetOutcomeIndexesInput: tradingForm.targetOutcomeIndexes,
+		tradingForkUniverse,
+		universeHasForked: poolUniverseHasForked,
 	})
 	const redeemSharesGuardMessage = getTradingRedeemSharesGuardMessage({
 		accountAddress: accountState.address,
@@ -75,12 +93,33 @@ export function TradingSection({
 		isMainnet,
 		questionOutcome: selectedPool?.questionOutcome,
 		systemState: selectedPool?.systemState,
-		universeHasForked: selectedPool?.universeHasForked,
+		universeHasForked: poolUniverseHasForked,
 	})
 	const mintGuardDisplayMessage = getTradingGuardDisplayMessage(mintGuardMessage)
 	const redeemCompleteSetGuardDisplayMessage = getTradingGuardDisplayMessage(redeemCompleteSetGuardMessage)
 	const migrateSharesGuardDisplayMessage = getTradingGuardDisplayMessage(migrateSharesGuardMessage)
 	const redeemSharesGuardDisplayMessage = getTradingGuardDisplayMessage(redeemSharesGuardMessage)
+	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
+	const setAllTargetOutcomeIndexes = () => {
+		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse) })
+	}
+	const clearTargetOutcomeIndexes = () => {
+		onTradingFormChange({ targetOutcomeIndexes: '' })
+	}
+	const toggleTargetOutcomeIndex = (outcomeIndex: bigint) => {
+		if (selectedTargetOutcomeIndexSet.has(outcomeIndex.toString())) {
+			onTradingFormChange({
+				targetOutcomeIndexes: selectedTargetOutcomeIndexes
+					.filter(index => index !== outcomeIndex)
+					.map(index => index.toString())
+					.join(', '),
+			})
+			return
+		}
+		onTradingFormChange({
+			targetOutcomeIndexes: [...selectedTargetOutcomeIndexes, outcomeIndex].map(index => index.toString()).join(', '),
+		})
+	}
 	const renderShareMetricValue = (value: bigint | undefined) => {
 		if (loadingTradingDetails) return 'Loading...'
 		if (value === undefined) return '—'
@@ -94,6 +133,8 @@ export function TradingSection({
 				embedInCard={embedInCard}
 				rows={[
 					{ label: 'Action', value: tradingResult.action },
+					...(tradingResult.action !== 'migrateShares' || tradingResult.shareOutcome === undefined ? [] : [{ label: 'Share Outcome', value: tradingResult.shareOutcome }]),
+					...(tradingResult.action !== 'migrateShares' || tradingResult.targetOutcomeIndexes === undefined ? [] : [{ label: 'Target Outcome Indexes', value: tradingResult.targetOutcomeIndexes.join(', ') }]),
 					{ label: 'Pool', value: tradingResult.securityPoolAddress },
 					{ label: 'Universe', value: <UniverseLink universeId={tradingResult.universeId} /> },
 					{ label: 'Transaction', value: <TransactionHashLink hash={tradingResult.hash} /> },
@@ -204,9 +245,18 @@ export function TradingSection({
 				<h4>Migrate Forked Shares</h4>
 			</div>
 			<label className='field'>
-				<span>Outcome To Migrate</span>
-				<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={tradingForm.selectedOutcome} onChange={selectedOutcome => onTradingFormChange({ selectedOutcome })} />
+				<span>Share Outcome To Migrate</span>
+				<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={tradingForm.selectedShareOutcome} onChange={selectedShareOutcome => onTradingFormChange({ selectedShareOutcome })} disabled={shareMigrationSelectionDisabled} />
 			</label>
+			<ShareMigrationTargetsSection
+				disabled={shareMigrationSelectionDisabled}
+				forkUniverse={tradingForkUniverse}
+				onClearOutcomeIndexes={clearTargetOutcomeIndexes}
+				onSelectAllOutcomeIndexes={setAllTargetOutcomeIndexes}
+				onToggleOutcomeIndex={toggleTargetOutcomeIndex}
+				selectedOutcomeIndexes={selectedTargetOutcomeIndexes}
+				selectedOutcomeIndexSet={selectedTargetOutcomeIndexSet}
+			/>
 			<div className='actions'>
 				<button className='secondary' title={migrateSharesGuardDisplayMessage} onClick={onMigrateShares} disabled={migrateSharesGuardMessage !== undefined}>
 					Migrate Shares

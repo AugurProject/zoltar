@@ -14,8 +14,16 @@ const sharedArtifactCopyPaths = [
 		destinationPath: path.join(UI_ROOT_PATH, 'js', 'shared', 'addressDerivation.js'),
 	},
 	{
+		sourcePath: path.join(SHARED_OUTPUT_ROOT_PATH, 'bigInt.js'),
+		destinationPath: path.join(UI_ROOT_PATH, 'js', 'shared', 'bigInt.js'),
+	},
+	{
 		sourcePath: path.join(SHARED_OUTPUT_ROOT_PATH, 'addressDerivation.d.ts'),
 		destinationPath: path.join(UI_ROOT_PATH, 'ts', 'shared', 'addressDerivation.d.ts'),
+	},
+	{
+		sourcePath: path.join(SHARED_OUTPUT_ROOT_PATH, 'bigInt.d.ts'),
+		destinationPath: path.join(UI_ROOT_PATH, 'ts', 'shared', 'bigInt.d.ts'),
 	},
 	{
 		sourcePath: path.join(SHARED_OUTPUT_ROOT_PATH, 'deploymentAddresses.js'),
@@ -31,6 +39,10 @@ const sharedSourceShimFiles = [
 	{
 		destinationPath: path.join(UI_ROOT_PATH, 'ts', 'shared', 'addressDerivation.js'),
 		fileContents: "export * from '../../../shared/js/addressDerivation.js'\n",
+	},
+	{
+		destinationPath: path.join(UI_ROOT_PATH, 'ts', 'shared', 'bigInt.js'),
+		fileContents: "export * from '../../../shared/js/bigInt.js'\n",
 	},
 	{
 		destinationPath: path.join(UI_ROOT_PATH, 'ts', 'shared', 'deploymentAddresses.js'),

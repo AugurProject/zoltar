@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from 'viem'
+import { EnumDropdown } from '../components/EnumDropdown.js'
 import { MetricField } from '../components/MetricField.js'
 import { TradingSection } from '../components/TradingSection.js'
 import { MARKET_NOT_FINALIZED_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE } from '../lib/trading.js'
@@ -71,6 +72,15 @@ function findButton(node: unknown, label: string) {
 	return matchingButton
 }
 
+function findFirstNodeByType(node: unknown, type: unknown) {
+	let matchingNode: VNodeLike | undefined
+	visitTree(node, vnode => {
+		if (matchingNode !== undefined || vnode.type !== type) return
+		matchingNode = vnode
+	})
+	return matchingNode
+}
+
 function createMarketDetails(): MarketDetails {
 	return {
 		answerUnit: '',
@@ -131,6 +141,7 @@ function createTradingDetails(overrides: Partial<TradingDetails> = {}): TradingD
 	return {
 		maxRedeemableCompleteSets: 2n * 10n ** 18n,
 		shareBalances,
+		universeId: 1n,
 		...overrides,
 	}
 }
@@ -140,7 +151,8 @@ function createTradingForm(overrides: Partial<TradingFormState> = {}): TradingFo
 		completeSetAmount: '1',
 		redeemAmount: '1',
 		securityPoolAddress: zeroAddress,
-		selectedOutcome: 'yes',
+		selectedShareOutcome: 'yes',
+		targetOutcomeIndexes: '',
 		...overrides,
 	}
 }
@@ -159,6 +171,7 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 	return {
 		accountState: createAccountState(),
 		embedInCard: true,
+		loadingTradingForkUniverse: false,
 		loadingTradingDetails: false,
 		onCreateCompleteSet: () => undefined,
 		onMigrateShares: () => undefined,
@@ -173,6 +186,7 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 		showSecurityPoolAddressInput: false,
 		tradingDetails: createTradingDetails(),
 		tradingError: undefined,
+		tradingForkUniverse: undefined,
 		tradingForm: createTradingForm(),
 		tradingResult: undefined,
 		...overrides,
@@ -244,6 +258,16 @@ void describe('TradingSection', () => {
 		expect(migrateButton?.props['disabled']).toBe(true)
 		expect(migrateButton?.props['title']).toBeUndefined()
 		expect(detailTexts).not.toContain(SHARE_MIGRATION_AFTER_FORK_MESSAGE)
+	})
+
+	void test('disables the share outcome dropdown before the selected pool universe forks', () => {
+		const section = renderTradingSection({
+			selectedPool: createSelectedPool({ universeHasForked: false }),
+		})
+		const shareOutcomeDropdown = findFirstNodeByType(section, EnumDropdown)
+
+		expect(shareOutcomeDropdown).toBeDefined()
+		expect(shareOutcomeDropdown?.props['disabled']).toBe(true)
 	})
 
 	void test('keeps share redemption disabled silently before finalization', () => {

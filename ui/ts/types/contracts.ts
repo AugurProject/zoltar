@@ -272,11 +272,14 @@ export type TradingShareBalances = {
 export type TradingDetails = {
 	maxRedeemableCompleteSets: bigint | undefined
 	shareBalances: TradingShareBalances | undefined
+	universeId: bigint
 }
 
 export type TradingActionResult = ActionResult & {
 	action: 'createCompleteSet' | 'migrateShares' | 'redeemCompleteSet' | 'redeemShares'
 	securityPoolAddress: Address
+	shareOutcome?: ReportingOutcomeKey
+	targetOutcomeIndexes?: bigint[]
 	universeId: bigint
 }
 

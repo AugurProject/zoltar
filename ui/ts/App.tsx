@@ -174,7 +174,7 @@ export function App() {
 		setLiquidationAmount,
 		setLiquidationTargetVault,
 	} = useSecurityPoolsOverview(baseHookConfig)
-	const { createCompleteSet, loadingTradingDetails, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingDetails, tradingError, tradingForm, tradingResult } = useTradingOperations(baseHookConfig)
+	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations(baseHookConfig)
 	const {
 		claimAuctionProceeds,
 		createChildUniverse,
@@ -435,6 +435,7 @@ export function App() {
 							},
 							trading: {
 								accountState,
+								loadingTradingForkUniverse,
 								loadingTradingDetails,
 								onCreateCompleteSet: () => void createCompleteSet(),
 								onMigrateShares: () => void migrateShares(),
@@ -448,6 +449,7 @@ export function App() {
 								tradingDetails,
 								tradingError,
 								tradingForm,
+								tradingForkUniverse,
 								tradingResult,
 							},
 						}}
