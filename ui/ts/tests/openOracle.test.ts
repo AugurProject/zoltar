@@ -584,10 +584,7 @@ describe('Open Oracle helpers', () => {
 		expect(preview.hasWethWrapAction).toBe(true)
 		expect(preview.requiredWethWrapAmount).toBeUndefined()
 		expect(preview.canWrapRequiredWeth).toBe(false)
-		expect(preview.wrapRequiredWethMessage).toEqual({
-			kind: 'visible',
-			message: 'Enter a valid REP / WETH price to determine whether this report needs more WETH.',
-		})
+		expect(preview.wrapRequiredWethMessage).toBeUndefined()
 	})
 
 	test('initial report submission helper allows submit when balances and approvals are sufficient', () => {
@@ -824,6 +821,6 @@ describe('Open Oracle helpers', () => {
 		expect(result.action).toBe('wrapWeth')
 
 		const endBalance = await loadErc20Balance(uiReadClient, WETH_ADDRESS, walletAddress)
-		expect(endBalance - startBalance).toBe(wrapAmount)
+		expect(endBalance - startBalance).toEqual(wrapAmount)
 	})
 })
