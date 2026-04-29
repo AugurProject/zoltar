@@ -9,6 +9,8 @@ const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
 const REPOSITORY_ROOT_PATH = path.join(UI_ROOT_PATH, '..')
 const DEV_SERVER_PATH = path.join(UI_ROOT_PATH, 'dev-server.ts')
 const INDEX_HTML_PATH = path.join(UI_ROOT_PATH, 'index.html')
+const SHARED_SOURCE_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'shared', 'ts')
+const SHARED_TSCONFIG_PATH = path.join(REPOSITORY_ROOT_PATH, 'shared', 'tsconfig.json')
 const TYPE_SCRIPT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'js')
 const TYPE_SCRIPT_SOURCE_PATH = path.join(UI_ROOT_PATH, 'ts')
 const VENDOR_INPUT_PATHS = [path.join(UI_ROOT_PATH, 'build', 'vendor.mts'), path.join(UI_ROOT_PATH, 'package.json'), path.join(UI_ROOT_PATH, 'tsconfig.vendor.json'), path.join(UI_ROOT_PATH, 'bun.lock')]
@@ -19,6 +21,9 @@ type ManagedProcess = ReturnType<typeof spawn>
 let shuttingDown = false
 let restartingServer = false
 let serverProcess: ManagedProcess | undefined
+let sharedBuildProcess: ManagedProcess | undefined
+let sharedBuildQueued = false
+let sharedBuildRunning = false
 let typeScriptWatchProcess: ManagedProcess | undefined
 let vendorBuildProcess: ManagedProcess | undefined
 let vendorBuildRunning = false
@@ -27,6 +32,7 @@ let liveReloadQueued = false
 let liveReloadTimeout: NodeJS.Timeout | undefined
 
 const unwatchCallbacks: Array<() => void> = []
+let sharedSourceUnwatchCallbacks: Array<() => void> = []
 let typeScriptOutputUnwatchCallbacks: Array<() => void> = []
 let typeScriptSourceUnwatchCallbacks: Array<() => void> = []
 
@@ -192,6 +198,13 @@ const clearTypeScriptOutputWatchers = () => {
 	typeScriptOutputUnwatchCallbacks = []
 }
 
+const clearSharedSourceWatchers = () => {
+	for (const unwatch of sharedSourceUnwatchCallbacks) {
+		unwatch()
+	}
+	sharedSourceUnwatchCallbacks = []
+}
+
 const clearTypeScriptSourceWatchers = () => {
 	for (const unwatch of typeScriptSourceUnwatchCallbacks) {
 		unwatch()
@@ -231,6 +244,24 @@ const watchDirectoryForTypeScriptSources = (directoryPath: string, refreshWatche
 	})
 }
 
+const watchDirectoryForSharedSources = (directoryPath: string, refreshWatchers: () => void) => {
+	let debounceTimeout: NodeJS.Timeout | undefined
+	const watcher = fs.watch(directoryPath, (eventType, filename) => {
+		if (eventType !== 'rename') return
+		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
+		debounceTimeout = setTimeout(() => {
+			debounceTimeout = undefined
+			refreshWatchers()
+			const changedPath = typeof filename === 'string' && filename.length > 0 ? path.join(directoryPath, filename) : directoryPath
+			void runSharedBuild(path.relative(UI_ROOT_PATH, changedPath).replaceAll('\\', '/'))
+		}, 120)
+	})
+	sharedSourceUnwatchCallbacks.push(() => {
+		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
+		watcher.close()
+	})
+}
+
 const refreshTypeScriptOutputWatchers = async () => {
 	clearTypeScriptOutputWatchers()
 	const directories = await getAllDirectories(TYPE_SCRIPT_OUTPUT_PATH)
@@ -248,6 +279,28 @@ const refreshTypeScriptOutputWatchers = async () => {
 			},
 			callback => {
 				typeScriptOutputUnwatchCallbacks.push(callback)
+			},
+		)
+	}
+}
+
+const refreshSharedSourceWatchers = async () => {
+	clearSharedSourceWatchers()
+	const directories = await getAllDirectories(SHARED_SOURCE_ROOT_PATH)
+	for (const directoryPath of directories) {
+		watchDirectoryForSharedSources(directoryPath, () => {
+			void refreshSharedSourceWatchers()
+		})
+	}
+	const files = await getAllFiles(SHARED_SOURCE_ROOT_PATH)
+	for (const filePath of files) {
+		watchFileWithCleanup(
+			filePath,
+			relativePath => {
+				void runSharedBuild(relativePath)
+			},
+			callback => {
+				sharedSourceUnwatchCallbacks.push(callback)
 			},
 		)
 	}
@@ -273,6 +326,43 @@ const refreshTypeScriptSourceWatchers = async () => {
 			},
 		)
 	}
+}
+
+const runSharedBuildStep = async (command: string[], cwd: string, label: string) => {
+	try {
+		const [executable, ...args] = command
+		if (executable === undefined) throw new Error(`Missing executable for ${label}`)
+		sharedBuildProcess = spawn(executable, args, {
+			cwd,
+			stdio: 'inherit',
+		})
+	} catch (error) {
+		console.error(`[ui:watch] Failed to start ${label.toLowerCase()}`)
+		console.error(error)
+		await shutdown(1)
+		return false
+	}
+	const childProcess = sharedBuildProcess
+	attachProcessErrorHandler(childProcess, label)
+	let exitCode: number | null
+	let signalCode: NodeJS.Signals | null
+	try {
+		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
+	} catch (error) {
+		console.error(`[ui:watch] ${label} failed to start`)
+		console.error(error)
+		sharedBuildProcess = undefined
+		await shutdown(1)
+		return false
+	}
+	sharedBuildProcess = undefined
+	if (exitCode !== 0) {
+		const failureCode = exitCode ?? 1
+		console.error(`[ui:watch] ${label} failed (${signalCode ?? failureCode})`)
+		await shutdown(failureCode)
+		return false
+	}
+	return true
 }
 
 const restartServer = async (reason: string) => {
@@ -336,6 +426,27 @@ const runVendorBuild = async (reason: string) => {
 	queueLiveReload(reason)
 }
 
+const runSharedBuild = async (reason: string) => {
+	if (shuttingDown) return
+	if (sharedBuildRunning) {
+		sharedBuildQueued = true
+		return
+	}
+	sharedBuildRunning = true
+	console.log(`[ui:watch] Rebuilding shared UI helper assets because ${reason} changed`)
+	const builtSharedOutputs = await runSharedBuildStep(['bun', 'run', 'shared:build'], REPOSITORY_ROOT_PATH, 'Shared TypeScript build')
+	if (!builtSharedOutputs) return
+	const mirroredSharedOutputs = await runSharedBuildStep(['bun', 'run', 'ui:shared'], REPOSITORY_ROOT_PATH, 'Shared UI asset mirror')
+	if (!mirroredSharedOutputs) return
+	sharedBuildRunning = false
+	if (sharedBuildQueued) {
+		sharedBuildQueued = false
+		await runSharedBuild('queued shared input')
+		return
+	}
+	queueLiveReload(reason)
+}
+
 const watchFile = (filePath: string, onChange: (relativePath: string) => void) => {
 	watchFileWithCleanup(filePath, onChange, callback => {
 		unwatchCallbacks.push(callback)
@@ -348,8 +459,10 @@ const shutdown = async (exitCode: number) => {
 	for (const unwatch of unwatchCallbacks) {
 		unwatch()
 	}
+	clearSharedSourceWatchers()
 	clearTypeScriptOutputWatchers()
 	clearTypeScriptSourceWatchers()
+	await stopProcess(sharedBuildProcess)
 	await stopProcess(vendorBuildProcess)
 	await stopProcess(serverProcess)
 	await stopProcess(typeScriptWatchProcess)
@@ -399,6 +512,16 @@ const main = () => {
 
 	void refreshTypeScriptOutputWatchers().catch(error => {
 		console.error('[ui:watch] Failed to watch TypeScript output files')
+		console.error(error)
+		void shutdown(1)
+	})
+
+	watchFile(SHARED_TSCONFIG_PATH, relativePath => {
+		void runSharedBuild(relativePath)
+	})
+
+	void refreshSharedSourceWatchers().catch(error => {
+		console.error('[ui:watch] Failed to watch shared TypeScript source files')
 		console.error(error)
 		void shutdown(1)
 	})
