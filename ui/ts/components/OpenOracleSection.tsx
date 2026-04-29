@@ -2,7 +2,6 @@ import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
-import { ApprovedAmountValue } from './ApprovedAmountValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
@@ -92,7 +91,7 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 	)
 }
 
-function renderSelectedReportActionSection(
+export function renderSelectedReportActionSection(
 	actionMode: OpenOracleSelectedReportActionMode,
 	isConnected: boolean,
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction'],
@@ -136,38 +135,6 @@ function renderSelectedReportActionSection(
 							</div>
 						</div>
 						<p className='detail'>Price source: {showQuoteLoadingPlaceholder ? <strong>Loading...</strong> : renderInitialPriceSourceLabel(initialReportSubmission.priceSource, initialReportSubmission.priceSourceUrl)}</p>
-						<div className='question-summary-grid'>
-							<MetricField label={`Required ${token1Symbol}`}>
-								<CurrencyValue value={initialReportSubmission.amount1} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
-							</MetricField>
-							<MetricField label={`Required ${token2Symbol}`}>
-								<CurrencyValue value={initialReportSubmission.amount2} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
-							</MetricField>
-							<MetricField label={`Wallet ${token1Symbol}`}>
-								<CurrencyValue
-									loading={openOracleInitialReportState.tokenAccessLoadingInitial && openOracleInitialReportState.token1Balance === undefined && openOracleInitialReportState.token1BalanceError === undefined}
-									value={openOracleInitialReportState.token1Balance}
-									units={initialReportSubmission.token1Decimals ?? 18}
-									suffix={token1Symbol}
-									copyable={false}
-								/>
-							</MetricField>
-							<MetricField label={`Wallet ${token2Symbol}`}>
-								<CurrencyValue
-									loading={openOracleInitialReportState.tokenAccessLoadingInitial && openOracleInitialReportState.token2Balance === undefined && openOracleInitialReportState.token2BalanceError === undefined}
-									value={openOracleInitialReportState.token2Balance}
-									units={initialReportSubmission.token2Decimals ?? 18}
-									suffix={token2Symbol}
-									copyable={false}
-								/>
-							</MetricField>
-							<MetricField label={`Approved ${token1Symbol}`}>
-								<ApprovedAmountValue loading={openOracleInitialReportState.token1Approval.loading} value={initialReportSubmission.token1Approval.approvedAmount} units={initialReportSubmission.token1Decimals ?? 18} suffix={token1Symbol} copyable={false} />
-							</MetricField>
-							<MetricField label={`Approved ${token2Symbol}`}>
-								<ApprovedAmountValue loading={openOracleInitialReportState.token2Approval.loading} value={initialReportSubmission.token2Approval.approvedAmount} units={initialReportSubmission.token2Decimals ?? 18} suffix={token2Symbol} copyable={false} />
-							</MetricField>
-						</div>
 						{!initialReportSubmission.hasWethWrapAction ? undefined : (
 							<div className='entity-card-subsection'>
 								{initialReportSubmission.requiredWethWrapAmount === undefined || initialReportSubmission.requiredWethWrapAmount <= 0n ? undefined : (
