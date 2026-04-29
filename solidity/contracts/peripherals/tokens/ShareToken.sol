@@ -147,13 +147,13 @@ contract ShareToken is ERC1155, IShareToken {
 		_burn(msg.sender, fromId, fromIdBalance);
 
 		(, uint256 questionId, , , ) = zoltar.universes(universeId);
-		for (uint256 i = 0; i < targetOutcomeIndexes.length; i++) {
+		uint256 targetOutcomeIndexesLength = targetOutcomeIndexes.length;
+		uint256 previousOutcomeIndex;
+		for (uint256 i = 0; i < targetOutcomeIndexesLength; i++) {
 			uint256 outcomeIndex = targetOutcomeIndexes[i];
 			require(!zoltar.zoltarQuestionData().isMalformedAnswerOption(questionId, outcomeIndex), 'Malformed');
-
-			for (uint256 j = 0; j < i; j++) {
-				require(targetOutcomeIndexes[j] != outcomeIndex, 'Duplicate target outcome');
-			}
+			if (i > 0) require(outcomeIndex > previousOutcomeIndex, 'Target outcomes must be strictly increasing');
+			previousOutcomeIndex = outcomeIndex;
 
 			uint256 toId = getChildId(fromId, getChildUniverseId(universeId, outcomeIndex));
 			_mint(msg.sender, toId, fromIdBalance);

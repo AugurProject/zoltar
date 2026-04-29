@@ -2330,6 +2330,7 @@ export async function redeemSharesInSecurityPool(client: WriteClient, securityPo
 }
 
 export async function migrateSharesFromUniverse(client: WriteClient, securityPoolAddress: Address, shareOutcome: ReportingOutcomeKey, targetOutcomeIndexes: bigint[]) {
+	const sortedTargetOutcomeIndexes = [...targetOutcomeIndexes].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
 	const [universeId, shareTokenAddress] = await Promise.all([
 		readSecurityPoolUniverseId(client, securityPoolAddress),
 		client.readContract({
@@ -2343,14 +2344,14 @@ export async function migrateSharesFromUniverse(client: WriteClient, securityPoo
 		address: shareTokenAddress,
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'migrate',
-		args: [getShareTokenId(universeId, shareOutcome), targetOutcomeIndexes],
+		args: [getShareTokenId(universeId, shareOutcome), sortedTargetOutcomeIndexes],
 	}))
 	return {
 		action: 'migrateShares',
 		hash,
 		securityPoolAddress,
 		shareOutcome,
-		targetOutcomeIndexes,
+		targetOutcomeIndexes: sortedTargetOutcomeIndexes,
 		universeId,
 	} satisfies TradingActionResult
 }

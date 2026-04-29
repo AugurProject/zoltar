@@ -942,11 +942,12 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const lowScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 3n)
 		const highScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 7n)
+		const sortedScalarOutcomes = [lowScalarOutcome, highScalarOutcome].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
 		const holderAddress = addressString(TEST_ADDRESSES[2])
 		const parentBalancesBeforeMigration = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
 		const parentYesBalance = ensureDefined(parentBalancesBeforeMigration[1], 'parent yes balance is undefined')
 
-		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [lowScalarOutcome, highScalarOutcome])
+		await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, sortedScalarOutcomes)
 
 		const parentBalancesAfterMigration = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
 		strictEqualTypeSafe(parentBalancesAfterMigration[1], 0n, 'parent yes shares should be burned after migration')
@@ -964,7 +965,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(highScalarBalances[2], 0n, 'no shares should stay at zero in the high scalar child universe')
 	})
 
-	test('rejects malformed and duplicate share migration target outcomes', async () => {
+	test('rejects malformed, duplicate, and unsorted share migration target outcomes', async () => {
 		const openInterestAmount = 5n * 10n ** 18n
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		const scalarForkQuestion = {
@@ -986,12 +987,16 @@ describe('Peripherals Contract Test Suite', () => {
 		await forkUniverse(client, genesisUniverse, scalarQuestionId)
 
 		const holderAddress = addressString(TEST_ADDRESSES[2])
+		const lowScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 3n)
 		const validScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 5n)
+		const highScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 7n)
+		const sortedScalarOutcomes = [lowScalarOutcome, highScalarOutcome].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
 		const parentBalancesBeforeFailedMigrations = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
 		const parentYesBalance = ensureDefined(parentBalancesBeforeFailedMigrations[1], 'parent yes balance is undefined')
 
 		await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [5n]), /Malformed/)
-		await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [validScalarOutcome, validScalarOutcome]), /Duplicate target outcome/)
+		await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [validScalarOutcome, validScalarOutcome]), /Target outcomes must be strictly increasing/)
+		await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [...sortedScalarOutcomes].reverse()), /Target outcomes must be strictly increasing/)
 
 		const parentBalancesAfterFailedMigrations = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
 		strictEqualTypeSafe(parentBalancesAfterFailedMigrations[1], parentYesBalance, 'failed migrations should preserve the parent yes share balance')
