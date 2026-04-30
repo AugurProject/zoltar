@@ -6,14 +6,18 @@ import { createOpenOracleReportInstance, getOpenOracleAddress, loadErc20Balance,
 import {
 	addOpenOracleBountyBuffer,
 	deriveOpenOracleInitialReportSubmissionDetails,
+	formatOpenOracleDisputeWriteErrorMessage,
 	formatOpenOracleFeePercentage,
 	formatOpenOracleInitialReportApprovalStatusUnavailableMessage,
 	formatOpenOracleInitialReportBalanceStatusUnavailableMessage,
 	formatOpenOracleInitialReportPriceUnavailableMessage,
 	formatOpenOracleInitialReportWriteErrorMessage,
 	formatOpenOracleMultiplier,
+	formatOpenOracleSettleWriteErrorMessage,
+	getOpenOracleDisputeAvailability,
 	getOpenOracleReportStatus,
 	getOpenOracleSelectedReportActionMode,
+	getOpenOracleSettleAvailability,
 	loadOpenOracleInitialReportPrice,
 	loadOpenOracleInitialReportPriceResult,
 } from '../lib/openOracle.js'
@@ -95,6 +99,31 @@ function createInitialReportSubmissionPreview(overrides: Partial<Parameters<type
 		walletEthBalance: 10n,
 		...overrides,
 	})
+}
+
+function createOpenOracleLifecycleReport(
+	overrides: Partial<{
+		currentBlockNumber: bigint
+		currentReporter: Address
+		currentTime: bigint
+		disputeDelay: bigint
+		isDistributed: boolean
+		reportTimestamp: bigint
+		settlementTime: bigint
+		timeType: boolean
+	}> = {},
+) {
+	return {
+		currentBlockNumber: 0n,
+		currentReporter: getAddress(addressString(TEST_ADDRESSES[1])),
+		currentTime: 0n,
+		disputeDelay: 10n,
+		isDistributed: false,
+		reportTimestamp: 100n,
+		settlementTime: 60n,
+		timeType: true,
+		...overrides,
+	}
 }
 
 describe('Open Oracle helpers', () => {
@@ -702,6 +731,102 @@ describe('Open Oracle helpers', () => {
 		expect(getOpenOracleSelectedReportActionMode({ currentReporter: reporter, disputeOccurred: false, isDistributed: false, reportTimestamp: 1n })).toBe('dispute')
 		expect(getOpenOracleSelectedReportActionMode({ currentReporter: reporter, disputeOccurred: true, isDistributed: false, reportTimestamp: 1n })).toBe('dispute')
 		expect(getOpenOracleSelectedReportActionMode({ currentReporter: reporter, disputeOccurred: false, isDistributed: true, reportTimestamp: 1n })).toBe('read-only')
+	})
+
+	test('dispute and settle availability follow time-based report lifecycle', () => {
+		const beforeDisputeDelay = createOpenOracleLifecycleReport({ currentTime: 109n })
+		expect(getOpenOracleDisputeAvailability(beforeDisputeDelay)).toEqual({
+			canAct: false,
+			message: 'This report is not ready to dispute yet.',
+		})
+		expect(getOpenOracleSettleAvailability(beforeDisputeDelay)).toEqual({
+			canAct: false,
+			message: 'This report is not ready to settle yet.',
+		})
+
+		const insideDisputeWindow = createOpenOracleLifecycleReport({ currentTime: 110n })
+		expect(getOpenOracleDisputeAvailability(insideDisputeWindow)).toEqual({
+			canAct: true,
+			message: undefined,
+		})
+		expect(getOpenOracleSettleAvailability(insideDisputeWindow)).toEqual({
+			canAct: false,
+			message: 'This report is not ready to settle yet.',
+		})
+
+		const exactSettlementBoundary = createOpenOracleLifecycleReport({ currentTime: 160n })
+		expect(getOpenOracleDisputeAvailability(exactSettlementBoundary)).toEqual({
+			canAct: true,
+			message: undefined,
+		})
+		expect(getOpenOracleSettleAvailability(exactSettlementBoundary)).toEqual({
+			canAct: true,
+			message: undefined,
+		})
+
+		const afterSettlementWindow = createOpenOracleLifecycleReport({ currentTime: 161n })
+		expect(getOpenOracleDisputeAvailability(afterSettlementWindow)).toEqual({
+			canAct: false,
+			message: 'Dispute window closed. Settle Report instead.',
+		})
+		expect(getOpenOracleSettleAvailability(afterSettlementWindow)).toEqual({
+			canAct: true,
+			message: undefined,
+		})
+	})
+
+	test('dispute and settle availability use current block number for block-based reports', () => {
+		const blockBasedReport = createOpenOracleLifecycleReport({
+			currentBlockNumber: 111n,
+			currentTime: 1n,
+			timeType: false,
+		})
+
+		expect(getOpenOracleDisputeAvailability(blockBasedReport)).toEqual({
+			canAct: true,
+			message: undefined,
+		})
+		expect(getOpenOracleSettleAvailability(blockBasedReport)).toEqual({
+			canAct: false,
+			message: 'This report is not ready to settle yet.',
+		})
+	})
+
+	test('dispute and settle availability block reports without an initial report or already-settled reports', () => {
+		const noInitialReport = createOpenOracleLifecycleReport({
+			currentReporter: zeroAddress,
+			reportTimestamp: 0n,
+		})
+		expect(getOpenOracleDisputeAvailability(noInitialReport)).toEqual({
+			canAct: false,
+			message: 'Submit an initial report before disputing this report.',
+		})
+		expect(getOpenOracleSettleAvailability(noInitialReport)).toEqual({
+			canAct: false,
+			message: 'Submit an initial report before settling this report.',
+		})
+
+		const settledReport = createOpenOracleLifecycleReport({
+			currentTime: 200n,
+			isDistributed: true,
+		})
+		expect(getOpenOracleDisputeAvailability(settledReport)).toEqual({
+			canAct: false,
+			message: 'This report is already settled.',
+		})
+		expect(getOpenOracleSettleAvailability(settledReport)).toEqual({
+			canAct: false,
+			message: 'This report is already settled.',
+		})
+	})
+
+	test('maps dispute and settle write failures into friendly guidance', () => {
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x98bdb2e0'))).toBe('This report requires a higher settlement gas limit because it executes a callback on settlement. Retry with the updated UI.')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement'))).toBe('This report is not ready to settle yet.')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: no initial report'))).toBe('Submit an initial report before settling this report.')
+		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute too early'))).toBe('This report is not ready to dispute yet.')
+		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute period expired'))).toBe('Dispute window closed. Settle Report instead.')
+		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: report settled'))).toBe('This report is already settled.')
 	})
 
 	test('loadOracleManagerDetails reflects initial manager state after deployment', async () => {

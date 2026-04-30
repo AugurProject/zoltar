@@ -139,6 +139,10 @@ function hasTimestamp(value: unknown): value is { timestamp: bigint } {
 	return isObjectRecord(value) && typeof value['timestamp'] === 'bigint'
 }
 
+function hasTimestampAndNumber(value: unknown): value is { timestamp: bigint; number: bigint } {
+	return isObjectRecord(value) && typeof value['timestamp'] === 'bigint' && typeof value['number'] === 'bigint'
+}
+
 type SecurityPoolDeploymentQueryResult = {
 	completeSetCollateralAmount: bigint
 	currentRetentionRate: bigint
@@ -393,6 +397,7 @@ type ContractRevertReasonParams = {
 	address: Address
 	args?: readonly unknown[]
 	functionName: string
+	gas?: bigint
 	value?: bigint
 }
 
@@ -407,6 +412,7 @@ async function getContractRevertReason<TCallParams extends ContractRevertReasonP
 		await client.call({
 			account,
 			data,
+			gas: params.gas,
 			to: params.address,
 			value: params.value,
 		})
@@ -441,6 +447,7 @@ async function writeContractAndWait<TCallParams extends ContractRevertReasonPara
 		hash = await client.sendTransaction({
 			account,
 			data,
+			gas: callParams.gas,
 			to: callParams.address,
 			value: callParams.value,
 		})
@@ -1501,29 +1508,33 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 }
 
 export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('./types/contracts.js').OpenOracleReportDetails> {
-	const [meta, status, extra] = await readRequiredMulticall(client, [
-		{
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-			functionName: 'reportMeta',
-			address: openOracleAddress,
-			args: [reportId],
-		},
-		{
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-			functionName: 'reportStatus',
-			address: openOracleAddress,
-			args: [reportId],
-		},
-		{
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-			functionName: 'extraData',
-			address: openOracleAddress,
-			args: [reportId],
-		},
+	const [[meta, status, extra], block] = await Promise.all([
+		readRequiredMulticall(client, [
+			{
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'reportMeta',
+				address: openOracleAddress,
+				args: [reportId],
+			},
+			{
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'reportStatus',
+				address: openOracleAddress,
+				args: [reportId],
+			},
+			{
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'extraData',
+				address: openOracleAddress,
+				args: [reportId],
+			},
+		]),
+		client.getBlock(),
 	])
 	const reportMeta = meta as OpenOracleReportMetaTuple
 	const reportStatus = status as OpenOracleReportStatusTuple
 	const reportExtra = extra as OpenOracleExtraDataTuple
+	if (!hasTimestampAndNumber(block)) throw new Error('Unexpected block response')
 	if (reportMeta[4] === zeroAddress) throw new Error(`Oracle report #${reportId.toString()} does not exist`)
 	const [token1Decimals, token2Decimals, token1Symbol, token2Symbol] = await readRequiredMulticall(client, [
 		{
@@ -1555,6 +1566,8 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 	return {
 		reportId,
 		openOracleAddress,
+		currentTime: block.timestamp,
+		currentBlockNumber: block.number,
 		exactToken1Report: reportMeta[0],
 		escalationHalt: reportMeta[1],
 		fee: reportMeta[2],
@@ -1827,6 +1840,7 @@ export async function settleOracleReport(client: WriteClient, openOracleAddress:
 		address: openOracleAddress,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
+		gas: 5_000_000n,
 		args: [reportId],
 	}))
 	return {

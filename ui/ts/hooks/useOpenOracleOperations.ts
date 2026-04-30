@@ -7,7 +7,17 @@ import { ABIS } from '../abis.js'
 import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, loadOpenOracleReportDetails, readOptionalMulticall, settleOracleReport, submitInitialOracleReport, wrapWeth } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOracleInitialReportWriteErrorMessage, formatOpenOraclePriceInput, getOpenOracleSelectedReportActionMode, loadOpenOracleInitialReportPriceResult } from '../lib/openOracle.js'
+import {
+	deriveOpenOracleInitialReportSubmissionDetails,
+	formatOpenOracleDisputeWriteErrorMessage,
+	formatOpenOracleInitialReportWriteErrorMessage,
+	formatOpenOraclePriceInput,
+	formatOpenOracleSettleWriteErrorMessage,
+	getOpenOracleDisputeAvailability,
+	getOpenOracleSelectedReportActionMode,
+	getOpenOracleSettleAvailability,
+	loadOpenOracleInitialReportPriceResult,
+} from '../lib/openOracle.js'
 import { parseAddressInput, parseBytes32Input, parseReportIdInput } from '../lib/inputs.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState, parseBigIntInput } from '../lib/marketForm.js'
 import { requireDefined } from '../lib/required.js'
@@ -544,13 +554,31 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 			{ refreshInitialReportTokenAccessOnSuccess: true },
 		)
 
-	const settleReport = async () => await runOracleAction('settle', async walletAddress => await settleOracleReport(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), getOpenOracleAddress(), parseReportIdInput(openOracleForm.value.reportId)), 'Failed to settle report')
+	const settleReport = async () =>
+		await runOracleAction(
+			'settle',
+			async walletAddress => {
+				const { details } = await ensureLoadedSelectedReport({ forceReload: true })
+				const settleAvailability = getOpenOracleSettleAvailability(details)
+				if (!settleAvailability.canAct) {
+					throw new Error(settleAvailability.message ?? 'This report is not ready to settle yet.')
+				}
+
+				return await settleOracleReport(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), getOpenOracleAddress(), details.reportId)
+			},
+			'Failed to settle report',
+			{ formatErrorMessage: formatOpenOracleSettleWriteErrorMessage },
+		)
 
 	const disputeReport = async () =>
 		await runOracleAction(
 			'dispute',
 			async walletAddress => {
-				const { details } = await ensureLoadedSelectedReport()
+				const { details } = await ensureLoadedSelectedReport({ forceReload: true })
+				const disputeAvailability = getOpenOracleDisputeAvailability(details)
+				if (!disputeAvailability.canAct) {
+					throw new Error(disputeAvailability.message ?? 'This report is not ready to dispute yet.')
+				}
 				const form = openOracleForm.value
 				const tokenToSwap = form.disputeTokenToSwap === 'token1' ? details.token1 : details.token2
 				return await disputeOracleReport(
@@ -565,6 +593,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				)
 			},
 			'Failed to dispute report',
+			{ formatErrorMessage: formatOpenOracleDisputeWriteErrorMessage },
 		)
 
 	useEffect(() => {
@@ -575,6 +604,41 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		void refreshOpenOracleInitialReportQuote(openOracleReportDetails.value)
 		void refreshOpenOracleInitialReportTokenAccess(openOracleReportDetails.value)
 	}, [accountAddress, openOracleReportDetails.value?.reportId, openOracleReportDetails.value?.token1, openOracleReportDetails.value?.token2, openOracleReportDetails.value?.exactToken1Report])
+
+	useEffect(() => {
+		const loadedReport = openOracleReportDetails.value
+		if (loadedReport === undefined) return
+
+		let cancelled = false
+		const trackedReportId = loadedReport.reportId
+		const refreshChainClock = async () => {
+			try {
+				const block = await createConnectedReadClient().getBlock()
+				if (cancelled || typeof block.timestamp !== 'bigint' || typeof block.number !== 'bigint') return
+
+				const currentReport = openOracleReportDetails.value
+				if (currentReport === undefined || currentReport.reportId !== trackedReportId) return
+
+				openOracleReportDetails.value = {
+					...currentReport,
+					currentTime: block.timestamp,
+					currentBlockNumber: block.number,
+				}
+			} catch {
+				return
+			}
+		}
+
+		void refreshChainClock()
+		const intervalId = window.setInterval(() => {
+			void refreshChainClock()
+		}, 1000)
+
+		return () => {
+			cancelled = true
+			window.clearInterval(intervalId)
+		}
+	}, [openOracleReportDetails.value?.reportId])
 
 	return {
 		approveToken1,

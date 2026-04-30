@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from 'viem'
+import { getAddress, zeroAddress } from 'viem'
 import { ErrorNotice } from '../components/ErrorNotice.js'
 import { MetricField } from '../components/MetricField.js'
 import { renderSelectedReportActionSection } from '../components/OpenOracleSection.js'
@@ -106,9 +106,11 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		callbackContract: zeroAddress,
 		callbackGasLimit: 0,
 		callbackSelector: '0x00000000',
+		currentBlockNumber: 0n,
 		currentAmount1: 0n,
 		currentAmount2: 0n,
 		currentReporter: zeroAddress,
+		currentTime: 0n,
 		disputeDelay: 3600n,
 		disputeOccurred: false,
 		escalationHalt: 5n * 10n ** 17n,
@@ -231,6 +233,59 @@ function renderInitialReportActionSection({
 	)
 }
 
+function renderDisputeActionSection({
+	accountState = createAccountState(),
+	openOracleForm = createOpenOracleForm(),
+	openOracleReportDetails = createOpenOracleReportDetails({
+		currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+		reportTimestamp: 100n,
+	}),
+}: {
+	accountState?: AccountState
+	openOracleForm?: OpenOracleFormState
+	openOracleReportDetails?: OpenOracleReportDetails
+} = {}) {
+	return renderSelectedReportActionSection(
+		'dispute',
+		accountState.address !== undefined,
+		undefined,
+		openOracleForm,
+		deriveOpenOracleInitialReportSubmissionDetails({
+			approvedToken1Amount: 0n,
+			approvedToken2Amount: 0n,
+			defaultPrice: undefined,
+			defaultPriceError: undefined,
+			defaultPriceSource: undefined,
+			defaultPriceSourceUrl: undefined,
+			priceInput: '',
+			quoteAttemptedSources: undefined,
+			quoteFailureReason: undefined,
+			reportDetails: undefined,
+			token1AllowanceError: undefined,
+			token1Balance: undefined,
+			token1BalanceError: undefined,
+			token1Decimals: openOracleReportDetails.token1Decimals,
+			token2AllowanceError: undefined,
+			token2Balance: undefined,
+			token2BalanceError: undefined,
+			token2Decimals: openOracleReportDetails.token2Decimals,
+			walletEthBalance: undefined,
+		}),
+		createOpenOracleInitialReportState(),
+		openOracleReportDetails.token1Symbol,
+		openOracleReportDetails.token2Symbol,
+		() => undefined,
+		() => undefined,
+		() => undefined,
+		() => undefined,
+		() => undefined,
+		() => undefined,
+		() => undefined,
+		() => undefined,
+		openOracleReportDetails,
+	)
+}
+
 void describe('OpenOracleSection', () => {
 	void test('removes the redundant wallet metric row from the selected initial report action', () => {
 		const section = renderInitialReportActionSection()
@@ -270,5 +325,50 @@ void describe('OpenOracleSection', () => {
 
 		expect(getTextContent(section)).toContain('WETH approval required')
 		expect(hasVNodeType(section, ErrorNotice)).toBe(false)
+	})
+
+	void test('disables dispute after settlement time elapses and guides the user to settle', () => {
+		const section = renderDisputeActionSection({
+			openOracleReportDetails: createOpenOracleReportDetails({
+				currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+				currentTime: 161n,
+				disputeDelay: 10n,
+				reportTimestamp: 100n,
+				settlementTime: 60n,
+			}),
+		})
+
+		const disputeButton = findButton(section, 'Dispute & Swap')
+		const settleButton = findButton(section, 'Settle Report')
+		if (disputeButton === undefined || settleButton === undefined) {
+			throw new Error('Expected dispute action buttons to render')
+		}
+
+		expect(disputeButton.props['disabled']).toBe(true)
+		expect(settleButton.props['disabled']).toBe(false)
+		expect(getTextContent(section)).toContain('Dispute window closed. Settle Report instead.')
+	})
+
+	void test('disables dispute before dispute delay and disables settle before settlement time', () => {
+		const section = renderDisputeActionSection({
+			openOracleReportDetails: createOpenOracleReportDetails({
+				currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+				currentTime: 109n,
+				disputeDelay: 10n,
+				reportTimestamp: 100n,
+				settlementTime: 60n,
+			}),
+		})
+
+		const disputeButton = findButton(section, 'Dispute & Swap')
+		const settleButton = findButton(section, 'Settle Report')
+		if (disputeButton === undefined || settleButton === undefined) {
+			throw new Error('Expected dispute action buttons to render')
+		}
+
+		expect(disputeButton.props['disabled']).toBe(true)
+		expect(settleButton.props['disabled']).toBe(true)
+		expect(getTextContent(section)).toContain('This report is not ready to dispute yet.')
+		expect(getTextContent(section)).toContain('This report is not ready to settle yet.')
 	})
 })

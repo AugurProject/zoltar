@@ -1,5 +1,5 @@
 import { zeroAddress, type Address } from 'viem'
-import type { OpenOracleReportSummary } from '../types/contracts.js'
+import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../types/contracts.js'
 import { parseDecimalInput } from './decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from './errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from './formatters.js'
@@ -18,6 +18,11 @@ export type OpenOracleInitialReportQuoteFailureKind = 'unsupported-pair' | 'quot
 type OpenOracleGateMessage = {
 	kind: 'hidden-loading' | 'visible'
 	message: string
+}
+
+type OpenOracleReportActionAvailability = {
+	canAct: boolean
+	message: string | undefined
 }
 
 type OpenOracleInitialReportPriceLoadResult =
@@ -113,6 +118,70 @@ export function formatOpenOracleInitialReportWriteErrorMessage(error: unknown, f
 	return `Transaction failed while submitting the initial report. Reason: ${detail}`
 }
 
+export function formatOpenOracleSettleWriteErrorMessage(error: unknown, fallbackMessage = 'Failed to settle report') {
+	const genericMessage = formatWriteErrorMessage(error, fallbackMessage)
+	if (genericMessage === 'Action canceled in wallet.') {
+		return genericMessage
+	}
+
+	const detail = getErrorDetail(error, fallbackMessage)
+	const normalizedDetail = detail?.toLowerCase()
+	if (normalizedDetail === undefined) {
+		return 'Transaction failed while settling the report. Reload the report and try again.'
+	}
+
+	if (genericMessage === detail) {
+		return detail
+	}
+
+	if (normalizedDetail.includes('0x98bdb2e0') || normalizedDetail.includes('invalidgaslimit') || normalizedDetail.includes('invalid gas limit')) {
+		return 'This report requires a higher settlement gas limit because it executes a callback on settlement. Retry with the updated UI.'
+	}
+	if (normalizedDetail.includes('settlement')) {
+		return 'This report is not ready to settle yet.'
+	}
+	if (normalizedDetail.includes('report settled')) {
+		return 'This report is already settled.'
+	}
+	if (normalizedDetail.includes('no initial report')) {
+		return 'Submit an initial report before settling this report.'
+	}
+
+	return `Transaction failed while settling the report. Reason: ${detail}`
+}
+
+export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbackMessage = 'Failed to dispute report') {
+	const genericMessage = formatWriteErrorMessage(error, fallbackMessage)
+	if (genericMessage === 'Action canceled in wallet.') {
+		return genericMessage
+	}
+
+	const detail = getErrorDetail(error, fallbackMessage)
+	const normalizedDetail = detail?.toLowerCase()
+	if (normalizedDetail === undefined) {
+		return 'Transaction failed while disputing the report. Reload the report and try again.'
+	}
+
+	if (genericMessage === detail) {
+		return detail
+	}
+
+	if (normalizedDetail.includes('dispute too early')) {
+		return 'This report is not ready to dispute yet.'
+	}
+	if (normalizedDetail.includes('dispute period expired')) {
+		return 'Dispute window closed. Settle Report instead.'
+	}
+	if (normalizedDetail.includes('report settled')) {
+		return 'This report is already settled.'
+	}
+	if (normalizedDetail.includes('no report to dispute')) {
+		return 'Submit an initial report before disputing this report.'
+	}
+
+	return `Transaction failed while disputing the report. Reason: ${detail}`
+}
+
 function createHiddenLoadingGateMessage(message: string): OpenOracleGateMessage {
 	return { kind: 'hidden-loading', message }
 }
@@ -164,6 +233,81 @@ export function getOpenOracleSelectedReportActionMode(report: Pick<OpenOracleRep
 			return 'dispute'
 		case 'Settled':
 			return 'read-only'
+	}
+}
+
+function hasOpenOracleInitialReport(report: Pick<OpenOracleReportDetails, 'currentReporter' | 'reportTimestamp'>) {
+	return report.reportTimestamp !== 0n && report.currentReporter !== zeroAddress
+}
+
+function getOpenOracleLifecycleClockValue(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentTime' | 'timeType'>) {
+	return report.timeType ? report.currentTime : report.currentBlockNumber
+}
+
+export function getOpenOracleDisputeAvailability(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>): OpenOracleReportActionAvailability {
+	if (!hasOpenOracleInitialReport(report)) {
+		return {
+			canAct: false,
+			message: 'Submit an initial report before disputing this report.',
+		}
+	}
+	if (report.isDistributed) {
+		return {
+			canAct: false,
+			message: 'This report is already settled.',
+		}
+	}
+
+	const currentClock = getOpenOracleLifecycleClockValue(report)
+	const disputeStart = report.reportTimestamp + report.disputeDelay
+	const settlementStart = report.reportTimestamp + report.settlementTime
+
+	if (currentClock < disputeStart) {
+		return {
+			canAct: false,
+			message: 'This report is not ready to dispute yet.',
+		}
+	}
+	if (currentClock > settlementStart) {
+		return {
+			canAct: false,
+			message: 'Dispute window closed. Settle Report instead.',
+		}
+	}
+
+	return {
+		canAct: true,
+		message: undefined,
+	}
+}
+
+export function getOpenOracleSettleAvailability(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>): OpenOracleReportActionAvailability {
+	if (!hasOpenOracleInitialReport(report)) {
+		return {
+			canAct: false,
+			message: 'Submit an initial report before settling this report.',
+		}
+	}
+	if (report.isDistributed) {
+		return {
+			canAct: false,
+			message: 'This report is already settled.',
+		}
+	}
+
+	const currentClock = getOpenOracleLifecycleClockValue(report)
+	const settlementStart = report.reportTimestamp + report.settlementTime
+
+	if (currentClock < settlementStart) {
+		return {
+			canAct: false,
+			message: 'This report is not ready to settle yet.',
+		}
+	}
+
+	return {
+		canAct: true,
+		message: undefined,
 	}
 }
 
