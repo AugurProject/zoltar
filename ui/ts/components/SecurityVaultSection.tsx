@@ -148,6 +148,7 @@ export function SecurityVaultSection({
 						<CurrencyValue value={securityBondAllowance} suffix='ETH' />
 					</MetricField>
 					<CollateralizationMetricField
+						className='entity-metric'
 						collateralizationPercent={getVaultCollateralizationPercent(securityVaultDetails.repDepositShare, securityBondAllowance, repEthPrice)}
 						repEthSource={repEthSource}
 						repEthSourceUrl={repEthSourceUrl}

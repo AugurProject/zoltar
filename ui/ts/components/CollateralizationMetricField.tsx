@@ -5,6 +5,7 @@ import { getCollateralizationDisplayState, getCollateralizationTone } from '../l
 type UniswapPriceSource = 'v4' | 'v3'
 
 type CollateralizationMetricFieldProps = {
+	className?: string | undefined
 	collateralizationPercent: bigint | undefined
 	repEthSource: UniswapPriceSource | undefined
 	repEthSourceUrl: string | undefined
@@ -22,13 +23,13 @@ function renderSourceLink(source: UniswapPriceSource, sourceUrl: string | undefi
 	)
 }
 
-export function CollateralizationMetricField({ collateralizationPercent, repEthSource, repEthSourceUrl, securityBondAllowance, securityMultiplier }: CollateralizationMetricFieldProps) {
+export function CollateralizationMetricField({ className, collateralizationPercent, repEthSource, repEthSourceUrl, securityBondAllowance, securityMultiplier }: CollateralizationMetricFieldProps) {
 	const displayState = getCollateralizationDisplayState(securityBondAllowance, collateralizationPercent)
 	const tone = displayState === 'noActiveAllowance' ? 'danger' : getCollateralizationTone(collateralizationPercent, securityMultiplier)
 	const valueClassName = tone === 'success' ? 'metric-value-success' : tone === 'danger' ? 'metric-value-danger' : undefined
 
 	return (
-		<MetricField label={<span title='Uses the live Uniswap REP/ETH quote.'>Collateralization {repEthSource === undefined ? undefined : renderSourceLink(repEthSource, repEthSourceUrl)}</span>} valueClassName={valueClassName}>
+		<MetricField className={className} label={<span title='Uses the live Uniswap REP/ETH quote.'>Collateralization {repEthSource === undefined ? undefined : renderSourceLink(repEthSource, repEthSourceUrl)}</span>} valueClassName={valueClassName}>
 			{displayState === 'noActiveAllowance' ? 'No active allowance' : <CurrencyValue value={collateralizationPercent} suffix='%' copyable={false} />}
 		</MetricField>
 	)
