@@ -71,7 +71,7 @@ describe('token approval helpers', () => {
 				tokenLabel: 'ETH',
 				tokenUnits: 18,
 			}),
-		).toBe('Need 1 more ETH approved before submitting the initial report. Approving will set the allowance to 25 ETH.')
+		).toBe('Need 1 more ETH approved before submitting the initial report.')
 
 		expect(
 			formatTokenApprovalPartialMessage({
@@ -149,7 +149,7 @@ describe('token approval helpers', () => {
 				tokenLabel: 'ETH',
 				tokenUnits: 18,
 			}),
-		).toBe('Need 1 more ETH approved before submitting the initial report. Approving will set the allowance to 25 ETH.')
+		).toBe('Need 1 more ETH approved before submitting the initial report.')
 
 		expect(
 			resolveTokenApprovalStatusMessage({

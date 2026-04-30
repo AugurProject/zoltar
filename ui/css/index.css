@@ -1792,6 +1792,14 @@ button.currency-value.copyable:hover:not(:disabled) {
 	overflow-wrap: anywhere;
 }
 
+strong.metric-value-success {
+	color: var(--success);
+}
+
+strong.metric-value-danger {
+	color: var(--danger);
+}
+
 .entity-card-actions {
 	display: flex;
 	flex-wrap: wrap;

@@ -137,7 +137,7 @@ export function formatTokenApprovalNeededMessage({ actionLabel, requirement, tok
 	if (requirement.neededAmount === undefined || requirement.neededAmount <= 0n) return undefined
 	const targetAmount = requirement.targetAmount ?? requirement.requiredAmount
 	if (targetAmount === undefined) return undefined
-	return `Need ${formatCurrencyBalance(requirement.neededAmount, tokenUnits)} more ${tokenLabel} approved before ${actionLabel}. Approving will set the allowance to ${formatCurrencyBalance(targetAmount, tokenUnits)} ${tokenLabel}.`
+	return `Need ${formatCurrencyBalance(requirement.neededAmount, tokenUnits)} more ${tokenLabel} approved before ${actionLabel}.`
 }
 
 export function formatTokenApprovalPartialMessage({ actionLabel, nextApprovedAmount, requiredAmount, tokenLabel, tokenUnits }: { actionLabel: string; nextApprovedAmount: bigint; requiredAmount: bigint; tokenLabel: string; tokenUnits: number }) {
