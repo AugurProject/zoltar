@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from 'viem'
+import { ErrorNotice } from '../components/ErrorNotice.js'
 import { MetricField } from '../components/MetricField.js'
 import { renderSelectedReportActionSection } from '../components/OpenOracleSection.js'
 import { deriveOpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
@@ -70,6 +71,15 @@ function getButtonLabels(node: unknown) {
 		labels.push(getTextContent(vnode.props['children']).trim())
 	})
 	return labels
+}
+
+function hasVNodeType(node: unknown, type: unknown) {
+	let found = false
+	visitTree(node, vnode => {
+		if (found || vnode.type !== type) return
+		found = true
+	})
+	return found
 }
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
@@ -240,5 +250,25 @@ void describe('OpenOracleSection', () => {
 		expect(buttonLabels.indexOf('Wrap needed ETH to WETH')).toBeLessThan(buttonLabels.indexOf('Submit Initial Report'))
 		expect(wrapButton).toBeDefined()
 		expect(submitButton).toBeDefined()
+	})
+
+	void test('renders approval-required submission messages as normal detail text instead of an error notice', () => {
+		const section = renderInitialReportActionSection({
+			openOracleInitialReportState: createOpenOracleInitialReportState({
+				token1Approval: {
+					error: undefined,
+					loading: false,
+					value: 10n ** 18n,
+				},
+				token2Approval: {
+					error: undefined,
+					loading: false,
+					value: 0n,
+				},
+			}),
+		})
+
+		expect(getTextContent(section)).toContain('WETH approval required')
+		expect(hasVNodeType(section, ErrorNotice)).toBe(false)
 	})
 })

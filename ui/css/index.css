@@ -1781,15 +1781,18 @@ button.currency-value.copyable:hover:not(:disabled) {
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
-.entity-metric strong {
+.entity-metric .metric-field-value {
 	display: block;
 	margin-top: 0.15rem;
+	overflow-wrap: anywhere;
+}
+
+.entity-metric strong.metric-field-value {
 	font-family: "IBM Plex Mono", "Courier New", monospace;
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 	color: var(--value);
-	overflow-wrap: anywhere;
 }
 
 strong.metric-value-success {

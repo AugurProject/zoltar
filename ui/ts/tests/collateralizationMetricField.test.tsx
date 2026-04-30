@@ -22,7 +22,7 @@ describe('CollateralizationMetricField', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('keeps the no-active-allowance selected-vault metric inside the standard card wrapper', async () => {
+	test('renders the no-active-allowance selected-vault metric as normal text inside the standard card wrapper', async () => {
 		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField className='entity-metric' collateralizationPercent={undefined} repEthSource='v3' repEthSourceUrl='https://example.com/uniswap-v3' securityBondAllowance={0n} securityMultiplier={2n} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -31,7 +31,7 @@ describe('CollateralizationMetricField', () => {
 		const metricField = noActiveAllowanceValue.closest('div')
 
 		expect(metricField?.className).toBe('entity-metric')
-		expect(noActiveAllowanceValue.tagName).toBe('STRONG')
-		expect(noActiveAllowanceValue.className).toBe('metric-value-danger')
+		expect(noActiveAllowanceValue.tagName).toBe('SPAN')
+		expect(noActiveAllowanceValue.className).toBe('metric-field-value')
 	})
 })
