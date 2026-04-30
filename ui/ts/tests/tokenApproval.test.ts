@@ -173,6 +173,6 @@ describe('token approval helpers', () => {
 				reason: 'Failed to load token approval: execution reverted',
 				tokenLabel: 'REP',
 			}),
-		).toBe('Unable to verify REP approval before depositing REP. Reason: execution reverted. Retry loading the approval status before continuing.')
+		).toBe('Unable to verify REP approval before depositing REP. Retry loading the approval status before continuing.')
 	})
 })

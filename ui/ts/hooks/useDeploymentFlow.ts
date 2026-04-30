@@ -2,7 +2,7 @@ import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { createWalletWriteClient } from '../lib/clients.js'
 import { findNextDeployableStep, getPrerequisiteLabel } from '../lib/deployment.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { formatWriteErrorMessage } from '../lib/errors.js'
 import { requireWallet } from '../lib/walletGuard.js'
 import type { DeploymentStatus, DeploymentStepId } from '../types/contracts.js'
 
@@ -56,7 +56,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 			onTransaction(hash)
 			setDeploymentStatuses(current => current.map(currentStep => (currentStep.id === step.id ? { ...currentStep, deployed: true } : currentStep)))
 		} catch (error) {
-			errorMessage.value = getErrorMessage(error, `Failed to deploy ${step.label}`)
+			errorMessage.value = formatWriteErrorMessage(error, `Failed to deploy ${step.label}`)
 		} finally {
 			busyStepId.value = undefined
 			onTransactionFinished()

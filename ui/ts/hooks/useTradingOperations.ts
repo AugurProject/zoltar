@@ -4,6 +4,7 @@ import type { Address } from 'viem'
 import { createCompleteSetInSecurityPool, loadTradingDetails as loadTradingDetailsForPool, loadZoltarUniverseSummary, migrateSharesFromUniverse, redeemCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput } from '../lib/inputs.js'
 import { getDefaultTradingFormState, parseTradingAmountInput } from '../lib/marketForm.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
@@ -57,10 +58,10 @@ export function useTradingOperations({ accountAddress, onTransaction, onTransact
 				tradingDetails.value = details
 				tradingForkUniverse.value = forkUniverse
 			},
-			onError: () => {
+			onError: (error: unknown) => {
 				tradingDetails.value = undefined
 				tradingForkUniverse.value = undefined
-				tradingError.value = 'Failed to load trading details.'
+				tradingError.value = getErrorMessage(error, 'Failed to load trading details')
 			},
 		}
 

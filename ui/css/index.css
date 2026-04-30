@@ -490,10 +490,11 @@ button.destructive:hover:not(:disabled) {
 
 .notice.error {
 	margin-bottom: 0;
-	padding: 1rem 1.2rem;
+	padding: 1rem 1.25rem;
 	border: 1px solid var(--danger-border-strong);
 	border-top-color: var(--danger-border-strong);
 	border-bottom-color: var(--danger-border-strong);
+	border-radius: 3px;
 	background: var(--notice-error-gradient);
 	color: var(--danger-text);
 	font-weight: 600;
@@ -502,9 +503,16 @@ button.destructive:hover:not(:disabled) {
 		0 10px 30px rgba(255, 112, 143, 0.08);
 }
 
+.entity-card-body > .notice.error,
+.entity-card-subsection > .notice.error,
+.form-grid > .notice.error,
+.market-column > .notice.error {
+	margin-top: 0.25rem;
+}
+
 .notice.error.closeable {
 	position: relative;
-	padding-right: 4.4rem;
+	padding-right: 4.6rem;
 }
 
 .notice.success {

@@ -4,7 +4,7 @@ import type { Address, Hash } from 'viem'
 import { createZoltarChildUniverse, loadAllZoltarQuestions, loadZoltarQuestionCount, loadZoltarUniverseSummary } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../lib/errors.js'
 import { hasDeployedStep } from '../lib/marketCreation.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { DeploymentStatus, MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
@@ -155,16 +155,28 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 
 		zoltarChildUniverseError.value = undefined
 		try {
-			onTransactionRequested()
-			const universe = await ensureZoltarUniverse()
-			if (!universe.hasForked) {
-				throw new Error('Zoltar needs to fork before child universes can be deployed')
+			let refreshRequired = false
+			try {
+				onTransactionRequested()
+				const universe = await ensureZoltarUniverse()
+				if (!universe.hasForked) {
+					throw new Error('Zoltar needs to fork before child universes can be deployed')
+				}
+				const result = await createZoltarChildUniverse(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), universe.universeId, outcomeIndex)
+				onTransaction(result.hash)
+				refreshRequired = true
+			} catch (error) {
+				zoltarChildUniverseError.value = formatWriteErrorMessage(error, 'Failed to deploy child universe')
+				return
 			}
-			const result = await createZoltarChildUniverse(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), universe.universeId, outcomeIndex)
-			onTransaction(result.hash)
-			await refreshZoltarUniverse()
-		} catch (error) {
-			zoltarChildUniverseError.value = getErrorMessage(error, 'Failed to deploy child universe')
+
+			if (!refreshRequired) return
+
+			try {
+				await refreshZoltarUniverse()
+			} catch (error) {
+				zoltarChildUniverseError.value = formatRefreshErrorMessage(error, 'Child universe transaction succeeded, but refreshing the UI failed')
+			}
 		} finally {
 			onTransactionFinished()
 		}

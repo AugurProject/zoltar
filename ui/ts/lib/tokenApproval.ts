@@ -1,5 +1,6 @@
 import { maxUint256 } from 'viem'
 import { parseDecimalInput } from './decimal.js'
+import { sanitizeErrorDetail } from './errors.js'
 import { formatCurrencyBalance } from './formatters.js'
 
 export const maxUint200 = 2n ** 200n - 1n
@@ -19,17 +20,6 @@ export type TokenApprovalRequirement = {
 }
 
 type ParsedTokenApprovalAmount = { kind: 'custom'; amount: bigint } | { kind: 'default' } | { kind: 'max'; amount: typeof maxUint256 }
-
-function sanitizeApprovalFailureReason(reason: string | undefined) {
-	if (reason === undefined) return undefined
-
-	let sanitized = reason.trim().replace(/\s+/g, ' ')
-	if (sanitized === '') return undefined
-
-	sanitized = sanitized.replace(/^(failed to [^:.]+[:.]\s*)+/i, '')
-	sanitized = sanitized.replace(/\.$/, '')
-	return sanitized === '' ? undefined : sanitized
-}
 
 export function deriveTokenApprovalRequirement(requiredAmount: bigint | undefined, approvedAmount: bigint | undefined): TokenApprovalRequirement {
 	if (requiredAmount === undefined) {
@@ -80,7 +70,7 @@ export function shouldDisplayMaxTokenApprovalAmount(amount: bigint | undefined) 
 
 export function formatTokenApprovalUnavailableMessage({ actionLabel, reason, tokenLabel }: { actionLabel?: string | undefined; reason: string | undefined; tokenLabel: string | undefined }) {
 	const resolvedTokenLabel = tokenLabel?.trim() || 'token'
-	const sanitizedReason = sanitizeApprovalFailureReason(reason)
+	const sanitizedReason = sanitizeErrorDetail(reason)
 	const segments = [`Unable to verify ${resolvedTokenLabel} approval${actionLabel === undefined ? '' : ` before ${actionLabel}`}.`]
 
 	if (sanitizedReason !== undefined) {
