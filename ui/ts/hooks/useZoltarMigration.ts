@@ -4,7 +4,7 @@ import { useFormState } from './useFormState.js'
 import type { Address, Hash } from 'viem'
 import { migrateInternalRepInZoltar, prepareRepForMigrationInZoltar } from '../contracts.js'
 import { createWalletWriteClient } from '../lib/clients.js'
-import { getErrorMessage } from '../lib/errors.js'
+import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../lib/errors.js'
 import { requireWallet } from '../lib/walletGuard.js'
 import { parseBigIntListInput } from '../lib/inputs.js'
 import { getDefaultZoltarMigrationFormState, parseRepAmountInput } from '../lib/marketForm.js'
@@ -88,7 +88,7 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 				zoltarMigrationResult.value = result
 				onTransaction(result.hash)
 			} catch (error) {
-				zoltarMigrationError.value = getErrorMessage(error, errorFallback)
+				zoltarMigrationError.value = formatWriteErrorMessage(error, errorFallback)
 			} finally {
 				zoltarMigrationPending.value = false
 				zoltarMigrationActiveAction.value = undefined
@@ -105,7 +105,7 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 			} catch (error) {
 				console.error('[useZoltarMigration] Refresh after transaction failed')
 				console.error(error)
-				zoltarMigrationError.value = getErrorMessage(error, 'Migration succeeded, but refreshing the UI failed')
+				zoltarMigrationError.value = formatRefreshErrorMessage(error, 'Migration succeeded, but refreshing the UI failed')
 			}
 		},
 		[

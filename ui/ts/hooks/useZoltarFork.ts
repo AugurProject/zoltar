@@ -7,7 +7,7 @@ import { approveErc20, forkZoltarUniverse, getZoltarAddress, readOptionalMultica
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { requireWallet } from '../lib/walletGuard.js'
-import { getErrorDetail, getErrorMessage } from '../lib/errors.js'
+import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } from '../lib/errors.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import { GENESIS_REPUTATION_TOKEN_ADDRESS } from '../lib/universe.js'
@@ -125,9 +125,8 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 					value: approvalResult.result,
 				}
 			} else {
-				const errorDetail = approvalResult === undefined ? undefined : getErrorDetail(approvalResult.error)
 				zoltarForkApproval.value = {
-					error: errorDetail === undefined ? 'Failed to load token approval' : `Failed to load token approval: ${errorDetail}`,
+					error: getErrorMessage(approvalResult?.error, 'Failed to load token approval'),
 					loading: false,
 					value: undefined,
 				}
@@ -165,25 +164,34 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 		zoltarForkResult.value = undefined
 
 		try {
-			onTransactionRequested()
-			const universe = await ensureZoltarUniverse()
-			const questionId = options?.requireQuestionIdInput
-				? parseBigIntInput(zoltarForkQuestionId.value, 'Fork question ID')
-				: (() => {
-						const questionIdString = universe.forkQuestionDetails?.questionId ?? ''
-						if (questionIdString === '') throw new Error('Fork question ID is missing')
-						return BigInt(questionIdString)
-					})()
-			const result = await action(accountAddress, universe, questionId)
-			zoltarForkResult.value = result
-			onTransaction(result.hash)
-			if (refreshAfter) {
-				await refreshState()
-				await refreshZoltarUniverse()
+			let result: ZoltarForkActionResult | undefined
+			try {
+				onTransactionRequested()
+				const universe = await ensureZoltarUniverse()
+				const questionId = options?.requireQuestionIdInput
+					? parseBigIntInput(zoltarForkQuestionId.value, 'Fork question ID')
+					: (() => {
+							const questionIdString = universe.forkQuestionDetails?.questionId ?? ''
+							if (questionIdString === '') throw new Error('Fork question ID is missing')
+							return BigInt(questionIdString)
+						})()
+				result = await action(accountAddress, universe, questionId)
+				zoltarForkResult.value = result
+				onTransaction(result.hash)
+			} catch (error) {
+				zoltarForkError.value = formatWriteErrorMessage(error, errorFallback)
+				return
 			}
-			await loadZoltarForkAccess()
-		} catch (error) {
-			zoltarForkError.value = getErrorMessage(error, errorFallback)
+
+			try {
+				if (refreshAfter) {
+					await refreshState()
+					await refreshZoltarUniverse()
+				}
+				await loadZoltarForkAccess()
+			} catch (error) {
+				zoltarForkError.value = formatRefreshErrorMessage(error, 'Zoltar fork transaction succeeded, but refreshing the UI failed')
+			}
 		} finally {
 			zoltarForkPending.value = false
 			zoltarForkActiveAction.value = undefined

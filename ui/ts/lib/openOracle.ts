@@ -1,7 +1,7 @@
 import { zeroAddress, type Address } from 'viem'
 import type { OpenOracleReportSummary } from '../types/contracts.js'
 import { parseDecimalInput } from './decimal.js'
-import { getErrorDetail, getErrorMessage } from './errors.js'
+import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from './errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from './formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
 import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput, WETH_ADDRESS } from './uniswapQuoter.js'
@@ -67,36 +67,50 @@ function formatOpenOracleInitialReportLifecycleMessage(status: OpenOracleReportS
 }
 
 export function formatOpenOracleInitialReportWriteErrorMessage(error: unknown, fallbackMessage = 'Failed to submit initial report') {
-	const genericMessage = getErrorMessage(error, fallbackMessage)
+	const genericMessage = formatWriteErrorMessage(error, fallbackMessage)
 	if (genericMessage === 'Action canceled in wallet.') {
 		return genericMessage
 	}
 
-	const detail = sanitizeOpenOracleFailureReason(getErrorDetail(error))?.toLowerCase()
-	if (detail === undefined) {
-		return 'Unable to submit the initial report. Reload the report and verify the wallet balances and approvals before trying again.'
+	const detail = getErrorDetail(error, fallbackMessage)
+	const normalizedDetail = detail?.toLowerCase()
+	if (normalizedDetail === undefined) {
+		return 'Transaction failed while submitting the initial report. Reload the report and try again.'
 	}
 
-	if (detail.includes('report submitted')) {
+	if (genericMessage === detail) {
+		return detail
+	}
+
+	if (normalizedDetail.includes('report submitted')) {
 		return 'This report already has an initial report.'
 	}
-	if (detail.includes('report id')) {
+	if (normalizedDetail.includes('report id')) {
 		return 'This report is no longer valid. Reload it before submitting the initial report again.'
 	}
-	if (detail.includes('token1 amount')) {
+	if (normalizedDetail.includes('token1 amount')) {
 		return 'The required token1 amount changed on-chain. Reload the report before submitting the initial report again.'
 	}
-	if (detail.includes('token2 amount')) {
+	if (normalizedDetail.includes('token2 amount')) {
 		return 'The selected price produces an invalid token2 amount for the initial report.'
 	}
-	if (detail.includes('state hash')) {
+	if (normalizedDetail.includes('state hash')) {
 		return 'This report changed on-chain. Reload the report before submitting the initial report again.'
 	}
-	if (detail.includes('allowance') || detail.includes('balance') || detail.includes('transfer amount exceeds') || detail.includes('transferfrom') || detail.includes('transfer from') || detail.includes('erc20insufficientallowance') || detail.includes('erc20insufficientbalance') || detail.includes('safeerc20')) {
-		return 'Wallet balance or token approval changed since the last refresh. Reload the report and verify both token balances and approvals before submitting the initial report again.'
+	if (
+		normalizedDetail.includes('allowance') ||
+		normalizedDetail.includes('balance') ||
+		normalizedDetail.includes('transfer amount exceeds') ||
+		normalizedDetail.includes('transferfrom') ||
+		normalizedDetail.includes('transfer from') ||
+		normalizedDetail.includes('erc20insufficientallowance') ||
+		normalizedDetail.includes('erc20insufficientbalance') ||
+		normalizedDetail.includes('safeerc20')
+	) {
+		return 'Transaction failed while submitting the initial report. Wallet balance or token approval changed since the last refresh. Reload the report and verify both token balances and approvals before submitting the initial report again.'
 	}
 
-	return 'Unable to submit the initial report. Reload the report and verify the wallet balances and approvals before trying again.'
+	return `Transaction failed while submitting the initial report. Reason: ${detail}`
 }
 
 function createHiddenLoadingGateMessage(message: string): OpenOracleGateMessage {
@@ -200,22 +214,6 @@ function isCanonicalMainnetWeth(tokenAddress: string | undefined) {
 	return tokenAddress?.toLowerCase() === WETH_ADDRESS.toLowerCase()
 }
 
-function sanitizeOpenOracleFailureReason(reason: string | undefined) {
-	if (reason === undefined) return undefined
-
-	let sanitized = reason.trim().replace(/\s+/g, ' ')
-	if (sanitized === '' || ((sanitized.startsWith('{') || sanitized.startsWith('[')) && (sanitized.endsWith('}') || sanitized.endsWith(']')))) {
-		return undefined
-	}
-
-	sanitized = sanitized.replace(/^(failed to [^:.]+[:.]\s*)+/i, '')
-	sanitized = sanitized.replace(/\.$/, '')
-	if (sanitized === '') return undefined
-
-	const maxLength = 140
-	return sanitized.length > maxLength ? `${sanitized.slice(0, maxLength - 3).trimEnd()}...` : sanitized
-}
-
 function formatOpenOracleQuoteAttemptedSources(attemptedSources: OpenOracleInitialReportQuoteSource[]) {
 	if (attemptedSources.length === 0) return undefined
 	if (attemptedSources.length === 1) return attemptedSources[0]
@@ -233,7 +231,7 @@ export function formatOpenOracleInitialReportPriceUnavailableMessage({ attempted
 	const resolvedToken2Label = token2Label?.trim() || 'Token2'
 	const segments = [`Automatic price quote unavailable for ${resolvedToken1Label} / ${resolvedToken2Label}.`]
 	const attemptedSourceText = attemptedSources === undefined ? undefined : formatOpenOracleQuoteAttemptedSources(attemptedSources)
-	const sanitizedReason = sanitizeOpenOracleFailureReason(reason)
+	const sanitizedReason = sanitizeErrorDetail(reason)
 
 	if (attemptedSourceText !== undefined) {
 		segments.push(`Tried: ${attemptedSourceText}.`)
@@ -257,7 +255,7 @@ export function formatOpenOracleInitialReportApprovalStatusUnavailableMessage({ 
 export function formatOpenOracleInitialReportBalanceStatusUnavailableMessage({ reason, tokenLabel }: { reason: string | undefined; tokenLabel: string | undefined }) {
 	const resolvedTokenLabel = tokenLabel?.trim() || 'token'
 	const segments = [`Unable to verify ${resolvedTokenLabel} balance for this report.`]
-	const sanitizedReason = sanitizeOpenOracleFailureReason(reason)
+	const sanitizedReason = sanitizeErrorDetail(reason)
 
 	if (sanitizedReason !== undefined) {
 		segments.push(`Reason: ${sanitizedReason}.`)

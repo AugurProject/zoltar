@@ -1,5 +1,5 @@
 import type { Address, Hash } from 'viem'
-import { getErrorMessage } from './errors.js'
+import { formatRefreshErrorMessage, formatWriteErrorMessage } from './errors.js'
 import type { WriteOperationsParameters } from '../types/app.js'
 
 type RunWriteActionParameters = {
@@ -43,7 +43,7 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			if (result === undefined) return
 			await Promise.resolve(parameters.onTransaction(result.hash))
 		} catch (error) {
-			parameters.setErrorMessage(parameters.formatErrorMessage?.(error, errorFallback) ?? getErrorMessage(error, errorFallback))
+			parameters.setErrorMessage(parameters.formatErrorMessage?.(error, errorFallback) ?? formatWriteErrorMessage(error, errorFallback))
 			return
 		}
 
@@ -51,7 +51,7 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			await onSuccess?.(result, parameters.accountAddress)
 			await parameters.refreshState()
 		} catch (error) {
-			parameters.setErrorMessage(getErrorMessage(error, parameters.refreshErrorFallback ?? 'Transaction succeeded, but refreshing the UI failed'))
+			parameters.setErrorMessage(formatRefreshErrorMessage(error, parameters.refreshErrorFallback ?? 'Transaction succeeded, but refreshing the UI failed'))
 		}
 	} finally {
 		await Promise.resolve(parameters.onTransactionFinished())

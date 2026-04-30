@@ -6,7 +6,7 @@ import { useLoadController } from './useLoadController.js'
 import { ABIS } from '../abis.js'
 import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, loadOpenOracleReportDetails, readOptionalMulticall, settleOracleReport, submitInitialOracleReport, wrapWeth } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
-import { getErrorDetail, getErrorMessage } from '../lib/errors.js'
+import { getErrorMessage } from '../lib/errors.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOracleInitialReportWriteErrorMessage, formatOpenOraclePriceInput, getOpenOracleSelectedReportActionMode, loadOpenOracleInitialReportPriceResult } from '../lib/openOracle.js'
 import { parseAddressInput, parseBytes32Input, parseReportIdInput } from '../lib/inputs.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState, parseBigIntInput } from '../lib/marketForm.js'
@@ -145,9 +145,8 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				value: result.result,
 			}
 		}
-		const errorDetail = getErrorDetail(result.error)
 		return {
-			error: errorDetail === undefined ? 'Failed to load token approval' : `Failed to load token approval: ${errorDetail}`,
+			error: getErrorMessage(result.error, 'Failed to load token approval'),
 			loading: false,
 			value: undefined,
 		}
@@ -160,10 +159,9 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				error: undefined,
 			}
 		}
-		const errorDetail = getErrorDetail(result.error)
 		return {
 			amount: undefined,
-			error: errorDetail === undefined ? 'Failed to load token balance' : `Failed to load token balance: ${errorDetail}`,
+			error: getErrorMessage(result.error, 'Failed to load token balance'),
 		}
 	}
 
@@ -178,10 +176,9 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				error: undefined,
 			}
 		} catch (error) {
-			const errorDetail = getErrorDetail(error)
 			return {
 				amount: undefined,
-				error: errorDetail === undefined ? 'Failed to load wallet ETH balance' : `Failed to load wallet ETH balance: ${errorDetail}`,
+				error: getErrorMessage(error, 'Failed to load wallet ETH balance'),
 			}
 		}
 	}

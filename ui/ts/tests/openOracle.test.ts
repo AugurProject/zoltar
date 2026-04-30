@@ -375,7 +375,7 @@ describe('Open Oracle helpers', () => {
 				token1Label: undefined,
 				token2Label: '0x00000000000000000000000000000000000000a2',
 			}),
-		).toBe('Automatic price quote unavailable for Token1 / 0x00000000000000000000000000000000000000a2. Tried: Uniswap V4. Reason: execution reverted: pool not found. Enter a price manually to submit the initial report.')
+		).toBe('Automatic price quote unavailable for Token1 / 0x00000000000000000000000000000000000000a2. Tried: Uniswap V4. Reason: pool not found. Enter a price manually to submit the initial report.')
 	})
 
 	test('initial report submission helper surfaces allowance read failures separately from approval gating', () => {
@@ -661,7 +661,11 @@ describe('Open Oracle helpers', () => {
 		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: token1 amount'))).toBe('The required token1 amount changed on-chain. Reload the report before submitting the initial report again.')
 		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: token2 amount'))).toBe('The selected price produces an invalid token2 amount for the initial report.')
 		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: state hash'))).toBe('This report changed on-chain. Reload the report before submitting the initial report again.')
-		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('ERC20: transfer amount exceeds allowance'))).toBe('Wallet balance or token approval changed since the last refresh. Reload the report and verify both token balances and approvals before submitting the initial report again.')
+		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('ERC20: transfer amount exceeds allowance'))).toBe(
+			'Transaction failed while submitting the initial report. Wallet balance or token approval changed since the last refresh. Reload the report and verify both token balances and approvals before submitting the initial report again.',
+		)
+		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted'))).toBe('Transaction failed while submitting the initial report. Reload the report and try again.')
+		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: pool not found'))).toBe('Transaction failed while submitting the initial report. Reason: pool not found')
 	})
 
 	test('formats unavailable approval status messages with sanitized reasons', () => {
@@ -670,7 +674,7 @@ describe('Open Oracle helpers', () => {
 				reason: 'Failed to load token approval: execution reverted',
 				tokenLabel: 'WETH',
 			}),
-		).toBe('Unable to verify WETH approval before submitting the initial report. Reason: execution reverted. Retry loading the approval status before continuing.')
+		).toBe('Unable to verify WETH approval before submitting the initial report. Retry loading the approval status before continuing.')
 	})
 
 	test('formats unavailable balance status messages with sanitized reasons', () => {
@@ -679,7 +683,7 @@ describe('Open Oracle helpers', () => {
 				reason: 'Failed to load token balance: execution reverted',
 				tokenLabel: 'WETH',
 			}),
-		).toBe('Unable to verify WETH balance for this report. Reason: execution reverted. Retry loading the report or balance status before submitting the initial report.')
+		).toBe('Unable to verify WETH balance for this report. Retry loading the report or balance status before submitting the initial report.')
 	})
 
 	test('open oracle fee and multiplier formatters render human values', () => {

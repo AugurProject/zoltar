@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { loadErc20Allowance, loadErc20Balance } from '../contracts.js'
 import { createConnectedReadClient } from '../lib/clients.js'
-import { getErrorDetail } from '../lib/errors.js'
+import { getErrorMessage } from '../lib/errors.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { ReadClient } from '../types/contracts.js'
@@ -51,9 +51,8 @@ export function useErc20AllowanceLoader() {
 			}
 		} catch (error) {
 			if (!isCurrent()) return
-			const errorDetail = getErrorDetail(error)
 			signal.value = {
-				error: errorDetail === undefined ? 'Failed to load token approval' : `Failed to load token approval: ${errorDetail}`,
+				error: getErrorMessage(error, 'Failed to load token approval'),
 				loading: false,
 				value: undefined,
 			}
