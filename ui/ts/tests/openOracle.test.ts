@@ -792,7 +792,9 @@ describe('Open Oracle helpers', () => {
 		await expect(submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, stateHash)).rejects.toThrow(/report submitted/i)
 	})
 
-	test('submitInitialOracleReport rejects an invalid state hash', async () => {
+	// Temporarily disabled because `eth_simulate` changes the state hash while testing in
+	// Interceptor, so this validation must stay commented out for that flow.
+	test('submitInitialOracleReport accepts an invalid state hash', async () => {
 		await requestOraclePrice(uiWriteClient, managerAddress)
 
 		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
@@ -809,7 +811,12 @@ describe('Open Oracle helpers', () => {
 		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash
 		const invalidStateHash = stateHash === '0x0000000000000000000000000000000000000000000000000000000000000000' ? '0x0000000000000000000000000000000000000000000000000000000000000001' : '0x0000000000000000000000000000000000000000000000000000000000000000'
 
-		await expect(submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, invalidStateHash)).rejects.toThrow(/state hash/i)
+		await submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, invalidStateHash)
+
+		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
+		expect(reportDetails.currentAmount1).toBe(amount1)
+		expect(reportDetails.currentAmount2).toBe(amount2)
+		expect(getOpenOracleReportStatus(reportDetails)).toBe('Pending')
 	})
 
 	test('ui wrapWeth helper deposits ETH into WETH and reports the wrap action', async () => {
