@@ -16,7 +16,17 @@ import { TimestampValue } from './TimestampValue.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { useLoadController } from '../hooks/useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
-import { deriveOpenOracleInitialReportSubmissionDetails, formatOpenOracleFeePercentage, formatOpenOracleMultiplier, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSelectedReportActionMode, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
+import {
+	deriveOpenOracleInitialReportSubmissionDetails,
+	formatOpenOracleFeePercentage,
+	formatOpenOracleMultiplier,
+	getOpenOracleDisputeAvailability,
+	getOpenOracleReportStatus,
+	getOpenOracleReportStatusTone,
+	getOpenOracleSelectedReportActionMode,
+	getOpenOracleSettleAvailability,
+	type OpenOracleSelectedReportActionMode,
+} from '../lib/openOracle.js'
 import { loadOpenOracleReportSummaries } from '../contracts.js'
 import { getReportPresentation } from '../lib/userCopy.js'
 import { resolveFirstMatchingValue } from '../lib/viewState.js'
@@ -108,12 +118,15 @@ export function renderSelectedReportActionSection(
 	onSettleReport: () => void,
 	onSubmitInitialReport: () => void,
 	onWrapWethForInitialReport: () => void,
+	openOracleReportDetails?: OpenOracleReportDetails,
 ) {
 	const disputeTokenOptions: EnumDropdownOption<OpenOracleFormState['disputeTokenToSwap']>[] = [
 		{ value: 'token1', label: token1Symbol },
 		{ value: 'token2', label: token2Symbol },
 	]
 	const showQuoteLoadingPlaceholder = openOracleInitialReportState.quoteLoading && openOracleForm.price.trim() === '' && openOracleInitialReportState.defaultPrice === undefined && openOracleInitialReportState.defaultPriceError === undefined
+	const disputeAvailability = openOracleReportDetails === undefined ? { canAct: true, message: undefined } : getOpenOracleDisputeAvailability(openOracleReportDetails)
+	const settleAvailability = openOracleReportDetails === undefined ? { canAct: true, message: undefined } : getOpenOracleSettleAvailability(openOracleReportDetails)
 
 	switch (actionMode) {
 		case 'initial-report':
@@ -200,7 +213,9 @@ export function renderSelectedReportActionSection(
 					</div>
 				</div>
 			)
-		case 'dispute':
+		case 'dispute': {
+			const disputeDisabledMessage = !isConnected ? 'Connect a wallet before disputing reports.' : openOracleForm.reportId.trim() === '' ? 'Load a report first.' : disputeAvailability.message
+			const settleDisabledMessage = !isConnected ? 'Connect a wallet before settling reports.' : openOracleForm.reportId.trim() === '' ? 'Load a report first.' : settleAvailability.message
 			return (
 				<div className='entity-card-subsection'>
 					<div className='entity-card-subsection-header'>
@@ -222,18 +237,21 @@ export function renderSelectedReportActionSection(
 							</label>
 						</div>
 						<div className='actions'>
-							<button className='secondary' onClick={onDisputeReport} disabled={!isConnected || openOracleForm.reportId.trim() === ''}>
-								Dispute & Swap
+							<button className='secondary' onClick={onDisputeReport} disabled={!isConnected || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || openOracleActiveAction === 'dispute'} title={disputeDisabledMessage}>
+								{openOracleActiveAction === 'dispute' ? <LoadingText>Disputing...</LoadingText> : 'Dispute & Swap'}
 							</button>
 						</div>
+						{disputeDisabledMessage === undefined ? undefined : <p className='detail'>{disputeDisabledMessage}</p>}
 						<div className='actions'>
-							<button className='secondary' onClick={onSettleReport} disabled={!isConnected || openOracleForm.reportId.trim() === ''}>
-								Settle Report
+							<button className='secondary' onClick={onSettleReport} disabled={!isConnected || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct || openOracleActiveAction === 'settle'} title={settleDisabledMessage}>
+								{openOracleActiveAction === 'settle' ? <LoadingText>Settling...</LoadingText> : 'Settle Report'}
 							</button>
 						</div>
+						{settleDisabledMessage === undefined ? undefined : <p className='detail'>{settleDisabledMessage}</p>}
 					</div>
 				</div>
 			)
+		}
 		case 'read-only':
 			return (
 				<div className='entity-card-subsection'>
@@ -500,6 +518,7 @@ function renderReportDetailsCard(
 				onSettleReport,
 				onSubmitInitialReport,
 				onWrapWethForInitialReport,
+				openOracleReportDetails,
 			)}
 		</EntityCard>
 	)

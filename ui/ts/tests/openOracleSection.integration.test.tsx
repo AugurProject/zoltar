@@ -285,4 +285,96 @@ describe.serial('OpenOracleSection integration', () => {
 			expect(submittedReport.reportTimestamp > 0n).toBe(true)
 		})
 	})
+
+	test('disables dispute and enables settle after the settlement window elapses', async () => {
+		const renderedComponent = await renderIntoDocument(<OpenOracleSectionHarness accountAddress={walletAddress} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await setInputValue('Token1 Address', addressString(GENESIS_REPUTATION_TOKEN))
+		await setInputValue('Token2 Address', WETH_ADDRESS)
+		await setInputValue('Exact Token1 Report', '100000000000000000000')
+		await setInputValue('Settler Reward', '1000')
+		await setInputValue('ETH Value To Send', '1100')
+		await setInputValue('Fee Percentage', '100')
+		await setInputValue('Multiplier', '100')
+		await setInputValue('Settlement Time', '60')
+		await setInputValue('Escalation Halt', '0')
+		await setInputValue('Dispute Delay', '10')
+		await setInputValue('Protocol Fee', '100')
+
+		await clickElement(within(document.body).getByRole('button', { name: 'Create Open Oracle Game' }))
+		await waitForLatestAction('createReportInstance')
+		await waitFor(async () => {
+			const createdReport = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
+			expect(createdReport.reportId).toBe(reportId)
+		})
+
+		await clickElement(within(document.body).getByRole('button', { name: 'Browse' }))
+		await waitFor(() => {
+			expect(within(document.body).getByText(`Report #${reportId.toString()}`)).not.toBeNull()
+		})
+		await clickElement(within(document.body).getByRole('button', { name: 'Open report' }))
+
+		const selectedReportCard = await waitFor(() => getEntityCardByTitle('Selected Report'))
+		await waitFor(() => {
+			expect(within(document.body).getByText('Initial Report')).not.toBeNull()
+		})
+		await setInputValue(/^Price \(/, '4', selectedReportCard)
+
+		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
+		const openOracleAddress = getOpenOracleAddress()
+		const expectedAmount2 = reportDetails.exactToken1Report / 4n
+
+		const [token1ApprovalSection, token2ApprovalSection] = getApprovalSections(selectedReportCard)
+		if (token1ApprovalSection === undefined || token2ApprovalSection === undefined) {
+			throw new Error('Expected both token approval sections to be rendered')
+		}
+
+		await clickElement(getApproveButton(token1ApprovalSection))
+		await waitForLatestAction('approveToken1')
+		await waitFor(async () => {
+			expect(await loadErc20Allowance(uiReadClient, reportDetails.token1, walletAddress, openOracleAddress)).toBe(reportDetails.exactToken1Report)
+		})
+
+		const refreshedApprovalSections = getApprovalSections(getEntityCardByTitle('Selected Report'))
+		const refreshedToken2ApprovalSection = refreshedApprovalSections[1]
+		if (refreshedToken2ApprovalSection === undefined) {
+			throw new Error('Expected the second token approval section to remain rendered')
+		}
+
+		await clickElement(getApproveButton(refreshedToken2ApprovalSection))
+		await waitForLatestAction('approveToken2')
+		await waitFor(async () => {
+			expect(await loadErc20Allowance(uiReadClient, reportDetails.token2, walletAddress, openOracleAddress)).toBe(expectedAmount2)
+		})
+
+		await clickElement(within(document.body).getByRole('button', { name: 'Wrap needed ETH to WETH' }))
+		await waitFor(async () => {
+			expect(await loadErc20Balance(uiReadClient, reportDetails.token2, walletAddress)).toBe(expectedAmount2)
+		})
+
+		await waitFor(() => {
+			const submitButton = within(document.body).getByRole('button', { name: 'Submit Initial Report' }) as HTMLButtonElement
+			expect(submitButton.disabled).toBe(false)
+		})
+
+		await clickElement(within(document.body).getByRole('button', { name: 'Submit Initial Report' }))
+		await waitForLatestAction('submitInitialReport')
+		await waitFor(async () => {
+			const submittedReport = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
+			expect(submittedReport.currentReporter).not.toBe(zeroAddress)
+			expect(submittedReport.reportTimestamp > 0n).toBe(true)
+		})
+
+		await mockWindow.advanceTime(61n)
+		await clickElement(within(document.body).getByRole('button', { name: 'Refresh report' }))
+
+		await waitFor(() => {
+			const disputeButton = within(document.body).getByRole('button', { name: 'Dispute & Swap' }) as HTMLButtonElement
+			const settleButton = within(document.body).getByRole('button', { name: 'Settle Report' }) as HTMLButtonElement
+			expect(disputeButton.disabled).toBe(true)
+			expect(settleButton.disabled).toBe(false)
+			expect(within(document.body).getByText('Dispute window closed. Settle Report instead.')).not.toBeNull()
+		})
+	})
 })

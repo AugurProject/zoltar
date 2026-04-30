@@ -186,6 +186,8 @@ export type OpenOracleReportDetails = {
 	// Identity
 	reportId: bigint
 	openOracleAddress: Address
+	currentTime: bigint
+	currentBlockNumber: bigint
 	// Meta
 	exactToken1Report: bigint
 	escalationHalt: bigint
