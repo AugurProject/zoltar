@@ -22,7 +22,7 @@ describe('OverviewPanels', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('renders the REP/ETH panel using REP per ETH instead of ETH per REP', async () => {
+	test('renders the REP/ETH panel from the canonical REP per ETH quote', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<OverviewPanels
 				accountState={{
@@ -37,9 +37,9 @@ describe('OverviewPanels', () => {
 				isRefreshing={false}
 				onConnect={() => undefined}
 				onGoToGenesisUniverse={() => undefined}
-				repEthPrice={410000000000000n}
-				repEthSource={undefined}
-				repEthSourceUrl={undefined}
+				repPerEthPrice={2439024390243902439024n}
+				repPerEthSource={undefined}
+				repPerEthSourceUrl={undefined}
 				repUsdcPrice={undefined}
 				repUsdcSource={undefined}
 				repUsdcSourceUrl={undefined}

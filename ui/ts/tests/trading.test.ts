@@ -121,14 +121,15 @@ void describe('trading helpers', () => {
 		expect(getRemainingMintCapacity(undefined, 12n)).toBeUndefined()
 	})
 
-	void test('computes pool collateralization as a percentage using the Uniswap REP price', () => {
+	void test('computes pool collateralization as a percentage using the canonical REP/ETH price', () => {
 		expect(getPoolCollateralizationPercent(3n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, TOKEN_PRECISION)).toBe(150n * TOKEN_PRECISION)
 		expect(getPoolCollateralizationPercent(undefined, 2n * TOKEN_PRECISION, TOKEN_PRECISION)).toBeUndefined()
 		expect(getPoolCollateralizationPercent(3n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, undefined)).toBeUndefined()
+		expect(getPoolCollateralizationPercent(3n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, 0n)).toBeUndefined()
 	})
 
-	void test('computes vault collateralization as a percentage using the Uniswap REP price', () => {
-		expect(getVaultCollateralizationPercent(4n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, 150n * 10n ** 16n)).toBe(300n * TOKEN_PRECISION)
+	void test('computes vault collateralization as a percentage using the canonical REP/ETH price', () => {
+		expect(getVaultCollateralizationPercent(4n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, TOKEN_PRECISION)).toBe(200n * TOKEN_PRECISION)
 		expect(getVaultCollateralizationPercent(4n * TOKEN_PRECISION, undefined, TOKEN_PRECISION)).toBeUndefined()
 	})
 
