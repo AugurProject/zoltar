@@ -4,7 +4,7 @@ import { parseDecimalInput } from './decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from './errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from './formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
-import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput, WETH_ADDRESS } from './uniswapQuoter.js'
+import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput } from './uniswapQuoter.js'
 
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 18n
 const OPEN_ORACLE_BOUNTY_BUFFER_NUMERATOR = 12n
@@ -354,8 +354,8 @@ function resolveOpenOracleTokenLabel({ fallbackLabel, tokenAddress, tokenSymbol 
 	return fallbackLabel
 }
 
-function isCanonicalMainnetWeth(tokenAddress: string | undefined) {
-	return tokenAddress?.toLowerCase() === WETH_ADDRESS.toLowerCase()
+function isWrappedNativeToken(tokenAddress: string | undefined, wrappedNativeTokenAddress: string | undefined) {
+	return tokenAddress !== undefined && wrappedNativeTokenAddress !== undefined && tokenAddress.toLowerCase() === wrappedNativeTokenAddress.toLowerCase()
 }
 
 function formatOpenOracleQuoteAttemptedSources(attemptedSources: OpenOracleInitialReportQuoteSource[]) {
@@ -409,11 +409,25 @@ export function formatOpenOracleInitialReportBalanceStatusUnavailableMessage({ r
 	return segments.join(' ')
 }
 
-function formatOpenOracleInitialReportInsufficientBalanceMessage({ available, required, tokenAddress, tokenDecimals, tokenLabel }: { available: bigint; required: bigint; tokenAddress: string | undefined; tokenDecimals: number | undefined; tokenLabel: string }) {
+function formatOpenOracleInitialReportInsufficientBalanceMessage({
+	available,
+	required,
+	tokenAddress,
+	tokenDecimals,
+	tokenLabel,
+	wrappedNativeTokenAddress,
+}: {
+	available: bigint
+	required: bigint
+	tokenAddress: string | undefined
+	tokenDecimals: number | undefined
+	tokenLabel: string
+	wrappedNativeTokenAddress: string | undefined
+}) {
 	const resolvedDecimals = tokenDecimals ?? 18
 	const segments = [`Insufficient ${tokenLabel} balance for this report. Need ${formatCurrencyBalance(required, resolvedDecimals)}, wallet has ${formatCurrencyBalance(available, resolvedDecimals)}.`]
 
-	if (isCanonicalMainnetWeth(tokenAddress)) {
+	if (isWrappedNativeToken(tokenAddress, wrappedNativeTokenAddress)) {
 		segments.push('Wrap ETH into WETH first.')
 	}
 
@@ -490,6 +504,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	token1Decimals,
 	token2Decimals,
 	walletEthBalance,
+	wrappedNativeTokenAddress,
 }: {
 	approvedToken1Amount: bigint | undefined
 	approvedToken2Amount: bigint | undefined
@@ -522,6 +537,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	token1Decimals: number | undefined
 	token2Decimals: number | undefined
 	walletEthBalance: bigint | undefined
+	wrappedNativeTokenAddress: string | undefined
 }): OpenOracleInitialReportSubmissionDetails {
 	const trimmedPriceInput = priceInput.trim()
 	const resolvedPriceInput = trimmedPriceInput === '' ? (defaultPrice ?? '') : trimmedPriceInput
@@ -559,13 +575,13 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 	const token2Approval = deriveTokenApprovalRequirement(amount2, approvedToken2Amount)
 	const token1BalanceShortage = amount1 === undefined || token1Balance === undefined || token1Balance >= amount1 ? undefined : amount1 - token1Balance
 	const token2BalanceShortage = amount2 === undefined || token2Balance === undefined || token2Balance >= amount2 ? undefined : amount2 - token2Balance
-	const hasWethWrapAction = reportDetails !== undefined && (isCanonicalMainnetWeth(reportDetails.token1) || isCanonicalMainnetWeth(reportDetails.token2))
+	const hasWethWrapAction = reportDetails !== undefined && (isWrappedNativeToken(reportDetails.token1, wrappedNativeTokenAddress) || isWrappedNativeToken(reportDetails.token2, wrappedNativeTokenAddress))
 	const requiredWethWrapAmount =
 		reportDetails === undefined
 			? undefined
-			: isCanonicalMainnetWeth(reportDetails.token1) && token1BalanceShortage !== undefined && token1BalanceShortage > 0n
+			: isWrappedNativeToken(reportDetails.token1, wrappedNativeTokenAddress) && token1BalanceShortage !== undefined && token1BalanceShortage > 0n
 				? token1BalanceShortage
-				: isCanonicalMainnetWeth(reportDetails.token2) && token2BalanceShortage !== undefined && token2BalanceShortage > 0n
+				: isWrappedNativeToken(reportDetails.token2, wrappedNativeTokenAddress) && token2BalanceShortage !== undefined && token2BalanceShortage > 0n
 					? token2BalanceShortage
 					: undefined
 	const canWrapRequiredWeth = requiredWethWrapAmount !== undefined && requiredWethWrapAmount > 0n && walletEthBalance !== undefined && walletEthBalance >= requiredWethWrapAmount
@@ -577,7 +593,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 				: walletEthBalance < requiredWethWrapAmount
 					? createVisibleGateMessage(`Wallet has ${formatCurrencyBalance(walletEthBalance)} ETH, need ${formatCurrencyBalance(requiredWethWrapAmount)} ETH to wrap the required WETH.`)
 					: undefined
-			: (isCanonicalMainnetWeth(reportDetails?.token1) && token1Balance === undefined) || (isCanonicalMainnetWeth(reportDetails?.token2) && token2Balance === undefined)
+			: (isWrappedNativeToken(reportDetails?.token1, wrappedNativeTokenAddress) && token1Balance === undefined) || (isWrappedNativeToken(reportDetails?.token2, wrappedNativeTokenAddress) && token2Balance === undefined)
 				? createHiddenLoadingGateMessage('Loading current WETH balance.')
 				: undefined
 
@@ -642,6 +658,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 				tokenAddress: reportDetails.token1,
 				tokenDecimals: token1Decimals,
 				tokenLabel: token1Label,
+				wrappedNativeTokenAddress,
 			}),
 		)
 	} else if (amount2 !== undefined && token2Balance < amount2) {
@@ -652,6 +669,7 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 				tokenAddress: reportDetails.token2,
 				tokenDecimals: token2Decimals,
 				tokenLabel: token2Label,
+				wrappedNativeTokenAddress,
 			}),
 		)
 	} else if (approvedToken1Amount === undefined) {

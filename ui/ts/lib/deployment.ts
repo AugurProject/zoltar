@@ -20,7 +20,7 @@ const DEPLOYMENT_SECTIONS: DeploymentSectionDefinition[] = [
 	},
 ]
 
-export function getPrerequisiteLabel(steps: DeploymentStatus[], index: number) {
+export function getPrerequisiteLabel(steps: DeploymentStatus[], index: number, zoltarExternalPrerequisiteLabel?: string) {
 	const currentStep = steps[index]
 	if (currentStep === undefined) return undefined
 
@@ -30,11 +30,15 @@ export function getPrerequisiteLabel(steps: DeploymentStatus[], index: number) {
 		if (!dependency.deployed) return dependency.label
 	}
 
+	if (currentStep.id === 'zoltar') {
+		return zoltarExternalPrerequisiteLabel
+	}
+
 	return undefined
 }
 
-export function findNextDeployableStep(steps: DeploymentStatus[]) {
-	return steps.find((step, index) => !step.deployed && getPrerequisiteLabel(steps, index) === undefined)
+export function findNextDeployableStep(steps: DeploymentStatus[], zoltarExternalPrerequisiteLabel?: string) {
+	return steps.find((step, index) => !step.deployed && getPrerequisiteLabel(steps, index, zoltarExternalPrerequisiteLabel) === undefined)
 }
 
 export function getDeploymentSections(steps: DeploymentStatus[]) {

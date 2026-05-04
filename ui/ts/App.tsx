@@ -2,7 +2,6 @@ import { useSignal } from '@preact/signals'
 import type { Hash } from 'viem'
 import { useEffect } from 'preact/hooks'
 import { DeploymentRouteContent } from './components/DeploymentRouteContent.js'
-import { MainnetGateSection } from './components/MainnetGateSection.js'
 import { OverviewPanels } from './components/OverviewPanels.js'
 import { MarketSection } from './components/MarketSection.js'
 import { NotFoundSection } from './components/NotFoundSection.js'
@@ -26,7 +25,7 @@ import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { useUrlState } from './hooks/useUrlState.js'
 import { getDeploymentSections } from './lib/deployment.js'
 import { resolveLoadableValueState } from './lib/loadState.js'
-import { isMainnetChain } from './lib/network.js'
+import { doesWalletMatchActiveNetwork, getActiveNetworkLabel } from './lib/network.js'
 import { getUseQuestionForPoolState } from './lib/securityPoolNavigation.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
 import type { TransactionState } from './lib/transactionState.js'
@@ -39,7 +38,7 @@ import { TimestampValue } from './components/TimestampValue.js'
 export function App() {
 	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
 	const deployNextMissingPending = useSignal(false)
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, setActiveUniverseId, setOpenOracleReport, setSecurityPoolAddress } = useUrlState()
+	const { activeNetworkKey, activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, setActiveNetworkKey, setActiveUniverseId, setOpenOracleReport, setSecurityPoolAddress } = useUrlState()
 	const onTransaction = (hash: Hash) => {
 		transactionState.value = {
 			...transactionState.value,
@@ -56,8 +55,27 @@ export function App() {
 		transactionState.value = markTransactionFinished(transactionState.value)
 	}
 	const { navigate, route } = useHashRoute()
-	const { accountState, connectWallet, deploymentStatuses, errorMessage: walletErrorMessage, hasInjectedWallet, hasLoadedDeploymentStatuses, isConnectingWallet, isLoadingDeploymentStatuses, isRefreshing, refreshState, setDeploymentStatuses, walletBootstrapComplete, augurPlaceHolderDeployed } = useOnchainState()
+	const activeNetworkLabel = getActiveNetworkLabel(activeNetworkKey)
+	const {
+		accountState,
+		connectWallet,
+		deploymentStatuses,
+		errorMessage: walletErrorMessage,
+		hasInjectedWallet,
+		hasLoadedDeploymentStatuses,
+		isConnectingWallet,
+		isLoadingDeploymentStatuses,
+		isRefreshing,
+		refreshState,
+		setDeploymentStatuses,
+		walletBootstrapComplete,
+		zoltarExternalPrerequisiteDetail,
+		zoltarExternalPrerequisiteLabel,
+		augurPlaceHolderDeployed,
+	} = useOnchainState(activeNetworkKey)
+	const walletMatchesActiveNetwork = doesWalletMatchActiveNetwork(accountState.walletChainId, activeNetworkKey)
 	const baseHookConfig = {
+		activeNetworkKey,
 		accountAddress: accountState.address,
 		onTransaction,
 		onTransactionFinished,
@@ -65,7 +83,7 @@ export function App() {
 		onTransactionSubmitted,
 		refreshState,
 	}
-	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses })
+	const { busyStepId, deployNextMissing, deployStep, errorMessage: deploymentErrorMessage } = useDeploymentFlow({ ...baseHookConfig, deploymentStatuses, setDeploymentStatuses, zoltarExternalPrerequisiteDetail, zoltarExternalPrerequisiteLabel })
 	const {
 		approveZoltarForkRep,
 		createChildUniverse: createZoltarChildUniverse,
@@ -197,11 +215,9 @@ export function App() {
 		submitBid,
 		withdrawBids,
 	} = useForkAuctionOperations(baseHookConfig)
-	const { repEthPrice, repEthSource, repEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices } = useRepPrices()
+	const { repEthPrice, repEthSource, repEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices } = useRepPrices(activeNetworkKey)
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
-	const isMainnet = isMainnetChain(accountState.chainId)
-	const wrongNetworkMessage = accountState.address !== undefined && accountState.chainId !== undefined && !isMainnet ? 'Switch to Ethereum mainnet.' : undefined
 	const augurPlaceHolderDeploymentMissing = augurPlaceHolderDeployed === false
 	const showDeployTab = augurPlaceHolderDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 	const showAugurPlaceHolderDeploymentWarning = augurPlaceHolderDeploymentMissing
@@ -216,7 +232,7 @@ export function App() {
 	const isRouteContentDisabled = transactionState.value.transactionInFlightCount > 0 || disableRouteContent
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
-	const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, hasInjectedWallet, isMainnet })
+	const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, activeNetworkLabel, hasInjectedWallet, walletMatchesActiveNetwork })
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const refreshSelectedPoolData = () => {
 		if (!walletBootstrapComplete) return
@@ -224,28 +240,28 @@ export function App() {
 		void loadSecurityPools(securityPoolAddress)
 	}
 	const renderRouteContent = () => {
-		if (wrongNetworkMessage !== undefined) {
-			return <MainnetGateSection message={wrongNetworkMessage} />
-		}
-
 		switch (route) {
 			case 'deploy':
 				return (
 					<DeploymentRouteContent
 						accountAddress={accountState.address}
+						activeNetworkLabel={activeNetworkLabel}
 						busyStepId={busyStepId}
+						deploymentBlockedNotice={zoltarExternalPrerequisiteDetail}
 						deployNextMissingPending={deployNextMissingPending.value}
 						deploymentSections={deploymentSections}
 						deploymentStatuses={deploymentStatuses}
 						isLoadingDeploymentStatuses={isLoadingDeploymentStatuses}
-						isMainnet={isMainnet}
 						onDeploy={deployStep}
 						onDeployNextMissing={() => void onDeployNextMissing()}
+						walletMatchesActiveNetwork={walletMatchesActiveNetwork}
+						zoltarExternalPrerequisiteLabel={zoltarExternalPrerequisiteLabel}
 					/>
 				)
 			case 'zoltar':
 				return (
 					<MarketSection
+						activeNetworkLabel={activeNetworkLabel}
 						accountState={accountState}
 						hasLoadedZoltarQuestions={hasLoadedZoltarQuestions}
 						loadingZoltarForkAccess={loadingZoltarForkAccess}
@@ -287,12 +303,14 @@ export function App() {
 						zoltarQuestions={zoltarQuestions}
 						zoltarUniverse={zoltarUniverse}
 						onZoltarForkQuestionIdChange={questionId => setZoltarForkQuestionId(questionId)}
+						walletMatchesActiveNetwork={walletMatchesActiveNetwork}
 					/>
 				)
 			case 'security-pools':
 				return (
 					<SecurityPoolsSection
 						createPool={{
+							activeNetworkLabel,
 							accountState,
 							checkingDuplicateOriginPool,
 							duplicateOriginPoolExists,
@@ -313,8 +331,10 @@ export function App() {
 							repEthPrice,
 							repEthSource,
 							repEthSourceUrl,
+							walletMatchesActiveNetwork,
 						}}
 						overview={{
+							activeNetworkLabel,
 							accountState,
 							checkedSecurityPoolAddress,
 							closeLiquidationModal: () => closeLiquidationModal(),
@@ -336,13 +356,16 @@ export function App() {
 							repEthPrice,
 							repEthSource,
 							repEthSourceUrl,
+							walletMatchesActiveNetwork,
 						}}
 						workflow={{
+							activeNetworkLabel,
 							accountState,
 							activeUniverseId,
 							checkedSecurityPoolAddress,
 							closeLiquidationModal: () => closeLiquidationModal(),
 							forkAuction: {
+								activeNetworkLabel,
 								accountState,
 								forkAuctionDetails,
 								forkAuctionError,
@@ -364,6 +387,7 @@ export function App() {
 								onStartTruthAuction: () => void startTruthAuction(),
 								onSubmitBid: () => void submitBid(),
 								onWithdrawBids: () => void withdrawBids(),
+								walletMatchesActiveNetwork,
 							},
 							liquidationAmount,
 							liquidationManagerAddress,
@@ -400,14 +424,17 @@ export function App() {
 								onReportOutcome: () => void onReportOutcome(),
 								onReportingFormChange: update => setReportingForm(current => ({ ...current, ...update })),
 								onWithdrawEscalation: () => void withdrawEscalation(),
+								activeNetworkLabel,
 								reportingDetails,
 								reportingError,
 								reportingForm,
 								reportingResult,
+								walletMatchesActiveNetwork,
 							},
 							securityPoolAddress,
 							securityPools,
 							securityVault: {
+								activeNetworkLabel,
 								accountState,
 								loadingSecurityVault,
 								onApproveRep: amount => void approveRep(amount),
@@ -430,8 +457,10 @@ export function App() {
 								repEthSource,
 								repEthSourceUrl,
 								securityPoolVaults: selectedPool?.vaults,
+								walletMatchesActiveNetwork,
 							},
 							trading: {
+								activeNetworkLabel,
 								accountState,
 								loadingTradingForkUniverse,
 								loadingTradingDetails,
@@ -449,13 +478,16 @@ export function App() {
 								tradingForm,
 								tradingForkUniverse,
 								tradingResult,
+								walletMatchesActiveNetwork,
 							},
+							walletMatchesActiveNetwork,
 						}}
 					/>
 				)
 			case 'open-oracle':
 				return (
 					<OpenOracleSection
+						activeNetworkKey={activeNetworkKey}
 						accountState={accountState}
 						initialView={urlOpenOracleReportId === '' && openOracleForm.reportId === '' ? 'browse' : 'selected-report'}
 						loadingOracleReport={loadingOracleReport}
@@ -561,7 +593,7 @@ export function App() {
 					</div>
 				) : undefined}
 				{showAugurPlaceHolderDeploymentWarning ? <div className='notice error'>Finish setup in Deploy before using the app.</div> : undefined}
-				{walletPresentation === undefined || hasInjectedWallet ? undefined : <p className='notice warning'>{walletPresentation.detail}</p>}
+				{walletPresentation?.detail === undefined ? undefined : <p className='notice warning'>{walletPresentation.detail}</p>}
 				<ErrorNotice message={errorMessage} />
 				{transactionState.value.transactionInFlightCount > 0 ? (
 					<p className='notice success'>
@@ -581,10 +613,12 @@ export function App() {
 			<div className='top-shell'>
 				<div className='top-shell-content'>
 					<OverviewPanels
+						activeNetworkKey={activeNetworkKey}
 						accountState={accountState}
 						isConnectingWallet={isConnectingWallet}
 						isLoadingRepPrices={isLoadingRepPrices}
 						isLoadingUniverseRepBalance={loadingZoltarForkAccess}
+						onActiveNetworkKeyChange={setActiveNetworkKey}
 						onConnect={() => void connectWallet()}
 						onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
 						repEthPrice={repEthPrice}

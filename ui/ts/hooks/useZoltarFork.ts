@@ -5,17 +5,19 @@ import { ABIS } from '../abis.js'
 import { Zoltar_Zoltar } from '../contractArtifact.js'
 import { approveErc20, forkZoltarUniverse, getZoltarAddress, readOptionalMulticall } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
-import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { createReadClientForNetwork, createWalletWriteClient } from '../lib/clients.js'
 import { requireWallet } from '../lib/walletGuard.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } from '../lib/errors.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
-import { GENESIS_REPUTATION_TOKEN_ADDRESS } from '../lib/universe.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
+import { getGenesisReputationTokenAddress } from '../lib/universe.js'
+import type { SupportedNetworkKey } from '../shared/networkConfig.js'
 import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type UseZoltarForkParameters = {
 	accountAddress: Address | undefined
+	activeNetworkKey: SupportedNetworkKey
 	activeUniverseId: bigint
 	ensureZoltarUniverse: () => Promise<ZoltarUniverseSummary>
 	onTransaction: (hash: Hash) => void
@@ -37,7 +39,7 @@ function formatQuestionId(questionId: bigint) {
 	return `0x${questionId.toString(16)}`
 }
 
-export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUniverse, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, refreshZoltarUniverse, zoltarUniverse }: UseZoltarForkParameters) {
+export function useZoltarFork({ accountAddress, activeNetworkKey, activeUniverseId, ensureZoltarUniverse, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, refreshZoltarUniverse, zoltarUniverse }: UseZoltarForkParameters) {
 	const forkAccessLoad = useLoadController()
 	const zoltarForkError = useSignal<string | undefined>(undefined)
 	const zoltarForkPending = useSignal(false)
@@ -55,7 +57,7 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 	const nextForkAccessLoad = useRequestGuard()
 
 	const loadZoltarForkAccess = async () => {
-		const reputationToken = zoltarUniverse?.reputationToken ?? (activeUniverseId === 0n ? GENESIS_REPUTATION_TOKEN_ADDRESS : undefined)
+		const reputationToken = zoltarUniverse?.reputationToken ?? (activeUniverseId === 0n ? getGenesisReputationTokenAddress(activeNetworkKey) : undefined)
 		if (accountAddress === undefined || reputationToken === undefined || reputationToken === zeroAddress) {
 			zoltarForkApproval.value = {
 				error: undefined,
@@ -69,7 +71,7 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 		}
 
 		const isCurrent = nextForkAccessLoad()
-		const readClient = createConnectedReadClient()
+		const readClient = createReadClientForNetwork(activeNetworkKey)
 		const universeId = zoltarUniverse?.universeId ?? activeUniverseId
 		const childUniverses = (zoltarUniverse?.childUniverses ?? []).filter(child => child.reputationToken !== zeroAddress)
 		if (isCurrent()) {
@@ -92,12 +94,12 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 					abi: ABIS.mainnet.erc20,
 					functionName: 'allowance',
 					address: reputationToken,
-					args: [accountAddress, getZoltarAddress()],
+					args: [accountAddress, getZoltarAddress(activeNetworkKey)],
 				},
 				{
 					abi: Zoltar_Zoltar.abi,
 					functionName: 'getMigrationRepBalance',
-					address: getZoltarAddress(),
+					address: getZoltarAddress(activeNetworkKey),
 					args: [accountAddress, universeId],
 				},
 				...childUniverses.map(child => ({
@@ -205,7 +207,7 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 				'approve',
 				async (walletAddress, universe, questionId) => {
 					const approvalAmount = amount ?? universe.forkThreshold
-					const approval = await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), universe.reputationToken, getZoltarAddress(), approvalAmount, 'approveForkRep')
+					const approval = await approveErc20(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), universe.reputationToken, getZoltarAddress(activeNetworkKey), approvalAmount, 'approveForkRep')
 					return {
 						action: 'approveForkRep',
 						hash: approval.hash,
@@ -225,7 +227,7 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 			'fork',
 			async (walletAddress, universe, questionId) => {
 				if (universe.hasForked) throw new Error('Zoltar has already forked')
-				return await forkZoltarUniverse(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), universe.universeId, questionId)
+				return await forkZoltarUniverse(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), universe.universeId, questionId)
 			},
 			'Failed to fork Zoltar',
 			true,

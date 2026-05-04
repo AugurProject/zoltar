@@ -3,17 +3,19 @@ import { useEffect } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
 import { createSecurityPool, loadMarketDetails, originSecurityPoolExists } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
-import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { createReadClientForNetwork, createWalletWriteClient } from '../lib/clients.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultSecurityPoolFormState, parseBigIntInput } from '../lib/marketForm.js'
 import type { SecurityPoolFormState } from '../types/app.js'
+import type { SupportedNetworkKey } from '../shared/networkConfig.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '../types/contracts.js'
 
 type UseSecurityPoolCreationParameters = {
 	accountAddress: Address | undefined
+	activeNetworkKey: SupportedNetworkKey
 	deploymentStatuses: DeploymentStatus[]
 	onTransaction: (hash: Hash) => void
 	onTransactionFinished: () => void
@@ -34,7 +36,7 @@ export function resolveSecurityPoolQuestionLookupInput(marketIdInput: string) {
 	}
 }
 
-export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, zoltarUniverseHasForked }: UseSecurityPoolCreationParameters) {
+export function useSecurityPoolCreation({ accountAddress, activeNetworkKey, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, zoltarUniverseHasForked }: UseSecurityPoolCreationParameters) {
 	const marketDetailsLoad = useLoadController()
 	const duplicateOriginPoolCheckLoad = useLoadController()
 	const marketDetails = useSignal<MarketDetails | undefined>(undefined)
@@ -68,7 +70,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		const isCurrent = nextDuplicateCheck()
 		await duplicateOriginPoolCheckLoad.track(async () => {
 			try {
-				const exists = await originSecurityPoolExists(createConnectedReadClient(), questionId, securityMultiplier)
+				const exists = await originSecurityPoolExists(createReadClientForNetwork(activeNetworkKey), questionId, securityMultiplier)
 				if (!isCurrent()) return
 				duplicateOriginPoolExists.value = exists
 			} catch {
@@ -98,7 +100,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 					...securityPoolForm.value,
 					marketId,
 				})
-				const details = await loadMarketDetails(createConnectedReadClient(), questionId)
+				const details = await loadMarketDetails(createReadClientForNetwork(activeNetworkKey), questionId)
 				return details
 			},
 			onSuccess: details => {
@@ -151,19 +153,19 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 				if (zoltarUniverseHasForked) throw new Error('Security pools cannot be created after the universe has forked')
 
 				const parameters = createSecurityPoolParameters(securityPoolForm.value)
-				const details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createConnectedReadClient(), parameters.questionId)
+				const details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createReadClientForNetwork(activeNetworkKey), parameters.questionId)
 				if (!details.exists) throw new Error('No market found for that ID')
 				if (details.marketType !== 'binary') {
 					marketDetails.value = details
 					throw new Error('Security pools can only be deployed for binary markets')
 				}
-				if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.securityMultiplier)) {
+				if (await originSecurityPoolExists(createReadClientForNetwork(activeNetworkKey), parameters.questionId, parameters.securityMultiplier)) {
 					marketDetails.value = details
 					throw new Error('A security pool for this question and security multiplier already exists. Change the security multiplier to create a different pool.')
 				}
 
 				capturedDetails = details
-				const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), parameters)
+				const result = await createSecurityPool(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), parameters)
 				return { ...result, hash: result.deployPoolHash }
 			},
 			'Failed to create security pool',

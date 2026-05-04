@@ -3,12 +3,15 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { MetricField } from './MetricField.js'
 import { StateHint } from './StateHint.js'
 import type { OverviewPanelsProps } from '../types/components.js'
+import { getSupportedNetworkConfigs, isSupportedNetworkKey } from '../shared/networkConfig.js'
 
 export function OverviewPanels({
+	activeNetworkKey,
 	accountState,
 	isConnectingWallet,
 	isLoadingRepPrices,
 	isLoadingUniverseRepBalance,
+	onActiveNetworkKeyChange,
 	onConnect,
 	onGoToGenesisUniverse,
 	repEthPrice,
@@ -25,6 +28,7 @@ export function OverviewPanels({
 }: OverviewPanelsProps) {
 	const isWalletLoading = isConnectingWallet || (!walletBootstrapComplete && accountState.address === undefined)
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
+	const availableNetworks = getSupportedNetworkConfigs()
 	const renderSourceLink = (source: 'v3' | 'v4', sourceUrl: string | undefined) => {
 		const label = `u${source === 'v4' ? '4' : '3'}`
 		if (sourceUrl === undefined) return `(${label})`
@@ -88,6 +92,23 @@ export function OverviewPanels({
 						</div>
 					</div>
 					<div className='actions overview-actions'>
+						<label className='field'>
+							<span>Network</span>
+							<select
+								value={activeNetworkKey}
+								onChange={event => {
+									const nextNetworkKey = event.currentTarget.value
+									if (!isSupportedNetworkKey(nextNetworkKey)) return
+									onActiveNetworkKeyChange(nextNetworkKey)
+								}}
+							>
+								{availableNetworks.map(network => (
+									<option key={network.key} value={network.key}>
+										{network.label}
+									</option>
+								))}
+							</select>
+						</label>
 						{accountState.address === undefined ? (
 							<button className='primary' onClick={onConnect} disabled={isConnectingWallet}>
 								{isWalletLoading ? 'Connecting...' : 'Connect wallet'}

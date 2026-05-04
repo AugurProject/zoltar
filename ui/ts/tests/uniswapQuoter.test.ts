@@ -5,9 +5,6 @@ import { getAddress, zeroAddress, type Address } from 'viem'
 import {
 	DEFAULT_POOL_CONFIG,
 	ETH_ADDRESS,
-	REP_ADDRESS,
-	UNISWAP_V4_QUOTER_ADDRESS,
-	WETH_ADDRESS,
 	buildUniswapV3PoolUrl,
 	buildUniswapV4PoolId,
 	buildUniswapV4PoolUrl,
@@ -22,6 +19,7 @@ import {
 	quoteTokenForEth,
 } from '../lib/uniswapQuoter.js'
 import type { ReadClient } from '../lib/clients.js'
+import { getNetworkConfig } from '../shared/networkConfig.js'
 
 type SimulateArgs = Parameters<ReadClient['simulateContract']>[0]
 
@@ -41,6 +39,11 @@ type CapturedCall = {
 	hooks: string
 	exactAmount: bigint
 }
+
+const mainnetConfig = getNetworkConfig('ethereum')
+const REP_ADDRESS = mainnetConfig.genesisRepTokenAddress
+const UNISWAP_V4_QUOTER_ADDRESS = mainnetConfig.uniswapV4QuoterAddress
+const WETH_ADDRESS = mainnetConfig.wethAddress
 
 function extractParams(args: SimulateArgs): CapturedCall {
 	const [param] = args.args as unknown as [RawSimulateParam]

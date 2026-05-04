@@ -218,7 +218,7 @@ void describe('trading helpers', () => {
 				totalSecurityBondAllowance: 10n,
 				universeHasForked: false,
 			}),
-		).toBe('Switch to Ethereum mainnet before minting complete sets.')
+		).toBe('Switch wallet to Ethereum mainnet before minting complete sets.')
 	})
 
 	void test('surfaces the main mint block reasons before the transaction is sent', () => {

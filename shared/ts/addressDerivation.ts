@@ -8,6 +8,7 @@ type SecurityPoolCoreAddresses = {
 	securityPoolForker: Address
 	shareTokenFactory: Address
 	uniformPriceDualCapBatchAuctionFactory: Address
+	weth: Address
 	zoltar: Address
 	zoltarQuestionData: Address
 }
@@ -21,7 +22,7 @@ type RepTokenAddressConfig = {
 type SecurityPoolAddressConfig = {
 	getEscalationGameInitCode: (securityPool: Address) => Hex
 	getInfraContracts: () => SecurityPoolCoreAddresses
-	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle: Address, repToken: Address) => Hex
+	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle: Address, repToken: Address, weth: Address) => Hex
 	getRepTokenAddress: (universeId: bigint) => Address
 	getSecurityPoolInitCode: (inputs: {
 		escalationGameFactory: Address
@@ -79,7 +80,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 
 		const repToken = config.getRepTokenAddress(universeId)
 		const priceOracleManagerAndOperatorQueuer = getCreate2Address({
-			bytecode: config.getPriceOracleManagerAndOperatorQueuerInitCode(infraContracts.openOracle, repToken),
+			bytecode: config.getPriceOracleManagerAndOperatorQueuerInitCode(infraContracts.openOracle, repToken, infraContracts.weth),
 			from: infraContracts.priceOracleManagerAndOperatorQueuerFactory,
 			salt: securityPoolSaltWithMsgSender,
 		})

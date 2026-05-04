@@ -21,7 +21,6 @@ import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { hasForkActivity } from '../lib/forkAuction.js'
 import { resolveRequestedLoadableValueState, type LoadableValueState } from '../lib/loadState.js'
-import { isMainnetChain } from '../lib/network.js'
 import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
@@ -72,6 +71,7 @@ export function getSelectedPoolOracleMetricValues({ lastOraclePrice, lastOracleS
 }
 
 export function SecurityPoolWorkflowSection({
+	activeNetworkLabel = 'Ethereum mainnet',
 	accountState,
 	activeUniverseId,
 	checkedSecurityPoolAddress,
@@ -104,10 +104,10 @@ export function SecurityPoolWorkflowSection({
 	securityVault,
 	showHeader = true,
 	trading,
+	walletMatchesActiveNetwork = true,
 }: SecurityPoolWorkflowRouteContentProps & { showHeader?: boolean }) {
 	const [view, setView] = useState<SelectedPoolView>(() => resolveEnumValue<SelectedPoolView>(readSelectedPoolViewQueryParam(window.location.search), 'vaults', ['vaults', 'trading', 'resolution']))
 	const [vaultView, setVaultView] = useState<SelectedVaultView>('selected-vault')
-	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedPool = securityPools.find(pool => sameCaseInsensitiveText(pool.securityPoolAddress, securityPoolAddress))
 	const currentReportingDetails = sameAddress(reporting.reportingDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) ? reporting.reportingDetails : undefined
 	const currentForkAuctionDetails = sameAddress(forkAuction.forkAuctionDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) ? forkAuction.forkAuctionDetails : undefined
@@ -321,7 +321,7 @@ export function SecurityPoolWorkflowSection({
 											<button
 												className='secondary'
 												onClick={() => (loadedSelectedPool === undefined ? undefined : onRequestPoolPrice(loadedSelectedPool.managerAddress))}
-												disabled={accountState.address === undefined || !isMainnet || currentPoolOracleManagerDetails.pendingReportId > 0n || loadedSelectedPool === undefined}
+												disabled={accountState.address === undefined || !walletMatchesActiveNetwork || currentPoolOracleManagerDetails.pendingReportId > 0n || loadedSelectedPool === undefined}
 											>
 												Request New Price
 											</button>
@@ -398,7 +398,11 @@ export function SecurityPoolWorkflowSection({
 																>
 																	Select Vault
 																</button>
-																<button className='destructive' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet || currentPoolOracleManagerDetails?.isPriceValid === false}>
+																<button
+																	className='destructive'
+																	onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)}
+																	disabled={accountState.address === undefined || !walletMatchesActiveNetwork || currentPoolOracleManagerDetails?.isPriceValid === false}
+																>
 																	Liquidate Vault
 																</button>
 															</div>
@@ -473,9 +477,9 @@ export function SecurityPoolWorkflowSection({
 			</div>
 
 			<LiquidationModal
+				activeNetworkLabel={activeNetworkLabel}
 				accountAddress={accountState.address}
 				closeLiquidationModal={closeLiquidationModal}
-				isMainnet={isMainnet}
 				liquidationAmount={liquidationAmount}
 				liquidationManagerAddress={liquidationManagerAddress}
 				liquidationModalOpen={liquidationModalOpen}
@@ -484,6 +488,7 @@ export function SecurityPoolWorkflowSection({
 				onLiquidationAmountChange={onLiquidationAmountChange}
 				onLiquidationTargetVaultChange={onLiquidationTargetVaultChange}
 				onQueueLiquidation={onQueueLiquidation}
+				walletMatchesActiveNetwork={walletMatchesActiveNetwork}
 			/>
 		</section>
 	)

@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { readOpenOracleReportIdQueryParam, readSecurityPoolQueryParam, readUniverseQueryParam, writeOpenOracleReportIdQueryParam, writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../lib/urlParams.js'
+import { readNetworkQueryParam, readOpenOracleReportIdQueryParam, readSecurityPoolQueryParam, readUniverseQueryParam, writeNetworkQueryParam, writeOpenOracleReportIdQueryParam, writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../lib/urlParams.js'
 
 void describe('url params', () => {
 	void test('reads a universe query param', () => {
@@ -14,6 +14,16 @@ void describe('url params', () => {
 		expect(writeUniverseQueryParam('', 12n)).toBe('?universe=12')
 		expect(writeUniverseQueryParam('?foo=bar', 12n)).toBe('?foo=bar&universe=12')
 		expect(writeUniverseQueryParam('?foo=bar&universe=12', undefined)).toBe('?foo=bar')
+	})
+
+	void test('reads and writes a network query param', () => {
+		expect(readNetworkQueryParam('')).toBe('ethereum')
+		expect(readNetworkQueryParam('?network=sepolia')).toBe('sepolia')
+		expect(readNetworkQueryParam('?network=unknown')).toBe('ethereum')
+		expect(writeNetworkQueryParam('', 'ethereum')).toBe('')
+		expect(writeNetworkQueryParam('', 'sepolia')).toBe('?network=sepolia')
+		expect(writeNetworkQueryParam('?foo=bar', 'sepolia')).toBe('?foo=bar&network=sepolia')
+		expect(writeNetworkQueryParam('?foo=bar&network=sepolia', 'ethereum')).toBe('?foo=bar')
 	})
 
 	void test('reads and writes a security pool query param', () => {

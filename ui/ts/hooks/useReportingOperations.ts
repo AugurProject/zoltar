@@ -3,7 +3,7 @@ import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
 import { loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool } from '../contracts.js'
-import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { createReadClientForNetwork, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput, resolveOptionalBigIntListInput } from '../lib/inputs.js'
@@ -13,7 +13,7 @@ import type { ReportingActionResult, ReportingDetails } from '../types/contracts
 
 type UseReportingOperationsParameters = WriteOperationsParameters
 
-export function useReportingOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseReportingOperationsParameters) {
+export function useReportingOperations({ accountAddress, activeNetworkKey, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseReportingOperationsParameters) {
 	const reportingLoad = useLoadController()
 	const reportingDetails = useSignal<ReportingDetails | undefined>(undefined)
 	const reportingError = useSignal<string | undefined>(undefined)
@@ -27,7 +27,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 			},
 			load: async () => {
 				const securityPoolAddress = parseAddressInput(reportingForm.value.securityPoolAddress, 'Security pool address')
-				return await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
+				return await loadReportingDetails(createReadClientForNetwork(activeNetworkKey), securityPoolAddress, accountAddress)
 			},
 			onSuccess: details => {
 				reportingDetails.value = details
@@ -43,7 +43,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		const currentForm = reportingForm.value
 		await runWriteAction(
 			{
-				...buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, reportingError, 'Connect a wallet before reporting on a market'),
+				...buildWriteActionConfig({ accountAddress, activeNetworkKey, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, reportingError, 'Connect a wallet before reporting on a market'),
 				refreshErrorFallback: 'Reporting transaction succeeded, but refreshing reporting details failed',
 			},
 			async walletAddress => {
@@ -55,7 +55,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 			async result => {
 				reportingResult.value = result
 				const securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
-				const details = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
+				const details = await loadReportingDetails(createReadClientForNetwork(activeNetworkKey), securityPoolAddress, accountAddress)
 				reportingDetails.value = details
 			},
 		)
@@ -63,13 +63,13 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 
 	const reportOutcome = async () =>
 		await runReportingAction(
-			async (walletAddress, securityPoolAddress, currentForm) => await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, parseBigIntInput(currentForm.reportAmount, 'Report amount')),
+			async (walletAddress, securityPoolAddress, currentForm) => await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, parseBigIntInput(currentForm.reportAmount, 'Report amount')),
 			'Failed to report on outcome',
 		)
 
 	const withdrawEscalation = async () =>
 		await runReportingAction(async (walletAddress, securityPoolAddress, currentForm) => {
-			const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
+			const latestDetails = await loadReportingDetails(createReadClientForNetwork(activeNetworkKey), securityPoolAddress, walletAddress)
 			const selectedSide = latestDetails.sides.find(side => side.key === currentForm.selectedOutcome)
 			const depositIndexes = resolveOptionalBigIntListInput(currentForm.withdrawDepositIndexes, selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? [], 'Deposit indexes')
 
@@ -77,7 +77,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 				throw new Error('No deposits available to withdraw for the selected side')
 			}
 
-			return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, depositIndexes)
+			return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, depositIndexes)
 		}, 'Failed to withdraw escalation deposits')
 
 	return {

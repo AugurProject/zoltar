@@ -11,9 +11,10 @@ import { UniformPriceDualCapBatchAuction } from '../UniformPriceDualCapBatchAuct
 import { IShareToken } from '../interfaces/IShareToken.sol';
 import { PriceOracleManagerAndOperatorQueuerFactory } from './PriceOracleManagerAndOperatorQueuerFactory.sol';
 import { PriceOracleManagerAndOperatorQueuer } from '../PriceOracleManagerAndOperatorQueuer.sol';
-import { ReputationToken } from '../../ReputationToken.sol';
+import { IReputationToken } from '../../IReputationToken.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
+import { IWeth9 } from '../interfaces/IWeth9.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory shareTokenFactory;
@@ -21,6 +22,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	PriceOracleManagerAndOperatorQueuerFactory priceOracleManagerAndOperatorQueuerFactory;
 	Zoltar zoltar;
 	OpenOracle openOracle;
+	IWeth9 weth;
 	EscalationGameFactory escalationGameFactory;
 	ZoltarQuestionData questionData;
 	ISecurityPoolForker securityPoolForker;
@@ -28,13 +30,14 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 	event DeploySecurityPool(ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction, PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer, IShareToken shareToken, ISecurityPool parent, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 completeSetCollateralAmount);
 
-	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory, PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory) {
+	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory, PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory, IWeth9 _weth) {
 		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
 		uniformPriceDualCapBatchAuctionFactory = _uniformPriceDualCapBatchAuctionFactory;
 		priceOracleManagerAndOperatorQueuerFactory = _priceOracleManagerAndOperatorQueuerFactory;
 		zoltar = _zoltar;
 		openOracle = _openOracle;
+		weth = _weth;
 		escalationGameFactory = _escalationGameFactory;
 		questionData = _questionData;
 	}
@@ -55,8 +58,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	function deployChildSecurityPool(ISecurityPool parent, IShareToken shareToken, uint248 universeId, uint256 questionId, uint256 securityMultiplier, uint256 currentRetentionRate, uint256 completeSetCollateralAmount) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
 		require(msg.sender == address(securityPoolForker), 'only securityPoolForker');
 		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, questionId, securityMultiplier));
-		ReputationToken reputationToken = zoltar.getRepToken(universeId);
-		PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
+		IReputationToken reputationToken = zoltar.getRepToken(universeId);
+		PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, weth, securityPoolSalt);
 
 		truthAuction = uniformPriceDualCapBatchAuctionFactory.deployUniformPriceDualCapBatchAuction(address(securityPoolForker), securityPoolSalt);
 
@@ -80,9 +83,9 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(keccak256(bytes(outcomes[1])) == keccak256(bytes('No')), 'Second outcome must be "No"');
 		require(bytes(outcomes[2]).length == 0, 'Question must have exactly 2 outcomes');
 
-		ReputationToken reputationToken = zoltar.getRepToken(universeId);
+		IReputationToken reputationToken = zoltar.getRepToken(universeId);
 		bytes32 securityPoolSalt = keccak256(abi.encode(address(0x0), universeId, questionId, securityMultiplier));
-		PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
+		PriceOracleManagerAndOperatorQueuer priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, weth, securityPoolSalt);
 
 		// sharetoken has different salt as sharetoken address does not change in forks
 		bytes32 shareTokenSalt = keccak256(abi.encode(securityMultiplier, questionId));

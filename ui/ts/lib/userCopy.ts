@@ -120,7 +120,19 @@ export function getUniversePresentation(state: LoadableValueState) {
 	}
 }
 
-export function getWalletPresentation({ accountAddress, hasInjectedWallet = true, isMainnet = true }: { accountAddress: Address | undefined; hasInjectedWallet?: boolean; isMainnet?: boolean }) {
+export function getWalletPresentation({
+	accountAddress,
+	activeNetworkLabel = 'Ethereum mainnet',
+	hasInjectedWallet = true,
+	isMainnet,
+	walletMatchesActiveNetwork = isMainnet ?? true,
+}: {
+	accountAddress: Address | undefined
+	activeNetworkLabel?: string
+	hasInjectedWallet?: boolean
+	isMainnet?: boolean
+	walletMatchesActiveNetwork?: boolean
+}) {
 	if (!hasInjectedWallet) {
 		return createPresentation('wallet_disconnected', {
 			badgeLabel: 'Connect wallet',
@@ -135,11 +147,11 @@ export function getWalletPresentation({ accountAddress, hasInjectedWallet = true
 			detail: 'Connect wallet to continue.',
 		})
 	}
-	if (!isMainnet) {
+	if (!walletMatchesActiveNetwork) {
 		return createPresentation('wrong_network', {
 			badgeLabel: 'Wrong network',
 			badgeTone: 'blocked',
-			detail: 'Switch to Ethereum mainnet.',
+			detail: `Switch wallet to ${activeNetworkLabel}.`,
 		})
 	}
 	return undefined

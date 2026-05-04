@@ -2,7 +2,7 @@
 pragma solidity 0.8.33;
 
 import { Zoltar, FORK_THRESHOLD_DIVISOR } from '../Zoltar.sol';
-import { ReputationToken } from '../ReputationToken.sol';
+import { IReputationToken } from '../IReputationToken.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
 import { PriceOracleManagerAndOperatorQueuer } from './PriceOracleManagerAndOperatorQueuer.sol';
 import { ISecurityPool, SecurityVault, SystemState, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
@@ -25,7 +25,7 @@ contract SecurityPool is ISecurityPool {
 	Zoltar public immutable zoltar;
 	ISecurityPool immutable public parent;
 	IShareToken public immutable shareToken;
-	ReputationToken public immutable repToken;
+	IReputationToken public immutable repToken;
 	PriceOracleManagerAndOperatorQueuer public immutable priceOracleManagerAndOperatorQueuer;
 	OpenOracle public immutable openOracle;
 	EscalationGameFactory public immutable escalationGameFactory;

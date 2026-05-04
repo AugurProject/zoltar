@@ -30,6 +30,7 @@ import {
 import { loadOpenOracleReportSummaries } from '../contracts.js'
 import { getReportPresentation } from '../lib/userCopy.js'
 import { resolveFirstMatchingValue } from '../lib/viewState.js'
+import { DEFAULT_NETWORK_KEY, getNetworkConfig } from '../shared/networkConfig.js'
 import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
 import type { OpenOracleSectionProps, OpenOracleView } from '../types/components.js'
@@ -265,6 +266,7 @@ export function renderSelectedReportActionSection(
 }
 
 function renderReportDetailsCard(
+	activeNetworkKey: OpenOracleSectionProps['activeNetworkKey'] = DEFAULT_NETWORK_KEY,
 	openOracleReportDetails: OpenOracleReportDetails | undefined,
 	openOracleForm: OpenOracleFormState,
 	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
@@ -339,6 +341,7 @@ function renderReportDetailsCard(
 		token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
 		token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
 		walletEthBalance: openOracleInitialReportState.ethBalance,
+		wrappedNativeTokenAddress: getNetworkConfig(activeNetworkKey).wethAddress,
 	})
 
 	return (
@@ -540,6 +543,7 @@ function renderLatestActionCard(action: OpenOracleSectionProps['openOracleResult
 }
 
 export function OpenOracleSection({
+	activeNetworkKey = DEFAULT_NETWORK_KEY,
 	accountState,
 	loadingOracleReport,
 	onApproveToken1,
@@ -595,7 +599,7 @@ export function OpenOracleSection({
 				onStart: () => {
 					setBrowseError(undefined)
 				},
-				load: async () => await loadOpenOracleReportSummaries(createConnectedReadClient(), browsePageIndex, BROWSE_PAGE_SIZE),
+				load: async () => await loadOpenOracleReportSummaries(createConnectedReadClient(activeNetworkKey), browsePageIndex, BROWSE_PAGE_SIZE),
 				onSuccess: page => {
 					setBrowsePage(page)
 				},
@@ -610,7 +614,7 @@ export function OpenOracleSection({
 		return () => {
 			cancelled = true
 		}
-	}, [browsePageIndex, openOracleResult?.action, openOracleResult?.hash, view])
+	}, [activeNetworkKey, browsePageIndex, openOracleResult?.action, openOracleResult?.hash, view])
 
 	const loadingBrowse = browseLoad.isLoading.value
 	const browseReportCount = browsePage?.reportCount ?? 0n
@@ -757,6 +761,7 @@ export function OpenOracleSection({
 				<div className='market-grid'>
 					<div className='market-column'>
 						{renderReportDetailsCard(
+							activeNetworkKey,
 							openOracleReportDetails,
 							openOracleForm,
 							openOracleInitialReportState,

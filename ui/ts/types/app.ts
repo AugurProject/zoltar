@@ -1,10 +1,12 @@
 import type { MarketType, ReportingOutcomeKey } from './contracts.js'
 import type { Address, Hash } from 'viem'
+import type { SupportedNetworkKey } from '../shared/networkConfig.js'
 
 export type Route = 'deploy' | 'zoltar' | 'security-pools' | 'open-oracle' | 'not-found'
 
 export type WriteOperationsParameters = {
 	accountAddress: Address | undefined
+	activeNetworkKey: SupportedNetworkKey
 	onTransaction: (hash: Hash) => void
 	onTransactionFinished: () => void
 	onTransactionRequested: () => void
@@ -14,7 +16,8 @@ export type WriteOperationsParameters = {
 
 export type AccountState = {
 	address: Address | undefined
-	chainId: string | undefined
+	chainId?: string | undefined
+	walletChainId: string | undefined
 	ethBalance: bigint | undefined
 	wethBalance: bigint | undefined
 }

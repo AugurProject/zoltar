@@ -1,18 +1,19 @@
 import { useSignal } from '@preact/signals'
 import { loadErc20Allowance, loadErc20Balance } from '../contracts.js'
-import { createConnectedReadClient } from '../lib/clients.js'
+import { createReadClientForNetwork } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
+import type { SupportedNetworkKey } from '../shared/networkConfig.js'
 import type { ReadClient } from '../types/contracts.js'
 
-function useErc20Loader<TArgs extends unknown[]>(loadFn: (client: ReadClient, ...args: TArgs) => Promise<bigint>) {
+function useErc20Loader<TArgs extends unknown[]>(activeNetworkKey: SupportedNetworkKey, loadFn: (client: ReadClient, ...args: TArgs) => Promise<bigint>) {
 	const signal = useSignal<bigint | undefined>(undefined)
 	const nextLoad = useRequestGuard()
 	const reload = async (...args: TArgs) => {
 		const isCurrent = nextLoad()
 		try {
-			const value = await loadFn(createConnectedReadClient(), ...args)
+			const value = await loadFn(createReadClientForNetwork(activeNetworkKey), ...args)
 			if (!isCurrent()) return
 			signal.value = value
 		} catch {
@@ -23,11 +24,11 @@ function useErc20Loader<TArgs extends unknown[]>(loadFn: (client: ReadClient, ..
 	return { signal, reload }
 }
 
-export function useErc20BalanceLoader() {
-	return useErc20Loader(loadErc20Balance)
+export function useErc20BalanceLoader(activeNetworkKey: SupportedNetworkKey) {
+	return useErc20Loader(activeNetworkKey, loadErc20Balance)
 }
 
-export function useErc20AllowanceLoader() {
+export function useErc20AllowanceLoader(activeNetworkKey: SupportedNetworkKey) {
 	const signal = useSignal<TokenApprovalState>({
 		error: undefined,
 		loading: false,
@@ -42,7 +43,7 @@ export function useErc20AllowanceLoader() {
 			loading: true,
 		}
 		try {
-			const value = await loadErc20Allowance(createConnectedReadClient(), ...args)
+			const value = await loadErc20Allowance(createReadClientForNetwork(activeNetworkKey), ...args)
 			if (!isCurrent()) return
 			signal.value = {
 				error: undefined,

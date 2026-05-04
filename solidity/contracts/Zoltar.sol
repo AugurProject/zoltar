@@ -2,6 +2,7 @@
 pragma solidity 0.8.33;
 
 import './Constants.sol';
+import './IReputationToken.sol';
 import './ReputationToken.sol';
 import './ZoltarQuestionData.sol';
 
@@ -14,7 +15,7 @@ contract Zoltar {
 		uint256 forkQuestionId;
 		uint256 forkingOutcomeIndex;
 
-		ReputationToken reputationToken;
+		IReputationToken reputationToken;
 		uint248 parentUniverseId;
 	}
 
@@ -30,11 +31,13 @@ contract Zoltar {
 	event UniverseForked(address forker, uint248 universeId, uint256 questionId);
 	event DeployChild(address deployer, uint248 universeId, uint256 outcomeIndex, uint248 childUniverseId, ReputationToken childReputationToken);
 
+	address public immutable genesisReputationToken;
 	ZoltarQuestionData public zoltarQuestionData;
 
-	constructor(ZoltarQuestionData _zoltarQuestionData) {
+	constructor(ZoltarQuestionData _zoltarQuestionData, address _genesisReputationToken) {
 		zoltarQuestionData = _zoltarQuestionData;
-		universes[0] = Universe(0, 0, 0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0);
+		genesisReputationToken = _genesisReputationToken;
+		universes[0] = Universe(0, 0, 0, IReputationToken(_genesisReputationToken), 0);
 	}
 
 	function getForkTime(uint248 universeId) external view returns (uint256) {
@@ -42,7 +45,7 @@ contract Zoltar {
 		return universe.forkTime;
 	}
 
-	function getRepToken(uint248 universeId) external view returns (ReputationToken) {
+	function getRepToken(uint248 universeId) external view returns (IReputationToken) {
 		Universe memory universe = universes[universeId];
 		return universe.reputationToken;
 	}
@@ -66,9 +69,9 @@ contract Zoltar {
 		emit UniverseForked(msg.sender, universeId, questionId);
 	}
 
-	function burnRep(ReputationToken reputationToken, address migrator, uint256 amount) private {
+	function burnRep(IReputationToken reputationToken, address migrator, uint256 amount) private {
 		// Genesis is using REPv2 which we cannot actually burn
-		if (address(reputationToken) == Constants.GENESIS_REPUTATION_TOKEN) {
+		if (address(reputationToken) == genesisReputationToken) {
 			if (migrator == address(this)) {
 				reputationToken.transfer(Constants.BURN_ADDRESS, amount);
 			} else {
@@ -91,7 +94,7 @@ contract Zoltar {
 		require(address(universes[childUniverseId].reputationToken) == address(0), 'Child universe already deployed');
 		ReputationToken childReputationToken = new ReputationToken{ salt: bytes32(uint256(childUniverseId)) }(address(this));
 		childReputationToken.setMaxTheoreticalSupply(universe.reputationToken.getTotalTheoreticalSupply());
-		universes[childUniverseId] = Universe(0, universe.forkQuestionId, outcomeIndex, childReputationToken, universeId);
+		universes[childUniverseId] = Universe(0, universe.forkQuestionId, outcomeIndex, IReputationToken(address(childReputationToken)), universeId);
 		deployedChildOutcomeIndexes[universeId].push(outcomeIndex);
 		emit DeployChild(msg.sender, universeId, outcomeIndex, childUniverseId, childReputationToken);
 	}
@@ -135,7 +138,7 @@ contract Zoltar {
 			if (address(universes[childUniverseId].reputationToken) == address(0x0)) deployChild(universeId, outcomeIndex);
 			migrationRepBalances[msg.sender][universeId].childMigrationRepAmounts[childUniverseId] += amount;
 			require(migrationRepBalances[msg.sender][universeId].childMigrationRepAmounts[childUniverseId] <= migrationRepBalances[msg.sender][universeId].migrationRepBalance, 'cannot migrate more than internal balance');
-			universes[childUniverseId].reputationToken.mint(recipient, amount);
+			ReputationToken(address(universes[childUniverseId].reputationToken)).mint(recipient, amount);
 		}
 	}
 

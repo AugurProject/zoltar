@@ -7,6 +7,7 @@ import { MetricField } from '../components/MetricField.js'
 import { renderSelectedReportActionSection } from '../components/OpenOracleSection.js'
 import { deriveOpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
 import { getDefaultOpenOracleFormState } from '../lib/marketForm.js'
+import { getNetworkConfig } from '../shared/networkConfig.js'
 import type { AccountState, OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleSectionProps } from '../types/components.js'
 import type { OpenOracleReportDetails } from '../types/contracts.js'
@@ -82,10 +83,13 @@ function hasVNodeType(node: unknown, type: unknown) {
 	return found
 }
 
+const WRAPPED_NATIVE_TOKEN_ADDRESS = getNetworkConfig('ethereum').wethAddress
+
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
+		walletChainId: '0x1',
 		ethBalance: 10n * 10n ** 18n,
 		wethBalance: 5n * 10n ** 18n,
 		...overrides,
@@ -211,6 +215,7 @@ function renderInitialReportActionSection({
 		token2BalanceError: openOracleInitialReportState.token2BalanceError,
 		token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
 		walletEthBalance: openOracleInitialReportState.ethBalance,
+		wrappedNativeTokenAddress: WRAPPED_NATIVE_TOKEN_ADDRESS,
 	})
 
 	return renderSelectedReportActionSection(
@@ -270,6 +275,7 @@ function renderDisputeActionSection({
 			token2BalanceError: undefined,
 			token2Decimals: openOracleReportDetails.token2Decimals,
 			walletEthBalance: undefined,
+			wrappedNativeTokenAddress: WRAPPED_NATIVE_TOKEN_ADDRESS,
 		}),
 		createOpenOracleInitialReportState(),
 		openOracleReportDetails.token1Symbol,

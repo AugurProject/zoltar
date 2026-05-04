@@ -74,6 +74,12 @@ export type DeploymentStatusSnapshot = {
 	deploymentStatuses: DeploymentStatus[]
 }
 
+export type GenesisRepTokenDeploymentPrerequisite = {
+	detail: string | undefined
+	missingLabel: string | undefined
+	ready: boolean
+}
+
 type ActionResult = { hash: Hash }
 
 export type MarketCreationResult = {

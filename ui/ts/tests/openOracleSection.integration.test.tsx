@@ -11,6 +11,7 @@ import { useOpenOracleOperations } from '../hooks/useOpenOracleOperations.js'
 import type { AccountState } from '../types/app.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 import { createConnectedReadClient } from '../lib/clients.js'
+import { DEFAULT_NETWORK_KEY } from '../shared/networkConfig.js'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../../../solidity/ts/testsuite/simulator/utils/constants'
 import { addressString } from '../../../solidity/ts/testsuite/simulator/utils/bigint'
 import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../solidity/ts/testsuite/simulator/utils/utilities'
@@ -37,15 +38,17 @@ function createInjectedWalletShim(mockWindow: AnvilWindowEthereum, accountAddres
 	}
 
 	return {
+		chainId: '0x1',
 		on: () => undefined,
 		removeListener: () => undefined,
 		request,
-	}
+	} as unknown as InjectedEthereum
 }
 
 function OpenOracleSectionHarness({ accountAddress }: { accountAddress: Address }) {
 	const openOracle = useOpenOracleOperations({
 		accountAddress,
+		activeNetworkKey: DEFAULT_NETWORK_KEY,
 		onTransaction: (_hash: Hash) => undefined,
 		onTransactionFinished: () => undefined,
 		onTransactionRequested: () => undefined,
@@ -55,6 +58,7 @@ function OpenOracleSectionHarness({ accountAddress }: { accountAddress: Address 
 	const accountState: AccountState = {
 		address: accountAddress,
 		chainId: '0x1',
+		walletChainId: '0x1',
 		ethBalance: undefined,
 		wethBalance: undefined,
 	}
@@ -83,6 +87,7 @@ function OpenOracleSectionHarness({ accountAddress }: { accountAddress: Address 
 			openOracleInitialReportState={openOracle.openOracleInitialReportState}
 			openOracleReportDetails={openOracle.openOracleReportDetails}
 			openOracleResult={openOracle.openOracleResult}
+			activeNetworkKey={DEFAULT_NETWORK_KEY}
 		/>
 	)
 }
@@ -161,7 +166,7 @@ describe.serial('OpenOracleSection integration', () => {
 		restoreDomEnvironment = domEnvironment.cleanup
 		const injectedWindow = domEnvironment.window as unknown as Window & { ethereum?: InjectedEthereum }
 		injectedWindow.ethereum = createInjectedWalletShim(mockWindow, walletAddress)
-		uiReadClient = createConnectedReadClient()
+		uiReadClient = createConnectedReadClient(DEFAULT_NETWORK_KEY)
 	})
 
 	afterEach(async () => {
@@ -237,6 +242,9 @@ describe.serial('OpenOracleSection integration', () => {
 			throw new Error('Expected the second token approval section to remain rendered')
 		}
 
+		await waitFor(() => {
+			expect(getApproveButton(getApprovalSections(getEntityCardByTitle('Selected Report'))[1] ?? refreshedToken2ApprovalSection).disabled).toBe(false)
+		})
 		await clickElement(getApproveButton(refreshedToken2ApprovalSection))
 		await waitForLatestAction('approveToken2')
 		await waitFor(async () => {
@@ -342,6 +350,9 @@ describe.serial('OpenOracleSection integration', () => {
 			throw new Error('Expected the second token approval section to remain rendered')
 		}
 
+		await waitFor(() => {
+			expect(getApproveButton(getApprovalSections(getEntityCardByTitle('Selected Report'))[1] ?? refreshedToken2ApprovalSection).disabled).toBe(false)
+		})
 		await clickElement(getApproveButton(refreshedToken2ApprovalSection))
 		await waitForLatestAction('approveToken2')
 		await waitFor(async () => {

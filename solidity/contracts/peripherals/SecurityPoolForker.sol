@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
-import { ReputationToken } from '../ReputationToken.sol';
+import { IReputationToken } from '../IReputationToken.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { IUniformPriceDualCapBatchAuction } from './interfaces/IUniformPriceDualCapBatchAuction.sol';
 import { UniformPriceDualCapBatchAuction } from './UniformPriceDualCapBatchAuction.sol';
@@ -85,7 +85,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		require(securityPool.systemState() == SystemState.Operational, 'System is not operational');
 		require(address(escalationGame) == address(0x0) || escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'question has been finalized already');
 		securityPool.activateForkMode();
-		ReputationToken rep = securityPool.repToken();
+		IReputationToken rep = securityPool.repToken();
 		rep.approve(address(zoltar), type(uint256).max);
 		zoltar.addRepToMigrationBalance(universe, rep.balanceOf(address(this)));
 		forkDataByPool[securityPool].repAtFork = zoltar.getMigrationRepBalance(address(this), universe);
@@ -111,7 +111,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		trustedAuctionAddresses[address(truthAuction)] = true;
 		childrenByPoolAndOutcome[parent][outcomeIndex] = child;
 		parent.authorizeChildPool(child);
-		ReputationToken childReputationToken = child.repToken();
+		IReputationToken childReputationToken = child.repToken();
 		childReputationToken.transfer(address(child), childReputationToken.balanceOf(address(this)));
 
 		if (forkDataByPool[parent].ownFork) {

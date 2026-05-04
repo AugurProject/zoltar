@@ -28,6 +28,7 @@ import type { LoadableValueState } from '../lib/loadState.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 import type { OpenOracleInitialReportQuoteFailureKind, OpenOracleInitialReportQuoteSource } from '../lib/openOracle.js'
+import type { SupportedNetworkKey } from '../shared/networkConfig.js'
 
 type RepEthPriceProps = {
 	repEthPrice: bigint | undefined
@@ -35,17 +36,24 @@ type RepEthPriceProps = {
 	repEthSourceUrl: string | undefined
 }
 
+type ActiveNetworkWriteContext = {
+	activeNetworkLabel?: string
+	walletMatchesActiveNetwork?: boolean
+}
+
 export type DeploymentSectionProps = {
 	title: string
 	steps: DeploymentStatus[]
 	allSteps: DeploymentStatus[]
 	accountAddress: Address | undefined
-	isMainnet: boolean
+	activeNetworkLabel: string
 	busyStepId: DeploymentStepId | undefined
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
-}
+	zoltarExternalPrerequisiteLabel?: string | undefined
+} & ActiveNetworkWriteContext
 
 export type OverviewPanelsProps = {
+	activeNetworkKey: SupportedNetworkKey
 	accountState: AccountState
 	isConnectingWallet: boolean
 	walletBootstrapComplete: boolean
@@ -58,6 +66,7 @@ export type OverviewPanelsProps = {
 	repUsdcSource: 'v4' | 'v3' | undefined
 	repUsdcSourceUrl: string | undefined
 	isLoadingRepPrices: boolean
+	onActiveNetworkKeyChange: (networkKey: SupportedNetworkKey) => void
 	onConnect: () => void
 	onGoToGenesisUniverse: () => void
 } & RepEthPriceProps
@@ -73,21 +82,18 @@ export type TabNavigationProps = {
 	onRouteChange: (route: Exclude<Route, 'not-found'>) => void
 }
 
-export type MainnetGateSectionProps = {
-	message: string
-}
-
 export type DeploymentRouteContentProps = {
 	accountAddress: Address | undefined
 	busyStepId: DeploymentStepId | undefined
+	deploymentBlockedNotice?: string | undefined
 	deploymentSections: { title: string; steps: DeploymentStatus[] }[]
 	deploymentStatuses: DeploymentStatus[]
 	isLoadingDeploymentStatuses: boolean
-	isMainnet: boolean
 	deployNextMissingPending: boolean
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 	onDeployNextMissing: () => void
-}
+	zoltarExternalPrerequisiteLabel?: string | undefined
+} & ActiveNetworkWriteContext
 
 export type MarketRouteContentProps = {
 	accountState: AccountState
@@ -131,7 +137,7 @@ export type MarketRouteContentProps = {
 	zoltarMigrationActiveAction: 'prepare' | 'split' | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	onZoltarForkQuestionIdChange: (questionId: string) => void
-}
+} & ActiveNetworkWriteContext
 
 export type SecurityPoolRouteContentProps = {
 	accountState: AccountState
@@ -152,7 +158,8 @@ export type SecurityPoolRouteContentProps = {
 	securityPoolError: string | undefined
 	securityPoolForm: SecurityPoolFormState
 	securityPoolResult: SecurityPoolCreationResult | undefined
-} & RepEthPriceProps
+} & RepEthPriceProps &
+	ActiveNetworkWriteContext
 
 export type MarketSectionProps = MarketRouteContentProps
 export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
@@ -183,12 +190,14 @@ export type SecurityPoolsOverviewRouteContentProps = {
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	securityPools: ListedSecurityPool[]
 } & LiquidationControlsProps &
-	RepEthPriceProps
+	RepEthPriceProps &
+	ActiveNetworkWriteContext
 
 export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
 export type SecurityPoolWorkflowRouteContentProps = {
 	accountState: AccountState
+	activeNetworkLabel: string
 	activeUniverseId: bigint
 	checkedSecurityPoolAddress: string | undefined
 	closeLiquidationModal: () => void
@@ -220,7 +229,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	securityPools: ListedSecurityPool[]
 	securityVault: SecurityVaultRouteContentProps
 	trading: TradingRouteContentProps
-}
+} & ActiveNetworkWriteContext
 
 export type SecurityPoolsSectionProps = {
 	createPool: SecurityPoolRouteContentProps
@@ -251,7 +260,7 @@ export type SecurityVaultRouteContentProps = {
 	repEthSource: 'v4' | 'v3' | undefined
 	repEthSourceUrl: string | undefined
 	securityPoolVaults?: SecurityPoolVaultSummary[] | undefined
-}
+} & ActiveNetworkWriteContext
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	compactLayout?: boolean
@@ -262,6 +271,7 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 }
 
 export type OpenOracleRouteContentProps = {
+	activeNetworkKey?: SupportedNetworkKey
 	accountState: AccountState
 	loadingOracleReport: boolean
 	onApproveToken1: (amount?: bigint) => void
@@ -321,7 +331,7 @@ export type ReportingRouteContentProps = {
 	reportingError: string | undefined
 	reportingForm: ReportingFormState
 	reportingResult: ReportingActionResult | undefined
-}
+} & ActiveNetworkWriteContext
 
 export type ReportingSectionProps = ReportingRouteContentProps & {
 	embedInCard?: boolean
@@ -347,7 +357,7 @@ export type TradingRouteContentProps = {
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 	tradingForm: TradingFormState
 	tradingResult: TradingActionResult | undefined
-}
+} & ActiveNetworkWriteContext
 
 export type TradingSectionProps = TradingRouteContentProps & {
 	embedInCard?: boolean
@@ -377,7 +387,7 @@ export type ForkAuctionRouteContentProps = {
 	onStartTruthAuction: () => void
 	onSubmitBid: () => void
 	onWithdrawBids: () => void
-}
+} & ActiveNetworkWriteContext
 
 export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
 	disabled?: boolean

@@ -5,7 +5,7 @@ import { zeroAddress } from 'viem'
 import { findNextDeployableStep, getDeploymentSections, getPrerequisiteLabel } from '../lib/deployment.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
-import { getDeploymentSteps, getMulticall3Address, getOpenOracleAddress, loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '../contracts.js'
+import { getDeploymentSteps, getMulticall3Address, getOpenOracleAddress, loadDeploymentStatusOracleSnapshot, loadGenesisRepTokenDeploymentPrerequisite, loadZoltarUniverseSummary } from '../contracts.js'
 import type { DeploymentStatus, ReadClient } from '../types/contracts.js'
 import { AnvilWindowEthereum } from '../../../solidity/ts/testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../solidity/ts/testsuite/simulator/useIsolatedAnvilNode'
@@ -20,7 +20,12 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
 	if (globalWindow.window === undefined) {
 		globalWindow.window = globalThis as unknown as Window & typeof globalThis
 	}
-	globalWindow.window.ethereum = mockWindow as unknown as InjectedEthereum
+	globalWindow.window.ethereum = {
+		chainId: '0x1',
+		on: mockWindow.on,
+		removeListener: mockWindow.removeListener,
+		request: mockWindow.request,
+	} as unknown as InjectedEthereum
 }
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -62,6 +67,13 @@ void describe('deployment helpers', () => {
 		const steps = [createStep('zoltar', false, ['securityPoolFactory'])]
 
 		expect(findNextDeployableStep(steps)).toBe(undefined)
+	})
+
+	void test('getPrerequisiteLabel reports the genesis REP prerequisite for zoltar when configured externally', () => {
+		const steps = [createStep('proxyDeployer', true), createStep('scalarOutcomes', true), createStep('zoltarQuestionData', true), createStep('zoltar', false, ['proxyDeployer', 'zoltarQuestionData'])]
+
+		expect(getPrerequisiteLabel(steps, 3, 'Genesis REP token')).toBe('Genesis REP token')
+		expect(findNextDeployableStep(steps, 'Genesis REP token')).toBe(undefined)
 	})
 
 	void test('getDeploymentSteps includes the deployment status oracle as a proxy deployer step', () => {
@@ -117,6 +129,17 @@ void describe('deployment helpers', () => {
 		expect(snapshot.augurPlaceHolderDeployed).toBe(false)
 		expect(snapshot.deploymentStatuses.find(step => step.id === 'proxyDeployer')?.deployed).toBe(true)
 		expect(snapshot.deploymentStatuses.find(step => step.id === 'deploymentStatusOracle')?.deployed).toBe(false)
+	})
+
+	void test('loadGenesisRepTokenDeploymentPrerequisite reports an unconfigured non-mainnet genesis REP clone', async () => {
+		const prerequisite = await loadGenesisRepTokenDeploymentPrerequisite({
+			chain: { id: 11155111 },
+			getCode: async () => '0x',
+		} as Parameters<typeof loadGenesisRepTokenDeploymentPrerequisite>[0])
+
+		expect(prerequisite.ready).toBe(false)
+		expect(prerequisite.missingLabel).toBe('Genesis REP token')
+		expect(prerequisite.detail).toContain('Non-mainnet deployments must deploy GenesisReputationToken first')
 	})
 
 	void test('loadZoltarUniverseSummary returns undefined for an unknown universe id', async () => {

@@ -3,14 +3,16 @@ import { useLayoutEffect, useRef } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
 import { createZoltarChildUniverse, loadAllZoltarQuestions, loadZoltarQuestionCount, loadZoltarUniverseSummary } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
-import { createConnectedReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createReadClientForNetwork, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../lib/errors.js'
 import { hasDeployedStep } from '../lib/marketCreation.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
+import type { SupportedNetworkKey } from '../shared/networkConfig.js'
 import type { DeploymentStatus, MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type UseZoltarUniverseParameters = {
 	accountAddress: Address | undefined
+	activeNetworkKey: SupportedNetworkKey
 	activeUniverseId: bigint
 	autoLoadInitialData: boolean
 	deploymentStatuses: DeploymentStatus[]
@@ -20,7 +22,7 @@ type UseZoltarUniverseParameters = {
 	onTransactionSubmitted: (hash: Hash) => void
 }
 
-export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted }: UseZoltarUniverseParameters) {
+export function useZoltarUniverse({ accountAddress, activeNetworkKey, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted }: UseZoltarUniverseParameters) {
 	const universeLoad = useLoadController()
 	const questionCountLoad = useLoadController()
 	const questionsLoad = useLoadController()
@@ -77,7 +79,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 					zoltarChildUniverseError.value = undefined
 					return undefined
 				}
-				return await loadZoltarUniverseSummary(createConnectedReadClient(), requestedUniverseId)
+				return await loadZoltarUniverseSummary(createReadClientForNetwork(activeNetworkKey), requestedUniverseId)
 			},
 			onSuccess: universe => {
 				if (requestedUniverseId !== activeUniverseId) return
@@ -102,7 +104,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		const isCurrent = nextQuestionCountLoad()
 		await questionCountLoad.run({
 			isCurrent,
-			load: async () => await loadZoltarQuestionCount(createConnectedReadClient()),
+			load: async () => await loadZoltarQuestionCount(createReadClientForNetwork(activeNetworkKey)),
 			onSuccess: questionCount => {
 				if (!isMounted.current) return
 				zoltarQuestionCount.value = questionCount
@@ -115,7 +117,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		if (!isMounted.current) return
 		const isCountCurrent = nextQuestionCountLoad()
 		const isQuestionsCurrent = nextQuestionsLoad()
-		const readClient = createConnectedReadClient()
+		const readClient = createReadClientForNetwork(activeNetworkKey)
 
 		const countTask = questionCountLoad.run({
 			isCurrent: isCountCurrent,
@@ -162,7 +164,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 				if (!universe.hasForked) {
 					throw new Error('Zoltar needs to fork before child universes can be deployed')
 				}
-				const result = await createZoltarChildUniverse(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), universe.universeId, outcomeIndex)
+				const result = await createZoltarChildUniverse(createWalletWriteClient(accountAddress, activeNetworkKey, { onTransactionSubmitted }), universe.universeId, outcomeIndex)
 				onTransaction(result.hash)
 				refreshRequired = true
 			} catch (error) {

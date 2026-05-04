@@ -17,15 +17,15 @@ import type { ZoltarUniverseSummary } from '../types/contracts.js'
 
 type MarketOverviewSectionProps = {
 	accountAddress: Address | undefined
-	isMainnet: boolean
 	loadingZoltarUniverse: boolean
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
+	walletMatchesActiveNetwork: boolean
 	zoltarChildUniverseError: string | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseState: LoadableValueState
 }
 
-export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltarUniverse, onCreateChildUniverseForOutcomeIndex, zoltarChildUniverseError, zoltarUniverse, zoltarUniverseState }: MarketOverviewSectionProps) {
+export function MarketOverviewSection({ accountAddress, loadingZoltarUniverse, onCreateChildUniverseForOutcomeIndex, walletMatchesActiveNetwork, zoltarChildUniverseError, zoltarUniverse, zoltarUniverseState }: MarketOverviewSectionProps) {
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
@@ -82,9 +82,9 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 							accountAddress={accountAddress}
 							childUniverses={rootUniverse.childUniverses}
 							hasForked={hasForked}
-							isMainnet={isMainnet}
 							onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex}
 							questionDetails={scalarQuestionDetails}
+							walletMatchesActiveNetwork={walletMatchesActiveNetwork}
 							zoltarChildUniverseError={zoltarChildUniverseError}
 						/>
 					) : (
@@ -93,7 +93,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 							emptyMessage='No child universes yet.'
 							headerTitle='Child universes'
 							action={child => ({
-								disabled: accountAddress === undefined || !isMainnet || child.exists,
+								disabled: accountAddress === undefined || !walletMatchesActiveNetwork || child.exists,
 								label: child.exists ? 'Deployed' : 'Deploy Universe',
 								onClick: () => onCreateChildUniverseForOutcomeIndex(child.outcomeIndex),
 								className: 'secondary',

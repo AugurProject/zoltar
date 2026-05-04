@@ -100,31 +100,36 @@ export function getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse
 }
 
 export function getTradingMintGuardMessage({
+	activeNetworkLabel,
 	accountAddress,
 	completeSetCollateralAmount,
 	ethBalance,
 	hasSelectedPool,
 	isMainnet,
+	walletMatchesActiveNetwork = isMainnet ?? true,
 	mintAmountInput,
 	systemState,
 	totalRepDeposit,
 	totalSecurityBondAllowance,
 	universeHasForked,
 }: {
+	activeNetworkLabel?: string
 	accountAddress: Address | undefined
 	completeSetCollateralAmount: bigint | undefined
 	ethBalance: bigint | undefined
 	hasSelectedPool: boolean
-	isMainnet: boolean
+	isMainnet?: boolean
+	walletMatchesActiveNetwork?: boolean
 	mintAmountInput: string
 	systemState: SecurityPoolSystemState | undefined
 	totalRepDeposit: bigint | undefined
 	totalSecurityBondAllowance: bigint | undefined
 	universeHasForked: boolean | undefined
 }) {
+	const resolvedActiveNetworkLabel = activeNetworkLabel ?? 'Ethereum mainnet'
 	if (!hasSelectedPool) return 'Load a pool before minting.'
 	if (accountAddress === undefined) return 'Connect a wallet before minting complete sets.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before minting complete sets.'
+	if (!walletMatchesActiveNetwork) return `Switch wallet to ${resolvedActiveNetworkLabel} before minting complete sets.`
 	if (universeHasForked === true) return 'Minting is unavailable after this universe has forked.'
 	if (systemState !== undefined && systemState !== 'operational') return 'Minting is only available while the pool is operational.'
 
@@ -156,27 +161,32 @@ export function getTradingMintGuardMessage({
 }
 
 export function getTradingRedeemCompleteSetGuardMessage({
+	activeNetworkLabel,
 	accountAddress,
 	hasSelectedPool,
 	isMainnet,
+	walletMatchesActiveNetwork = isMainnet ?? true,
 	loadingTradingDetails,
 	redeemAmountInput,
 	shareBalances,
 	systemState,
 	universeHasForked,
 }: {
+	activeNetworkLabel?: string
 	accountAddress: Address | undefined
 	hasSelectedPool: boolean
-	isMainnet: boolean
+	isMainnet?: boolean
+	walletMatchesActiveNetwork?: boolean
 	loadingTradingDetails: boolean
 	redeemAmountInput: string
 	shareBalances: TradingShareBalances | undefined
 	systemState: SecurityPoolSystemState | undefined
 	universeHasForked: boolean | undefined
 }) {
+	const resolvedActiveNetworkLabel = activeNetworkLabel ?? 'Ethereum mainnet'
 	if (!hasSelectedPool) return 'Load a pool before redeeming complete sets.'
 	if (accountAddress === undefined) return 'Connect a wallet before redeeming complete sets.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming complete sets.'
+	if (!walletMatchesActiveNetwork) return `Switch wallet to ${resolvedActiveNetworkLabel} before redeeming complete sets.`
 	if (universeHasForked === true) return 'Redeeming complete sets is unavailable after this universe has forked.'
 	if (systemState !== undefined && systemState !== 'operational') return 'Redeeming complete sets is only available while the pool is operational.'
 	if (loadingTradingDetails) return 'Loading wallet share balances.'
@@ -201,9 +211,11 @@ export function getTradingRedeemCompleteSetGuardMessage({
 }
 
 export function getTradingMigrateSharesGuardMessage({
+	activeNetworkLabel,
 	accountAddress,
 	hasSelectedPool,
 	isMainnet,
+	walletMatchesActiveNetwork = isMainnet ?? true,
 	loadingTradingForkUniverse,
 	loadingTradingDetails,
 	selectedShareOutcome,
@@ -212,9 +224,11 @@ export function getTradingMigrateSharesGuardMessage({
 	tradingForkUniverse,
 	universeHasForked,
 }: {
+	activeNetworkLabel?: string
 	accountAddress: Address | undefined
 	hasSelectedPool: boolean
-	isMainnet: boolean
+	isMainnet?: boolean
+	walletMatchesActiveNetwork?: boolean
 	loadingTradingForkUniverse: boolean
 	loadingTradingDetails: boolean
 	selectedShareOutcome: ReportingOutcomeKey
@@ -223,9 +237,10 @@ export function getTradingMigrateSharesGuardMessage({
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 	universeHasForked: boolean | undefined
 }) {
+	const resolvedActiveNetworkLabel = activeNetworkLabel ?? 'Ethereum mainnet'
 	if (!hasSelectedPool) return 'Load a pool before migrating shares.'
 	if (accountAddress === undefined) return 'Connect a wallet before migrating shares.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before migrating shares.'
+	if (!walletMatchesActiveNetwork) return `Switch wallet to ${resolvedActiveNetworkLabel} before migrating shares.`
 	if (universeHasForked !== true) return SHARE_MIGRATION_AFTER_FORK_MESSAGE
 	if (loadingTradingForkUniverse) return 'Loading fork target universes.'
 	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return 'Refresh the fork target universes.'
@@ -247,23 +262,28 @@ export function getTradingMigrateSharesGuardMessage({
 }
 
 export function getTradingRedeemSharesGuardMessage({
+	activeNetworkLabel,
 	accountAddress,
 	hasSelectedPool,
 	isMainnet,
+	walletMatchesActiveNetwork = isMainnet ?? true,
 	questionOutcome,
 	systemState,
 	universeHasForked,
 }: {
+	activeNetworkLabel?: string
 	accountAddress: Address | undefined
 	hasSelectedPool: boolean
-	isMainnet: boolean
+	isMainnet?: boolean
+	walletMatchesActiveNetwork?: boolean
 	questionOutcome: ReportingOutcomeKey | 'none' | undefined
 	systemState: SecurityPoolSystemState | undefined
 	universeHasForked: boolean | undefined
 }) {
+	const resolvedActiveNetworkLabel = activeNetworkLabel ?? 'Ethereum mainnet'
 	if (!hasSelectedPool) return 'Load a pool before redeeming shares.'
 	if (accountAddress === undefined) return 'Connect a wallet before redeeming shares.'
-	if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming shares.'
+	if (!walletMatchesActiveNetwork) return `Switch wallet to ${resolvedActiveNetworkLabel} before redeeming shares.`
 	if (universeHasForked === true) return 'Redeeming shares is unavailable after this universe has forked.'
 	if (systemState !== undefined && systemState !== 'operational') return 'Redeeming shares is only available while the pool is operational.'
 	if (questionOutcome === undefined || questionOutcome === 'none') return MARKET_NOT_FINALIZED_MESSAGE

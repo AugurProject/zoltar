@@ -16,7 +16,6 @@ import { TimestampValue } from './TimestampValue.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { AUCTION_TIME_SECONDS, type ForkAuctionStageView, estimateRepPurchased, getForkAuctionStageView, getForkStageDescription, getForkStageDescriptionForState, getOutcomeActionLabel, getSystemStateLabel, getTimeRemaining, hasForkActivity, MIGRATION_TIME_SECONDS } from '../lib/forkAuction.js'
 import { formatDuration } from '../lib/formatters.js'
-import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
@@ -148,6 +147,7 @@ function estimateBidRep(bidAmount: string, selectedAuctionPrice: bigint | undefi
 }
 
 export function ForkAuctionSection({
+	activeNetworkLabel = 'Ethereum mainnet',
 	accountState,
 	disabled = false,
 	disabledMessage,
@@ -175,8 +175,8 @@ export function ForkAuctionSection({
 	previewPool,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
+	walletMatchesActiveNetwork = true,
 }: ForkAuctionSectionProps) {
-	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedAuctionPrice = forkAuctionDetails?.truthAuction?.clearingPrice
 	const estimatedRep = estimateBidRep(forkAuctionForm.submitBidAmount, selectedAuctionPrice)
 	const migrationTimeRemaining = forkAuctionDetails === undefined ? undefined : getTimeRemaining(forkAuctionDetails.migrationEndsAt, forkAuctionDetails.currentTime)
@@ -210,6 +210,7 @@ export function ForkAuctionSection({
 	const [selectedStage, setSelectedStage] = useState<ForkAuctionStageView>(currentStage)
 	const lastPoolKeyRef = useRef<string | undefined>(undefined)
 	const selectedStageAheadMessage = getStageAheadMessage(selectedStage, currentStage)
+	const resolvedDisabledMessage = disabledMessage ?? (accountState.address !== undefined && !walletMatchesActiveNetwork ? `Switch wallet to ${activeNetworkLabel} to use fork and truth auction actions.` : undefined)
 	const selectedStageBadge = <span className={`badge ${getStageTone(currentStage)}`}>{getStageLabel(currentStage)}</span>
 	const truthAuctionFallback = forkAuctionDetails?.truthAuction === undefined ? forkOnlyFallbackText : UNKNOWN_VALUE
 	const truthAuctionStatus = forkAuctionDetails?.truthAuction
@@ -328,10 +329,10 @@ export function ForkAuctionSection({
 				<WorkflowSubsection title='Fork Trigger' badge={<span className='badge muted'>{systemState === undefined ? UNKNOWN_VALUE : getSystemStateLabel(systemState)}</span>} className='fork-stage-metrics'>
 					{renderWorkflowMetricGrid(initiateStatusMetrics)}
 					<div className='actions'>
-						<button className='primary' onClick={onForkWithOwnEscalation} disabled={disabled || accountState.address === undefined || !isMainnet}>
+						<button className='primary' onClick={onForkWithOwnEscalation} disabled={disabled || accountState.address === undefined || !walletMatchesActiveNetwork}>
 							Fork With Own Escalation
 						</button>
-						<button className='secondary' onClick={onInitiateFork} disabled={disabled || accountState.address === undefined || !isMainnet}>
+						<button className='secondary' onClick={onInitiateFork} disabled={disabled || accountState.address === undefined || !walletMatchesActiveNetwork}>
 							Initiate Pool Fork
 						</button>
 					</div>
@@ -350,7 +351,7 @@ export function ForkAuctionSection({
 							</label>
 						</div>
 						<div className='actions'>
-							<button className='secondary' onClick={onForkUniverse} disabled={disabled || accountState.address === undefined || !isMainnet}>
+							<button className='secondary' onClick={onForkUniverse} disabled={disabled || accountState.address === undefined || !walletMatchesActiveNetwork}>
 								Fork Universe Directly
 							</button>
 						</div>
@@ -370,7 +371,7 @@ export function ForkAuctionSection({
 							<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
 						</label>
 						<div className='actions'>
-							<button className='primary' onClick={onCreateChildUniverse} disabled={disabled || accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onCreateChildUniverse} disabled={disabled || accountState.address === undefined || !walletMatchesActiveNetwork}>
 								Create {getOutcomeActionLabel(forkAuctionForm.selectedOutcome)} Child Universe
 							</button>
 						</div>
@@ -384,7 +385,7 @@ export function ForkAuctionSection({
 							<input value={forkAuctionForm.repMigrationOutcomes} onInput={event => onForkAuctionFormChange({ repMigrationOutcomes: event.currentTarget.value })} placeholder='yes,no,invalid' />
 						</label>
 						<div className='actions'>
-							<button className='secondary' onClick={onMigrateRepToZoltar} disabled={disabled || accountState.address === undefined || !isMainnet}>
+							<button className='secondary' onClick={onMigrateRepToZoltar} disabled={disabled || accountState.address === undefined || !walletMatchesActiveNetwork}>
 								Migrate REP To Zoltar
 							</button>
 						</div>
@@ -406,10 +407,10 @@ export function ForkAuctionSection({
 							<input value={forkAuctionForm.depositIndexes} onInput={event => onForkAuctionFormChange({ depositIndexes: event.currentTarget.value })} placeholder='0,1,2' />
 						</label>
 						<div className='actions'>
-							<button className='primary' onClick={onMigrateVault} disabled={disabled || accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onMigrateVault} disabled={disabled || accountState.address === undefined || !walletMatchesActiveNetwork}>
 								Migrate Vault
 							</button>
-							<button className='secondary' onClick={onMigrateEscalationDeposits} disabled={disabled || accountState.address === undefined || !isMainnet}>
+							<button className='secondary' onClick={onMigrateEscalationDeposits} disabled={disabled || accountState.address === undefined || !walletMatchesActiveNetwork}>
 								Migrate Escalation Deposits
 							</button>
 						</div>
@@ -425,7 +426,7 @@ export function ForkAuctionSection({
 				<WorkflowSubsection title='Start Truth Auction' className='fork-stage-actions'>
 					<div className='form-grid'>
 						<div className='actions'>
-							<button className='primary' onClick={onStartTruthAuction} disabled={disabled || accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onStartTruthAuction} disabled={disabled || accountState.address === undefined || !walletMatchesActiveNetwork}>
 								Start Truth Auction
 							</button>
 						</div>
@@ -444,7 +445,7 @@ export function ForkAuctionSection({
 						</label>
 						{selectedAuctionPrice === undefined ? undefined : <p className='detail'>At the current clearing price, this bid would buy roughly {estimatedRep === undefined ? UNKNOWN_VALUE : <CurrencyValue value={estimatedRep} suffix='REP' />} if it clears.</p>}
 						<div className='actions'>
-							<button className='secondary' onClick={onSubmitBid} disabled={disabled || accountState.address === undefined || !isMainnet}>
+							<button className='secondary' onClick={onSubmitBid} disabled={disabled || accountState.address === undefined || !walletMatchesActiveNetwork}>
 								Submit Bid
 							</button>
 						</div>
@@ -460,7 +461,7 @@ export function ForkAuctionSection({
 				<WorkflowSubsection title='Finalize Truth Auction' className='fork-stage-actions'>
 					<div className='form-grid'>
 						<div className='actions'>
-							<button className='secondary' onClick={onFinalizeTruthAuction} disabled={disabled || accountState.address === undefined || !isMainnet}>
+							<button className='secondary' onClick={onFinalizeTruthAuction} disabled={disabled || accountState.address === undefined || !walletMatchesActiveNetwork}>
 								Finalize Truth Auction
 							</button>
 						</div>
@@ -478,7 +479,7 @@ export function ForkAuctionSection({
 							<input value={forkAuctionForm.refundBidIndex} onInput={event => onForkAuctionFormChange({ refundBidIndex: event.currentTarget.value })} />
 						</label>
 						<div className='actions'>
-							<button className='primary' onClick={onRefundLosingBids} disabled={disabled || accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onRefundLosingBids} disabled={disabled || accountState.address === undefined || !walletMatchesActiveNetwork}>
 								Refund Losing Bid
 							</button>
 						</div>
@@ -502,7 +503,7 @@ export function ForkAuctionSection({
 							</label>
 						</div>
 						<div className='actions'>
-							<button className='primary' onClick={onClaimAuctionProceeds} disabled={disabled || accountState.address === undefined || !isMainnet}>
+							<button className='primary' onClick={onClaimAuctionProceeds} disabled={disabled || accountState.address === undefined || !walletMatchesActiveNetwork}>
 								Claim Auction Proceeds
 							</button>
 						</div>
@@ -526,7 +527,7 @@ export function ForkAuctionSection({
 							<input value={forkAuctionForm.withdrawBidIndex} onInput={event => onForkAuctionFormChange({ withdrawBidIndex: event.currentTarget.value })} />
 						</label>
 						<div className='actions'>
-							<button className='secondary' onClick={onWithdrawBids} disabled={disabled || accountState.address === undefined || !isMainnet}>
+							<button className='secondary' onClick={onWithdrawBids} disabled={disabled || accountState.address === undefined || !walletMatchesActiveNetwork}>
 								Withdraw Bids
 							</button>
 						</div>
@@ -553,7 +554,7 @@ export function ForkAuctionSection({
 					</div>
 
 					{hasLoadedPoolContext ? renderSummaryMetricGrid(poolSummaryMetrics) : <p className='detail'>Load a pool to inspect fork progress, migration, and the truth auction.</p>}
-					{disabledMessage === undefined ? undefined : <p className='detail'>{disabledMessage}</p>}
+					{resolvedDisabledMessage === undefined ? undefined : <p className='detail'>{resolvedDisabledMessage}</p>}
 					{forkStageDescription === undefined ? undefined : <p className='detail'>{forkStageDescription}</p>}
 				</div>
 			</WorkflowSubsection>

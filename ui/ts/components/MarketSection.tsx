@@ -4,7 +4,6 @@ import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
 import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
 import { ZoltarMigrationSection } from './ZoltarMigrationSection.js'
-import { isMainnetChain } from '../lib/network.js'
 import { resolveEnumValue } from '../lib/viewState.js'
 import { readZoltarViewQueryParam, writeZoltarViewQueryParam } from '../lib/urlParams.js'
 import type { MarketSectionProps } from '../types/components.js'
@@ -12,6 +11,7 @@ import type { MarketSectionProps } from '../types/components.js'
 type ZoltarView = 'questions' | 'create' | 'fork' | 'migrate'
 
 export function MarketSection({
+	activeNetworkLabel = 'Ethereum mainnet',
 	accountState,
 	hasLoadedZoltarQuestions,
 	loadingZoltarForkAccess,
@@ -53,10 +53,10 @@ export function MarketSection({
 	zoltarQuestions,
 	zoltarUniverse,
 	zoltarUniverseState,
+	walletMatchesActiveNetwork = true,
 }: MarketSectionProps) {
 	const [view, setView] = useState<ZoltarView>(() => resolveEnumValue<ZoltarView>(readZoltarViewQueryParam(window.location.search), 'questions', ['questions', 'create', 'fork', 'migrate']))
 	const hasForked = zoltarUniverse?.hasForked === true
-	const isMainnet = isMainnetChain(accountState.chainId)
 
 	useEffect(() => {
 		const nextSearch = writeZoltarViewQueryParam(window.location.search, view)
@@ -75,9 +75,9 @@ export function MarketSection({
 			<div className='workflow-stack'>
 				<MarketOverviewSection
 					accountAddress={accountState.address}
-					isMainnet={isMainnet}
 					loadingZoltarUniverse={loadingZoltarUniverse}
 					onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex}
+					walletMatchesActiveNetwork={walletMatchesActiveNetwork}
 					zoltarChildUniverseError={zoltarChildUniverseError}
 					zoltarUniverse={zoltarUniverse}
 					zoltarUniverseState={zoltarUniverseState}
@@ -119,7 +119,6 @@ export function MarketSection({
 					<MarketCreateQuestionSection
 						accountAddress={accountState.address}
 						hasForked={hasForked}
-						isMainnet={isMainnet}
 						loadingZoltarQuestions={loadingZoltarQuestions}
 						marketCreating={marketCreating}
 						marketError={marketError}
@@ -131,15 +130,16 @@ export function MarketSection({
 						onResetMarket={onResetMarket}
 						onUseQuestionForFork={onUseQuestionForFork}
 						onUseQuestionForPool={onUseQuestionForPool}
+						walletMatchesActiveNetwork={walletMatchesActiveNetwork}
 						zoltarQuestions={zoltarQuestions}
 					/>
 				) : undefined}
 
 				{view === 'fork' ? (
 					<ForkZoltarSection
+						activeNetworkLabel={activeNetworkLabel}
 						accountAddress={accountState.address}
 						hasLoadedZoltarQuestions={hasLoadedZoltarQuestions}
-						isMainnet={isMainnet}
 						loadingZoltarForkAccess={loadingZoltarForkAccess}
 						loadingZoltarQuestions={loadingZoltarQuestions || loadingZoltarQuestionCount}
 						onApproveZoltarForkRep={onApproveZoltarForkRep}
@@ -154,13 +154,14 @@ export function MarketSection({
 						zoltarQuestions={zoltarQuestions}
 						zoltarUniverse={zoltarUniverse}
 						zoltarUniverseState={zoltarUniverseState}
+						walletMatchesActiveNetwork={walletMatchesActiveNetwork}
 					/>
 				) : undefined}
 
 				{view === 'migrate' ? (
 					<ZoltarMigrationSection
+						activeNetworkLabel={activeNetworkLabel}
 						accountAddress={accountState.address}
-						isMainnet={isMainnet}
 						loadingZoltarForkAccess={loadingZoltarForkAccess}
 						loadingZoltarUniverse={loadingZoltarUniverse}
 						onMigrateInternalRep={onMigrateInternalRep}
@@ -179,6 +180,7 @@ export function MarketSection({
 						zoltarUniverse={zoltarUniverse}
 						zoltarUniverseState={zoltarUniverseState}
 						onApproveZoltarForkRep={onApproveZoltarForkRep}
+						walletMatchesActiveNetwork={walletMatchesActiveNetwork}
 					/>
 				) : undefined}
 			</div>

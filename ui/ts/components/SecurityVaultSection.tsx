@@ -15,7 +15,6 @@ import { TransactionHashLink } from './TransactionHashLink.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { balanceShortage } from '../lib/inputs.js'
-import { isMainnetChain } from '../lib/network.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
 import { getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
@@ -24,6 +23,7 @@ import { getWalletPresentation } from '../lib/userCopy.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
 export function SecurityVaultSection({
+	activeNetworkLabel = 'Ethereum mainnet',
 	accountState,
 	compactLayout = false,
 	autoLoadVault = false,
@@ -48,10 +48,10 @@ export function SecurityVaultSection({
 	repEthPrice,
 	repEthSource,
 	repEthSourceUrl,
+	walletMatchesActiveNetwork = true,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 }: SecurityVaultSectionProps) {
-	const isMainnet = isMainnetChain(accountState?.chainId)
 	const normalizedSecurityVaultForm = {
 		depositAmount: securityVaultForm.depositAmount ?? '0',
 		securityBondAllowanceAmount: securityVaultForm.securityBondAllowanceAmount ?? '0',
@@ -84,13 +84,13 @@ export function SecurityVaultSection({
 	const withdrawableRepAmount = securityVaultDetails === undefined ? undefined : securityVaultDetails.repDepositShare > securityVaultDetails.lockedRepInEscalationGame ? securityVaultDetails.repDepositShare - securityVaultDetails.lockedRepInEscalationGame : 0n
 	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(securityVaultDetails?.repDepositShare, depositAmount)
 	const hasClaimableFees = securityVaultDetails !== undefined && securityVaultDetails.unpaidEthFees > 0n
-	const canClaimFees = selectedVaultIsOwnedByAccount && isMainnet && hasClaimableFees
+	const canClaimFees = selectedVaultIsOwnedByAccount && walletMatchesActiveNetwork && hasClaimableFees
 	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && depositAmount !== undefined && depositAmount > 0n && approvalRequirement.hasSufficientApproval
 	const hasInsufficientRepBalance = repBalanceGap !== undefined && repBalanceGap > 0n
-	const canSetSecurityBondAllowance = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && hasValidOraclePrice && securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > 0n
-	const canWithdrawRep = selectedVaultIsOwnedByAccount && accountState.address !== undefined && isMainnet && hasValidOraclePrice && hasWithdrawAmount && withdrawableRepAmount !== undefined && withdrawableRepAmount > 0n
+	const canSetSecurityBondAllowance = selectedVaultIsOwnedByAccount && walletMatchesActiveNetwork && securityVaultDetails !== undefined && hasValidOraclePrice && securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > 0n
+	const canWithdrawRep = selectedVaultIsOwnedByAccount && accountState.address !== undefined && walletMatchesActiveNetwork && hasValidOraclePrice && hasWithdrawAmount && withdrawableRepAmount !== undefined && withdrawableRepAmount > 0n
 	const approvalGuardMessage = (() => {
-		const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, isMainnet })
+		const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, activeNetworkLabel, walletMatchesActiveNetwork })
 		if (walletPresentation !== undefined) return walletPresentation.detail
 		if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to approve REP.'
 		if (securityVaultMissing) return 'Choose a pool first.'
@@ -269,7 +269,7 @@ export function SecurityVaultSection({
 				tokenUnits={18}
 			/>
 			<div className='actions'>
-				<button className='primary' onClick={onDepositRep} disabled={!selectedVaultIsOwnedByAccount || accountState.address === undefined || !isMainnet || !hasSufficientDepositAllowance || hasInsufficientRepBalance || isDepositBelowMinimum}>
+				<button className='primary' onClick={onDepositRep} disabled={!selectedVaultIsOwnedByAccount || accountState.address === undefined || !walletMatchesActiveNetwork || !hasSufficientDepositAllowance || hasInsufficientRepBalance || isDepositBelowMinimum}>
 					Create / Deposit REP
 				</button>
 			</div>

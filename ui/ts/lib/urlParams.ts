@@ -1,3 +1,6 @@
+import { DEFAULT_NETWORK_KEY, isSupportedNetworkKey, type SupportedNetworkKey } from '../shared/networkConfig.js'
+
+const NETWORK_QUERY_PARAM = 'network'
 const UNIVERSE_QUERY_PARAM = 'universe'
 const SECURITY_POOL_QUERY_PARAM = 'securityPool'
 const ZOLTAR_VIEW_QUERY_PARAM = 'zoltarView'
@@ -33,6 +36,12 @@ export function readUniverseQueryParam(search: string) {
 	}
 }
 
+export function readNetworkQueryParam(search: string): SupportedNetworkKey {
+	const value = readStringQueryParam(search, NETWORK_QUERY_PARAM)
+	if (value !== undefined && isSupportedNetworkKey(value)) return value
+	return DEFAULT_NETWORK_KEY
+}
+
 export function writeUniverseQueryParam(search: string, universeId: bigint | undefined) {
 	const params = new URLSearchParams(search)
 	if (universeId === undefined) {
@@ -43,6 +52,10 @@ export function writeUniverseQueryParam(search: string, universeId: bigint | und
 
 	const nextSearch = params.toString()
 	return nextSearch === '' ? '' : `?${nextSearch}`
+}
+
+export function writeNetworkQueryParam(search: string, networkKey: SupportedNetworkKey) {
+	return writeStringQueryParam(search, NETWORK_QUERY_PARAM, networkKey === DEFAULT_NETWORK_KEY ? undefined : networkKey)
 }
 
 export function readSecurityPoolQueryParam(search: string) {

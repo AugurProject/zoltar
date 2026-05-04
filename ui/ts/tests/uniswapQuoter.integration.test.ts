@@ -9,9 +9,13 @@
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, http, zeroAddress } from 'viem'
 import { mainnet } from 'viem/chains'
-import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS, quoteExactInput, quoteRepForEth, quoteRepForEthV3, quoteEthForRep, quoteTokenForEth } from '../lib/uniswapQuoter.js'
+import { ETH_ADDRESS, quoteExactInput, quoteRepForEth, quoteRepForEthV3, quoteEthForRep, quoteTokenForEth } from '../lib/uniswapQuoter.js'
+import { getNetworkConfig } from '../shared/networkConfig.js'
 
 const RPC_URL = 'https://ethereum.dark.florist'
+const mainnetConfig = getNetworkConfig('ethereum')
+const REP_ADDRESS = mainnetConfig.genesisRepTokenAddress
+const USDC_ADDRESS = mainnetConfig.usdcAddress
 
 const client = createPublicClient({
 	chain: mainnet,

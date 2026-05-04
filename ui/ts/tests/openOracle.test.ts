@@ -23,7 +23,8 @@ import {
 } from '../lib/openOracle.js'
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
-import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS } from '../lib/uniswapQuoter.js'
+import { ETH_ADDRESS } from '../lib/uniswapQuoter.js'
+import { getNetworkConfig } from '../shared/networkConfig.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS, TEST_ADDRESSES } from '../../../solidity/ts/testsuite/simulator/utils/constants'
 import { addressString } from '../../../solidity/ts/testsuite/simulator/utils/bigint'
@@ -43,7 +44,12 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
 	if (globalWindow.window === undefined) {
 		globalWindow.window = globalThis as unknown as Window & typeof globalThis
 	}
-	globalWindow.window.ethereum = mockWindow as unknown as InjectedEthereum
+	globalWindow.window.ethereum = {
+		chainId: '0x1',
+		on: mockWindow.on,
+		removeListener: mockWindow.removeListener,
+		request: mockWindow.request,
+	} as unknown as InjectedEthereum
 }
 
 const genesisUniverse = 0n
@@ -51,6 +57,10 @@ const securityMultiplier = 2n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n
 const reportedRepEthPrice = 10n
 const outcomes = ['Yes', 'No']
+const mainnetConfig = getNetworkConfig('ethereum')
+const REP_ADDRESS = mainnetConfig.genesisRepTokenAddress
+const USDC_ADDRESS = mainnetConfig.usdcAddress
+const WRAPPED_NATIVE_TOKEN_ADDRESS = mainnetConfig.wethAddress
 
 function createQuoteClient(amountOut: bigint): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
 	return {
@@ -97,6 +107,7 @@ function createInitialReportSubmissionPreview(overrides: Partial<Parameters<type
 		token2BalanceError: undefined,
 		token2Decimals: 0,
 		walletEthBalance: 10n,
+		wrappedNativeTokenAddress: WRAPPED_NATIVE_TOKEN_ADDRESS,
 		...overrides,
 	})
 }

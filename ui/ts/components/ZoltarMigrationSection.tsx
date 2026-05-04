@@ -21,8 +21,8 @@ import type { ZoltarMigrationFormState } from '../types/app.js'
 import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type ZoltarMigrationSectionProps = {
+	activeNetworkLabel: string
 	accountAddress: Address | undefined
-	isMainnet: boolean
 	loadingZoltarForkAccess: boolean
 	loadingZoltarUniverse: boolean
 	onMigrateInternalRep: () => void
@@ -41,6 +41,7 @@ type ZoltarMigrationSectionProps = {
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseState: LoadableValueState
 	onApproveZoltarForkRep: (amount?: bigint) => void
+	walletMatchesActiveNetwork: boolean
 }
 
 function getMigrationAmount(value: string) {
@@ -55,8 +56,8 @@ function getMigrationAmountSource(preparedRepBalance: bigint | undefined, repBal
 	return (preparedRepBalance ?? 0n) + (repBalance ?? 0n)
 }
 
-function getMigrationGuardMessage(accountAddress: Address | undefined, isMainnet: boolean, rootUniverse: ZoltarUniverseSummary | undefined, loadingZoltarForkAccess: boolean, hasForked: boolean, loadingZoltarUniverse: boolean, notForkedAction: string): string | undefined {
-	const walletPresentation = getWalletPresentation({ accountAddress, isMainnet })
+function getMigrationGuardMessage(accountAddress: Address | undefined, activeNetworkLabel: string, rootUniverse: ZoltarUniverseSummary | undefined, loadingZoltarForkAccess: boolean, hasForked: boolean, loadingZoltarUniverse: boolean, notForkedAction: string, walletMatchesActiveNetwork: boolean): string | undefined {
+	const walletPresentation = getWalletPresentation({ accountAddress, activeNetworkLabel, walletMatchesActiveNetwork })
 	if (walletPresentation !== undefined) return walletPresentation.detail
 	if (rootUniverse === undefined) return loadingZoltarUniverse ? undefined : 'Refresh universe first.'
 	if (loadingZoltarForkAccess) return undefined
@@ -70,8 +71,8 @@ function getMissingPreparationAmount(targetAmount: bigint, preparedRepBalance: b
 }
 
 export function ZoltarMigrationSection({
+	activeNetworkLabel,
 	accountAddress,
-	isMainnet,
 	loadingZoltarForkAccess,
 	loadingZoltarUniverse,
 	onMigrateInternalRep,
@@ -90,6 +91,7 @@ export function ZoltarMigrationSection({
 	zoltarUniverse,
 	zoltarUniverseState,
 	onApproveZoltarForkRep,
+	walletMatchesActiveNetwork,
 }: ZoltarMigrationSectionProps) {
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
@@ -122,11 +124,11 @@ export function ZoltarMigrationSection({
 	const needsAdditionalPreparation = missingPreparationAmount > 0n
 	const splitLimit = useMemo(() => getMigrationOutcomeSplitLimit(rootUniverse?.childUniverses ?? [], zoltarMigrationChildRepBalances, zoltarMigrationPreparedRepBalance, selectedOutcomeIndexSet), [rootUniverse?.childUniverses, selectedOutcomeIndexSet, zoltarMigrationChildRepBalances, zoltarMigrationPreparedRepBalance])
 	const hasSufficientSplitLimit = migrationAmount !== undefined && splitLimit !== undefined && migrationAmount <= splitLimit
-	const canPrepare = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && needsAdditionalPreparation && hasEnoughRep && hasSufficientAllowance
-	const canSplit = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && hasPreparedBalance && hasValidOutcomeIndexes && hasSufficientSplitLimit
+	const canPrepare = accountAddress !== undefined && walletMatchesActiveNetwork && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && needsAdditionalPreparation && hasEnoughRep && hasSufficientAllowance
+	const canSplit = accountAddress !== undefined && walletMatchesActiveNetwork && rootUniverse !== undefined && hasForked && !zoltarMigrationPending && hasValidAmount && hasPreparedBalance && hasValidOutcomeIndexes && hasSufficientSplitLimit
 	const migrationAmountSource = getMigrationAmountSource(zoltarMigrationPreparedRepBalance, zoltarForkRepBalance)
 	const approvalGuardMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before preparing REP.')
+		const guard = getMigrationGuardMessage(accountAddress, activeNetworkLabel, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before preparing REP.', walletMatchesActiveNetwork)
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return 'Enter an amount greater than zero.'
 		return undefined
@@ -138,7 +140,7 @@ export function ZoltarMigrationSection({
 		return 'This amount is already in your migration balance. Split REP when ready.'
 	}
 	const prepareHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before preparing REP.')
+		const guard = getMigrationGuardMessage(accountAddress, activeNetworkLabel, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before preparing REP.', walletMatchesActiveNetwork)
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return 'Enter an amount greater than zero.'
 		if (missingPreparationAmount === 0n) return getAlreadyPreparedHint()
@@ -151,7 +153,7 @@ export function ZoltarMigrationSection({
 		return `Add ${formatCurrencyBalance(missingPreparationAmount)} REP to your migration balance from this universe, then split it across the selected universes.`
 	})()
 	const splitHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before migrating REP.')
+		const guard = getMigrationGuardMessage(accountAddress, activeNetworkLabel, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before migrating REP.', walletMatchesActiveNetwork)
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return 'Enter an amount greater than zero.'
 		if (!hasPreparedBalance) {
@@ -170,7 +172,7 @@ export function ZoltarMigrationSection({
 		return 'Split the migration REP across the selected universes.'
 	})()
 	const migrationAmountHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before migrating REP.')
+		const guard = getMigrationGuardMessage(accountAddress, activeNetworkLabel, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, 'Fork Zoltar before migrating REP.', walletMatchesActiveNetwork)
 		if (guard !== undefined) return guard
 		if (!hasValidAmount || migrationAmount === undefined) return undefined
 		if (amountExceedsAvailableRep) {

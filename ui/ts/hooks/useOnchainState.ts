@@ -2,13 +2,13 @@ import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
-import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../contracts.js'
+import type { SupportedNetworkKey } from '../shared/networkConfig.js'
+import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadGenesisRepTokenDeploymentPrerequisite } from '../contracts.js'
 import { getInjectedEthereum } from '../injectedEthereum.js'
-import { createConnectedReadClient, normalizeAccount } from '../lib/clients.js'
+import { createReadClientForNetwork, normalizeAccount } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { MAINNET_CHAIN_ID } from '../lib/network.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
-import { WETH_ADDRESS } from '../lib/uniswapQuoter.js'
+import { getNetworkConfig } from '../shared/networkConfig.js'
 import type { AccountState } from '../types/app.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 
@@ -33,12 +33,12 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 
 	void trackLoad(async () => {
 		try {
-			const chainId = await chainIdPromise
+			const walletChainId = await chainIdPromise
 			if (!isCurrent()) return
-			setAccountState({ ...getAccountState(), chainId })
+			setAccountState({ ...getAccountState(), chainId: walletChainId, walletChainId })
 		} catch {
 			if (!isCurrent()) return
-			setAccountState({ ...getAccountState(), chainId: MAINNET_CHAIN_ID })
+			setAccountState({ ...getAccountState(), chainId: undefined, walletChainId: undefined })
 		}
 	})
 
@@ -65,15 +65,16 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 	})
 }
 
-export function useOnchainState() {
+export function useOnchainState(activeNetworkKey: SupportedNetworkKey) {
 	const accountState = useSignal<AccountState>({
 		address: undefined,
 		chainId: undefined,
+		walletChainId: undefined,
 		ethBalance: undefined,
 		wethBalance: undefined,
 	})
 	const deploymentStatuses = useSignal<DeploymentStatus[]>(
-		getDeploymentSteps().map(step => ({
+		getDeploymentSteps(activeNetworkKey).map(step => ({
 			...step,
 			deployed: false,
 		})),
@@ -83,6 +84,8 @@ export function useOnchainState() {
 	const deploymentStatusLoad = useLoadController()
 	const deploymentStatusesLoaded = useSignal(false)
 	const augurPlaceHolderDeployed = useSignal<boolean | undefined>(undefined)
+	const zoltarExternalPrerequisiteDetail = useSignal<string | undefined>(undefined)
+	const zoltarExternalPrerequisiteLabel = useSignal<string | undefined>(undefined)
 	const walletBootstrapComplete = useSignal(false)
 	const isConnectingWallet = useSignal(false)
 	const nextRefresh = useRequestGuard()
@@ -103,11 +106,14 @@ export function useOnchainState() {
 		// Fire deployment status immediately — independent of wallet state
 		void deploymentStatusLoad.track(async () => {
 			try {
-				const snapshot = await loadDeploymentStatusOracleSnapshot(createConnectedReadClient())
+				const readClient = createReadClientForNetwork(activeNetworkKey)
+				const [snapshot, genesisRepTokenPrerequisite] = await Promise.all([loadDeploymentStatusOracleSnapshot(readClient), loadGenesisRepTokenDeploymentPrerequisite(readClient)])
 				if (!isCurrent()) return
 				augurPlaceHolderDeployed.value = snapshot.augurPlaceHolderDeployed
 				deploymentStatuses.value = snapshot.deploymentStatuses
 				deploymentStatusesLoaded.value = true
+				zoltarExternalPrerequisiteDetail.value = genesisRepTokenPrerequisite.ready ? undefined : genesisRepTokenPrerequisite.detail
+				zoltarExternalPrerequisiteLabel.value = genesisRepTokenPrerequisite.ready ? undefined : genesisRepTokenPrerequisite.missingLabel
 			} catch (error) {
 				if (!isCurrent()) return
 				errorMessage.value = getErrorMessage(error, 'Failed to refresh deployment status')
@@ -125,7 +131,8 @@ export function useOnchainState() {
 				const connectedAddress = normalizeAccount(accounts[0])
 				accountState.value = {
 					address: connectedAddress,
-					chainId: accountState.value.chainId,
+					chainId: accountState.value.walletChainId,
+					walletChainId: accountState.value.walletChainId,
 					ethBalance: connectedAddress === accountState.value.address ? accountState.value.ethBalance : undefined,
 					wethBalance: connectedAddress === accountState.value.address ? accountState.value.wethBalance : undefined,
 				}
@@ -135,9 +142,9 @@ export function useOnchainState() {
 
 				if (connectedAddress !== undefined && ethereum !== undefined) {
 					const chainIdPromise = ethereum.request({ method: 'eth_chainId' })
-					const readClient = createConnectedReadClient()
+					const readClient = createReadClientForNetwork(activeNetworkKey, { ethereum, walletChainId: accountState.value.walletChainId })
 					const ethBalancePromise = readClient.getBalance({ address: connectedAddress })
-					const wethBalancePromise = loadErc20Balance(readClient, WETH_ADDRESS, connectedAddress)
+					const wethBalancePromise = loadErc20Balance(readClient, getNetworkConfig(activeNetworkKey).wethAddress, connectedAddress)
 					void loadWalletState({
 						connectedAddress,
 						chainIdPromise,
@@ -154,7 +161,7 @@ export function useOnchainState() {
 						wethBalancePromise,
 					})
 				} else {
-					accountState.value = { ...accountState.value, chainId: MAINNET_CHAIN_ID, wethBalance: undefined }
+					accountState.value = { ...accountState.value, chainId: undefined, walletChainId: undefined, wethBalance: undefined }
 				}
 			} catch (error) {
 				if (!isCurrent()) return
@@ -186,7 +193,7 @@ export function useOnchainState() {
 
 	useEffect(() => {
 		void refreshState()
-	}, [])
+	}, [activeNetworkKey])
 
 	useEffect(() => {
 		const ethereum = getInjectedEthereum()
@@ -218,6 +225,8 @@ export function useOnchainState() {
 		isConnectingWallet: isConnectingWallet.value,
 		setDeploymentStatuses,
 		walletBootstrapComplete: walletBootstrapComplete.value,
+		zoltarExternalPrerequisiteDetail: zoltarExternalPrerequisiteDetail.value,
+		zoltarExternalPrerequisiteLabel: zoltarExternalPrerequisiteLabel.value,
 		refreshState,
 	}
 }

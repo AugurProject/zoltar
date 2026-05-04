@@ -5,7 +5,7 @@ import { Zoltar } from '../../Zoltar.sol';
 import { OpenOracle } from "../openOracle/OpenOracle.sol";
 import { UniformPriceDualCapBatchAuction } from "../UniformPriceDualCapBatchAuction.sol";
 import { IShareToken } from './IShareToken.sol';
-import { ReputationToken } from '../../ReputationToken.sol';
+import { IReputationToken } from '../../IReputationToken.sol';
 import { PriceOracleManagerAndOperatorQueuer } from '../PriceOracleManagerAndOperatorQueuer.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
@@ -50,7 +50,7 @@ interface ISecurityPool {
 	function parent() external view returns (ISecurityPool);
 	function systemState() external view returns (SystemState);
 	function shareToken() external view returns (IShareToken);
-	function repToken() external view returns (ReputationToken);
+	function repToken() external view returns (IReputationToken);
 	function securityPoolFactory() external view returns (ISecurityPoolFactory);
 	function priceOracleManagerAndOperatorQueuer() external view returns (PriceOracleManagerAndOperatorQueuer);
 	function openOracle() external view returns (OpenOracle);

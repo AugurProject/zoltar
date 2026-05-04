@@ -9,15 +9,16 @@ import { ensureProxyDeployerDeployed } from '../utilities'
 
 const ZERO_SALT: Hex = toHex(0, { size: 32 })
 
-function getZoltarInitCode(zoltarQuestionDataAddress: Address): Hex {
+function getZoltarInitCode(zoltarQuestionDataAddress: Address, genesisRepTokenAddress: Address): Hex {
 	return encodeDeployData({
 		abi: Zoltar_Zoltar.abi,
 		bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-		args: [zoltarQuestionDataAddress],
+		args: [zoltarQuestionDataAddress, genesisRepTokenAddress],
 	})
 }
 
 export const { getZoltarAddress } = createZoltarAddressHelpers({
+	genesisRepTokenAddress: getAddress(addressString(GENESIS_REPUTATION_TOKEN)),
 	getZoltarInitCode,
 	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
 	zeroSalt: ZERO_SALT,
@@ -25,6 +26,7 @@ export const { getZoltarAddress } = createZoltarAddressHelpers({
 })
 
 const { getZoltarQuestionDataAddress } = createZoltarAddressHelpers({
+	genesisRepTokenAddress: getAddress(addressString(GENESIS_REPUTATION_TOKEN)),
 	getZoltarInitCode,
 	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
 	zeroSalt: ZERO_SALT,
@@ -62,10 +64,9 @@ const ensureZoltarQuestionDataDeployed = async (client: WriteClient) => {
 }
 
 export const isZoltarDeployed = async (client: ReadClient) => {
-	const expectedDeployedBytecode: Hex = `0x${Zoltar_Zoltar.evm.deployedBytecode.object}`
 	const address = getZoltarAddress()
 	const deployedBytecode = await client.getCode({ address })
-	return deployedBytecode === expectedDeployedBytecode
+	return deployedBytecode !== undefined && deployedBytecode !== '0x'
 }
 
 export const ensureZoltarDeployed = async (client: WriteClient) => {
@@ -74,7 +75,7 @@ export const ensureZoltarDeployed = async (client: WriteClient) => {
 	await ensureZoltarQuestionDataDeployed(client)
 	if (await isZoltarDeployed(client)) return
 	const zoltarQuestionDataAddress = getZoltarQuestionDataAddress()
-	const initCode = getZoltarInitCode(zoltarQuestionDataAddress)
+	const initCode = getZoltarInitCode(zoltarQuestionDataAddress, getAddress(addressString(GENESIS_REPUTATION_TOKEN)))
 	const hash = await client.sendTransaction({ to: addressString(PROXY_DEPLOYER_ADDRESS), data: initCode })
 	await client.waitForTransactionReceipt({ hash })
 }

@@ -2,22 +2,24 @@ import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { loadOracleManagerDetails, requestOraclePrice } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
-import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { createReadClientForNetwork, createWalletWriteClient } from '../lib/clients.js'
 import { sameAddress } from '../lib/address.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { runWriteAction } from '../lib/writeAction.js'
+import type { SupportedNetworkKey } from '../shared/networkConfig.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '../types/contracts.js'
 
 type UsePriceOracleManagerParameters = {
 	accountAddress: Address | undefined
+	activeNetworkKey: SupportedNetworkKey
 	onTransaction: (hash: Hash) => void
 	onTransactionFinished: () => void
 	onTransactionRequested: () => void
 	onTransactionSubmitted: (hash: Hash) => void
 }
 
-export function usePriceOracleManager({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted }: UsePriceOracleManagerParameters) {
+export function usePriceOracleManager({ accountAddress, activeNetworkKey, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted }: UsePriceOracleManagerParameters) {
 	const poolOracleManagerLoad = useLoadController()
 	const poolOracleManagerDetails = useSignal<OracleManagerDetails | undefined>(undefined)
 	const poolOracleManagerError = useSignal<string | undefined>(undefined)
@@ -31,7 +33,7 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 			onStart: () => {
 				poolOracleManagerError.value = undefined
 			},
-			load: async () => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
+			load: async () => await loadOracleManagerDetails(createReadClientForNetwork(activeNetworkKey), managerAddress),
 			onSuccess: details => {
 				poolOracleManagerDetails.value = details
 			},
@@ -61,9 +63,9 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 			async walletAddress => {
 				const currentManagerDetails = poolOracleManagerDetails.value
 				if (currentManagerDetails === undefined || !sameAddress(currentManagerDetails.managerAddress, managerAddress)) {
-					poolOracleManagerDetails.value = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
+					poolOracleManagerDetails.value = await loadOracleManagerDetails(createReadClientForNetwork(activeNetworkKey), managerAddress)
 				}
-				return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress)
+				return await requestOraclePrice(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), managerAddress)
 			},
 			'Failed to request price',
 			result => {

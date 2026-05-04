@@ -1,12 +1,14 @@
 import type { Address, Hash } from 'viem'
 import { useCallback, useMemo } from 'preact/hooks'
 import type { DeploymentStatus } from '../types/contracts.js'
+import type { SupportedNetworkKey } from '../shared/networkConfig.js'
 import { useZoltarFork } from './useZoltarFork.js'
 import { useZoltarMigration } from './useZoltarMigration.js'
 import { useZoltarUniverse } from './useZoltarUniverse.js'
 
 type UseZoltarOperationsParameters = {
 	accountAddress: Address | undefined
+	activeNetworkKey: SupportedNetworkKey
 	activeUniverseId: bigint
 	autoLoadInitialData: boolean
 	deploymentStatuses: DeploymentStatus[]
@@ -17,13 +19,14 @@ type UseZoltarOperationsParameters = {
 	refreshState: () => Promise<void>
 }
 
-export function useZoltarOperations({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseZoltarOperationsParameters) {
-	const { createChildUniverse: createUniverseChildUniverse, ...universe } = useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted })
+export function useZoltarOperations({ accountAddress, activeNetworkKey, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseZoltarOperationsParameters) {
+	const { createChildUniverse: createUniverseChildUniverse, ...universe } = useZoltarUniverse({ accountAddress, activeNetworkKey, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted })
 	const refreshZoltarUniverse = useCallback(async () => {
 		await universe.refreshZoltarUniverse()
 	}, [universe.refreshZoltarUniverse])
 	const fork = useZoltarFork({
 		accountAddress,
+		activeNetworkKey,
 		activeUniverseId,
 		ensureZoltarUniverse: universe.ensureZoltarUniverse,
 		onTransaction,
@@ -39,6 +42,7 @@ export function useZoltarOperations({ accountAddress, activeUniverseId, autoLoad
 	}, [fork.loadZoltarForkAccess])
 	const migration = useZoltarMigration({
 		accountAddress,
+		activeNetworkKey,
 		ensureZoltarUniverse: universe.ensureZoltarUniverse,
 		onTransaction,
 		onTransactionFinished,

@@ -22,7 +22,12 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
 	if (globalWindow.window === undefined) {
 		globalWindow.window = globalThis as unknown as Window & typeof globalThis
 	}
-	globalWindow.window.ethereum = mockWindow as unknown as InjectedEthereum
+	globalWindow.window.ethereum = {
+		chainId: '0x1',
+		on: mockWindow.on,
+		removeListener: mockWindow.removeListener,
+		request: mockWindow.request,
+	} as unknown as InjectedEthereum
 }
 
 describe('security pool creation helper', () => {

@@ -13,12 +13,12 @@ import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { formatDuration } from '../lib/formatters.js'
 import { parseOptionalBigIntInput } from '../lib/inputs.js'
-import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome } from '../lib/reportingDomain.js'
 import type { ReportingSectionProps } from '../types/components.js'
 
 export function ReportingSection({
+	activeNetworkLabel = 'Ethereum mainnet',
 	accountState,
 	embedInCard = false,
 	loadingReportingDetails,
@@ -30,10 +30,10 @@ export function ReportingSection({
 	reportingError,
 	reportingForm,
 	reportingResult,
+	walletMatchesActiveNetwork = true,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 }: ReportingSectionProps) {
-	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedAmount = parseOptionalBigIntInput(reportingForm.reportAmount)
 	const totalBalance = reportingDetails === undefined ? 0n : reportingDetails.sides.reduce((sum, side) => sum + side.balance, 0n)
 	const leadingOutcome = reportingDetails === undefined ? undefined : getLeadingEscalationOutcome(reportingDetails.sides)
@@ -238,7 +238,7 @@ export function ReportingSection({
 			)}
 
 			<div className='actions'>
-				<button className='primary' onClick={onReportOutcome} disabled={accountState.address === undefined || !isMainnet}>
+				<button className='primary' onClick={onReportOutcome} disabled={accountState.address === undefined || !walletMatchesActiveNetwork}>
 					Report / Contribute On Selected Side
 				</button>
 			</div>
@@ -249,10 +249,11 @@ export function ReportingSection({
 			</label>
 
 			<div className='actions'>
-				<button className='secondary' onClick={onWithdrawEscalation} disabled={accountState.address === undefined || !isMainnet}>
+				<button className='secondary' onClick={onWithdrawEscalation} disabled={accountState.address === undefined || !walletMatchesActiveNetwork}>
 					Withdraw Escalation Deposits
 				</button>
 			</div>
+			{accountState.address !== undefined && !walletMatchesActiveNetwork ? <p className='detail'>{`Switch wallet to ${activeNetworkLabel} to report or withdraw escalation deposits.`}</p> : undefined}
 		</div>
 	)
 

@@ -1,8 +1,9 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { useLoadController } from './useLoadController.js'
-import { createConnectedReadClient } from '../lib/clients.js'
-import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource, ETH_ADDRESS, REP_ADDRESS } from '../lib/uniswapQuoter.js'
+import { createReadClientForNetwork } from '../lib/clients.js'
+import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource, ETH_ADDRESS } from '../lib/uniswapQuoter.js'
+import { getNetworkConfig, type SupportedNetworkKey } from '../shared/networkConfig.js'
 
 const ONE_REP = 10n ** 18n
 
@@ -18,18 +19,18 @@ type RepPrices = {
 	isLoadingRepPrices: boolean
 }
 
-async function fetchRepEthPrice(client: ReturnType<typeof createConnectedReadClient>): Promise<{ price: bigint; source: PriceSource; sourceUrl: string | undefined }> {
+async function fetchRepEthPrice(networkKey: SupportedNetworkKey, client: ReturnType<typeof createReadClientForNetwork>): Promise<{ price: bigint; source: PriceSource; sourceUrl: string | undefined }> {
+	const networkConfig = getNetworkConfig(networkKey)
 	try {
-		const { amountOut, source } = await quoteBestExactInputWithSource(client, REP_ADDRESS, ETH_ADDRESS, ONE_REP)
+		const { amountOut, source } = await quoteBestExactInputWithSource(client, networkConfig.genesisRepTokenAddress, ETH_ADDRESS, ONE_REP, networkConfig.repEthV4PoolConfigs)
 		return { price: amountOut, source: 'v4', sourceUrl: source.poolUrl }
 	} catch {
-		// V4 REP/ETH pool doesn't exist yet — fall back to V3 REP/WETH (1% pool)
-		const { amountOut, source } = await quoteBestV3ExactInputWithSource(client, REP_ADDRESS, ETH_ADDRESS, ONE_REP)
+		const { amountOut, source } = await quoteBestV3ExactInputWithSource(client, networkConfig.genesisRepTokenAddress, ETH_ADDRESS, ONE_REP, networkConfig.repV3FallbackFees)
 		return { price: amountOut, source: 'v3', sourceUrl: source.poolUrl }
 	}
 }
 
-export function useRepPrices(): RepPrices {
+export function useRepPrices(activeNetworkKey: SupportedNetworkKey): RepPrices {
 	const repEthPrice = useSignal<bigint | undefined>(undefined)
 	const repEthSource = useSignal<PriceSource | undefined>(undefined)
 	const repEthSourceUrl = useSignal<string | undefined>(undefined)
@@ -40,11 +41,11 @@ export function useRepPrices(): RepPrices {
 
 	useEffect(() => {
 		let cancelled = false
-		const client = createConnectedReadClient()
+		const client = createReadClientForNetwork(activeNetworkKey)
 
 		void repPricesLoad
 			.track(async () => {
-				const [{ price: ethPrice, source: ethSource, sourceUrl: ethSourceUrl }, usdcQuote] = await Promise.all([fetchRepEthPrice(client), quoteRepForUsdcV4WithSource(client, ONE_REP)])
+				const [{ price: ethPrice, source: ethSource, sourceUrl: ethSourceUrl }, usdcQuote] = await Promise.all([fetchRepEthPrice(activeNetworkKey, client), quoteRepForUsdcV4WithSource(client, ONE_REP)])
 				if (cancelled) return
 				repEthPrice.value = ethPrice
 				repEthSource.value = ethSource
@@ -60,7 +61,7 @@ export function useRepPrices(): RepPrices {
 		return () => {
 			cancelled = true
 		}
-	}, [])
+	}, [activeNetworkKey])
 
 	return {
 		repEthPrice: repEthPrice.value,

@@ -14,9 +14,9 @@ import { getReportPresentation, getUniversePresentation, getWalletPresentation }
 import type { MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type ForkZoltarSectionProps = {
+	activeNetworkLabel: string
 	accountAddress: Address | undefined
 	hasLoadedZoltarQuestions: boolean
-	isMainnet: boolean
 	loadingZoltarForkAccess: boolean
 	loadingZoltarQuestions: boolean
 	onApproveZoltarForkRep: (amount?: bigint) => void
@@ -31,12 +31,13 @@ type ForkZoltarSectionProps = {
 	zoltarQuestions: MarketDetails[]
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseState: LoadableValueState
+	walletMatchesActiveNetwork: boolean
 }
 
 export function ForkZoltarSection({
+	activeNetworkLabel,
 	accountAddress,
 	hasLoadedZoltarQuestions,
-	isMainnet,
 	loadingZoltarForkAccess,
 	loadingZoltarQuestions,
 	onApproveZoltarForkRep,
@@ -51,6 +52,7 @@ export function ForkZoltarSection({
 	zoltarQuestions,
 	zoltarUniverse,
 	zoltarUniverseState,
+	walletMatchesActiveNetwork,
 }: ForkZoltarSectionProps) {
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
@@ -67,9 +69,9 @@ export function ForkZoltarSection({
 		value: selectedQuestion,
 	})
 	const selectedQuestionPresentation = hasSelectedQuestionId && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
-	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && hasEnoughRep && hasEnoughApproval
+	const canFork = accountAddress !== undefined && walletMatchesActiveNetwork && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && hasEnoughRep && hasEnoughApproval
 	const approvalGuardMessage = (() => {
-		const walletPresentation = getWalletPresentation({ accountAddress, isMainnet })
+		const walletPresentation = getWalletPresentation({ accountAddress, activeNetworkLabel, walletMatchesActiveNetwork })
 		if (walletPresentation !== undefined) return walletPresentation.detail
 		if (rootUniverse === undefined) return undefined
 		if (hasForked) return 'Zoltar is already forked.'

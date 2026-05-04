@@ -23,7 +23,6 @@ const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] =
 type MarketCreateQuestionSectionProps = {
 	accountAddress: Address | undefined
 	hasForked: boolean
-	isMainnet: boolean
 	marketCreating: boolean
 	marketError: string | undefined
 	marketForm: MarketFormState
@@ -36,6 +35,7 @@ type MarketCreateQuestionSectionProps = {
 	onUseQuestionForFork: (questionId: string) => void
 	onUseQuestionForPool: (questionId: string) => void
 	zoltarQuestions: MarketDetails[]
+	walletMatchesActiveNetwork: boolean
 }
 
 function getScalarCreatePreviewDetails(marketForm: MarketFormState): ScalarCreatePreviewDetails | undefined {
@@ -53,7 +53,6 @@ function getScalarCreatePreviewDetails(marketForm: MarketFormState): ScalarCreat
 export function MarketCreateQuestionSection({
 	accountAddress,
 	hasForked,
-	isMainnet,
 	loadingZoltarQuestions,
 	marketCreating,
 	marketError,
@@ -66,6 +65,7 @@ export function MarketCreateQuestionSection({
 	onUseQuestionForFork,
 	onUseQuestionForPool,
 	zoltarQuestions,
+	walletMatchesActiveNetwork,
 }: MarketCreateQuestionSectionProps) {
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
 	const selectedQuestionDetails = useMemo(() => (marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)), [marketResult?.questionId, zoltarQuestions])
@@ -227,7 +227,7 @@ export function MarketCreateQuestionSection({
 						) : undefined}
 
 						<div className='actions'>
-							<button className='primary' onClick={onCreateMarket} disabled={accountAddress === undefined || !isMainnet || marketCreating || !marketFormValidation.isValid}>
+							<button className='primary' onClick={onCreateMarket} disabled={accountAddress === undefined || !walletMatchesActiveNetwork || marketCreating || !marketFormValidation.isValid}>
 								{marketCreating ? <LoadingText>Creating Question...</LoadingText> : 'Create Question'}
 							</button>
 							{marketFormValidation.notice === undefined ? undefined : <p className='form-validation-inline'>{marketFormValidation.notice}</p>}

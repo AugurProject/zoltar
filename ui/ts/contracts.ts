@@ -3,11 +3,10 @@ import { ABIS } from './abis.js'
 import { createRepTokenAddressHelper, createSecurityPoolAddressHelper } from './shared/addressDerivation.js'
 import { sortBigIntsAscending } from './shared/bigInt.js'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from './shared/deploymentAddresses.js'
+import { DEFAULT_NETWORK_KEY, getNetworkConfig, getNetworkConfigByChainId, isMainnetNetworkKey, type SupportedNetworkKey } from './shared/networkConfig.js'
 import { assertNever } from './lib/assert.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
 import { addOpenOracleBountyBuffer } from './lib/openOracle.js'
-import { WETH_ADDRESS } from './lib/uniswapQuoter.js'
-import { GENESIS_REPUTATION_TOKEN_ADDRESS } from './lib/universe.js'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	ReputationToken_ReputationToken,
@@ -38,6 +37,7 @@ import type {
 	ForkAuctionAction,
 	ForkAuctionActionResult,
 	ForkAuctionDetails,
+	GenesisRepTokenDeploymentPrerequisite,
 	ListedSecurityPool,
 	MarketCreationResult,
 	MarketDetails,
@@ -100,9 +100,44 @@ type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 type OpenOracleReportMetaTuple = readonly [bigint, bigint, bigint, bigint, Address, number, Address, boolean, number, number, number, number]
 type OpenOracleReportStatusTuple = readonly [bigint, bigint, bigint, Address, number, number, Address, number, boolean, boolean]
 type OpenOracleExtraDataTuple = readonly [Hex, Address, number, number, Hex, Address, boolean, boolean, boolean]
+type ClientWithChain = {
+	chain?:
+		| {
+				id: number
+		  }
+		| undefined
+}
+type NetworkContractHelpers = {
+	getDeploymentStatusOracleAddress: () => Address
+	getInfraContractAddresses: ReturnType<typeof createInfraContractAddressHelper>['getInfraContractAddresses']
+	getRepTokenAddress: ReturnType<typeof createRepTokenAddressHelper>['getRepTokenAddress']
+	getSecurityPoolAddresses: ReturnType<typeof createSecurityPoolAddressHelper>['getSecurityPoolAddresses']
+	getZoltarAddress: () => Address
+	getZoltarQuestionDataAddress: () => Address
+}
 
 function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${value.toString(16).padStart(40, '0')}`)
+}
+
+function chainIdToHex(chainId: number) {
+	return `0x${chainId.toString(16)}`
+}
+
+function getNetworkKeyFromClient(client: ClientWithChain): SupportedNetworkKey {
+	const network = client.chain?.id === undefined ? undefined : getNetworkConfigByChainId(chainIdToHex(client.chain.id))
+	return network?.key ?? DEFAULT_NETWORK_KEY
+}
+
+function getNetworkHelpers(networkKey: SupportedNetworkKey = DEFAULT_NETWORK_KEY): NetworkContractHelpers {
+	const existingHelpers = networkHelpersByNetworkKey.get(networkKey)
+	if (existingHelpers !== undefined) {
+		return existingHelpers
+	}
+
+	const networkHelpers = createNetworkContractHelpers(networkKey)
+	networkHelpersByNetworkKey.set(networkKey, networkHelpers)
+	return networkHelpers
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -196,11 +231,11 @@ const getSecurityPoolForkerByteCode = (zoltarAddress: Address) =>
 		args: [zoltarAddress],
 	})
 
-const getZoltarInitCode = (zoltarQuestionDataAddress: Address): Hex =>
+const getZoltarInitCode = (zoltarQuestionDataAddress: Address, genesisRepTokenAddress: Address): Hex =>
 	encodeDeployData({
 		abi: Zoltar_Zoltar.abi,
 		bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-		args: [zoltarQuestionDataAddress],
+		args: [zoltarQuestionDataAddress, genesisRepTokenAddress],
 	})
 
 const getSecurityPoolFactoryByteCode = ({
@@ -210,6 +245,7 @@ const getSecurityPoolFactoryByteCode = ({
 	securityPoolForker,
 	shareTokenFactory,
 	uniformPriceDualCapBatchAuctionFactory,
+	weth,
 	zoltar,
 	zoltarQuestionData,
 }: {
@@ -219,17 +255,18 @@ const getSecurityPoolFactoryByteCode = ({
 	securityPoolForker: Address
 	shareTokenFactory: Address
 	uniformPriceDualCapBatchAuctionFactory: Address
+	weth: Address
 	zoltar: Address
 	zoltarQuestionData: Address
 }) =>
 	encodeDeployData({
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
-		args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory],
+		args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory, weth],
 	})
 
-function getDeploymentStatusOracleStepAddresses() {
-	const addresses = getInfraContractAddresses()
+function getDeploymentStatusOracleStepAddresses(networkKey: SupportedNetworkKey) {
+	const addresses = getNetworkHelpers(networkKey).getInfraContractAddresses()
 	return [
 		PROXY_DEPLOYER_ADDRESS,
 		addresses.multicall3,
@@ -247,16 +284,16 @@ function getDeploymentStatusOracleStepAddresses() {
 	] satisfies Address[]
 }
 
-function getDeploymentStatusOracleByteCode() {
+function getDeploymentStatusOracleByteCode(networkKey: SupportedNetworkKey) {
 	return encodeDeployData({
 		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
 		bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
-		args: [getDeploymentStatusOracleStepAddresses()],
+		args: [getDeploymentStatusOracleStepAddresses(networkKey)],
 	})
 }
 
-function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracleDeployed: boolean): DeploymentStatusSnapshot {
-	const steps = getDeploymentSteps()
+function getDeploymentStatusSnapshot(networkKey: SupportedNetworkKey, deployedMask: bigint, deploymentStatusOracleDeployed: boolean): DeploymentStatusSnapshot {
+	const steps = getDeploymentSteps(networkKey)
 	let maskIndex = 0n
 	const deploymentStatuses = steps.map(step => {
 		if (step.id === 'deploymentStatusOracle') {
@@ -290,95 +327,107 @@ const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [
 	},
 ])
 
-export const { getZoltarAddress, getZoltarQuestionDataAddress } = createZoltarAddressHelpers({
-	getZoltarInitCode,
-	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
-	zeroSalt: ZERO_SALT,
-	zoltarQuestionDataBytecode: getZoltarQuestionDataByteCode,
-})
+const networkHelpersByNetworkKey = new Map<SupportedNetworkKey, NetworkContractHelpers>()
 
-const { getInfraContractAddresses } = createInfraContractAddressHelper({
-	getEscalationGameFactoryByteCode,
-	getSecurityPoolFactoryByteCode,
-	getSecurityPoolForkerByteCode,
-	getShareTokenFactoryByteCode,
-	getZoltarAddress,
-	getZoltarQuestionDataAddress,
-	multicall3Bytecode: MULTICALL3_BYTECODE,
-	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
-	priceOracleManagerAndOperatorQueuerFactoryBytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
-	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
-	scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
-	securityPoolUtilsBytecode: `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
-	uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
-	zeroSalt: ZERO_SALT,
-})
+function createNetworkContractHelpers(networkKey: SupportedNetworkKey): NetworkContractHelpers {
+	const networkConfig = getNetworkConfig(networkKey)
+	const { getZoltarAddress, getZoltarQuestionDataAddress } = createZoltarAddressHelpers({
+		genesisRepTokenAddress: networkConfig.genesisRepTokenAddress,
+		getZoltarInitCode,
+		proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
+		zeroSalt: ZERO_SALT,
+		zoltarQuestionDataBytecode: getZoltarQuestionDataByteCode,
+	})
+	const { getInfraContractAddresses } = createInfraContractAddressHelper({
+		getEscalationGameFactoryByteCode,
+		getSecurityPoolFactoryByteCode,
+		getSecurityPoolForkerByteCode,
+		getShareTokenFactoryByteCode,
+		getZoltarAddress,
+		getZoltarQuestionDataAddress,
+		multicall3Bytecode: MULTICALL3_BYTECODE,
+		openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
+		priceOracleManagerAndOperatorQueuerFactoryBytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
+		proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
+		scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
+		securityPoolUtilsBytecode: `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
+		uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
+		wethAddress: networkConfig.wethAddress,
+		zeroSalt: ZERO_SALT,
+	})
+	const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddressHelper({
+		deploymentStatusOracleBytecode: () => getDeploymentStatusOracleByteCode(networkKey),
+		proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
+		zeroSalt: ZERO_SALT,
+	})
+	const { getRepTokenAddress } = createRepTokenAddressHelper({
+		genesisRepTokenAddress: networkConfig.genesisRepTokenAddress,
+		getReputationTokenInitCode: zoltarAddress =>
+			encodeDeployData({
+				abi: ReputationToken_ReputationToken.abi,
+				bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
+				args: [zoltarAddress],
+			}),
+		getZoltarAddress,
+	})
+	const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
+		getEscalationGameInitCode: securityPool =>
+			encodeDeployData({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
+				args: [securityPool],
+			}),
+		getInfraContracts: () => getInfraContractAddresses(),
+		getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken, weth) =>
+			encodeDeployData({
+				abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+				bytecode: `0x${peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.evm.bytecode.object}`,
+				args: [openOracle, repToken, weth],
+			}),
+		getRepTokenAddress,
+		getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, securityMultiplier, securityPoolFactory, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
+			encodeDeployData({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
+				args: [securityPoolForker, securityPoolFactory, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, truthAuction],
+			}),
+		getShareTokenInitCode: (securityPoolFactory, zoltarAddress, questionId) =>
+			encodeDeployData({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
+				args: [securityPoolFactory, zoltarAddress, questionId],
+			}),
+		getTruthAuctionInitCode: securityPoolForker =>
+			encodeDeployData({
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				bytecode: `0x${peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.evm.bytecode.object}`,
+				args: [securityPoolForker],
+			}),
+	})
 
-const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddressHelper({
-	deploymentStatusOracleBytecode: getDeploymentStatusOracleByteCode,
-	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
-	zeroSalt: ZERO_SALT,
-})
+	return {
+		getDeploymentStatusOracleAddress,
+		getInfraContractAddresses,
+		getRepTokenAddress,
+		getSecurityPoolAddresses,
+		getZoltarAddress,
+		getZoltarQuestionDataAddress,
+	}
+}
 
-const { getRepTokenAddress } = createRepTokenAddressHelper({
-	genesisRepTokenAddress: GENESIS_REPUTATION_TOKEN_ADDRESS,
-	getReputationTokenInitCode: zoltarAddress =>
-		encodeDeployData({
-			abi: ReputationToken_ReputationToken.abi,
-			bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
-			args: [zoltarAddress],
-		}),
-	getZoltarAddress,
-})
-
-const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
-	getEscalationGameInitCode: securityPool =>
-		encodeDeployData({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-			args: [securityPool],
-		}),
-	getInfraContracts: () => getInfraContractAddresses(),
-	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken) =>
-		encodeDeployData({
-			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-			bytecode: `0x${peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.evm.bytecode.object}`,
-			args: [openOracle, repToken],
-		}),
-	getRepTokenAddress,
-	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, securityMultiplier, securityPoolFactory, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
-		encodeDeployData({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
-			args: [securityPoolForker, securityPoolFactory, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, truthAuction],
-		}),
-	getShareTokenInitCode: (securityPoolFactory, zoltarAddress, questionId) =>
-		encodeDeployData({
-			abi: peripherals_tokens_ShareToken_ShareToken.abi,
-			bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
-			args: [securityPoolFactory, zoltarAddress, questionId],
-		}),
-	getTruthAuctionInitCode: securityPoolForker =>
-		encodeDeployData({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			bytecode: `0x${peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.evm.bytecode.object}`,
-			args: [securityPoolForker],
-		}),
-})
-
-async function readRequiredMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts): Promise<MulticallReturnType<TContracts, false>> {
+async function readRequiredMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'> & ClientWithChain, contracts: TContracts): Promise<MulticallReturnType<TContracts, false>> {
 	return (await client.multicall({
 		allowFailure: false,
 		contracts: contracts as readonly ContractFunctionParameters[],
-		multicallAddress: getMulticall3Address(),
+		multicallAddress: getMulticall3Address(getNetworkKeyFromClient(client)),
 	})) as MulticallReturnType<TContracts, false>
 }
 
-export async function readOptionalMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts): Promise<MulticallReturnType<TContracts, true>> {
+export async function readOptionalMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'> & ClientWithChain, contracts: TContracts): Promise<MulticallReturnType<TContracts, true>> {
 	return (await client.multicall({
 		allowFailure: true,
 		contracts: contracts as readonly ContractFunctionParameters[],
-		multicallAddress: getMulticall3Address(),
+		multicallAddress: getMulticall3Address(getNetworkKeyFromClient(client)),
 	})) as MulticallReturnType<TContracts, true>
 }
 
@@ -494,16 +543,21 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 	return deployHash
 }
 
-export function getOpenOracleAddress() {
-	return getInfraContractAddresses().openOracle
+export function getZoltarAddress(networkKey: SupportedNetworkKey = DEFAULT_NETWORK_KEY) {
+	return getNetworkHelpers(networkKey).getZoltarAddress()
 }
 
-export function getMulticall3Address() {
-	return getInfraContractAddresses().multicall3
+export function getOpenOracleAddress(networkKey: SupportedNetworkKey = DEFAULT_NETWORK_KEY) {
+	return getNetworkHelpers(networkKey).getInfraContractAddresses().openOracle
 }
 
-export function getDeploymentSteps(): DeploymentStep[] {
-	const addresses = getInfraContractAddresses()
+export function getMulticall3Address(networkKey: SupportedNetworkKey = DEFAULT_NETWORK_KEY) {
+	return getNetworkHelpers(networkKey).getInfraContractAddresses().multicall3
+}
+
+export function getDeploymentSteps(networkKey: SupportedNetworkKey = DEFAULT_NETWORK_KEY): DeploymentStep[] {
+	const networkConfig = getNetworkConfig(networkKey)
+	const addresses = getNetworkHelpers(networkKey).getInfraContractAddresses()
 
 	return [
 		{
@@ -519,9 +573,9 @@ export function getDeploymentSteps(): DeploymentStep[] {
 		{
 			id: 'deploymentStatusOracle',
 			label: 'Deployment Status Oracle',
-			address: getDeploymentStatusOracleAddress(),
+			address: getNetworkHelpers(networkKey).getDeploymentStatusOracleAddress(),
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, getDeploymentStatusOracleByteCode()),
+			deploy: async client => await deployViaProxy(client, getDeploymentStatusOracleByteCode(networkKey)),
 		},
 		{
 			id: 'multicall3',
@@ -570,7 +624,7 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			label: 'Zoltar',
 			address: addresses.zoltar,
 			dependencies: ['proxyDeployer', 'zoltarQuestionData'],
-			deploy: async client => await deployViaProxy(client, getZoltarInitCode(addresses.zoltarQuestionData)),
+			deploy: async client => await deployViaProxy(client, getZoltarInitCode(addresses.zoltarQuestionData, networkConfig.genesisRepTokenAddress)),
 		},
 		{
 			id: 'shareTokenFactory',
@@ -615,6 +669,7 @@ export function getDeploymentSteps(): DeploymentStep[] {
 						securityPoolForker: addresses.securityPoolForker,
 						shareTokenFactory: addresses.shareTokenFactory,
 						uniformPriceDualCapBatchAuctionFactory: addresses.uniformPriceDualCapBatchAuctionFactory,
+						weth: addresses.weth,
 						zoltar: addresses.zoltar,
 						zoltarQuestionData: addresses.zoltarQuestionData,
 					}),
@@ -623,28 +678,60 @@ export function getDeploymentSteps(): DeploymentStep[] {
 	]
 }
 
-async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readContract'>): Promise<bigint> {
+async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readContract'> & ClientWithChain): Promise<bigint> {
+	const networkKey = getNetworkKeyFromClient(client)
 	return BigInt(
 		await client.readContract({
 			abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
 			functionName: 'getDeploymentMask',
-			address: getDeploymentStatusOracleAddress(),
+			address: getNetworkHelpers(networkKey).getDeploymentStatusOracleAddress(),
 			args: [],
 		}),
 	)
 }
 
-export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient, 'readContract' | 'getCode'>): Promise<DeploymentStatusSnapshot> {
-	const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
+export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient, 'readContract' | 'getCode'> & ClientWithChain): Promise<DeploymentStatusSnapshot> {
+	const networkKey = getNetworkKeyFromClient(client)
+	const deploymentStatusOracleAddress = getNetworkHelpers(networkKey).getDeploymentStatusOracleAddress()
 	const deploymentStatusOracleCode = await client.getCode({ address: deploymentStatusOracleAddress })
 	if (deploymentStatusOracleCode === undefined || deploymentStatusOracleCode === '0x') {
 		const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
 		const proxyDeployerDeployed = proxyDeployerCode !== undefined && proxyDeployerCode !== '0x'
-		return getDeploymentStatusSnapshot(proxyDeployerDeployed ? 1n : 0n, false)
+		return getDeploymentStatusSnapshot(networkKey, proxyDeployerDeployed ? 1n : 0n, false)
 	}
 
 	const deployedMask = await loadDeploymentStatusOracleMask(client)
-	return getDeploymentStatusSnapshot(deployedMask, true)
+	return getDeploymentStatusSnapshot(networkKey, deployedMask, true)
+}
+
+export async function loadGenesisRepTokenDeploymentPrerequisite(client: Pick<ReadClient, 'getCode'> & ClientWithChain): Promise<GenesisRepTokenDeploymentPrerequisite> {
+	const networkKey = getNetworkKeyFromClient(client)
+	const networkConfig = getNetworkConfig(networkKey)
+
+	if (networkConfig.genesisRepTokenAddress === zeroAddress) {
+		return {
+			detail: `Genesis REP is not configured for ${networkConfig.label}. Non-mainnet deployments must deploy GenesisReputationToken first, then update shared/ts/networkConfig.ts with the deployed address.`,
+			missingLabel: 'Genesis REP token',
+			ready: false,
+		}
+	}
+
+	const code = await client.getCode({ address: networkConfig.genesisRepTokenAddress })
+	if (code !== undefined && code !== '0x') {
+		return {
+			detail: undefined,
+			missingLabel: undefined,
+			ready: true,
+		}
+	}
+
+	return {
+		detail: isMainnetNetworkKey(networkKey)
+			? `Missing configured genesis REP contract at ${networkConfig.genesisRepTokenAddress}. Mainnet uses the external REPv2 deployment and it must exist before deploying Zoltar.`
+			: `Missing configured genesis REP contract at ${networkConfig.genesisRepTokenAddress}. Non-mainnet deployments require a deployed GenesisReputationToken clone. Run solidity/ts/scripts/deployGenesisReputationToken.ts first, then update shared/ts/networkConfig.ts if the deployed address changed.`,
+		missingLabel: 'Genesis REP token',
+		ready: false,
+	}
 }
 
 export async function loadErc20Balance(client: ReadClient, tokenAddress: Address, ownerAddress: Address) {
@@ -665,8 +752,8 @@ export async function loadErc20Allowance(client: ReadClient, tokenAddress: Addre
 	})
 }
 
-function getDeploymentStep(id: DeploymentStepId) {
-	const step = getDeploymentSteps().find(candidate => candidate.id === id)
+function getDeploymentStep(id: DeploymentStepId, networkKey: SupportedNetworkKey = DEFAULT_NETWORK_KEY) {
+	const step = getDeploymentSteps(networkKey).find(candidate => candidate.id === id)
 	if (step === undefined) throw new Error(`Unknown deployment step: ${id}`)
 	return step
 }
@@ -769,6 +856,7 @@ function getMarketType(questionData: QuestionData, outcomeLabels: string[]): Mar
 }
 
 async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
+	const zoltarQuestionDataAddress = getDeploymentStep('zoltarQuestionData', getNetworkKeyFromClient(client)).address
 	let currentIndex = 0n
 	const outcomeLabels: string[] = []
 
@@ -776,7 +864,7 @@ async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
 		const page = await client.readContract({
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'getOutcomeLabels',
-			address: getDeploymentStep('zoltarQuestionData').address,
+			address: zoltarQuestionDataAddress,
 			args: [questionId, currentIndex, CONTRACT_PAGE_SIZE],
 		})
 		if (!isStringArray(page)) throw new Error('Unexpected outcome labels response')
@@ -821,17 +909,18 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 }
 
 export async function loadMarketDetails(client: ReadClient, questionId: bigint): Promise<MarketDetails> {
+	const zoltarQuestionDataAddress = getDeploymentStep('zoltarQuestionData', getNetworkKeyFromClient(client)).address
 	const [question, createdAt] = await readRequiredMulticall(client, [
 		{
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'questions',
-			address: getDeploymentStep('zoltarQuestionData').address,
+			address: zoltarQuestionDataAddress,
 			args: [questionId],
 		},
 		{
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'questionCreatedTimestamp',
-			address: getDeploymentStep('zoltarQuestionData').address,
+			address: zoltarQuestionDataAddress,
 			args: [questionId],
 		},
 	])
@@ -859,10 +948,11 @@ export async function loadMarketDetails(client: ReadClient, questionId: bigint):
 }
 
 async function loadQuestionIds(client: ReadClient): Promise<bigint[]> {
+	const zoltarQuestionDataAddress = getDeploymentStep('zoltarQuestionData', getNetworkKeyFromClient(client)).address
 	const questionCount = await client.readContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'getQuestionCount',
-		address: getDeploymentStep('zoltarQuestionData').address,
+		address: zoltarQuestionDataAddress,
 		args: [],
 	})
 
@@ -872,7 +962,7 @@ async function loadQuestionIds(client: ReadClient): Promise<bigint[]> {
 		const page = await client.readContract({
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'getQuestions',
-			address: getDeploymentStep('zoltarQuestionData').address,
+			address: zoltarQuestionDataAddress,
 			args: [currentIndex, CONTRACT_PAGE_SIZE],
 		})
 		if (!Array.isArray(page)) throw new Error('Unexpected question id page response')
@@ -895,13 +985,15 @@ export async function loadZoltarQuestionCount(client: ReadClient) {
 	return await client.readContract({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'getQuestionCount',
-		address: getDeploymentStep('zoltarQuestionData').address,
+		address: getDeploymentStep('zoltarQuestionData', getNetworkKeyFromClient(client)).address,
 		args: [],
 	})
 }
 
 export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint): Promise<ZoltarUniverseSummary | undefined> {
-	const zoltarAddress = getDeploymentStep('zoltar').address
+	const networkKey = getNetworkKeyFromClient(client)
+	const zoltarAddress = getDeploymentStep('zoltar', networkKey).address
+	const zoltarQuestionDataAddress = getDeploymentStep('zoltarQuestionData', networkKey).address
 	const [repToken, universe, forkTime, forkThreshold] = await readRequiredMulticall(client, [
 		{
 			abi: Zoltar_Zoltar.abi,
@@ -952,7 +1044,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 				const page: DeployedChildUniversesPage = await client.readContract({
 					abi: Zoltar_Zoltar.abi,
 					functionName: 'getDeployedChildUniverses',
-					address: getDeploymentStep('zoltar').address,
+					address: zoltarAddress,
 					args: [universeId, currentIndex, CONTRACT_PAGE_SIZE],
 				})
 				const [outcomeIndexes, childUniverseIds, childUniverseTuples] = page
@@ -965,7 +1057,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 									outcomeIndexes.map(outcomeIndex => ({
 										abi: ANSWER_OPTION_ABI,
 										functionName: 'getAnswerOptionName',
-										address: getDeploymentStep('zoltarQuestionData').address,
+										address: zoltarQuestionDataAddress,
 										args: [forkQuestionId, outcomeIndex],
 									})),
 								)
@@ -1007,7 +1099,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 					childOutcomeEntries.map(({ outcomeIndex }) => ({
 						abi: Zoltar_Zoltar.abi,
 						functionName: 'getChildUniverseId',
-						address: getDeploymentStep('zoltar').address,
+						address: zoltarAddress,
 						args: [universeId, outcomeIndex],
 					})),
 				)
@@ -1017,7 +1109,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 				childUniverseIds.map(childUniverseId => ({
 					abi: Zoltar_Zoltar.abi,
 					functionName: 'universes',
-					address: getDeploymentStep('zoltar').address,
+					address: zoltarAddress,
 					args: [childUniverseId],
 				})),
 			)) as unknown as UniverseTuple[]
@@ -1169,9 +1261,10 @@ export async function createMarket(
 		questionData: QuestionData
 	},
 ) {
+	const networkKey = getNetworkKeyFromClient(client)
 	const questionId = getQuestionId(parameters.questionData, parameters.outcomeLabels)
 	const createQuestionHash = await writeContractAndWait(client, () => ({
-		address: getDeploymentStep('zoltarQuestionData').address,
+		address: getDeploymentStep('zoltarQuestionData', networkKey).address,
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 		functionName: 'createQuestion',
 		args: [parameters.questionData, parameters.outcomeLabels],
@@ -1192,8 +1285,9 @@ export async function createSecurityPool(
 		securityMultiplier: bigint
 	},
 ) {
+	const networkKey = getNetworkKeyFromClient(client)
 	const deployPoolHash = await writeContractAndWait(client, () => ({
-		address: getDeploymentStep('securityPoolFactory').address,
+		address: getDeploymentStep('securityPoolFactory', networkKey).address,
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deployOriginSecurityPool',
 		args: [0n, parameters.questionId, parameters.securityMultiplier, parameters.currentRetentionRate],
@@ -1202,7 +1296,7 @@ export async function createSecurityPool(
 	return {
 		deployPoolHash,
 		questionId: getQuestionIdHex(parameters.questionId),
-		securityPoolAddress: getSecurityPoolAddresses(zeroAddress, 0n, parameters.questionId, parameters.securityMultiplier).securityPool,
+		securityPoolAddress: getNetworkHelpers(networkKey).getSecurityPoolAddresses(zeroAddress, 0n, parameters.questionId, parameters.securityMultiplier).securityPool,
 		securityMultiplier: parameters.securityMultiplier,
 		universeId: 0n,
 	} satisfies SecurityPoolCreationResult
@@ -1212,20 +1306,21 @@ function getOriginSecurityPoolShareTokenSalt(questionId: bigint, securityMultipl
 	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [securityMultiplier, questionId]))
 }
 
-function getOriginSecurityPoolShareTokenAddress(questionId: bigint, securityMultiplier: bigint) {
+function getOriginSecurityPoolShareTokenAddress(networkKey: SupportedNetworkKey, questionId: bigint, securityMultiplier: bigint) {
+	const addresses = getNetworkHelpers(networkKey).getInfraContractAddresses()
 	return getCreate2Address({
-		from: getInfraContractAddresses().shareTokenFactory,
+		from: addresses.shareTokenFactory,
 		salt: getOriginSecurityPoolShareTokenSalt(questionId, securityMultiplier),
 		bytecode: encodeDeployData({
 			abi: peripherals_tokens_ShareToken_ShareToken.abi,
 			bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
-			args: [getInfraContractAddresses().securityPoolFactory, getZoltarAddress(), questionId],
+			args: [addresses.securityPoolFactory, getNetworkHelpers(networkKey).getZoltarAddress(), questionId],
 		}),
 	})
 }
 
-export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode'>, questionId: bigint, securityMultiplier: bigint) {
-	const shareTokenAddress = getOriginSecurityPoolShareTokenAddress(questionId, securityMultiplier)
+export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode'> & ClientWithChain, questionId: bigint, securityMultiplier: bigint) {
+	const shareTokenAddress = getOriginSecurityPoolShareTokenAddress(getNetworkKeyFromClient(client), questionId, securityMultiplier)
 	const code = await client.getCode({ address: shareTokenAddress })
 	return code !== undefined && code !== '0x'
 }
@@ -1462,7 +1557,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		},
 	])
 
-	const resolvedOracleAddress = openOracleAddress ?? getInfraContractAddresses().openOracle
+	const resolvedOracleAddress = openOracleAddress ?? getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses().openOracle
 
 	let callbackStateHash: Hex | undefined
 	let exactToken1Report: bigint | undefined
@@ -1610,7 +1705,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 	if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('Page index must be a non-negative integer')
 	if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error('Page size must be a positive integer')
 
-	const openOracleAddress = getOpenOracleAddress()
+	const openOracleAddress = getOpenOracleAddress(getNetworkKeyFromClient(client))
 	const nextReportId = await client.readContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'nextReportId',
@@ -1760,8 +1855,9 @@ export async function createOpenOracleReportInstance(
 		token2Address: Address
 	},
 ) {
+	const networkKey = getNetworkKeyFromClient(client)
 	const callParams = {
-		address: getOpenOracleAddress(),
+		address: getOpenOracleAddress(networkKey),
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'createReportInstance',
 		args: [parameters.token1Address, parameters.token2Address, parameters.exactToken1Report, parameters.feePercentage, parameters.multiplier, parameters.settlementTime, parameters.escalationHalt, parameters.disputeDelay, parameters.protocolFee, parameters.settlerReward],
@@ -1802,8 +1898,9 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 }
 
 export async function wrapWeth(client: WriteClient, amount: bigint) {
+	const networkKey = getNetworkKeyFromClient(client)
 	const hash = await writeContractAndWait(client, () => ({
-		address: WETH_ADDRESS,
+		address: getNetworkConfig(networkKey).wethAddress,
 		abi: [
 			{
 				type: 'function',
@@ -1863,6 +1960,7 @@ export async function disputeOracleReport(client: WriteClient, openOracleAddress
 }
 
 export async function loadForkAuctionDetails(client: ReadClient, securityPoolAddress: Address): Promise<ForkAuctionDetails> {
+	const infraAddresses = getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses()
 	const [[questionId, parentSecurityPoolAddress, universeId, systemStateValue, truthAuctionAddress, completeSetCollateralAmount, forkData, questionOutcome], block] = await Promise.all([
 		readRequiredMulticall(client, [
 			{
@@ -1904,13 +2002,13 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			{
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'forkData',
-				address: getInfraContractAddresses().securityPoolForker,
+				address: infraAddresses.securityPoolForker,
 				args: [securityPoolAddress],
 			},
 			{
 				abi: QUESTION_OUTCOME_ABI,
 				functionName: 'getQuestionOutcome',
-				address: getInfraContractAddresses().securityPoolForker,
+				address: infraAddresses.securityPoolForker,
 				args: [securityPoolAddress],
 			},
 		]),
@@ -1929,7 +2027,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 						{
 							abi: Zoltar_Zoltar.abi,
 							functionName: 'getForkTime',
-							address: getInfraContractAddresses().zoltar,
+							address: infraAddresses.zoltar,
 							args: [universeId],
 						},
 					])
@@ -2053,6 +2151,7 @@ async function executeForkAuctionAction(client: WriteClient, action: ForkAuction
 }
 
 export async function forkZoltarWithOwnEscalation(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
+	const infraAddresses = getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses()
 	return await executeForkAuctionAction(
 		client,
 		'forkWithOwnEscalation',
@@ -2060,7 +2159,7 @@ export async function forkZoltarWithOwnEscalation(client: WriteClient, securityP
 		universeId,
 		async () =>
 			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
+				address: infraAddresses.securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'forkZoltarWithOwnEscalationGame',
 				args: [securityPoolAddress],
@@ -2069,6 +2168,7 @@ export async function forkZoltarWithOwnEscalation(client: WriteClient, securityP
 }
 
 export async function initiateSecurityPoolFork(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
+	const infraAddresses = getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses()
 	return await executeForkAuctionAction(
 		client,
 		'initiateFork',
@@ -2076,7 +2176,7 @@ export async function initiateSecurityPoolFork(client: WriteClient, securityPool
 		universeId,
 		async () =>
 			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
+				address: infraAddresses.securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'initiateSecurityPoolFork',
 				args: [securityPoolAddress],
@@ -2085,6 +2185,7 @@ export async function initiateSecurityPoolFork(client: WriteClient, securityPool
 }
 
 export async function createChildUniverseFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
+	const infraAddresses = getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses()
 	return await executeForkAuctionAction(
 		client,
 		'createChildUniverse',
@@ -2092,7 +2193,7 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 		universeId,
 		async () =>
 			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
+				address: infraAddresses.securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'createChildUniverse',
 				args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
@@ -2101,8 +2202,9 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 }
 
 export async function createZoltarChildUniverse(client: WriteClient, universeId: bigint, outcomeIndex: bigint) {
+	const networkKey = getNetworkKeyFromClient(client)
 	const hash = await writeContractAndWait(client, () => ({
-		address: getDeploymentStep('zoltar').address,
+		address: getDeploymentStep('zoltar', networkKey).address,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'deployChild',
 		args: [universeId, outcomeIndex],
@@ -2127,8 +2229,9 @@ async function executeZoltarMigrationAction<TCallParams extends ContractRevertRe
 }
 
 export async function prepareRepForMigrationInZoltar(client: WriteClient, universeId: bigint, amount: bigint) {
+	const networkKey = getNetworkKeyFromClient(client)
 	const callParams = {
-		address: getDeploymentStep('zoltar').address,
+		address: getDeploymentStep('zoltar', networkKey).address,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'addRepToMigrationBalance',
 		args: [universeId, amount],
@@ -2137,8 +2240,9 @@ export async function prepareRepForMigrationInZoltar(client: WriteClient, univer
 }
 
 export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) {
+	const networkKey = getNetworkKeyFromClient(client)
 	const callParams = {
-		address: getDeploymentStep('zoltar').address,
+		address: getDeploymentStep('zoltar', networkKey).address,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'splitMigrationRep',
 		args: [universeId, amount, outcomeIndexes],
@@ -2147,6 +2251,7 @@ export async function migrateInternalRepInZoltar(client: WriteClient, universeId
 }
 
 export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
+	const infraAddresses = getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses()
 	return await executeForkAuctionAction(
 		client,
 		'migrateRepToZoltar',
@@ -2154,7 +2259,7 @@ export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, se
 		universeId,
 		async () =>
 			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
+				address: infraAddresses.securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateRepToZoltar',
 				args: [securityPoolAddress, outcomes.map(outcome => BigInt(getReportingOutcomeValue(outcome)))],
@@ -2163,6 +2268,7 @@ export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, se
 }
 
 export async function migrateSecurityVault(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
+	const infraAddresses = getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses()
 	return await executeForkAuctionAction(
 		client,
 		'migrateVault',
@@ -2170,7 +2276,7 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 		universeId,
 		async () =>
 			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
+				address: infraAddresses.securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVault',
 				args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
@@ -2196,6 +2302,7 @@ function toUint8Array(values: bigint[]) {
 }
 
 export async function migrateEscalationDeposits(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
+	const infraAddresses = getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses()
 	return await executeForkAuctionAction(
 		client,
 		'migrateEscalationDeposits',
@@ -2203,7 +2310,7 @@ export async function migrateEscalationDeposits(client: WriteClient, securityPoo
 		universeId,
 		async () =>
 			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
+				address: infraAddresses.securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateFromEscalationGame',
 				args: [securityPoolAddress, vaultAddress, getReportingOutcomeValue(outcome), toUint8Array(depositIndexes)],
@@ -2212,6 +2319,7 @@ export async function migrateEscalationDeposits(client: WriteClient, securityPoo
 }
 
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
+	const infraAddresses = getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses()
 	return await executeForkAuctionAction(
 		client,
 		'startTruthAuction',
@@ -2219,7 +2327,7 @@ export async function startTruthAuctionForSecurityPool(client: WriteClient, secu
 		universeId,
 		async () =>
 			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
+				address: infraAddresses.securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'startTruthAuction',
 				args: [securityPoolAddress],
@@ -2257,6 +2365,7 @@ export async function refundTruthAuctionBid(client: WriteClient, securityPoolAdd
 }
 
 export async function finalizeSecurityPoolTruthAuction(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
+	const infraAddresses = getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses()
 	return await executeForkAuctionAction(
 		client,
 		'finalizeTruthAuction',
@@ -2264,7 +2373,7 @@ export async function finalizeSecurityPoolTruthAuction(client: WriteClient, secu
 		universeId,
 		async () =>
 			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
+				address: infraAddresses.securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'finalizeTruthAuction',
 				args: [securityPoolAddress],
@@ -2273,6 +2382,7 @@ export async function finalizeSecurityPoolTruthAuction(client: WriteClient, secu
 }
 
 export async function claimSecurityPoolAuctionProceeds(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, tick: bigint, bidIndex: bigint) {
+	const infraAddresses = getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses()
 	return await executeForkAuctionAction(
 		client,
 		'claimAuctionProceeds',
@@ -2280,7 +2390,7 @@ export async function claimSecurityPoolAuctionProceeds(client: WriteClient, secu
 		universeId,
 		async () =>
 			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
+				address: infraAddresses.securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'claimAuctionProceeds',
 				args: [securityPoolAddress, vaultAddress, [{ tick, bidIndex }]],
@@ -2289,8 +2399,9 @@ export async function claimSecurityPoolAuctionProceeds(client: WriteClient, secu
 }
 
 export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSecurityPool[]> {
+	const infraAddresses = getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses()
 	const deploymentCount = await client.readContract({
-		address: getInfraContractAddresses().securityPoolFactory,
+		address: infraAddresses.securityPoolFactory,
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'securityPoolDeploymentCount',
 		args: [],
@@ -2300,7 +2411,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 		deploymentCount === 0n
 			? []
 			: await client.readContract({
-					address: getInfraContractAddresses().securityPoolFactory,
+					address: infraAddresses.securityPoolFactory,
 					abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 					functionName: 'securityPoolDeploymentsRange',
 					args: [0n, deploymentCount],
@@ -2326,7 +2437,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 					{
 						abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 						functionName: 'forkData',
-						address: getInfraContractAddresses().securityPoolForker,
+						address: infraAddresses.securityPoolForker,
 						args: [securityPoolAddress],
 					},
 					{
@@ -2344,7 +2455,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 					{
 						abi: QUESTION_OUTCOME_ABI,
 						functionName: 'getQuestionOutcome',
-						address: getInfraContractAddresses().securityPoolForker,
+						address: infraAddresses.securityPoolForker,
 						args: [securityPoolAddress],
 					},
 					{
@@ -2362,7 +2473,7 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 					{
 						abi: Zoltar_Zoltar.abi,
 						functionName: 'getForkTime',
-						address: getInfraContractAddresses().zoltar,
+						address: infraAddresses.zoltar,
 						args: [universeId],
 					},
 				]),
@@ -2551,8 +2662,9 @@ export async function migrateSharesFromUniverse(client: WriteClient, securityPoo
 }
 
 export async function forkUniverseDirectly(client: WriteClient, universeId: bigint, questionId: bigint, securityPoolAddress: Address) {
+	const infraAddresses = getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses()
 	const hash = await writeContractAndWait(client, () => ({
-		address: getInfraContractAddresses().zoltar,
+		address: infraAddresses.zoltar,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkUniverse',
 		args: [universeId, questionId],
@@ -2566,8 +2678,9 @@ export async function forkUniverseDirectly(client: WriteClient, universeId: bigi
 }
 
 export async function forkZoltarUniverse(client: WriteClient, universeId: bigint, questionId: bigint) {
+	const infraAddresses = getNetworkHelpers(getNetworkKeyFromClient(client)).getInfraContractAddresses()
 	const hash = await writeContractAndWait(client, () => ({
-		address: getInfraContractAddresses().zoltar,
+		address: infraAddresses.zoltar,
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkUniverse',
 		args: [universeId, questionId],

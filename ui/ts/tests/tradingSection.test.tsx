@@ -162,6 +162,7 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	return {
 		address: zeroAddress,
 		chainId: '0x1',
+		walletChainId: '0x1',
 		ethBalance: 10n * 10n ** 18n,
 		wethBalance: 0n,
 		...overrides,

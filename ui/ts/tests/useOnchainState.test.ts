@@ -29,6 +29,7 @@ void describe('loadWalletState', () => {
 		let accountState: AccountState = {
 			address: zeroAddress,
 			chainId: undefined,
+			walletChainId: undefined,
 			ethBalance: undefined,
 			wethBalance: undefined,
 		}
@@ -59,6 +60,7 @@ void describe('loadWalletState', () => {
 		chainIdDeferred.resolve('0x1')
 		await Promise.resolve()
 		expect(accountState.chainId).toBe('0x1')
+		expect(accountState.walletChainId).toBe('0x1')
 
 		ethBalanceDeferred.resolve(123n)
 		await Promise.resolve()
@@ -71,6 +73,7 @@ void describe('loadWalletState', () => {
 		expect(errorMessage).toBe(undefined)
 		expect(accountState.address).toBe(zeroAddress)
 		expect(accountState.chainId).toBe('0x1')
+		expect(accountState.walletChainId).toBe('0x1')
 		expect(accountState.ethBalance).toBe(123n)
 		expect(accountState.wethBalance).toBe(456n)
 	})
@@ -83,6 +86,7 @@ void describe('loadWalletState', () => {
 		let accountState: AccountState = {
 			address: zeroAddress,
 			chainId: undefined,
+			walletChainId: undefined,
 			ethBalance: undefined,
 			wethBalance: undefined,
 		}
@@ -115,6 +119,7 @@ void describe('loadWalletState', () => {
 		await flushAsyncUpdates()
 		expect(controller.isLoading.value).toBe(false)
 		expect(accountState.chainId).toBe('0x1')
+		expect(accountState.walletChainId).toBe('0x1')
 		expect(accountState.ethBalance).toBe(123n)
 		expect(accountState.wethBalance).toBe(456n)
 	})

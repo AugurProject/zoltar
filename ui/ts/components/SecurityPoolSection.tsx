@@ -10,11 +10,11 @@ import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
-import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent, openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import type { SecurityPoolSectionProps } from '../types/components.js'
 
 export function SecurityPoolSection({
+	activeNetworkLabel = 'Ethereum mainnet',
 	accountState,
 	checkingDuplicateOriginPool,
 	duplicateOriginPoolExists,
@@ -34,12 +34,12 @@ export function SecurityPoolSection({
 	securityPoolResult,
 	showHeader = true,
 	poolCreationMarketDetails: carriedPoolCreationMarketDetails,
+	walletMatchesActiveNetwork = true,
 	zoltarUniverseHasForked,
 }: SecurityPoolSectionProps) {
-	const isMainnet = isMainnetChain(accountState.chainId)
 	const isPoolActionPending = securityPoolCreating || checkingDuplicateOriginPool
 	const hasSecurityPoolResult = securityPoolResult !== undefined
-	const isCreateDisabled = accountState.address === undefined || !isMainnet || isPoolActionPending || duplicateOriginPoolExists || marketDetails?.marketType !== 'binary' || zoltarUniverseHasForked
+	const isCreateDisabled = accountState.address === undefined || !walletMatchesActiveNetwork || isPoolActionPending || duplicateOriginPoolExists || marketDetails?.marketType !== 'binary' || zoltarUniverseHasForked
 	const matchingPools = marketDetails === undefined ? [] : securityPools.filter(pool => sameCaseInsensitiveText(pool.questionId, marketDetails.questionId))
 	const hasMatchingSecurityMultiplier = matchingPools.some(pool => pool.securityMultiplier.toString() === securityPoolForm.securityMultiplier.trim())
 	let createdQuestionDetails = undefined
@@ -187,6 +187,7 @@ export function SecurityPoolSection({
 
 							{!duplicateOriginPoolExists && !hasMatchingSecurityMultiplier ? undefined : <p className='detail'>A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.</p>}
 							{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>Security pools can only be created for binary markets. Load a binary market to proceed.</p> : undefined}
+							{accountState.address !== undefined && !walletMatchesActiveNetwork ? <p className='detail'>{`Switch wallet to ${activeNetworkLabel} to create pools.`}</p> : undefined}
 							{zoltarUniverseHasForked ? <p className='notice error'>Security pools cannot be created after Zoltar has forked.</p> : undefined}
 							<ErrorNotice message={securityPoolError} />
 						</div>

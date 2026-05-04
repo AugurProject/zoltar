@@ -9,12 +9,12 @@ import { ShareMigrationTargetsSection } from './ShareMigrationTargetsSection.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
-import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
 import { getDefaultShareMigrationTargetOutcomeIndexes, getRemainingMintCapacity, getTradingGuardDisplayMessage, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage } from '../lib/trading.js'
 import type { TradingSectionProps } from '../types/components.js'
 
 export function TradingSection({
+	activeNetworkLabel = 'Ethereum mainnet',
 	accountState,
 	embedInCard = false,
 	loadingTradingForkUniverse,
@@ -33,10 +33,10 @@ export function TradingSection({
 	tradingForm,
 	tradingForkUniverse,
 	tradingResult,
+	walletMatchesActiveNetwork = true,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 }: TradingSectionProps) {
-	const isMainnet = isMainnetChain(accountState.chainId)
 	const hasSelectedPool = selectedPool !== undefined
 	const poolUniverseHasForked = selectedPool?.universeHasForked === true || tradingForkUniverse?.hasForked === true
 	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.totalSecurityBondAllowance, selectedPool?.completeSetCollateralAmount)
@@ -54,31 +54,33 @@ export function TradingSection({
 	}
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
 	const mintGuardMessage = getTradingMintGuardMessage({
+		activeNetworkLabel,
 		accountAddress: accountState.address,
 		completeSetCollateralAmount: selectedPool?.completeSetCollateralAmount,
 		ethBalance: accountState.ethBalance,
 		hasSelectedPool,
-		isMainnet,
 		mintAmountInput: tradingForm.completeSetAmount,
 		systemState: selectedPool?.systemState,
 		totalRepDeposit: selectedPool?.totalRepDeposit,
 		totalSecurityBondAllowance: selectedPool?.totalSecurityBondAllowance,
 		universeHasForked: poolUniverseHasForked,
+		walletMatchesActiveNetwork,
 	})
 	const redeemCompleteSetGuardMessage = getTradingRedeemCompleteSetGuardMessage({
+		activeNetworkLabel,
 		accountAddress: accountState.address,
 		hasSelectedPool,
-		isMainnet,
 		loadingTradingDetails,
 		redeemAmountInput: tradingForm.redeemAmount,
 		shareBalances,
 		systemState: selectedPool?.systemState,
 		universeHasForked: poolUniverseHasForked,
+		walletMatchesActiveNetwork,
 	})
 	const migrateSharesGuardMessage = getTradingMigrateSharesGuardMessage({
+		activeNetworkLabel,
 		accountAddress: accountState.address,
 		hasSelectedPool,
-		isMainnet,
 		loadingTradingForkUniverse,
 		loadingTradingDetails,
 		selectedShareOutcome: tradingForm.selectedShareOutcome,
@@ -86,14 +88,16 @@ export function TradingSection({
 		targetOutcomeIndexesInput: tradingForm.targetOutcomeIndexes,
 		tradingForkUniverse,
 		universeHasForked: poolUniverseHasForked,
+		walletMatchesActiveNetwork,
 	})
 	const redeemSharesGuardMessage = getTradingRedeemSharesGuardMessage({
+		activeNetworkLabel,
 		accountAddress: accountState.address,
 		hasSelectedPool,
-		isMainnet,
 		questionOutcome: selectedPool?.questionOutcome,
 		systemState: selectedPool?.systemState,
 		universeHasForked: poolUniverseHasForked,
+		walletMatchesActiveNetwork,
 	})
 	const mintGuardDisplayMessage = getTradingGuardDisplayMessage(mintGuardMessage)
 	const redeemCompleteSetGuardDisplayMessage = getTradingGuardDisplayMessage(redeemCompleteSetGuardMessage)

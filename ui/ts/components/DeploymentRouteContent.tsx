@@ -4,8 +4,21 @@ import { DeploymentSection } from './DeploymentSection.js'
 import { findNextDeployableStep } from '../lib/deployment.js'
 import type { DeploymentRouteContentProps } from '../types/components.js'
 
-export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isMainnet, onDeploy, onDeployNextMissing }: DeploymentRouteContentProps) {
-	const nextMissingStep = findNextDeployableStep(deploymentStatuses)
+export function DeploymentRouteContent({
+	accountAddress,
+	activeNetworkLabel = 'Ethereum mainnet',
+	busyStepId,
+	deploymentBlockedNotice,
+	deployNextMissingPending,
+	deploymentSections,
+	deploymentStatuses,
+	isLoadingDeploymentStatuses,
+	onDeploy,
+	onDeployNextMissing,
+	walletMatchesActiveNetwork = true,
+	zoltarExternalPrerequisiteLabel,
+}: DeploymentRouteContentProps) {
+	const nextMissingStep = findNextDeployableStep(deploymentStatuses, zoltarExternalPrerequisiteLabel)
 	const deployedContractCount = deploymentStatuses.filter(step => step.deployed).length
 	const totalContractCount = deploymentStatuses.length
 	let buttonContent: ComponentChildren = 'Deploy Next Missing'
@@ -29,14 +42,26 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 					</LoadableValue>
 				</h2>
 				{!isLoadingDeploymentStatuses && <p className='detail'>{nextMissingStep === undefined ? 'All deterministic contracts are deployed.' : `Next deployable contract: ${nextMissingStep.label}`}</p>}
+				{deploymentBlockedNotice === undefined ? undefined : <p className='detail'>{deploymentBlockedNotice}</p>}
+				{accountAddress !== undefined && !walletMatchesActiveNetwork ? <p className='detail'>{`Switch wallet to ${activeNetworkLabel} to deploy contracts.`}</p> : undefined}
 				<div className='actions'>
-					<button className='primary' onClick={onDeployNextMissing} disabled={accountAddress === undefined || !isMainnet || nextMissingStep === undefined || busyStepId !== undefined || deployNextMissingPending}>
+					<button className='primary' onClick={onDeployNextMissing} disabled={accountAddress === undefined || !walletMatchesActiveNetwork || nextMissingStep === undefined || busyStepId !== undefined || deployNextMissingPending}>
 						{buttonContent}
 					</button>
 				</div>
 			</section>
 			{deploymentSections.map(section => (
-				<DeploymentSection title={section.title} steps={section.steps} allSteps={deploymentStatuses} accountAddress={accountAddress} isMainnet={isMainnet} busyStepId={busyStepId} onDeploy={onDeploy} />
+				<DeploymentSection
+					title={section.title}
+					steps={section.steps}
+					allSteps={deploymentStatuses}
+					accountAddress={accountAddress}
+					activeNetworkLabel={activeNetworkLabel}
+					busyStepId={busyStepId}
+					onDeploy={onDeploy}
+					walletMatchesActiveNetwork={walletMatchesActiveNetwork}
+					zoltarExternalPrerequisiteLabel={zoltarExternalPrerequisiteLabel}
+				/>
 			))}
 		</>
 	)

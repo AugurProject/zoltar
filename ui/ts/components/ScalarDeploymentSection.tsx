@@ -13,13 +13,13 @@ type ScalarDeploymentSectionProps = {
 	accountAddress: Address | undefined
 	childUniverses: ZoltarChildUniverseSummary[]
 	hasForked: boolean
-	isMainnet: boolean
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	questionDetails: MarketDetails | undefined
+	walletMatchesActiveNetwork: boolean
 	zoltarChildUniverseError: string | undefined
 }
 
-export function ScalarDeploymentSection({ accountAddress, childUniverses, hasForked, isMainnet, onCreateChildUniverseForOutcomeIndex, questionDetails, zoltarChildUniverseError }: ScalarDeploymentSectionProps) {
+export function ScalarDeploymentSection({ accountAddress, childUniverses, hasForked, onCreateChildUniverseForOutcomeIndex, questionDetails, walletMatchesActiveNetwork, zoltarChildUniverseError }: ScalarDeploymentSectionProps) {
 	const [scalarOutcomeTick, setScalarOutcomeTick] = useState('0')
 	const [scalarOutcomeInvalid, setScalarOutcomeInvalid] = useState(false)
 	const [scalarDeployError, setScalarDeployError] = useState<string | undefined>(undefined)
@@ -44,7 +44,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const selectedScalarOutcomeIndex = scalarOutcomeInvalid ? 0n : getScalarOutcomeIndex(questionDetails, clampedSelectedScalarTick)
 	const selectedScalarChild = childUniverses.find(child => child.outcomeIndex === selectedScalarOutcomeIndex)
 	const selectedScalarChildExists = selectedScalarChild?.exists === true
-	const canDeployScalarChild = accountAddress !== undefined && isMainnet && hasForked && !selectedScalarChildExists
+	const canDeployScalarChild = accountAddress !== undefined && walletMatchesActiveNetwork && hasForked && !selectedScalarChildExists
 
 	useEffect(() => {
 		const nextTick = clampScalarTickIndex(selectedScalarTick, questionDetails.numTicks).toString()

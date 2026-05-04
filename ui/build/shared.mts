@@ -33,6 +33,14 @@ const sharedArtifactCopyPaths = [
 		sourcePath: path.join(SHARED_OUTPUT_ROOT_PATH, 'deploymentAddresses.d.ts'),
 		destinationPath: path.join(UI_ROOT_PATH, 'ts', 'shared', 'deploymentAddresses.d.ts'),
 	},
+	{
+		sourcePath: path.join(SHARED_OUTPUT_ROOT_PATH, 'networkConfig.js'),
+		destinationPath: path.join(UI_ROOT_PATH, 'js', 'shared', 'networkConfig.js'),
+	},
+	{
+		sourcePath: path.join(SHARED_OUTPUT_ROOT_PATH, 'networkConfig.d.ts'),
+		destinationPath: path.join(UI_ROOT_PATH, 'ts', 'shared', 'networkConfig.d.ts'),
+	},
 ]
 
 const sharedSourceShimFiles = [
@@ -47,6 +55,10 @@ const sharedSourceShimFiles = [
 	{
 		destinationPath: path.join(UI_ROOT_PATH, 'ts', 'shared', 'deploymentAddresses.js'),
 		fileContents: "export * from '../../../shared/js/deploymentAddresses.js'\n",
+	},
+	{
+		destinationPath: path.join(UI_ROOT_PATH, 'ts', 'shared', 'networkConfig.js'),
+		fileContents: "export * from '../../../shared/js/networkConfig.js'\n",
 	},
 ]
 

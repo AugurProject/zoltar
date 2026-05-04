@@ -5,7 +5,7 @@ import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
 import { ABIS } from '../abis.js'
 import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, loadOpenOracleReportDetails, readOptionalMulticall, settleOracleReport, submitInitialOracleReport, wrapWeth } from '../contracts.js'
-import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { createReadClientForNetwork, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import {
 	deriveOpenOracleInitialReportSubmissionDetails,
@@ -21,6 +21,7 @@ import {
 import { parseAddressInput, parseBytes32Input, parseReportIdInput } from '../lib/inputs.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState, parseBigIntInput } from '../lib/marketForm.js'
 import { requireDefined } from '../lib/required.js'
+import { getNetworkConfig } from '../shared/networkConfig.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
@@ -59,7 +60,7 @@ function toReadError(error: unknown) {
 	return error instanceof Error ? error : new Error('Unknown read error')
 }
 
-export function useOpenOracleOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters) {
+export function useOpenOracleOperations({ accountAddress, activeNetworkKey, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters) {
 	const loadingOpenOracleCreate = useSignal(false)
 	const oracleReportLoad = useLoadController()
 	const openOracleInitialReportPriceLoad = useLoadController()
@@ -175,7 +176,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		}
 	}
 
-	const loadEthBalance = async (readClient = createConnectedReadClient()): Promise<TokenAccessLoadResult> => {
+	const loadEthBalance = async (readClient = createReadClientForNetwork(activeNetworkKey)): Promise<TokenAccessLoadResult> => {
 		if (accountAddress === undefined) {
 			return { amount: undefined, error: undefined }
 		}
@@ -219,7 +220,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 					resetOpenOracleInitialReportQuoteState()
 				}
 			},
-			load: async () => await loadOpenOracleInitialReportPriceResult(createConnectedReadClient(), currentDetails.token1, currentDetails.token2, currentDetails.exactToken1Report),
+			load: async () => await loadOpenOracleInitialReportPriceResult(createReadClientForNetwork(activeNetworkKey), currentDetails.token1, currentDetails.token2, currentDetails.exactToken1Report),
 			onSuccess: (initialPriceResult: OpenOracleInitialReportPriceLoadResult) => {
 				const initialPrice = initialPriceResult.status === 'success' ? initialPriceResult : undefined
 				const priceFailure = initialPriceResult.status === 'failure' ? initialPriceResult : undefined
@@ -282,7 +283,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 							token2BalanceResult: { amount: undefined, error: undefined },
 						} satisfies OpenOracleInitialReportTokenAccessLoadResult
 					}
-					const readClient = createConnectedReadClient()
+					const readClient = createReadClientForNetwork(activeNetworkKey)
 					const [ethBalanceResult, [token1ApprovalReadResult, token2ApprovalReadResult, token1BalanceReadResult, token2BalanceReadResult]] = await Promise.all([
 						loadEthBalance(readClient),
 						readOptionalMulticall(readClient, [
@@ -290,13 +291,13 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 								abi: ABIS.mainnet.erc20,
 								functionName: 'allowance',
 								address: currentDetails.token1,
-								args: [accountAddress, getOpenOracleAddress()],
+								args: [accountAddress, getOpenOracleAddress(activeNetworkKey)],
 							},
 							{
 								abi: ABIS.mainnet.erc20,
 								functionName: 'allowance',
 								address: currentDetails.token2,
-								args: [accountAddress, getOpenOracleAddress()],
+								args: [accountAddress, getOpenOracleAddress(activeNetworkKey)],
 							},
 							{
 								abi: ABIS.mainnet.erc20,
@@ -347,7 +348,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		}
 	}
 
-	const loadOracleReportById = async (reportId: bigint) => await loadOpenOracleReportDetails(createConnectedReadClient(), getOpenOracleAddress(), reportId)
+	const loadOracleReportById = async (reportId: bigint) => await loadOpenOracleReportDetails(createReadClientForNetwork(activeNetworkKey), getOpenOracleAddress(activeNetworkKey), reportId)
 
 	const loadOracleReport = async (reportIdInput?: string) => {
 		await oracleReportLoad.run({
@@ -414,6 +415,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 			token2BalanceError: openOracleInitialReportToken2BalanceError.value,
 			token2Decimals: reportDetails.token2Decimals,
 			walletEthBalance: openOracleInitialReportEthBalance.value,
+			wrappedNativeTokenAddress: getNetworkConfig(activeNetworkKey).wethAddress,
 		})
 
 	const runOracleAction = async (
@@ -428,7 +430,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		try {
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, openOracleError, 'Connect a wallet before operating open oracle'),
+					...buildWriteActionConfig({ accountAddress, activeNetworkKey, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, openOracleError, 'Connect a wallet before operating open oracle'),
 					formatErrorMessage: options?.formatErrorMessage,
 					refreshErrorFallback: 'Oracle transaction succeeded, but refreshing the selected report failed',
 				},
@@ -466,7 +468,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				if (approvalAmount === undefined) {
 					throw new Error('No token1 approval amount is required for the selected report')
 				}
-				return await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), reportDetails.token1, getOpenOracleAddress(), approvalAmount, 'approveToken1')
+				return await approveErc20(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), reportDetails.token1, getOpenOracleAddress(activeNetworkKey), approvalAmount, 'approveToken1')
 			},
 			'Failed to approve token1',
 			{ refreshInitialReportTokenAccessOnSuccess: true },
@@ -482,7 +484,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				if (approvalAmount === undefined) {
 					throw new Error('No token2 approval amount is required for the selected report')
 				}
-				return await approveErc20(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), reportDetails.token2, getOpenOracleAddress(), approvalAmount, 'approveToken2')
+				return await approveErc20(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), reportDetails.token2, getOpenOracleAddress(activeNetworkKey), approvalAmount, 'approveToken2')
 			},
 			'Failed to approve token2',
 			{ refreshInitialReportTokenAccessOnSuccess: true },
@@ -494,7 +496,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 			await runOracleAction(
 				'createReportInstance',
 				async walletAddress =>
-					await createOpenOracleReportInstance(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), {
+					await createOpenOracleReportInstance(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), {
 						disputeDelay: Number(parseBigIntInput(openOracleCreateForm.value.disputeDelay, 'Dispute delay')),
 						escalationHalt: parseBigIntInput(openOracleCreateForm.value.escalationHalt, 'Escalation halt'),
 						exactToken1Report: parseBigIntInput(openOracleCreateForm.value.exactToken1Report, 'Exact token1 report'),
@@ -530,7 +532,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 					throw new Error(submission.blockMessage?.message ?? 'Invalid price')
 				}
 
-				return await submitInitialOracleReport(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), getOpenOracleAddress(), reportDetails.reportId, submission.amount1, submission.amount2, parseBytes32Input(openOracleForm.value.stateHash, 'State hash'))
+				return await submitInitialOracleReport(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), getOpenOracleAddress(activeNetworkKey), reportDetails.reportId, submission.amount1, submission.amount2, parseBytes32Input(openOracleForm.value.stateHash, 'State hash'))
 			},
 			'Failed to submit initial report',
 			{ formatErrorMessage: formatOpenOracleInitialReportWriteErrorMessage },
@@ -548,7 +550,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 					throw new Error(submission.wrapRequiredWethMessage?.message ?? 'No WETH wrap is required for this report')
 				}
 
-				return await wrapWeth(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), wrapAmount)
+				return await wrapWeth(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), wrapAmount)
 			},
 			'Failed to wrap ETH to WETH',
 			{ refreshInitialReportTokenAccessOnSuccess: true },
@@ -564,7 +566,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 					throw new Error(settleAvailability.message ?? 'This report is not ready to settle yet.')
 				}
 
-				return await settleOracleReport(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), getOpenOracleAddress(), details.reportId)
+				return await settleOracleReport(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), getOpenOracleAddress(activeNetworkKey), details.reportId)
 			},
 			'Failed to settle report',
 			{ formatErrorMessage: formatOpenOracleSettleWriteErrorMessage },
@@ -582,8 +584,8 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 				const form = openOracleForm.value
 				const tokenToSwap = form.disputeTokenToSwap === 'token1' ? details.token1 : details.token2
 				return await disputeOracleReport(
-					createWalletWriteClient(walletAddress, { onTransactionSubmitted }),
-					getOpenOracleAddress(),
+					createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }),
+					getOpenOracleAddress(activeNetworkKey),
 					details.reportId,
 					tokenToSwap,
 					parseBigIntInput(form.disputeNewAmount1, 'New token1 amount'),
@@ -613,7 +615,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		const trackedReportId = loadedReport.reportId
 		const refreshChainClock = async () => {
 			try {
-				const block = await createConnectedReadClient().getBlock()
+				const block = await createReadClientForNetwork(activeNetworkKey).getBlock()
 				if (cancelled || typeof block.timestamp !== 'bigint' || typeof block.number !== 'bigint') return
 
 				const currentReport = openOracleReportDetails.value

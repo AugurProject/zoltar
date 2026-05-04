@@ -11,13 +11,13 @@ import { Question, getQuestionTitle } from './Question.js'
 import { StateHint } from './StateHint.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
-import { isMainnetChain } from '../lib/network.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 
 export function SecurityPoolsOverviewSection({
+	activeNetworkLabel = 'Ethereum mainnet',
 	accountState,
 	closeLiquidationModal,
 	hasLoadedSecurityPools,
@@ -39,8 +39,8 @@ export function SecurityPoolsOverviewSection({
 	securityPoolOverviewError,
 	securityPoolOverviewResult,
 	securityPools,
+	walletMatchesActiveNetwork = true,
 }: SecurityPoolsOverviewSectionProps) {
-	const isMainnet = isMainnetChain(accountState.chainId)
 	const registryPresentation = getPoolRegistryPresentation({
 		hasLoaded: hasLoadedSecurityPools,
 		isLoading: loadingSecurityPools,
@@ -142,7 +142,7 @@ export function SecurityPoolsOverviewSection({
 													className='compact'
 													title={<AddressValue address={vault.vaultAddress} />}
 													actions={
-														<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
+														<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !walletMatchesActiveNetwork}>
 															Liquidate Vault
 														</button>
 													}
@@ -177,9 +177,9 @@ export function SecurityPoolsOverviewSection({
 			</div>
 
 			<LiquidationModal
+				activeNetworkLabel={activeNetworkLabel}
 				accountAddress={accountState.address}
 				closeLiquidationModal={closeLiquidationModal}
-				isMainnet={isMainnet}
 				liquidationAmount={liquidationAmount}
 				liquidationManagerAddress={liquidationManagerAddress}
 				liquidationModalOpen={liquidationModalOpen}
@@ -188,6 +188,7 @@ export function SecurityPoolsOverviewSection({
 				onLiquidationAmountChange={onLiquidationAmountChange}
 				onLiquidationTargetVaultChange={onLiquidationTargetVaultChange}
 				onQueueLiquidation={onQueueLiquidation}
+				walletMatchesActiveNetwork={walletMatchesActiveNetwork}
 			/>
 		</section>
 	)

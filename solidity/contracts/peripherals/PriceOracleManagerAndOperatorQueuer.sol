@@ -3,7 +3,7 @@ pragma solidity 0.8.33;
 
 import { IWeth9 } from './interfaces/IWeth9.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
-import { ReputationToken } from '../ReputationToken.sol';
+import { IReputationToken } from '../IReputationToken.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 
 // price oracle
@@ -17,8 +17,6 @@ enum OperationType {
 
 uint256 constant gasConsumedOpenOracleReportPrice = 100000; // TODO
 uint32 constant gasConsumedSettlement = 1000000; // TODO
-
-IWeth9 constant WETH = IWeth9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
 struct QueuedOperation {
 	OperationType operation;
@@ -36,9 +34,10 @@ contract PriceOracleManagerAndOperatorQueuer {
 	uint256 public queuedPendingOperationId;
 	uint256 public lastSettlementTimestamp;
 	uint256 public lastPrice; // (REP * PRICE_PRECISION) / ETH;
-	ReputationToken immutable reputationToken;
+	IReputationToken immutable reputationToken;
 	ISecurityPool public securityPool;
 	OpenOracle public immutable openOracle;
+	IWeth9 public immutable weth;
 
 	event PriceReported(uint256 reportId, uint256 price);
 	event ExecutedQueuedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
@@ -47,9 +46,10 @@ contract PriceOracleManagerAndOperatorQueuer {
 	uint256 public queuedOperationCounter;
 	mapping(uint256 => QueuedOperation) public queuedOperations;
 
-	constructor(OpenOracle _openOracle, ReputationToken _reputationToken) {
+	constructor(OpenOracle _openOracle, IReputationToken _reputationToken, IWeth9 _weth) {
 		reputationToken = _reputationToken;
 		openOracle = _openOracle;
+		weth = _weth;
 	}
 
 	function setSecurityPool(ISecurityPool _securityPool) public {
@@ -82,7 +82,7 @@ contract PriceOracleManagerAndOperatorQueuer {
 			settlementTime: 15 * 12,//~15 blocks // report instance can settle if no disputes within this timeframe
 			disputeDelay: 0, // time disputes must wait after every new report
 			protocolFee: 0, // fee paid to protocolFeeRecipient. 1000 = 0.01%
-			token2Address: address(WETH), // address of token2 in the oracle report instance
+			token2Address: address(weth), // address of token2 in the oracle report instance
 			callbackGasLimit: gasConsumedSettlement, // gas the settlement callback must use
 			feePercentage: 10000, // 0.1% atm, TODO,// fee paid to previous reporter. 1000 = 0.01%
 			multiplier: 140, // amount by which newAmount1 must increase versus old amount1. 140 = 1.4x

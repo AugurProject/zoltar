@@ -31,6 +31,7 @@
 		"compile-contracts": "cd solidity && bun install --frozen-lockfile && bun x tsc --project tsconfig-compile.json && bun run ./js/compile.js",
 		"generate": "bun run compile-contracts && bun run shared:build && bun run ui:vendor",
 		"tsc": "bun run shared:build && bun run ui:shared && bun x tsc --noEmit",
+		"deploy:genesis-reputation-token": "bun run solidity/ts/scripts/deployGenesisReputationToken.ts",
 		"ui:setup": "bun install --frozen-lockfile && cd solidity && bun install --frozen-lockfile && bun run setup && cd .. && bun run generate && cd ui && bun install --frozen-lockfile && bun run build && bun run build:tests",
 		"ui:build": "bun run generate && cd ui && bun install --frozen-lockfile && bun run build && bun run build:tests",
 		"ui:shared": "bun ./ui/build/shared.mts",

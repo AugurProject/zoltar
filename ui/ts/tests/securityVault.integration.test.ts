@@ -22,7 +22,12 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
 		Reflect.set(globalThis, 'window', globalThis)
 	}
 	const windowObject = globalThis.window
-	Reflect.set(windowObject, 'ethereum', mockWindow)
+	Reflect.set(windowObject, 'ethereum', {
+		chainId: '0x1',
+		on: mockWindow.on,
+		removeListener: mockWindow.removeListener,
+		request: mockWindow.request,
+	})
 }
 
 const genesisUniverse = 0n

@@ -9,10 +9,12 @@ import { requireWallet } from '../lib/walletGuard.js'
 import { parseBigIntListInput } from '../lib/inputs.js'
 import { getDefaultZoltarMigrationFormState, parseRepAmountInput } from '../lib/marketForm.js'
 import type { ZoltarMigrationFormState } from '../types/app.js'
+import type { SupportedNetworkKey } from '../shared/networkConfig.js'
 import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type UseZoltarMigrationParameters = {
 	accountAddress: Address | undefined
+	activeNetworkKey: SupportedNetworkKey
 	ensureZoltarUniverse: () => Promise<ZoltarUniverseSummary>
 	onTransaction: (hash: Hash) => void
 	onTransactionFinished: () => void
@@ -47,7 +49,20 @@ function resolvePrepareMigrationAmount(amount: bigint, preparedRepBalance: bigin
 	return missingAmount
 }
 
-export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, refreshZoltarForkAccess, refreshZoltarUniverse, zoltarForkRepBalance, zoltarMigrationPreparedRepBalance }: UseZoltarMigrationParameters) {
+export function useZoltarMigration({
+	accountAddress,
+	activeNetworkKey,
+	ensureZoltarUniverse,
+	onTransaction,
+	onTransactionFinished,
+	onTransactionRequested,
+	onTransactionSubmitted,
+	refreshState,
+	refreshZoltarForkAccess,
+	refreshZoltarUniverse,
+	zoltarForkRepBalance,
+	zoltarMigrationPreparedRepBalance,
+}: UseZoltarMigrationParameters) {
 	const zoltarMigrationError = useSignal<string | undefined>(undefined)
 	const zoltarMigrationPending = useSignal(false)
 	const zoltarMigrationResult = useSignal<ZoltarMigrationActionResult | undefined>(undefined)
@@ -130,7 +145,7 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 	const prepareRepForMigration = useCallback(async () => {
 		await runZoltarMigrationAction({
 			actionName: 'prepare',
-			action: async (walletAddress, universe, amount) => await prepareRepForMigrationInZoltar(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), universe.universeId, amount),
+			action: async (walletAddress, universe, amount) => await prepareRepForMigrationInZoltar(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), universe.universeId, amount),
 			errorFallback: 'Failed to prepare REP for migration',
 			refreshAfter: false,
 			requiresOutcomeIndexes: false,
@@ -141,7 +156,7 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 	const migrateInternalRep = useCallback(async () => {
 		await runZoltarMigrationAction({
 			actionName: 'split',
-			action: async (walletAddress, universe, amount, outcomeIndexes) => await migrateInternalRepInZoltar(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), universe.universeId, amount, outcomeIndexes),
+			action: async (walletAddress, universe, amount, outcomeIndexes) => await migrateInternalRepInZoltar(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), universe.universeId, amount, outcomeIndexes),
 			errorFallback: 'Failed to migrate REP',
 			refreshAfter: true,
 			requiresOutcomeIndexes: true,

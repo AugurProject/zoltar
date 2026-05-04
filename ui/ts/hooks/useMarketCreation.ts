@@ -7,11 +7,13 @@ import { runWriteAction } from '../lib/writeAction.js'
 import { createMarketParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultMarketFormState } from '../lib/marketForm.js'
 import type { MarketFormState } from '../types/app.js'
+import type { SupportedNetworkKey } from '../shared/networkConfig.js'
 import type { DeploymentStatus, MarketCreationResult } from '../types/contracts.js'
 import { useZoltarOperations } from './useZoltarOperations.js'
 
 type UseMarketCreationParameters = {
 	accountAddress: Address | undefined
+	activeNetworkKey: SupportedNetworkKey
 	activeUniverseId: bigint
 	autoLoadInitialData: boolean
 	deploymentStatuses: DeploymentStatus[]
@@ -22,8 +24,8 @@ type UseMarketCreationParameters = {
 	refreshState: () => Promise<void>
 }
 
-export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseMarketCreationParameters) {
-	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState })
+export function useMarketCreation({ accountAddress, activeNetworkKey, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseMarketCreationParameters) {
+	const zoltar = useZoltarOperations({ accountAddress, activeNetworkKey, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState })
 	const { state: marketForm, setState: setMarketForm } = useFormState<MarketFormState>(getDefaultMarketFormState())
 	const marketCreating = useSignal(false)
 	const marketResult = useSignal<MarketCreationResult | undefined>(undefined)
@@ -54,7 +56,7 @@ export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadIn
 			},
 			async walletAddress => {
 				if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) throw new Error('Deploy ZoltarQuestionData before creating a question')
-				const result = await createMarketTransaction(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), createMarketParameters(marketForm.value))
+				const result = await createMarketTransaction(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), createMarketParameters(marketForm.value))
 				return { ...result, hash: result.createQuestionHash }
 			},
 			'Failed to create question',

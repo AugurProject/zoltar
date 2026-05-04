@@ -3,9 +3,9 @@ import type { Address } from 'viem'
 import { AddressInfo } from './AddressInfo.js'
 
 type LiquidationModalProps = {
+	activeNetworkLabel: string
 	accountAddress: Address | undefined
 	closeLiquidationModal: () => void
-	isMainnet: boolean
 	liquidationAmount: string
 	liquidationManagerAddress: Address | undefined
 	liquidationModalOpen: boolean
@@ -14,9 +14,23 @@ type LiquidationModalProps = {
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTargetVaultChange: (value: string) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
+	walletMatchesActiveNetwork: boolean
 }
 
-export function LiquidationModal({ accountAddress, closeLiquidationModal, isMainnet, liquidationAmount, liquidationManagerAddress, liquidationModalOpen, liquidationSecurityPoolAddress, liquidationTargetVault, onLiquidationAmountChange, onLiquidationTargetVaultChange, onQueueLiquidation }: LiquidationModalProps) {
+export function LiquidationModal({
+	activeNetworkLabel,
+	accountAddress,
+	closeLiquidationModal,
+	liquidationAmount,
+	liquidationManagerAddress,
+	liquidationModalOpen,
+	liquidationSecurityPoolAddress,
+	liquidationTargetVault,
+	onLiquidationAmountChange,
+	onLiquidationTargetVaultChange,
+	onQueueLiquidation,
+	walletMatchesActiveNetwork,
+}: LiquidationModalProps) {
 	useEffect(() => {
 		if (!liquidationModalOpen) return
 		const handleKeyDown = (event: KeyboardEvent) => {
@@ -59,6 +73,7 @@ export function LiquidationModal({ accountAddress, closeLiquidationModal, isMain
 						</label>
 					</div>
 				</div>
+				{accountAddress !== undefined && !walletMatchesActiveNetwork ? <p className='detail'>{`Switch wallet to ${activeNetworkLabel} to queue this liquidation.`}</p> : undefined}
 				<div className='actions'>
 					<button className='secondary' onClick={closeLiquidationModal}>
 						Cancel
@@ -69,7 +84,7 @@ export function LiquidationModal({ accountAddress, closeLiquidationModal, isMain
 							if (liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined) return
 							onQueueLiquidation(liquidationManagerAddress, liquidationSecurityPoolAddress)
 						}}
-						disabled={accountAddress === undefined || !isMainnet || liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined}
+						disabled={accountAddress === undefined || !walletMatchesActiveNetwork || liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined}
 					>
 						Queue Liquidation
 					</button>

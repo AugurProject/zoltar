@@ -3,15 +3,17 @@ import type { Address, Hash } from 'viem'
 import { loadAllSecurityPools, queueSecurityPoolLiquidation } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { normalizeAddress } from '../lib/address.js'
-import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { createReadClientForNetwork, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
+import type { SupportedNetworkKey } from '../shared/networkConfig.js'
 import type { ListedSecurityPool, SecurityPoolOverviewActionResult } from '../types/contracts.js'
 
 type UseSecurityPoolsOverviewParameters = {
 	accountAddress: Address | undefined
+	activeNetworkKey: SupportedNetworkKey
 	onTransaction: (hash: Hash) => void
 	onTransactionFinished: () => void
 	onTransactionRequested: () => void
@@ -19,7 +21,7 @@ type UseSecurityPoolsOverviewParameters = {
 	refreshState: () => Promise<void>
 }
 
-export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters) {
+export function useSecurityPoolsOverview({ accountAddress, activeNetworkKey, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters) {
 	const liquidationAmount = useSignal('0')
 	const liquidationTargetVault = useSignal('')
 	const liquidationManagerAddress = useSignal<Address | undefined>(undefined)
@@ -38,7 +40,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 			onStart: () => {
 				securityPoolOverviewError.value = undefined
 			},
-			load: async () => await loadAllSecurityPools(createConnectedReadClient()),
+			load: async () => await loadAllSecurityPools(createReadClientForNetwork(activeNetworkKey)),
 			onSuccess: pools => {
 				hasLoadedSecurityPools.value = true
 				checkedSecurityPoolAddress.value = normalizedCheckedAddress
@@ -64,11 +66,11 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 	const queueLiquidation = async (managerAddress: Address, securityPoolAddress: Address) => {
 		securityPoolOverviewResult.value = undefined
 		await runWriteAction(
-			buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, securityPoolOverviewError, 'Connect a wallet before queueing liquidation'),
+			buildWriteActionConfig({ accountAddress, activeNetworkKey, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, securityPoolOverviewError, 'Connect a wallet before queueing liquidation'),
 			async walletAddress => {
 				const targetVault = parseAddressInput(liquidationTargetVault.value, 'Target vault')
 				const amount = parseBigIntInput(liquidationAmount.value, 'Liquidation amount')
-				const hash = await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount)
+				const hash = await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, activeNetworkKey, { onTransactionSubmitted }), managerAddress, targetVault, amount)
 				return { hash }
 			},
 			'Failed to queue liquidation',
