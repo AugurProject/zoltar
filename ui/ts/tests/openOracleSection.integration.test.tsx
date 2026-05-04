@@ -97,12 +97,12 @@ function getEntityCardByTitle(name: string) {
 	return card
 }
 
-function getApprovalSections(selectedReportCard: HTMLElement) {
-	return within(selectedReportCard)
+function getApprovalSections() {
+	return within(document.body)
 		.getAllByRole('heading', { level: 4 })
 		.filter(heading => heading.textContent?.trim().endsWith('Approval') === true)
 		.map(heading => {
-			const section = heading.closest('.entity-card-subsection')
+			const section = heading.closest('section')
 			if (!(section instanceof HTMLElement)) {
 				throw new Error('Expected approval section container')
 			}
@@ -209,18 +209,18 @@ describe.serial('OpenOracleSection integration', () => {
 		})
 		await clickElement(within(document.body).getByRole('button', { name: 'Open report' }))
 
-		const selectedReportCard = await waitFor(() => getEntityCardByTitle('Selected Report'))
+		await waitFor(() => getEntityCardByTitle('Selected Report'))
 		await waitFor(() => {
 			expect(within(document.body).getByText('Initial Report')).not.toBeNull()
 		})
-		await setInputValue(/^Price \(/, '4', selectedReportCard)
+		await setInputValue(/^Price \(/, '4')
 
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 		const openOracleAddress = getOpenOracleAddress()
 		const expectedAmount2 = reportDetails.exactToken1Report / 4n
 
 		await waitFor(() => {
-			const [currentToken1ApprovalSection, currentToken2ApprovalSection] = getApprovalSections(getEntityCardByTitle('Selected Report'))
+			const [currentToken1ApprovalSection, currentToken2ApprovalSection] = getApprovalSections()
 			if (currentToken1ApprovalSection === undefined || currentToken2ApprovalSection === undefined) {
 				throw new Error('Expected both token approval sections to be rendered')
 			}
@@ -228,7 +228,7 @@ describe.serial('OpenOracleSection integration', () => {
 			expect(getApproveButton(currentToken2ApprovalSection).disabled).toBe(false)
 		})
 
-		const [token1ApprovalSection, token2ApprovalSection] = getApprovalSections(selectedReportCard)
+		const [token1ApprovalSection, token2ApprovalSection] = getApprovalSections()
 		if (token1ApprovalSection === undefined || token2ApprovalSection === undefined) {
 			throw new Error('Expected both token approval sections to be rendered')
 		}
@@ -239,7 +239,7 @@ describe.serial('OpenOracleSection integration', () => {
 			expect(await loadErc20Allowance(uiReadClient, reportDetails.token1, walletAddress, openOracleAddress)).toBe(reportDetails.exactToken1Report)
 		})
 
-		const refreshedApprovalSections = getApprovalSections(getEntityCardByTitle('Selected Report'))
+		const refreshedApprovalSections = getApprovalSections()
 		const refreshedToken2ApprovalSection = refreshedApprovalSections[1]
 		if (refreshedToken2ApprovalSection === undefined) {
 			throw new Error('Expected the second token approval section to remain rendered')
@@ -259,9 +259,9 @@ describe.serial('OpenOracleSection integration', () => {
 			expect(wrapButton.disabled).toBe(false)
 			expect(documentQueries.getByText(/more WETH for this report/i)).not.toBeNull()
 
-			const wrapActionRow = wrapButton.parentElement
+			const wrapActionRow = wrapButton.closest('.actions')
 			expect(wrapActionRow).not.toBeNull()
-			expect(wrapActionRow).toBe(submitButton.parentElement)
+			expect(wrapActionRow).toBe(submitButton.closest('.actions'))
 			const actionButtons = Array.from(wrapActionRow?.querySelectorAll('button') ?? [])
 			expect(actionButtons.indexOf(wrapButton)).toBeLessThan(actionButtons.indexOf(submitButton))
 		})
@@ -323,17 +323,17 @@ describe.serial('OpenOracleSection integration', () => {
 		})
 		await clickElement(within(document.body).getByRole('button', { name: 'Open report' }))
 
-		const selectedReportCard = await waitFor(() => getEntityCardByTitle('Selected Report'))
+		await waitFor(() => getEntityCardByTitle('Selected Report'))
 		await waitFor(() => {
 			expect(within(document.body).getByText('Initial Report')).not.toBeNull()
 		})
-		await setInputValue(/^Price \(/, '4', selectedReportCard)
+		await setInputValue(/^Price \(/, '4')
 
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 		const openOracleAddress = getOpenOracleAddress()
 		const expectedAmount2 = reportDetails.exactToken1Report / 4n
 
-		const [token1ApprovalSection, token2ApprovalSection] = getApprovalSections(selectedReportCard)
+		const [token1ApprovalSection, token2ApprovalSection] = getApprovalSections()
 		if (token1ApprovalSection === undefined || token2ApprovalSection === undefined) {
 			throw new Error('Expected both token approval sections to be rendered')
 		}
@@ -344,7 +344,7 @@ describe.serial('OpenOracleSection integration', () => {
 			expect(await loadErc20Allowance(uiReadClient, reportDetails.token1, walletAddress, openOracleAddress)).toBe(reportDetails.exactToken1Report)
 		})
 
-		const refreshedApprovalSections = getApprovalSections(getEntityCardByTitle('Selected Report'))
+		const refreshedApprovalSections = getApprovalSections()
 		const refreshedToken2ApprovalSection = refreshedApprovalSections[1]
 		if (refreshedToken2ApprovalSection === undefined) {
 			throw new Error('Expected the second token approval section to remain rendered')

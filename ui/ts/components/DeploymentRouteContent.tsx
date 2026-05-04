@@ -1,43 +1,62 @@
 import type { ComponentChildren } from 'preact'
 import { LoadableValue } from './LoadableValue.js'
 import { DeploymentSection } from './DeploymentSection.js'
-import { findNextDeployableStep } from '../lib/deployment.js'
+import { RouteHeader } from './RouteHeader.js'
+import { SectionBlock } from './SectionBlock.js'
+import { TransactionActionButton } from './TransactionActionButton.js'
+import { DataGrid } from './DataGrid.js'
+import { findNextDeployableStep, getDeployNextMissingAvailability } from '../lib/deployment.js'
 import type { DeploymentRouteContentProps } from '../types/components.js'
 
 export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isMainnet, onDeploy, onDeployNextMissing }: DeploymentRouteContentProps) {
 	const nextMissingStep = findNextDeployableStep(deploymentStatuses)
 	const deployedContractCount = deploymentStatuses.filter(step => step.deployed).length
 	const totalContractCount = deploymentStatuses.length
+	const deployNextAvailability = getDeployNextMissingAvailability({
+		accountAddress,
+		busyStepId,
+		deployNextMissingPending,
+		isMainnet,
+		nextMissingStep,
+	})
 	let buttonContent: ComponentChildren = 'Deploy Next Missing'
 	if (deployNextMissingPending) {
-		buttonContent = (
-			<>
-				<span className='spinner' aria-hidden='true' />
-				Deploying...
-			</>
-		)
+		buttonContent = 'Deploying...'
 	} else if (busyStepId !== undefined) {
 		buttonContent = 'Deployment In Progress'
 	}
 
 	return (
 		<>
-			<section className='panel'>
-				<h2>
-					<LoadableValue loading={isLoadingDeploymentStatuses} placeholder='Loading deployment status...'>
-						{deployedContractCount} / {totalContractCount} contracts deployed
-					</LoadableValue>
-				</h2>
-				{!isLoadingDeploymentStatuses && <p className='detail'>{nextMissingStep === undefined ? 'All deterministic contracts are deployed.' : `Next deployable contract: ${nextMissingStep.label}`}</p>}
-				<div className='actions'>
-					<button className='primary' onClick={onDeployNextMissing} disabled={accountAddress === undefined || !isMainnet || nextMissingStep === undefined || busyStepId !== undefined || deployNextMissingPending}>
-						{buttonContent}
-					</button>
+			<RouteHeader
+				eyebrow='Deploy'
+				title='Deterministic contract deployment'
+				description='Deploy and verify the shared deterministic contracts that back the application.'
+				actions={<TransactionActionButton idleLabel={buttonContent} pendingLabel='Deploying...' onClick={onDeployNextMissing} pending={deployNextMissingPending} availability={deployNextAvailability} />}
+				summary={
+					<DataGrid columns='auto'>
+						<div>
+							<p className='detail'>Contracts deployed</p>
+							<strong>
+								<LoadableValue loading={isLoadingDeploymentStatuses} placeholder='Loading deployment status...'>
+									{deployedContractCount} / {totalContractCount}
+								</LoadableValue>
+							</strong>
+						</div>
+						<div>
+							<p className='detail'>Next deployable</p>
+							<strong>{isLoadingDeploymentStatuses ? 'Loading...' : (nextMissingStep?.label ?? 'All deployed')}</strong>
+						</div>
+					</DataGrid>
+				}
+			/>
+			<SectionBlock title='Deployment Groups' description={!isLoadingDeploymentStatuses && nextMissingStep !== undefined ? `Next deployable contract: ${nextMissingStep.label}` : 'All deterministic contracts are deployed in grouped sections.'}>
+				<div className='workflow-stack'>
+					{deploymentSections.map(section => (
+						<DeploymentSection title={section.title} steps={section.steps} allSteps={deploymentStatuses} accountAddress={accountAddress} isMainnet={isMainnet} busyStepId={busyStepId} onDeploy={onDeploy} />
+					))}
 				</div>
-			</section>
-			{deploymentSections.map(section => (
-				<DeploymentSection title={section.title} steps={section.steps} allSteps={deploymentStatuses} accountAddress={accountAddress} isMainnet={isMainnet} busyStepId={busyStepId} onDeploy={onDeploy} />
-			))}
+			</SectionBlock>
 		</>
 	)
 }

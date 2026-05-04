@@ -77,7 +77,8 @@ export function getPoolRegistryPresentation(
 			return createPresentation('loading', {
 				badgeLabel: 'Loading',
 				badgeTone: 'pending',
-				detail: 'Checking this address.',
+				detail: 'Loading...',
+				detailIsLoading: true,
 			})
 		case 'unknown':
 			return createPresentation('not_checked', {

@@ -2,7 +2,19 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from 'viem'
-import { getCurrentPoolOracleManagerDetails, getOracleLastPriceDisplay, getOraclePriceExpiryDisplay, getSelectedPoolCardTitle, getSelectedPoolLookupDisplay, getSelectedPoolOracleMetricValues, isForkWorkflowDisabled, shouldShowSelectedPoolWorkflowDetails } from '../components/SecurityPoolWorkflowSection.js'
+import {
+	getCurrentPoolOracleManagerDetails,
+	getOracleLastPriceDisplay,
+	getOraclePriceExpiryDisplay,
+	getSelectedPoolCardTitle,
+	getSelectedPoolLookupDisplay,
+	getSelectedPoolOracleMetricValues,
+	getSelectedPoolWorkflowGuardMessage,
+	getSelectedPoolWorkflowLockedPresentation,
+	isForkWorkflowDisabled,
+	resolveSelectedPoolView,
+	shouldShowSelectedPoolWorkflowDetails,
+} from '../components/SecurityPoolWorkflowSection.js'
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 
 void describe('selected pool workflow lookup state', () => {
@@ -65,6 +77,13 @@ void describe('selected pool workflow lookup state', () => {
 			}),
 		).toBe('ready')
 	})
+
+	void test('maps the legacy resolution view alias to the reporting tab', () => {
+		expect(resolveSelectedPoolView(undefined)).toBe('vaults')
+		expect(resolveSelectedPoolView('resolution')).toBe('reporting')
+		expect(resolveSelectedPoolView('reporting')).toBe('reporting')
+		expect(resolveSelectedPoolView('fork')).toBe('fork')
+	})
 })
 
 void describe('selected pool workflow visibility', () => {
@@ -109,6 +128,81 @@ void describe('selected pool workflow visibility', () => {
 		expect(isForkWorkflowDisabled('poolForked')).toBe(false)
 		expect(isForkWorkflowDisabled('forkMigration')).toBe(false)
 		expect(isForkWorkflowDisabled('forkTruthAuction')).toBe(false)
+	})
+
+	void test('uses state-specific reasons before unlocking pool workflows', () => {
+		expect(
+			getSelectedPoolWorkflowGuardMessage({
+				hasSelectedPoolAddress: false,
+				selectedPoolLookupState: 'unknown',
+				selectedPoolUniverseMismatch: false,
+			}),
+		).toBe('Load a pool to open this workflow.')
+
+		expect(
+			getSelectedPoolWorkflowGuardMessage({
+				hasSelectedPoolAddress: true,
+				selectedPoolLookupState: 'loading',
+				selectedPoolUniverseMismatch: false,
+			}),
+		).toBe('Wait for this pool to finish loading.')
+
+		expect(
+			getSelectedPoolWorkflowGuardMessage({
+				hasSelectedPoolAddress: true,
+				selectedPoolLookupState: 'missing',
+				selectedPoolUniverseMismatch: false,
+			}),
+		).toBe('Load a valid pool to open this workflow.')
+
+		expect(
+			getSelectedPoolWorkflowGuardMessage({
+				hasSelectedPoolAddress: true,
+				selectedPoolLookupState: 'ready',
+				selectedPoolUniverseMismatch: true,
+			}),
+		).toBe('Switch to the same universe before using this pool workflow.')
+	})
+
+	void test('keeps a stable locked-workflow presentation before a pool resolves', () => {
+		expect(
+			getSelectedPoolWorkflowLockedPresentation({
+				hasSelectedPoolAddress: false,
+				selectedPoolLookupState: 'unknown',
+				selectedPoolUniverseMismatch: false,
+			}),
+		).toEqual({
+			badgeLabel: 'No pool selected',
+			badgeTone: 'muted',
+			detail: 'No pool selected.',
+			key: 'action_needed',
+		})
+
+		expect(
+			getSelectedPoolWorkflowLockedPresentation({
+				hasSelectedPoolAddress: true,
+				selectedPoolLookupState: 'loading',
+				selectedPoolUniverseMismatch: false,
+			}),
+		).toEqual({
+			detail: 'Loading...',
+			detailIsLoading: true,
+			key: 'loading',
+		})
+
+		expect(
+			getSelectedPoolWorkflowLockedPresentation({
+				hasSelectedPoolAddress: true,
+				selectedPoolLookupState: 'ready',
+				selectedPoolUniverseMismatch: true,
+			}),
+		).toEqual({
+			actionHint: 'Switch to the matching universe first.',
+			badgeLabel: 'Unavailable',
+			badgeTone: 'blocked',
+			detail: 'Switch to the same universe before using vault, trading, reporting, and fork workflows.',
+			key: 'unavailable',
+		})
 	})
 })
 

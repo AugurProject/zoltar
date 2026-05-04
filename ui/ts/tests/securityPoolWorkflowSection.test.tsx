@@ -1,13 +1,13 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '@testing-library/dom'
-import { h } from 'preact'
+import { fireEvent, within } from '@testing-library/dom'
+import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
-import { SecurityPoolsSection, shouldRefreshSelectedPoolDataOnViewOpen } from '../components/SecurityPoolsSection.js'
+import { SecurityPoolWorkflowSection } from '../components/SecurityPoolWorkflowSection.js'
 import type { AccountState } from '../types/app.js'
-import type { ListedSecurityPool, MarketDetails } from '../types/contracts.js'
-import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../types/components.js'
+import type { ListedSecurityPool, MarketDetails, SecurityVaultDetails } from '../types/contracts.js'
+import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -111,6 +111,24 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 	}
 }
 
+function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
+	return {
+		currentRetentionRate: 10n,
+		lockedRepInEscalationGame: 0n,
+		managerAddress: zeroAddress,
+		poolOwnershipDenominator: 1n,
+		repDepositShare: 5n * 10n ** 18n,
+		repToken: zeroAddress,
+		securityBondAllowance: 2n * 10n ** 18n,
+		securityPoolAddress: zeroAddress,
+		totalSecurityBondAllowance: 3n * 10n ** 18n,
+		unpaidEthFees: 1n * 10n ** 18n,
+		universeId: 1n,
+		vaultAddress: zeroAddress,
+		...overrides,
+	}
+}
+
 function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps> = {}): ForkAuctionRouteContentProps {
 	return {
 		accountState: createAccountState(),
@@ -198,13 +216,13 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
 		universeId: 1n,
-		vaultCount: 3n,
+		vaultCount: 0n,
 		vaults: [],
 		...overrides,
 	}
 }
 
-function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {}): SecurityPoolWorkflowRouteContentProps {
+function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {}): SecurityPoolWorkflowRouteContentProps {
 	return {
 		accountState: createAccountState(),
 		activeUniverseId: 1n,
@@ -244,144 +262,7 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 	}
 }
 
-function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteContentProps> = {}): SecurityPoolsOverviewRouteContentProps {
-	return {
-		accountState: createAccountState(),
-		checkedSecurityPoolAddress: undefined,
-		closeLiquidationModal: () => undefined,
-		hasLoadedSecurityPools: false,
-		liquidationAmount: '',
-		liquidationManagerAddress: undefined,
-		liquidationModalOpen: false,
-		liquidationSecurityPoolAddress: undefined,
-		liquidationTargetVault: '',
-		loadingSecurityPools: false,
-		onLiquidationAmountChange: () => undefined,
-		onLiquidationTargetVaultChange: () => undefined,
-		onLoadSecurityPools: () => undefined,
-		onOpenLiquidationModal: () => undefined,
-		onQueueLiquidation: () => undefined,
-		repPerEthPrice: undefined,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
-		securityPoolOverviewActiveAction: undefined,
-		securityPoolOverviewError: undefined,
-		securityPoolOverviewResult: undefined,
-		securityPools: [],
-		...overrides,
-	}
-}
-
-function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps> = {}): SecurityPoolRouteContentProps {
-	return {
-		accountState: createAccountState(),
-		checkingDuplicateOriginPool: false,
-		duplicateOriginPoolExists: false,
-		loadingMarketDetails: false,
-		marketDetails: undefined,
-		onCreateSecurityPool: () => undefined,
-		onLoadMarket: () => undefined,
-		onLoadMarketById: async () => undefined,
-		onResetSecurityPoolCreation: () => undefined,
-		onSecurityPoolFormChange: () => undefined,
-		poolCreationMarketDetails: undefined,
-		repPerEthPrice: undefined,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
-		securityPools: [],
-		securityPoolCreating: false,
-		securityPoolError: undefined,
-		securityPoolForm: {
-			currentRetentionRate: '',
-			marketId: '',
-			securityMultiplier: '',
-		},
-		securityPoolResult: undefined,
-		zoltarUniverseHasForked: false,
-		...overrides,
-	}
-}
-
-function createSecurityPoolsSectionProps(overrides: Partial<SecurityPoolsSectionProps> = {}): SecurityPoolsSectionProps {
-	return {
-		createPool: createCreatePoolProps(),
-		overview: createOverviewProps(),
-		workflow: createWorkflowProps(),
-		...overrides,
-	}
-}
-
-void describe('security pools selected tab refresh', () => {
-	const currentSecurityPoolAddress = '0x1234567890123456789012345678901234567890'
-	const nextSecurityPoolAddress = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'
-
-	void test('refreshes selected pool data only when opening the selected pool view for a pool that is not already loaded', () => {
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'browse',
-				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolExists: false,
-			}),
-		).toBe(false)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'create',
-				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolExists: false,
-			}),
-		).toBe(false)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'operate',
-				nextSecurityPoolAddress: '',
-				selectedPoolExists: false,
-			}),
-		).toBe(false)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'operate',
-				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolExists: true,
-			}),
-		).toBe(false)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'operate',
-				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolExists: false,
-			}),
-		).toBe(true)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'operate',
-				nextSecurityPoolAddress,
-				selectedPoolExists: true,
-			}),
-		).toBe(false)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'operate',
-				nextSecurityPoolAddress,
-				selectedPoolExists: false,
-			}),
-		).toBe(true)
-	})
-})
-
-void describe('SecurityPoolsSection', () => {
+describe('SecurityPoolWorkflowSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
@@ -397,62 +278,102 @@ void describe('SecurityPoolsSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	void test('renders the header switch and hides the route summary in browse mode', async () => {
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps()))
+	test('keeps the workflow rail visible with disabled items before a pool loads', async () => {
+		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps()} showHeader={false} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('button', { name: 'Browse' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Create' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Operate' })).not.toBeNull()
-		expect(documentQueries.queryByText('Mode')).toBeNull()
-		expect(document.body.querySelector('.route-summary-strip')).toBeNull()
-		expect(documentQueries.queryByText('Loaded pools')).toBeNull()
-		expect(documentQueries.queryByText('Selected pool')).toBeNull()
-		expect(documentQueries.queryByText('Pool status')).toBeNull()
-		expect(documentQueries.queryByText('Next step')).toBeNull()
+		expect(documentQueries.getByRole('tablist', { name: 'Selected pool views' })).not.toBeNull()
+
+		for (const label of ['Vaults', 'Trading', 'Reporting', 'Fork']) {
+			const button = documentQueries.getByRole('button', { name: label }) as HTMLButtonElement
+			expect(button.disabled).toBe(true)
+			expect(button.title).toBe('Load a pool to open this workflow.')
+		}
+
+		expect(documentQueries.getByRole('heading', { name: 'Pool Workflows' })).not.toBeNull()
+		expect(documentQueries.getByText('No pool selected.')).not.toBeNull()
+		expect(documentQueries.queryByText('Locked')).toBeNull()
 	})
 
-	void test('keeps the route summary hidden even when the selected pool is resolved in operate mode', async () => {
-		const selectedPool = createSelectedPool()
+	test('renders a vault workspace header and local mode switch for a loaded pool', async () => {
 		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolsSection,
-				createSecurityPoolsSectionProps({
-					overview: createOverviewProps({
-						securityPools: [selectedPool],
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					securityVault: createSecurityVaultProps({
+						selectedPoolSecurityMultiplier: 2n,
+						securityVaultDetails: createSecurityVaultDetails(),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: zeroAddress,
+							selectedVaultAddress: zeroAddress,
+						},
 					}),
-					workflow: createWorkflowProps({
-						checkedSecurityPoolAddress: zeroAddress,
-						securityPoolAddress: zeroAddress,
-						securityPools: [selectedPool],
-					}),
-				}),
-			),
+				})}
+				showHeader={false}
+			/>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.querySelector('.route-summary-strip')).toBeNull()
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Loaded pools')).toBeNull()
-		expect(documentQueries.queryByText('Selected pool')).toBeNull()
-		expect(documentQueries.queryByText('Pool status')).toBeNull()
-		expect(documentQueries.queryByText('Next step')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Security pools' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Pool Summary' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Price Oracle' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Selected Pool Summary' })).toBeNull()
+		expect(documentQueries.queryByText('Workflow')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Vault Operations' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Vault Lookup' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Vault Summary' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Selected Vault' })).toBeNull()
+		expect(documentQueries.getByLabelText('Selected Vault Address')).not.toBeNull()
+		expect(documentQueries.getByText('Claimable Fees')).not.toBeNull()
+		expect(documentQueries.queryByText('Enter a deposit amount greater than zero.')).toBeNull()
+		expect(documentQueries.queryByText('Fork Flow')).toBeNull()
+		expect(documentQueries.queryByText('Oracle Status')).toBeNull()
+		expect(documentQueries.getByText('Security Multiplier')).not.toBeNull()
+		const directoryButton = documentQueries.getByRole('button', { name: 'Directory' })
+		expect(documentQueries.getByRole('button', { name: 'Selected' })).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(directoryButton)
+		})
+
+		expect(documentQueries.getByRole('heading', { name: 'Vault Directory' })).not.toBeNull()
+		expect(documentQueries.queryByText('0 vaults')).toBeNull()
 	})
 
-	void test('keeps the route summary hidden in operate mode until the selected pool resolves', async () => {
+	test('shows disabled reporting actions before market end instead of a placeholder message', async () => {
+		const futureMarket = createMarketDetails({ endTime: BigInt(Math.floor(Date.now() / 1000) + 3600) })
 		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolsSection,
-				createSecurityPoolsSectionProps({
-					workflow: createWorkflowProps({
-						securityPoolAddress: '0x0000000000000000000000000000000000000001',
-					}),
-				}),
-			),
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool({ marketDetails: futureMarket })],
+				})}
+				showHeader={false}
+			/>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.querySelector('.route-summary-strip')).toBeNull()
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Reporting' }))
+		})
+
+		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Report Outcome' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
+		expect(documentQueries.queryByText('Reporting unlocks after the market end timestamp for the selected pool.')).toBeNull()
+		expect(documentQueries.getAllByText('Reporting opens after market end.').length).toBeGreaterThan(0)
+
+		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
+		expect(reportButton.disabled).toBe(true)
+		expect(reportButton.title).toBe('Reporting opens after market end.')
 	})
 })

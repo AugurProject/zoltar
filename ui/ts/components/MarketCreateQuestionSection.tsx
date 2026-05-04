@@ -4,8 +4,9 @@ import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
-import { LoadingText } from './LoadingText.js'
 import { Question, getQuestionTitle } from './Question.js'
+import { SectionBlock } from './SectionBlock.js'
+import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { MetricField } from './MetricField.js'
 import { validateMarketForm } from '../lib/marketCreation.js'
@@ -145,7 +146,7 @@ export function MarketCreateQuestionSection({
 			)}
 
 			{marketResult === undefined ? (
-				<EntityCard title='Create Question' badge={<span className='badge muted'>{marketForm.marketType}</span>}>
+				<SectionBlock title='Create Question' description='Define the market type, timing, and outcomes for a new Zoltar question.'>
 					<div className='form-grid'>
 						<label className='field'>
 							<span>Question Type</span>
@@ -227,13 +228,20 @@ export function MarketCreateQuestionSection({
 						) : undefined}
 
 						<div className='actions'>
-							<button className='primary' onClick={onCreateMarket} disabled={accountAddress === undefined || !isMainnet || marketCreating || !marketFormValidation.isValid}>
-								{marketCreating ? <LoadingText>Creating Question...</LoadingText> : 'Create Question'}
-							</button>
+							<TransactionActionButton
+								idleLabel='Create Question'
+								pendingLabel='Creating Question...'
+								onClick={onCreateMarket}
+								pending={marketCreating}
+								availability={{
+									disabled: accountAddress === undefined || !isMainnet || marketCreating || !marketFormValidation.isValid,
+									reason: accountAddress === undefined ? 'Connect a wallet before creating a question.' : !isMainnet ? 'Switch to Ethereum mainnet before creating a question.' : marketFormValidation.notice,
+								}}
+							/>
 							{marketFormValidation.notice === undefined ? undefined : <p className='form-validation-inline'>{marketFormValidation.notice}</p>}
 						</div>
 					</div>
-				</EntityCard>
+				</SectionBlock>
 			) : undefined}
 
 			<ErrorNotice message={marketError} />

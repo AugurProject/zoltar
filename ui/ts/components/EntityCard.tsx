@@ -6,11 +6,12 @@ type EntityCardProps = {
 	children: ComponentChildren
 	className?: string
 	title: ComponentChildren
+	variant?: 'compact' | 'record'
 }
 
-export function EntityCard({ actions, badge, children, className = '', title }: EntityCardProps) {
+export function EntityCard({ actions, badge, children, className = '', title, variant = 'record' }: EntityCardProps) {
 	return (
-		<article className={`entity-card ${className}`}>
+		<article className={`entity-card record-card ${variant === 'compact' ? 'compact' : ''} ${className}`.trim()}>
 			<div className='entity-card-header'>
 				<div className='entity-card-copy'>
 					<h3>{title}</h3>

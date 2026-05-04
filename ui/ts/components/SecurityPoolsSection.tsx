@@ -1,4 +1,6 @@
 import { useState } from 'preact/hooks'
+import { SectionBlock } from './SectionBlock.js'
+import { ViewTabs } from './ViewTabs.js'
 import { SecurityPoolSection } from './SecurityPoolSection.js'
 import { SecurityPoolWorkflowSection } from './SecurityPoolWorkflowSection.js'
 import { SecurityPoolsOverviewSection } from './SecurityPoolsOverviewSection.js'
@@ -31,20 +33,29 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 		if (!shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress: workflow.securityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolExists })) return
 		workflow.onRefreshSelectedPoolData()
 	}
+	const renderModeTabs = () => (
+		<ViewTabs
+			ariaLabel='Security Pools views'
+			className='security-pools-header-switch'
+			size='compact'
+			value={view}
+			variant='subroute'
+			onChange={openView}
+			options={[
+				{ label: 'Browse', value: 'browse' },
+				{ label: 'Create', value: 'create' },
+				{ label: 'Operate', value: 'operate' },
+			]}
+		/>
+	)
 
 	return (
-		<section className='panel market-panel'>
-			<div className='subtab-nav' role='tablist' aria-label='Security Pools views'>
-				<button className={`subtab-link ${view === 'browse' ? 'active' : ''}`} type='button' onClick={() => openView('browse')} aria-pressed={view === 'browse'}>
-					Browse Pools
-				</button>
-				<button className={`subtab-link ${view === 'create' ? 'active' : ''}`} type='button' onClick={() => openView('create')} aria-pressed={view === 'create'}>
-					Create Pool
-				</button>
-				<button className={`subtab-link ${view === 'operate' ? 'active' : ''}`} type='button' onClick={() => openView('operate')} aria-pressed={view === 'operate'}>
-					Selected Pool
-				</button>
-			</div>
+		<div className='route-view-flow'>
+			{view === 'operate' ? undefined : (
+				<SectionBlock density='compact' title='Security pools' description='Browse deployed pools, create new pools, and operate on selected pool workflows.' actions={renderModeTabs()}>
+					<></>
+				</SectionBlock>
+			)}
 
 			{view === 'browse' ? (
 				<SecurityPoolsOverviewSection
@@ -67,7 +78,7 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 				/>
 			) : undefined}
 
-			{view === 'operate' ? <SecurityPoolWorkflowSection {...workflow} showHeader={false} /> : undefined}
-		</section>
+			{view === 'operate' ? <SecurityPoolWorkflowSection {...workflow} modeTabs={renderModeTabs()} showHeader={false} /> : undefined}
+		</div>
 	)
 }

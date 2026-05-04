@@ -1,6 +1,8 @@
 import { useEffect } from 'preact/hooks'
 import type { Address } from 'viem'
 import { AddressInfo } from './AddressInfo.js'
+import { DataGrid } from './DataGrid.js'
+import { TransactionActionButton } from './TransactionActionButton.js'
 
 type LiquidationModalProps = {
 	accountAddress: Address | undefined
@@ -10,13 +12,27 @@ type LiquidationModalProps = {
 	liquidationManagerAddress: Address | undefined
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
+	securityPoolOverviewActiveAction: 'queueLiquidation' | undefined
 	liquidationTargetVault: string
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTargetVaultChange: (value: string) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 }
 
-export function LiquidationModal({ accountAddress, closeLiquidationModal, isMainnet, liquidationAmount, liquidationManagerAddress, liquidationModalOpen, liquidationSecurityPoolAddress, liquidationTargetVault, onLiquidationAmountChange, onLiquidationTargetVaultChange, onQueueLiquidation }: LiquidationModalProps) {
+export function LiquidationModal({
+	accountAddress,
+	closeLiquidationModal,
+	isMainnet,
+	liquidationAmount,
+	liquidationManagerAddress,
+	liquidationModalOpen,
+	liquidationSecurityPoolAddress,
+	liquidationTargetVault,
+	securityPoolOverviewActiveAction,
+	onLiquidationAmountChange,
+	onLiquidationTargetVaultChange,
+	onQueueLiquidation,
+}: LiquidationModalProps) {
 	useEffect(() => {
 		if (!liquidationModalOpen) return
 		const handleKeyDown = (event: KeyboardEvent) => {
@@ -29,6 +45,18 @@ export function LiquidationModal({ accountAddress, closeLiquidationModal, isMain
 	}, [liquidationModalOpen, closeLiquidationModal])
 
 	if (!liquidationModalOpen) return undefined
+	const queueLiquidationReason =
+		accountAddress === undefined
+			? 'Connect a wallet before queueing liquidation.'
+			: !isMainnet
+				? 'Switch to Ethereum mainnet before queueing liquidation.'
+				: liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined
+					? 'Reload the selected pool before queueing liquidation.'
+					: liquidationTargetVault.trim() === ''
+						? 'Enter the target vault address.'
+						: liquidationAmount.trim() === ''
+							? 'Enter a liquidation amount.'
+							: undefined
 
 	return (
 		<div className='modal-backdrop' role='presentation' onClick={closeLiquidationModal}>
@@ -43,10 +71,10 @@ export function LiquidationModal({ accountAddress, closeLiquidationModal, isMain
 					</button>
 				</div>
 				<p className='detail'>The selected vault is prefilled here. Adjust the target or amount if needed, then queue the liquidation transaction.</p>
-				<div className='modal-summary-grid'>
+				<DataGrid className='modal-summary-grid' columns={2}>
 					<AddressInfo address={liquidationSecurityPoolAddress} label='Security Pool' />
 					<AddressInfo address={liquidationManagerAddress} label='Manager' />
-				</div>
+				</DataGrid>
 				<div className='form-grid'>
 					<div className='field-row'>
 						<label className='field'>
@@ -63,16 +91,16 @@ export function LiquidationModal({ accountAddress, closeLiquidationModal, isMain
 					<button className='secondary' onClick={closeLiquidationModal}>
 						Cancel
 					</button>
-					<button
-						className='primary'
+					<TransactionActionButton
+						idleLabel='Queue Liquidation'
+						pendingLabel='Queueing liquidation...'
 						onClick={() => {
 							if (liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined) return
 							onQueueLiquidation(liquidationManagerAddress, liquidationSecurityPoolAddress)
 						}}
-						disabled={accountAddress === undefined || !isMainnet || liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined}
-					>
-						Queue Liquidation
-					</button>
+						pending={securityPoolOverviewActiveAction === 'queueLiquidation'}
+						availability={{ disabled: queueLiquidationReason !== undefined, reason: queueLiquidationReason }}
+					/>
 				</div>
 			</section>
 		</div>

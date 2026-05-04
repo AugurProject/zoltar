@@ -5,6 +5,8 @@ import { getAddress, zeroAddress } from 'viem'
 import { ErrorNotice } from '../components/ErrorNotice.js'
 import { MetricField } from '../components/MetricField.js'
 import { renderSelectedReportActionSection } from '../components/OpenOracleSection.js'
+import { SectionBlock } from '../components/SectionBlock.js'
+import { TransactionActionButton } from '../components/TransactionActionButton.js'
 import { deriveOpenOracleInitialReportSubmissionDetails, getOpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import { getDefaultOpenOracleFormState } from '../lib/marketForm.js'
 import type { AccountState, OpenOracleFormState } from '../types/app.js'
@@ -55,11 +57,38 @@ function getMetricFieldLabels(node: unknown) {
 	return labels
 }
 
+function getButtonLikeLabel(vnode: VNodeLike) {
+	if (vnode.type === 'button') return getTextContent(vnode.props['children']).trim()
+	if (vnode.type !== TransactionActionButton) return undefined
+	const idleLabel = vnode.props['idleLabel']
+	return typeof idleLabel === 'string' ? idleLabel.trim() : undefined
+}
+
+function getButtonDisabled(vnode: VNodeLike) {
+	if (vnode.type === 'button') return vnode.props['disabled'] === true
+	if (vnode.type !== TransactionActionButton) return undefined
+	const availability = vnode.props['availability']
+	if (!isObjectRecord(availability)) return undefined
+	return availability['disabled'] === true
+}
+
+function getButtonDisabledReason(vnode: VNodeLike) {
+	if (vnode.type === 'button') {
+		const title = vnode.props['title']
+		return typeof title === 'string' ? title : undefined
+	}
+	if (vnode.type !== TransactionActionButton) return undefined
+	const availability = vnode.props['availability']
+	if (!isObjectRecord(availability)) return undefined
+	const reason = availability['reason']
+	return typeof reason === 'string' ? reason : undefined
+}
+
 function findButton(node: unknown, label: string) {
 	let matchingButton: VNodeLike | undefined
 	visitTree(node, vnode => {
-		if (matchingButton !== undefined || vnode.type !== 'button') return
-		if (getTextContent(vnode.props['children']).trim() === label) matchingButton = vnode
+		if (matchingButton !== undefined) return
+		if (getButtonLikeLabel(vnode) === label) matchingButton = vnode
 	})
 	return matchingButton
 }
@@ -67,10 +96,20 @@ function findButton(node: unknown, label: string) {
 function getButtonLabels(node: unknown) {
 	const labels: string[] = []
 	visitTree(node, vnode => {
-		if (vnode.type !== 'button') return
-		labels.push(getTextContent(vnode.props['children']).trim())
+		const label = getButtonLikeLabel(vnode)
+		if (label !== undefined) labels.push(label)
 	})
 	return labels
+}
+
+function getSectionTitles(node: unknown) {
+	const titles: string[] = []
+	visitTree(node, vnode => {
+		if (vnode.type !== SectionBlock) return
+		const title = vnode.props['title']
+		if (typeof title === 'string') titles.push(title)
+	})
+	return titles
 }
 
 function hasVNodeType(node: unknown, type: unknown) {
@@ -291,15 +330,16 @@ void describe('OpenOracleSection', () => {
 		const section = renderInitialReportActionSection()
 		const metricFieldLabels = getMetricFieldLabels(section)
 		const textContent = getTextContent(section)
+		const sectionTitles = getSectionTitles(section)
 		const buttonLabels = getButtonLabels(section)
 		const wrapButton = findButton(section, 'Wrap needed ETH to WETH')
 		const submitButton = findButton(section, 'Submit Initial Report')
 
 		expect(metricFieldLabels).not.toContain('Wallet REPv2')
 		expect(metricFieldLabels).not.toContain('Wallet WETH')
-		expect(textContent).toContain('Initial Report')
-		expect(textContent).toContain('REPv2 Approval')
-		expect(textContent).toContain('WETH Approval')
+		expect(sectionTitles).toContain('Initial Report')
+		expect(sectionTitles).toContain('REPv2 Approval')
+		expect(sectionTitles).toContain('WETH Approval')
 		expect(textContent).not.toContain('determine whether this report needs more WETH')
 		expect(buttonLabels.indexOf('Wrap needed ETH to WETH')).toBeGreaterThan(-1)
 		expect(buttonLabels.indexOf('Wrap needed ETH to WETH')).toBeLessThan(buttonLabels.indexOf('Submit Initial Report'))
@@ -343,11 +383,11 @@ void describe('OpenOracleSection', () => {
 			throw new Error('Expected settle action button to render')
 		}
 
-		expect(settleButton.props['disabled']).toBe(false)
+		expect(getButtonDisabled(settleButton)).toBe(false)
 		expect(findButton(section, 'Dispute & Swap')).toBeUndefined()
-		expect(getTextContent(section)).toContain('Settle Report')
-		expect(getTextContent(section)).not.toContain('Token to Swap Out')
-		expect(getTextContent(section)).not.toContain('Dispute window closed. Settle Report instead.')
+		expect(getSectionTitles(section)).toContain('Settle Report')
+		expect(getSectionTitles(section)).not.toContain('Dispute Report')
+		expect(getButtonDisabledReason(settleButton)).toBeUndefined()
 	})
 
 	void test('disables dispute before dispute delay and disables settle before settlement time', () => {
@@ -367,9 +407,9 @@ void describe('OpenOracleSection', () => {
 			throw new Error('Expected dispute action buttons to render')
 		}
 
-		expect(disputeButton.props['disabled']).toBe(true)
-		expect(settleButton.props['disabled']).toBe(true)
-		expect(getTextContent(section)).toContain('This report is not ready to dispute yet.')
-		expect(getTextContent(section)).toContain('This report is not ready to settle yet.')
+		expect(getButtonDisabled(disputeButton)).toBe(true)
+		expect(getButtonDisabled(settleButton)).toBe(true)
+		expect(getButtonDisabledReason(disputeButton)).toBe('This report is not ready to dispute yet.')
+		expect(getButtonDisabledReason(settleButton)).toBe('This report is not ready to settle yet.')
 	})
 })

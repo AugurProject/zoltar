@@ -8,9 +8,11 @@ import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { OpenInterestCapacityMetrics } from './OpenInterestCapacityMetrics.js'
 import { Question, getQuestionTitle } from './Question.js'
+import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
+import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { isMainnetChain } from '../lib/network.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
@@ -36,6 +38,7 @@ export function SecurityPoolsOverviewSection({
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
+	securityPoolOverviewActiveAction,
 	securityPoolOverviewError,
 	securityPoolOverviewResult,
 	securityPools,
@@ -50,130 +53,124 @@ export function SecurityPoolsOverviewSection({
 
 	return (
 		<section className='panel market-panel'>
-			<div className='workflow-stack'>
-				<EntityCard
+			<div className='workflow-stack route-workflow-stack'>
+				<SectionBlock
+					density='compact'
 					title='Pool Registry'
-					badge={<span className='badge muted'>{securityPools.length} loaded</span>}
+					description='Browse deployed pools, inspect their vaults, and open a selected pool workflow.'
 					actions={
 						<button className='secondary' onClick={onLoadSecurityPools} disabled={loadingSecurityPools}>
 							{loadingSecurityPools ? <LoadingText>Loading pools...</LoadingText> : 'Refresh pools'}
 						</button>
 					}
 				>
-					<p className='detail'>Browse pools and inspect vaults.</p>
-				</EntityCard>
+					{securityPoolOverviewResult === undefined ? undefined : (
+						<p className='notice success'>
+							Queued liquidation for <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
+						</p>
+					)}
+					<ErrorNotice message={securityPoolOverviewError} />
 
-				{securityPoolOverviewResult === undefined ? undefined : (
-					<p className='notice success'>
-						Queued liquidation for <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
-					</p>
-				)}
-				<ErrorNotice message={securityPoolOverviewError} />
+					{securityPools.length === 0 ? (
+						registryPresentation === undefined ? undefined : (
+							<StateHint presentation={registryPresentation} />
+						)
+					) : (
+						<div className='entity-card-list'>
+							{securityPools.map(pool => (
+								<EntityCard
+									key={pool.securityPoolAddress}
+									title={getQuestionTitle(pool.marketDetails)}
+									variant='record'
+									badge={<span className='badge ok'>{pool.systemState}</span>}
+									actions={
+										onSelectSecurityPool === undefined ? undefined : (
+											<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
+												Open Pool
+											</button>
+										)
+									}
+								>
+									<WorkflowSubsection title='Question'>
+										<Question question={pool.marketDetails} />
+									</WorkflowSubsection>
 
-				{securityPools.length === 0 ? (
-					<EntityCard title='Pools'>{registryPresentation === undefined ? undefined : <StateHint presentation={registryPresentation} />}</EntityCard>
-				) : (
-					<div className='entity-card-list'>
-						{securityPools.map(pool => (
-							<EntityCard
-								key={pool.securityPoolAddress}
-								title={getQuestionTitle(pool.marketDetails)}
-								badge={<span className='badge ok'>{pool.systemState}</span>}
-								actions={
-									onSelectSecurityPool === undefined ? undefined : (
-										<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
-											Open Pool
-										</button>
-									)
-								}
-							>
-								<div className='entity-card-subsection'>
-									<div className='entity-card-subsection-header'>
-										<h4>Question</h4>
-									</div>
-									<Question question={pool.marketDetails} />
-								</div>
-
-								<div className='entity-card-subsection'>
-									<div className='entity-card-subsection-header'>
-										<h4>Pool</h4>
-										<span className='badge muted'>{pool.vaultCount.toString()} vaults</span>
-									</div>
-									<div className='workflow-metric-grid'>
-										<MetricField label='Pool Address'>
-											<AddressValue address={pool.securityPoolAddress} />
-										</MetricField>
-										<MetricField label='Universe'>
-											<UniverseLink universeId={pool.universeId} />
-										</MetricField>
-										<MetricField label='Security Multiplier'>{pool.securityMultiplier.toString()}</MetricField>
-										<MetricField label='Open Interest Fee / Year'>
-											<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
-										</MetricField>
-										<OpenInterestCapacityMetrics
-											completeSetCollateralAmount={pool.completeSetCollateralAmount}
-											repPerEthPrice={repPerEthPrice}
-											repPerEthSource={repPerEthSource}
-											repPerEthSourceUrl={repPerEthSourceUrl}
-											securityMultiplier={pool.securityMultiplier}
-											totalRepDeposit={pool.totalRepDeposit}
-											totalSecurityBondAllowance={pool.totalSecurityBondAllowance}
-										/>
-										<MetricField label='Manager'>
-											<AddressValue address={pool.managerAddress} />
-										</MetricField>
-										<MetricField label='Truth Auction'>
-											<AddressValue address={pool.truthAuctionAddress} />
-										</MetricField>
-									</div>
-								</div>
-
-								<div className='entity-card-subsection'>
-									<div className='entity-card-subsection-header'>
-										<h4>Vaults</h4>
-									</div>
-									{pool.vaults.length === 0 ? (
-										<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />
-									) : (
-										<div className='entity-card-list'>
-											{pool.vaults.map(vault => (
-												<EntityCard
-													key={`${pool.securityPoolAddress}-${vault.vaultAddress}`}
-													className='compact'
-													title={<AddressValue address={vault.vaultAddress} />}
-													actions={
-														<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
-															Liquidate Vault
-														</button>
-													}
-												>
-													<div className='workflow-vault-grid'>
-														<MetricField label='Rep Deposit'>
-															<CurrencyValue value={vault.repDepositShare} suffix='REP' />
-														</MetricField>
-														<MetricField label='Security Bond Allowance'>
-															<CurrencyValue value={vault.securityBondAllowance} suffix='ETH' />
-														</MetricField>
-														<CollateralizationMetricField
-															collateralizationPercent={getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repPerEthPrice)}
-															repPerEthSource={repPerEthSource}
-															repPerEthSourceUrl={repPerEthSourceUrl}
-															securityBondAllowance={vault.securityBondAllowance}
-															securityMultiplier={pool.securityMultiplier}
-														/>
-														<MetricField label='Unpaid ETH Fees'>
-															<CurrencyValue value={vault.unpaidEthFees} suffix='ETH' />
-														</MetricField>
-													</div>
-												</EntityCard>
-											))}
+									<WorkflowSubsection title='Pool'>
+										<div className='workflow-metric-grid'>
+											<MetricField label='Pool Address'>
+												<AddressValue address={pool.securityPoolAddress} />
+											</MetricField>
+											<MetricField label='Universe'>
+												<UniverseLink universeId={pool.universeId} />
+											</MetricField>
+											<MetricField label='Vaults'>{pool.vaultCount.toString()}</MetricField>
+											<MetricField label='Security Multiplier'>{pool.securityMultiplier.toString()}</MetricField>
+											<MetricField label='Open Interest Fee / Year'>
+												<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
+											</MetricField>
+											<OpenInterestCapacityMetrics
+												completeSetCollateralAmount={pool.completeSetCollateralAmount}
+												repPerEthPrice={repPerEthPrice}
+												repPerEthSource={repPerEthSource}
+												repPerEthSourceUrl={repPerEthSourceUrl}
+												securityMultiplier={pool.securityMultiplier}
+												totalRepDeposit={pool.totalRepDeposit}
+												totalSecurityBondAllowance={pool.totalSecurityBondAllowance}
+											/>
+											<MetricField label='Manager'>
+												<AddressValue address={pool.managerAddress} />
+											</MetricField>
+											<MetricField label='Truth Auction'>
+												<AddressValue address={pool.truthAuctionAddress} />
+											</MetricField>
 										</div>
-									)}
-								</div>
-							</EntityCard>
-						))}
-					</div>
-				)}
+									</WorkflowSubsection>
+
+									<WorkflowSubsection title='Vaults'>
+										{pool.vaults.length === 0 ? (
+											<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />
+										) : (
+											<div className='entity-card-list'>
+												{pool.vaults.map(vault => (
+													<EntityCard
+														key={`${pool.securityPoolAddress}-${vault.vaultAddress}`}
+														className='compact'
+														title={<AddressValue address={vault.vaultAddress} />}
+														variant='compact'
+														actions={
+															<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
+																Liquidate Vault
+															</button>
+														}
+													>
+														<div className='workflow-vault-grid'>
+															<MetricField label='Rep Deposit'>
+																<CurrencyValue value={vault.repDepositShare} suffix='REP' />
+															</MetricField>
+															<MetricField label='Security Bond Allowance'>
+																<CurrencyValue value={vault.securityBondAllowance} suffix='ETH' />
+															</MetricField>
+															<CollateralizationMetricField
+																collateralizationPercent={getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repPerEthPrice)}
+																repPerEthSource={repPerEthSource}
+																repPerEthSourceUrl={repPerEthSourceUrl}
+																securityBondAllowance={vault.securityBondAllowance}
+																securityMultiplier={pool.securityMultiplier}
+															/>
+															<MetricField label='Unpaid ETH Fees'>
+																<CurrencyValue value={vault.unpaidEthFees} suffix='ETH' />
+															</MetricField>
+														</div>
+													</EntityCard>
+												))}
+											</div>
+										)}
+									</WorkflowSubsection>
+								</EntityCard>
+							))}
+						</div>
+					)}
+				</SectionBlock>
 			</div>
 
 			<LiquidationModal
@@ -185,6 +182,7 @@ export function SecurityPoolsOverviewSection({
 				liquidationModalOpen={liquidationModalOpen}
 				liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}
 				liquidationTargetVault={liquidationTargetVault}
+				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
 				onLiquidationAmountChange={onLiquidationAmountChange}
 				onLiquidationTargetVaultChange={onLiquidationTargetVaultChange}
 				onQueueLiquidation={onQueueLiquidation}

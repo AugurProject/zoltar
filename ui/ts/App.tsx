@@ -88,6 +88,7 @@ export function App() {
 		setZoltarForkQuestionId,
 		setZoltarMigrationForm,
 		zoltarChildUniverseError,
+		zoltarChildUniversePendingOutcomeIndex,
 		zoltarForkApproval,
 		zoltarForkActiveAction,
 		zoltarForkError,
@@ -153,8 +154,8 @@ export function App() {
 		submitInitialReport,
 		wrapWethForInitialReport,
 	} = useOpenOracleOperations(baseHookConfig)
-	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
-	const { loadingPoolOracleManager, loadPoolOracleManager, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(baseHookConfig)
+	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
+	const { loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(baseHookConfig)
 	const {
 		checkedSecurityPoolAddress,
 		closeLiquidationModal,
@@ -168,17 +169,19 @@ export function App() {
 		loadSecurityPools,
 		openLiquidationModal,
 		queueLiquidation,
+		securityPoolOverviewActiveAction,
 		securityPoolOverviewError,
 		securityPoolOverviewResult,
 		securityPools,
 		setLiquidationAmount,
 		setLiquidationTargetVault,
 	} = useSecurityPoolsOverview(baseHookConfig)
-	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations(baseHookConfig)
+	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations(baseHookConfig)
 	const {
 		claimAuctionProceeds,
 		createChildUniverse,
 		finalizeTruthAuction,
+		forkAuctionActiveAction,
 		forkAuctionDetails,
 		forkAuctionError,
 		forkAuctionForm,
@@ -274,6 +277,7 @@ export function App() {
 						zoltarForkApproval={zoltarForkApproval}
 						zoltarForkError={zoltarForkError}
 						zoltarChildUniverseError={zoltarChildUniverseError}
+						zoltarChildUniversePendingOutcomeIndex={zoltarChildUniversePendingOutcomeIndex}
 						zoltarForkPending={zoltarForkPending}
 						zoltarForkQuestionId={zoltarForkQuestionId}
 						zoltarForkRepBalance={zoltarForkRepBalance}
@@ -330,6 +334,7 @@ export function App() {
 							onOpenLiquidationModal: (managerAddress, securityPoolAddress, vaultAddress) => openLiquidationModal(managerAddress, securityPoolAddress, vaultAddress),
 							onLoadSecurityPools: () => void loadSecurityPools(),
 							onQueueLiquidation: (managerAddress, securityPoolAddress) => void queueLiquidation(managerAddress, securityPoolAddress),
+							securityPoolOverviewActiveAction,
 							securityPoolOverviewError,
 							securityPoolOverviewResult,
 							securityPools,
@@ -344,6 +349,7 @@ export function App() {
 							closeLiquidationModal: () => closeLiquidationModal(),
 							forkAuction: {
 								accountState,
+								forkAuctionActiveAction,
 								forkAuctionDetails,
 								forkAuctionError,
 								forkAuctionForm,
@@ -384,6 +390,8 @@ export function App() {
 								navigate('open-oracle')
 								void loadOracleReport(reportId.toString())
 							},
+							securityPoolOverviewActiveAction,
+							poolOracleActiveAction,
 							poolOracleManagerDetails,
 							poolOracleManagerError,
 							poolPriceOracleResult,
@@ -400,6 +408,7 @@ export function App() {
 								onReportOutcome: () => void onReportOutcome(),
 								onReportingFormChange: update => setReportingForm(current => ({ ...current, ...update })),
 								onWithdrawEscalation: () => void withdrawEscalation(),
+								reportingActiveAction,
 								reportingDetails,
 								reportingError,
 								reportingForm,
@@ -444,6 +453,7 @@ export function App() {
 								repPerEthSource,
 								repPerEthSourceUrl,
 								selectedPool,
+								tradingActiveAction,
 								tradingDetails,
 								tradingError,
 								tradingForm,

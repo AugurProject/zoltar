@@ -1,4 +1,5 @@
 import { CurrencyValue } from './CurrencyValue.js'
+import { WorkflowSubsection } from './WorkflowSubsection.js'
 import type { ZoltarChildUniverseSummary } from '../types/contracts.js'
 
 type MigrationOutcomeUniversesSectionProps = {
@@ -36,15 +37,17 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 	const hasAddableOutcome = childUniverses.some(child => !selectedOutcomeIndexSet.has(child.outcomeIndex.toString()))
 
 	return (
-		<div className='entity-card-subsection market-overview-subsection'>
-			<div className='entity-card-subsection-header'>
-				<h4>Outcome universes</h4>
-				{isScalarFork ? (
+		<WorkflowSubsection
+			badge={
+				isScalarFork ? (
 					<button className='quiet' type='button' onClick={onAddNextOutcome} disabled={disabled || !hasAddableOutcome}>
 						Add another universe
 					</button>
-				) : undefined}
-			</div>
+				) : undefined
+			}
+			className='migration-outcome-section'
+			title='Outcome Universes'
+		>
 			{childUniverses.length === 0 ? (
 				<p className='detail'>No outcome universes available.</p>
 			) : (
@@ -77,6 +80,6 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 					})}
 				</div>
 			)}
-		</div>
+		</WorkflowSubsection>
 	)
 }

@@ -1,5 +1,7 @@
 import type { DeploymentSectionProps } from '../types/components.js'
-import { getPrerequisiteLabel } from '../lib/deployment.js'
+import { SectionBlock } from './SectionBlock.js'
+import { TransactionActionButton } from './TransactionActionButton.js'
+import { getDeploymentStepAvailability, getPrerequisiteLabel } from '../lib/deployment.js'
 
 type StepStatus = {
 	badgeClass: string
@@ -62,19 +64,20 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 
 export function DeploymentSection({ title, steps, allSteps, accountAddress, isMainnet, busyStepId, onDeploy }: DeploymentSectionProps) {
 	return (
-		<section className='panel contract-panel'>
-			<div className='contract-panel-header'>
-				<div>
-					<h2>{title}</h2>
-				</div>
-			</div>
+		<SectionBlock className='contract-panel' title={title}>
 			<div className='contract-list'>
 				{steps.map(step => {
 					const stepIndex = allSteps.findIndex(candidate => candidate.id === step.id)
 					const prerequisiteLabel = stepIndex === -1 ? undefined : getPrerequisiteLabel(allSteps, stepIndex)
 					const isBusy = busyStepId === step.id
-					const canDeploy = accountAddress !== undefined && isMainnet && prerequisiteLabel === undefined && !step.deployed && busyStepId === undefined
 					const stepStatus = getStepStatus(step.deployed, prerequisiteLabel, isBusy, accountAddress, isMainnet)
+					const availability = getDeploymentStepAvailability({
+						accountAddress,
+						busyStepId,
+						isMainnet,
+						prerequisiteLabel,
+						step,
+					})
 
 					return (
 						<div className='contract-row' key={step.id}>
@@ -86,13 +89,11 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, isMa
 								<p className='address'>{step.address}</p>
 								<p className='detail'>{stepStatus.detail}</p>
 							</div>
-							<button className='primary' onClick={() => void onDeploy(step.id)} disabled={!canDeploy}>
-								{stepStatus.buttonLabel}
-							</button>
+							<TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel='Deploying...' onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
 						</div>
 					)
 				})}
 			</div>
-		</section>
+		</SectionBlock>
 	)
 }

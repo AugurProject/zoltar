@@ -32,6 +32,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 	const zoltarQuestions = useSignal<MarketDetails[]>([])
 	const zoltarUniverse = useSignal<ZoltarUniverseSummary | undefined>(undefined)
 	const zoltarChildUniverseError = useSignal<string | undefined>(undefined)
+	const zoltarChildUniversePendingOutcomeIndex = useSignal<bigint | undefined>(undefined)
 	const isMounted = useRef(true)
 	const nextUniverseLoad = useRequestGuard()
 	const nextQuestionCountLoad = useRequestGuard()
@@ -43,6 +44,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		zoltarUniverseLoadedId.value = undefined
 		zoltarUniverseResolvedId.value = undefined
 		zoltarChildUniverseError.value = undefined
+		zoltarChildUniversePendingOutcomeIndex.value = undefined
 		hasLoadedZoltarQuestions.value = false
 		zoltarQuestionCount.value = undefined
 		zoltarQuestions.value = []
@@ -75,6 +77,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 					zoltarUniverseLoadedId.value = undefined
 					zoltarUniverseResolvedId.value = undefined
 					zoltarChildUniverseError.value = undefined
+					zoltarChildUniversePendingOutcomeIndex.value = undefined
 					return undefined
 				}
 				return await loadZoltarUniverseSummary(createConnectedReadClient(), requestedUniverseId)
@@ -154,6 +157,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		}
 
 		zoltarChildUniverseError.value = undefined
+		zoltarChildUniversePendingOutcomeIndex.value = outcomeIndex
 		try {
 			let refreshRequired = false
 			try {
@@ -178,6 +182,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 				zoltarChildUniverseError.value = formatRefreshErrorMessage(error, 'Child universe transaction succeeded, but refreshing the UI failed')
 			}
 		} finally {
+			zoltarChildUniversePendingOutcomeIndex.value = undefined
 			onTransactionFinished()
 		}
 	}
@@ -206,6 +211,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		loadZoltarUniverse,
 		refreshZoltarUniverse,
 		zoltarChildUniverseError: zoltarChildUniverseError.value,
+		zoltarChildUniversePendingOutcomeIndex: zoltarChildUniversePendingOutcomeIndex.value,
 		zoltarQuestionCount: zoltarQuestionCount.value,
 		zoltarQuestions: zoltarQuestions.value,
 		zoltarUniverse: zoltarUniverseLoadedId.value === activeUniverseId ? zoltarUniverse.value : undefined,

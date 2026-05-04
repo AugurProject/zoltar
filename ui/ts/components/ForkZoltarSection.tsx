@@ -1,12 +1,15 @@
 import type { Address } from 'viem'
 import { CurrencyValue } from './CurrencyValue.js'
+import { DataGrid } from './DataGrid.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
-import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
+import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
+import { TransactionActionButton } from './TransactionActionButton.js'
+import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { resolveLoadableValueState, type LoadableValueState } from '../lib/loadState.js'
 import { deriveTokenApprovalRequirement, type TokenApprovalState } from '../lib/tokenApproval.js'
@@ -75,12 +78,28 @@ export function ForkZoltarSection({
 		if (hasForked) return 'Zoltar is already forked.'
 		return undefined
 	})()
+	const forkGuardMessage =
+		accountAddress === undefined
+			? 'Connect a wallet before forking Zoltar.'
+			: !isMainnet
+				? 'Switch to Ethereum mainnet before forking Zoltar.'
+				: rootUniverse === undefined
+					? 'Refresh universe data before forking Zoltar.'
+					: hasForked
+						? 'Zoltar is already forked.'
+						: selectedQuestion === undefined
+							? 'Select a valid fork question before forking Zoltar.'
+							: !hasEnoughRep
+								? 'Insufficient REP to meet the fork threshold.'
+								: !hasEnoughApproval
+									? 'Approve enough REP before forking Zoltar.'
+									: undefined
 
 	if (universeMissing) {
 		const presentation = getUniversePresentation(zoltarUniverseState)
 		return (
 			<>
-				<EntityCard title='Fork Zoltar'>{presentation === undefined ? undefined : <StateHint presentation={presentation} />}</EntityCard>
+				{presentation === undefined ? undefined : <StateHint presentation={presentation} title='Fork Zoltar' />}
 				<ErrorNotice message={zoltarForkError} />
 			</>
 		)
@@ -88,12 +107,12 @@ export function ForkZoltarSection({
 
 	return (
 		<>
-			<EntityCard title='Fork Zoltar' badge={hasForked ? <span className='badge blocked'>Forked</span> : undefined}>
-				<div className='workflow-metric-grid'>
+			<SectionBlock title='Fork Zoltar' description='Approve the fork threshold, select the fork question, and trigger the universe fork.'>
+				<DataGrid>
 					<MetricField label='Fork Threshold'>
 						<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThreshold} suffix='REP' />
 					</MetricField>
-				</div>
+				</DataGrid>
 
 				<div className='form-grid'>
 					{hasForked ? undefined : (
@@ -119,29 +138,28 @@ export function ForkZoltarSection({
 					</label>
 
 					{selectedQuestion === undefined ? undefined : (
-						<div className='entity-card-subsection'>
-							<div className='entity-card-subsection-header'>
-								<h4>Question</h4>
-							</div>
-							<Question question={selectedQuestion} />
-						</div>
+						<WorkflowSubsection title='Question'>
+							<EntityCard title='Selected Question' variant='record'>
+								<Question question={selectedQuestion} />
+							</EntityCard>
+						</WorkflowSubsection>
 					)}
 					{selectedQuestionPresentation === undefined ? undefined : <StateHint presentation={selectedQuestionPresentation} />}
 
 					<div className='actions'>
-						<button
-							className='primary'
+						<TransactionActionButton
+							idleLabel='Fork Zoltar'
+							pendingLabel='Forking Zoltar...'
 							onClick={() => {
 								if (selectedQuestionId === '') return
 								onForkZoltar()
 							}}
-							disabled={!canFork}
-						>
-							{zoltarForkActiveAction === 'fork' ? <LoadingText>Forking Zoltar...</LoadingText> : 'Fork Zoltar'}
-						</button>
+							pending={zoltarForkActiveAction === 'fork'}
+							availability={{ disabled: !canFork, reason: forkGuardMessage }}
+						/>
 					</div>
 				</div>
-			</EntityCard>
+			</SectionBlock>
 
 			<ErrorNotice message={zoltarForkError} />
 		</>
