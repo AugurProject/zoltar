@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { formatCurrencyInputBalance, formatDuration, formatRelativeTimestamp, formatRoundedCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
+import { formatCurrencyInputBalance, formatDuration, formatRelativeTimestamp, formatRoundedCurrencyBalance, formatTimestamp, invertFixedPoint18 } from '../lib/formatters.js'
 
 void describe('formatting helpers', () => {
 	void test('formatRoundedCurrencyBalance rounds positive balances without a decimal part when decimals are zero', () => {
@@ -19,6 +19,19 @@ void describe('formatting helpers', () => {
 
 	void test('formatCurrencyInputBalance returns a compact decimal string without grouped separators', () => {
 		expect(formatCurrencyInputBalance(1234567890000000000000n)).toBe('1234.56789')
+	})
+
+	void test('invertFixedPoint18 returns undefined for missing or zero values', () => {
+		expect(invertFixedPoint18(undefined)).toBeUndefined()
+		expect(invertFixedPoint18(0n)).toBeUndefined()
+	})
+
+	void test('invertFixedPoint18 converts ETH per REP into REP per ETH with 18-decimal precision', () => {
+		expect(invertFixedPoint18(410000000000000n)).toBe(2439024390243902439024n)
+	})
+
+	void test('invertFixedPoint18 rounds half up instead of truncating', () => {
+		expect(invertFixedPoint18(600000000000000000n)).toBe(1666666666666666667n)
 	})
 
 	void describe('timestamp formatting', () => {

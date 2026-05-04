@@ -2,6 +2,7 @@ import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { MetricField } from './MetricField.js'
 import { StateHint } from './StateHint.js'
+import { invertFixedPoint18 } from '../lib/formatters.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 
 export function OverviewPanels({
@@ -70,7 +71,7 @@ export function OverviewPanels({
 								</>
 							) : undefined}
 							<MetricField label={<>REP/ETH {repEthSource === undefined ? undefined : renderSourceLink(repEthSource, repEthSourceUrl)}</>}>
-								<CurrencyValue value={repEthPrice} loading={isLoadingRepPrices} suffix='ETH' />
+								<CurrencyValue value={invertFixedPoint18(repEthPrice)} loading={isLoadingRepPrices} copyable={false} />
 							</MetricField>
 							<MetricField label={<>REP/USDC {repUsdcSource === undefined ? undefined : renderSourceLink(repUsdcSource, repUsdcSourceUrl)}</>}>
 								<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />

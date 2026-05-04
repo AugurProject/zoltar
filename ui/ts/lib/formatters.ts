@@ -1,6 +1,7 @@
 import { formatEther, formatUnits } from 'viem'
 
 const MILLISECONDS_PER_SECOND = 1000
+const FIXED_POINT_18_SCALE = 10n ** 18n
 const SECONDS_PER_MINUTE = 60n
 const SECONDS_PER_HOUR = 60n * SECONDS_PER_MINUTE
 const SECONDS_PER_DAY = 24n * SECONDS_PER_HOUR
@@ -41,6 +42,11 @@ export function formatCurrencyBalance(value: bigint | undefined, units: number =
 	assertInteger(units, 'Units')
 	const formattedValue = units === 18 ? formatEther(value) : formatUnits(value, units)
 	return formatDecimalString(formattedValue)
+}
+
+export function invertFixedPoint18(value: bigint | undefined) {
+	if (value === undefined || value === 0n) return undefined
+	return (FIXED_POINT_18_SCALE * FIXED_POINT_18_SCALE + value / 2n) / value
 }
 
 export function formatCurrencyInputBalance(value: bigint, units: number = 18) {
