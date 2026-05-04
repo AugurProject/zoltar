@@ -197,7 +197,7 @@ export function App() {
 		submitBid,
 		withdrawBids,
 	} = useForkAuctionOperations(baseHookConfig)
-	const { repEthPrice, repEthSource, repEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices } = useRepPrices()
+	const { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices } = useRepPrices()
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
 	const isMainnet = isMainnetChain(accountState.chainId)
@@ -310,9 +310,9 @@ export function App() {
 							securityPoolError,
 							securityPoolForm,
 							securityPoolResult,
-							repEthPrice,
-							repEthSource,
-							repEthSourceUrl,
+							repPerEthPrice,
+							repPerEthSource,
+							repPerEthSourceUrl,
 						}}
 						overview={{
 							accountState,
@@ -333,9 +333,9 @@ export function App() {
 							securityPoolOverviewError,
 							securityPoolOverviewResult,
 							securityPools,
-							repEthPrice,
-							repEthSource,
-							repEthSourceUrl,
+							repPerEthPrice,
+							repPerEthSource,
+							repPerEthSourceUrl,
 						}}
 						workflow={{
 							accountState,
@@ -390,9 +390,9 @@ export function App() {
 							onSecurityPoolAddressChange: value => {
 								setSecurityPoolAddress(value)
 							},
-							repEthPrice,
-							repEthSource,
-							repEthSourceUrl,
+							repPerEthPrice,
+							repPerEthSource,
+							repPerEthSourceUrl,
 							reporting: {
 								accountState,
 								loadingReportingDetails,
@@ -426,9 +426,9 @@ export function App() {
 								securityVaultRepBalance,
 								securityVaultResult,
 								selectedPoolSecurityMultiplier: selectedPool?.securityMultiplier,
-								repEthPrice,
-								repEthSource,
-								repEthSourceUrl,
+								repPerEthPrice,
+								repPerEthSource,
+								repPerEthSourceUrl,
 								securityPoolVaults: selectedPool?.vaults,
 							},
 							trading: {
@@ -440,9 +440,9 @@ export function App() {
 								onRedeemCompleteSet: () => void redeemCompleteSet(),
 								onRedeemShares: () => void redeemShares(),
 								onTradingFormChange: update => setTradingForm(current => ({ ...current, ...update })),
-								repEthPrice,
-								repEthSource,
-								repEthSourceUrl,
+								repPerEthPrice,
+								repPerEthSource,
+								repPerEthSourceUrl,
 								selectedPool,
 								tradingDetails,
 								tradingError,
@@ -587,9 +587,9 @@ export function App() {
 						isLoadingUniverseRepBalance={loadingZoltarForkAccess}
 						onConnect={() => void connectWallet()}
 						onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
-						repEthPrice={repEthPrice}
-						repEthSource={repEthSource}
-						repEthSourceUrl={repEthSourceUrl}
+						repPerEthPrice={repPerEthPrice}
+						repPerEthSource={repPerEthSource}
+						repPerEthSourceUrl={repPerEthSourceUrl}
 						repUsdcPrice={repUsdcPrice}
 						repUsdcSource={repUsdcSource}
 						repUsdcSourceUrl={repUsdcSourceUrl}

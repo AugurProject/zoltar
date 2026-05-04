@@ -29,6 +29,9 @@ import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import { readSelectedPoolViewQueryParam, writeSelectedPoolViewQueryParam } from '../lib/urlParams.js'
 import { resolveEnumValue } from '../lib/viewState.js'
+import { formatDuration, formatRoundedCurrencyBalance } from '../lib/formatters.js'
+import { getOracleManagerPriceValidUntilTimestamp } from '../lib/securityVault.js'
+import { getTimeRemaining } from '../lib/time.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolSystemState } from '../types/contracts.js'
 import type { SecurityPoolWorkflowRouteContentProps } from '../types/components.js'
 
@@ -56,7 +59,18 @@ export function isForkWorkflowDisabled(selectedPoolState: SecurityPoolSystemStat
 
 export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }: { lastPrice: bigint; lastSettlementTimestamp: bigint }) {
 	if (lastSettlementTimestamp === 0n) return '-'
-	return lastPrice.toString()
+	return `≈ ${formatRoundedCurrencyBalance(lastPrice, 18, 2)} REP / ETH`
+}
+
+export function getOraclePriceExpiryDisplay({ currentTimestamp, lastSettlementTimestamp, priceValidUntilTimestamp }: { currentTimestamp: bigint; lastSettlementTimestamp: bigint; priceValidUntilTimestamp: bigint | undefined }) {
+	if (lastSettlementTimestamp === 0n) return '-'
+
+	const validUntilTimestamp = priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp)
+	if (validUntilTimestamp === undefined) return '-'
+
+	const timeRemaining = getTimeRemaining(validUntilTimestamp, currentTimestamp)
+	if (timeRemaining === undefined) return '-'
+	return timeRemaining === 0n ? 'Expired' : formatDuration(timeRemaining)
 }
 
 export function getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails, selectedPoolManagerAddress }: { poolOracleManagerDetails: OracleManagerDetails | undefined; selectedPoolManagerAddress: string | undefined }) {
@@ -95,9 +109,9 @@ export function SecurityPoolWorkflowSection({
 	poolOracleManagerError,
 	poolPriceOracleResult,
 	onSecurityPoolAddressChange,
-	repEthPrice,
-	repEthSource,
-	repEthSourceUrl,
+	repPerEthPrice,
+	repPerEthSource,
+	repPerEthSourceUrl,
 	reporting,
 	securityPoolAddress,
 	securityPools,
@@ -233,9 +247,9 @@ export function SecurityPoolWorkflowSection({
 									</MetricField>
 									<OpenInterestCapacityMetrics
 										completeSetCollateralAmount={loadedSelectedPool?.completeSetCollateralAmount}
-										repEthPrice={repEthPrice}
-										repEthSource={repEthSource}
-										repEthSourceUrl={repEthSourceUrl}
+										repPerEthPrice={repPerEthPrice}
+										repPerEthSource={repPerEthSource}
+										repPerEthSourceUrl={repPerEthSourceUrl}
 										securityMultiplier={loadedSelectedPool?.securityMultiplier}
 										totalRepDeposit={loadedSelectedPool?.totalRepDeposit}
 										totalSecurityBondAllowance={loadedSelectedPool?.totalSecurityBondAllowance}
@@ -285,6 +299,13 @@ export function SecurityPoolWorkflowSection({
 												<MetricField label='Set At'>
 													<TimestampValue timestamp={selectedPoolOracleMetricValues.lastSettlementTimestamp} zeroText='Never' />
 												</MetricField>
+												<MetricField label='Expires In'>
+													{getOraclePriceExpiryDisplay({
+														currentTimestamp,
+														lastSettlementTimestamp: selectedPoolOracleMetricValues.lastSettlementTimestamp,
+														priceValidUntilTimestamp: undefined,
+													})}
+												</MetricField>
 											</div>
 										)}
 										<p className='detail'>
@@ -303,6 +324,13 @@ export function SecurityPoolWorkflowSection({
 											<MetricField label='Last Price'>{getOracleLastPriceDisplay(currentPoolOracleManagerDetails)}</MetricField>
 											<MetricField label='Set At'>
 												<TimestampValue timestamp={currentPoolOracleManagerDetails.lastSettlementTimestamp} zeroText='Never' />
+											</MetricField>
+											<MetricField label='Expires In'>
+												{getOraclePriceExpiryDisplay({
+													currentTimestamp,
+													lastSettlementTimestamp: currentPoolOracleManagerDetails.lastSettlementTimestamp,
+													priceValidUntilTimestamp: currentPoolOracleManagerDetails.priceValidUntilTimestamp,
+												})}
 											</MetricField>
 											<MetricField label='Pending Request'>
 												{currentPoolOracleManagerDetails.pendingReportId > 0n ? (
@@ -412,9 +440,9 @@ export function SecurityPoolWorkflowSection({
 																<CurrencyValue value={vault.securityBondAllowance} suffix='ETH' />
 															</MetricField>
 															<CollateralizationMetricField
-																collateralizationPercent={getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repEthPrice)}
-																repEthSource={repEthSource}
-																repEthSourceUrl={repEthSourceUrl}
+																collateralizationPercent={getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repPerEthPrice)}
+																repPerEthSource={repPerEthSource}
+																repPerEthSourceUrl={repPerEthSourceUrl}
 																securityBondAllowance={vault.securityBondAllowance}
 																securityMultiplier={selectedPool.securityMultiplier}
 															/>

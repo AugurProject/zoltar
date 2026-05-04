@@ -45,9 +45,9 @@ export function SecurityVaultSection({
 	securityVaultRepBalance,
 	securityVaultResult,
 	selectedPoolSecurityMultiplier,
-	repEthPrice,
-	repEthSource,
-	repEthSourceUrl,
+	repPerEthPrice,
+	repPerEthSource,
+	repPerEthSourceUrl,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 }: SecurityVaultSectionProps) {
@@ -149,9 +149,9 @@ export function SecurityVaultSection({
 					</MetricField>
 					<CollateralizationMetricField
 						className='entity-metric'
-						collateralizationPercent={getVaultCollateralizationPercent(securityVaultDetails.repDepositShare, securityBondAllowance, repEthPrice)}
-						repEthSource={repEthSource}
-						repEthSourceUrl={repEthSourceUrl}
+						collateralizationPercent={getVaultCollateralizationPercent(securityVaultDetails.repDepositShare, securityBondAllowance, repPerEthPrice)}
+						repPerEthSource={repPerEthSource}
+						repPerEthSourceUrl={repPerEthSourceUrl}
 						securityBondAllowance={securityBondAllowance}
 						securityMultiplier={selectedPoolSecurityMultiplier}
 					/>

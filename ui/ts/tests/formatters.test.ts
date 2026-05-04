@@ -67,7 +67,7 @@ void describe('formatting helpers', () => {
 			expect(formatRoundedCurrencyBalance(4500000000000000n, 18, 2)).toBe('0.0045')
 		})
 
-		// 0.00041 ETH (typical REP/ETH price) → 5 decimal places: 0.00041
+		// 0.00041 ETH → 5 decimal places: 0.00041
 		void test('0.00041 ETH rounds to 0.00041', () => {
 			expect(formatRoundedCurrencyBalance(410000000000000n, 18, 2)).toBe('0.00041')
 		})

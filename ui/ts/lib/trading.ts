@@ -24,17 +24,17 @@ export function getRemainingMintCapacity(totalSecurityBondAllowance: bigint | un
 	return totalSecurityBondAllowance > completeSetCollateralAmount ? totalSecurityBondAllowance - completeSetCollateralAmount : 0n
 }
 
-function getCollateralizationPercent(repDeposit: bigint | undefined, securityBondAllowance: bigint | undefined, repEthPrice: bigint | undefined) {
-	if (repDeposit === undefined || securityBondAllowance === undefined || repEthPrice === undefined || securityBondAllowance === 0n) return undefined
-	return (repDeposit * repEthPrice * PERCENT_MULTIPLIER) / securityBondAllowance
+function getCollateralizationPercent(repDeposit: bigint | undefined, securityBondAllowance: bigint | undefined, repPerEthPrice: bigint | undefined) {
+	if (repDeposit === undefined || securityBondAllowance === undefined || repPerEthPrice === undefined || repPerEthPrice === 0n || securityBondAllowance === 0n) return undefined
+	return (repDeposit * PERCENT_MULTIPLIER * PRICE_PRECISION * PRICE_PRECISION) / (securityBondAllowance * repPerEthPrice)
 }
 
-export function getPoolCollateralizationPercent(totalRepDeposit: bigint | undefined, totalSecurityBondAllowance: bigint | undefined, repEthPrice: bigint | undefined) {
-	return getCollateralizationPercent(totalRepDeposit, totalSecurityBondAllowance, repEthPrice)
+export function getPoolCollateralizationPercent(totalRepDeposit: bigint | undefined, totalSecurityBondAllowance: bigint | undefined, repPerEthPrice: bigint | undefined) {
+	return getCollateralizationPercent(totalRepDeposit, totalSecurityBondAllowance, repPerEthPrice)
 }
 
-export function getVaultCollateralizationPercent(repDepositShare: bigint | undefined, securityBondAllowance: bigint | undefined, repEthPrice: bigint | undefined) {
-	return getCollateralizationPercent(repDepositShare, securityBondAllowance, repEthPrice)
+export function getVaultCollateralizationPercent(repDepositShare: bigint | undefined, securityBondAllowance: bigint | undefined, repPerEthPrice: bigint | undefined) {
+	return getCollateralizationPercent(repDepositShare, securityBondAllowance, repPerEthPrice)
 }
 
 export function getCollateralizationTone(collateralizationPercent: bigint | undefined, securityMultiplier: bigint | undefined): CollateralizationTone | undefined {

@@ -33,9 +33,9 @@ export function SecurityPoolsOverviewSection({
 	onOpenLiquidationModal,
 	onQueueLiquidation,
 	onSelectSecurityPool,
-	repEthPrice,
-	repEthSource,
-	repEthSourceUrl,
+	repPerEthPrice,
+	repPerEthSource,
+	repPerEthSourceUrl,
 	securityPoolOverviewError,
 	securityPoolOverviewResult,
 	securityPools,
@@ -112,9 +112,9 @@ export function SecurityPoolsOverviewSection({
 										</MetricField>
 										<OpenInterestCapacityMetrics
 											completeSetCollateralAmount={pool.completeSetCollateralAmount}
-											repEthPrice={repEthPrice}
-											repEthSource={repEthSource}
-											repEthSourceUrl={repEthSourceUrl}
+											repPerEthPrice={repPerEthPrice}
+											repPerEthSource={repPerEthSource}
+											repPerEthSourceUrl={repPerEthSourceUrl}
 											securityMultiplier={pool.securityMultiplier}
 											totalRepDeposit={pool.totalRepDeposit}
 											totalSecurityBondAllowance={pool.totalSecurityBondAllowance}
@@ -155,9 +155,9 @@ export function SecurityPoolsOverviewSection({
 															<CurrencyValue value={vault.securityBondAllowance} suffix='ETH' />
 														</MetricField>
 														<CollateralizationMetricField
-															collateralizationPercent={getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repEthPrice)}
-															repEthSource={repEthSource}
-															repEthSourceUrl={repEthSourceUrl}
+															collateralizationPercent={getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repPerEthPrice)}
+															repPerEthSource={repPerEthSource}
+															repPerEthSourceUrl={repPerEthSourceUrl}
 															securityBondAllowance={vault.securityBondAllowance}
 															securityMultiplier={pool.securityMultiplier}
 														/>

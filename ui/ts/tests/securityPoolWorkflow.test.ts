@@ -2,7 +2,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from 'viem'
-import { getCurrentPoolOracleManagerDetails, getOracleLastPriceDisplay, getSelectedPoolCardTitle, getSelectedPoolLookupDisplay, getSelectedPoolOracleMetricValues, isForkWorkflowDisabled, shouldShowSelectedPoolWorkflowDetails } from '../components/SecurityPoolWorkflowSection.js'
+import { getCurrentPoolOracleManagerDetails, getOracleLastPriceDisplay, getOraclePriceExpiryDisplay, getSelectedPoolCardTitle, getSelectedPoolLookupDisplay, getSelectedPoolOracleMetricValues, isForkWorkflowDisabled, shouldShowSelectedPoolWorkflowDetails } from '../components/SecurityPoolWorkflowSection.js'
+import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 
 void describe('selected pool workflow lookup state', () => {
 	void test('uses a stable card title until a pool resolves', () => {
@@ -184,15 +185,43 @@ void describe('selected pool oracle price display', () => {
 					lastOracleSettlementTimestamp: 1n,
 				}),
 			),
-		).toBe('0')
+		).toBe('≈ 0.00 REP / ETH')
 
 		expect(
 			getOracleLastPriceDisplay(
 				getSelectedPoolOracleMetricValues({
-					lastOraclePrice: 42n,
+					lastOraclePrice: 42n * 10n ** 18n,
 					lastOracleSettlementTimestamp: 1n,
 				}),
 			),
-		).toBe('42')
+		).toBe('≈ 42.00 REP / ETH')
+	})
+
+	void test('derives expiry countdowns from the last settlement when manager details are not loaded', () => {
+		expect(
+			getOraclePriceExpiryDisplay({
+				currentTimestamp: 31n,
+				lastSettlementTimestamp: 1n,
+				priceValidUntilTimestamp: undefined,
+			}),
+		).toBe('59m')
+	})
+
+	void test('shows a dash before the oracle has ever settled and expired once the price window closes', () => {
+		expect(
+			getOraclePriceExpiryDisplay({
+				currentTimestamp: 100n,
+				lastSettlementTimestamp: 0n,
+				priceValidUntilTimestamp: undefined,
+			}),
+		).toBe('-')
+
+		expect(
+			getOraclePriceExpiryDisplay({
+				currentTimestamp: 100n + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS,
+				lastSettlementTimestamp: 100n,
+				priceValidUntilTimestamp: 100n + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS,
+			}),
+		).toBe('Expired')
 	})
 })

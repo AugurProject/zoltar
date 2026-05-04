@@ -25,9 +25,9 @@ export function TradingSection({
 	onRedeemShares,
 	onTradingFormChange,
 	tradingDetails,
-	repEthPrice,
-	repEthSource,
-	repEthSourceUrl,
+	repPerEthPrice,
+	repPerEthSource,
+	repPerEthSourceUrl,
 	selectedPool,
 	tradingError,
 	tradingForm,
@@ -166,9 +166,9 @@ export function TradingSection({
 						</MetricField>
 						<OpenInterestCapacityMetrics
 							completeSetCollateralAmount={selectedPool.completeSetCollateralAmount}
-							repEthPrice={repEthPrice}
-							repEthSource={repEthSource}
-							repEthSourceUrl={repEthSourceUrl}
+							repPerEthPrice={repPerEthPrice}
+							repPerEthSource={repPerEthSource}
+							repPerEthSourceUrl={repPerEthSourceUrl}
 							securityMultiplier={selectedPool.securityMultiplier}
 							totalRepDeposit={selectedPool.totalRepDeposit}
 							totalSecurityBondAllowance={selectedPool.totalSecurityBondAllowance}

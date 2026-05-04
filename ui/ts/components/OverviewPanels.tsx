@@ -11,9 +11,9 @@ export function OverviewPanels({
 	isLoadingUniverseRepBalance,
 	onConnect,
 	onGoToGenesisUniverse,
-	repEthPrice,
-	repEthSource,
-	repEthSourceUrl,
+	repPerEthPrice,
+	repPerEthSource,
+	repPerEthSourceUrl,
 	repUsdcPrice,
 	repUsdcSource,
 	repUsdcSourceUrl,
@@ -69,8 +69,8 @@ export function OverviewPanels({
 									</MetricField>
 								</>
 							) : undefined}
-							<MetricField label={<>REP/ETH {repEthSource === undefined ? undefined : renderSourceLink(repEthSource, repEthSourceUrl)}</>}>
-								<CurrencyValue value={repEthPrice} loading={isLoadingRepPrices} suffix='ETH' />
+							<MetricField label={<>REP/ETH {repPerEthSource === undefined ? undefined : renderSourceLink(repPerEthSource, repPerEthSourceUrl)}</>}>
+								<CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />
 							</MetricField>
 							<MetricField label={<>REP/USDC {repUsdcSource === undefined ? undefined : renderSourceLink(repUsdcSource, repUsdcSourceUrl)}</>}>
 								<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />

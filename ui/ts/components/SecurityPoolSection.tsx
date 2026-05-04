@@ -24,9 +24,9 @@ export function SecurityPoolSection({
 	onOpenCreatedPool,
 	onSecurityPoolFormChange,
 	onResetSecurityPoolCreation,
-	repEthPrice,
-	repEthSource,
-	repEthSourceUrl,
+	repPerEthPrice,
+	repPerEthSource,
+	repPerEthSourceUrl,
 	securityPools,
 	securityPoolCreating,
 	securityPoolError,
@@ -139,9 +139,9 @@ export function SecurityPoolSection({
 													</MetricField>
 													<OpenInterestCapacityMetrics
 														completeSetCollateralAmount={pool.completeSetCollateralAmount}
-														repEthPrice={repEthPrice}
-														repEthSource={repEthSource}
-														repEthSourceUrl={repEthSourceUrl}
+														repPerEthPrice={repPerEthPrice}
+														repPerEthSource={repPerEthSource}
+														repPerEthSourceUrl={repPerEthSourceUrl}
 														securityMultiplier={pool.securityMultiplier}
 														totalRepDeposit={pool.totalRepDeposit}
 														totalSecurityBondAllowance={pool.totalSecurityBondAllowance}
