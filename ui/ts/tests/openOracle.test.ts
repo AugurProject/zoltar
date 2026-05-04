@@ -107,6 +107,7 @@ function createOpenOracleLifecycleReport(
 		currentReporter: Address
 		currentTime: bigint
 		disputeDelay: bigint
+		disputeOccurred: boolean
 		isDistributed: boolean
 		reportTimestamp: bigint
 		settlementTime: bigint
@@ -118,6 +119,7 @@ function createOpenOracleLifecycleReport(
 		currentReporter: getAddress(addressString(TEST_ADDRESSES[1])),
 		currentTime: 0n,
 		disputeDelay: 10n,
+		disputeOccurred: false,
 		isDistributed: false,
 		reportTimestamp: 100n,
 		settlementTime: 60n,
@@ -726,11 +728,11 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('selected report action mode follows the report lifecycle', () => {
-		expect(getOpenOracleSelectedReportActionMode({ currentReporter: zeroAddress, disputeOccurred: false, isDistributed: false, reportTimestamp: 0n })).toBe('initial-report')
-		const reporter = getAddress(addressString(TEST_ADDRESSES[1]))
-		expect(getOpenOracleSelectedReportActionMode({ currentReporter: reporter, disputeOccurred: false, isDistributed: false, reportTimestamp: 1n })).toBe('dispute')
-		expect(getOpenOracleSelectedReportActionMode({ currentReporter: reporter, disputeOccurred: true, isDistributed: false, reportTimestamp: 1n })).toBe('dispute')
-		expect(getOpenOracleSelectedReportActionMode({ currentReporter: reporter, disputeOccurred: false, isDistributed: true, reportTimestamp: 1n })).toBe('read-only')
+		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentReporter: zeroAddress, reportTimestamp: 0n }))).toBe('initial-report')
+		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 110n }))).toBe('dispute')
+		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 110n, disputeOccurred: true }))).toBe('dispute')
+		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 161n }))).toBe('settle')
+		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 161n, isDistributed: true }))).toBe('read-only')
 	})
 
 	test('dispute and settle availability follow time-based report lifecycle', () => {
