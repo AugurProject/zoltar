@@ -5,7 +5,7 @@ import { getAddress, zeroAddress } from 'viem'
 import { ErrorNotice } from '../components/ErrorNotice.js'
 import { MetricField } from '../components/MetricField.js'
 import { renderSelectedReportActionSection } from '../components/OpenOracleSection.js'
-import { deriveOpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
+import { deriveOpenOracleInitialReportSubmissionDetails, getOpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import { getDefaultOpenOracleFormState } from '../lib/marketForm.js'
 import type { AccountState, OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleSectionProps } from '../types/components.js'
@@ -246,7 +246,7 @@ function renderDisputeActionSection({
 	openOracleReportDetails?: OpenOracleReportDetails
 } = {}) {
 	return renderSelectedReportActionSection(
-		'dispute',
+		getOpenOracleSelectedReportActionMode(openOracleReportDetails),
 		accountState.address !== undefined,
 		undefined,
 		openOracleForm,
@@ -327,7 +327,7 @@ void describe('OpenOracleSection', () => {
 		expect(hasVNodeType(section, ErrorNotice)).toBe(false)
 	})
 
-	void test('disables dispute after settlement time elapses and guides the user to settle', () => {
+	void test('renders settle-only controls after the dispute window closes', () => {
 		const section = renderDisputeActionSection({
 			openOracleReportDetails: createOpenOracleReportDetails({
 				currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
@@ -338,15 +338,16 @@ void describe('OpenOracleSection', () => {
 			}),
 		})
 
-		const disputeButton = findButton(section, 'Dispute & Swap')
 		const settleButton = findButton(section, 'Settle Report')
-		if (disputeButton === undefined || settleButton === undefined) {
-			throw new Error('Expected dispute action buttons to render')
+		if (settleButton === undefined) {
+			throw new Error('Expected settle action button to render')
 		}
 
-		expect(disputeButton.props['disabled']).toBe(true)
 		expect(settleButton.props['disabled']).toBe(false)
-		expect(getTextContent(section)).toContain('Dispute window closed. Settle Report instead.')
+		expect(findButton(section, 'Dispute & Swap')).toBeUndefined()
+		expect(getTextContent(section)).toContain('Settle Report')
+		expect(getTextContent(section)).not.toContain('Token to Swap Out')
+		expect(getTextContent(section)).not.toContain('Dispute window closed. Settle Report instead.')
 	})
 
 	void test('disables dispute before dispute delay and disables settle before settlement time', () => {

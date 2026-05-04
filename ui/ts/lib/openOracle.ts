@@ -11,7 +11,7 @@ const OPEN_ORACLE_BOUNTY_BUFFER_NUMERATOR = 12n
 const OPEN_ORACLE_BOUNTY_BUFFER_DENOMINATOR = 10n
 
 type OpenOracleReportStatus = 'Awaiting Initial Report' | 'Pending' | 'Disputed' | 'Settled'
-export type OpenOracleSelectedReportActionMode = 'initial-report' | 'dispute' | 'read-only'
+export type OpenOracleSelectedReportActionMode = 'initial-report' | 'dispute' | 'settle' | 'read-only'
 export type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3' | 'Manual override' | 'Unavailable'
 export type OpenOracleInitialReportQuoteSource = Exclude<OpenOracleInitialReportPriceSource, 'Manual override' | 'Unavailable'>
 export type OpenOracleInitialReportQuoteFailureKind = 'unsupported-pair' | 'quote-failed'
@@ -223,16 +223,24 @@ export function getOpenOracleReportStatusTone(status: OpenOracleReportStatus): '
 	}
 }
 
-export function getOpenOracleSelectedReportActionMode(report: Pick<OpenOracleReportSummary, 'currentReporter' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp'>): OpenOracleSelectedReportActionMode {
+export function getOpenOracleSelectedReportActionMode(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>): OpenOracleSelectedReportActionMode {
 	const status = getOpenOracleReportStatus(report)
 	switch (status) {
 		case 'Awaiting Initial Report':
 			return 'initial-report'
-		case 'Pending':
-		case 'Disputed':
-			return 'dispute'
 		case 'Settled':
 			return 'read-only'
+		case 'Pending':
+		case 'Disputed': {
+			const disputeAvailability = getOpenOracleDisputeAvailability(report)
+			const settleAvailability = getOpenOracleSettleAvailability(report)
+
+			if (!disputeAvailability.canAct && settleAvailability.canAct) {
+				return 'settle'
+			}
+
+			return 'dispute'
+		}
 	}
 }
 

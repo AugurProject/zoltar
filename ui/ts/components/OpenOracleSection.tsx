@@ -252,6 +252,24 @@ export function renderSelectedReportActionSection(
 				</div>
 			)
 		}
+		case 'settle': {
+			const settleDisabledMessage = !isConnected ? 'Connect a wallet before settling reports.' : openOracleForm.reportId.trim() === '' ? 'Load a report first.' : settleAvailability.message
+			return (
+				<div className='entity-card-subsection'>
+					<div className='entity-card-subsection-header'>
+						<h4>Settle Report</h4>
+					</div>
+					<div className='form-grid'>
+						<div className='actions'>
+							<button className='secondary' onClick={onSettleReport} disabled={!isConnected || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct || openOracleActiveAction === 'settle'} title={settleDisabledMessage}>
+								{openOracleActiveAction === 'settle' ? <LoadingText>Settling...</LoadingText> : 'Settle Report'}
+							</button>
+						</div>
+						{settleDisabledMessage === undefined ? undefined : <p className='detail'>{settleDisabledMessage}</p>}
+					</div>
+				</div>
+			)
+		}
 		case 'read-only':
 			return (
 				<div className='entity-card-subsection'>
