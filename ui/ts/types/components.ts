@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import type { Address } from 'viem'
 import type { AccountState, ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, Route, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from './app.js'
 import type {
@@ -33,6 +34,72 @@ type RepPerEthPriceProps = {
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: 'v4' | 'v3' | undefined
 	repPerEthSourceUrl: string | undefined
+}
+
+export type ActionAvailability = {
+	disabled: boolean
+	reason: string | undefined
+}
+
+export type RouteHeaderProps = {
+	actions?: ComponentChildren
+	badge?: ComponentChildren
+	description?: ComponentChildren
+	eyebrow?: ComponentChildren
+	summary?: ComponentChildren
+	title: ComponentChildren
+}
+
+export type SectionBlockProps = {
+	actions?: ComponentChildren
+	badge?: ComponentChildren
+	children: ComponentChildren
+	className?: string
+	description?: ComponentChildren
+	density?: 'balanced' | 'compact'
+	headingLevel?: 3 | 4
+	title?: ComponentChildren
+	tone?: 'critical' | 'default' | 'muted'
+	variant?: 'default' | 'embedded'
+}
+
+export type DataGridProps = {
+	children: ComponentChildren
+	className?: string
+	columns?: 2 | 3 | 4 | 'auto'
+	dense?: boolean
+}
+
+export type ViewTabOption<TValue extends string> = {
+	disabled?: boolean
+	href?: string
+	label: ComponentChildren
+	reason?: string
+	value: TValue
+}
+
+export type ViewTabsProps<TValue extends string> = {
+	ariaLabel: string
+	className?: string
+	onChange: (value: TValue) => void
+	orientation?: 'horizontal' | 'vertical'
+	options: ViewTabOption<TValue>[]
+	size?: 'compact' | 'default'
+	value: TValue
+	variant?: 'route' | 'subroute'
+}
+
+export type TransactionActionButtonProps = {
+	availability?: ActionAvailability
+	className?: string
+	disabled?: boolean
+	idleLabel: ComponentChildren
+	onClick: () => void
+	pending?: boolean
+	pendingLabel: ComponentChildren
+	showDisabledReason?: boolean
+	tone?: 'primary' | 'secondary'
+	type?: 'button' | 'submit'
 }
 
 export type DeploymentSectionProps = {
@@ -118,6 +185,7 @@ export type MarketRouteContentProps = {
 	zoltarForkError: string | undefined
 	loadingZoltarForkAccess: boolean
 	zoltarChildUniverseError: string | undefined
+	zoltarChildUniversePendingOutcomeIndex: bigint | undefined
 	zoltarForkPending: boolean
 	zoltarForkQuestionId: string
 	zoltarForkRepBalance: bigint | undefined
@@ -165,6 +233,7 @@ type LiquidationControlsProps = {
 	liquidationManagerAddress: Address | undefined
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
+	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
 	liquidationTargetVault: string
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTargetVaultChange: (value: string) => void
@@ -208,6 +277,8 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	onRefreshSelectedPoolData: () => void
 	onRequestPoolPrice: (managerAddress: Address) => void
 	onViewPendingReport: (reportId: bigint) => void
+	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
+	poolOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	poolOracleManagerDetails: OracleManagerDetails | undefined
 	poolOracleManagerError: string | undefined
 	poolPriceOracleResult: OpenOracleActionResult | undefined
@@ -257,6 +328,8 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	compactLayout?: boolean
 	oracleManagerDetails?: OracleManagerDetails | undefined
 	autoLoadVault?: boolean
+	showLookupSection?: boolean
+	showSummarySection?: boolean
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean
 }
@@ -317,6 +390,7 @@ export type ReportingRouteContentProps = {
 	onReportOutcome: () => void
 	onReportingFormChange: (update: Partial<ReportingFormState>) => void
 	onWithdrawEscalation: () => void
+	reportingActiveAction: ReportingActionResult['action'] | undefined
 	reportingDetails: ReportingDetails | undefined
 	reportingError: string | undefined
 	reportingForm: ReportingFormState
@@ -324,7 +398,10 @@ export type ReportingRouteContentProps = {
 }
 
 export type ReportingSectionProps = ReportingRouteContentProps & {
+	currentTimestamp?: bigint | undefined
 	embedInCard?: boolean
+	lockedReason?: string | undefined
+	previewMarketDetails?: MarketDetails | undefined
 	showHeader?: boolean
 	showSecurityPoolAddressInput?: boolean
 }
@@ -342,6 +419,7 @@ export type TradingRouteContentProps = {
 	repPerEthSource: 'v4' | 'v3' | undefined
 	repPerEthSourceUrl: string | undefined
 	selectedPool: ListedSecurityPool | undefined
+	tradingActiveAction: TradingActionResult['action'] | undefined
 	tradingDetails: TradingDetails | undefined
 	tradingError: string | undefined
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
@@ -358,6 +436,7 @@ export type TradingSectionProps = TradingRouteContentProps & {
 export type ForkAuctionRouteContentProps = {
 	accountState: AccountState
 	forkAuctionDetails: ForkAuctionDetails | undefined
+	forkAuctionActiveAction: ForkAuctionActionResult['action'] | undefined
 	forkAuctionError: string | undefined
 	forkAuctionForm: ForkAuctionFormState
 	forkAuctionResult: ForkAuctionActionResult | undefined

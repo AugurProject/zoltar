@@ -1,6 +1,8 @@
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
 import { Question, getQuestionTitle } from './Question.js'
+import { SectionBlock } from './SectionBlock.js'
+import { StateHint } from './StateHint.js'
 import type { MarketDetails } from '../types/contracts.js'
 
 type MarketQuestionsSectionProps = {
@@ -17,13 +19,12 @@ type MarketQuestionsSectionProps = {
 }
 
 export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, loadingZoltarQuestionCount, loadingZoltarQuestions, onLoadZoltarQuestions, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestionCount, zoltarQuestions }: MarketQuestionsSectionProps) {
-	const questionCountBadge = zoltarQuestionCount === undefined ? undefined : `${zoltarQuestionCount.toString()} questions`
 	const noQuestionsAvailable = zoltarQuestionCount === 0n
 
 	return (
-		<EntityCard
+		<SectionBlock
+			density='compact'
 			title='Questions'
-			badge={questionCountBadge === undefined ? undefined : <span className='badge muted'>{questionCountBadge}</span>}
 			actions={
 				<button className='secondary' onClick={onLoadZoltarQuestions} disabled={loadingZoltarQuestions || noQuestionsAvailable}>
 					{loadingZoltarQuestions ? <LoadingText>Loading Questions...</LoadingText> : noQuestionsAvailable ? 'No Questions' : hasLoadedZoltarQuestions ? 'Refresh Questions' : 'Fetch Questions'}
@@ -31,8 +32,20 @@ export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, lo
 			}
 		>
 			{zoltarQuestions.length === 0 ? (
-				loadingZoltarQuestionCount || loadingZoltarQuestions ? undefined : noQuestionsAvailable ? (
-					<p className='detail'>No questions</p>
+				loadingZoltarQuestionCount || loadingZoltarQuestions ? (
+					<p className='detail'>
+						<LoadingText>Loading questions...</LoadingText>
+					</p>
+				) : noQuestionsAvailable ? (
+					<StateHint
+						presentation={{
+							key: 'empty',
+							badgeLabel: 'None yet',
+							badgeTone: 'muted',
+							detail: 'No questions are available in this universe yet.',
+						}}
+						title='No questions'
+					/>
 				) : undefined
 			) : (
 				<div className='entity-card-list'>
@@ -64,6 +77,6 @@ export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, lo
 					))}
 				</div>
 			)}
-		</EntityCard>
+		</SectionBlock>
 	)
 }

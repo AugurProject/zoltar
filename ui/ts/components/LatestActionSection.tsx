@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact'
-import { EntityCard } from './EntityCard.js'
-import { WorkflowSubsection } from './WorkflowSubsection.js'
+import { DataGrid } from './DataGrid.js'
+import { SectionBlock } from './SectionBlock.js'
 
 type LatestActionSectionRow = {
 	label: string
@@ -15,23 +15,20 @@ type LatestActionSectionProps = {
 }
 
 export function LatestActionSection({ badge, embedInCard = false, rows, title }: LatestActionSectionProps) {
-	const content = rows.map((row, index) => (
-		<p key={`${row.label}:${index.toString()}`} className='detail'>
-			{row.label}: {row.value}
-		</p>
-	))
-
-	if (embedInCard) {
-		return (
-			<WorkflowSubsection title={title} badge={badge}>
-				{content}
-			</WorkflowSubsection>
-		)
-	}
+	const content = (
+		<DataGrid className='latest-action-grid'>
+			{rows.map((row, index) => (
+				<div key={`${row.label}:${index.toString()}`}>
+					<p className='detail'>{row.label}</p>
+					<strong>{row.value}</strong>
+				</div>
+			))}
+		</DataGrid>
+	)
 
 	return (
-		<EntityCard title={title} badge={badge}>
+		<SectionBlock title={title} badge={badge} className={embedInCard ? 'embedded-latest-action' : 'latest-action-section'}>
 			{content}
-		</EntityCard>
+		</SectionBlock>
 	)
 }

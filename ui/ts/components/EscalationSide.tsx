@@ -18,8 +18,7 @@ export function EscalationSide({ estimate, isLeading, isSelected, side, userStak
 	return (
 		<div className={`escalation-side ${isSelected ? 'selected' : ''} ${isLeading ? 'leading' : ''}`}>
 			<div className='escalation-side-header'>
-				<p className='panel-label'>{side.label}</p>
-				{isLeading ? <span className='badge ok'>Leading</span> : undefined}
+				<p className='panel-label'>{isLeading ? `${side.label} (Leading)` : side.label}</p>
 			</div>
 			<p className='detail'>
 				Total stake: <CurrencyValue value={side.balance} suffix='REP' />

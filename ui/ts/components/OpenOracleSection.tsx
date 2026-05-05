@@ -3,17 +3,22 @@ import type { ComponentChildren } from 'preact'
 import { zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
+import { DataGrid } from './DataGrid.js'
 import { EntityCard } from './EntityCard.js'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { LatestActionSection } from './LatestActionSection.js'
+import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
+import { RouteHeader } from './RouteHeader.js'
+import { SectionModeTabs } from './SectionModeTabs.js'
+import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
+import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
-import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { useLoadController } from '../hooks/useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import {
@@ -46,9 +51,9 @@ function renderReportField(label: string, value: ComponentChildren) {
 
 function renderReportSection(title: string, fields: Array<{ label: string; value: ComponentChildren }>) {
 	return (
-		<WorkflowSubsection title={title}>
-			<div className='question-summary-grid'>{fields.map(field => renderReportField(field.label, field.value))}</div>
-		</WorkflowSubsection>
+		<SectionBlock headingLevel={4} title={title} variant='embedded'>
+			<DataGrid className='question-summary-grid'>{fields.map(field => renderReportField(field.label, field.value))}</DataGrid>
+		</SectionBlock>
 	)
 }
 
@@ -83,7 +88,7 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 				</div>
 			}
 		>
-			<div className='question-summary-grid'>
+			<DataGrid className='question-summary-grid'>
 				{renderReportField(
 					'Token Pair',
 					<>
@@ -96,7 +101,7 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 				{renderReportField('Current Amount2', <CurrencyValue value={report.currentAmount2} suffix={report.token2Symbol} units={report.token2Decimals} copyable={false} />)}
 				{renderReportField('Report Timestamp', <TimestampValue timestamp={report.reportTimestamp} zeroText='Awaiting initial report' />)}
 				{renderReportField('Settlement Timestamp', <TimestampValue timestamp={report.settlementTimestamp} zeroText='Not settled' />)}
-			</div>
+			</DataGrid>
 		</EntityCard>
 	)
 }
@@ -131,10 +136,7 @@ export function renderSelectedReportActionSection(
 	switch (actionMode) {
 		case 'initial-report':
 			return (
-				<div className='entity-card-subsection'>
-					<div className='entity-card-subsection-header'>
-						<h4>Initial Report</h4>
-					</div>
+				<SectionBlock headingLevel={4} title='Initial Report' variant='embedded'>
 					<div className='form-grid'>
 						<div className='field-row'>
 							<label className='field'>
@@ -148,10 +150,7 @@ export function renderSelectedReportActionSection(
 							</div>
 						</div>
 						<p className='detail'>Price source: {showQuoteLoadingPlaceholder ? <strong>Loading...</strong> : renderInitialPriceSourceLabel(initialReportSubmission.priceSource, initialReportSubmission.priceSourceUrl)}</p>
-						<div className='entity-card-subsection'>
-							<div className='entity-card-subsection-header'>
-								<h4>{`${token1Symbol} Approval`}</h4>
-							</div>
+						<SectionBlock headingLevel={4} title={`${token1Symbol} Approval`} variant='embedded'>
 							<TokenApprovalControl
 								actionLabel='submitting the initial report'
 								allowanceError={openOracleInitialReportState.token1Approval.error}
@@ -166,12 +165,9 @@ export function renderSelectedReportActionSection(
 								tokenSymbol={token1Symbol}
 								tokenUnits={initialReportSubmission.token1Decimals ?? 18}
 							/>
-						</div>
+						</SectionBlock>
 
-						<div className='entity-card-subsection'>
-							<div className='entity-card-subsection-header'>
-								<h4>{`${token2Symbol} Approval`}</h4>
-							</div>
+						<SectionBlock headingLevel={4} title={`${token2Symbol} Approval`} variant='embedded'>
 							<TokenApprovalControl
 								actionLabel='submitting the initial report'
 								allowanceError={openOracleInitialReportState.token2Approval.error}
@@ -186,7 +182,7 @@ export function renderSelectedReportActionSection(
 								tokenSymbol={token2Symbol}
 								tokenUnits={initialReportSubmission.token2Decimals ?? 18}
 							/>
-						</div>
+						</SectionBlock>
 						{initialReportSubmission.requiredWethWrapAmount === undefined || initialReportSubmission.requiredWethWrapAmount <= 0n ? undefined : (
 							<p className='detail'>
 								Need <CurrencyValue value={initialReportSubmission.requiredWethWrapAmount} suffix='WETH' copyable={false} /> more WETH for this report.
@@ -196,88 +192,113 @@ export function renderSelectedReportActionSection(
 						{initialReportSubmission.blockMessage?.kind !== 'visible' ? undefined : <p className='detail'>{initialReportSubmission.blockMessage.message}</p>}
 						<div className='actions'>
 							{!initialReportSubmission.hasWethWrapAction ? undefined : (
-								<button
-									className='secondary'
-									type='button'
+								<TransactionActionButton
+									idleLabel='Wrap needed ETH to WETH'
+									pendingLabel='Wrapping ETH...'
 									onClick={onWrapWethForInitialReport}
-									disabled={!isConnected || !initialReportSubmission.canWrapRequiredWeth || openOracleActiveAction === 'wrapWeth'}
-									title={initialReportSubmission.wrapRequiredWethMessage?.kind === 'visible' ? initialReportSubmission.wrapRequiredWethMessage.message : undefined}
-								>
-									{openOracleActiveAction === 'wrapWeth' ? <LoadingText>Wrapping ETH...</LoadingText> : 'Wrap needed ETH to WETH'}
-								</button>
+									pending={openOracleActiveAction === 'wrapWeth'}
+									tone='secondary'
+									availability={{
+										disabled: !isConnected || !initialReportSubmission.canWrapRequiredWeth,
+										reason: !isConnected ? 'Connect a wallet before wrapping ETH.' : initialReportSubmission.wrapRequiredWethMessage?.kind === 'visible' ? initialReportSubmission.wrapRequiredWethMessage.message : undefined,
+									}}
+								/>
 							)}
-							<button className='primary' type='button' onClick={onSubmitInitialReport} disabled={!isConnected || !initialReportSubmission.canSubmit || openOracleActiveAction === 'submitInitialReport'}>
-								{openOracleActiveAction === 'submitInitialReport' ? <LoadingText>Submitting...</LoadingText> : 'Submit Initial Report'}
-							</button>
+							<TransactionActionButton
+								idleLabel='Submit Initial Report'
+								pendingLabel='Submitting...'
+								onClick={onSubmitInitialReport}
+								pending={openOracleActiveAction === 'submitInitialReport'}
+								availability={{
+									disabled: !isConnected || !initialReportSubmission.canSubmit,
+									reason: !isConnected ? 'Connect a wallet before submitting the initial report.' : initialReportSubmission.blockMessage?.kind === 'visible' ? initialReportSubmission.blockMessage.message : undefined,
+								}}
+							/>
 						</div>
 					</div>
-				</div>
+				</SectionBlock>
 			)
 		case 'dispute': {
 			const disputeDisabledMessage = !isConnected ? 'Connect a wallet before disputing reports.' : openOracleForm.reportId.trim() === '' ? 'Load a report first.' : disputeAvailability.message
 			const settleDisabledMessage = !isConnected ? 'Connect a wallet before settling reports.' : openOracleForm.reportId.trim() === '' ? 'Load a report first.' : settleAvailability.message
 			return (
-				<div className='entity-card-subsection'>
-					<div className='entity-card-subsection-header'>
-						<h4>Dispute Report</h4>
-					</div>
-					<div className='form-grid'>
-						<label className='field'>
-							<span>Token to Swap Out</span>
-							<EnumDropdown options={disputeTokenOptions} value={openOracleForm.disputeTokenToSwap} onChange={disputeTokenToSwap => onOpenOracleFormChange({ disputeTokenToSwap })} />
-						</label>
-						<div className='field-row'>
+				<>
+					<SectionBlock headingLevel={4} title='Dispute Report' variant='embedded'>
+						<div className='form-grid'>
 							<label className='field'>
-								<span>{`New ${token1Symbol} Amount`}</span>
-								<input value={openOracleForm.disputeNewAmount1} onInput={event => onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })} />
+								<span>Token to Swap Out</span>
+								<EnumDropdown options={disputeTokenOptions} value={openOracleForm.disputeTokenToSwap} onChange={disputeTokenToSwap => onOpenOracleFormChange({ disputeTokenToSwap })} />
 							</label>
-							<label className='field'>
-								<span>{`New ${token2Symbol} Amount`}</span>
-								<input value={openOracleForm.disputeNewAmount2} onInput={event => onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })} />
-							</label>
+							<div className='field-row'>
+								<label className='field'>
+									<span>{`New ${token1Symbol} Amount`}</span>
+									<input value={openOracleForm.disputeNewAmount1} onInput={event => onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })} />
+								</label>
+								<label className='field'>
+									<span>{`New ${token2Symbol} Amount`}</span>
+									<input value={openOracleForm.disputeNewAmount2} onInput={event => onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })} />
+								</label>
+							</div>
+							<div className='actions'>
+								<TransactionActionButton
+									idleLabel='Dispute & Swap'
+									pendingLabel='Submitting dispute...'
+									onClick={onDisputeReport}
+									pending={openOracleActiveAction === 'dispute'}
+									tone='secondary'
+									availability={{
+										disabled: !isConnected || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct,
+										reason: disputeDisabledMessage,
+									}}
+								/>
+							</div>
 						</div>
+					</SectionBlock>
+					<SectionBlock headingLevel={4} title='Settle Report' variant='embedded'>
 						<div className='actions'>
-							<button className='secondary' onClick={onDisputeReport} disabled={!isConnected || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || openOracleActiveAction === 'dispute'} title={disputeDisabledMessage}>
-								{openOracleActiveAction === 'dispute' ? <LoadingText>Disputing...</LoadingText> : 'Dispute & Swap'}
-							</button>
+							<TransactionActionButton
+								idleLabel='Settle Report'
+								pendingLabel='Settling report...'
+								onClick={onSettleReport}
+								pending={openOracleActiveAction === 'settle'}
+								tone='secondary'
+								availability={{
+									disabled: !isConnected || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct,
+									reason: settleDisabledMessage,
+								}}
+							/>
 						</div>
-						{disputeDisabledMessage === undefined ? undefined : <p className='detail'>{disputeDisabledMessage}</p>}
-						<div className='actions'>
-							<button className='secondary' onClick={onSettleReport} disabled={!isConnected || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct || openOracleActiveAction === 'settle'} title={settleDisabledMessage}>
-								{openOracleActiveAction === 'settle' ? <LoadingText>Settling...</LoadingText> : 'Settle Report'}
-							</button>
-						</div>
-						{settleDisabledMessage === undefined ? undefined : <p className='detail'>{settleDisabledMessage}</p>}
-					</div>
-				</div>
+					</SectionBlock>
+				</>
 			)
 		}
 		case 'settle': {
 			const settleDisabledMessage = !isConnected ? 'Connect a wallet before settling reports.' : openOracleForm.reportId.trim() === '' ? 'Load a report first.' : settleAvailability.message
 			return (
-				<div className='entity-card-subsection'>
-					<div className='entity-card-subsection-header'>
-						<h4>Settle Report</h4>
-					</div>
+				<SectionBlock headingLevel={4} title='Settle Report' variant='embedded'>
 					<div className='form-grid'>
 						<div className='actions'>
-							<button className='secondary' onClick={onSettleReport} disabled={!isConnected || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct || openOracleActiveAction === 'settle'} title={settleDisabledMessage}>
-								{openOracleActiveAction === 'settle' ? <LoadingText>Settling...</LoadingText> : 'Settle Report'}
-							</button>
+							<TransactionActionButton
+								idleLabel='Settle Report'
+								pendingLabel='Settling report...'
+								onClick={onSettleReport}
+								pending={openOracleActiveAction === 'settle'}
+								tone='secondary'
+								availability={{
+									disabled: !isConnected || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct,
+									reason: settleDisabledMessage,
+								}}
+							/>
 						</div>
-						{settleDisabledMessage === undefined ? undefined : <p className='detail'>{settleDisabledMessage}</p>}
 					</div>
-				</div>
+				</SectionBlock>
 			)
 		}
 		case 'read-only':
 			return (
-				<div className='entity-card-subsection'>
-					<div className='entity-card-subsection-header'>
-						<h4>Settled Report</h4>
-					</div>
+				<SectionBlock headingLevel={4} title='Settled Report' variant='embedded'>
 					<p className='detail'>This report is settled. No write actions are available.</p>
-				</div>
+				</SectionBlock>
 			)
 	}
 }
@@ -287,6 +308,7 @@ function renderReportDetailsCard(
 	openOracleForm: OpenOracleFormState,
 	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction'],
+	modeTabs: ComponentChildren,
 	loadingOracleReport: boolean,
 	isConnected: boolean,
 	onApproveToken1: (amount?: bigint) => void,
@@ -299,33 +321,31 @@ function renderReportDetailsCard(
 	onSubmitInitialReport: () => void,
 	onWrapWethForInitialReport: () => void,
 ) {
+	const reportControls = (
+		<div className='form-grid'>
+			<LookupFieldRow
+				label='Report ID'
+				value={openOracleForm.reportId}
+				onInput={reportId => onOpenOracleFormChange({ reportId })}
+				action={
+					<button className='secondary' onClick={() => onLoadOracleReport(openOracleForm.reportId)} disabled={loadingOracleReport}>
+						{loadingOracleReport ? <LoadingText>Loading...</LoadingText> : openOracleReportDetails === undefined ? 'Open report' : 'Refresh report'}
+					</button>
+				}
+			/>
+		</div>
+	)
+
 	if (openOracleReportDetails === undefined) {
 		const reportPresentation = getReportPresentation({
 			kind: 'report',
 			state: loadingOracleReport ? 'loading' : openOracleForm.reportId.trim() === '' ? 'unknown' : 'missing',
 		})
 		return (
-			<EntityCard className='selected-report-card' title='Selected Report'>
-				<div className='entity-card-subsection'>
-					<div className='entity-card-subsection-header'>
-						<h4>Report Controls</h4>
-					</div>
-					<div className='form-grid'>
-						<div className='field-row'>
-							<label className='field'>
-								<span>Report ID</span>
-								<input value={openOracleForm.reportId} onInput={event => onOpenOracleFormChange({ reportId: event.currentTarget.value })} />
-							</label>
-							<div className='actions'>
-								<button className='secondary' onClick={() => onLoadOracleReport(openOracleForm.reportId)} disabled={loadingOracleReport}>
-									{loadingOracleReport ? <LoadingText>Loading...</LoadingText> : 'Open report'}
-								</button>
-							</div>
-						</div>
-					</div>
-					{reportPresentation === undefined ? undefined : <StateHint presentation={reportPresentation} />}
-				</div>
-			</EntityCard>
+			<SectionBlock actions={modeTabs} title='Selected Report'>
+				{reportControls}
+				{reportPresentation === undefined ? undefined : <StateHint presentation={reportPresentation} />}
+			</SectionBlock>
 		)
 	}
 
@@ -360,185 +380,175 @@ function renderReportDetailsCard(
 	})
 
 	return (
-		<EntityCard className='selected-report-card' title='Selected Report' badge={<span className={`badge ${statusTone}`}>{status}</span>}>
-			<div className='entity-card-subsection'>
-				<div className='entity-card-subsection-header'>
-					<h4>Report Controls</h4>
-				</div>
-				<div className='form-grid'>
-					<div className='field-row'>
-						<label className='field'>
-							<span>Report ID</span>
-							<input value={openOracleForm.reportId} onInput={event => onOpenOracleFormChange({ reportId: event.currentTarget.value })} />
-						</label>
-						<div className='actions'>
-							<button className='secondary' onClick={() => onLoadOracleReport(openOracleForm.reportId)} disabled={loadingOracleReport}>
-								{loadingOracleReport ? <LoadingText>Loading...</LoadingText> : 'Refresh report'}
-							</button>
-						</div>
-					</div>
-				</div>
-			</div>
+		<>
+			<SectionBlock actions={modeTabs} badge={<span className={`badge ${statusTone}`}>{status}</span>} title='Selected Report'>
+				{reportControls}
+				<DataGrid className='question-summary-grid'>
+					{renderReportField('Report ID', openOracleReportDetails.reportId.toString())}
+					{renderReportField('Oracle Address', <AddressValue address={openOracleReportDetails.openOracleAddress} />)}
+					{renderReportField('Current Reporter', openOracleReportDetails.currentReporter === zeroAddress ? 'None (awaiting initial report)' : <AddressValue address={openOracleReportDetails.currentReporter} />)}
+					{renderReportField('Current Price', <CurrencyValue value={openOracleReportDetails.price} suffix={`${openOracleReportDetails.token1Symbol} / ${openOracleReportDetails.token2Symbol}`} copyable={false} />)}
+					{renderReportField('Settlement Timestamp', <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.settlementTimestamp} zeroText='Not settled' />)}
+				</DataGrid>
+				{renderReportSection('Identity', [
+					{
+						label: 'Oracle Address',
+						value: <AddressValue address={openOracleReportDetails.openOracleAddress} />,
+					},
+					{
+						label: openOracleReportDetails.token1Symbol,
+						value: <AddressValue address={openOracleReportDetails.token1} />,
+					},
+					{
+						label: openOracleReportDetails.token2Symbol,
+						value: <AddressValue address={openOracleReportDetails.token2} />,
+					},
+					{
+						label: 'Current Reporter',
+						value: openOracleReportDetails.currentReporter === zeroAddress ? 'None (awaiting initial report)' : <AddressValue address={openOracleReportDetails.currentReporter} />,
+					},
+					{
+						label: 'Initial Reporter',
+						value: openOracleReportDetails.initialReporter === zeroAddress ? 'None' : <AddressValue address={openOracleReportDetails.initialReporter} />,
+					},
+				])}
 
-			{renderReportSection('Identity', [
-				{
-					label: 'Oracle Address',
-					value: <AddressValue address={openOracleReportDetails.openOracleAddress} />,
-				},
-				{
-					label: openOracleReportDetails.token1Symbol,
-					value: <AddressValue address={openOracleReportDetails.token1} />,
-				},
-				{
-					label: openOracleReportDetails.token2Symbol,
-					value: <AddressValue address={openOracleReportDetails.token2} />,
-				},
-				{
-					label: 'Current Reporter',
-					value: openOracleReportDetails.currentReporter === zeroAddress ? 'None (awaiting initial report)' : <AddressValue address={openOracleReportDetails.currentReporter} />,
-				},
-				{
-					label: 'Initial Reporter',
-					value: openOracleReportDetails.initialReporter === zeroAddress ? 'None' : <AddressValue address={openOracleReportDetails.initialReporter} />,
-				},
-			])}
+				{renderReportSection('Economics', [
+					{
+						label: `Exact ${openOracleReportDetails.token1Symbol} Required`,
+						value: <CurrencyValue value={openOracleReportDetails.exactToken1Report} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
+					},
+					{
+						label: `Current ${openOracleReportDetails.token1Symbol}`,
+						value: <CurrencyValue value={openOracleReportDetails.currentAmount1} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
+					},
+					{
+						label: `Current ${openOracleReportDetails.token2Symbol}`,
+						value: <CurrencyValue value={openOracleReportDetails.currentAmount2} suffix={openOracleReportDetails.token2Symbol} units={openOracleReportDetails.token2Decimals} copyable={false} />,
+					},
+					{
+						label: 'Price',
+						value: <CurrencyValue value={openOracleReportDetails.price} suffix={`${openOracleReportDetails.token1Symbol} / ${openOracleReportDetails.token2Symbol}`} copyable={false} />,
+					},
+					{
+						label: 'Fee',
+						value: <CurrencyValue value={openOracleReportDetails.fee} suffix='ETH' copyable={false} />,
+					},
+					{
+						label: 'Settler Reward',
+						value: <CurrencyValue value={openOracleReportDetails.settlerReward} suffix='ETH' copyable={false} />,
+					},
+					{
+						label: 'Escalation Halt',
+						value: <CurrencyValue value={openOracleReportDetails.escalationHalt} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
+					},
+				])}
 
-			{renderReportSection('Economics', [
-				{
-					label: `Exact ${openOracleReportDetails.token1Symbol} Required`,
-					value: <CurrencyValue value={openOracleReportDetails.exactToken1Report} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
-				},
-				{
-					label: `Current ${openOracleReportDetails.token1Symbol}`,
-					value: <CurrencyValue value={openOracleReportDetails.currentAmount1} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
-				},
-				{
-					label: `Current ${openOracleReportDetails.token2Symbol}`,
-					value: <CurrencyValue value={openOracleReportDetails.currentAmount2} suffix={openOracleReportDetails.token2Symbol} units={openOracleReportDetails.token2Decimals} copyable={false} />,
-				},
-				{
-					label: 'Price',
-					value: <CurrencyValue value={openOracleReportDetails.price} suffix={`${openOracleReportDetails.token1Symbol} / ${openOracleReportDetails.token2Symbol}`} copyable={false} />,
-				},
-				{
-					label: 'Fee',
-					value: <CurrencyValue value={openOracleReportDetails.fee} suffix='ETH' copyable={false} />,
-				},
-				{
-					label: 'Settler Reward',
-					value: <CurrencyValue value={openOracleReportDetails.settlerReward} suffix='ETH' copyable={false} />,
-				},
-				{
-					label: 'Escalation Halt',
-					value: <CurrencyValue value={openOracleReportDetails.escalationHalt} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
-				},
-			])}
+				{renderReportSection('Status', [
+					{
+						label: 'Report Timestamp',
+						value: <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.reportTimestamp} zeroText='Awaiting initial report' />,
+					},
+					{
+						label: 'Dispute Occurred',
+						value: openOracleReportDetails.disputeOccurred ? 'Yes' : 'No',
+					},
+					{
+						label: 'Distributed',
+						value: openOracleReportDetails.isDistributed ? 'Yes' : 'No',
+					},
+					{
+						label: 'Settlement Timestamp',
+						value: <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.settlementTimestamp} zeroText='Not settled' />,
+					},
+					{
+						label: 'Last Report Opportunity',
+						value: openOracleReportDetails.lastReportOppoTime === 0n ? 'None' : `${openOracleReportDetails.lastReportOppoTime.toString()} ${openOracleReportDetails.timeType ? 's' : ' blocks'}`,
+					},
+					{
+						label: 'State Hash',
+						value: openOracleReportDetails.stateHash,
+					},
+				])}
 
-			{renderReportSection('Status', [
-				{
-					label: 'Report Timestamp',
-					value: <TimestampValue timestamp={openOracleReportDetails.reportTimestamp} zeroText='Awaiting initial report' />,
-				},
-				{
-					label: 'Dispute Occurred',
-					value: openOracleReportDetails.disputeOccurred ? 'Yes' : 'No',
-				},
-				{
-					label: 'Distributed',
-					value: openOracleReportDetails.isDistributed ? 'Yes' : 'No',
-				},
-				{
-					label: 'Settlement Timestamp',
-					value: <TimestampValue timestamp={openOracleReportDetails.settlementTimestamp} zeroText='Not settled' />,
-				},
-				{
-					label: 'Last Report Opportunity',
-					value: openOracleReportDetails.lastReportOppoTime === 0n ? 'None' : `${openOracleReportDetails.lastReportOppoTime.toString()} ${openOracleReportDetails.timeType ? 's' : ' blocks'}`,
-				},
-				{
-					label: 'State Hash',
-					value: openOracleReportDetails.stateHash,
-				},
-			])}
+				{renderReportSection('Settlement', [
+					{
+						label: 'Settlement Time',
+						value: `${openOracleReportDetails.settlementTime.toString()} ${openOracleReportDetails.timeType ? 's' : ' blocks'}`,
+					},
+					{
+						label: 'Dispute Delay',
+						value: `${openOracleReportDetails.disputeDelay.toString()} ${openOracleReportDetails.timeType ? 's' : ' blocks'}`,
+					},
+					{
+						label: 'Fee Percentage',
+						value: formatOpenOracleFeePercentage(openOracleReportDetails.feePercentage),
+					},
+					{
+						label: 'Protocol Fee',
+						value: formatOpenOracleFeePercentage(openOracleReportDetails.protocolFee),
+					},
+					{
+						label: 'Multiplier',
+						value: formatOpenOracleMultiplier(openOracleReportDetails.multiplier),
+					},
+				])}
 
-			{renderReportSection('Settlement', [
-				{
-					label: 'Settlement Time',
-					value: `${openOracleReportDetails.settlementTime.toString()} ${openOracleReportDetails.timeType ? 's' : ' blocks'}`,
-				},
-				{
-					label: 'Dispute Delay',
-					value: `${openOracleReportDetails.disputeDelay.toString()} ${openOracleReportDetails.timeType ? 's' : ' blocks'}`,
-				},
-				{
-					label: 'Fee Percentage',
-					value: formatOpenOracleFeePercentage(openOracleReportDetails.feePercentage),
-				},
-				{
-					label: 'Protocol Fee',
-					value: formatOpenOracleFeePercentage(openOracleReportDetails.protocolFee),
-				},
-				{
-					label: 'Multiplier',
-					value: formatOpenOracleMultiplier(openOracleReportDetails.multiplier),
-				},
-			])}
-
-			{renderReportSection('Callback / Extra', [
-				{
-					label: 'Callback Contract',
-					value: openOracleReportDetails.callbackContract === zeroAddress ? 'None' : <AddressValue address={openOracleReportDetails.callbackContract} />,
-				},
-				{
-					label: 'Callback Selector',
-					value: openOracleReportDetails.callbackSelector === '0x00000000' ? 'None' : openOracleReportDetails.callbackSelector,
-				},
-				{
-					label: 'Callback Gas Limit',
-					value: openOracleReportDetails.callbackGasLimit === 0 ? 'None' : openOracleReportDetails.callbackGasLimit.toString(),
-				},
-				{
-					label: 'Protocol Fee Recipient',
-					value: openOracleReportDetails.protocolFeeRecipient === zeroAddress ? 'None' : <AddressValue address={openOracleReportDetails.protocolFeeRecipient} />,
-				},
-				{
-					label: 'Track Disputes',
-					value: openOracleReportDetails.trackDisputes ? 'Yes' : 'No',
-				},
-				{
-					label: 'Keep Fee',
-					value: openOracleReportDetails.keepFee ? 'Yes' : 'No',
-				},
-				{
-					label: 'Fee Token',
-					value: openOracleReportDetails.feeToken ? openOracleReportDetails.token1Symbol : 'ETH',
-				},
-				{
-					label: 'Number of Reports',
-					value: openOracleReportDetails.numReports.toString(),
-				},
-			])}
-
-			{renderSelectedReportActionSection(
-				actionMode,
-				isConnected,
-				openOracleActiveAction,
-				openOracleForm,
-				initialReportSubmission,
-				openOracleInitialReportState,
-				openOracleReportDetails.token1Symbol,
-				openOracleReportDetails.token2Symbol,
-				onApproveToken1,
-				onApproveToken2,
-				onDisputeReport,
-				onOpenOracleFormChange,
-				onRefreshPrice,
-				onSettleReport,
-				onSubmitInitialReport,
-				onWrapWethForInitialReport,
-				openOracleReportDetails,
-			)}
-		</EntityCard>
+				{renderReportSection('Callback / Extra', [
+					{
+						label: 'Callback Contract',
+						value: openOracleReportDetails.callbackContract === zeroAddress ? 'None' : <AddressValue address={openOracleReportDetails.callbackContract} />,
+					},
+					{
+						label: 'Callback Selector',
+						value: openOracleReportDetails.callbackSelector === '0x00000000' ? 'None' : openOracleReportDetails.callbackSelector,
+					},
+					{
+						label: 'Callback Gas Limit',
+						value: openOracleReportDetails.callbackGasLimit === 0 ? 'None' : openOracleReportDetails.callbackGasLimit.toString(),
+					},
+					{
+						label: 'Protocol Fee Recipient',
+						value: openOracleReportDetails.protocolFeeRecipient === zeroAddress ? 'None' : <AddressValue address={openOracleReportDetails.protocolFeeRecipient} />,
+					},
+					{
+						label: 'Track Disputes',
+						value: openOracleReportDetails.trackDisputes ? 'Yes' : 'No',
+					},
+					{
+						label: 'Keep Fee',
+						value: openOracleReportDetails.keepFee ? 'Yes' : 'No',
+					},
+					{
+						label: 'Fee Token',
+						value: openOracleReportDetails.feeToken ? openOracleReportDetails.token1Symbol : 'ETH',
+					},
+					{
+						label: 'Number of Reports',
+						value: openOracleReportDetails.numReports.toString(),
+					},
+				])}
+				{renderSelectedReportActionSection(
+					actionMode,
+					isConnected,
+					openOracleActiveAction,
+					openOracleForm,
+					initialReportSubmission,
+					openOracleInitialReportState,
+					openOracleReportDetails.token1Symbol,
+					openOracleReportDetails.token2Symbol,
+					onApproveToken1,
+					onApproveToken2,
+					onDisputeReport,
+					onOpenOracleFormChange,
+					onRefreshPrice,
+					onSettleReport,
+					onSubmitInitialReport,
+					onWrapWethForInitialReport,
+					openOracleReportDetails,
+				)}
+			</SectionBlock>
+		</>
 	)
 }
 
@@ -548,7 +558,6 @@ function renderLatestActionCard(action: OpenOracleSectionProps['openOracleResult
 	return (
 		<LatestActionSection
 			title='Latest Oracle Action'
-			badge={<span className='badge ok'>{action.action}</span>}
 			rows={[
 				{ label: 'Action', value: action.action },
 				{ label: 'Transaction', value: <TransactionHashLink hash={action.hash} /> },
@@ -635,6 +644,19 @@ export function OpenOracleSection({
 	const browsePageCount = browsePage === undefined || browseReportCount === 0n ? 0 : Math.ceil(Number(browseReportCount) / BROWSE_PAGE_SIZE)
 	const browseHasPreviousPage = browsePageIndex > 0
 	const browseHasNextPage = browsePage !== undefined && browsePageIndex + 1 < browsePageCount
+	const showRouteHeader = view !== 'selected-report'
+	const renderModeTabs = () => (
+		<SectionModeTabs
+			ariaLabel='Open Oracle views'
+			value={view}
+			onChange={setView}
+			options={[
+				{ label: 'Browse', value: 'browse' },
+				{ label: 'Create', value: 'create' },
+				{ label: 'Selected Report', value: 'selected-report' },
+			]}
+		/>
+	)
 
 	const openBrowseReport = async (reportId: bigint) => {
 		onOpenOracleFormChange({ reportId: reportId.toString() })
@@ -643,39 +665,36 @@ export function OpenOracleSection({
 	}
 
 	return (
-		<section className='panel market-panel'>
-			<div className='subtab-nav' role='tablist' aria-label='Open Oracle views'>
-				<button className={`subtab-link ${view === 'browse' ? 'active' : ''}`} type='button' onClick={() => setView('browse')} aria-pressed={view === 'browse'}>
-					Browse
-				</button>
-				<button className={`subtab-link ${view === 'create' ? 'active' : ''}`} type='button' onClick={() => setView('create')} aria-pressed={view === 'create'}>
-					Create
-				</button>
-				<button className={`subtab-link ${view === 'selected-report' ? 'active' : ''}`} type='button' onClick={() => setView('selected-report')} aria-pressed={view === 'selected-report'}>
-					Selected Report
-				</button>
-			</div>
-
+		<div className='route-view-flow'>
+			{!showRouteHeader ? undefined : (
+				<RouteHeader
+					eyebrow='Open Oracle'
+					title='Open Oracle'
+					description='Browse direct reports, create new report instances, and manage selected report lifecycle actions.'
+					summary={
+						<DataGrid columns='auto'>
+							<div>
+								<p className='detail'>Browse count</p>
+								<strong>{browseReportCount.toString()}</strong>
+							</div>
+							<div>
+								<p className='detail'>Page</p>
+								<strong>{browsePageCount === 0 ? '0 / 0' : `${browsePageIndex + 1} / ${browsePageCount}`}</strong>
+							</div>
+							<div>
+								<p className='detail'>Selected report</p>
+								<strong>{openOracleReportDetails?.reportId.toString() ?? (openOracleForm.reportId === '' ? 'None' : openOracleForm.reportId)}</strong>
+							</div>
+						</DataGrid>
+					}
+				/>
+			)}
 			{view === 'browse' ? (
-				<div className='market-grid'>
-					<div className='market-column'>
-						<EntityCard title='Open Oracle Games' badge={<span className='badge muted'>{browseReportCount.toString()} total</span>}>
-							<p className='detail'>Browse every Open Oracle game and click a card to open its selected-report view.</p>
-							{loadingBrowse ? (
-								<p className='detail'>
-									<span className='loading-value' role='status' aria-label='Loading report summaries'>
-										<span className='spinner' aria-hidden='true' />
-									</span>
-								</p>
-							) : undefined}
-							<ErrorNotice message={browseError} />
-							{browsePage === undefined || browsePage.reports.length === 0 ? <p className='detail'>No Open Oracle games found.</p> : <div className='entity-card-list'>{browsePage.reports.map(report => renderReportSummaryCard(report, reportId => void openBrowseReport(reportId)))}</div>}
-						</EntityCard>
-					</div>
-
-					<div className='market-column'>
-						<EntityCard title='Browse Controls' badge={<span className='badge muted'>{browsePageCount === 0 ? '0 pages' : `Page ${browsePageIndex + 1} / ${browsePageCount}`}</span>}>
+				<div className='workflow-stack route-workflow-stack'>
+					<SectionBlock
+						actions={
 							<div className='actions'>
+								{renderModeTabs()}
 								<button className='secondary' type='button' onClick={() => setBrowsePageIndex(current => Math.max(0, current - 1))} disabled={!browseHasPreviousPage || loadingBrowse}>
 									Previous Page
 								</button>
@@ -683,120 +702,123 @@ export function OpenOracleSection({
 									Next Page
 								</button>
 							</div>
-							<p className='detail'>Page size is fixed at {BROWSE_PAGE_SIZE} reports.</p>
-							{renderLatestActionCard(openOracleResult)}
-						</EntityCard>
-					</div>
+						}
+						density='compact'
+						title='Browse Reports'
+						description={`Browse every Open Oracle game and open a selected report view. Page size is fixed at ${BROWSE_PAGE_SIZE} reports.`}
+					>
+						<ErrorNotice message={browseError} />
+						{loadingBrowse ? (
+							<StateHint presentation={{ key: 'loading', badgeLabel: 'Loading', badgeTone: 'pending', detail: 'Refreshing report summaries.' }} />
+						) : browsePage === undefined || browsePage.reports.length === 0 ? (
+							<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No Open Oracle games found.' }} />
+						) : (
+							<div className='entity-card-list'>{browsePage.reports.map(report => renderReportSummaryCard(report, reportId => void openBrowseReport(reportId)))}</div>
+						)}
+					</SectionBlock>
+					{renderLatestActionCard(openOracleResult)}
 				</div>
 			) : undefined}
 
 			{view === 'create' ? (
-				<div className='market-grid'>
-					<div className='market-column'>{renderLatestActionCard(openOracleResult)}</div>
-
-					<div className='market-column'>
-						<EntityCard title='Create Open Oracle Game' badge={<span className='badge muted'>direct</span>}>
-							<p className='detail'>Create a standalone Open Oracle game directly. This does not queue an oracle-manager operation.</p>
-							<div className='form-grid'>
-								<div className='field-row'>
-									<label className='field'>
-										<span>Token1 Address</span>
-										<input value={openOracleCreateForm.token1Address} onInput={event => onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })} placeholder='0x...' />
-									</label>
-									<label className='field'>
-										<span>Token2 Address</span>
-										<input value={openOracleCreateForm.token2Address} onInput={event => onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })} placeholder='0x...' />
-									</label>
-								</div>
-
-								<div className='field-row'>
-									<label className='field'>
-										<span>Exact Token1 Report</span>
-										<input value={openOracleCreateForm.exactToken1Report} onInput={event => onOpenOracleCreateFormChange({ exactToken1Report: event.currentTarget.value })} />
-									</label>
-									<label className='field'>
-										<span>Settler Reward</span>
-										<input value={openOracleCreateForm.settlerReward} onInput={event => onOpenOracleCreateFormChange({ settlerReward: event.currentTarget.value })} />
-									</label>
-								</div>
-
+				<div className='workflow-stack route-workflow-stack'>
+					{renderLatestActionCard(openOracleResult)}
+					<SectionBlock actions={renderModeTabs()} title='Create Open Oracle Game' description='Create a standalone Open Oracle game directly. This does not queue an oracle-manager operation.'>
+						<div className='form-grid'>
+							<div className='field-row'>
 								<label className='field'>
-									<span>ETH Value To Send</span>
-									<input value={openOracleCreateForm.ethValue} onInput={event => onOpenOracleCreateFormChange({ ethValue: event.currentTarget.value })} />
+									<span>Token1 Address</span>
+									<input value={openOracleCreateForm.token1Address} onInput={event => onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })} placeholder='0x...' />
 								</label>
-
-								<div className='field-row'>
-									<label className='field'>
-										<span>Fee Percentage</span>
-										<input value={openOracleCreateForm.feePercentage} onInput={event => onOpenOracleCreateFormChange({ feePercentage: event.currentTarget.value })} />
-									</label>
-									<label className='field'>
-										<span>Multiplier</span>
-										<input value={openOracleCreateForm.multiplier} onInput={event => onOpenOracleCreateFormChange({ multiplier: event.currentTarget.value })} />
-									</label>
-								</div>
-
-								<div className='field-row'>
-									<label className='field'>
-										<span>Settlement Time</span>
-										<input value={openOracleCreateForm.settlementTime} onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })} />
-									</label>
-									<label className='field'>
-										<span>Escalation Halt</span>
-										<input value={openOracleCreateForm.escalationHalt} onInput={event => onOpenOracleCreateFormChange({ escalationHalt: event.currentTarget.value })} />
-									</label>
-								</div>
-
-								<div className='field-row'>
-									<label className='field'>
-										<span>Dispute Delay</span>
-										<input value={openOracleCreateForm.disputeDelay} onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })} />
-									</label>
-									<label className='field'>
-										<span>Protocol Fee</span>
-										<input value={openOracleCreateForm.protocolFee} onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })} />
-									</label>
-								</div>
-
-								<div className='actions'>
-									<button className='primary' onClick={onCreateOpenOracleGame} disabled={!isConnected || loadingOpenOracleCreate}>
-										{loadingOpenOracleCreate ? <LoadingText>Creating...</LoadingText> : 'Create Open Oracle Game'}
-									</button>
-								</div>
+								<label className='field'>
+									<span>Token2 Address</span>
+									<input value={openOracleCreateForm.token2Address} onInput={event => onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })} placeholder='0x...' />
+								</label>
 							</div>
-						</EntityCard>
 
-						<ErrorNotice message={openOracleError} />
-					</div>
+							<div className='field-row'>
+								<label className='field'>
+									<span>Exact Token1 Report</span>
+									<input value={openOracleCreateForm.exactToken1Report} onInput={event => onOpenOracleCreateFormChange({ exactToken1Report: event.currentTarget.value })} />
+								</label>
+								<label className='field'>
+									<span>Settler Reward</span>
+									<input value={openOracleCreateForm.settlerReward} onInput={event => onOpenOracleCreateFormChange({ settlerReward: event.currentTarget.value })} />
+								</label>
+							</div>
+
+							<label className='field'>
+								<span>ETH Value To Send</span>
+								<input value={openOracleCreateForm.ethValue} onInput={event => onOpenOracleCreateFormChange({ ethValue: event.currentTarget.value })} />
+							</label>
+
+							<div className='field-row'>
+								<label className='field'>
+									<span>Fee Percentage</span>
+									<input value={openOracleCreateForm.feePercentage} onInput={event => onOpenOracleCreateFormChange({ feePercentage: event.currentTarget.value })} />
+								</label>
+								<label className='field'>
+									<span>Multiplier</span>
+									<input value={openOracleCreateForm.multiplier} onInput={event => onOpenOracleCreateFormChange({ multiplier: event.currentTarget.value })} />
+								</label>
+							</div>
+
+							<div className='field-row'>
+								<label className='field'>
+									<span>Settlement Time</span>
+									<input value={openOracleCreateForm.settlementTime} onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })} />
+								</label>
+								<label className='field'>
+									<span>Escalation Halt</span>
+									<input value={openOracleCreateForm.escalationHalt} onInput={event => onOpenOracleCreateFormChange({ escalationHalt: event.currentTarget.value })} />
+								</label>
+							</div>
+
+							<div className='field-row'>
+								<label className='field'>
+									<span>Dispute Delay</span>
+									<input value={openOracleCreateForm.disputeDelay} onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })} />
+								</label>
+								<label className='field'>
+									<span>Protocol Fee</span>
+									<input value={openOracleCreateForm.protocolFee} onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })} />
+								</label>
+							</div>
+
+							<div className='actions'>
+								<TransactionActionButton idleLabel='Create Open Oracle Game' pendingLabel='Creating...' onClick={onCreateOpenOracleGame} pending={loadingOpenOracleCreate} availability={{ disabled: !isConnected, reason: !isConnected ? 'Connect a wallet before creating an Open Oracle game.' : undefined }} />
+							</div>
+						</div>
+					</SectionBlock>
+					<ErrorNotice message={openOracleError} />
 				</div>
 			) : undefined}
 
 			{view === 'selected-report' ? (
-				<div className='market-grid'>
-					<div className='market-column'>
-						{renderReportDetailsCard(
-							openOracleReportDetails,
-							openOracleForm,
-							openOracleInitialReportState,
-							openOracleActiveAction,
-							loadingOracleReport,
-							isConnected,
-							onApproveToken1,
-							onApproveToken2,
-							onDisputeReport,
-							onLoadOracleReport,
-							onOpenOracleFormChange,
-							onRefreshPrice,
-							onSettleReport,
-							onSubmitInitialReport,
-							onWrapWethForInitialReport,
-						)}
-						{renderLatestActionCard(openOracleResult)}
-					</div>
+				<div className='workflow-stack route-workflow-stack'>
+					{renderReportDetailsCard(
+						openOracleReportDetails,
+						openOracleForm,
+						openOracleInitialReportState,
+						openOracleActiveAction,
+						renderModeTabs(),
+						loadingOracleReport,
+						isConnected,
+						onApproveToken1,
+						onApproveToken2,
+						onDisputeReport,
+						onLoadOracleReport,
+						onOpenOracleFormChange,
+						onRefreshPrice,
+						onSettleReport,
+						onSubmitInitialReport,
+						onWrapWethForInitialReport,
+					)}
+					{renderLatestActionCard(openOracleResult)}
 				</div>
 			) : undefined}
 
 			<ErrorNotice message={openOracleError} />
-		</section>
+		</div>
 	)
 }

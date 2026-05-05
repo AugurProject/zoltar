@@ -1,5 +1,7 @@
+import { RouteHeader } from './RouteHeader.js'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
+import { DataGrid } from './DataGrid.js'
 import { MetricField } from './MetricField.js'
 import { StateHint } from './StateHint.js'
 import type { OverviewPanelsProps } from '../types/components.js'
@@ -37,64 +39,63 @@ export function OverviewPanels({
 
 	return (
 		<section className='overview-shell'>
-			<article className='panel overview-panel overview-wallet-panel'>
-				<div className='panel-header overview-wallet-header'>
-					<div className='overview-wallet-summary'>
-						<div className='overview-brand-lockup'>
-							<h1 className='overview-app-title'>Augur PLACEHOLDER</h1>
-						</div>
-						<div className='overview-inline-metrics'>
-							<MetricField className='overview-address-metric' label='Address'>
-								{isWalletLoading ? (
-									<span className='loading-value'>
-										<span className='spinner' aria-hidden='true' />
-										Connecting...
-									</span>
-								) : accountState.address === undefined ? (
-									'Not connected'
-								) : (
-									<AddressValue address={accountState.address} />
-								)}
-							</MetricField>
-							{showAccountBalances ? (
-								<>
-									<MetricField label='ETH'>
-										<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix='ETH' />
-									</MetricField>
-									<MetricField label='WETH'>
-										<CurrencyValue value={accountState.wethBalance} loading={isRefreshing && accountState.wethBalance === undefined} suffix='WETH' />
-									</MetricField>
-									<MetricField label='REP'>
-										<CurrencyValue value={universeRepBalance} loading={isLoadingUniverseRepBalance} suffix='REP' />
-									</MetricField>
-								</>
-							) : undefined}
-							<MetricField label={<>REP/ETH {repPerEthSource === undefined ? undefined : renderSourceLink(repPerEthSource, repPerEthSourceUrl)}</>}>
-								<CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />
-							</MetricField>
-							<MetricField label={<>REP/USDC {repUsdcSource === undefined ? undefined : renderSourceLink(repUsdcSource, repUsdcSourceUrl)}</>}>
-								<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />
-							</MetricField>
-							<MetricField label='Universe' valueClassName={universePresentation === undefined ? undefined : 'overview-universe-error'}>
-								{universePresentation === undefined ? universeLabel : <StateHint presentation={universePresentation} />}
-								{universePresentation === undefined ? undefined : (
-									<div className='overview-universe-actions'>
-										<button className='secondary' onClick={onGoToGenesisUniverse}>
-											Go to Genesis universe
-										</button>
-									</div>
-								)}
-							</MetricField>
-						</div>
-					</div>
-					<div className='actions overview-actions'>
-						{accountState.address === undefined ? (
+			<article className='overview-panel overview-wallet-panel'>
+				<RouteHeader
+					eyebrow='Operations'
+					title='Augur PLACEHOLDER'
+					actions={
+						accountState.address === undefined ? (
 							<button className='primary' onClick={onConnect} disabled={isConnectingWallet}>
 								{isWalletLoading ? 'Connecting...' : 'Connect wallet'}
 							</button>
-						) : undefined}
-					</div>
-				</div>
+						) : undefined
+					}
+				/>
+				<DataGrid className='overview-inline-metrics' columns='auto'>
+					<MetricField className='overview-address-metric' label='Address'>
+						{isWalletLoading ? (
+							<span className='loading-value'>
+								<span className='spinner' aria-hidden='true' />
+								Connecting...
+							</span>
+						) : accountState.address === undefined ? (
+							'Not connected'
+						) : (
+							<AddressValue address={accountState.address} />
+						)}
+					</MetricField>
+					{showAccountBalances ? (
+						<>
+							<MetricField label='ETH'>
+								<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix='ETH' />
+							</MetricField>
+							<MetricField label='WETH'>
+								<CurrencyValue value={accountState.wethBalance} loading={isRefreshing && accountState.wethBalance === undefined} suffix='WETH' />
+							</MetricField>
+							<MetricField label='REP'>
+								<CurrencyValue value={universeRepBalance} loading={isLoadingUniverseRepBalance} suffix='REP' />
+							</MetricField>
+						</>
+					) : undefined}
+					<MetricField label={<>REP/ETH {repPerEthSource === undefined ? undefined : renderSourceLink(repPerEthSource, repPerEthSourceUrl)}</>}>
+						<CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />
+					</MetricField>
+					<MetricField label={<>REP/USDC {repUsdcSource === undefined ? undefined : renderSourceLink(repUsdcSource, repUsdcSourceUrl)}</>}>
+						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />
+					</MetricField>
+					<MetricField label='Universe'>{universeLabel}</MetricField>
+				</DataGrid>
+				{universePresentation === undefined ? undefined : (
+					<StateHint
+						className='overview-universe-state'
+						presentation={universePresentation}
+						actions={
+							<button className='secondary' onClick={onGoToGenesisUniverse}>
+								Go to Genesis universe
+							</button>
+						}
+					/>
+				)}
 			</article>
 		</section>
 	)

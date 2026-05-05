@@ -1,13 +1,19 @@
 import type { ComponentChildren } from 'preact'
 import { EntityCard } from './EntityCard.js'
+import { TransactionActionButton } from './TransactionActionButton.js'
 import { UniverseLink } from './UniverseLink.js'
+import { WorkflowSubsection } from './WorkflowSubsection.js'
+import type { ActionAvailability } from '../types/components.js'
 import type { ZoltarChildUniverseSummary } from '../types/contracts.js'
 
 type ChildUniverseAction = {
-	className?: string
-	disabled: boolean
+	availability?: ActionAvailability
 	label: string
 	onClick: () => void
+	pending?: boolean
+	pendingLabel?: string
+	showDisabledReason?: boolean
+	tone?: 'primary' | 'secondary'
 }
 
 type ChildUniversesSectionProps = {
@@ -23,11 +29,7 @@ type ChildUniversesSectionProps = {
 
 export function ChildUniversesSection({ action, childUniverses, emptyMessage, headerSubtitle, headerTitle, renderBody, renderBadge, renderTitle }: ChildUniversesSectionProps) {
 	return (
-		<div className='entity-card-subsection market-overview-subsection'>
-			<div className='entity-card-subsection-header'>
-				<h4>{headerTitle}</h4>
-				{headerSubtitle === undefined ? undefined : <span className='detail'>{headerSubtitle}</span>}
-			</div>
+		<WorkflowSubsection badge={headerSubtitle === undefined ? undefined : <span className='detail'>{headerSubtitle}</span>} className='child-universes-section' title={headerTitle}>
 			{childUniverses.length === 0 ? (
 				<p className='detail'>{emptyMessage}</p>
 			) : (
@@ -42,9 +44,15 @@ export function ChildUniversesSection({ action, childUniverses, emptyMessage, he
 								badge={renderBadge === undefined ? undefined : renderBadge(child)}
 								actions={
 									childAction === undefined ? undefined : (
-										<button className={childAction.className ?? 'secondary'} onClick={childAction.onClick} disabled={childAction.disabled}>
-											{childAction.label}
-										</button>
+										<TransactionActionButton
+											idleLabel={childAction.label}
+											pendingLabel={childAction.pendingLabel ?? 'Working...'}
+											onClick={childAction.onClick}
+											pending={childAction.pending === true}
+											tone={childAction.tone ?? 'secondary'}
+											availability={childAction.availability ?? { disabled: false, reason: undefined }}
+											showDisabledReason={childAction.showDisabledReason ?? false}
+										/>
 									)
 								}
 							>
@@ -54,6 +62,6 @@ export function ChildUniversesSection({ action, childUniverses, emptyMessage, he
 					})}
 				</div>
 			)}
-		</div>
+		</WorkflowSubsection>
 	)
 }

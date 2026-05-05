@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { SectionBlock } from './SectionBlock.js'
 
 type WorkflowSubsectionProps = {
 	badge?: ComponentChildren
@@ -9,14 +10,8 @@ type WorkflowSubsectionProps = {
 
 export function WorkflowSubsection({ badge, children, className = '', title }: WorkflowSubsectionProps) {
 	return (
-		<div className={`entity-card-subsection ${className}`.trim()}>
-			{title === undefined && badge === undefined ? undefined : (
-				<div className='entity-card-subsection-header'>
-					{title === undefined ? <span /> : <h4>{title}</h4>}
-					{badge}
-				</div>
-			)}
+		<SectionBlock badge={badge} className={`workflow-subsection ${className}`.trim()} headingLevel={4} title={title} variant='embedded'>
 			{children}
-		</div>
+		</SectionBlock>
 	)
 }

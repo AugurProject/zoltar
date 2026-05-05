@@ -2,14 +2,15 @@ import type { Address } from 'viem'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
+import { DataGrid } from './DataGrid.js'
 import { EntityCard } from './EntityCard.js'
 import { ChildUniversesSection } from './ChildUniversesSection.js'
-import { LoadableValue } from './LoadableValue.js'
 import { Question } from './Question.js'
 import { MetricField } from './MetricField.js'
 import { ScalarDeploymentSection } from './ScalarDeploymentSection.js'
 import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
+import { WorkflowSubsection } from './WorkflowSubsection.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import { getUniversePresentation } from '../lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../lib/universe.js'
@@ -21,11 +22,12 @@ type MarketOverviewSectionProps = {
 	loadingZoltarUniverse: boolean
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	zoltarChildUniverseError: string | undefined
+	zoltarChildUniversePendingOutcomeIndex: bigint | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseState: LoadableValueState
 }
 
-export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltarUniverse, onCreateChildUniverseForOutcomeIndex, zoltarChildUniverseError, zoltarUniverse, zoltarUniverseState }: MarketOverviewSectionProps) {
+export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltarUniverse, onCreateChildUniverseForOutcomeIndex, zoltarChildUniverseError, zoltarChildUniversePendingOutcomeIndex, zoltarUniverse, zoltarUniverseState }: MarketOverviewSectionProps) {
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
@@ -35,36 +37,21 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 
 	if (universeMissing) {
 		const presentation = getUniversePresentation(zoltarUniverseState)
-		return (
-			<EntityCard className='market-overview-card' title='Universe'>
-				{presentation === undefined ? undefined : <StateHint presentation={presentation} />}
-			</EntityCard>
-		)
+		return presentation === undefined ? undefined : <StateHint presentation={presentation} />
 	}
 
 	return (
-		<EntityCard className='market-overview-card' title={rootUniverse === undefined ? 'Universe' : (currentUniverseName ?? 'Universe')} badge={rootUniverse === undefined ? undefined : <span className='badge ok'>{hasForked ? 'Forked' : 'Unforked'}</span>}>
+		<>
 			{rootUniverse === undefined ? (
-				<p className='detail'>
-					<span className='loading-value' role='status' aria-label='Loading universe data'>
-						<span className='spinner' aria-hidden='true' />
-					</span>
-				</p>
+				<StateHint presentation={getUniversePresentation('loading') ?? { key: 'loading', badgeLabel: 'Loading', badgeTone: 'pending', detail: 'Loading universe details.' }} />
 			) : (
 				<>
-					{hasForked ? (
-						<EntityCard title='Fork Question'>
-							<Question question={rootUniverse.forkQuestionDetails} loading={rootUniverse.forkQuestionDetails === undefined} />
-						</EntityCard>
-					) : undefined}
-					<div className='workflow-question-grid market-overview-grid'>
+					<DataGrid className='market-overview-grid'>
+						<MetricField label='Universe'>{currentUniverseName ?? 'Universe'}</MetricField>
+						<MetricField label='Status'>{hasForked ? 'Forked' : 'Unforked'}</MetricField>
 						{hasForked ? (
 							<>
-								<MetricField label='Fork Time'>
-									<LoadableValue loading={loadingZoltarUniverse} placeholder='Loading...'>
-										<TimestampValue timestamp={rootUniverse.forkTime} />
-									</LoadableValue>
-								</MetricField>
+								<MetricField label='Fork Time'>{loadingZoltarUniverse ? 'Loading...' : <TimestampValue timestamp={rootUniverse.forkTime} />}</MetricField>
 								<MetricField label='Fork Threshold'>
 									<CurrencyValue value={rootUniverse.forkThreshold} suffix='REP' />
 								</MetricField>
@@ -76,7 +63,14 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 						<MetricField label='Total Theoretical Supply'>
 							<CurrencyValue value={rootUniverse.totalTheoreticalSupply} suffix='REP' />
 						</MetricField>
-					</div>
+					</DataGrid>
+					{hasForked ? (
+						<WorkflowSubsection title='Fork Question'>
+							<EntityCard title='Selected Fork Question' variant='record'>
+								<Question question={rootUniverse.forkQuestionDetails} loading={rootUniverse.forkQuestionDetails === undefined} />
+							</EntityCard>
+						</WorkflowSubsection>
+					) : undefined}
 					{isScalarFork ? (
 						<ScalarDeploymentSection
 							accountAddress={accountAddress}
@@ -86,17 +80,24 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 							onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex}
 							questionDetails={scalarQuestionDetails}
 							zoltarChildUniverseError={zoltarChildUniverseError}
+							zoltarChildUniversePendingOutcomeIndex={zoltarChildUniversePendingOutcomeIndex}
 						/>
 					) : (
 						<ChildUniversesSection
 							childUniverses={rootUniverse.childUniverses}
 							emptyMessage='No child universes yet.'
-							headerTitle='Child universes'
+							headerSubtitle={hasForked ? 'Deploy child universes as needed for fork resolution.' : 'Child universes become deployable after the universe forks.'}
+							headerTitle='Child Universes'
 							action={child => ({
-								disabled: accountAddress === undefined || !isMainnet || child.exists,
+								availability: {
+									disabled: accountAddress === undefined || !isMainnet || !hasForked || child.exists,
+									reason:
+										accountAddress === undefined ? 'Connect a wallet before deploying a child universe.' : !isMainnet ? 'Switch to Ethereum mainnet before deploying a child universe.' : !hasForked ? 'Fork Zoltar before deploying child universes.' : child.exists ? 'This child universe is already deployed.' : undefined,
+								},
 								label: child.exists ? 'Deployed' : 'Deploy Universe',
 								onClick: () => onCreateChildUniverseForOutcomeIndex(child.outcomeIndex),
-								className: 'secondary',
+								pending: zoltarChildUniversePendingOutcomeIndex === child.outcomeIndex,
+								pendingLabel: 'Deploying universe...',
 							})}
 							renderBadge={child => <span className={`badge ${child.exists ? 'ok' : 'pending'}`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
 							renderBody={child => <ChildUniverseDetails child={child} />}
@@ -104,6 +105,6 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 					)}
 				</>
 			)}
-		</EntityCard>
+		</>
 	)
 }

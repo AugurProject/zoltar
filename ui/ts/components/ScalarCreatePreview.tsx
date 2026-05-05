@@ -1,3 +1,4 @@
+import { DataGrid } from './DataGrid.js'
 import { useEffect, useState } from 'preact/hooks'
 import { MetricField } from './MetricField.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
@@ -44,10 +45,10 @@ export function ScalarCreatePreview({ details, selectedTick, onSelectedTickChang
 					</label>
 				</div>
 			</div>
-			<div className='workflow-question-grid scalar-slider-stats'>
+			<DataGrid className='scalar-slider-stats'>
 				<MetricField label='Selected Tick'>{isInvalid ? 'Invalid' : `${clampedSelectedTick} / ${details.numTicks.toString()}`}</MetricField>
 				<MetricField label='Current Value'>{isInvalid ? 'Invalid' : formatScalarOutcomeLabel(details, clampedSelectedTickValue)}</MetricField>
-			</div>
+			</DataGrid>
 		</div>
 	)
 }

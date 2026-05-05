@@ -1,13 +1,15 @@
 import { useMemo } from 'preact/hooks'
 import type { Address } from 'viem'
 import { CurrencyValue } from './CurrencyValue.js'
-import { EntityCard } from './EntityCard.js'
+import { DataGrid } from './DataGrid.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
-import { LoadingText } from './LoadingText.js'
+import { LatestActionSection } from './LatestActionSection.js'
 import { MetricField } from './MetricField.js'
+import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
+import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
@@ -204,7 +206,7 @@ export function ZoltarMigrationSection({
 		const presentation = getUniversePresentation(zoltarUniverseState)
 		return (
 			<>
-				<EntityCard title='Migrate REP'>{presentation === undefined ? undefined : <StateHint presentation={presentation} />}</EntityCard>
+				{presentation === undefined ? undefined : <StateHint presentation={presentation} title='Migrate REP' />}
 				<ErrorNotice message={zoltarMigrationError} />
 			</>
 		)
@@ -212,8 +214,8 @@ export function ZoltarMigrationSection({
 
 	return (
 		<>
-			<EntityCard title='Migrate REP'>
-				<div className='workflow-metric-grid'>
+			<SectionBlock title='Migrate REP' description='Prepare REP into your migration balance, choose target universes, and split migration REP across outcomes.'>
+				<DataGrid>
 					<MetricField label='Migration REP Balance'>
 						<CurrencyValue loading={loadingZoltarForkAccess && zoltarMigrationPreparedRepBalance === undefined} value={zoltarMigrationPreparedRepBalance} suffix='REP' />
 					</MetricField>
@@ -226,7 +228,7 @@ export function ZoltarMigrationSection({
 							<UniverseLink universeId={rootUniverse.universeId} />
 						)}
 					</MetricField>
-				</div>
+				</DataGrid>
 				<div className='form-grid'>
 					<div className='field'>
 						<span>Migration Amount</span>
@@ -268,33 +270,22 @@ export function ZoltarMigrationSection({
 					)}
 
 					<div className='actions'>
-						<button className='secondary' title={prepareHintMessage} onClick={onPrepareRepForMigration} disabled={!canPrepare}>
-							{zoltarMigrationActiveAction === 'prepare' ? <LoadingText>Preparing REP...</LoadingText> : 'Prepare REP'}
-						</button>
-						<button className='primary' title={splitHintMessage} onClick={onMigrateInternalRep} disabled={!canSplit}>
-							{zoltarMigrationActiveAction === 'split' ? <LoadingText>Splitting REP...</LoadingText> : 'Split REP'}
-						</button>
+						<TransactionActionButton idleLabel='Prepare REP' pendingLabel='Preparing REP...' onClick={onPrepareRepForMigration} pending={zoltarMigrationActiveAction === 'prepare'} tone='secondary' availability={{ disabled: !canPrepare, reason: prepareHintMessage }} />
+						<TransactionActionButton idleLabel='Split REP' pendingLabel='Splitting REP...' onClick={onMigrateInternalRep} pending={zoltarMigrationActiveAction === 'split'} availability={{ disabled: !canSplit, reason: splitHintMessage }} />
 					</div>
 				</div>
-			</EntityCard>
+			</SectionBlock>
 
 			{zoltarMigrationResult === undefined ? undefined : (
-				<EntityCard title='Latest Migration Action' badge={<span className='badge muted'>{zoltarMigrationResult.action}</span>}>
-					<div className='entity-metric-grid'>
-						<MetricField className='entity-metric' label='Action'>
-							{zoltarMigrationResult.action}
-						</MetricField>
-						<MetricField className='entity-metric' label='Amount'>
-							<CurrencyValue value={zoltarMigrationResult.amount} suffix='REP' />
-						</MetricField>
-						<MetricField className='entity-metric' label='Outcome Indexes'>
-							{zoltarMigrationResult.outcomeIndexes.length === 0 ? 'None' : zoltarMigrationResult.outcomeIndexes.join(', ')}
-						</MetricField>
-						<MetricField className='entity-metric' label='Transaction'>
-							<TransactionHashLink hash={zoltarMigrationResult.hash} />
-						</MetricField>
-					</div>
-				</EntityCard>
+				<LatestActionSection
+					title='Latest Migration Action'
+					rows={[
+						{ label: 'Action', value: zoltarMigrationResult.action },
+						{ label: 'Amount', value: <CurrencyValue value={zoltarMigrationResult.amount} suffix='REP' /> },
+						{ label: 'Outcome Indexes', value: zoltarMigrationResult.outcomeIndexes.length === 0 ? 'None' : zoltarMigrationResult.outcomeIndexes.join(', ') },
+						{ label: 'Transaction', value: <TransactionHashLink hash={zoltarMigrationResult.hash} /> },
+					]}
+				/>
 			)}
 
 			<ErrorNotice message={zoltarMigrationError} />

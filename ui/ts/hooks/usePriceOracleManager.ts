@@ -19,6 +19,7 @@ type UsePriceOracleManagerParameters = {
 
 export function usePriceOracleManager({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted }: UsePriceOracleManagerParameters) {
 	const poolOracleManagerLoad = useLoadController()
+	const poolOracleActiveAction = useSignal<OpenOracleActionResult['action'] | undefined>(undefined)
 	const poolOracleManagerDetails = useSignal<OracleManagerDetails | undefined>(undefined)
 	const poolOracleManagerError = useSignal<string | undefined>(undefined)
 	const poolPriceOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)
@@ -43,38 +44,44 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 
 	const requestPoolPrice = async (managerAddress: Address) => {
 		poolPriceOracleResult.value = undefined
-		await runWriteAction(
-			{
-				accountAddress,
-				missingWalletMessage: 'Connect a wallet before requesting a price',
-				onTransaction,
-				onTransactionFinished,
-				onTransactionRequested,
-				refreshErrorFallback: 'Price request succeeded, but refreshing price oracle details failed',
-				refreshState: async () => {
-					await loadPoolOracleManager(managerAddress)
+		try {
+			poolOracleActiveAction.value = 'requestPrice'
+			await runWriteAction(
+				{
+					accountAddress,
+					missingWalletMessage: 'Connect a wallet before requesting a price',
+					onTransaction,
+					onTransactionFinished,
+					onTransactionRequested,
+					refreshErrorFallback: 'Price request succeeded, but refreshing price oracle details failed',
+					refreshState: async () => {
+						await loadPoolOracleManager(managerAddress)
+					},
+					setErrorMessage: message => {
+						poolOracleManagerError.value = message
+					},
 				},
-				setErrorMessage: message => {
-					poolOracleManagerError.value = message
+				async walletAddress => {
+					const currentManagerDetails = poolOracleManagerDetails.value
+					if (currentManagerDetails === undefined || !sameAddress(currentManagerDetails.managerAddress, managerAddress)) {
+						poolOracleManagerDetails.value = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
+					}
+					return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress)
 				},
-			},
-			async walletAddress => {
-				const currentManagerDetails = poolOracleManagerDetails.value
-				if (currentManagerDetails === undefined || !sameAddress(currentManagerDetails.managerAddress, managerAddress)) {
-					poolOracleManagerDetails.value = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
-				}
-				return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress)
-			},
-			'Failed to request price',
-			result => {
-				poolPriceOracleResult.value = result
-			},
-		)
+				'Failed to request price',
+				result => {
+					poolPriceOracleResult.value = result
+				},
+			)
+		} finally {
+			poolOracleActiveAction.value = undefined
+		}
 	}
 
 	return {
 		loadingPoolOracleManager: poolOracleManagerLoad.isLoading.value,
 		loadPoolOracleManager,
+		poolOracleActiveAction: poolOracleActiveAction.value,
 		poolOracleManagerDetails: poolOracleManagerDetails.value,
 		poolOracleManagerError: poolOracleManagerError.value,
 		poolPriceOracleResult: poolPriceOracleResult.value,

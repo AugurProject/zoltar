@@ -1,5 +1,8 @@
+import type { ComponentChildren } from 'preact'
 import { useEffect, useMemo, useState } from 'preact/hooks'
+import { DataGrid } from './DataGrid.js'
 import { MetricField } from './MetricField.js'
+import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { clampScalarTickIndex, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -60,6 +63,14 @@ function getScalarSelectedTargetOutcomes(childUniverseByOutcomeIndex: Map<string
 	})
 }
 
+function renderTargetSection(title: string, children: ComponentChildren, actions?: ComponentChildren) {
+	return (
+		<WorkflowSubsection badge={actions} className='share-migration-targets-section' title={title}>
+			{children}
+		</WorkflowSubsection>
+	)
+}
+
 export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOutcomeIndexes, onSelectAllOutcomeIndexes, onToggleOutcomeIndex, selectedOutcomeIndexes, selectedOutcomeIndexSet }: ShareMigrationTargetsSectionProps) {
 	const [scalarOutcomeTick, setScalarOutcomeTick] = useState('0')
 	const [scalarOutcomeInvalid, setScalarOutcomeInvalid] = useState(false)
@@ -75,36 +86,15 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 	}, [scalarOutcomeTick, scalarQuestion, selectedScalarTick])
 
 	if (forkUniverse === undefined) {
-		return (
-			<div className='entity-card-subsection market-overview-subsection'>
-				<div className='entity-card-subsection-header'>
-					<h4>Target Child Universes</h4>
-				</div>
-				<p className='detail'>Loading fork target universes...</p>
-			</div>
-		)
+		return renderTargetSection('Target Child Universes', <p className='detail'>Loading fork target universes...</p>)
 	}
 
 	if (!forkUniverse.hasForked) {
-		return (
-			<div className='entity-card-subsection market-overview-subsection'>
-				<div className='entity-card-subsection-header'>
-					<h4>Target Child Universes</h4>
-				</div>
-				<p className='detail'>Child-universe targets unlock after this universe forks.</p>
-			</div>
-		)
+		return renderTargetSection('Target Child Universes', <p className='detail'>Child-universe targets unlock after this universe forks.</p>)
 	}
 
 	if (forkUniverse.forkQuestionDetails === undefined) {
-		return (
-			<div className='entity-card-subsection market-overview-subsection'>
-				<div className='entity-card-subsection-header'>
-					<h4>Target Child Universes</h4>
-				</div>
-				<p className='detail'>Loading fork question details...</p>
-			</div>
-		)
+		return renderTargetSection('Target Child Universes', <p className='detail'>Loading fork question details...</p>)
 	}
 
 	if (forkUniverse.forkQuestionDetails.marketType !== 'scalar') {
@@ -115,33 +105,22 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 		}))
 		const hasSelectableTargets = childUniverses.length > 0
 
-		return (
-			<div className='entity-card-subsection market-overview-subsection'>
-				<div className='entity-card-subsection-header'>
-					<h4>Target Child Universes</h4>
-					<div className='actions'>
-						<button className='quiet' type='button' onClick={onSelectAllOutcomeIndexes} disabled={disabled || !hasSelectableTargets}>
-							Select all
-						</button>
-						<button className='quiet' type='button' onClick={onClearOutcomeIndexes} disabled={disabled || selectedOutcomeIndexes.length === 0}>
-							Clear
-						</button>
-					</div>
-				</div>
-				{childUniverses.length === 0 ? <p className='detail'>No target child universes available.</p> : <div className='migration-outcome-list'>{childUniverses.map(target => renderTargetOutcomeRow(target, selectedOutcomeIndexSet.has(target.outcomeIndex.toString()), disabled, onToggleOutcomeIndex))}</div>}
-			</div>
+		return renderTargetSection(
+			'Target Child Universes',
+			childUniverses.length === 0 ? <p className='detail'>No target child universes available.</p> : <div className='migration-outcome-list'>{childUniverses.map(target => renderTargetOutcomeRow(target, selectedOutcomeIndexSet.has(target.outcomeIndex.toString()), disabled, onToggleOutcomeIndex))}</div>,
+			<div className='actions'>
+				<button className='quiet' type='button' onClick={onSelectAllOutcomeIndexes} disabled={disabled || !hasSelectableTargets}>
+					Select all
+				</button>
+				<button className='quiet' type='button' onClick={onClearOutcomeIndexes} disabled={disabled || selectedOutcomeIndexes.length === 0}>
+					Clear
+				</button>
+			</div>,
 		)
 	}
 
 	if (scalarQuestion === undefined) {
-		return (
-			<div className='entity-card-subsection market-overview-subsection'>
-				<div className='entity-card-subsection-header'>
-					<h4>Target Child Universes</h4>
-				</div>
-				<p className='detail'>Loading scalar fork details...</p>
-			</div>
-		)
+		return renderTargetSection('Target Child Universes', <p className='detail'>Loading scalar fork details...</p>)
 	}
 
 	const clampedSelectedScalarTick = clampScalarTickIndex(selectedScalarTick, scalarQuestion.numTicks)
@@ -151,16 +130,11 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 	const candidateSelected = selectedOutcomeIndexSet.has(candidateOutcomeIndex.toString())
 	const selectedTargetOutcomes = getScalarSelectedTargetOutcomes(childUniverseByOutcomeIndex, scalarQuestion, selectedOutcomeIndexes)
 
-	return (
-		<div className='entity-card-subsection market-overview-subsection'>
-			<div className='entity-card-subsection-header'>
-				<h4>Target Child Universes</h4>
-				<button className='quiet' type='button' onClick={onClearOutcomeIndexes} disabled={disabled || selectedOutcomeIndexes.length === 0}>
-					Clear
-				</button>
-			</div>
+	return renderTargetSection(
+		'Target Child Universes',
+		<>
 			{selectedTargetOutcomes.length === 0 ? <p className='detail'>Select at least one scalar target universe.</p> : <div className='migration-outcome-list'>{selectedTargetOutcomes.map(target => renderTargetOutcomeRow(target, true, disabled, onToggleOutcomeIndex))}</div>}
-			<div className='market-scalar-deploy'>
+			<div className='market-scalar-deploy workflow-subsection'>
 				<div className='field scalar-slider-field'>
 					<span>Select Scalar Target</span>
 					<div className='scalar-slider-with-invalid'>
@@ -196,18 +170,21 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 						</label>
 					</div>
 				</div>
-				<div className='workflow-question-grid scalar-slider-stats'>
+				<DataGrid className='scalar-slider-stats'>
 					<MetricField label='Min Value'>{formatScalarOutcomeLabel(scalarQuestion, 0n)}</MetricField>
 					<MetricField label='Selected Tick'>{scalarOutcomeInvalid ? 'Invalid' : `${clampedScalarOutcomeTick} / ${scalarQuestion.numTicks.toString()}`}</MetricField>
 					<MetricField label='Selected Outcome'>{candidateOutcomeLabel}</MetricField>
 					<MetricField label='Max Value'>{formatScalarOutcomeLabel(scalarQuestion, scalarQuestion.numTicks)}</MetricField>
-				</div>
+				</DataGrid>
 				<div className='actions'>
 					<button className='secondary' type='button' onClick={() => onToggleOutcomeIndex(candidateOutcomeIndex)} disabled={disabled}>
 						{candidateSelected ? 'Remove Target' : 'Add Target'}
 					</button>
 				</div>
 			</div>
-		</div>
+		</>,
+		<button className='quiet' type='button' onClick={onClearOutcomeIndexes} disabled={disabled || selectedOutcomeIndexes.length === 0}>
+			Clear
+		</button>,
 	)
 }

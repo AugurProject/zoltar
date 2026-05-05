@@ -28,6 +28,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 	const securityPoolsLoad = useLoadController()
 	const hasLoadedSecurityPools = useSignal(false)
 	const checkedSecurityPoolAddress = useSignal<string | undefined>(undefined)
+	const securityPoolOverviewActiveAction = useSignal<SecurityPoolOverviewActionResult['action'] | undefined>(undefined)
 	const securityPoolOverviewError = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewResult = useSignal<SecurityPoolOverviewActionResult | undefined>(undefined)
 	const securityPools = useSignal<ListedSecurityPool[]>([])
@@ -63,23 +64,28 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 
 	const queueLiquidation = async (managerAddress: Address, securityPoolAddress: Address) => {
 		securityPoolOverviewResult.value = undefined
-		await runWriteAction(
-			buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, securityPoolOverviewError, 'Connect a wallet before queueing liquidation'),
-			async walletAddress => {
-				const targetVault = parseAddressInput(liquidationTargetVault.value, 'Target vault')
-				const amount = parseBigIntInput(liquidationAmount.value, 'Liquidation amount')
-				const hash = await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount)
-				return { hash }
-			},
-			'Failed to queue liquidation',
-			result => {
-				securityPoolOverviewResult.value = {
-					action: 'queueLiquidation',
-					hash: result.hash,
-					securityPoolAddress,
-				}
-			},
-		)
+		try {
+			securityPoolOverviewActiveAction.value = 'queueLiquidation'
+			await runWriteAction(
+				buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, securityPoolOverviewError, 'Connect a wallet before queueing liquidation'),
+				async walletAddress => {
+					const targetVault = parseAddressInput(liquidationTargetVault.value, 'Target vault')
+					const amount = parseBigIntInput(liquidationAmount.value, 'Liquidation amount')
+					const hash = await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount)
+					return { hash }
+				},
+				'Failed to queue liquidation',
+				result => {
+					securityPoolOverviewResult.value = {
+						action: 'queueLiquidation',
+						hash: result.hash,
+						securityPoolAddress,
+					}
+				},
+			)
+		} finally {
+			securityPoolOverviewActiveAction.value = undefined
+		}
 	}
 
 	return {
@@ -94,6 +100,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 		closeLiquidationModal,
 		openLiquidationModal,
 		queueLiquidation,
+		securityPoolOverviewActiveAction: securityPoolOverviewActiveAction.value,
 		securityPoolOverviewError: securityPoolOverviewError.value,
 		securityPoolOverviewResult: securityPoolOverviewResult.value,
 		securityPools: securityPools.value,

@@ -5,6 +5,7 @@ import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
+import { TransactionActionButton } from './TransactionActionButton.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../lib/tokenApproval.js'
 
@@ -123,13 +124,11 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 			</label>
 
 			<div className='actions'>
-				<button className='secondary' type='button' onClick={() => onApprove(nextApprovalAmount)} disabled={!canApprove}>
-					{buttonLabel}
-				</button>
+				<TransactionActionButton idleLabel={buttonLabel} pendingLabel={pendingLabel} onClick={() => onApprove(nextApprovalAmount)} pending={pending} tone='secondary' availability={{ disabled: !canApprove, reason: visibleStatusMessage ?? allowanceMessage ?? guardMessage }} />
 			</div>
 
 			{allowanceMessage === undefined ? undefined : <ErrorNotice message={allowanceMessage} />}
-			{allowanceMessage !== undefined || visibleStatusMessage === undefined ? undefined : <p className='detail'>{visibleStatusMessage}</p>}
+			{allowanceMessage !== undefined || visibleStatusMessage === undefined || !canApprove ? undefined : <p className='detail'>{visibleStatusMessage}</p>}
 		</div>
 	)
 }

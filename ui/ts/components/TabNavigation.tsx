@@ -1,44 +1,37 @@
+import { ViewTabs } from './ViewTabs.js'
 import type { TabNavigationProps } from '../types/components.js'
 
-function renderTabLink(route: Exclude<TabNavigationProps['route'], 'not-found'>, label: string, href: string, activeRoute: TabNavigationProps['route'], disabled: boolean, onRouteChange: TabNavigationProps['onRouteChange']) {
-	const isActive = activeRoute === route
-
-	return (
-		<a
-			className={`tab-link ${isActive ? 'active' : ''}${disabled ? ' disabled' : ''}`}
-			href={href}
-			aria-disabled={disabled ? 'true' : undefined}
-			tabIndex={disabled ? -1 : undefined}
-			title={disabled ? 'Deploy Augur PLACEHOLDER contracts before using this tab' : undefined}
-			onClick={event => {
-				event.preventDefault()
-				if (disabled) return
-				onRouteChange(route)
-			}}
-		>
-			{label}
-		</a>
-	)
-}
-
 export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDeployed, deployRoute, marketRoute, openOracleRoute, securityPoolsRoute, onRouteChange }: TabNavigationProps) {
+	const disabledTabReason = 'Deploy Augur PLACEHOLDER contracts before using this tab.'
+	const options: Array<{ disabled?: boolean; href: string; label: string; reason?: string; value: Exclude<TabNavigationProps['route'], 'not-found'> }> = []
+	if (showDeployTab) {
+		options.push({ value: 'deploy', label: 'Deploy', href: deployRoute })
+	}
+	options.push({
+		value: 'zoltar',
+		label: 'Zoltar',
+		href: marketRoute,
+		disabled: !augurPlaceHolderDeployed,
+		...(!augurPlaceHolderDeployed ? { reason: disabledTabReason } : {}),
+	})
+	options.push({
+		value: 'security-pools',
+		label: 'Security Pools',
+		href: securityPoolsRoute,
+		disabled: !augurPlaceHolderDeployed,
+		...(!augurPlaceHolderDeployed ? { reason: disabledTabReason } : {}),
+	})
+	options.push({
+		value: 'open-oracle',
+		label: 'Open Oracle',
+		href: openOracleRoute,
+		disabled: !augurPlaceHolderDeployed,
+		...(!augurPlaceHolderDeployed ? { reason: disabledTabReason } : {}),
+	})
+
 	return (
 		<nav className='tab-nav' aria-label='Application sections'>
-			{showDeployTab ? (
-				<a
-					className={`tab-link ${route === 'deploy' ? 'active' : ''}`}
-					href={deployRoute}
-					onClick={event => {
-						event.preventDefault()
-						onRouteChange('deploy')
-					}}
-				>
-					Deploy
-				</a>
-			) : undefined}
-			{renderTabLink('zoltar', 'Zoltar', marketRoute, route, !augurPlaceHolderDeployed, onRouteChange)}
-			{renderTabLink('security-pools', 'Security Pools', securityPoolsRoute, route, !augurPlaceHolderDeployed, onRouteChange)}
-			{renderTabLink('open-oracle', 'Open Oracle', openOracleRoute, route, !augurPlaceHolderDeployed, onRouteChange)}
+			<ViewTabs ariaLabel='Application sections' value={route === 'not-found' ? 'deploy' : route} variant='route' onChange={value => onRouteChange(value as Exclude<TabNavigationProps['route'], 'not-found'>)} options={options} />
 		</nav>
 	)
 }

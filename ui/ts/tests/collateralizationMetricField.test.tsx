@@ -31,7 +31,7 @@ describe('CollateralizationMetricField', () => {
 		const metricField = noActiveAllowanceValue.closest('div')
 
 		expect(metricField?.className).toBe('entity-metric')
-		expect(noActiveAllowanceValue.tagName).toBe('SPAN')
+		expect(noActiveAllowanceValue.tagName).toBe('STRONG')
 		expect(noActiveAllowanceValue.className).toBe('metric-field-value')
 	})
 })

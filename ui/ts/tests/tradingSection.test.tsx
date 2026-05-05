@@ -2,8 +2,11 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from 'viem'
+import { EntityCard } from '../components/EntityCard.js'
 import { EnumDropdown } from '../components/EnumDropdown.js'
 import { MetricField } from '../components/MetricField.js'
+import { SectionBlock } from '../components/SectionBlock.js'
+import { TransactionActionButton } from '../components/TransactionActionButton.js'
 import { TradingSection } from '../components/TradingSection.js'
 import { MARKET_NOT_FINALIZED_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE } from '../lib/trading.js'
 import type { AccountState, TradingFormState } from '../types/app.js'
@@ -13,6 +16,12 @@ import type { TradingSectionProps } from '../types/components.js'
 type VNodeLike = {
 	props: Record<string, unknown>
 	type: unknown
+}
+
+type ButtonState = {
+	disabled: boolean
+	label: string
+	title: string | undefined
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -54,20 +63,80 @@ function getMetricFieldLabels(node: unknown) {
 	return labels
 }
 
+function getSectionBlockTitles(node: unknown) {
+	const titles: string[] = []
+	visitTree(node, vnode => {
+		if (vnode.type !== SectionBlock) return
+		const title = vnode.props['title']
+		if (typeof title === 'string') titles.push(title)
+	})
+	return titles
+}
+
+function getEntityCardTitles(node: unknown) {
+	const titles: string[] = []
+	visitTree(node, vnode => {
+		if (vnode.type !== EntityCard) return
+		const title = vnode.props['title']
+		if (typeof title === 'string') titles.push(title)
+	})
+	return titles
+}
+
 function getDetailTexts(node: unknown) {
 	const detailTexts: string[] = []
 	visitTree(node, vnode => {
 		if (vnode.type !== 'p' || vnode.props['className'] !== 'detail') return
 		detailTexts.push(getTextContent(vnode.props['children']))
 	})
+	visitTree(node, vnode => {
+		const buttonState = getButtonState(vnode)
+		if (buttonState?.disabled !== true || buttonState.title === undefined) return
+		detailTexts.push(buttonState.title)
+	})
 	return detailTexts
 }
 
+function getButtonState(vnode: VNodeLike): ButtonState | undefined {
+	if (vnode.type === 'button') {
+		const title = vnode.props['title']
+		return {
+			disabled: vnode.props['disabled'] === true,
+			label: getTextContent(vnode.props['children']).trim(),
+			title: typeof title === 'string' ? title : undefined,
+		}
+	}
+
+	if (vnode.type !== TransactionActionButton) return undefined
+
+	const idleLabel = vnode.props['idleLabel']
+	if (typeof idleLabel !== 'string') return undefined
+
+	const availability = vnode.props['availability']
+	const disabled = vnode.props['disabled'] === true
+	const pending = vnode.props['pending'] === true
+	let disabledByAvailability = false
+	let title: string | undefined
+
+	if (isObjectRecord(availability)) {
+		disabledByAvailability = availability['disabled'] === true
+		const availabilityReason = availability['reason']
+		if (typeof availabilityReason === 'string') title = availabilityReason
+	}
+
+	return {
+		disabled: disabled || pending || disabledByAvailability,
+		label: idleLabel,
+		title,
+	}
+}
+
 function findButton(node: unknown, label: string) {
-	let matchingButton: VNodeLike | undefined
+	let matchingButton: ButtonState | undefined
 	visitTree(node, vnode => {
-		if (matchingButton !== undefined || vnode.type !== 'button') return
-		if (getTextContent(vnode.props['children']).trim() === label) matchingButton = vnode
+		if (matchingButton !== undefined) return
+		const buttonState = getButtonState(vnode)
+		if (buttonState?.label === label) matchingButton = buttonState
 	})
 	return matchingButton
 }
@@ -185,6 +254,7 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 		selectedPool: createSelectedPool(),
 		showHeader: false,
 		showSecurityPoolAddressInput: false,
+		tradingActiveAction: undefined,
 		tradingDetails: createTradingDetails(),
 		tradingError: undefined,
 		tradingForkUniverse: undefined,
@@ -207,7 +277,21 @@ void describe('TradingSection', () => {
 		expect(metricFieldLabels).not.toContain('Max Complete Sets')
 	})
 
-	void test('keeps minting disabled silently when the pool has no active allowance', () => {
+	void test('renders workflow content as section blocks instead of a generic trading actions card', () => {
+		const section = renderTradingSection({ embedInCard: false, showHeader: false })
+		const sectionTitles = getSectionBlockTitles(section)
+		const entityCardTitles = getEntityCardTitles(section)
+
+		expect(sectionTitles).not.toContain('Pool Context')
+		expect(sectionTitles).toContain('Your Shares')
+		expect(sectionTitles).toContain('Mint Complete Sets')
+		expect(sectionTitles).toContain('Redeem Complete Sets')
+		expect(sectionTitles).toContain('Migrate Forked Shares')
+		expect(sectionTitles).toContain('Redeem Resolved Shares')
+		expect(entityCardTitles).not.toContain('Trading Actions')
+	})
+
+	void test('shows the minting disabled reason when the pool has no active allowance', () => {
 		const section = renderTradingSection({
 			selectedPool: createSelectedPool({
 				completeSetCollateralAmount: 0n,
@@ -221,12 +305,12 @@ void describe('TradingSection', () => {
 		const detailTexts = getDetailTexts(section)
 
 		expect(mintButton).toBeDefined()
-		expect(mintButton?.props['disabled']).toBe(true)
-		expect(mintButton?.props['title']).toBeUndefined()
-		expect(detailTexts).not.toContain(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)
+		expect(mintButton?.disabled).toBe(true)
+		expect(mintButton?.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)
+		expect(detailTexts).toContain(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)
 	})
 
-	void test('keeps complete-set redemption disabled silently when the wallet lacks matching shares', () => {
+	void test('shows the complete-set redemption disabled reason when the wallet lacks matching shares', () => {
 		const section = renderTradingSection({
 			selectedPool: createSelectedPool({ universeHasForked: false }),
 			tradingDetails: createTradingDetails({
@@ -243,12 +327,12 @@ void describe('TradingSection', () => {
 		const detailTexts = getDetailTexts(section)
 
 		expect(redeemButton).toBeDefined()
-		expect(redeemButton?.props['disabled']).toBe(true)
-		expect(redeemButton?.props['title']).toBeUndefined()
-		expect(detailTexts).not.toContain(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)
+		expect(redeemButton?.disabled).toBe(true)
+		expect(redeemButton?.title).toBe(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)
+		expect(detailTexts).toContain(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)
 	})
 
-	void test('keeps share migration disabled silently before the universe forks', () => {
+	void test('shows the share migration disabled reason before the universe forks', () => {
 		const section = renderTradingSection({
 			selectedPool: createSelectedPool({ universeHasForked: false }),
 		})
@@ -256,9 +340,9 @@ void describe('TradingSection', () => {
 		const detailTexts = getDetailTexts(section)
 
 		expect(migrateButton).toBeDefined()
-		expect(migrateButton?.props['disabled']).toBe(true)
-		expect(migrateButton?.props['title']).toBeUndefined()
-		expect(detailTexts).not.toContain(SHARE_MIGRATION_AFTER_FORK_MESSAGE)
+		expect(migrateButton?.disabled).toBe(true)
+		expect(migrateButton?.title).toBe(SHARE_MIGRATION_AFTER_FORK_MESSAGE)
+		expect(detailTexts).toContain(SHARE_MIGRATION_AFTER_FORK_MESSAGE)
 	})
 
 	void test('disables the share outcome dropdown before the selected pool universe forks', () => {
@@ -271,7 +355,7 @@ void describe('TradingSection', () => {
 		expect(shareOutcomeDropdown?.props['disabled']).toBe(true)
 	})
 
-	void test('keeps share redemption disabled silently before finalization', () => {
+	void test('shows the share redemption disabled reason before finalization', () => {
 		const section = renderTradingSection({
 			selectedPool: createSelectedPool({ questionOutcome: 'none' }),
 		})
@@ -279,9 +363,9 @@ void describe('TradingSection', () => {
 		const detailTexts = getDetailTexts(section)
 
 		expect(redeemSharesButton).toBeDefined()
-		expect(redeemSharesButton?.props['disabled']).toBe(true)
-		expect(redeemSharesButton?.props['title']).toBeUndefined()
-		expect(detailTexts).not.toContain(MARKET_NOT_FINALIZED_MESSAGE)
+		expect(redeemSharesButton?.disabled).toBe(true)
+		expect(redeemSharesButton?.title).toBe(MARKET_NOT_FINALIZED_MESSAGE)
+		expect(detailTexts).toContain(MARKET_NOT_FINALIZED_MESSAGE)
 	})
 
 	void test('keeps non-suppressed trading guard messages visible', () => {
@@ -293,8 +377,8 @@ void describe('TradingSection', () => {
 		const detailTexts = getDetailTexts(section)
 
 		expect(redeemButton).toBeDefined()
-		expect(redeemButton?.props['disabled']).toBe(true)
-		expect(redeemButton?.props['title']).toBe('Loading wallet share balances.')
+		expect(redeemButton?.disabled).toBe(true)
+		expect(redeemButton?.title).toBe('Loading wallet share balances.')
 		expect(detailTexts).toContain('Loading wallet share balances.')
 	})
 })

@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'preact/hooks'
+import { DataGrid } from './DataGrid.js'
 import { ForkZoltarSection } from './ForkZoltarSection.js'
 import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
 import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
+import { SectionModeTabs } from './SectionModeTabs.js'
+import { SectionBlock } from './SectionBlock.js'
 import { ZoltarMigrationSection } from './ZoltarMigrationSection.js'
 import { isMainnetChain } from '../lib/network.js'
 import { resolveEnumValue } from '../lib/viewState.js'
@@ -37,6 +40,7 @@ export function MarketSection({
 	onZoltarForkQuestionIdChange,
 	onZoltarMigrationFormChange,
 	zoltarChildUniverseError,
+	zoltarChildUniversePendingOutcomeIndex,
 	zoltarForkApproval,
 	zoltarForkError,
 	zoltarForkPending,
@@ -57,6 +61,7 @@ export function MarketSection({
 	const [view, setView] = useState<ZoltarView>(() => resolveEnumValue<ZoltarView>(readZoltarViewQueryParam(window.location.search), 'questions', ['questions', 'create', 'fork', 'migrate']))
 	const hasForked = zoltarUniverse?.hasForked === true
 	const isMainnet = isMainnetChain(accountState.chainId)
+	const showUniverseSummary = view === 'questions' && zoltarUniverse !== undefined
 
 	useEffect(() => {
 		const nextSearch = writeZoltarViewQueryParam(window.location.search, view)
@@ -70,36 +75,53 @@ export function MarketSection({
 		setView('questions')
 	}, [hasForked, view, zoltarUniverse])
 
+	const renderModeTabs = () => (
+		<SectionModeTabs
+			ariaLabel='Zoltar views'
+			value={view}
+			onChange={setView}
+			options={[
+				{ label: 'Questions', value: 'questions' },
+				{ label: 'Create Question', value: 'create' },
+				{ label: 'Fork Zoltar', value: 'fork' },
+				{ label: 'Migrate REP', value: 'migrate', disabled: !hasForked, ...(!hasForked ? { reason: 'Fork Zoltar before migrating REP.' } : {}) },
+			]}
+		/>
+	)
+
 	return (
-		<section className='panel market-panel'>
-			<div className='workflow-stack'>
-				<MarketOverviewSection
-					accountAddress={accountState.address}
-					isMainnet={isMainnet}
-					loadingZoltarUniverse={loadingZoltarUniverse}
-					onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex}
-					zoltarChildUniverseError={zoltarChildUniverseError}
-					zoltarUniverse={zoltarUniverse}
-					zoltarUniverseState={zoltarUniverseState}
-				/>
-			</div>
-
-			<div className='subtab-nav market-subtab-nav' role='tablist' aria-label='Zoltar views'>
-				<button className={`subtab-link ${view === 'questions' ? 'active' : ''}`} type='button' onClick={() => setView('questions')} aria-pressed={view === 'questions'}>
-					Questions
-				</button>
-				<button className={`subtab-link ${view === 'create' ? 'active' : ''}`} type='button' onClick={() => setView('create')} aria-pressed={view === 'create'}>
-					Create Question
-				</button>
-				<button className={`subtab-link ${view === 'fork' ? 'active' : ''}`} type='button' onClick={() => setView('fork')} aria-pressed={view === 'fork'}>
-					Fork Zoltar
-				</button>
-				<button className={`subtab-link ${view === 'migrate' ? 'active' : ''}`} type='button' onClick={() => setView('migrate')} aria-pressed={view === 'migrate'} disabled={!hasForked} title={!hasForked ? 'Fork Zoltar before migrating REP' : undefined}>
-					Migrate REP
-				</button>
-			</div>
-
-			<div className='workflow-stack'>
+		<div className='route-view-flow'>
+			<SectionBlock density='compact' title='Zoltar'>
+				{renderModeTabs()}
+				{showUniverseSummary ? (
+					<MarketOverviewSection
+						accountAddress={accountState.address}
+						isMainnet={isMainnet}
+						loadingZoltarUniverse={loadingZoltarUniverse}
+						onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex}
+						zoltarChildUniverseError={zoltarChildUniverseError}
+						zoltarChildUniversePendingOutcomeIndex={zoltarChildUniversePendingOutcomeIndex}
+						zoltarUniverse={zoltarUniverse}
+						zoltarUniverseState={zoltarUniverseState}
+					/>
+				) : (
+					<DataGrid columns='auto'>
+						<div>
+							<p className='detail'>Universe</p>
+							<strong>{zoltarUniverse?.universeId.toString() ?? 'Loading...'}</strong>
+						</div>
+						<div>
+							<p className='detail'>Status</p>
+							<strong>{hasForked ? 'Forked' : 'Unforked'}</strong>
+						</div>
+						<div>
+							<p className='detail'>Questions</p>
+							<strong>{zoltarQuestionCount?.toString() ?? '—'}</strong>
+						</div>
+					</DataGrid>
+				)}
+			</SectionBlock>
+			<div className='workflow-stack route-workflow-stack'>
 				{view === 'questions' ? (
 					<MarketQuestionsSection
 						hasForked={hasForked}
@@ -182,6 +204,6 @@ export function MarketSection({
 					/>
 				) : undefined}
 			</div>
-		</section>
+		</div>
 	)
 }
