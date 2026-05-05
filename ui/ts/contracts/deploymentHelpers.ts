@@ -1,7 +1,7 @@
 import { encodeDeployData, getCreate2Address, keccak256, toHex, type Address, type Hex } from 'viem'
 import { createRepTokenAddressHelper, createSecurityPoolAddressHelper } from '../shared/addressDerivation.js'
 import { createApplyLinkedLibrariesHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '../shared/deploymentAddresses.js'
-import { GENESIS_REPUTATION_TOKEN_ADDRESS } from '../lib/universe.js'
+import { MAINNET_NETWORK_PROFILE } from '../lib/networkProfile.js'
 import { bigintToAddress } from './helpers.js'
 import {
 	ReputationToken_ReputationToken,
@@ -10,7 +10,7 @@ import {
 	ZoltarQuestionData_ZoltarQuestionData,
 	peripherals_EscalationGame_EscalationGame,
 	peripherals_Multicall3_Multicall3,
-	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
+	peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
 	peripherals_SecurityPoolUtils_SecurityPoolUtils,
@@ -119,7 +119,7 @@ export const { getZoltarAddress, getZoltarQuestionDataAddress } = createZoltarAd
 })
 
 const { getRepTokenAddress } = createRepTokenAddressHelper({
-	genesisRepTokenAddress: GENESIS_REPUTATION_TOKEN_ADDRESS,
+	genesisRepTokenAddress: MAINNET_NETWORK_PROFILE.genesisRepTokenAddress,
 	getReputationTokenInitCode: zoltarAddress =>
 		encodeDeployData({
 			abi: ReputationToken_ReputationToken.abi,
@@ -156,8 +156,8 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 	getInfraContracts: () => getInfraContractAddresses(),
 	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken) =>
 		encodeDeployData({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-			bytecode: `0x${peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.evm.bytecode.object}`,
+			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+			bytecode: `0x${peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.evm.bytecode.object}`,
 			args: [openOracle, repToken],
 		}),
 	getRepTokenAddress,

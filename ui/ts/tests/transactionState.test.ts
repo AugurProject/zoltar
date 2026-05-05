@@ -1,7 +1,13 @@
 /// <reference types="bun-types" />
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from '../lib/transactionState.js'
+import { resetActiveEnvironmentForTesting, setActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
+
+afterEach(() => {
+	resetActiveEnvironmentForTesting()
+})
 
 void describe('transaction state', () => {
 	void test('tracks a single transaction through request, submission, and confirmation', () => {
@@ -23,5 +29,18 @@ void describe('transaction state', () => {
 		const finished = markTransactionFinished(createInitialTransactionState())
 
 		expect(finished.transactionInFlightCount).toBe(0)
+	})
+
+	void test('omits explorer URLs when the active profile does not define one', () => {
+		setActiveEnvironmentForTesting(
+			createFakeBackend({
+				profile: createFakeSimulationProfile(),
+			}),
+		)
+
+		const submitted = markTransactionSubmitted(createInitialTransactionState(), '0x1234')
+
+		expect(submitted.lastTransactionHash).toBe('0x1234')
+		expect(submitted.transactionUrl).toBeUndefined()
 	})
 })

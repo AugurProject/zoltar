@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress, type Address } from 'viem'
 import {
 	DEFAULT_POOL_CONFIG,
@@ -21,7 +21,13 @@ import {
 	quoteRepForEth,
 	quoteTokenForEth,
 } from '../lib/uniswapQuoter.js'
+import { resetActiveEnvironmentForTesting, setActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createConnectedReadClient, type ReadClient } from '../lib/clients.js'
+import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
+
+afterEach(() => {
+	resetActiveEnvironmentForTesting()
+})
 
 type SimulateArgs = Parameters<ReadClient['simulateContract']>[0]
 
@@ -58,9 +64,20 @@ function extractParams(args: SimulateArgs): CapturedCall {
 	}
 }
 
+function createStubReadClient(): ReadClient {
+	return {
+		readContract: async () => {
+			throw new Error('readContract should not be used in this test')
+		},
+		simulateContract: async () => {
+			throw new Error('simulateContract must be overridden in this test')
+		},
+	} as unknown as ReadClient
+}
+
 function createCapturingClient(amountOut: bigint): { client: ReadClient; captured: CapturedCall } {
 	const captured: CapturedCall = { address: '', zeroForOne: false, currency0: '', currency1: '', fee: 0, tickSpacing: 0, hooks: '', exactAmount: 0n }
-	const client = createConnectedReadClient()
+	const client = createStubReadClient()
 	const simulateContract: ReadClient['simulateContract'] = async args => {
 		const typedArgs = args as SimulateArgs
 		Object.assign(captured, extractParams(typedArgs))
@@ -71,7 +88,7 @@ function createCapturingClient(amountOut: bigint): { client: ReadClient; capture
 }
 
 function createPoolAwareClient(amountsByFee: Partial<Record<number, bigint>>): ReadClient {
-	const client = createConnectedReadClient()
+	const client = createStubReadClient()
 	const simulateContract: ReadClient['simulateContract'] = async args => {
 		const typedArgs = args as SimulateArgs
 		const { fee } = extractParams(typedArgs)
@@ -86,7 +103,7 @@ function createPoolAwareClient(amountsByFee: Partial<Record<number, bigint>>): R
 }
 
 function createV3FeeAwareClient(amountsByFee: Partial<Record<number, bigint>>): ReadClient {
-	const client = createConnectedReadClient()
+	const client = createStubReadClient()
 	const simulateContract: ReadClient['simulateContract'] = async args => {
 		const typedArgs = args as SimulateArgs
 		const [param] = typedArgs.args as [RawV3SimulateParam]
@@ -101,6 +118,18 @@ function createV3FeeAwareClient(amountsByFee: Partial<Record<number, bigint>>): 
 }
 
 void describe('quoteExactInput', () => {
+	void test('rejects when REP pricing is disabled in simulation mode', async () => {
+		setActiveEnvironmentForTesting(
+			createFakeBackend({
+				profile: createFakeSimulationProfile(),
+			}),
+		)
+
+		const { client } = createCapturingClient(1n)
+
+		await expect(quoteRepForEth(client, 1n)).rejects.toThrow('Uniswap pricing is unavailable in simulation mode.')
+	})
+
 	void test('returns amountOut from the quoter result', async () => {
 		const { client } = createCapturingClient(500000000000000000n)
 		const result = await quoteExactInput(client, REP_ADDRESS, ETH_ADDRESS, 1000000000000000000n)

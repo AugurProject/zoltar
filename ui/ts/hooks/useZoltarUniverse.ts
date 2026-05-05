@@ -3,10 +3,11 @@ import { useLayoutEffect, useRef } from 'preact/hooks'
 import type { Address, Hash } from 'viem'
 import { createZoltarChildUniverse, loadAllZoltarQuestions, loadZoltarQuestionCount, loadZoltarUniverseSummary } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
-import { createConnectedReadClient, createWalletWriteClient, getRequiredInjectedEthereum } from '../lib/clients.js'
+import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../lib/errors.js'
 import { hasDeployedStep } from '../lib/marketCreation.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
+import { requireWallet } from '../lib/walletGuard.js'
 import type { DeploymentStatus, MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type UseZoltarUniverseParameters = {
@@ -145,14 +146,15 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 	}
 
 	const createChildUniverse = async (outcomeIndex: bigint) => {
-		try {
-			getRequiredInjectedEthereum()
-		} catch {
-			zoltarChildUniverseError.value = 'Connect wallet to continue.'
-			return
-		}
-		if (accountAddress === undefined) {
-			zoltarChildUniverseError.value = 'Connect wallet to continue.'
+		if (
+			!requireWallet(
+				accountAddress,
+				message => {
+					zoltarChildUniverseError.value = message
+				},
+				'creating a child universe',
+			)
+		) {
 			return
 		}
 

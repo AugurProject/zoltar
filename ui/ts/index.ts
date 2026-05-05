@@ -1,6 +1,7 @@
 import './liveReload.js'
 import { createElement, render } from 'preact'
 import { App } from './App.js'
+import { initializeActiveEnvironment } from './lib/activeEnvironment.js'
 
 // specify our render function, which will be fired anytime rootModel is mutated
 function rerender() {
@@ -8,5 +9,6 @@ function rerender() {
 	render(element, document.body)
 }
 
-// kick off the initial render
-rerender()
+void initializeActiveEnvironment().then(() => {
+	rerender()
+})

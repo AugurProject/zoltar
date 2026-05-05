@@ -6,7 +6,7 @@ import { WETH_ADDRESS } from '../constants'
 import {
 	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
 	peripherals_openOracle_OpenOracle_OpenOracle,
-	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
+	peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer,
 	peripherals_tokens_ShareToken_ShareToken,
 	ZoltarQuestionData_ZoltarQuestionData,
 } from '../../../../types/contractArtifact'
@@ -25,8 +25,8 @@ export const requestPriceIfNeededAndStageOperation = async (client: WriteClient,
 	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
-			functionName: 'requestPriceIfNeededAndStageOperation',
+			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+			functionName: 'requestPriceIfNeededAndQueueOperation',
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [operation, targetVault, amount],
 			value: ethCost,
@@ -38,7 +38,7 @@ export const requestPrice = async (client: WriteClient, priceOracleManagerAndOpe
 	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 			functionName: 'requestPrice',
 			address: priceOracleManagerAndOperatorQueuer,
 			args: [],
@@ -49,7 +49,7 @@ export const requestPrice = async (client: WriteClient, priceOracleManagerAndOpe
 
 export const getPendingReportId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'pendingReportId',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
@@ -121,7 +121,7 @@ export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
 
 export const getRequestPriceEthCost = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'getRequestPriceEthCost',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
@@ -190,7 +190,7 @@ export const getOpenOracleReportMeta = async (client: ReadClient, reportId: bigi
 
 export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
-		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 		functionName: 'lastPrice',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],

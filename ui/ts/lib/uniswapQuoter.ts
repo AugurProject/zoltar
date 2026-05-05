@@ -1,5 +1,7 @@
 import { encodeAbiParameters, getAddress, keccak256, type Address, type Hex, zeroAddress } from 'viem'
 import type { ReadClient } from './clients.js'
+import { getActiveNetworkProfile } from './activeEnvironment.js'
+import { MAINNET_WETH_ADDRESS } from './networkProfile.js'
 
 export const UNISWAP_V4_QUOTER_ADDRESS: Address = '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203'
 // Uniswap V3 QuoterV2 — used as fallback when a V4 pool doesn't exist
@@ -11,7 +13,7 @@ const UNISWAP_POOL_EXPLORER_BASE_URL = 'https://app.uniswap.org/explore/pools/et
 export const REP_ADDRESS: Address = '0x221657776846890989a759BA2973e427DfF5C9bB'
 export const USDC_ADDRESS: Address = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
 // WETH — used for V3 quotes (V3 doesn't support native ETH, only WETH)
-export const WETH_ADDRESS: Address = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
+export const WETH_ADDRESS: Address = MAINNET_WETH_ADDRESS
 // ETH in Uniswap V4 is represented as address(0)
 export const ETH_ADDRESS: Address = zeroAddress
 
@@ -106,6 +108,19 @@ function buildUniswapPoolExplorerUrl(poolIdentifier: string) {
 	return `${UNISWAP_POOL_EXPLORER_BASE_URL}/${poolIdentifier}`
 }
 
+export function getWethAddress() {
+	return getActiveNetworkProfile().wethAddress
+}
+
+export function isRepPricingEnabled() {
+	return getActiveNetworkProfile().repPricingMode === 'uniswap'
+}
+
+function assertRepPricingEnabled() {
+	if (isRepPricingEnabled()) return
+	throw new Error('Uniswap pricing is unavailable in simulation mode.')
+}
+
 export function buildUniswapV4PoolId(tokenA: Address, tokenB: Address, poolConfig: PoolConfig): Hex {
 	const [currency0, currency1] = sortTokenPair(tokenA, tokenB)
 	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint24' }, { type: 'int24' }, { type: 'address' }], [currency0, currency1, poolConfig.fee, poolConfig.tickSpacing, poolConfig.hooks ?? zeroAddress]))
@@ -123,6 +138,7 @@ export function buildUniswapV3PoolUrl(poolAddress: Address) {
 // Use ETH_ADDRESS (zeroAddress) for ETH. Tokens can be in any order — currency0/1
 // ordering and zeroForOne direction are derived from the addresses automatically.
 export async function quoteExactInput(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, poolConfig: PoolConfig = DEFAULT_POOL_CONFIG): Promise<bigint> {
+	assertRepPricingEnabled()
 	const tokenInBig = BigInt(tokenIn)
 	const tokenOutBig = BigInt(tokenOut)
 	const zeroForOne = tokenInBig < tokenOutBig
@@ -151,6 +167,7 @@ export async function quoteExactInput(client: ReadClient, tokenIn: Address, toke
 }
 
 export async function quoteBestExactInputWithSource(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, poolConfigs: readonly PoolConfig[] = COMMON_V4_POOL_CONFIGS): Promise<{ amountOut: bigint; source: UniswapV4QuoteSource }> {
+	assertRepPricingEnabled()
 	let bestAmountOut: bigint | undefined
 	let bestPoolConfig: PoolConfig | undefined
 	let lastError: unknown
@@ -251,7 +268,7 @@ async function quoteV3ExactInput(client: ReadClient, tokenIn: Address, tokenOut:
 }
 
 function normalizeV3Token(token: Address) {
-	return token === ETH_ADDRESS ? WETH_ADDRESS : token
+	return token === ETH_ADDRESS ? getWethAddress() : token
 }
 
 async function loadUniswapV3PoolAddress(client: ReadClient, tokenIn: Address, tokenOut: Address, fee: number): Promise<Address | undefined> {
@@ -272,6 +289,7 @@ async function loadUniswapV3PoolAddress(client: ReadClient, tokenIn: Address, to
 }
 
 export async function quoteBestV3ExactInputWithSource(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, fees: readonly number[] = COMMON_V3_FEES): Promise<{ amountOut: bigint; source: UniswapV3QuoteSource }> {
+	assertRepPricingEnabled()
 	const normalizedTokenIn = normalizeV3Token(tokenIn)
 	const normalizedTokenOut = normalizeV3Token(tokenOut)
 

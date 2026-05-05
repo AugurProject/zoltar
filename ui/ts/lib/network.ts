@@ -1,5 +1,16 @@
-export const MAINNET_CHAIN_ID = '0x1'
+import { getActiveNetworkProfile } from './activeEnvironment.js'
+
+export function isSupportedAppChain(chainId: string | undefined) {
+	const profile = getActiveNetworkProfile()
+	return profile.isSupportedAppChain && chainId === profile.chainIdHex
+}
 
 export function isMainnetChain(chainId: string | undefined) {
-	return chainId === MAINNET_CHAIN_ID
+	return isSupportedAppChain(chainId)
+}
+
+export function getWrongNetworkMessage() {
+	const profile = getActiveNetworkProfile()
+	if (profile.id === 'simulation') return undefined
+	return 'Switch to Ethereum mainnet.'
 }

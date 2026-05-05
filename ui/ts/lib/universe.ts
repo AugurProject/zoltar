@@ -1,7 +1,9 @@
-import type { Address } from 'viem'
+import { getActiveNetworkProfile } from './activeEnvironment.js'
 import { readUniverseQueryParam, writeUniverseQueryParam } from './urlParams.js'
 
-export const GENESIS_REPUTATION_TOKEN_ADDRESS = '0x221657776846890989a759ba2973e427dff5c9bb' satisfies Address
+export function getGenesisReputationTokenAddress() {
+	return getActiveNetworkProfile().genesisRepTokenAddress
+}
 
 export function formatUniverseLabel(universeId: bigint) {
 	return universeId === 0n ? 'Genesis (0)' : `Universe ${universeId.toString()}`

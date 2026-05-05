@@ -12,7 +12,7 @@ import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { OperationType, getRequestPriceEthCost } from '../testsuite/simulator/utils/contracts/peripherals'
-import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator } from '../types/contractArtifact'
+import { peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -66,7 +66,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 					address: priceOracle,
 					functionName: 'requestPrice',
 					value: overpayment,
@@ -95,16 +95,16 @@ describe('Price Oracle Refund Security Tests', () => {
 		const balanceBefore = await getETHBalance(client, priceOracle)
 		assert.strictEqual(balanceBefore, preBalance, 'Pre-set balance should be set correctly')
 
-		// Call requestPriceIfNeededAndStageOperation with overpayment
+		// Call requestPriceIfNeededAndQueueOperation with overpayment
 		const caller = client.account.address
 		const sendValue = ethCost * 2n
 		await writeContractAndWait(
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
 					address: priceOracle,
-					functionName: 'requestPriceIfNeededAndStageOperation',
+					functionName: 'requestPriceIfNeededAndQueueOperation',
 					args: [OperationType.WithdrawRep, caller, 100n],
 					value: sendValue,
 				}),

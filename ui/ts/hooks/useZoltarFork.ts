@@ -10,7 +10,7 @@ import { requireWallet } from '../lib/walletGuard.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } from '../lib/errors.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
-import { GENESIS_REPUTATION_TOKEN_ADDRESS } from '../lib/universe.js'
+import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -55,7 +55,7 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 	const nextForkAccessLoad = useRequestGuard()
 
 	const loadZoltarForkAccess = async () => {
-		const reputationToken = zoltarUniverse?.reputationToken ?? (activeUniverseId === 0n ? GENESIS_REPUTATION_TOKEN_ADDRESS : undefined)
+		const reputationToken = zoltarUniverse?.reputationToken ?? (activeUniverseId === 0n ? getGenesisReputationTokenAddress() : undefined)
 		if (accountAddress === undefined || reputationToken === undefined || reputationToken === zeroAddress) {
 			zoltarForkApproval.value = {
 				error: undefined,

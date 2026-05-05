@@ -1,8 +1,8 @@
 import type { Address } from 'viem'
-import { getRequiredInjectedEthereum } from './clients.js'
+import { getActiveBackend } from './activeEnvironment.js'
 
 /**
- * Guards a write action by checking that an injected wallet is present and
+ * Guards a write action by checking that a wallet backend is present and
  * that the user has connected an account. Sets an error message and returns
  * false if either check fails.
  *
@@ -10,9 +10,7 @@ import { getRequiredInjectedEthereum } from './clients.js'
  *   if (!requireWallet(accountAddress, setError, 'creating a pool')) return
  */
 export function requireWallet(accountAddress: Address | undefined, setError: (message: string | undefined) => void, _actionLabel: string): accountAddress is Address {
-	try {
-		getRequiredInjectedEthereum()
-	} catch {
+	if (!getActiveBackend().hasWallet()) {
 		setError('Connect wallet to continue.')
 		return false
 	}
