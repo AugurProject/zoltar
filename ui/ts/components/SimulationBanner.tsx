@@ -14,6 +14,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	const blockCountSinceReset = useSignal(controller.blockCountSinceReset)
 	const currentTimestamp = useSignal(controller.currentTimestamp)
 	const currentScenario = useSignal(controller.currentScenario)
+	const queryDelayMilliseconds = useSignal(controller.queryDelayMilliseconds.toString())
 	const selectedAccount = useSignal(controller.selectedAccount)
 	const transactionCountSinceReset = useSignal(controller.transactionCountSinceReset)
 	const transactionDelayMilliseconds = useSignal(controller.transactionDelayMilliseconds.toString())
@@ -24,6 +25,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 				blockCountSinceReset.value = controller.blockCountSinceReset
 				currentTimestamp.value = controller.currentTimestamp
 				currentScenario.value = controller.currentScenario
+				queryDelayMilliseconds.value = controller.queryDelayMilliseconds.toString()
 				selectedAccount.value = controller.selectedAccount
 				transactionCountSinceReset.value = controller.transactionCountSinceReset
 				transactionDelayMilliseconds.value = controller.transactionDelayMilliseconds.toString()
@@ -63,6 +65,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 						<p className='detail'>Switch scenarios to reload the browser simulation into a different seeded state.</p>
 					</div>
 					<select
+						className='simulation-control-select'
 						value={currentScenario.value}
 						disabled={busy.value}
 						onChange={event => {
@@ -90,6 +93,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 						<p className='detail'>Switch between seeded accounts, reset the scenario, or move chain time forward.</p>
 					</div>
 					<select
+						className='simulation-control-select'
 						value={selectedAccount.value}
 						disabled={busy.value}
 						onChange={event => {
@@ -127,24 +131,45 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 					<div className='contract-copy'>
 						<h3>Controls</h3>
 						<p className='detail'>Use these controls for repeatable manual UI QA without a wallet extension.</p>
-						<label className='simulation-delay-field'>
-							<span className='simulation-delay-label'>Transaction receipt delay (ms)</span>
-							<input
-								type='number'
-								min='0'
-								step='100'
-								inputMode='numeric'
-								value={transactionDelayMilliseconds.value}
-								disabled={busy.value}
-								onInput={event => {
-									transactionDelayMilliseconds.value = event.currentTarget.value
-								}}
-								onChange={event => {
-									controller.setTransactionDelayMilliseconds(Number(event.currentTarget.value))
-								}}
-							/>
-						</label>
-						<p className='detail'>Adds an artificial confirmation delay after each simulated transaction so loading states stay visible.</p>
+						<div className='simulation-delay-grid'>
+							<label className='simulation-delay-field'>
+								<span className='simulation-delay-label'>Query delay (ms)</span>
+								<input
+									className='simulation-control-input'
+									type='number'
+									min='0'
+									step='100'
+									inputMode='numeric'
+									value={queryDelayMilliseconds.value}
+									disabled={busy.value}
+									onInput={event => {
+										queryDelayMilliseconds.value = event.currentTarget.value
+									}}
+									onChange={event => {
+										controller.setQueryDelayMilliseconds(Number(event.currentTarget.value))
+									}}
+								/>
+							</label>
+							<label className='simulation-delay-field'>
+								<span className='simulation-delay-label'>Transaction receipt delay (ms)</span>
+								<input
+									className='simulation-control-input'
+									type='number'
+									min='0'
+									step='100'
+									inputMode='numeric'
+									value={transactionDelayMilliseconds.value}
+									disabled={busy.value}
+									onInput={event => {
+										transactionDelayMilliseconds.value = event.currentTarget.value
+									}}
+									onChange={event => {
+										controller.setTransactionDelayMilliseconds(Number(event.currentTarget.value))
+									}}
+								/>
+							</label>
+						</div>
+						<p className='detail'>Query delay slows simulation reads. Transaction delay slows receipt confirmation so loading states stay visible.</p>
 					</div>
 					<div className='button-row'>
 						<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value}>

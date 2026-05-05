@@ -9,9 +9,11 @@ export type SimulationController = {
 	currentScenario: SimulationScenario
 	isActive: true
 	mineBlock(): Promise<void>
+	queryDelayMilliseconds: number
 	reset(): Promise<void>
 	selectAccount(address: Address): Promise<void>
 	selectedAccount: Address
+	setQueryDelayMilliseconds(value: number): void
 	subscribe(handler: () => void): () => void
 	transactionCountSinceReset: bigint
 	transactionDelayMilliseconds: number

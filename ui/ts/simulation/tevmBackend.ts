@@ -40,9 +40,10 @@ function emitListeners(listeners: ReturnType<typeof createListenerMap>, eventNam
 	}
 }
 
-function createSimulationProvider({ getChainId, getSelectedAccount, memoryClient }: { getChainId: () => string; getSelectedAccount: () => Address; memoryClient: MemoryClientLike }): InjectedEthereum {
+function createSimulationProvider({ getChainId, getQueryDelayMilliseconds, getSelectedAccount, memoryClient }: { getChainId: () => string; getQueryDelayMilliseconds: () => number; getSelectedAccount: () => Address; memoryClient: MemoryClientLike }): InjectedEthereum {
 	const passthroughRequest = memoryClient.request as (parameters: RequestArguments) => Promise<unknown>
 	const request = (async (parameters: RequestArguments) => {
+		await delayMilliseconds(getQueryDelayMilliseconds())
 		if (parameters.method === 'eth_accounts' || parameters.method === 'eth_requestAccounts') {
 			return [getSelectedAccount()]
 		}
@@ -314,11 +315,19 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 	let baselineBlockNumber = 0n
 	let blockCountSinceReset = 0n
 	let currentTimestamp = 0n
+	let queryDelayMilliseconds = 100
 	let selectedAccount = primaryAccount
 	let transactionCountSinceReset = 0n
-	let transactionDelayMilliseconds = 0
+	let transactionDelayMilliseconds = 1_000
 	const provider = createSimulationProvider({
 		getChainId: () => profile.chainIdHex,
+		getQueryDelayMilliseconds: () => queryDelayMilliseconds,
+		getSelectedAccount: () => selectedAccount,
+		memoryClient,
+	})
+	const bootstrapProvider = createSimulationProvider({
+		getChainId: () => profile.chainIdHex,
+		getQueryDelayMilliseconds: () => 0,
 		getSelectedAccount: () => selectedAccount,
 		memoryClient,
 	})
@@ -340,6 +349,25 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 		blockCountSinceReset = chainState.blockNumber >= baselineBlockNumber ? chainState.blockNumber - baselineBlockNumber : 0n
 	}
 
+	const createBootstrapReadClient = () =>
+		createPublicClient({
+			chain: profile.chain,
+			transport: custom(bootstrapProvider),
+		}) as ReadClient
+
+	const createBootstrapWriteClient = (accountAddress: Address) =>
+		createWriteClient({
+			accountAddress,
+			callbacks: {},
+			ensureImpersonated,
+			getTransactionDelayMilliseconds: () => 0,
+			memoryClient,
+			onSimulationReceiptResolved: async () => undefined,
+			onSimulationTransactionSubmitted: async () => undefined,
+			profile,
+			provider: bootstrapProvider,
+		})
+
 	const backend: SimulationBackend = {
 		accounts: QA_ACCOUNTS,
 		advanceTime: async seconds => {
@@ -351,8 +379,8 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 		bootstrap: async () => {
 			await bootstrapSimulationChain({
 				accounts: QA_ACCOUNTS,
-				createReadClient: backend.createReadClient,
-				createWriteClient: accountAddress => backend.createWriteClient(accountAddress),
+				createReadClient: createBootstrapReadClient,
+				createWriteClient: createBootstrapWriteClient,
 				memoryClient,
 				onBaselineState: state => {
 					baselineState = state
@@ -414,6 +442,9 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 			emitListeners(listeners, 'state')
 		},
 		profile,
+		get queryDelayMilliseconds() {
+			return queryDelayMilliseconds
+		},
 		requestAccounts: async () => [selectedAccount],
 		reset: async () => {
 			if (baselineState === undefined || baselineState === null) {
@@ -432,6 +463,10 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 		},
 		setTransactionDelayMilliseconds: value => {
 			transactionDelayMilliseconds = clampTransactionDelayMilliseconds(value)
+			emitListeners(listeners, 'state')
+		},
+		setQueryDelayMilliseconds: value => {
+			queryDelayMilliseconds = clampTransactionDelayMilliseconds(value)
 			emitListeners(listeners, 'state')
 		},
 		selectAccount: async address => {
