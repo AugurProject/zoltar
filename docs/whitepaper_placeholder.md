@@ -13,7 +13,7 @@ The stack in this repository has two distinct protocol identities.
 - `Zoltar` is the base oracle substrate.
 - `Augur Placeholder` is the application layer built on top of Zoltar.
 
-For the Zoltar substrate itself, including universes, question encoding, scalar math, and REP migration, see [whitepaper_zoltar.md](./whitepaper_zoltar.md).
+For the Zoltar substrate itself, including universes, question encoding, scalar math, and REP migration, see [whitepaper_zoltar.md](./whitepaper_zoltar.md). This paper assumes that fork-and-migration model as given and focuses on the market, underwriting, and collateral system layered above it.
 
 Augur Placeholder is responsible for the economic system on top of that substrate:
 
@@ -98,15 +98,21 @@ Each vault can choose a `securityBondAllowance`. This is the amount of open inte
 
 At the vault level, the solvency condition enforced by operations such as `performWithdrawRep` is:
 
-`remaining REP backing * PRICE_PRECISION >= securityBondAllowance * REP/ETH price`
+$$
+\text{remainingRepBacking} \cdot \text{PRICE\_PRECISION} \geq \text{securityBondAllowance} \cdot \text{repPerEthPrice}
+$$
 
 Here the oracle price is oriented as:
 
-`REP/ETH price = REP * PRICE_PRECISION / ETH`
+$$
+\text{repPerEthPrice} = \frac{\text{repAmount} \cdot \text{PRICE\_PRECISION}}{\text{ethAmount}}
+$$
 
 At the liquidation boundary, the system uses the stronger condition that includes the pool’s chosen security multiplier:
 
-`vault is liquidable if securityBondAllowance * securityMultiplier * REP/ETH price > REP backing * PRICE_PRECISION`
+$$
+\text{vaultIsLiquidable if } \text{securityBondAllowance} \cdot \text{securityMultiplier} \cdot \text{repPerEthPrice} > \text{repBacking} \cdot \text{PRICE\_PRECISION}
+$$
 
 The contract applies related conditions both at the vault level and at the whole-pool level before allowing operations such as `performWithdrawRep`, `performLiquidation`, and `performSetSecurityBondsAllowance`.
 
@@ -125,15 +131,19 @@ The pool gradually converts part of complete-set collateral into fees owed to RE
 - `feeIndex`
 - `currentRetentionRate`
 
-The retention rate is updated as utilization changes. The current curve in [`SecurityPoolUtils.calculateRetentionRate`](../solidity/contracts/peripherals/SecurityPoolUtils.sol) is heuristic: it begins at a high retention rate, declines linearly until 80% utilization, and then bottoms out at a lower rate.
+The retention rate is updated as utilization changes. The current curve in [`SecurityPoolUtils.calculateRetentionRate`](../solidity/contracts/peripherals/SecurityPoolUtils.sol) is heuristic: it begins at a high retention rate, declines linearly until 80% utilization, and then bottoms out at a lower rate. The intent is to charge more aggressively for security as utilization rises and available underwriting slack falls.
 
 The utilization proxy is:
 
-`utilization = completeSetCollateralAmount / totalSecurityBondAllowance`
+$$
+\text{utilization} = \frac{\text{completeSetCollateralAmount}}{\text{totalSecurityBondAllowance}}
+$$
 
 and the collateral base decays over time approximately as:
 
-`collateral(t + dt) = collateral(t) * retentionRate^dt`
+$$
+\text{collateralAtLaterTime} = \text{collateralAtCurrentTime} \cdot \text{retentionRate}^{\text{elapsedTime}}
+$$
 
 with the lost portion becoming fees owed to REP vaults.
 
@@ -143,7 +153,7 @@ REP withdrawal, liquidation, and bond-allowance updates depend on a valid REP/ET
 
 ### Liquidation
 
-Liquidation in Augur Placeholder is a transfer of risk, not a direct sale of collateral. When a vault becomes undercollateralized relative to its `securityBondAllowance`, oracle price, and `securityMultiplier`, another vault can call `performLiquidation` through the queued-oracle path. The contract snapshots the target vault’s state at queue time, then uses that snapshot when the operation executes so that later state changes cannot trivially invalidate the liquidation attempt.
+Liquidation in Augur Placeholder is a transfer of risk, not a direct sale of collateral. When a vault becomes undercollateralized relative to its `securityBondAllowance`, oracle price, and `securityMultiplier`, another vault can call `performLiquidation` through the queued-oracle path. The contract snapshots the target vault’s state at queue time, then uses that snapshot when the operation executes so that later target-vault manipulation cannot trivially invalidate the liquidation attempt.
 
 Economically, liquidation moves some amount of debt and a corresponding amount of REP-backed ownership from the target vault to the caller vault. The receiving vault must remain solvent after taking on that additional debt, and both sides must still satisfy the minimum deposit requirements enforced by the pool. In the current implementation, this mechanism is intentionally strict: it is designed to move underwriting responsibility away from an unsafe vault and into one that can still support it.
 
@@ -169,7 +179,7 @@ Shares can also migrate across forks. `ShareToken.migrate` burns a parent-univer
 
 ## 6. Escalation Resolution
 
-Augur Placeholder does not require every dispute to become a Zoltar fork. Instead it first attempts local resolution through [`EscalationGame`](../solidity/contracts/peripherals/EscalationGame.sol).
+Augur Placeholder does not require every dispute to become a Zoltar fork. Instead it first attempts local resolution through [`EscalationGame`](../solidity/contracts/peripherals/EscalationGame.sol). In this repository’s architecture, the escalation game lives in Placeholder rather than in Zoltar because it is part of the application-layer market and migration workflow, not part of the minimal forkable-universe substrate itself.
 
 ### Basic structure
 
@@ -183,14 +193,16 @@ Participants stake behind one of three outcomes:
 
 The required attrition cost rises from `startBond` to `nonDecisionThreshold` over a seven-week interval. The contract computes this curve from an exponential form and exposes both forward and inverse calculations.
 
-If `s` is `startBond`, `n` is `nonDecisionThreshold`, `t` is elapsed time, and `T` is the full escalation interval, the intended cost curve is:
+If `startingBondAmount` is `startBond`, `nonDecisionThresholdAmount` is `nonDecisionThreshold`, `elapsedTime` is time since game start, and `fullEscalationInterval` is the full escalation interval, the intended cost curve is:
 
-`cost(t) = s * exp( ln(n / s) * t / T )`
+$$
+\text{requiredEscalationCost}(\text{elapsedTime}) = \text{startingBondAmount} \cdot \exp\left(\ln\left(\frac{\text{nonDecisionThresholdAmount}}{\text{startingBondAmount}}\right) \cdot \frac{\text{elapsedTime}}{\text{fullEscalationInterval}}\right)
+$$
 
 This gives:
 
-- `cost(0) = s`
-- `cost(T) = n`
+- `requiredEscalationCost(0) = startingBondAmount`
+- `requiredEscalationCost(fullEscalationInterval) = nonDecisionThresholdAmount`
 - monotonic growth between those endpoints
 
 ### Resolution rule
@@ -254,7 +266,7 @@ State-machine view:
 
 | State | Meaning | Typical transition out |
 | --- | --- | --- |
-| `Operational` | normal pool operation outside the explicit fork/migration lifecycle | the question may resolve locally without entering a dedicated terminal `SystemState`, or the pool may activate fork handling |
+| `Operational` | normal pool operation outside the explicit fork/migration lifecycle | question resolution does not itself create a separate terminal state, or the pool may activate fork handling |
 | `PoolForked` | parent pool has stopped normal operation after fork | child pools begin migration setup |
 | `ForkMigration` | child pool is receiving migrated vaults, REP-derived state, and collateral | migration window ends |
 | `ForkTruthAuction` | child pool is repairing missing collateral with REP sale | auction finalizes and pool returns to `Operational` |
@@ -287,27 +299,27 @@ Parent universe U0
     |
     | fork on disputed question
     v
-+---------------------------+
-| Zoltar child universe UY  |
-| outcome: Yes              |
-| migrated REP: 60%         |
-+-------------+-------------+
-              |
-              v
++--------------------------+
+| Zoltar child universe UY |
+| outcome: Yes             |
+| migrated REP: 60%        |
++------------+-------------+
+             |
+             v
 +---------------------------+
 | Placeholder child pool    |
-| migrated collateral: 60 ETH |
-| target collateral: 100 ETH  |
+| collateral: 60 ETH        |
+| target: 100 ETH           |
 | gap: 40 ETH               |
-+-------------+-------------+
-              |
-              v
++------------+--------------+
+             |
+             v
 +---------------------------+
 | Truth auction             |
 | sell child REP for ETH    |
-+-------------+-------------+
-              |
-              v
++------------+--------------+
+             |
+             v
 +---------------------------+
 | Repaired child pool       |
 | resumes operation         |
@@ -337,7 +349,9 @@ To repair that mismatch, the child pool can sell REP through [`UniformPriceDualC
 
 In the actual `startTruthAuction` logic, the ETH repair target is:
 
-`ethToBuy = parentCollateral - parentCollateral * migratedRep / repAtFork`
+$$
+\text{ethCollateralToBuy} = \text{parentCollateralAmount} - \frac{\text{parentCollateralAmount} \cdot \text{migratedRepAmount}}{\text{repAtForkAmount}}
+$$
 
 This is the contract’s direct statement of the gap: how much ETH collateral the child branch is still missing after accounting for the fraction of REP-backed state that has already migrated into it.
 
