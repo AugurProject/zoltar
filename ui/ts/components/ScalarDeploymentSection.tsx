@@ -2,14 +2,13 @@ import { useState } from 'preact/hooks'
 import type { Address } from 'viem'
 import { ChildUniversesSection } from './ChildUniversesSection.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
-import { DataGrid } from './DataGrid.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { useEffect } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
-import { MetricField } from './MetricField.js'
+import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
-import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
+import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../types/contracts.js'
 
 type ScalarDeploymentSectionProps = {
@@ -73,50 +72,8 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				renderBadge={child => <span className={`badge ${child.exists ? 'ok' : 'pending'}`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
 				renderBody={child => <ChildUniverseDetails child={child} />}
 			/>
-			<div className='market-scalar-deploy workflow-subsection'>
-				<div className='field scalar-slider-field'>
-					<span>Select Child Universe</span>
-					<div className='scalar-slider-with-invalid'>
-						<div className={`scalar-slider-rail ${scalarOutcomeInvalid ? 'is-disabled' : ''}`}>
-							<div className='scalar-slider-track' />
-							<div className='scalar-slider-input-wrapper'>
-								<div className='scalar-slider-fill' style={{ '--slider-fill': scalarOutcomeInvalid ? '0%' : getScalarSliderFillWidth(clampedSelectedScalarTick, questionDetails.numTicks) }} />
-								<input
-									disabled={scalarOutcomeInvalid}
-									type='range'
-									min='0'
-									max={questionDetails.numTicks.toString()}
-									step='1'
-									value={clampedScalarOutcomeTick}
-									aria-valuetext={selectedScalarOutcomeLabel}
-									onInput={event => {
-										setScalarDeployError(undefined)
-										setScalarOutcomeTick(event.currentTarget.value)
-									}}
-								/>
-							</div>
-						</div>
-						<span className='scalar-or-divider'>or</span>
-						<label className='scalar-invalid-toggle'>
-							<input
-								type='checkbox'
-								checked={scalarOutcomeInvalid}
-								onChange={event => {
-									setScalarDeployError(undefined)
-									setScalarOutcomeInvalid(event.currentTarget.checked)
-								}}
-							/>
-							<span>Invalid</span>
-						</label>
-					</div>
-				</div>
-				<DataGrid className='scalar-slider-stats'>
-					<MetricField label='Min Value'>{formatScalarOutcomeLabel(questionDetails, 0n)}</MetricField>
-					<MetricField label='Selected Tick'>{scalarOutcomeInvalid ? 'Invalid' : `${clampedScalarOutcomeTick} / ${questionDetails.numTicks.toString()}`}</MetricField>
-					<MetricField label='Selected Outcome'>{selectedScalarOutcomeLabel}</MetricField>
-					<MetricField label='Max Value'>{formatScalarOutcomeLabel(questionDetails, questionDetails.numTicks)}</MetricField>
-				</DataGrid>
-				<div className='actions'>
+			<ScalarOutcomePicker
+				action={
 					<TransactionActionButton
 						idleLabel={selectedScalarChildExists ? 'Deployed' : scalarOutcomeInvalid ? 'Deploy Invalid Universe' : 'Deploy Universe'}
 						pendingLabel='Deploying universe...'
@@ -132,8 +89,26 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 						tone='secondary'
 						availability={{ disabled: !canDeployScalarChild || scalarDeployError !== undefined, reason: deployReason }}
 					/>
-				</div>
-			</div>
+				}
+				details={{
+					maxValueLabel: formatScalarOutcomeLabel(questionDetails, questionDetails.numTicks),
+					minValueLabel: formatScalarOutcomeLabel(questionDetails, 0n),
+					numTicks: questionDetails.numTicks,
+				}}
+				isInvalid={scalarOutcomeInvalid}
+				label='Select Child Universe'
+				onInvalidChange={invalid => {
+					setScalarDeployError(undefined)
+					setScalarOutcomeInvalid(invalid)
+				}}
+				onSelectedTickChange={tick => {
+					setScalarDeployError(undefined)
+					setScalarOutcomeTick(tick)
+				}}
+				selectedOutcomeLabel={selectedScalarOutcomeLabel}
+				selectedTick={clampedScalarOutcomeTick}
+				selectedTickLabel={scalarOutcomeInvalid ? 'Invalid' : `${clampedScalarOutcomeTick} / ${questionDetails.numTicks.toString()}`}
+			/>
 			<ErrorNotice message={scalarDeployError} />
 			<ErrorNotice message={zoltarChildUniverseError} />
 		</WorkflowSubsection>

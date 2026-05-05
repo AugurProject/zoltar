@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from 'viem'
 import { ErrorNotice } from '../components/ErrorNotice.js'
+import { FormInput } from '../components/FormInput.js'
 import { MetricField } from '../components/MetricField.js'
 import { renderSelectedReportActionSection } from '../components/OpenOracleSection.js'
 import { SectionBlock } from '../components/SectionBlock.js'
@@ -365,6 +366,14 @@ void describe('OpenOracleSection', () => {
 
 		expect(getTextContent(section)).toContain('WETH approval required')
 		expect(hasVNodeType(section, ErrorNotice)).toBe(false)
+	})
+
+	void test('uses the shared form input for initial-report and dispute amount fields', () => {
+		const initialReportSection = renderInitialReportActionSection()
+		const disputeSection = renderDisputeActionSection()
+
+		expect(hasVNodeType(initialReportSection, FormInput)).toBe(true)
+		expect(hasVNodeType(disputeSection, FormInput)).toBe(true)
 	})
 
 	void test('renders settle-only controls after the dispute window closes', () => {

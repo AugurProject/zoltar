@@ -1,9 +1,9 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useMemo, useState } from 'preact/hooks'
-import { DataGrid } from './DataGrid.js'
-import { MetricField } from './MetricField.js'
+import { OutcomeSelectionList } from './OutcomeSelectionList.js'
+import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
-import { clampScalarTickIndex, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
+import { clampScalarTickIndex, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type ShareMigrationTargetsSectionProps = {
@@ -27,21 +27,23 @@ function getTargetOutcomeBadgeLabel(target: TargetOutcomePresentation) {
 }
 
 function renderTargetOutcomeRow(target: TargetOutcomePresentation, selected: boolean, disabled: boolean, onToggleOutcomeIndex: (outcomeIndex: bigint) => void) {
-	return (
-		<button key={target.outcomeIndex.toString()} aria-pressed={selected} className={`migration-outcome-row ${selected ? 'active' : ''}`} disabled={disabled} onClick={() => onToggleOutcomeIndex(target.outcomeIndex)} type='button'>
-			<span className='migration-outcome-copy'>
-				<span className='migration-outcome-label'>{target.label}</span>
-				<span className='migration-outcome-metrics'>
-					<span>
-						<strong>{selected ? 'Selected' : 'Not selected'}</strong>
-					</span>
-					<span>
-						<strong>{getTargetOutcomeBadgeLabel(target)}</strong>
-					</span>
+	return {
+		details: (
+			<>
+				<span>
+					<strong>{selected ? 'Selected' : 'Not selected'}</strong>
 				</span>
-			</span>
-		</button>
-	)
+				<span>
+					<strong>{getTargetOutcomeBadgeLabel(target)}</strong>
+				</span>
+			</>
+		),
+		disabled,
+		key: target.outcomeIndex.toString(),
+		label: target.label,
+		onSelect: () => onToggleOutcomeIndex(target.outcomeIndex),
+		selected,
+	}
 }
 
 function getScalarSelectedTargetOutcomes(childUniverseByOutcomeIndex: Map<string, ZoltarChildUniverseSummary>, scalarQuestion: MarketDetails, selectedOutcomeIndexes: bigint[]) {
@@ -107,7 +109,7 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 
 		return renderTargetSection(
 			'Target Child Universes',
-			childUniverses.length === 0 ? <p className='detail'>No target child universes available.</p> : <div className='migration-outcome-list'>{childUniverses.map(target => renderTargetOutcomeRow(target, selectedOutcomeIndexSet.has(target.outcomeIndex.toString()), disabled, onToggleOutcomeIndex))}</div>,
+			<OutcomeSelectionList emptyMessage='No target child universes available.' items={childUniverses.map(target => renderTargetOutcomeRow(target, selectedOutcomeIndexSet.has(target.outcomeIndex.toString()), disabled, onToggleOutcomeIndex))} />,
 			<div className='actions'>
 				<button className='quiet' type='button' onClick={onSelectAllOutcomeIndexes} disabled={disabled || !hasSelectableTargets}>
 					Select all
@@ -133,55 +135,27 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 	return renderTargetSection(
 		'Target Child Universes',
 		<>
-			{selectedTargetOutcomes.length === 0 ? <p className='detail'>Select at least one scalar target universe.</p> : <div className='migration-outcome-list'>{selectedTargetOutcomes.map(target => renderTargetOutcomeRow(target, true, disabled, onToggleOutcomeIndex))}</div>}
-			<div className='market-scalar-deploy workflow-subsection'>
-				<div className='field scalar-slider-field'>
-					<span>Select Scalar Target</span>
-					<div className='scalar-slider-with-invalid'>
-						<div className={`scalar-slider-rail ${scalarOutcomeInvalid ? 'is-disabled' : ''}`}>
-							<div className='scalar-slider-track' />
-							<div className='scalar-slider-input-wrapper'>
-								<div className='scalar-slider-fill' style={{ '--slider-fill': scalarOutcomeInvalid ? '0%' : getScalarSliderFillWidth(clampedSelectedScalarTick, scalarQuestion.numTicks) }} />
-								<input
-									disabled={disabled || scalarOutcomeInvalid}
-									type='range'
-									min='0'
-									max={scalarQuestion.numTicks.toString()}
-									step='1'
-									value={clampedScalarOutcomeTick}
-									aria-valuetext={candidateOutcomeLabel}
-									onInput={event => {
-										setScalarOutcomeTick(event.currentTarget.value)
-									}}
-								/>
-							</div>
-						</div>
-						<span className='scalar-or-divider'>or</span>
-						<label className='scalar-invalid-toggle'>
-							<input
-								type='checkbox'
-								disabled={disabled}
-								checked={scalarOutcomeInvalid}
-								onChange={event => {
-									setScalarOutcomeInvalid(event.currentTarget.checked)
-								}}
-							/>
-							<span>Invalid</span>
-						</label>
-					</div>
-				</div>
-				<DataGrid className='scalar-slider-stats'>
-					<MetricField label='Min Value'>{formatScalarOutcomeLabel(scalarQuestion, 0n)}</MetricField>
-					<MetricField label='Selected Tick'>{scalarOutcomeInvalid ? 'Invalid' : `${clampedScalarOutcomeTick} / ${scalarQuestion.numTicks.toString()}`}</MetricField>
-					<MetricField label='Selected Outcome'>{candidateOutcomeLabel}</MetricField>
-					<MetricField label='Max Value'>{formatScalarOutcomeLabel(scalarQuestion, scalarQuestion.numTicks)}</MetricField>
-				</DataGrid>
-				<div className='actions'>
+			<OutcomeSelectionList emptyMessage='Select at least one scalar target universe.' items={selectedTargetOutcomes.map(target => renderTargetOutcomeRow(target, true, disabled, onToggleOutcomeIndex))} />
+			<ScalarOutcomePicker
+				action={
 					<button className='secondary' type='button' onClick={() => onToggleOutcomeIndex(candidateOutcomeIndex)} disabled={disabled}>
 						{candidateSelected ? 'Remove Target' : 'Add Target'}
 					</button>
-				</div>
-			</div>
+				}
+				details={{
+					maxValueLabel: formatScalarOutcomeLabel(scalarQuestion, scalarQuestion.numTicks),
+					minValueLabel: formatScalarOutcomeLabel(scalarQuestion, 0n),
+					numTicks: scalarQuestion.numTicks,
+				}}
+				disabled={disabled}
+				isInvalid={scalarOutcomeInvalid}
+				label='Select Scalar Target'
+				onInvalidChange={setScalarOutcomeInvalid}
+				onSelectedTickChange={setScalarOutcomeTick}
+				selectedOutcomeLabel={candidateOutcomeLabel}
+				selectedTick={clampedScalarOutcomeTick}
+				selectedTickLabel={scalarOutcomeInvalid ? 'Invalid' : `${clampedScalarOutcomeTick} / ${scalarQuestion.numTicks.toString()}`}
+			/>
 		</>,
 		<button className='quiet' type='button' onClick={onClearOutcomeIndexes} disabled={disabled || selectedOutcomeIndexes.length === 0}>
 			Clear

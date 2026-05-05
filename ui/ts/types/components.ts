@@ -63,12 +63,63 @@ export type SectionBlockProps = {
 	variant?: 'default' | 'embedded'
 }
 
+export type RouteWorkflowPanelProps = {
+	children: ComponentChildren
+	className?: string
+	description?: ComponentChildren
+	showHeader?: boolean
+	title: ComponentChildren
+}
+
 export type DataGridProps = {
 	children: ComponentChildren
 	className?: string
 	columns?: 2 | 3 | 4 | 'auto'
 	dense?: boolean
 }
+
+export type ScalarOutcomePickerProps = {
+	action?: ComponentChildren
+	details: {
+		maxValueLabel?: ComponentChildren
+		minValueLabel?: ComponentChildren
+		numTicks: bigint
+	}
+	disabled?: boolean
+	isInvalid: boolean
+	label: ComponentChildren
+	onInvalidChange: (invalid: boolean) => void
+	onSelectedTickChange: (tick: string) => void
+	selectedOutcomeLabel: ComponentChildren
+	selectedTick: string
+	selectedTickLabel: ComponentChildren
+	showMinMax?: boolean
+}
+
+export type OutcomeSelectionListProps = {
+	className?: string
+	emptyMessage?: ComponentChildren
+	items: Array<{
+		details?: ComponentChildren
+		disabled?: boolean
+		key: string
+		label: ComponentChildren
+		onSelect: () => void
+		selected: boolean
+	}>
+}
+
+export type VaultMetricGridProps = {
+	approvedRep?: TokenApprovalState | undefined
+	className?: string
+	lockedRepInEscalationGame?: bigint | undefined
+	priceValidUntilTimestamp?: bigint | undefined
+	repDepositShare: bigint | undefined
+	selectedPoolSecurityMultiplier: bigint | undefined
+	securityBondAllowance: bigint | undefined
+	unpaidEthFees: bigint | undefined
+	variant?: 'embedded' | 'record'
+} & RepPerEthPriceProps
 
 export type ViewTabOption<TValue extends string> = {
 	disabled?: boolean

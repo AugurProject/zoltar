@@ -1,19 +1,20 @@
 import { useEffect, useRef } from 'preact/hooks'
-import { ApprovedAmountValue } from './ApprovedAmountValue.js'
-import { CollateralizationMetricField } from './CollateralizationMetricField.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
+import { FormInput } from './FormInput.js'
 import { LatestActionSection } from './LatestActionSection.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
+import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
+import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { balanceShortage } from '../lib/inputs.js'
@@ -22,7 +23,6 @@ import { isMainnetChain } from '../lib/network.js'
 import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
 import { getWalletPresentation } from '../lib/userCopy.js'
 import { getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
-import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
 type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'securityVaultRepApproval' | 'selectedPoolSecurityMultiplier'> & {
@@ -33,34 +33,19 @@ type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerE
 }
 
 export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityVaultDetails, securityVaultRepApproval, selectedPoolSecurityMultiplier, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
-	const gridClassName = variant === 'embedded' ? 'workflow-metric-grid' : 'entity-metric-grid'
-	const metricClassName = variant === 'embedded' ? undefined : 'entity-metric'
 	const content = (
-		<div className={gridClassName}>
-			<MetricField className={metricClassName} label='Rep Deposit'>
-				<CurrencyValue value={securityVaultDetails.repDepositShare} suffix='REP' />
-			</MetricField>
-			<MetricField className={metricClassName} label='Approved REP'>
-				<ApprovedAmountValue loading={securityVaultRepApproval.loading} value={securityVaultRepApproval.value} suffix='REP' />
-			</MetricField>
-			<MetricField className={metricClassName} label='Security Bond Allowance'>
-				<CurrencyValue value={securityBondAllowance} suffix='ETH' />
-			</MetricField>
-			<CollateralizationMetricField
-				className={metricClassName}
-				collateralizationPercent={getVaultCollateralizationPercent(securityVaultDetails.repDepositShare, securityBondAllowance, repPerEthPrice)}
-				repPerEthSource={repPerEthSource}
-				repPerEthSourceUrl={repPerEthSourceUrl}
-				securityBondAllowance={securityBondAllowance}
-				securityMultiplier={selectedPoolSecurityMultiplier}
-			/>
-			<MetricField className={metricClassName} label='Unpaid ETH Fees'>
-				<CurrencyValue value={securityVaultDetails.unpaidEthFees} suffix='ETH' />
-			</MetricField>
-			<MetricField className={metricClassName} label='Locked REP'>
-				<CurrencyValue value={securityVaultDetails.lockedRepInEscalationGame} suffix='REP' />
-			</MetricField>
-		</div>
+		<VaultMetricGrid
+			approvedRep={securityVaultRepApproval}
+			lockedRepInEscalationGame={securityVaultDetails.lockedRepInEscalationGame}
+			repDepositShare={securityVaultDetails.repDepositShare}
+			repPerEthPrice={repPerEthPrice}
+			repPerEthSource={repPerEthSource}
+			repPerEthSourceUrl={repPerEthSourceUrl}
+			selectedPoolSecurityMultiplier={selectedPoolSecurityMultiplier}
+			securityBondAllowance={securityBondAllowance}
+			unpaidEthFees={securityVaultDetails.unpaidEthFees}
+			variant={variant}
+		/>
 	)
 
 	if (variant === 'embedded') {
@@ -254,7 +239,7 @@ export function SecurityVaultSection({
 					{showSecurityPoolAddressInput ? (
 						<label className='field'>
 							<span>Security Pool Address</span>
-							<input value={normalizedSecurityVaultForm.securityPoolAddress} onInput={event => onSecurityVaultFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder='0x...' />
+							<FormInput value={normalizedSecurityVaultForm.securityPoolAddress} onInput={event => onSecurityVaultFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder='0x...' />
 						</label>
 					) : undefined}
 					{selectedVaultIsOwnedByAccount ? undefined : <p className='detail'>Select your own vault to unlock actions.</p>}
@@ -295,7 +280,7 @@ export function SecurityVaultSection({
 				<label className='field'>
 					<span>REP Deposit Amount</span>
 					<div className='field-inline'>
-						<input className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} />
+						<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} />
 						<button
 							className='quiet field-inline-action'
 							type='button'
@@ -353,7 +338,7 @@ export function SecurityVaultSection({
 						</div>
 						<label className='field'>
 							<span>Security Bond Allowance Amount</span>
-							<input value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} />
+							<FormInput value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} />
 						</label>
 						<div className='actions'>
 							<TransactionActionButton
@@ -387,7 +372,7 @@ export function SecurityVaultSection({
 				<label className='field'>
 					<span>REP Withdraw Amount</span>
 					<div className='field-inline'>
-						<input className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} />
+						<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} />
 						<button
 							className='quiet field-inline-action'
 							type='button'
@@ -415,17 +400,8 @@ export function SecurityVaultSection({
 	}
 
 	return (
-		<section className='panel market-panel'>
-			{showHeader ? (
-				<div className='market-header'>
-					<div>
-						<h2>Security Vault</h2>
-						<p className='detail'>Browse vaults for the selected security pool, then manage REP, fees, and redemptions for the selected vault.</p>
-					</div>
-				</div>
-			) : undefined}
-
-			<div className='workflow-stack route-workflow-stack'>{sections}</div>
-		</section>
+		<RouteWorkflowPanel description='Browse vaults for the selected security pool, then manage REP, fees, and redemptions for the selected vault.' showHeader={showHeader} title='Security Vault'>
+			{sections}
+		</RouteWorkflowPanel>
 	)
 }
