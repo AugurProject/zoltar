@@ -3,6 +3,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { DataGrid } from './DataGrid.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
+import { FormInput } from './FormInput.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
 import { SectionBlock } from './SectionBlock.js'
@@ -134,7 +135,7 @@ export function ForkZoltarSection({
 
 					<label className='field'>
 						<span>Fork Question ID</span>
-						<input value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder='0x...' disabled={hasForked || zoltarForkPending} />
+						<FormInput value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder='0x...' disabled={hasForked || zoltarForkPending} />
 					</label>
 
 					{selectedQuestion === undefined ? undefined : (

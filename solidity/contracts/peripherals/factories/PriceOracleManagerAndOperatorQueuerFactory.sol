@@ -5,10 +5,10 @@ import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { Zoltar } from '../../Zoltar.sol';
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
-import { PriceOracleManagerAndOperatorQueuer } from '../PriceOracleManagerAndOperatorQueuer.sol';
+import { SecurityPoolOracleCoordinator } from '../SecurityPoolOracleCoordinator.sol';
 
 contract PriceOracleManagerAndOperatorQueuerFactory {
-	function deployPriceOracleManagerAndOperatorQueuer(OpenOracle _openOracle, ReputationToken _reputationToken, bytes32 salt) external returns (PriceOracleManagerAndOperatorQueuer) {
-		return new PriceOracleManagerAndOperatorQueuer{ salt: keccak256(abi.encode(msg.sender, salt)) }(_openOracle, _reputationToken);
+	function deployPriceOracleManagerAndOperatorQueuer(OpenOracle _openOracle, ReputationToken _reputationToken, bytes32 salt) external returns (SecurityPoolOracleCoordinator) {
+		return new SecurityPoolOracleCoordinator{ salt: keccak256(abi.encode(msg.sender, salt)) }(_openOracle, _reputationToken);
 	}
 }

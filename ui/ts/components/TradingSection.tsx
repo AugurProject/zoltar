@@ -1,7 +1,9 @@
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
+import { FormInput } from './FormInput.js'
 import { LatestActionSection } from './LatestActionSection.js'
 import { MetricField } from './MetricField.js'
+import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { ShareMigrationTargetsSection } from './ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
@@ -138,7 +140,7 @@ export function TradingSection({
 				<SectionBlock density='compact'>
 					<label className='field'>
 						<span>Security Pool Address</span>
-						<input value={tradingForm.securityPoolAddress} onInput={event => onTradingFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder='0x...' />
+						<FormInput value={tradingForm.securityPoolAddress} onInput={event => onTradingFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder='0x...' />
 					</label>
 				</SectionBlock>
 			)}
@@ -159,7 +161,7 @@ export function TradingSection({
 			<SectionBlock title='Mint Complete Sets'>
 				<label className='field'>
 					<span>Mint Complete Sets Amount</span>
-					<input value={tradingForm.completeSetAmount} inputMode='decimal' onInput={event => onTradingFormChange({ completeSetAmount: event.currentTarget.value })} />
+					<FormInput value={tradingForm.completeSetAmount} inputMode='decimal' onInput={event => onTradingFormChange({ completeSetAmount: event.currentTarget.value })} />
 				</label>
 				<div className='actions'>
 					<TransactionActionButton idleLabel='Mint Complete Sets' pendingLabel='Minting complete sets...' onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} availability={{ disabled: mintGuardMessage !== undefined, reason: mintGuardMessage }} />
@@ -170,7 +172,7 @@ export function TradingSection({
 				<label className='field'>
 					<span>Redeem Complete Sets Amount</span>
 					<div className='field-inline'>
-						<input className='field-inline-input' value={tradingForm.redeemAmount} inputMode='decimal' onInput={event => onTradingFormChange({ redeemAmount: event.currentTarget.value })} />
+						<FormInput className='field-inline-input' value={tradingForm.redeemAmount} inputMode='decimal' onInput={event => onTradingFormChange({ redeemAmount: event.currentTarget.value })} />
 						<button
 							className='quiet field-inline-action'
 							type='button'
@@ -230,16 +232,8 @@ export function TradingSection({
 	}
 
 	return (
-		<section className='panel market-panel'>
-			{showHeader ? (
-				<div className='market-header'>
-					<div>
-						<h2>Trading</h2>
-					</div>
-				</div>
-			) : undefined}
-
-			<div className='workflow-stack route-workflow-stack'>{sections}</div>
-		</section>
+		<RouteWorkflowPanel showHeader={showHeader} title='Trading'>
+			{sections}
+		</RouteWorkflowPanel>
 	)
 }

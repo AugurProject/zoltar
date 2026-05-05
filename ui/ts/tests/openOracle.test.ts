@@ -41,9 +41,9 @@ setDefaultTimeout(TEST_TIMEOUT_MS)
 function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
 	const globalWindow = globalThis as typeof globalThis & { window?: Window }
 	if (globalWindow.window === undefined) {
-		globalWindow.window = globalThis as unknown as Window & typeof globalThis
+		globalWindow.window = globalThis as Window & typeof globalThis
 	}
-	globalWindow.window.ethereum = mockWindow as unknown as InjectedEthereum
+	globalWindow.window.ethereum = mockWindow as InjectedEthereum
 }
 
 const genesisUniverse = 0n
@@ -53,17 +53,19 @@ const reportedRepEthPrice = 10n
 const outcomes = ['Yes', 'No']
 
 function createQuoteClient(amountOut: bigint): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
-	return {
-		simulateContract: async () => ({ result: [amountOut, 100000n] }),
-	} as unknown as Parameters<typeof loadOpenOracleInitialReportPrice>[0]
+	const client = createConnectedReadClient()
+	const simulateContract: Parameters<typeof loadOpenOracleInitialReportPrice>[0]['simulateContract'] = async () => ({ result: [amountOut, 100000n], request: {} as never }) as never
+	client.simulateContract = simulateContract
+	return client
 }
 
 function createFailingQuoteClient(message: string): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
-	return {
-		simulateContract: async () => {
-			throw new Error(message)
-		},
-	} as unknown as Parameters<typeof loadOpenOracleInitialReportPrice>[0]
+	const client = createConnectedReadClient()
+	const simulateContract: Parameters<typeof loadOpenOracleInitialReportPrice>[0]['simulateContract'] = async () => {
+		throw new Error(message)
+	}
+	client.simulateContract = simulateContract
+	return client
 }
 
 function createInitialReportSubmissionPreview(overrides: Partial<Parameters<typeof deriveOpenOracleInitialReportSubmissionDetails>[0]> = {}) {
@@ -234,27 +236,27 @@ describe('Open Oracle helpers', () => {
 
 	test('initial report price helpers report both Uniswap V4 and V3 failures when fallback was attempted', async () => {
 		let callCount = 0
-		const failingClient = {
-			simulateContract: async () => {
-				callCount += 1
-				throw new Error(callCount <= 4 ? 'no v4 pool' : 'v3 quote reverted')
-			},
-		} as unknown as Parameters<typeof loadOpenOracleInitialReportPrice>[0]
+		const failingClient = createConnectedReadClient()
+		const simulateContract: Parameters<typeof loadOpenOracleInitialReportPrice>[0]['simulateContract'] = async () => {
+			callCount += 1
+			throw new Error(callCount <= 4 ? 'no v4 pool' : 'v3 quote reverted')
+		}
+		failingClient.simulateContract = simulateContract
 
 		await expect(loadOpenOracleInitialReportPrice(failingClient, REP_ADDRESS, ETH_ADDRESS, 100n)).rejects.toThrow('Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v4 pool. Uniswap V3 quote failed: v3 quote reverted')
 	})
 
 	test('initial report price helpers use Uniswap V3 for REP/WETH pairs when V4 is unavailable', async () => {
 		let callCount = 0
-		const fallbackClient = {
-			simulateContract: async () => {
-				callCount += 1
-				if (callCount <= 4) {
-					throw new Error('no v4 pool')
-				}
-				return { result: [200_000_000_000_000_000n, 0n, 0, 0n] }
-			},
-		} as unknown as Parameters<typeof loadOpenOracleInitialReportPrice>[0]
+		const fallbackClient = createConnectedReadClient()
+		const simulateContract: Parameters<typeof loadOpenOracleInitialReportPrice>[0]['simulateContract'] = async () => {
+			callCount += 1
+			if (callCount <= 4) {
+				throw new Error('no v4 pool')
+			}
+			return { result: [200_000_000_000_000_000n, 0n, 0, 0n], request: {} as never } as never
+		}
+		fallbackClient.simulateContract = simulateContract
 
 		await expect(loadOpenOracleInitialReportPrice(fallbackClient, REP_ADDRESS, WETH_ADDRESS, 100n * 10n ** 18n)).resolves.toEqual({
 			price: 500_000_000_000_000_000_000n,
@@ -265,15 +267,15 @@ describe('Open Oracle helpers', () => {
 
 	test('initial report price helpers use Uniswap V3 for non-REP pairs when V4 is unavailable', async () => {
 		let callCount = 0
-		const fallbackClient = {
-			simulateContract: async () => {
-				callCount += 1
-				if (callCount <= 4) {
-					throw new Error('no v4 pool')
-				}
-				return { result: [50n, 0n, 0, 0n] }
-			},
-		} as unknown as Parameters<typeof loadOpenOracleInitialReportPrice>[0]
+		const fallbackClient = createConnectedReadClient()
+		const simulateContract: Parameters<typeof loadOpenOracleInitialReportPrice>[0]['simulateContract'] = async () => {
+			callCount += 1
+			if (callCount <= 4) {
+				throw new Error('no v4 pool')
+			}
+			return { result: [50n, 0n, 0, 0n], request: {} as never } as never
+		}
+		fallbackClient.simulateContract = simulateContract
 
 		await expect(loadOpenOracleInitialReportPrice(fallbackClient, USDC_ADDRESS, WETH_ADDRESS, 100n)).resolves.toEqual({
 			price: 2_000_000_000_000_000_000n,

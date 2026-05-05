@@ -1,4 +1,5 @@
 import { CurrencyValue } from './CurrencyValue.js'
+import { OutcomeSelectionList } from './OutcomeSelectionList.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import type { ZoltarChildUniverseSummary } from '../types/contracts.js'
 
@@ -51,34 +52,36 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 			{childUniverses.length === 0 ? (
 				<p className='detail'>No outcome universes available.</p>
 			) : (
-				<div className='migration-outcome-list'>
-					{childUniverses.map(child => {
+				<OutcomeSelectionList
+					items={childUniverses.map(child => {
 						const selected = selectedOutcomeIndexSet.has(child.outcomeIndex.toString())
 						const heldBalance = getMigrationOutcomeHeldBalance(child, childUniverseRepBalances)
 						const isHeldBalanceLoading = child.exists && heldBalance === undefined
-						return (
-							<button key={child.universeId.toString()} aria-pressed={selected} className={`migration-outcome-row ${selected ? 'active' : ''}`} disabled={disabled} onClick={() => onToggleOutcomeIndex(child.outcomeIndex)} type='button'>
-								<span className='migration-outcome-copy'>
-									<span className='migration-outcome-label'>{child.outcomeLabel}</span>
-									<span className='migration-outcome-metrics'>
-										<span>
-											Your balance:{' '}
-											<strong>
-												<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix='REP' />
-											</strong>
-										</span>
-										<span>
-											Already migrated:{' '}
-											<strong>
-												<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix='REP' /> / <CurrencyValue copyable={false} loading={migrationBalance === undefined} value={migrationBalance} suffix='REP' />
-											</strong>
-										</span>
+						return {
+							details: (
+								<>
+									<span>
+										Your balance:{' '}
+										<strong>
+											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix='REP' />
+										</strong>
 									</span>
-								</span>
-							</button>
-						)
+									<span>
+										Already migrated:{' '}
+										<strong>
+											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix='REP' /> / <CurrencyValue copyable={false} loading={migrationBalance === undefined} value={migrationBalance} suffix='REP' />
+										</strong>
+									</span>
+								</>
+							),
+							disabled,
+							key: child.universeId.toString(),
+							label: child.outcomeLabel,
+							onSelect: () => onToggleOutcomeIndex(child.outcomeIndex),
+							selected,
+						}
 					})}
-				</div>
+				/>
 			)}
 		</WorkflowSubsection>
 	)

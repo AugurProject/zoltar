@@ -112,6 +112,13 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		childrenByPoolAndOutcome[parent][outcomeIndex] = child;
 		parent.authorizeChildPool(child);
 		ReputationToken childReputationToken = child.repToken();
+		// `migrateRepToZoltar` causes Zoltar to mint child-universe REP to this forker
+		// contract, because this contract calls `splitMigrationRep`. That minting
+		// duplicates the migrated parent-universe REP across the selected children
+		// (for example, 1 parent REP can become 1 Yes-child REP plus 1 No-child REP).
+		// When the child pool is created, the forker transfers its balance of that child
+		// REP token into the new child pool. The original parent-universe REP has already
+		// been burned into migration balance before this transfer happens.
 		childReputationToken.transfer(address(child), childReputationToken.balanceOf(address(this)));
 
 		if (forkDataByPool[parent].ownFork) {

@@ -40,6 +40,7 @@ const dependencyPaths: Dependency[] = [
 	{ packageName: '@noble/curves', subfolderToVendor: 'esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { secp256k1: 'secp256k1.js', 'abstract/modular': 'abstract/modular.js', 'abstract/utils': 'abstract/utils.js' } },
 	{ packageName: 'funtypes', subfolderToVendor: 'lib', mainEntrypointFile: 'index.mjs', alternateEntrypoints: {} },
 	{ packageName: 'ox', subfolderToVendor: '_esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { BlockOverrides: 'core/BlockOverrides.js', AbiConstructor: 'core/AbiConstructor.js', AbiFunction: 'core/AbiFunction.js' } },
+	{ packageName: 'tevm', subfolderToVendor: '_esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { common: 'common/index.js' } },
 ]
 
 async function vendorDependencies() {
@@ -125,6 +126,8 @@ async function bundleViem() {
 			'chains/index': path.join(viemSrcDir, 'chains', 'index.js'),
 			'window/index': path.join(viemSrcDir, 'window', 'index.js'),
 			'actions/index': path.join(viemSrcDir, 'actions', 'index.js'),
+			'accounts/index': path.join(MODULES_ROOT_PATH, 'viem', 'accounts', 'index.js'),
+			'utils/index': path.join(MODULES_ROOT_PATH, 'viem', 'utils', 'index.js'),
 		},
 		format: 'esm',
 		outdir: viemTmpOut,
@@ -140,8 +143,32 @@ async function bundleViem() {
 	await fs.rm(viemTmpOut, { recursive: true, force: true })
 }
 
+async function bundleTevm() {
+	const tevmSrcDir = path.join(MODULES_ROOT_PATH, 'tevm', '_esm')
+	const tevmTmpOut = path.join(directoryOfThisFile, 'tmp-tevm-bundle')
+
+	await esbuild.build({
+		entryPoints: {
+			index: path.join(MODULES_ROOT_PATH, 'tevm', 'index.js'),
+			'common/index': path.join(MODULES_ROOT_PATH, '@tevm', 'common', 'dist', 'index.js'),
+		},
+		format: 'esm',
+		outdir: tevmTmpOut,
+		bundle: true,
+		platform: 'browser',
+		sourcemap: true,
+		target: 'esnext',
+	})
+
+	await fs.rm(tevmSrcDir, { recursive: true, force: true })
+	await fs.mkdir(tevmSrcDir, { recursive: true })
+	await recursiveDirectoryCopy(tevmTmpOut, tevmSrcDir, async () => true)
+	await fs.rm(tevmTmpOut, { recursive: true, force: true })
+}
+
 const vendor = async () => {
 	await bundleViem()
+	await bundleTevm()
 	await vendorDependencies()
 	await copyProjectArtifacts()
 }

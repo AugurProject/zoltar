@@ -1,6 +1,9 @@
 /// <reference types="bun-types" />
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { fireEvent, within } from '@testing-library/dom'
+import { useState } from 'preact/hooks'
+import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 import { EntityCard } from '../components/EntityCard.js'
 import { EnumDropdown } from '../components/EnumDropdown.js'
@@ -10,8 +13,10 @@ import { TransactionActionButton } from '../components/TransactionActionButton.j
 import { TradingSection } from '../components/TradingSection.js'
 import { MARKET_NOT_FINALIZED_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE } from '../lib/trading.js'
 import type { AccountState, TradingFormState } from '../types/app.js'
-import type { ListedSecurityPool, MarketDetails, TradingDetails, TradingShareBalances } from '../types/contracts.js'
+import type { ListedSecurityPool, MarketDetails, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
 import type { TradingSectionProps } from '../types/components.js'
+import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 type VNodeLike = {
 	props: Record<string, unknown>
@@ -264,11 +269,74 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 	}
 }
 
+function createScalarForkUniverse(): ZoltarUniverseSummary {
+	return {
+		childUniverses: [
+			{
+				exists: true,
+				forkTime: 1n,
+				outcomeIndex: 2n,
+				outcomeLabel: '20 USD',
+				parentUniverseId: 1n,
+				reputationToken: zeroAddress,
+				universeId: 2n,
+			},
+		],
+		forkThreshold: 0n,
+		forkQuestionDetails: {
+			...createMarketDetails(),
+			answerUnit: 'USD',
+			displayValueMax: 100n,
+			displayValueMin: 0n,
+			marketType: 'scalar',
+			numTicks: 10n,
+			outcomeLabels: [],
+		},
+		forkTime: 1n,
+		forkingOutcomeIndex: 0n,
+		hasForked: true,
+		parentUniverseId: 1n,
+		reputationToken: zeroAddress,
+		totalTheoreticalSupply: 0n,
+		universeId: 10n,
+	}
+}
+
+function TradingSectionHarness({ tradingForkUniverse }: { tradingForkUniverse: ZoltarUniverseSummary }) {
+	const [tradingForm, setTradingForm] = useState<TradingFormState>(createTradingForm())
+
+	return (
+		<TradingSection
+			{...createTradingSectionProps({
+				selectedPool: createSelectedPool({ universeHasForked: true }),
+				tradingForkUniverse,
+				tradingForm,
+			})}
+			onTradingFormChange={update => setTradingForm(current => ({ ...current, ...update }))}
+		/>
+	)
+}
+
 function renderTradingSection(overrides: Partial<TradingSectionProps> = {}) {
 	return TradingSection(createTradingSectionProps(overrides))
 }
 
 void describe('TradingSection', () => {
+	let restoreDomEnvironment: (() => void) | undefined
+	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+
+	beforeEach(() => {
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+	})
+
+	afterEach(async () => {
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+		restoreDomEnvironment?.()
+		restoreDomEnvironment = undefined
+	})
+
 	void test('renames the max complete sets metric to total complete sets', () => {
 		const section = renderTradingSection()
 		const metricFieldLabels = getMetricFieldLabels(section)
@@ -380,5 +448,32 @@ void describe('TradingSection', () => {
 		expect(redeemButton?.disabled).toBe(true)
 		expect(redeemButton?.title).toBe('Loading wallet share balances.')
 		expect(detailTexts).toContain('Loading wallet share balances.')
+	})
+
+	void test('keeps scalar share migration interactive through the shared target list and picker', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSectionHarness tradingForkUniverse={createScalarForkUniverse()} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const slider = documentQueries.getByRole('slider') as HTMLInputElement
+
+		expect(documentQueries.getByText('Select Scalar Target')).not.toBeNull()
+		expect(documentQueries.getByText('Select at least one scalar target universe.')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Add Target' })).not.toBeNull()
+
+		await act(() => {
+			fireEvent.input(slider, {
+				target: { value: '7' },
+			})
+		})
+
+		expect(documentQueries.getByText('7 / 10')).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Add Target' }))
+		})
+
+		expect(documentQueries.queryByText('Select at least one scalar target universe.')).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Remove Target' })).not.toBeNull()
 	})
 })

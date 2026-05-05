@@ -74,6 +74,10 @@ Rules:
 
 Use available primitives according to role, not convenience.
 
+- Reuse before create. Inspect `ui/ts/components` and the touched route before adding a wrapper, surface, field, card, tab, or selector pattern.
+- If an exact shared primitive does not exist, choose the closest existing primitive and adapt composition around it before inventing a new component.
+- If a touched area currently uses a unique local pattern, prefer switching it to a shared component even when that introduces a small visual change toward cross-route consistency.
+- Do not preserve a one-off local pattern just because it already exists. Existing inconsistency is not a design constraint.
 - `EntityCard` is for entity records and concrete result summaries.
 - Do not use `EntityCard` as the default page-layout box.
 - `WorkflowSubsection` should structure content inside a larger section.
@@ -83,6 +87,7 @@ Use available primitives according to role, not convenience.
 
 Implementation rule:
 
+- Check `ui/ts/components` and the touched route composition before adding a new UI primitive.
 - If a dedicated shared primitive does not exist, emulate the same role with the closest existing component and CSS pattern.
 - Before adding a new wrapper or class pattern, check whether an existing surface, badge, metric, or tab pattern already expresses that role.
 - New component structure should reinforce this surface model instead of creating a parallel one.

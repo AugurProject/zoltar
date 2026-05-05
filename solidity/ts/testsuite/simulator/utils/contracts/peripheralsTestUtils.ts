@@ -7,7 +7,7 @@ import { getInfraContractAddresses, getSecurityPoolAddresses } from './deployPer
 import { approveToken, contractExists, getERC20Balance } from '../utilities'
 import { WriteClient } from '../viem'
 import assert from 'node:assert'
-import { getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndQueueOperation, wrapWeth } from './peripherals'
+import { getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndStageOperation, wrapWeth } from './peripherals'
 import { QuestionOutcome } from '../../types/types'
 import { forkZoltarWithOwnEscalationGame } from './securityPoolForker'
 import { getTotalTheoreticalSupply } from './zoltar'
@@ -71,7 +71,7 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 }
 
 export const manipulatePriceOracleAndPerformOperation = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
-	await requestPriceIfNeededAndQueueOperation(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount)
+	await requestPriceIfNeededAndStageOperation(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount)
 	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 }
 

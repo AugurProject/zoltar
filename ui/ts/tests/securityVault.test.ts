@@ -5,6 +5,7 @@ import { getAddress, zeroAddress } from 'viem'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleManagerPriceValidUntilTimestamp, getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount, MIN_SECURITY_VAULT_REP_DEPOSIT, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
+import { createConnectedReadClient } from '../lib/clients.js'
 import { loadSecurityVaultDetails } from '../contracts.js'
 
 void describe('security vault helpers', () => {
@@ -68,13 +69,14 @@ void describe('security vault helpers', () => {
 
 	void test('returns undefined for a missing security pool without reading contract state', async () => {
 		let readContractCalled = false
-		const client = {
-			getCode: async () => '0x',
-			readContract: async () => {
-				readContractCalled = true
-				throw new Error('readContract should not be called for a missing security pool')
-			},
-		} as unknown as Parameters<typeof loadSecurityVaultDetails>[0]
+		const client = createConnectedReadClient()
+		const getCode: typeof client.getCode = async () => '0x'
+		const readContract: typeof client.readContract = async () => {
+			readContractCalled = true
+			throw new Error('readContract should not be called for a missing security pool')
+		}
+		client.getCode = getCode
+		client.readContract = readContract
 
 		await expect(loadSecurityVaultDetails(client, getAddress('0x00000000000000000000000000000000000000b1'), getAddress('0x00000000000000000000000000000000000000c1'))).resolves.toBeUndefined()
 		expect(readContractCalled).toBe(false)

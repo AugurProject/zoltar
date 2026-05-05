@@ -15,19 +15,25 @@
 	},
 	"dependencies": {
 		"@preact/signals": "2.0.1",
+		"buffer": "6.0.3",
 		"preact": "10.26.4",
-		"viem": "2.23.15"
+		"tevm": "1.0.0-next.149",
+		"viem": "2.38.3"
 	},
 	"scripts": {
 		"preinstall": "bun ./scripts/link-node-modules.mjs",
 		"link:shared-modules": "bun ./scripts/link-node-modules.mjs",
 		"contracts": "cd ../solidity && bun run setup",
+		"generate:shared-js": "cd .. && bun run shared:build",
+		"generate:contract-artifact": "cd .. && bun run ui:shared",
+		"generate:vendor": "bun install --frozen-lockfile && bun --tsconfig-override=tsconfig.vendor.json ./build/vendor.mts",
+		"generate": "bun run generate:shared-js && bun run generate:contract-artifact",
 		"setup": "bun install --frozen-lockfile && bun run contracts && bun run build",
 		"shared": "cd .. && bun run shared:build && bun run ui:shared",
 		"build": "bun run shared && tsc",
 		"build:tests": "bun ./build/tests.mts",
 		"watch": "bun run shared && tsc --watch",
 		"serve": "bun run shared && bun x tsc --project tsconfig.json && bun ./dev-server.ts",
-		"vendor": "bun install --frozen-lockfile && bun --tsconfig-override=tsconfig.vendor.json ./build/vendor.mts"
+		"vendor": "bun run generate:vendor"
 	}
 }

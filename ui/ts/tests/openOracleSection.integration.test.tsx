@@ -120,6 +120,14 @@ function getApproveButton(section: HTMLElement) {
 	return button
 }
 
+function getRefreshReportButton() {
+	const button = within(document.body).getByText('Refresh report', { selector: 'button' })
+	if (!(button instanceof HTMLButtonElement)) {
+		throw new Error('Expected refresh report button')
+	}
+	return button
+}
+
 async function setInputValue(label: string | RegExp, value: string, scope?: HTMLElement) {
 	const input = within(scope ?? document.body).getByLabelText(label) as HTMLInputElement
 	await act(() => {
@@ -167,8 +175,7 @@ describe.serial('OpenOracleSection integration', () => {
 
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
-		const injectedWindow = domEnvironment.window as unknown as Window & { ethereum?: InjectedEthereum }
-		injectedWindow.ethereum = createInjectedWalletShim(mockWindow, walletAddress)
+		Reflect.set(domEnvironment.window, 'ethereum', createInjectedWalletShim(mockWindow, walletAddress))
 		uiReadClient = createConnectedReadClient()
 	})
 
@@ -386,7 +393,7 @@ describe.serial('OpenOracleSection integration', () => {
 		const advanceTimeBy = settleOnlyClock > submittedClock ? settleOnlyClock - submittedClock : 1n
 
 		await mockWindow.advanceTime(advanceTimeBy)
-		await clickElement(within(document.body).getByRole('button', { name: 'Refresh report' }))
+		await clickElement(getRefreshReportButton())
 		await waitFor(async () => {
 			const refreshedReport = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
 			expect(getOpenOracleSelectedReportActionMode(refreshedReport)).toBe('settle')

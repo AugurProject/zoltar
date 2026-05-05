@@ -81,7 +81,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(initialBalance - finalBalance, expectedNetCost, `Caller should net pay only ethCost (${ethCost}), but paid ${initialBalance - finalBalance}`)
 	})
 
-	test('requestPriceIfNeededAndQueueOperation should not drain preexisting contract balance', async () => {
+	test('requestPriceIfNeededAndStageOperation should not drain preexisting contract balance', async () => {
 		// This test verifies that pre-existing ETH in the contract is not refunded to the caller
 		// (drain vulnerability). It works even when price is invalid (so requestPrice is called internally).
 
@@ -114,6 +114,6 @@ describe('Price Oracle Refund Security Tests', () => {
 		// The contract should have retained ethCost (to pay OpenOracle) and refunded the excess (sendValue - ethCost).
 		// Final balance = preBalance (unchanged)
 		const balanceAfter = await getETHBalance(client, priceOracle)
-		assert.strictEqual(balanceAfter, preBalance, `Contract should retain preexisting balance (${preBalance}) after requestPriceIfNeededAndQueueOperation, but it was drained to ${balanceAfter}`)
+		assert.strictEqual(balanceAfter, preBalance, `Contract should retain preexisting balance (${preBalance}) after requestPriceIfNeededAndStageOperation, but it was drained to ${balanceAfter}`)
 	})
 })

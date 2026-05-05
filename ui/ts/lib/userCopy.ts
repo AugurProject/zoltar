@@ -1,4 +1,5 @@
 import type { Address } from 'viem'
+import { getWrongNetworkMessage } from './network.js'
 import type { LoadableValueState } from './loadState.js'
 
 export type UserMessageKey = 'not_checked' | 'loading' | 'not_found' | 'empty' | 'action_needed' | 'wrong_network' | 'wallet_disconnected' | 'unavailable' | 'page_not_found' | 'load_failed'
@@ -121,8 +122,11 @@ export function getUniversePresentation(state: LoadableValueState) {
 	}
 }
 
-export function getWalletPresentation({ accountAddress, hasInjectedWallet = true, isMainnet = true }: { accountAddress: Address | undefined; hasInjectedWallet?: boolean; isMainnet?: boolean }) {
-	if (!hasInjectedWallet) {
+export function getWalletPresentation({ accountAddress, hasInjectedWallet, hasWallet, isMainnet, isSupportedChain }: { accountAddress: Address | undefined; hasInjectedWallet?: boolean; hasWallet?: boolean; isMainnet?: boolean; isSupportedChain?: boolean }) {
+	const walletAvailable = hasWallet ?? hasInjectedWallet ?? true
+	const supportedChain = isSupportedChain ?? isMainnet ?? true
+
+	if (!walletAvailable) {
 		return createPresentation('wallet_disconnected', {
 			badgeLabel: 'Connect wallet',
 			badgeTone: 'blocked',
@@ -136,11 +140,11 @@ export function getWalletPresentation({ accountAddress, hasInjectedWallet = true
 			detail: 'Connect wallet to continue.',
 		})
 	}
-	if (!isMainnet) {
+	if (!supportedChain) {
 		return createPresentation('wrong_network', {
 			badgeLabel: 'Wrong network',
 			badgeTone: 'blocked',
-			detail: 'Switch to Ethereum mainnet.',
+			detail: getWrongNetworkMessage() ?? 'Switch to Ethereum mainnet.',
 		})
 	}
 	return undefined
