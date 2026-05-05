@@ -18,9 +18,9 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
 	const globalWindow = globalThis as typeof globalThis & { window?: Window }
 	if (globalWindow.window === undefined) {
-		globalWindow.window = globalThis as unknown as Window & typeof globalThis
+		globalWindow.window = globalThis as Window & typeof globalThis
 	}
-	globalWindow.window.ethereum = mockWindow as unknown as InjectedEthereum
+	globalWindow.window.ethereum = mockWindow as InjectedEthereum
 }
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -121,12 +121,12 @@ void describe('deployment helpers', () => {
 
 	void test('loadZoltarUniverseSummary returns undefined for an unknown universe id', async () => {
 		let callCount = 0
-		const mockReadClient = {
-			multicall: async () => {
-				callCount += 1
-				return [zeroAddress, [0n, 0n, 0n, zeroAddress, 0n], 0n, 0n]
-			},
-		} as unknown as ReadClient
+		const mockReadClient = createConnectedReadClient()
+		const multicall: ReadClient['multicall'] = async () => {
+			callCount += 1
+			return [zeroAddress, [0n, 0n, 0n, zeroAddress, 0n], 0n, 0n] as never
+		}
+		mockReadClient.multicall = multicall
 
 		const universe = await loadZoltarUniverseSummary(mockReadClient, 123456789n)
 

@@ -12,7 +12,7 @@ import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { OperationType, getRequestPriceEthCost } from '../testsuite/simulator/utils/contracts/peripherals'
-import { peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer } from '../types/contractArtifact'
+import { peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -66,7 +66,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 					address: priceOracle,
 					functionName: 'requestPrice',
 					value: overpayment,
@@ -81,7 +81,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(initialBalance - finalBalance, expectedNetCost, `Caller should net pay only ethCost (${ethCost}), but paid ${initialBalance - finalBalance}`)
 	})
 
-	test('requestPriceIfNeededAndQueueOperation should not drain preexisting contract balance', async () => {
+	test('requestPriceIfNeededAndStageOperation should not drain preexisting contract balance', async () => {
 		// This test verifies that pre-existing ETH in the contract is not refunded to the caller
 		// (drain vulnerability). It works even when price is invalid (so requestPrice is called internally).
 
@@ -95,16 +95,16 @@ describe('Price Oracle Refund Security Tests', () => {
 		const balanceBefore = await getETHBalance(client, priceOracle)
 		assert.strictEqual(balanceBefore, preBalance, 'Pre-set balance should be set correctly')
 
-		// Call requestPriceIfNeededAndQueueOperation with overpayment
+		// Call requestPriceIfNeededAndStageOperation with overpayment
 		const caller = client.account.address
 		const sendValue = ethCost * 2n
 		await writeContractAndWait(
 			client,
 			async () =>
 				await client.writeContract({
-					abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 					address: priceOracle,
-					functionName: 'requestPriceIfNeededAndQueueOperation',
+					functionName: 'requestPriceIfNeededAndStageOperation',
 					args: [OperationType.WithdrawRep, caller, 100n],
 					value: sendValue,
 				}),
@@ -114,6 +114,6 @@ describe('Price Oracle Refund Security Tests', () => {
 		// The contract should have retained ethCost (to pay OpenOracle) and refunded the excess (sendValue - ethCost).
 		// Final balance = preBalance (unchanged)
 		const balanceAfter = await getETHBalance(client, priceOracle)
-		assert.strictEqual(balanceAfter, preBalance, `Contract should retain preexisting balance (${preBalance}) after requestPriceIfNeededAndQueueOperation, but it was drained to ${balanceAfter}`)
+		assert.strictEqual(balanceAfter, preBalance, `Contract should retain preexisting balance (${preBalance}) after requestPriceIfNeededAndStageOperation, but it was drained to ${balanceAfter}`)
 	})
 })

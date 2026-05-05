@@ -128,6 +128,11 @@ contract Zoltar {
 
 	function splitRepInternal(uint248 universeId, uint256 amount, address recipient, uint256[] memory outcomeIndexes) private {
 		uint256 questionId = universes[universeId].forkQuestionId;
+		// Fork migration intentionally duplicates the holder's migration balance across the
+		// selected child universes. For example, splitting 1 parent-universe REP into the
+		// Yes and No children mints 1 Yes-child REP and 1 No-child REP. The original
+		// parent-universe REP is not preserved here: it has already been burned into the
+		// migration balance before child-universe REP is minted.
 		for (uint256 i = 0; i < outcomeIndexes.length; i++) {
 			uint256 outcomeIndex = outcomeIndexes[i];
 			require(!zoltarQuestionData.isMalformedAnswerOption(questionId, outcomeIndex), 'Malformed');
