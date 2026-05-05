@@ -4,7 +4,7 @@
 
 Augur Placeholder is a prediction-market and oracle-security protocol built on top of Zoltar. Zoltar supplies forkable universes, question registration, outcome encoding, and post-fork REP splitting across disputed branches of reality. Augur Placeholder adds question-specific security pools, ETH-collateralized complete sets, escalation-driven local resolution, and a fork-recovery path that migrates economic state into child universes and, when needed, restores missing collateral through a truth auction.
 
-The result is a layered design. Zoltar provides the base mechanism for turning unresolved disagreement into explicit child universes. Augur Placeholder uses that substrate to let REP vaults underwrite open interest, users mint and hold outcome shares backed by collateral, and disputes resolve locally whenever possible before escalating into a Zoltar fork.
+The result is a layered design. REP vaults underwrite open interest, users mint and hold outcome shares backed by collateral, and disputes resolve locally whenever possible before escalating into a fork.
 
 ## 1. System Overview
 
@@ -13,7 +13,7 @@ The stack in this repository has two distinct protocol identities.
 - `Zoltar` is the base oracle substrate.
 - `Augur Placeholder` is the application layer built on top of Zoltar.
 
-For the Zoltar substrate itself, including universes, question encoding, scalar math, and post-fork REP splitting, see [whitepaper_zoltar.md](./whitepaper_zoltar.md). This paper assumes that fork-and-branching model as given and focuses on the market, underwriting, and collateral system layered above it.
+For the Zoltar substrate itself, including universes, question encoding, scalar math, and post-fork REP splitting, see [whitepaper_zoltar.md](./whitepaper_zoltar.md). This paper focuses on the market, underwriting, and collateral system layered above it.
 
 Augur Placeholder is responsible for the economic system on top of that substrate:
 
@@ -32,7 +32,7 @@ Contract responsibility map:
 - [`EscalationGame`](../solidity/contracts/peripherals/EscalationGame.sol): local dispute and non-decision mechanism
 - [`SecurityPoolForker`](../solidity/contracts/peripherals/SecurityPoolForker.sol): pool migration across child universes
 - [`UniformPriceDualCapBatchAuction`](../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol): truth auction for missing collateral
-- [`PriceOracleManagerAndOperatorQueuer`](../solidity/contracts/peripherals/PriceOracleManagerAndOperatorQueuer.sol): REP/ETH solvency price operations
+- [`SecurityPoolOracleCoordinator`](../solidity/contracts/peripherals/SecurityPoolOracleCoordinator.sol): REP/ETH solvency price operations
 - [`ShareToken`](../solidity/contracts/peripherals/tokens/ShareToken.sol): [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) positions and fork-aware share migration
 
 ```
@@ -53,7 +53,7 @@ Contract responsibility map:
 
 ## 2. Architecture
 
-Augur Placeholder is the system described by the peripheral contracts. It extends Zoltar with an underwriting and collateral system around individual questions.
+Augur Placeholder is the system described by the peripheral contracts. It adds an underwriting and collateral system around individual questions.
 
 At a high level, Augur Placeholder adds:
 
@@ -63,8 +63,6 @@ At a high level, Augur Placeholder adds:
 - a local escalation game that tries to settle disputes before a global fork
 - migration of pool state into child universes after a Zoltar fork
 - a truth auction that can sell REP for ETH when a child pool needs to rebuild missing collateral
-
-In other words, Zoltar defines how reality branches, and Augur Placeholder defines how economic positions are issued, redeemed, survive, migrate, and remain collateralized across those branches.
 
 ## 3. Core Economic Roles
 
@@ -77,19 +75,17 @@ Augur Placeholder introduces a set of economic roles above the Zoltar substrate.
 - Fork migrators move REP, shares, and vault state from a parent universe into child universes after a Zoltar fork.
 - Truth-auction bidders buy REP with ETH when a child branch needs to restore missing collateral.
 - Liquidators move undercollateralized bond allowance away from unsafe vaults.
-- Price reporters and settlers in the OpenOracle flow supply a REP/ETH solvency price used for bond accounting, not a truth outcome for the question itself.
-
-These roles are separate on purpose. Zoltar handles epistemic branching; Augur Placeholder handles underwriting, collateral, and post-fork economic continuity.
+- Price reporters and settlers in the OpenOracle flow supply a REP/ETH solvency price for bond accounting, not a truth outcome for the question itself.
 
 ## 4. Security Pools
 
-[`SecurityPool`](../solidity/contracts/peripherals/SecurityPool.sol) is the central Augur Placeholder contract. A security pool is defined for one question, one universe, and one collateral denomination. In the current implementation that denomination is ETH, and that ETH-denominated structure is not just a deployment choice but the contract design itself.
+[`SecurityPool`](../solidity/contracts/peripherals/SecurityPool.sol) is the central Augur Placeholder contract. A security pool is defined for one question, one universe, and one collateral denomination. In the current implementation that denomination is ETH, and that ETH-denominated structure is the contract design itself.
 
 ### Vault deposits and pool ownership
 
 REP vault operators call `depositRep` to transfer REP into the pool. In return they receive internal pool-ownership accounting rather than a separate token. Pool ownership tracks each vault’s claim on the REP held by the pool.
 
-Each vault can choose a `securityBondAllowance`. This is the amount of open interest that the vault is willing to underwrite. The pool enforces both local and global solvency conditions using the REP/ETH price from `PriceOracleManagerAndOperatorQueuer`.
+Each vault can choose a `securityBondAllowance`. This is the amount of open interest that the vault is willing to underwrite. The pool enforces both local and global solvency conditions using the REP/ETH price from `SecurityPoolOracleCoordinator`.
 
 At the vault level, the solvency condition enforced by operations such as `performWithdrawRep` is:
 
@@ -148,15 +144,13 @@ with the lost portion becoming fees owed to REP vaults.
 
 ### Solvency operations
 
-REP withdrawal, liquidation, and bond-allowance updates depend on a valid REP/ETH price. Those operations are executed only when the pool satisfies the relevant solvency condition for that operation after the proposed change. In practice, withdrawal and allowance changes check backing against allowance, while liquidation applies the stronger `securityMultiplier`-adjusted liquidability condition.
+REP withdrawal, liquidation, and bond-allowance updates depend on a valid REP/ETH price. Withdrawal and allowance changes check backing against allowance, while liquidation applies the stronger `securityMultiplier`-adjusted liquidability condition.
 
 ### Liquidation
 
 Liquidation in Augur Placeholder is a transfer of risk, not a direct sale of collateral. When a vault becomes undercollateralized relative to its `securityBondAllowance`, oracle price, and `securityMultiplier`, another vault can call `performLiquidation` through the queued-oracle path. The contract snapshots the target vault’s state at queue time, then uses that snapshot when the operation executes so that later target-vault manipulation cannot trivially invalidate the liquidation attempt.
 
 Economically, liquidation moves some amount of debt and a corresponding amount of REP-backed ownership from the target vault to the caller vault. The receiving vault must remain solvent after taking on that additional debt, and both sides must still satisfy the minimum deposit requirements enforced by the pool. In the current implementation, this mechanism is intentionally strict: it is designed to move underwriting responsibility away from an unsafe vault and into one that can still support it.
-
-Security pools are therefore an Augur Placeholder feature, not a Zoltar feature. They turn REP into underwriting capacity for a collateral-backed outcome market.
 
 ## 5. Shares and Complete Sets
 
@@ -287,7 +281,7 @@ This separation is important. Post-fork REP splitting is a Zoltar primitive, des
 
 ### Worked Example: Adapted Branch-Recovery Intuition
 
-The examples in [Sisyphean Exchange.md](https://github.com/AugurProject/oracle-research/blob/main/Sisyphean%20Exchange.md) are useful for explaining the same recovery logic at a more intuitive level. That document uses a different economic wrapper than this repository, so the example below keeps only the branch-migration and auction intuition and translates it into Augur Placeholder terms.
+The examples in [Sisyphean Exchange.md](https://github.com/AugurProject/oracle-research/blob/main/Sisyphean%20Exchange.md) are useful for explaining the same recovery logic at an intuitive level. The example below keeps only the branch-migration and auction intuition and translates it into Augur Placeholder terms.
 
 Suppose a parent pool has:
 
@@ -312,15 +306,7 @@ $$
 
 The truth auction then sells that child branch’s REP for `2.5 ETH`. If bidders supply that ETH, the user-preferred child pool returns to the full `50 ETH` collateral base and can continue operating cleanly. The false child branch, by contrast, keeps only its `2.5 ETH` and whatever branch-local economic activity it can attract.
 
-This is a good intuition for the intended recovery path in Augur Placeholder:
-
-- REP splitting determines which child branch participants expect to retain meaningful value
-- collateral migration gives that branch only a proportional starting point
-- the truth auction lets that branch buy back the missing ETH needed for clean continuation
-
 In contract terms, Zoltar first handles the universe fork and the splitting of post-fork REP claims into child universes. The Placeholder parent pool then separately enters its own fork lifecycle through `initiateSecurityPoolFork` and `activateForkMode`; the Zoltar fork and the pool-fork transition are related, but they are not the same contract step. Augur Placeholder creates the relevant child pool, migrates vault state and any eligible escalation-game winnings into it through `migrateVault` and `migrateFromEscalationGame`, and then starts a REP-for-ETH sale through `startTruthAuction` if the child branch still lacks its intended collateral base. If bidders supply the missing ETH, the child pool resumes operation with repaired collateral. If the auction is underfunded, the branch still continues, but collateral repair is incomplete.
-
-Unlike `Sisyphean Exchange.md`, this repository does not introduce a separate `CASH` wrapper token. The same branch-recovery logic is instead expressed through security pools, migrated ETH collateral, and a child-branch REP sale.
 
 ## 8. Truth Auction
 
@@ -376,7 +362,7 @@ Parent Placeholder pool
 
 The REP/ETH oracle subsystem is narrow in purpose and should not be confused with market-truth resolution.
 
-[`PriceOracleManagerAndOperatorQueuer`](../solidity/contracts/peripherals/PriceOracleManagerAndOperatorQueuer.sol) uses [`OpenOracle`](../solidity/contracts/peripherals/openOracle/OpenOracle.sol) to request a fresh REP/ETH price when needed. This price is used only for solvency-sensitive security-pool operations such as:
+[`SecurityPoolOracleCoordinator`](../solidity/contracts/peripherals/SecurityPoolOracleCoordinator.sol) uses [`OpenOracle`](../solidity/contracts/peripherals/openOracle/OpenOracle.sol) to request a fresh REP/ETH price when needed. This price is used only for solvency-sensitive security-pool operations such as:
 
 - liquidation
 - REP withdrawal
@@ -386,7 +372,31 @@ If the last price is stale, these operations can be queued until a valid report 
 
 This is therefore not the oracle for determining whether a question resolves `Yes`, `No`, or `Invalid`. That truth path is handled by the escalation game and, if necessary, the Zoltar fork system. The REP/ETH oracle exists only to price security backing against ETH collateral.
 
-## 10. End-to-End Example
+## 10. Assumptions and Security Model
+
+Augur Placeholder adds external collateral, underwriting, and auction-based repair on top of Zoltar. Its security argument therefore depends on stronger assumptions than the base Colored Coins substrate alone.
+
+The main assumptions are:
+
+- the economic value of REP backing remains larger than the value of the obligations that REP is securing
+- users who want clean resolution continue in the branch they expect other users to keep valuing
+- the child-branch truth auction can attract enough demand for branch-native REP to repair missing ETH collateral when repair is needed
+- REP and ETH can be exchanged with sufficient liquidity and price discovery that collateral repair and solvency operations do not fail purely because markets are too thin
+- users accept that fork recovery may convert part of branch-native security capital into collateral repair through the truth auction
+
+The key inequality behind the design is:
+
+$$
+\text{REP value securing the system} > \text{value of the obligations secured by that REP}
+$$
+
+In this implementation, the same idea should be read concretely: the value of the REP-backed security base must exceed the value of the collateralized economic state that it is protecting.
+
+Under those assumptions, the system is game-theoretically sound in the intended sense. Zoltar forks only create branches, and Placeholder carries underwriting state, collateral state, and outcome shares into them. If a participant drags value into a branch they expect others to abandon, they may capture some local advantage but also destroy the value of the branch-native REP and underwriting base they rely on there. If users and bidders instead coordinate on the branch they expect to keep using, REP migration, proportional collateral migration, and truth-auction repair can rebuild a usable market state in that branch.
+
+This argument has limits. If multiple branches retain substantial durable value, the simple “one branch gets almost all the value” intuition weakens. If REP/ETH liquidity is poor or truth-auction demand is weak, collateral repair may be incomplete. If REP/ETH price discovery is unreliable, solvency operations become less trustworthy. The escalation game helps avoid unnecessary forks, but it does not remove the need for these higher-level coordination and valuation assumptions.
+
+## 11. End-to-End Example
 
 An end-to-end lifecycle under the current contracts looks like this:
 
@@ -403,17 +413,17 @@ An end-to-end lifecycle under the current contracts looks like this:
 11. If a child pool lacks enough ETH collateral after migration, it starts a truth auction with `startTruthAuction` and sells REP for ETH.
 12. The surviving child pool resumes operation, or users redeem final payouts once the outcome becomes final in that branch.
 
-## 11. Current Implementation Constraints
+## 12. Current Implementation Constraints
 
 The current repository exposes several implementation constraints.
 
 - Origin security pools currently support only the exact categorical market shape `Yes / No`, with `Invalid` added as the third Placeholder trading and resolution outcome.
-- Placeholder issues transferable shares and manages their redemption and migration, but secondary-market trading remains outside the core contracts.
+- Placeholder issues transferable shares and manages their redemption and migration, but not secondary-market trading.
 - The fork threshold divisor, fork-burn divisor, and escalation-game initial deposit are fixed constants in the current implementation and should be read as current design parameters rather than as dynamically governed values.
 - Retention-rate bounds, the retention-rate dip point, and several oracle and auction tuning parameters are also fixed constants in the current implementation.
 - The retention-rate curve in [`SecurityPoolUtils`](../solidity/contracts/peripherals/SecurityPoolUtils.sol) is heuristic rather than final market design.
 - Some comments in [`SecurityPool`](../solidity/contracts/peripherals/SecurityPool.sol) acknowledge open accounting questions around child-pool complete-set behavior.
 
-## 12. Design Thesis
+## 13. Design Thesis
 
-Zoltar provides the forkable oracle base, and Augur Placeholder turns that substrate into a collateralized, security-backed prediction-market system. REP vaults underwrite open interest, users hold complete sets and outcome shares backed by ETH collateral, and disputes attempt to resolve locally through escalation before falling back to a Zoltar fork. Afterward, structured migration and truth auctions let the surviving branch rebuild a coherent economic state.
+REP vaults underwrite open interest, users hold complete sets and outcome shares backed by ETH collateral, and disputes attempt local resolution before falling back to a fork. Structured migration and truth auctions then let the continuing branch rebuild a coherent economic state.

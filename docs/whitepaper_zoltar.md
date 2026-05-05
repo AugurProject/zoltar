@@ -2,7 +2,7 @@
 
 ## Abstract
 
-Zoltar is a forkable oracle substrate centered on universes, question encoding, and REP branching across disputed outcomes. It is best understood as an implementation of the branching model described in [Colored Coins.md](https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md): unresolved disagreement is represented as explicit child universes, and REP holders convert post-fork migration balances into child-universe REP across one or more selected branches. Zoltar supports both categorical and scalar questions, treats `Invalid` as a legitimate answer state, and uses deterministic fork and split mechanics to branch protocol state without embedding a higher-level market design directly into the core layer.
+Zoltar is a forkable oracle substrate centered on universes, question encoding, and REP branching. It is best understood as an implementation of the branching model described in [Colored Coins.md](https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md): unresolved disagreement is represented as explicit child universes, and REP holders convert post-fork migration balances into child-universe REP across one or more selected branches. Zoltar supports both categorical and scalar questions, treats `Invalid` as a legitimate answer state, and branches protocol state without embedding a higher-level market design directly into the core layer.
 
 ## 1. System Overview
 
@@ -21,7 +21,7 @@ Core contract map:
 - [`ReputationToken`](../solidity/contracts/ReputationToken.sol): child-universe REP minted and burned by Zoltar
 - [`ScalarOutcomes`](../solidity/contracts/ScalarOutcomes.sol): scalar formatting and interpolation logic
 
-The clearest conceptual lens for Zoltar is the one used in [Colored Coins.md](https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md). A fork does not destroy the disputed parent state and replace it with a single chosen successor inside the protocol. Instead, it defines child universes for each valid outcome, after which REP holders can split their post-fork claims across those branches. Zoltar therefore expresses disagreement by branching state rather than by trying to force immediate convergence inside the substrate itself.
+In the [Colored Coins.md](https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md) framing, a fork does not replace the disputed parent state with a single chosen successor. Instead, it defines child universes for each valid outcome, after which REP holders can split their post-fork claims across those branches.
 
 ```
 +----------------------+
@@ -75,7 +75,7 @@ $$
 
 Genesis REP cannot be burned natively, so the contract transfers it to the configured burn address. Child-universe REP is minted and burned directly by [`ReputationToken`](../solidity/contracts/ReputationToken.sol) under Zoltar’s control.
 
-In the Colored Coins framing, the threshold deposit is the cost of forcing the branch point into existence. Once the fork exists, the disputed universe is no longer treated as a place where one answer must be imposed. Instead, the fork turns that disagreement into explicit child-universe claims.
+In the Colored Coins framing, the threshold deposit is the cost of forcing the branch point into existence.
 
 ## 4. Child Universes and REP Splitting
 
@@ -85,9 +85,23 @@ For categorical questions, that means `Invalid`, which is a legitimate answer st
 
 This is Zoltar’s core branching primitive. A REP holder does not choose one destination universe and abandon all others inside the substrate. Instead, the holder takes a post-fork migration balance and uses it to mint child-universe REP across one or more selected branches. If multiple child outcomes are selected, the same migrated balance is reproduced into each selected child universe. That is the key Colored Coins-style property: the fork branches the claim structure itself, and later value concentration determines which branch matters economically.
 
-The intended security intuition is not an onchain accounting identity. It is a coordination claim taken from the Colored Coins framing: if social and market coordination concentrate durable value into the branch that participants regard as truthful, then branched post-fork claims can still inherit meaningful security from the pre-fork REP base even though the protocol itself has explicitly split them across multiple child universes.
+The security intuition is a coordination claim: if durable value concentrates in the branch that participants regard as truthful, then branched post-fork claims can still inherit meaningful security from the pre-fork REP base even though the protocol has split them across multiple child universes.
 
-## 5. Questions and Outcome Encoding
+## 5. Assumptions and Security Model
+
+Zoltar is a Colored Coins-style system, so its security argument depends on user behavior and value concentration rather than on the contract being able to identify one objectively correct branch onchain.
+
+The core assumptions are:
+
+- users can choose which child universe to continue using after a fork
+- users prefer to continue in the universe they regard as truthful
+- the protocol itself does not know which universe is truthful and treats all valid branches symmetrically
+- most durable economic activity concentrates in the branch that users expect other users to keep using
+- dishonest or abandoned branches may continue to exist, but are assumed to retain little long-term value compared with the branch that market participants keep coordinating around
+
+Under those assumptions, the system is game-theoretically sound in the limited Colored Coins sense. A fork only creates branches. If users and future activity concentrate in the branch they regard as truthful, the value of child-universe REP also concentrates there. Rational REP holders are therefore pushed toward the branch they expect the market to keep using, because migrating into a branch they expect others to abandon destroys the long-term value of the REP they receive there.
+
+## 6. Questions and Outcome Encoding
 
 [`ZoltarQuestionData.QuestionData`](../solidity/contracts/ZoltarQuestionData.sol) stores:
 
@@ -153,7 +167,7 @@ $$
 
 The contract implementation performs this interpolation with fixed-point integer math and formats the result with 18 decimal places, trimming trailing zeroes for display.
 
-## 6. Market Types Supported by Zoltar
+## 7. Market Types Supported by Zoltar
 
 At the Zoltar layer, market type support comes from how questions and outcomes are encoded in [`ZoltarQuestionData`](../solidity/contracts/ZoltarQuestionData.sol).
 
@@ -162,9 +176,9 @@ Zoltar currently supports:
 - categorical questions, implemented as an ordered array of non-empty outcome labels
 - scalar questions, implemented as a tick-based numeric range with no categorical labels
 
-This means Zoltar itself is more general than any one application-specific market design built on top of it. It can represent arbitrary categorical questions and scalar questions, while higher-level protocols may choose to build only narrower market shapes on top of that substrate. Zoltar therefore defines answer spaces and forkable resolution state, not by itself the collateralized trading mechanics that may later be attached to those questions.
+Zoltar can represent arbitrary categorical questions and scalar questions, while higher-level protocols may choose narrower market shapes on top of that substrate. It defines answer spaces and forkable resolution state, not the collateralized trading mechanics that may later be attached to those questions.
 
-## 7. Invalid vs Malformed
+## 8. Invalid vs Malformed
 
 Zoltar distinguishes `invalid` answers from `malformed` answers.
 
@@ -173,7 +187,7 @@ Zoltar distinguishes `invalid` answers from `malformed` answers.
 
 This distinction matters because malformed answers are rejected during child-universe REP splitting and any fork-aware asset branching that depends on Zoltar’s answer validation, while `Invalid` remains a valid branch and a valid final outcome.
 
-## 8. Example Fork Lifecycle
+## 9. Example Fork Lifecycle
 
 Consider a universe `parentUniverse` and a question `forkQuestion`, meaning the question whose unresolved outcome caused `parentUniverse` to split, after that question’s end time. The Zoltar fork lifecycle is:
 
@@ -185,6 +199,6 @@ Consider a universe `parentUniverse` and a question `forkQuestion`, meaning the 
 
 At that point, Zoltar has turned one disputed universe into multiple child universes with separate reputation tokens. The higher-level economic meaning of those branches is left to protocols built on top.
 
-## 9. Design Thesis
+## 10. Design Thesis
 
-Zoltar provides a forkable oracle substrate. Rather than forcing a single answer when disagreement persists, it turns unresolved decisions into explicit child universes and lets REP holders split post-fork claims across one or more selected branches. In that sense it closely follows the Colored Coins model: the protocol makes disagreement explicit by branching the state, while later coordination determines which branch carries durable value. The result is a generalized branching layer for categorical and scalar questions, with deterministic encoding, deterministic child-universe ids, and REP splitting as the mechanism for expressing branch-level belief.
+Zoltar provides a generalized branching substrate for categorical and scalar questions. Rather than forcing a single answer when disagreement persists, it turns unresolved decisions into explicit child universes and lets REP holders split post-fork claims across one or more selected branches. In that sense it closely follows the Colored Coins model: the protocol branches state first, and later coordination determines which branch carries durable value.
