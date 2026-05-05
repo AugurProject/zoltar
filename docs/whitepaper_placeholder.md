@@ -4,7 +4,7 @@
 
 Augur Placeholder is a prediction-market and oracle-security protocol built on top of Zoltar. Zoltar supplies forkable universes, question registration, outcome encoding, and post-fork REP splitting across disputed branches of reality. Augur Placeholder adds question-specific security pools, ETH-collateralized complete sets, escalation-driven local resolution, and a fork-recovery path that migrates economic state into child universes and, when needed, restores missing collateral through a truth auction.
 
-The result is a layered design. Zoltar provides the base mechanism for turning unresolved disagreement into explicit child universes. Augur Placeholder uses that substrate to let REP vaults underwrite open interest, users mint and hold outcome shares backed by collateral, and disputes resolve locally whenever possible before escalating into a Zoltar fork. The protocol issues fork-aware shares, but it does not itself implement an exchange or matching layer for trading those shares.
+The result is a layered design. Zoltar provides the base mechanism for turning unresolved disagreement into explicit child universes. Augur Placeholder uses that substrate to let REP vaults underwrite open interest, users mint and hold outcome shares backed by collateral, and disputes resolve locally whenever possible before escalating into a Zoltar fork.
 
 ## 1. System Overview
 
@@ -24,7 +24,7 @@ Augur Placeholder is responsible for the economic system on top of that substrat
 - migration of pool state after a fork
 - a batch auction that can restore missing collateral in a surviving branch
 
-What it does not add is an exchange venue. Users can receive `Invalid`, `Yes`, and `No` shares from complete sets and can transfer those [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) positions to other users, but price discovery and secondary-market trading are left outside Placeholder itself.
+What it does not add is an exchange venue. Users can receive `Invalid`, `Yes`, and `No` shares from complete sets and can transfer those [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) positions to other users, but secondary-market trading is left outside Placeholder itself.
 
 Contract responsibility map:
 
@@ -34,13 +34,6 @@ Contract responsibility map:
 - [`UniformPriceDualCapBatchAuction`](../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol): truth auction for missing collateral
 - [`PriceOracleManagerAndOperatorQueuer`](../solidity/contracts/peripherals/PriceOracleManagerAndOperatorQueuer.sol): REP/ETH solvency price operations
 - [`ShareToken`](../solidity/contracts/peripherals/tokens/ShareToken.sol): [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) positions and fork-aware share migration
-
-Terminology:
-
-- `Complete set`: one `Invalid`, one `Yes`, and one `No` share for an Augur Placeholder binary market
-- `Security bond allowance`: the amount of open interest a vault chooses to underwrite
-- `Non-decision`: an escalation-game state where disagreement remains unresolved and a fork path becomes available
-- `Binding capital`: the median of the three escalation-game outcome balances, used to determine the effective game endpoint
 
 ```
                          +----------------------+
@@ -71,7 +64,7 @@ At a high level, Augur Placeholder adds:
 - migration of pool state into child universes after a Zoltar fork
 - a truth auction that can sell REP for ETH when a child pool needs to rebuild missing collateral
 
-In other words, Zoltar defines how reality branches, and Augur Placeholder defines how economic positions are issued, redeemed, survive, migrate, and remain collateralized across those branches. It stops short of defining an on-protocol exchange for those positions.
+In other words, Zoltar defines how reality branches, and Augur Placeholder defines how economic positions are issued, redeemed, survive, migrate, and remain collateralized across those branches.
 
 ## 3. Core Economic Roles
 
@@ -80,7 +73,7 @@ Augur Placeholder introduces a set of economic roles above the Zoltar substrate.
 - Question creators register questions in Zoltar question data, creating the objects around which Placeholder markets can be built.
 - REP vault operators deposit REP into a security pool and provide oracle security capacity. Their deposits back open interest and earn fees extracted from collateral over time.
 - Users mint complete sets with ETH and hold outcome shares.
-- Escalation-game participants stake behind `Invalid`, `Yes`, or `No` after a question ends in order to settle locally or force a non-decision.
+- Escalation-game participants stake behind `Invalid`, `Yes`, or `No` after a question ends in order to settle locally or force a non-decision, meaning an unresolved state that opens the fork path.
 - Fork migrators move REP, shares, and vault state from a parent universe into child universes after a Zoltar fork.
 - Truth-auction bidders buy REP with ETH when a child branch needs to restore missing collateral.
 - Liquidators move undercollateralized bond allowance away from unsafe vaults.
@@ -120,9 +113,13 @@ The contract applies related conditions both at the vault level and at the whole
 
 ### Users and complete sets
 
-Users call `createCompleteSet` with ETH. The pool mints a complete set of [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) shares through `ShareToken`, one unit each of `Invalid`, `Yes`, and `No` for the current universe. The deposited ETH becomes `completeSetCollateralAmount`.
+Users call `createCompleteSet` with ETH. The pool mints a complete set, meaning one `Invalid`, one `Yes`, and one `No` [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) share, through `ShareToken` for the current universe. The deposited ETH becomes `completeSetCollateralAmount`.
 
-Before finalization, a full complete set can be burned with `redeemCompleteSet` to recover its pro rata share of collateral.
+Complete-set lifecycle:
+
+- before finalization, a full complete set can be burned with `redeemCompleteSet` to recover its pro rata share of collateral
+- after finalization, users no longer redeem a full set
+- instead, they redeem only the winning outcome through `redeemShares`, as described in Section 5
 
 ### Fee extraction and retention rate
 
@@ -151,7 +148,7 @@ with the lost portion becoming fees owed to REP vaults.
 
 ### Solvency operations
 
-REP withdrawal, liquidation, and bond-allowance updates depend on a valid REP/ETH price. Those operations are executed only when the pool remains solvent after the proposed change.
+REP withdrawal, liquidation, and bond-allowance updates depend on a valid REP/ETH price. Those operations are executed only when the pool satisfies the relevant solvency condition for that operation after the proposed change. In practice, withdrawal and allowance changes check backing against allowance, while liquidation applies the stronger `securityMultiplier`-adjusted liquidability condition.
 
 ### Liquidation
 
@@ -165,7 +162,7 @@ Security pools are therefore an Augur Placeholder feature, not a Zoltar feature.
 
 [`ShareToken`](../solidity/contracts/peripherals/tokens/ShareToken.sol) is an [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) contract used by Augur Placeholder to represent outcome positions.
 
-Those positions are transferable with the standard [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) token mechanics, so users can move shares to other users. Placeholder itself, however, does not implement an order book, AMM, or other secondary-market trading mechanism.
+Those positions are transferable with the standard [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) token mechanics, so users can move shares to other users.
 
 For each complete set:
 
@@ -177,7 +174,7 @@ The token id encodes both universe id and outcome. This makes the same question�
 
 Before finalization, a user who holds a complete set can burn all three legs and recover collateral through the parent security pool. After finalization, a user can redeem only the winning outcome through `redeemShares`.
 
-At the implementation level, `redeemShares` burns the winning token id and pays `sharesToCash(amount)` out of the pool’s current collateral accounting. In the healthy case, this should correspond to a clean `1:1` redemption outcome against the economic meaning of a complete-set claim, subject to the pool’s collateral accounting remaining intact through migration and any required auction repair. The important edge case is fork recovery: if a child pool emerges from migration with incomplete collateral, the truth auction exists to sell REP for ETH so that the child branch can restore the collateral base needed for clean redemption.
+At the implementation level, `redeemShares` burns the holder’s full balance of the winning token id and pays `sharesToCash(amount)` out of the pool’s current collateral accounting. In the healthy case, this should correspond to a clean `1:1` redemption outcome against the economic meaning of a complete-set claim, subject to the pool’s collateral accounting remaining intact through migration and any required auction repair. The important edge case is fork recovery: if a child pool emerges from migration with incomplete collateral, the truth auction exists to sell REP for ETH so that the child branch can restore the collateral base needed for clean redemption.
 
 Shares can also migrate across forks. `ShareToken.migrate` burns a parent-universe token id and mints corresponding child-universe token ids for one or more target outcomes, provided the target outcomes are valid and non-malformed for the fork question. If multiple target outcomes are selected, the holder’s full burned balance is reproduced into each selected child branch. This colored-coin style branching behavior depends directly on Zoltar’s universe and fork state, which is described in [whitepaper_zoltar.md](./whitepaper_zoltar.md).
 
@@ -288,60 +285,7 @@ After a Zoltar fork:
 
 This separation is important. Post-fork REP splitting is a Zoltar primitive, described in [whitepaper_zoltar.md](./whitepaper_zoltar.md). Vault migration, collateral transfer, and child-pool initialization are Augur Placeholder primitives built on top of it.
 
-### Example: a post-fork branch
-
-Consider the following purely illustrative toy example for a binary Augur Placeholder market in universe `U0`:
-
-- `100 ETH` of parent-pool collateral
-- `100 ETH` of effective complete-set obligations
-- a forked question whose `Yes` child universe attracts `60%` of the REP that is split into that branch
-
-The contracts do not simply say “60% of REP split into one branch means exactly 60% of all collateral in every case.” This toy example is only meant to illustrate the economic shape of the problem. Suppose the `Yes` child branch ends up with only `60 ETH` of effective collateral support, even though the surviving branch would ideally like to support the full `100 ETH` of clean claims. That leaves a `40 ETH` collateral gap. In the actual contract path, the repair target is computed from parent collateral, REP already split into the child branch, and `repAtFork`, as described in Section 8.
-
-```
-Parent universe U0
-    |
-    | fork on disputed question
-    v
-+--------------------------+
-| Zoltar child universe UY |
-| outcome: Yes             |
-| split REP share: 60%     |
-+------------+-------------+
-             |
-             v
-+---------------------------+
-| Placeholder child pool    |
-| collateral: 60 ETH        |
-| target: 100 ETH           |
-| gap: 40 ETH               |
-+------------+--------------+
-             |
-             v
-+---------------------------+
-| Truth auction             |
-| sell child REP for ETH    |
-+------------+--------------+
-             |
-             v
-+---------------------------+
-| Repaired child pool       |
-| resumes operation         |
-+---------------------------+
-```
-
-In that case:
-
-1. Zoltar handles the universe fork and the splitting of post-fork REP claims into the `Yes` child universe.
-2. The Placeholder parent pool then separately enters its own fork lifecycle through `initiateSecurityPoolFork` and `activateForkMode`. The Zoltar fork and the pool-fork transition are related, but they are not the same contract step.
-3. Augur Placeholder creates the `Yes` child pool and migrates vault state and any eligible escalation-game winnings into it through `migrateVault` and `migrateFromEscalationGame`.
-4. Because the child pool does not yet have the collateral base it wants, `startTruthAuction` begins a sale of child-universe REP for ETH.
-5. Bidders contribute ETH. If the auction succeeds, the child pool pulls in the missing ETH and can resume operation with a repaired collateral base.
-6. If the auction is underfunded, the branch still continues, but collateral repair was incomplete.
-
-This is why the truth auction exists: not to decide truth, but to convert surviving-branch REP into the ETH needed to restore clean collateralization after a fork.
-
-### Example: adapted branch-recovery intuition
+### Worked Example: Adapted Branch-Recovery Intuition
 
 The examples in [Sisyphean Exchange.md](https://github.com/AugurProject/oracle-research/blob/main/Sisyphean%20Exchange.md) are useful for explaining the same recovery logic at a more intuitive level. That document uses a different economic wrapper than this repository, so the example below keeps only the branch-migration and auction intuition and translates it into Augur Placeholder terms.
 
@@ -352,27 +296,29 @@ Suppose a parent pool has:
 
 Now suppose a fork happens and REP claims are split as follows:
 
-- `190 REP` is split into the truthful child universe
+- `190 REP` is split into the child universe that a given user treats as truthful
 - `10 REP` is split into the false child universe
 
 If parent-side collateral follows the same proportion into child pools, then:
 
-- the truthful child pool begins with `47.5 ETH`
+- the user-preferred child pool begins with `47.5 ETH`
 - the false child pool begins with `2.5 ETH`
 
-The truthful child branch is the one expected to preserve economically meaningful claims, so it is also the branch that wants to continue supporting clean redemption for the surviving market. On those numbers, it is short by:
+The child branch that a user expects to preserve economically meaningful claims is also the branch that user expects to continue supporting clean redemption. On those numbers, it is short by:
 
 $$
 \text{ethCollateralToBuy} = 50 \text{ ETH} - 47.5 \text{ ETH} = 2.5 \text{ ETH}
 $$
 
-The truth auction then sells truthful-branch REP for `2.5 ETH`. If bidders supply that ETH, the truthful child pool returns to the full `50 ETH` collateral base and can continue operating cleanly. The false child branch, by contrast, keeps only its `2.5 ETH` and whatever branch-local economic activity it can attract.
+The truth auction then sells that child branch’s REP for `2.5 ETH`. If bidders supply that ETH, the user-preferred child pool returns to the full `50 ETH` collateral base and can continue operating cleanly. The false child branch, by contrast, keeps only its `2.5 ETH` and whatever branch-local economic activity it can attract.
 
 This is a good intuition for the intended recovery path in Augur Placeholder:
 
-- REP splitting determines which child branch inherits epistemic legitimacy
+- REP splitting determines which child branch participants expect to retain meaningful value
 - collateral migration gives that branch only a proportional starting point
-- the truth auction lets the surviving branch buy back the missing ETH needed for clean continuation
+- the truth auction lets that branch buy back the missing ETH needed for clean continuation
+
+In contract terms, Zoltar first handles the universe fork and the splitting of post-fork REP claims into child universes. The Placeholder parent pool then separately enters its own fork lifecycle through `initiateSecurityPoolFork` and `activateForkMode`; the Zoltar fork and the pool-fork transition are related, but they are not the same contract step. Augur Placeholder creates the relevant child pool, migrates vault state and any eligible escalation-game winnings into it through `migrateVault` and `migrateFromEscalationGame`, and then starts a REP-for-ETH sale through `startTruthAuction` if the child branch still lacks its intended collateral base. If bidders supply the missing ETH, the child pool resumes operation with repaired collateral. If the auction is underfunded, the branch still continues, but collateral repair is incomplete.
 
 Unlike `Sisyphean Exchange.md`, this repository does not introduce a separate `CASH` wrapper token. The same branch-recovery logic is instead expressed through security pools, migrated ETH collateral, and a child-branch REP sale.
 
@@ -380,9 +326,9 @@ Unlike `Sisyphean Exchange.md`, this repository does not introduce a separate `C
 
 The truth auction belongs to Augur Placeholder, not to Zoltar.
 
-After migration, a child pool may still have less ETH collateral than is needed to represent the full surviving branch. This happens because migration can move less than the full parent-side economic state into that child universe.
+After migration, a child pool may still have less ETH collateral than is needed to represent that branch’s intended collateral base. This happens because migration can move less than the full parent-side economic state into that child universe.
 
-More precisely, the parent pool may have outstanding complete-set obligations and collateral that were economically tied to the parent universe, while only some fraction of REP-backed security and vault state migrates into a given child branch. The child branch may therefore inherit a partial economic state: enough to exist, but not enough to cleanly support the level of collateralization that the surviving branch would want if it were to continue as a standalone market.
+More precisely, the parent pool may have outstanding complete-set obligations and collateral that were economically tied to the parent universe, while only some fraction of REP-backed security and vault state migrates into a given child branch. The child branch may therefore inherit a partial economic state: enough to exist, but not enough to cleanly support the level of collateralization that participants in that branch would want if it were to continue as a standalone market.
 
 To repair that mismatch, the child pool can sell REP through [`UniformPriceDualCapBatchAuction`](../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol).
 
@@ -405,7 +351,7 @@ This is the contract’s direct statement of the gap: `ethCollateralToBuy` is th
 
 If the auction is underfunded, the contract switches to threshold-based logic that allocates REP proportionally among bids above the underfunded threshold price.
 
-The purpose of this auction is to let a child Augur Placeholder branch reassemble collateral completeness after a Zoltar fork. REP is sold here because it is the branch-native scarce asset that migrated with epistemic legitimacy into the child universe. The auction converts part of that security capital back into the ETH collateral required for the child market to continue operating cleanly. Put differently, it monetizes branch-native REP, not trader share balances or direct vault claims.
+The purpose of this auction is to let a child Augur Placeholder branch reassemble collateral completeness after a Zoltar fork. REP is sold here because it is the branch-native scarce asset that migrated into the child universe along with that branch’s security claims. The auction converts part of that security capital back into the ETH collateral required for the child market to continue operating cleanly. Put differently, it monetizes branch-native REP, not trader share balances or direct vault claims.
 
 ```
 Zoltar fork
@@ -462,12 +408,12 @@ An end-to-end lifecycle under the current contracts looks like this:
 The current repository exposes several implementation constraints.
 
 - Origin security pools currently support only the exact categorical market shape `Yes / No`, with `Invalid` added as the third Placeholder trading and resolution outcome.
-- The fork threshold divisor, fork-burn divisor, escalation-game initial deposit, retention-rate bounds, retention-rate dip point, and several oracle and auction tuning parameters are fixed constants in the current implementation and should be read as current design parameters rather than as dynamically governed values.
+- Placeholder issues transferable shares and manages their redemption and migration, but secondary-market trading remains outside the core contracts.
+- The fork threshold divisor, fork-burn divisor, and escalation-game initial deposit are fixed constants in the current implementation and should be read as current design parameters rather than as dynamically governed values.
+- Retention-rate bounds, the retention-rate dip point, and several oracle and auction tuning parameters are also fixed constants in the current implementation.
 - The retention-rate curve in [`SecurityPoolUtils`](../solidity/contracts/peripherals/SecurityPoolUtils.sol) is heuristic rather than final market design.
-- Some comments acknowledge open accounting questions around child-pool complete-set behavior.
-- The background design ideas are broader and more generalized than the contracts currently implemented in this repository.
-- This implementation is strongest where it specifies fork handling, migration, underwriting, and collateral continuity across disputed branches.
+- Some comments in [`SecurityPool`](../solidity/contracts/peripherals/SecurityPool.sol) acknowledge open accounting questions around child-pool complete-set behavior.
 
 ## 12. Design Thesis
 
-Zoltar provides the forkable oracle base, and Augur Placeholder turns that substrate into a collateralized, security-backed prediction-market system. REP vaults underwrite open interest, users hold complete sets and outcome shares backed by ETH collateral, and disputes attempt to resolve locally through escalation before falling back to a Zoltar fork. Afterward, structured migration and truth auctions let the surviving branch rebuild a coherent economic state. The protocol issues transferable shares, but it leaves secondary-market trading itself outside the core Placeholder contracts.
+Zoltar provides the forkable oracle base, and Augur Placeholder turns that substrate into a collateralized, security-backed prediction-market system. REP vaults underwrite open interest, users hold complete sets and outcome shares backed by ETH collateral, and disputes attempt to resolve locally through escalation before falling back to a Zoltar fork. Afterward, structured migration and truth auctions let the surviving branch rebuild a coherent economic state.
