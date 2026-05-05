@@ -118,6 +118,21 @@ At a high level, if `p` is the payout assigned to the upper scalar leg and `T` i
 
 The contract implementation performs this with fixed-point integer math and formats the result for presentation.
 
+### Market types supported by Zoltar
+
+At the Zoltar layer, market type support comes from how questions and outcomes are encoded in [`ZoltarQuestionData`](../solidity/contracts/ZoltarQuestionData.sol), not from the Placeholder security-pool layer.
+
+Zoltar currently supports:
+
+- categorical questions, implemented as an ordered array of non-empty outcome labels
+- scalar questions, implemented as a tick-based numeric range with no categorical labels
+
+For categorical questions, the contract stores the outcome strings in `outcomeLabels[questionId]`. Any number of categorical outcomes can exist at the Zoltar level as long as the labels are non-empty and sorted by hash in the required canonical order.
+
+For scalar questions, the contract stores no outcome-label array. Instead, `numTicks`, `displayValueMin`, `displayValueMax`, and `answerUnit` define the answer space. A scalar outcome is then represented by an encoded pair of payout numerators, and `ScalarOutcomes` turns that encoding into a human-readable value.
+
+This means Zoltar itself is more general than Augur Placeholder’s current origin-market implementation. Zoltar can represent arbitrary categorical questions and scalar questions, while Augur Placeholder currently builds only the `Yes / No / Invalid` trading structure on top of that substrate.
+
 ### Invalid vs malformed
 
 Zoltar distinguishes `invalid` answers from `malformed` answers.
