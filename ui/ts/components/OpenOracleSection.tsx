@@ -7,6 +7,7 @@ import { DataGrid } from './DataGrid.js'
 import { EntityCard } from './EntityCard.js'
 import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
+import { FormInput } from './FormInput.js'
 import { LatestActionSection } from './LatestActionSection.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
@@ -141,7 +142,7 @@ export function renderSelectedReportActionSection(
 						<div className='field-row'>
 							<label className='field'>
 								<span>{`Price (${token1Symbol} / ${token2Symbol})`}</span>
-								<input value={openOracleForm.price} onInput={event => onOpenOracleFormChange({ price: event.currentTarget.value })} placeholder='1.00' />
+								<FormInput value={openOracleForm.price} onInput={event => onOpenOracleFormChange({ price: event.currentTarget.value })} placeholder='1.00' />
 							</label>
 							<div className='actions'>
 								<button className='secondary' onClick={onRefreshPrice} disabled={openOracleInitialReportState.quoteLoading}>
@@ -232,11 +233,11 @@ export function renderSelectedReportActionSection(
 							<div className='field-row'>
 								<label className='field'>
 									<span>{`New ${token1Symbol} Amount`}</span>
-									<input value={openOracleForm.disputeNewAmount1} onInput={event => onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })} />
+									<FormInput value={openOracleForm.disputeNewAmount1} onInput={event => onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })} />
 								</label>
 								<label className='field'>
 									<span>{`New ${token2Symbol} Amount`}</span>
-									<input value={openOracleForm.disputeNewAmount2} onInput={event => onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })} />
+									<FormInput value={openOracleForm.disputeNewAmount2} onInput={event => onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })} />
 								</label>
 							</div>
 							<div className='actions'>
@@ -728,60 +729,60 @@ export function OpenOracleSection({
 							<div className='field-row'>
 								<label className='field'>
 									<span>Token1 Address</span>
-									<input value={openOracleCreateForm.token1Address} onInput={event => onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })} placeholder='0x...' />
+									<FormInput value={openOracleCreateForm.token1Address} onInput={event => onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })} placeholder='0x...' />
 								</label>
 								<label className='field'>
 									<span>Token2 Address</span>
-									<input value={openOracleCreateForm.token2Address} onInput={event => onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })} placeholder='0x...' />
+									<FormInput value={openOracleCreateForm.token2Address} onInput={event => onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })} placeholder='0x...' />
 								</label>
 							</div>
 
 							<div className='field-row'>
 								<label className='field'>
 									<span>Exact Token1 Report</span>
-									<input value={openOracleCreateForm.exactToken1Report} onInput={event => onOpenOracleCreateFormChange({ exactToken1Report: event.currentTarget.value })} />
+									<FormInput value={openOracleCreateForm.exactToken1Report} onInput={event => onOpenOracleCreateFormChange({ exactToken1Report: event.currentTarget.value })} />
 								</label>
 								<label className='field'>
 									<span>Settler Reward</span>
-									<input value={openOracleCreateForm.settlerReward} onInput={event => onOpenOracleCreateFormChange({ settlerReward: event.currentTarget.value })} />
+									<FormInput value={openOracleCreateForm.settlerReward} onInput={event => onOpenOracleCreateFormChange({ settlerReward: event.currentTarget.value })} />
 								</label>
 							</div>
 
 							<label className='field'>
 								<span>ETH Value To Send</span>
-								<input value={openOracleCreateForm.ethValue} onInput={event => onOpenOracleCreateFormChange({ ethValue: event.currentTarget.value })} />
+								<FormInput value={openOracleCreateForm.ethValue} onInput={event => onOpenOracleCreateFormChange({ ethValue: event.currentTarget.value })} />
 							</label>
 
 							<div className='field-row'>
 								<label className='field'>
 									<span>Fee Percentage</span>
-									<input value={openOracleCreateForm.feePercentage} onInput={event => onOpenOracleCreateFormChange({ feePercentage: event.currentTarget.value })} />
+									<FormInput value={openOracleCreateForm.feePercentage} onInput={event => onOpenOracleCreateFormChange({ feePercentage: event.currentTarget.value })} />
 								</label>
 								<label className='field'>
 									<span>Multiplier</span>
-									<input value={openOracleCreateForm.multiplier} onInput={event => onOpenOracleCreateFormChange({ multiplier: event.currentTarget.value })} />
+									<FormInput value={openOracleCreateForm.multiplier} onInput={event => onOpenOracleCreateFormChange({ multiplier: event.currentTarget.value })} />
 								</label>
 							</div>
 
 							<div className='field-row'>
 								<label className='field'>
 									<span>Settlement Time</span>
-									<input value={openOracleCreateForm.settlementTime} onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })} />
+									<FormInput value={openOracleCreateForm.settlementTime} onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })} />
 								</label>
 								<label className='field'>
 									<span>Escalation Halt</span>
-									<input value={openOracleCreateForm.escalationHalt} onInput={event => onOpenOracleCreateFormChange({ escalationHalt: event.currentTarget.value })} />
+									<FormInput value={openOracleCreateForm.escalationHalt} onInput={event => onOpenOracleCreateFormChange({ escalationHalt: event.currentTarget.value })} />
 								</label>
 							</div>
 
 							<div className='field-row'>
 								<label className='field'>
 									<span>Dispute Delay</span>
-									<input value={openOracleCreateForm.disputeDelay} onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })} />
+									<FormInput value={openOracleCreateForm.disputeDelay} onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })} />
 								</label>
 								<label className='field'>
 									<span>Protocol Fee</span>
-									<input value={openOracleCreateForm.protocolFee} onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })} />
+									<FormInput value={openOracleCreateForm.protocolFee} onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })} />
 								</label>
 							</div>
 

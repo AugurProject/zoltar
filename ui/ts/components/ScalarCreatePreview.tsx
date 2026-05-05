@@ -1,7 +1,6 @@
-import { DataGrid } from './DataGrid.js'
 import { useEffect, useState } from 'preact/hooks'
-import { MetricField } from './MetricField.js'
-import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
+import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
+import { clampScalarTickIndex, formatScalarOutcomeLabel } from '../lib/scalarOutcome.js'
 
 export type ScalarCreatePreviewDetails = {
 	answerUnit: string
@@ -27,28 +26,16 @@ export function ScalarCreatePreview({ details, selectedTick, onSelectedTickChang
 	}, [clampedSelectedTick, onSelectedTickChange, selectedTick])
 
 	return (
-		<div className='market-scalar-deploy'>
-			<div className='field scalar-slider-field'>
-				<span>Scalar Preview</span>
-				<div className='scalar-slider-with-invalid'>
-					<div className={`scalar-slider-rail ${isInvalid ? 'is-disabled' : ''}`}>
-						<div className='scalar-slider-track' />
-						<div className='scalar-slider-input-wrapper'>
-							<div className='scalar-slider-fill' style={{ '--slider-fill': isInvalid ? '0%' : getScalarSliderFillWidth(clampedSelectedTickValue, details.numTicks) }} />
-							<input disabled={isInvalid} aria-valuetext={isInvalid ? 'Invalid' : formatScalarOutcomeLabel(details, clampedSelectedTickValue)} max={details.numTicks.toString()} min='0' step='1' type='range' value={clampedSelectedTick} onInput={event => onSelectedTickChange(event.currentTarget.value)} />
-						</div>
-					</div>
-					<span className='scalar-or-divider'>or</span>
-					<label className='scalar-invalid-toggle'>
-						<input type='checkbox' checked={isInvalid} onChange={event => setIsInvalid(event.currentTarget.checked)} />
-						<span>Invalid</span>
-					</label>
-				</div>
-			</div>
-			<DataGrid className='scalar-slider-stats'>
-				<MetricField label='Selected Tick'>{isInvalid ? 'Invalid' : `${clampedSelectedTick} / ${details.numTicks.toString()}`}</MetricField>
-				<MetricField label='Current Value'>{isInvalid ? 'Invalid' : formatScalarOutcomeLabel(details, clampedSelectedTickValue)}</MetricField>
-			</DataGrid>
-		</div>
+		<ScalarOutcomePicker
+			details={{ numTicks: details.numTicks }}
+			isInvalid={isInvalid}
+			label='Scalar Preview'
+			onInvalidChange={setIsInvalid}
+			onSelectedTickChange={onSelectedTickChange}
+			selectedOutcomeLabel={isInvalid ? 'Invalid' : formatScalarOutcomeLabel(details, clampedSelectedTickValue)}
+			selectedTick={clampedSelectedTick}
+			selectedTickLabel={isInvalid ? 'Invalid' : `${clampedSelectedTick} / ${details.numTicks.toString()}`}
+			showMinMax={false}
+		/>
 	)
 }

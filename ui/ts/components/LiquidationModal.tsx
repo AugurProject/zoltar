@@ -2,6 +2,7 @@ import { useEffect } from 'preact/hooks'
 import type { Address } from 'viem'
 import { AddressInfo } from './AddressInfo.js'
 import { DataGrid } from './DataGrid.js'
+import { FormInput } from './FormInput.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 
 type LiquidationModalProps = {
@@ -79,11 +80,11 @@ export function LiquidationModal({
 					<div className='field-row'>
 						<label className='field'>
 							<span>Target Vault</span>
-							<input value={liquidationTargetVault} onInput={event => onLiquidationTargetVaultChange(event.currentTarget.value)} placeholder='0x...' />
+							<FormInput value={liquidationTargetVault} onInput={event => onLiquidationTargetVaultChange(event.currentTarget.value)} placeholder='0x...' />
 						</label>
 						<label className='field'>
 							<span>Liquidation Amount</span>
-							<input value={liquidationAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} />
+							<FormInput value={liquidationAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} />
 						</label>
 					</div>
 				</div>

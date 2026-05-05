@@ -3,12 +3,14 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
+import { FormInput } from './FormInput.js'
 import { EscalationSide } from './EscalationSide.js'
 import { LatestActionSection } from './LatestActionSection.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
+import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
@@ -203,7 +205,7 @@ export function ReportingSection({
 
 				<label className='field'>
 					<span>Report / Contribution Amount</span>
-					<input value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportingLocked} />
+					<FormInput value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportingLocked} />
 				</label>
 
 				{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
@@ -222,7 +224,7 @@ export function ReportingSection({
 			<SectionBlock title='Withdraw Escalation Deposits'>
 				<label className='field'>
 					<span>Withdraw Deposit Indexes</span>
-					<input value={reportingForm.withdrawDepositIndexes} onInput={event => onReportingFormChange({ withdrawDepositIndexes: event.currentTarget.value })} placeholder='Leave empty to withdraw all your deposits on the selected side' disabled={reportingLocked} />
+					<FormInput value={reportingForm.withdrawDepositIndexes} onInput={event => onReportingFormChange({ withdrawDepositIndexes: event.currentTarget.value })} placeholder='Leave empty to withdraw all your deposits on the selected side' disabled={reportingLocked} />
 				</label>
 
 				<div className='actions'>
@@ -239,16 +241,8 @@ export function ReportingSection({
 	}
 
 	return (
-		<section className='panel market-panel'>
-			{showHeader ? (
-				<div className='market-header'>
-					<div>
-						<h2>Reporting & Escalation</h2>
-					</div>
-				</div>
-			) : undefined}
-
-			<div className='workflow-stack route-workflow-stack'>{sections}</div>
-		</section>
+		<RouteWorkflowPanel showHeader={showHeader} title='Reporting & Escalation'>
+			{sections}
+		</RouteWorkflowPanel>
 	)
 }

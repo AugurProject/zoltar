@@ -6,7 +6,7 @@ import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 import { SecurityPoolWorkflowSection } from '../components/SecurityPoolWorkflowSection.js'
 import type { AccountState } from '../types/app.js'
-import type { ListedSecurityPool, MarketDetails, SecurityVaultDetails } from '../types/contracts.js'
+import type { ListedSecurityPool, MarketDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '../types/contracts.js'
 import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -124,6 +124,17 @@ function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {
 		totalSecurityBondAllowance: 3n * 10n ** 18n,
 		unpaidEthFees: 1n * 10n ** 18n,
 		universeId: 1n,
+		vaultAddress: zeroAddress,
+		...overrides,
+	}
+}
+
+function createSecurityPoolVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
+	return {
+		lockedRepInEscalationGame: 1n * 10n ** 18n,
+		repDepositShare: 5n * 10n ** 18n,
+		securityBondAllowance: 2n * 10n ** 18n,
+		unpaidEthFees: 1n * 10n ** 18n,
 		vaultAddress: zeroAddress,
 		...overrides,
 	}
@@ -297,15 +308,21 @@ describe('SecurityPoolWorkflowSection', () => {
 	})
 
 	test('renders a vault workspace header and local mode switch for a loaded pool', async () => {
+		const poolVault = createSecurityPoolVaultSummary()
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
 					checkedSecurityPoolAddress: zeroAddress,
 					securityPoolAddress: zeroAddress,
-					securityPools: [createSelectedPool()],
+					securityPools: [
+						createSelectedPool({
+							vaultCount: 1n,
+							vaults: [poolVault],
+						}),
+					],
 					securityVault: createSecurityVaultProps({
 						selectedPoolSecurityMultiplier: 2n,
-						securityVaultDetails: createSecurityVaultDetails(),
+						securityVaultDetails: createSecurityVaultDetails({ vaultAddress: poolVault.vaultAddress }),
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '',
@@ -332,6 +349,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Vault' })).toBeNull()
 		expect(documentQueries.getByLabelText('Selected Vault Address')).not.toBeNull()
 		expect(documentQueries.getByText('Claimable Fees')).not.toBeNull()
+		expect(documentQueries.getAllByText('Approved REP').length).toBeGreaterThan(0)
 		expect(documentQueries.queryByText('Enter a deposit amount greater than zero.')).toBeNull()
 		expect(documentQueries.queryByText('Fork Flow')).toBeNull()
 		expect(documentQueries.queryByText('Oracle Status')).toBeNull()
@@ -344,7 +362,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		})
 
 		expect(documentQueries.getByRole('heading', { name: 'Vault Directory' })).not.toBeNull()
-		expect(documentQueries.queryByText('0 vaults')).toBeNull()
+		expect(documentQueries.getAllByText('Locked REP').length).toBeGreaterThan(0)
 	})
 
 	test('shows disabled reporting actions before market end instead of a placeholder message', async () => {

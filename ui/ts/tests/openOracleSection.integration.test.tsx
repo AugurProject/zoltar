@@ -386,7 +386,7 @@ describe.serial('OpenOracleSection integration', () => {
 		const advanceTimeBy = settleOnlyClock > submittedClock ? settleOnlyClock - submittedClock : 1n
 
 		await mockWindow.advanceTime(advanceTimeBy)
-		await clickElement(within(document.body).getByRole('button', { name: 'Refresh report' }))
+		await clickElement(within(document.body).getByText('Refresh report') as HTMLButtonElement)
 		await waitFor(async () => {
 			const refreshedReport = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
 			expect(getOpenOracleSelectedReportActionMode(refreshedReport)).toBe('settle')
