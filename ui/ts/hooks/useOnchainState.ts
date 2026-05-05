@@ -1,35 +1,36 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../contracts.js'
-import { getInjectedEthereum } from '../injectedEthereum.js'
 import { createConnectedReadClient, normalizeAccount } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { MAINNET_CHAIN_ID } from '../lib/network.js'
+import { getActiveBackend } from '../lib/activeEnvironment.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
-import { WETH_ADDRESS } from '../lib/uniswapQuoter.js'
+import { getWethAddress } from '../lib/uniswapQuoter.js'
 import type { AccountState } from '../types/app.js'
 import type { DeploymentStatus } from '../types/contracts.js'
+import { useLoadController } from './useLoadController.js'
 
 type RefreshStateOptions = {
 	loadWalletState?: boolean
 }
 
 type LoadWalletStateParameters = {
-	connectedAddress: Address | undefined
 	chainIdPromise: Promise<string> | undefined
+	connectedAddress: Address | undefined
 	ethBalancePromise: Promise<bigint> | undefined
-	wethBalancePromise: Promise<bigint> | undefined
+	fallbackChainId?: string
 	getAccountState: () => AccountState
 	isCurrent: () => boolean
 	setAccountState: (state: AccountState) => void
 	setErrorMessage: (message: string | undefined) => void
 	trackLoad: <TResult>(work: () => Promise<TResult>) => Promise<TResult>
+	wethBalancePromise: Promise<bigint> | undefined
 }
 
-export async function loadWalletState({ chainIdPromise, connectedAddress, ethBalancePromise, getAccountState, isCurrent, setAccountState, setErrorMessage, trackLoad, wethBalancePromise }: LoadWalletStateParameters) {
+export async function loadWalletState({ chainIdPromise, connectedAddress, ethBalancePromise, fallbackChainId, getAccountState, isCurrent, setAccountState, setErrorMessage, trackLoad, wethBalancePromise }: LoadWalletStateParameters) {
 	if (connectedAddress === undefined || chainIdPromise === undefined || ethBalancePromise === undefined || wethBalancePromise === undefined) return
+	const resolvedFallbackChainId = fallbackChainId ?? '0x1'
 
 	void trackLoad(async () => {
 		try {
@@ -38,7 +39,7 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 			setAccountState({ ...getAccountState(), chainId })
 		} catch {
 			if (!isCurrent()) return
-			setAccountState({ ...getAccountState(), chainId: MAINNET_CHAIN_ID })
+			setAccountState({ ...getAccountState(), chainId: resolvedFallbackChainId })
 		}
 	})
 
@@ -78,7 +79,7 @@ export function useOnchainState() {
 			deployed: false,
 		})),
 	)
-	const hasInjectedWallet = useSignal(getInjectedEthereum() !== undefined)
+	const hasInjectedWallet = useSignal(getActiveBackend().hasWallet())
 	const walletStateLoad = useLoadController()
 	const deploymentStatusLoad = useLoadController()
 	const deploymentStatusesLoaded = useSignal(false)
@@ -95,15 +96,14 @@ export function useOnchainState() {
 
 	const refreshState = async (options: RefreshStateOptions = {}) => {
 		const shouldLoadWalletState = options.loadWalletState ?? true
-		const ethereum = getInjectedEthereum()
+		const backend = getActiveBackend()
 		const isCurrent = nextRefresh()
-		hasInjectedWallet.value = ethereum !== undefined
+		hasInjectedWallet.value = backend.hasWallet()
 		errorMessage.value = undefined
 
-		// Fire deployment status immediately — independent of wallet state
 		void deploymentStatusLoad.track(async () => {
 			try {
-				const snapshot = await loadDeploymentStatusOracleSnapshot(createConnectedReadClient())
+				const snapshot = await loadDeploymentStatusOracleSnapshot(backend.createReadClient())
 				if (!isCurrent()) return
 				augurPlaceHolderDeployed.value = snapshot.augurPlaceHolderDeployed
 				deploymentStatuses.value = snapshot.deploymentStatuses
@@ -116,12 +116,10 @@ export function useOnchainState() {
 
 		if (!shouldLoadWalletState) return
 
-		// Resolve connection state — address check completes bootstrap; balance/chainId load in background
 		await walletStateLoad.track(async () => {
 			try {
-				const accountsResult = ethereum === undefined ? [] : await ethereum.request({ method: 'eth_accounts' }).catch(() => [])
+				const accounts = await backend.getAccounts()
 				if (!isCurrent()) return
-				const accounts = Array.isArray(accountsResult) ? accountsResult : []
 				const connectedAddress = normalizeAccount(accounts[0])
 				accountState.value = {
 					address: connectedAddress,
@@ -130,18 +128,18 @@ export function useOnchainState() {
 					wethBalance: connectedAddress === accountState.value.address ? accountState.value.wethBalance : undefined,
 				}
 
-				// Address is now known — unblock data loading regardless of wallet presence
 				walletBootstrapComplete.value = true
 
-				if (connectedAddress !== undefined && ethereum !== undefined) {
-					const chainIdPromise = ethereum.request({ method: 'eth_chainId' })
+				if (connectedAddress !== undefined) {
+					const chainIdPromise = backend.getChainId()
 					const readClient = createConnectedReadClient()
 					const ethBalancePromise = readClient.getBalance({ address: connectedAddress })
-					const wethBalancePromise = loadErc20Balance(readClient, WETH_ADDRESS, connectedAddress)
+					const wethBalancePromise = loadErc20Balance(readClient, getWethAddress(), connectedAddress)
 					void loadWalletState({
-						connectedAddress,
 						chainIdPromise,
+						connectedAddress,
 						ethBalancePromise,
+						fallbackChainId: backend.profile.chainIdHex,
 						getAccountState: () => accountState.value,
 						isCurrent,
 						setAccountState: state => {
@@ -154,7 +152,7 @@ export function useOnchainState() {
 						wethBalancePromise,
 					})
 				} else {
-					accountState.value = { ...accountState.value, chainId: MAINNET_CHAIN_ID, wethBalance: undefined }
+					accountState.value = { ...accountState.value, chainId: backend.profile.chainIdHex, wethBalance: undefined }
 				}
 			} catch (error) {
 				if (!isCurrent()) return
@@ -165,8 +163,8 @@ export function useOnchainState() {
 	}
 
 	const connectWallet = async () => {
-		const ethereum = getInjectedEthereum()
-		if (ethereum === undefined) {
+		const backend = getActiveBackend()
+		if (!backend.hasWallet()) {
 			errorMessage.value = 'Connect wallet to continue.'
 			return
 		}
@@ -175,7 +173,7 @@ export function useOnchainState() {
 		try {
 			isConnectingWallet.value = true
 			errorMessage.value = undefined
-			await ethereum.request({ method: 'eth_requestAccounts' })
+			await backend.requestAccounts()
 			await refreshState()
 		} catch (error) {
 			errorMessage.value = getErrorMessage(error, 'Wallet connection failed')
@@ -189,19 +187,16 @@ export function useOnchainState() {
 	}, [])
 
 	useEffect(() => {
-		const ethereum = getInjectedEthereum()
-		if (ethereum === undefined) return
-
+		const backend = getActiveBackend()
 		const handleWalletChange = () => {
 			void refreshState()
 		}
-
-		ethereum.on?.('accountsChanged', handleWalletChange)
-		ethereum.on?.('chainChanged', handleWalletChange)
+		const unsubscribeAccounts = backend.subscribeAccountsChanged(handleWalletChange)
+		const unsubscribeChain = backend.subscribeChainChanged(handleWalletChange)
 
 		return () => {
-			ethereum.removeListener?.('accountsChanged', handleWalletChange)
-			ethereum.removeListener?.('chainChanged', handleWalletChange)
+			unsubscribeChain()
+			unsubscribeAccounts()
 		}
 	}, [])
 
@@ -212,12 +207,12 @@ export function useOnchainState() {
 		errorMessage: errorMessage.value,
 		hasInjectedWallet: hasInjectedWallet.value,
 		hasLoadedDeploymentStatuses: deploymentStatusesLoaded.value,
+		isConnectingWallet: isConnectingWallet.value,
 		isLoadingDeploymentStatuses: deploymentStatusLoad.isLoading.value,
 		isRefreshing: walletStateLoad.isLoading.value,
 		augurPlaceHolderDeployed: augurPlaceHolderDeployed.value,
-		isConnectingWallet: isConnectingWallet.value,
+		refreshState,
 		setDeploymentStatuses,
 		walletBootstrapComplete: walletBootstrapComplete.value,
-		refreshState,
 	}
 }

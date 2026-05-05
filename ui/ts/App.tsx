@@ -7,6 +7,7 @@ import { OverviewPanels } from './components/OverviewPanels.js'
 import { MarketSection } from './components/MarketSection.js'
 import { NotFoundSection } from './components/NotFoundSection.js'
 import { OpenOracleSection } from './components/OpenOracleSection.js'
+import { SimulationBanner } from './components/SimulationBanner.js'
 import { TabNavigation } from './components/TabNavigation.js'
 import { SecurityPoolsSection } from './components/SecurityPoolsSection.js'
 import { ErrorNotice } from './components/ErrorNotice.js'
@@ -24,9 +25,10 @@ import { useRepPrices } from './hooks/useRepPrices.js'
 import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { useUrlState } from './hooks/useUrlState.js'
+import { getActiveSimulationController } from './lib/activeEnvironment.js'
 import { getDeploymentSections } from './lib/deployment.js'
 import { resolveLoadableValueState } from './lib/loadState.js'
-import { isMainnetChain } from './lib/network.js'
+import { getWrongNetworkMessage, isSupportedAppChain } from './lib/network.js'
 import { getUseQuestionForPoolState } from './lib/securityPoolNavigation.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
 import type { TransactionState } from './lib/transactionState.js'
@@ -201,10 +203,11 @@ export function App() {
 		withdrawBids,
 	} = useForkAuctionOperations(baseHookConfig)
 	const { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices } = useRepPrices()
+	const simulationController = getActiveSimulationController()
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
-	const isMainnet = isMainnetChain(accountState.chainId)
-	const wrongNetworkMessage = accountState.address !== undefined && accountState.chainId !== undefined && !isMainnet ? 'Switch to Ethereum mainnet.' : undefined
+	const isMainnet = isSupportedAppChain(accountState.chainId)
+	const wrongNetworkMessage = accountState.address !== undefined && accountState.chainId !== undefined && !isMainnet ? getWrongNetworkMessage() : undefined
 	const augurPlaceHolderDeploymentMissing = augurPlaceHolderDeployed === false
 	const showDeployTab = augurPlaceHolderDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 	const showAugurPlaceHolderDeploymentWarning = augurPlaceHolderDeploymentMissing
@@ -219,7 +222,7 @@ export function App() {
 	const isRouteContentDisabled = transactionState.value.transactionInFlightCount > 0 || disableRouteContent
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
-	const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, hasInjectedWallet, isMainnet })
+	const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, hasWallet: hasInjectedWallet, isSupportedChain: isMainnet })
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const refreshSelectedPoolData = () => {
 		if (!walletBootstrapComplete) return
@@ -588,6 +591,7 @@ export function App() {
 					</p>
 				)}
 			</div>
+			{simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onRefresh={refreshState} />}
 			<div className='top-shell'>
 				<div className='top-shell-content'>
 					<OverviewPanels

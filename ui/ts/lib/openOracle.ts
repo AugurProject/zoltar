@@ -4,7 +4,7 @@ import { parseDecimalInput } from './decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from './errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from './formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
-import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput, WETH_ADDRESS } from './uniswapQuoter.js'
+import { getWethAddress, isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput } from './uniswapQuoter.js'
 
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 18n
 const OPEN_ORACLE_BOUNTY_BUFFER_NUMERATOR = 12n
@@ -372,7 +372,7 @@ function resolveOpenOracleTokenLabel({ fallbackLabel, tokenAddress, tokenSymbol 
 }
 
 function isCanonicalMainnetWeth(tokenAddress: string | undefined) {
-	return tokenAddress?.toLowerCase() === WETH_ADDRESS.toLowerCase()
+	return tokenAddress?.toLowerCase() === getWethAddress().toLowerCase()
 }
 
 function formatOpenOracleQuoteAttemptedSources(attemptedSources: OpenOracleInitialReportQuoteSource[]) {
@@ -438,6 +438,15 @@ function formatOpenOracleInitialReportInsufficientBalanceMessage({ available, re
 }
 
 export async function loadOpenOracleInitialReportPriceResult(client: Parameters<typeof quoteExactInput>[0], token1: Parameters<typeof quoteExactInput>[1], token2: Parameters<typeof quoteExactInput>[2], token1Amount: bigint): Promise<OpenOracleInitialReportPriceLoadResult> {
+	if (!isRepPricingEnabled()) {
+		return {
+			attemptedSources: [],
+			failureKind: 'unsupported-pair',
+			reason: 'Automatic Uniswap pricing is unavailable in simulation mode. Enter the initial report price manually.',
+			status: 'failure',
+		}
+	}
+
 	let v4Failure: unknown = 'Uniswap V4 returned an unusable quote'
 
 	try {

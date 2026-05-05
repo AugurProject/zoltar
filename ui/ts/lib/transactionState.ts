@@ -1,4 +1,6 @@
 import type { Hash } from 'viem'
+import { getActiveNetworkProfile } from './activeEnvironment.js'
+import { buildTransactionExplorerUrl } from './networkProfile.js'
 
 export type TransactionState = {
 	lastTransactionHash: Hash | undefined
@@ -29,7 +31,7 @@ export function markTransactionSubmitted(state: TransactionState, hash: Hash): T
 		...state,
 		lastTransactionHash: hash,
 		transactionSubmitted: true,
-		transactionUrl: `https://etherscan.io/tx/${hash}`,
+		transactionUrl: buildTransactionExplorerUrl(getActiveNetworkProfile(), hash),
 	}
 }
 

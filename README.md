@@ -38,6 +38,24 @@ If you are iterating on the frontend and want rebuilds, use:
 bun run ui:watch
 ```
 
+## Browser Simulation
+
+The UI also supports a walletless browser-local simulation mode for manual QA.
+
+1. Run `bun run setup`
+1. Run `bun run ui:serve`
+1. Open `http://localhost:12345/?simulate=1`
+
+This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain, seeds the QA accounts with ETH, WETH, and REP, and leaves the application contracts undeployed so the UI starts on the deploy flow.
+
+Simulation mode details:
+
+- The activation flag is `?simulate=1`
+- The current seeded scenario is `?simulate=1&simScenario=baseline`
+- The yellow simulation banner exposes developer-only controls for account switching, reset, block mining, time travel, blockchain time, block count, transaction count, and artificial transaction receipt delay
+- Uniswap-backed REP pricing is intentionally disabled in simulation mode, so quote-dependent UI paths degrade instead of using mainnet liquidity
+- The simulation chain is ephemeral and exists only in the current browser tab session
+
 ## Common Commands
 
 Run the UI in development mode:

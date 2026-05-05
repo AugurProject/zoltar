@@ -6,8 +6,8 @@ import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHe
 import { assertNever } from './lib/assert.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
 import { addOpenOracleBountyBuffer } from './lib/openOracle.js'
-import { WETH_ADDRESS } from './lib/uniswapQuoter.js'
-import { GENESIS_REPUTATION_TOKEN_ADDRESS } from './lib/universe.js'
+import { getWethAddress } from './lib/uniswapQuoter.js'
+import { getGenesisReputationTokenAddress } from './lib/universe.js'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	ReputationToken_ReputationToken,
@@ -71,6 +71,7 @@ import type {
 const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
+const PROXY_DEPLOYER_RUNTIME_CODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3' satisfies Hex
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
 const ZERO_SALT = toHex(0, { size: 32 })
 const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
@@ -320,16 +321,18 @@ const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddress
 	zeroSalt: ZERO_SALT,
 })
 
-const { getRepTokenAddress } = createRepTokenAddressHelper({
-	genesisRepTokenAddress: GENESIS_REPUTATION_TOKEN_ADDRESS,
-	getReputationTokenInitCode: zoltarAddress =>
-		encodeDeployData({
-			abi: ReputationToken_ReputationToken.abi,
-			bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
-			args: [zoltarAddress],
-		}),
-	getZoltarAddress,
-})
+function getRepTokenAddress(universeId: bigint) {
+	return createRepTokenAddressHelper({
+		genesisRepTokenAddress: getGenesisReputationTokenAddress(),
+		getReputationTokenInitCode: zoltarAddress =>
+			encodeDeployData({
+				abi: ReputationToken_ReputationToken.abi,
+				bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
+				args: [zoltarAddress],
+			}),
+		getZoltarAddress,
+	}).getRepTokenAddress(universeId)
+}
 
 const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 	getEscalationGameInitCode: securityPool =>
@@ -480,6 +483,13 @@ async function securityPoolExists(client: Pick<ReadClient, 'getCode'>, securityP
 async function ensureProxyDeployerDeployed(client: WriteClient) {
 	const code = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
 	if (code !== undefined && code !== '0x') return undefined
+	if (client.installSimulationProxyDeployer !== undefined) {
+		await client.installSimulationProxyDeployer({
+			address: PROXY_DEPLOYER_ADDRESS,
+			runtimeCode: PROXY_DEPLOYER_RUNTIME_CODE,
+		})
+		return ZERO_HASH
+	}
 
 	const fundHash = await client.sendTransaction({
 		to: PROXY_DEPLOYER_SIGNER,
@@ -570,7 +580,14 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			label: 'Zoltar',
 			address: addresses.zoltar,
 			dependencies: ['proxyDeployer', 'zoltarQuestionData'],
-			deploy: async client => await deployViaProxy(client, getZoltarInitCode(addresses.zoltarQuestionData)),
+			deploy: async client => {
+				const hash = await deployViaProxy(client, getZoltarInitCode(addresses.zoltarQuestionData))
+				await client.patchSimulationGenesisRepToken?.({
+					repAddress: getGenesisReputationTokenAddress(),
+					zoltarAddress: addresses.zoltar,
+				})
+				return hash
+			},
 		},
 		{
 			id: 'shareTokenFactory',
@@ -1803,7 +1820,7 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 
 export async function wrapWeth(client: WriteClient, amount: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
-		address: WETH_ADDRESS,
+		address: getWethAddress(),
 		abi: [
 			{
 				type: 'function',

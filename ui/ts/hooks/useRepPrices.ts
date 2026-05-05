@@ -2,7 +2,7 @@ import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
-import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource, ETH_ADDRESS, REP_ADDRESS } from '../lib/uniswapQuoter.js'
+import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource, ETH_ADDRESS, REP_ADDRESS, isRepPricingEnabled } from '../lib/uniswapQuoter.js'
 
 const ONE_ETH = 10n ** 18n
 const ONE_REP = 10n ** 18n
@@ -40,6 +40,8 @@ export function useRepPrices(): RepPrices {
 	const repPricesLoad = useLoadController()
 
 	useEffect(() => {
+		if (!isRepPricingEnabled()) return
+
 		let cancelled = false
 		const client = createConnectedReadClient()
 

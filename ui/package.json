@@ -15,8 +15,10 @@
 	},
 	"dependencies": {
 		"@preact/signals": "2.0.1",
+		"buffer": "6.0.3",
 		"preact": "10.26.4",
-		"viem": "2.23.15"
+		"tevm": "1.0.0-next.149",
+		"viem": "2.38.3"
 	},
 	"scripts": {
 		"preinstall": "bun ./scripts/link-node-modules.mjs",
@@ -28,6 +30,6 @@
 		"build:tests": "bun ./build/tests.mts",
 		"watch": "bun run shared && tsc --watch",
 		"serve": "bun run shared && bun x tsc --project tsconfig.json && bun ./dev-server.ts",
-		"vendor": "bun install --frozen-lockfile && bun --tsconfig-override=tsconfig.vendor.json ./build/vendor.mts"
+		"vendor": "bun install --frozen-lockfile && bun ./build/vendor.mts"
 	}
 }

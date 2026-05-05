@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress, type Address } from 'viem'
 import {
 	DEFAULT_POOL_CONFIG,
@@ -21,7 +21,13 @@ import {
 	quoteRepForEth,
 	quoteTokenForEth,
 } from '../lib/uniswapQuoter.js'
+import { resetActiveEnvironmentForTesting, setActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ReadClient } from '../lib/clients.js'
+import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
+
+afterEach(() => {
+	resetActiveEnvironmentForTesting()
+})
 
 type SimulateArgs = Parameters<ReadClient['simulateContract']>[0]
 
@@ -94,6 +100,18 @@ function createV3FeeAwareClient(amountsByFee: Partial<Record<number, bigint>>): 
 }
 
 void describe('quoteExactInput', () => {
+	void test('rejects when REP pricing is disabled in simulation mode', async () => {
+		setActiveEnvironmentForTesting(
+			createFakeBackend({
+				profile: createFakeSimulationProfile(),
+			}),
+		)
+
+		const { client } = createCapturingClient(1n)
+
+		await expect(quoteRepForEth(client, 1n)).rejects.toThrow('Uniswap pricing is unavailable in simulation mode.')
+	})
+
 	void test('returns amountOut from the quoter result', async () => {
 		const { client } = createCapturingClient(500000000000000000n)
 		const result = await quoteExactInput(client, REP_ADDRESS, ETH_ADDRESS, 1000000000000000000n)
