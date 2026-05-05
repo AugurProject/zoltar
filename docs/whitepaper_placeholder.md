@@ -128,7 +128,7 @@ The pool gradually converts part of complete-set collateral into fees owed to RE
 
 The retention rate is updated as utilization changes. The current curve in [`SecurityPoolUtils.calculateRetentionRate`](../solidity/contracts/peripherals/SecurityPoolUtils.sol) is heuristic: it begins at a high retention rate, declines linearly until 80% utilization, and then bottoms out at a lower rate. The intent is to charge more aggressively for security as utilization rises and available underwriting slack falls.
 
-The utilization proxy is:
+When `totalSecurityBondAllowance > 0`, the utilization proxy is:
 
 $$
 \text{utilization} = \frac{\text{completeSetCollateralAmount}}{\text{totalSecurityBondAllowance}}
@@ -279,9 +279,7 @@ After a Zoltar fork:
 
 This separation is important. Post-fork REP splitting is a Zoltar primitive, described in [whitepaper_zoltar.md](./whitepaper_zoltar.md). Vault migration, collateral transfer, and child-pool initialization are Augur Placeholder primitives built on top of it.
 
-### Worked Example: Adapted Branch-Recovery Intuition
-
-The examples in [Sisyphean Exchange.md](https://github.com/AugurProject/oracle-research/blob/main/Sisyphean%20Exchange.md) are useful for explaining the same recovery logic at an intuitive level. The example below keeps only the branch-migration and auction intuition and translates it into Augur Placeholder terms.
+### Worked Example: Branch Collateral Repair
 
 Suppose a parent pool has:
 
@@ -318,13 +316,15 @@ More precisely, the parent pool may have outstanding complete-set obligations an
 
 To repair that mismatch, the child pool can sell REP through [`UniformPriceDualCapBatchAuction`](../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol).
 
-In the actual `startTruthAuction` logic, the ETH repair target is:
+In the actual `startTruthAuction` logic, the ETH repair target, when `repAtForkAmount > 0` and the child has not already migrated all fork REP, is:
 
 $$
 \text{ethCollateralToBuy} = \text{parentCollateralAmount} - \frac{\text{parentCollateralAmount} \cdot \text{migratedRepAmount}}{\text{repAtForkAmount}}
 $$
 
 This is the contract’s direct statement of the gap: `ethCollateralToBuy` is the amount of ETH collateral the child branch is still missing after accounting for the fraction of REP-backed state that has already been split into it.
+
+If `repAtForkAmount` is zero, the contract does not evaluate this division path. It finalizes immediately because `migratedRepAmount >= repAtForkAmount` already holds.
 
 ### Auction mechanics
 
@@ -396,7 +396,41 @@ Under those assumptions, the system is game-theoretically sound in the intended 
 
 This argument has limits. If multiple branches retain substantial durable value, the simple “one branch gets almost all the value” intuition weakens. If REP/ETH liquidity is poor or truth-auction demand is weak, collateral repair may be incomplete. If REP/ETH price discovery is unreliable, solvency operations become less trustworthy. The escalation game helps avoid unnecessary forks, but it does not remove the need for these higher-level coordination and valuation assumptions.
 
-## 11. End-to-End Example
+## 11. Current Parameter Values
+
+| Parameter | Current value | Meaning |
+| --- | --- | --- |
+| `NUM_OUTCOMES` | `3` | Placeholder complete sets mint `Invalid`, `Yes`, and `No` shares |
+| `TODO_INITIAL_ESCALATION_GAME_DEPOSIT` | `1 ether` | Fixed initial deposit used when the escalation game is first deployed |
+| Escalation `nonDecisionThreshold` | `totalTheoreticalRepSupply / 40` | Deployed as `repToken.getTotalTheoreticalSupply() / (FORK_THRESHOLD_DIVISOR * 2)` |
+| `MIGRATION_TIME` | `8 weeks` | Fork-migration window before truth auction can start |
+| `AUCTION_TIME` | `1 week` | Truth-auction duration |
+| `PRICE_PRECISION` | `1e18` | Fixed-point precision for REP/ETH and retention-rate math |
+| `MAX_RETENTION_RATE` | `999999996848000000` | Upper retention-rate bound, annotated in code as approximately 90% yearly retention |
+| `MIN_RETENTION_RATE` | `999999977880000000` | Lower retention-rate bound, annotated in code as approximately 50% yearly retention |
+| `RETENTION_RATE_DIP` | `80` | Utilization point at which the retention curve reaches its minimum |
+| `MIN_SECURITY_BOND_DEBT` | `1 ether` | Minimum non-zero bond allowance a vault can carry |
+| `MIN_REP_DEPOSIT` | `10 ether` | Minimum REP backing for a non-empty vault |
+| `MAX_AUCTION_VAULT_HAIRCUT_DIVISOR` | `1000000` | Small haircut divisor used when reserving a tiny amount of REP from auction sale |
+| `PRICE_VALID_FOR_SECONDS` | `1 hour` | How long a settled REP/ETH price remains valid |
+| `gasConsumedOpenOracleReportPrice` | `100000` | Coordinator gas estimate for report submission |
+| `gasConsumedSettlement` | `1000000` | Coordinator gas estimate for settlement callback |
+| OpenOracle `exactToken1Report` | `26392439800` | Hard-coded initial report liquidity parameter |
+| OpenOracle `escalationHalt` | `reputationToken.totalSupply() / 100000` | Dynamic halt threshold for report escalation |
+| OpenOracle `settlerReward` | `block.basefee * 2 * gasConsumedOpenOracleReportPrice` | Dynamic ETH reward paid to settler |
+| OpenOracle `settlementTime` | `180` | Settlement delay encoded as `15 * 12` |
+| OpenOracle `disputeDelay` | `0` | No extra waiting period after each report |
+| OpenOracle `protocolFee` | `0` | Protocol fee disabled |
+| OpenOracle `callbackGasLimit` | `1000000` | Settlement callback gas limit |
+| OpenOracle `feePercentage` | `10000` | Fee paid to previous reporter, annotated in code as 0.1% |
+| OpenOracle `multiplier` | `140` | New report amount must be 1.4x prior amount |
+| OpenOracle `timeType` | `true` | OpenOracle uses block timestamps rather than block numbers |
+| OpenOracle `trackDisputes` | `false` | Dispute history not stored for these reports |
+| OpenOracle `keepFee` | `false` | Initial reporter reward does not stay with the initial reporter |
+| OpenOracle `feeToken` | `true` | OpenOracle fees are paid in token-to-swap terms |
+| Coordinator `WETH` | `0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2` | Mainnet WETH address used in REP/ETH price reports |
+
+## 12. End-to-End Example
 
 An end-to-end lifecycle under the current contracts looks like this:
 
@@ -413,7 +447,7 @@ An end-to-end lifecycle under the current contracts looks like this:
 11. If a child pool lacks enough ETH collateral after migration, it starts a truth auction with `startTruthAuction` and sells REP for ETH.
 12. The surviving child pool resumes operation, or users redeem final payouts once the outcome becomes final in that branch.
 
-## 12. Current Implementation Constraints
+## 13. Current Implementation Constraints
 
 The current repository exposes several implementation constraints.
 
@@ -424,6 +458,6 @@ The current repository exposes several implementation constraints.
 - The retention-rate curve in [`SecurityPoolUtils`](../solidity/contracts/peripherals/SecurityPoolUtils.sol) is heuristic rather than final market design.
 - Some comments in [`SecurityPool`](../solidity/contracts/peripherals/SecurityPool.sol) acknowledge open accounting questions around child-pool complete-set behavior.
 
-## 13. Design Thesis
+## 14. Design Thesis
 
 REP vaults underwrite open interest, users hold complete sets and outcome shares backed by ETH collateral, and disputes attempt local resolution before falling back to a fork. Structured migration and truth auctions then let the continuing branch rebuild a coherent economic state.

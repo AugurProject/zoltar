@@ -61,7 +61,7 @@ $$
 
 where `forkThreshold` denotes the REP amount required to trigger a fork in the current universe.
 
-Initiating a fork requires burning REP equal to 5% of the universe’s total theoretical supply. Under the current constants, 20% of that fork-triggering deposit is permanently burned and the remaining 80% becomes the initiator’s migration balance, meaning the internal REP amount that can later be split into child universes.
+Initiating a fork requires supplying REP equal to 5% of the universe’s total theoretical supply as the fork threshold. Under the current constants, 20% of that threshold deposit is permanently burned, which is 1% of total theoretical supply, and the remaining 80% becomes the initiator’s migration balance.
 
 Using descriptive names for the fork initiator’s two post-fork quantities:
 
@@ -76,6 +76,15 @@ $$
 Genesis REP cannot be burned natively, so the contract transfers it to the configured burn address. Child-universe REP is minted and burned directly by [`ReputationToken`](../solidity/contracts/ReputationToken.sol) under Zoltar’s control.
 
 In the Colored Coins framing, the threshold deposit is the cost of forcing the branch point into existence.
+
+### Current parameter values
+
+| Parameter | Current value | Meaning |
+| --- | --- | --- |
+| `GENESIS_REPUTATION_TOKEN` | `0x221657776846890989a759BA2973e427DfF5C9bB` | Genesis-universe REP token address |
+| `BURN_ADDRESS` | `0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF` | Burn sink used for genesis REP |
+| `FORK_THRESHOLD_DIVISOR` | `20` | Fork threshold is `totalTheoreticalRepSupply / 20`, or 5% of supply |
+| `FORK_BURN_DIVISOR` | `5` | Burned amount is `forkThreshold / 5`, or 20% of threshold |
 
 ## 4. Child Universes and REP Splitting
 
@@ -99,7 +108,7 @@ The core assumptions are:
 - most durable economic activity concentrates in the branch that users expect other users to keep using
 - dishonest or abandoned branches may continue to exist, but are assumed to retain little long-term value compared with the branch that market participants keep coordinating around
 
-Under those assumptions, the system is game-theoretically sound in the limited Colored Coins sense. A fork only creates branches. If users and future activity concentrate in the branch they regard as truthful, the value of child-universe REP also concentrates there. Rational REP holders are therefore pushed toward the branch they expect the market to keep using, because migrating into a branch they expect others to abandon destroys the long-term value of the REP they receive there.
+A fork only creates branches. If users and future activity concentrate in the branch they regard as truthful, the value of child-universe REP also concentrates there. Rational REP holders are therefore pushed toward the branch they expect the market to keep using, because migrating into a branch they expect others to abandon destroys the long-term value of the REP they receive there.
 
 ## 6. Questions and Outcome Encoding
 
@@ -159,10 +168,10 @@ $$
 (\text{numTicks} - \text{tickIndex}, \text{tickIndex})
 $$
 
-[`ScalarOutcomes`](../solidity/contracts/ScalarOutcomes.sol) interprets `secondPayoutNumerator` as the position along the scalar range. Using descriptive names for the scalar range parameters, the displayed scalar value is:
+[`ScalarOutcomes`](../solidity/contracts/ScalarOutcomes.sol) interprets `secondPayoutNumerator` as the position along the scalar range. Using the contract’s `numTicks` parameter, the displayed scalar value is:
 
 $$
-\text{displayedValue} = \text{displayValueMin} + \frac{\text{secondPayoutNumerator}}{\text{totalTickCount}} \cdot (\text{displayValueMax} - \text{displayValueMin})
+\text{displayedValue} = \text{displayValueMin} + \frac{\text{secondPayoutNumerator}}{\text{numTicks}} \cdot (\text{displayValueMax} - \text{displayValueMin})
 $$
 
 The contract implementation performs this interpolation with fixed-point integer math and formats the result with 18 decimal places, trimming trailing zeroes for display.
@@ -180,7 +189,7 @@ Zoltar can represent arbitrary categorical questions and scalar questions, while
 
 ## 8. Invalid vs Malformed
 
-Zoltar distinguishes `invalid` answers from `malformed` answers.
+Zoltar distinguishes `Invalid` answers from `Malformed` answers.
 
 - `Invalid` is a legitimate resolution state.
 - `Malformed` means the submitted outcome index or scalar encoding does not fit the question’s allowed answer space.
