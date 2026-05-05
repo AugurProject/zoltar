@@ -2,7 +2,7 @@ import { zeroAddress, type Address } from 'viem'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../types/contracts.js'
 import { parseDecimalInput } from './decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from './errors.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance } from './formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from './formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
 import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput, WETH_ADDRESS } from './uniswapQuoter.js'
 
@@ -252,6 +252,14 @@ function getOpenOracleLifecycleClockValue(report: Pick<OpenOracleReportDetails, 
 	return report.timeType ? report.currentTime : report.currentBlockNumber
 }
 
+function formatOpenOracleLifecycleRemaining(remaining: bigint, timeType: boolean) {
+	if (timeType) {
+		return formatDuration(remaining)
+	}
+
+	return `${remaining.toString()} block${remaining === 1n ? '' : 's'}`
+}
+
 export function getOpenOracleDisputeAvailability(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>): OpenOracleReportActionAvailability {
 	if (!hasOpenOracleInitialReport(report)) {
 		return {
@@ -307,9 +315,10 @@ export function getOpenOracleSettleAvailability(report: Pick<OpenOracleReportDet
 	const settlementStart = report.reportTimestamp + report.settlementTime
 
 	if (currentClock < settlementStart) {
+		const remaining = settlementStart - currentClock
 		return {
 			canAct: false,
-			message: 'This report is not ready to settle yet.',
+			message: `This report can be settled in ${formatOpenOracleLifecycleRemaining(remaining, report.timeType)} if no disputes occur.`,
 		}
 	}
 

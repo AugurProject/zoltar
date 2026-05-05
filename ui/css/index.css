@@ -2021,6 +2021,37 @@ strong.metric-value-danger {
 	min-width: 0;
 }
 
+.lookup-field-row {
+	width: 100%;
+}
+
+.lookup-field-controls {
+	display: grid;
+	gap: 1.1rem;
+	width: 100%;
+	min-width: 0;
+}
+
+.lookup-field-controls.has-action {
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: stretch;
+}
+
+.lookup-field-controls > input {
+	width: 100%;
+	min-width: 0;
+}
+
+.lookup-field-controls > .actions {
+	display: flex;
+	align-items: stretch;
+	justify-content: flex-end;
+}
+
+.lookup-field-controls > .actions > * {
+	height: 100%;
+}
+
 .field-inline {
 	display: flex;
 	align-items: stretch;
@@ -2323,6 +2354,10 @@ button:focus-visible {
 	.fork-summary-grid,
 	.field-row,
 	.market-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.lookup-field-controls.has-action {
 		grid-template-columns: 1fr;
 	}
 
@@ -2647,6 +2682,7 @@ button:focus-visible {
 	gap: var(--space-3);
 }
 
+.section-mode-switch,
 .security-pools-header-switch {
 	display: inline-flex;
 	flex-wrap: nowrap;
@@ -2660,6 +2696,7 @@ button:focus-visible {
 	overflow-x: auto;
 }
 
+.section-mode-switch.view-tabs.subroute .view-tab,
 .security-pools-header-switch.view-tabs.subroute .view-tab {
 	padding: 0.42rem 0.66rem;
 	border-color: transparent;
@@ -2670,11 +2707,13 @@ button:focus-visible {
 	white-space: nowrap;
 }
 
+.section-mode-switch.view-tabs.subroute .view-tab:hover:not(:disabled),
 .security-pools-header-switch.view-tabs.subroute .view-tab:hover:not(:disabled) {
 	background: rgba(56, 213, 255, 0.06);
 	border-color: rgba(56, 213, 255, 0.14);
 }
 
+.section-mode-switch.view-tabs.subroute .view-tab.active,
 .security-pools-header-switch.view-tabs.subroute .view-tab.active {
 	background: rgba(56, 213, 255, 0.12);
 	border-color: var(--border-active);
@@ -2891,11 +2930,13 @@ button:focus-visible {
 		flex-direction: column;
 	}
 
+	.section-mode-switch,
 	.security-pools-header-switch {
 		justify-content: flex-start;
 		flex-wrap: nowrap;
 	}
 
+	.section-mode-switch.view-tabs.subroute .view-tab,
 	.security-pools-header-switch.view-tabs.subroute .view-tab {
 		flex: 0 0 auto;
 	}

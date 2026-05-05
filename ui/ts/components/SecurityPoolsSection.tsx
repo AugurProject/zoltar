@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks'
+import { SectionModeTabs } from './SectionModeTabs.js'
 import { SectionBlock } from './SectionBlock.js'
-import { ViewTabs } from './ViewTabs.js'
 import { SecurityPoolSection } from './SecurityPoolSection.js'
 import { SecurityPoolWorkflowSection } from './SecurityPoolWorkflowSection.js'
 import { SecurityPoolsOverviewSection } from './SecurityPoolsOverviewSection.js'
@@ -34,12 +34,10 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 		workflow.onRefreshSelectedPoolData()
 	}
 	const renderModeTabs = () => (
-		<ViewTabs
+		<SectionModeTabs
 			ariaLabel='Security Pools views'
 			className='security-pools-header-switch'
-			size='compact'
 			value={view}
-			variant='subroute'
 			onChange={openView}
 			options={[
 				{ label: 'Browse', value: 'browse' },

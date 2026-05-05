@@ -88,13 +88,13 @@ function OpenOracleSectionHarness({ accountAddress }: { accountAddress: Address 
 	)
 }
 
-function getEntityCardByTitle(name: string) {
+function getSectionByTitle(name: string) {
 	const heading = within(document.body).getByRole('heading', { level: 3, name })
-	const card = heading.closest('article')
-	if (!(card instanceof HTMLElement)) {
-		throw new Error(`Expected entity card for ${name}`)
+	const section = heading.closest('section')
+	if (!(section instanceof HTMLElement)) {
+		throw new Error(`Expected section for ${name}`)
 	}
-	return card
+	return section
 }
 
 function getApprovalSections() {
@@ -209,10 +209,13 @@ describe.serial('OpenOracleSection integration', () => {
 		})
 		await clickElement(within(document.body).getByRole('button', { name: 'Open report' }))
 
-		await waitFor(() => getEntityCardByTitle('Selected Report'))
+		await waitFor(() => getSectionByTitle('Selected Report'))
 		await waitFor(() => {
 			expect(within(document.body).getByText('Initial Report')).not.toBeNull()
 		})
+		expect(within(document.body).queryByRole('heading', { level: 2, name: 'Open Oracle' })).toBeNull()
+		expect(within(document.body).queryByRole('heading', { level: 3, name: 'Report Details' })).toBeNull()
+		expect(within(document.body).queryByRole('heading', { level: 3, name: 'Report Actions' })).toBeNull()
 		await setInputValue(/^Price \(/, '4')
 
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
@@ -323,10 +326,13 @@ describe.serial('OpenOracleSection integration', () => {
 		})
 		await clickElement(within(document.body).getByRole('button', { name: 'Open report' }))
 
-		await waitFor(() => getEntityCardByTitle('Selected Report'))
+		await waitFor(() => getSectionByTitle('Selected Report'))
 		await waitFor(() => {
 			expect(within(document.body).getByText('Initial Report')).not.toBeNull()
 		})
+		expect(within(document.body).queryByRole('heading', { level: 2, name: 'Open Oracle' })).toBeNull()
+		expect(within(document.body).queryByRole('heading', { level: 3, name: 'Report Details' })).toBeNull()
+		expect(within(document.body).queryByRole('heading', { level: 3, name: 'Report Actions' })).toBeNull()
 		await setInputValue(/^Price \(/, '4')
 
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)

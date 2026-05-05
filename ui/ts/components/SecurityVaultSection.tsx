@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'preact/hooks'
-import { AddressValue } from './AddressValue.js'
 import { ApprovedAmountValue } from './ApprovedAmountValue.js'
 import { CollateralizationMetricField } from './CollateralizationMetricField.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { LatestActionSection } from './LatestActionSection.js'
+import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { SectionBlock } from './SectionBlock.js'
@@ -37,9 +37,6 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 	const metricClassName = variant === 'embedded' ? undefined : 'entity-metric'
 	const content = (
 		<div className={gridClassName}>
-			<MetricField className={metricClassName} label='Selected Vault'>
-				<AddressValue address={securityVaultDetails.vaultAddress} />
-			</MetricField>
 			<MetricField className={metricClassName} label='Rep Deposit'>
 				<CurrencyValue value={securityVaultDetails.repDepositShare} suffix='REP' />
 			</MetricField>
@@ -62,9 +59,6 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 			</MetricField>
 			<MetricField className={metricClassName} label='Locked REP'>
 				<CurrencyValue value={securityVaultDetails.lockedRepInEscalationGame} suffix='REP' />
-			</MetricField>
-			<MetricField className={metricClassName} label='Total Security Bond Allowance'>
-				<CurrencyValue value={securityVaultDetails.totalSecurityBondAllowance} suffix='ETH' />
 			</MetricField>
 		</div>
 	)
@@ -246,21 +240,23 @@ export function SecurityVaultSection({
 			{showLookupSection ? (
 				<SectionBlock title='Vault Lookup'>
 					{vaultLoadNotice}
-					<label className='field'>
-						<span>Selected Vault Address</span>
-						<input value={normalizedSecurityVaultForm.selectedVaultAddress} onInput={event => onSecurityVaultFormChange({ selectedVaultAddress: event.currentTarget.value })} placeholder='0x...' />
-					</label>
+					<LookupFieldRow
+						label='Selected Vault Address'
+						value={normalizedSecurityVaultForm.selectedVaultAddress}
+						onInput={selectedVaultAddress => onSecurityVaultFormChange({ selectedVaultAddress })}
+						placeholder='0x...'
+						action={
+							<button className='secondary' onClick={() => onLoadSecurityVault()} disabled={loadingSecurityVault}>
+								{loadingSecurityVault ? <LoadingText>Refreshing...</LoadingText> : 'Refresh'}
+							</button>
+						}
+					/>
 					{showSecurityPoolAddressInput ? (
 						<label className='field'>
 							<span>Security Pool Address</span>
 							<input value={normalizedSecurityVaultForm.securityPoolAddress} onInput={event => onSecurityVaultFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder='0x...' />
 						</label>
 					) : undefined}
-					<div className='actions'>
-						<button className='secondary' onClick={() => onLoadSecurityVault()} disabled={loadingSecurityVault}>
-							{loadingSecurityVault ? <LoadingText>Refreshing...</LoadingText> : 'Refresh'}
-						</button>
-					</div>
 					{selectedVaultIsOwnedByAccount ? undefined : <p className='detail'>Select your own vault to unlock actions.</p>}
 				</SectionBlock>
 			) : undefined}

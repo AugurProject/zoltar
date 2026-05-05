@@ -7,6 +7,7 @@ import { EntityCard } from './EntityCard.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { LatestActionSection } from './LatestActionSection.js'
+import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
@@ -492,17 +493,18 @@ export function ForkAuctionSection({
 			<SectionBlock title='Pool Context'>
 				<div className='form-grid'>
 					{showSecurityPoolAddressInput ? (
-						<label className='field'>
-							<span>Security Pool Address</span>
-							<input value={forkAuctionForm.securityPoolAddress} onInput={event => onForkAuctionFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder='0x...' />
-						</label>
+						<LookupFieldRow
+							label='Security Pool Address'
+							value={forkAuctionForm.securityPoolAddress}
+							onInput={securityPoolAddress => onForkAuctionFormChange({ securityPoolAddress })}
+							placeholder='0x...'
+							action={
+								<button className='secondary' onClick={onLoadForkAuction} disabled={loadingForkAuctionDetails}>
+									{loadingForkAuctionDetails ? <LoadingText>Loading fork...</LoadingText> : 'Refresh fork'}
+								</button>
+							}
+						/>
 					) : undefined}
-
-					<div className='actions'>
-						<button className='secondary' onClick={onLoadForkAuction} disabled={loadingForkAuctionDetails}>
-							{loadingForkAuctionDetails ? <LoadingText>Loading fork...</LoadingText> : 'Refresh fork'}
-						</button>
-					</div>
 
 					{hasLoadedPoolContext ? renderSummaryMetricGrid(poolSummaryMetrics) : <p className='detail'>Load a pool to inspect fork progress, migration, and the truth auction.</p>}
 					{disabledMessage === undefined ? undefined : <p className='detail'>{disabledMessage}</p>}

@@ -410,6 +410,6 @@ void describe('OpenOracleSection', () => {
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(getButtonDisabled(settleButton)).toBe(true)
 		expect(getButtonDisabledReason(disputeButton)).toBe('This report is not ready to dispute yet.')
-		expect(getButtonDisabledReason(settleButton)).toBe('This report is not ready to settle yet.')
+		expect(getButtonDisabledReason(settleButton)).toBe('This report can be settled in less than a minute if no disputes occur.')
 	})
 })

@@ -25,7 +25,6 @@ export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, lo
 		<SectionBlock
 			density='compact'
 			title='Questions'
-			description='Browse the current universe question set and seed related workflows from a selected question.'
 			actions={
 				<button className='secondary' onClick={onLoadZoltarQuestions} disabled={loadingZoltarQuestions || noQuestionsAvailable}>
 					{loadingZoltarQuestions ? <LoadingText>Loading Questions...</LoadingText> : noQuestionsAvailable ? 'No Questions' : hasLoadedZoltarQuestions ? 'Refresh Questions' : 'Fetch Questions'}

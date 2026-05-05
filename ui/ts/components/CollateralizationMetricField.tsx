@@ -29,12 +29,7 @@ export function CollateralizationMetricField({ className, collateralizationPerce
 	const valueClassName = tone === 'success' ? 'metric-value-success' : tone === 'danger' ? 'metric-value-danger' : undefined
 
 	return (
-		<MetricField
-			className={className}
-			label={<span title='Uses the live Uniswap REP/ETH quote.'>Collateralization {repPerEthSource === undefined ? undefined : renderSourceLink(repPerEthSource, repPerEthSourceUrl)}</span>}
-			valueClassName={valueClassName}
-			valueTagName={displayState === 'noActiveAllowance' ? 'span' : undefined}
-		>
+		<MetricField className={className} label={<span title='Uses the live Uniswap REP/ETH quote.'>Collateralization {repPerEthSource === undefined ? undefined : renderSourceLink(repPerEthSource, repPerEthSourceUrl)}</span>} valueClassName={valueClassName}>
 			{displayState === 'noActiveAllowance' ? 'No active allowance' : <CurrencyValue value={collateralizationPercent} suffix='%' copyable={false} />}
 		</MetricField>
 	)

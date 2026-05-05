@@ -7,6 +7,7 @@ import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
 import { LiquidationModal } from './LiquidationModal.js'
+import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { OpenInterestCapacityMetrics } from './OpenInterestCapacityMetrics.js'
@@ -335,22 +336,18 @@ export function SecurityPoolWorkflowSection({
 			) : undefined}
 
 			<div className='workflow-stack route-workflow-stack'>
-				<SectionBlock
-					density='compact'
-					title='Security pools'
-					actions={
-						<div className='actions'>
-							{modeTabs}
+				<SectionBlock density='compact' title='Security pools' actions={<div className='actions'>{modeTabs}</div>}>
+					<LookupFieldRow
+						label='Security Pool Address'
+						value={securityPoolAddress}
+						onInput={onSecurityPoolAddressChange}
+						placeholder='0x...'
+						action={
 							<button className='secondary' onClick={() => onRefreshSelectedPoolData()} disabled={!hasSelectedPoolAddress || loadingSecurityPools}>
 								{loadingSecurityPools ? <LoadingText>Refreshing pool...</LoadingText> : 'Refresh pool'}
 							</button>
-						</div>
-					}
-				>
-					<label className='field'>
-						<span>Security Pool Address</span>
-						<input value={securityPoolAddress} onInput={event => onSecurityPoolAddressChange(event.currentTarget.value)} placeholder='0x...' />
-					</label>
+						}
+					/>
 					{selectedPoolLookupPresentation === undefined ? undefined : <StateHint presentation={selectedPoolLookupPresentation} />}
 					{loadedSelectedPool === undefined ? undefined : (
 						<>
@@ -361,6 +358,9 @@ export function SecurityPoolWorkflowSection({
 									<MetricField label='Security Multiplier'>{loadedSelectedPool.securityMultiplier.toString()}</MetricField>
 									<MetricField label='Open Interest Fee / Year'>
 										<CurrencyValue value={openInterestFeePerYearBigint(loadedSelectedPool.currentRetentionRate)} suffix='%' />
+									</MetricField>
+									<MetricField label='Total Security Bond Allowance'>
+										<CurrencyValue value={loadedSelectedPool.totalSecurityBondAllowance} suffix='ETH' />
 									</MetricField>
 									<OpenInterestCapacityMetrics
 										completeSetCollateralAmount={loadedSelectedPool.completeSetCollateralAmount}

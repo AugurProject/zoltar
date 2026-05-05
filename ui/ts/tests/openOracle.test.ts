@@ -743,7 +743,7 @@ describe('Open Oracle helpers', () => {
 		})
 		expect(getOpenOracleSettleAvailability(beforeDisputeDelay)).toEqual({
 			canAct: false,
-			message: 'This report is not ready to settle yet.',
+			message: 'This report can be settled in less than a minute if no disputes occur.',
 		})
 
 		const insideDisputeWindow = createOpenOracleLifecycleReport({ currentTime: 110n })
@@ -753,7 +753,7 @@ describe('Open Oracle helpers', () => {
 		})
 		expect(getOpenOracleSettleAvailability(insideDisputeWindow)).toEqual({
 			canAct: false,
-			message: 'This report is not ready to settle yet.',
+			message: 'This report can be settled in less than a minute if no disputes occur.',
 		})
 
 		const exactSettlementBoundary = createOpenOracleLifecycleReport({ currentTime: 160n })
@@ -790,7 +790,7 @@ describe('Open Oracle helpers', () => {
 		})
 		expect(getOpenOracleSettleAvailability(blockBasedReport)).toEqual({
 			canAct: false,
-			message: 'This report is not ready to settle yet.',
+			message: 'This report can be settled in 49 blocks if no disputes occur.',
 		})
 	})
 

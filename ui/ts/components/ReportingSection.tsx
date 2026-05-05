@@ -5,6 +5,7 @@ import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { EscalationSide } from './EscalationSide.js'
 import { LatestActionSection } from './LatestActionSection.js'
+import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
@@ -92,22 +93,23 @@ export function ReportingSection({
 		<>
 			<SectionBlock title='Reporting Context'>
 				{showSecurityPoolAddressInput ? (
-					<label className='field'>
-						<span>Security Pool Address</span>
-						<input value={reportingForm.securityPoolAddress} onInput={event => onReportingFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder='0x...' />
-					</label>
+					<LookupFieldRow
+						label='Security Pool Address'
+						value={reportingForm.securityPoolAddress}
+						onInput={securityPoolAddress => onReportingFormChange({ securityPoolAddress })}
+						placeholder='0x...'
+						action={
+							<button className='secondary' onClick={onLoadReporting} disabled={loadingReportingDetails || reportingLocked} title={reportingLocked ? lockedReason : undefined}>
+								{loadingReportingDetails ? <LoadingText>Loading escalation...</LoadingText> : 'Refresh reporting'}
+							</button>
+						}
+					/>
 				) : undefined}
-
-				<div className='actions'>
-					<button className='secondary' onClick={onLoadReporting} disabled={loadingReportingDetails || reportingLocked} title={reportingLocked ? lockedReason : undefined}>
-						{loadingReportingDetails ? <LoadingText>Loading escalation...</LoadingText> : 'Refresh reporting'}
-					</button>
-				</div>
 
 				{marketDetails === undefined ? undefined : (
 					<div className='workflow-metric-grid'>
 						<MetricField label='Market End'>
-							<TimestampValue timestamp={marketDetails.endTime} />
+							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={marketDetails.endTime} />
 						</MetricField>
 						{effectiveCurrentTimestamp === undefined ? undefined : <MetricField label='Reporting'>{marketDetails.endTime <= effectiveCurrentTimestamp ? 'Open' : 'Locked'}</MetricField>}
 						{effectiveCurrentTimestamp === undefined || marketDetails.endTime <= effectiveCurrentTimestamp ? undefined : <MetricField label='Opens In'>{formatDuration(marketDetails.endTime - effectiveCurrentTimestamp)}</MetricField>}
@@ -145,7 +147,7 @@ export function ReportingSection({
 						<li>
 							<span>Market End</span>
 							<strong>
-								<TimestampValue timestamp={reportingDetails.marketDetails.endTime} />
+								<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={reportingDetails.marketDetails.endTime} />
 							</strong>
 						</li>
 						<li>
@@ -174,7 +176,7 @@ export function ReportingSection({
 						<MetricField label='Time Left'>{formatDuration(getEscalationTimeRemaining(reportingDetails))}</MetricField>
 					</div>
 					<p className='detail'>
-						Game starts at <TimestampValue timestamp={reportingDetails.startingTime} /> and currently uses a start bond of <CurrencyValue value={reportingDetails.startBond} suffix='REP' />.
+						Game starts at <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={reportingDetails.startingTime} /> and currently uses a start bond of <CurrencyValue value={reportingDetails.startBond} suffix='REP' />.
 					</p>
 				</SectionBlock>
 			)}
