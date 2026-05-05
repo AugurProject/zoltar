@@ -2,7 +2,7 @@
 
 ## Abstract
 
-Zoltar is a forkable oracle substrate centered on universes, question encoding, and REP migration across disputed branches of reality. Its purpose is to represent unresolved disagreement as explicit child universes and to let reputation capital migrate into those branches. Zoltar supports both categorical and scalar questions, treats `Invalid` as a legitimate answer state, and uses deterministic fork and migration mechanics to branch protocol state without embedding a higher-level market design directly into the core layer.
+Zoltar is a forkable oracle substrate centered on universes, question encoding, and REP branching across disputed outcomes. It is best understood as an implementation of the branching model described in [Colored Coins.md](https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md): unresolved disagreement is represented as explicit child universes, and REP holders convert post-fork migration balances into child-universe REP across one or more selected branches. Zoltar supports both categorical and scalar questions, treats `Invalid` as a legitimate answer state, and uses deterministic fork and split mechanics to branch protocol state without embedding a higher-level market design directly into the core layer.
 
 ## 1. System Overview
 
@@ -12,11 +12,11 @@ Zoltar is the base oracle layer in this repository. It does not implement the fu
 - encode valid answer spaces
 - represent forks as child universes
 - mint and burn child-universe REP
-- migrate REP balances across disputed branches
+- split post-fork REP claims across disputed branches
 
 Core contract map:
 
-- [`Zoltar`](../solidity/contracts/Zoltar.sol): universe forks and REP migration
+- [`Zoltar`](../solidity/contracts/Zoltar.sol): universe forks and REP splitting
 - [`ZoltarQuestionData`](../solidity/contracts/ZoltarQuestionData.sol): question registry and outcome encoding
 - [`ReputationToken`](../solidity/contracts/ReputationToken.sol): child-universe REP minted and burned by Zoltar
 - [`ScalarOutcomes`](../solidity/contracts/ScalarOutcomes.sol): scalar formatting and interpolation logic
@@ -29,11 +29,13 @@ Terminology:
 - `Invalid`: a legitimate answer state
 - `Malformed`: an answer encoding that does not fit the question’s allowed answer space
 
+The clearest conceptual lens for Zoltar is the one used in [Colored Coins.md](https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md). A fork does not destroy the disputed parent state and replace it with a single chosen successor inside the protocol. Instead, it makes the disagreement explicit by defining child universes for each valid outcome, after which REP holders can split their post-fork claims across those branches. Zoltar therefore expresses disagreement by branching state rather than by trying to force immediate convergence inside the substrate itself.
+
 ```
 +----------------------+
 |      Zoltar          |
 | questions, universes,|
-| forks, REP migration |
+| forks, REP splitting |
 +----------------------+
 ```
 
@@ -55,6 +57,8 @@ $$
 
 This makes each branch reproducible from parent universe and outcome index alone.
 
+The resulting child universes coexist. Zoltar does not, at the substrate level, select one canonical child universe and delete the others. It deterministically defines all valid branches for the forked question and leaves later economic and social coordination to determine which branch accumulates meaningful value.
+
 ## 3. Fork Thresholds and REP Economics
 
 The current fork threshold is:
@@ -63,17 +67,11 @@ $$
 \text{forkThreshold} = \frac{\text{totalTheoreticalRepSupply}}{20}
 $$
 
-Equivalently, if `totalTheoreticalRepSupply` is the universe’s total theoretical REP supply:
-
-$$
-\text{forkThreshold} = \frac{\text{totalTheoreticalRepSupply}}{20}
-$$
-
-where `forkThreshold` is the current fork threshold.
+where `forkThreshold` denotes the REP amount required to trigger a fork in the current universe.
 
 Initiating a fork requires burning REP equal to 5% of the universe’s total theoretical supply. Under the current constants, 20% of that fork-triggering deposit is permanently burned and the remaining 80% becomes the initiator’s migration balance.
 
-If `burnedRepAmount` is the permanently burned portion and `forkInitiatorMigrationBalance` is the initiator’s migration balance:
+Using descriptive names for the fork initiator’s two post-fork quantities:
 
 $$
 \text{burnedRepAmount} = \frac{\text{forkThreshold}}{5}
@@ -85,11 +83,27 @@ $$
 
 Genesis REP cannot be burned natively, so the contract transfers it to the configured burn address. Child-universe REP is minted and burned directly by [`ReputationToken`](../solidity/contracts/ReputationToken.sol) under Zoltar’s control.
 
-## 4. Child Universes and REP Migration
+In the Colored Coins framing, the threshold deposit is the cost of forcing the branch point into existence. Once the fork exists, the protocol no longer treats the disputed universe as a place where one answer must be imposed. Instead, it turns that disagreement into a set of explicit child-universe claims.
 
-Once a universe forks, child universes can be deployed lazily through `deployChild`. A user can also add more REP into the migration balance with `addRepToMigrationBalance`. Migration itself is performed through `splitMigrationRep`, which lets a holder mint child-universe REP for one or more valid outcome indices.
+## 4. Child Universes and REP Splitting
 
-This is Zoltar’s core branching primitive. If a forked question has multiple plausible branches, REP holders express their view by deciding which child universes receive their migrated reputation capital.
+Once a universe forks, child universes can be deployed lazily through `deployChild`. A user can also add more REP into the migration balance with `addRepToMigrationBalance`. The core post-fork action is then `splitMigrationRep`, which lets a holder mint child-universe REP for one or more valid outcome indices.
+
+This is Zoltar’s core branching primitive. A REP holder does not choose one destination universe and abandon all others inside the substrate. Instead, the holder takes a post-fork migration balance and uses it to mint child-universe REP across one or more selected branches. If multiple child outcomes are selected, the same migrated balance is reproduced into each selected child universe. That is the key Colored Coins-style property: the fork branches the claim structure itself, and later value concentration determines which branch matters economically.
+
+One way to express the intended security intuition is:
+
+$$
+\text{valueOfRepBeforeFork} = \sum_{\text{childUniverse} \in \text{childUniverses}} \text{valueOfRepInChildUniverse}
+$$
+
+and, under the protocol’s intended coordination assumptions,
+
+$$
+\text{valueOfRepBeforeFork} \approx \text{valueOfRepInTruthfulChildUniverse}
+$$
+
+These equations are not enforced by the contract as accounting identities. They express the Colored Coins intuition behind the design: if social and market coordination concentrate value into the truthful branch, then branched post-fork claims can still inherit meaningful security from the pre-fork REP base.
 
 ## 5. Questions and Outcome Encoding
 
@@ -127,7 +141,7 @@ In the contract’s encoding:
 
 The all-zero encoding is therefore the canonical `Invalid` answer for scalar questions.
 
-For a valid scalar answer, the two 120-bit payout numerators must sum exactly to `numTicks`:
+For a valid scalar answer, the two payout numerators must sum exactly to `numTicks`:
 
 $$
 \text{firstPayoutNumerator} + \text{secondPayoutNumerator} = \text{numTicks}
@@ -135,7 +149,7 @@ $$
 
 If that equality does not hold, the answer is malformed rather than valid.
 
-At the helper and UI level, a scalar tick index `tickIndex` is encoded as:
+At the helper and UI level, a scalar tick index named `tickIndex` is encoded as:
 
 - `firstPayoutNumerator = numTicks - tickIndex`
 - `secondPayoutNumerator = tickIndex`
@@ -147,7 +161,7 @@ $$
 (\text{numTicks} - \text{tickIndex}, \text{tickIndex})
 $$
 
-[`ScalarOutcomes`](../solidity/contracts/ScalarOutcomes.sol) interprets the second payout numerator as the position along the scalar range. If `secondPayoutNumerator` is that second payout numerator and `totalTickCount` is `numTicks`, the displayed scalar value is:
+[`ScalarOutcomes`](../solidity/contracts/ScalarOutcomes.sol) interprets `secondPayoutNumerator` as the position along the scalar range. Using descriptive names for the scalar range parameters, the displayed scalar value is:
 
 $$
 \text{displayedValue} = \text{displayValueMin} + \frac{\text{secondPayoutNumerator}}{\text{totalTickCount}} \cdot (\text{displayValueMax} - \text{displayValueMin})
@@ -173,7 +187,7 @@ Zoltar distinguishes `invalid` answers from `malformed` answers.
 - `Invalid` is a legitimate resolution state.
 - `Malformed` means the submitted outcome index or scalar encoding does not fit the question’s answer space.
 
-This distinction matters because malformed answers are rejected during child-universe REP migration and any fork-aware asset migration that depends on Zoltar’s answer validation, while `Invalid` remains a valid branch and a valid final outcome.
+This distinction matters because malformed answers are rejected during child-universe REP splitting and any fork-aware asset branching that depends on Zoltar’s answer validation, while `Invalid` remains a valid branch and a valid final outcome.
 
 ## 8. Example Fork Lifecycle
 
@@ -183,10 +197,10 @@ Consider a universe `parentUniverse` and a question `forkQuestion` whose answer 
 2. Child universes are defined deterministically from `parentUniverse` and each valid outcome index.
 3. The fork initiator’s REP deposit is partly burned and partly converted into migration balance.
 4. Any REP holder can add more REP into migration balance for the forked universe.
-5. REP holders call `splitMigrationRep` to mint child-universe REP into the outcome branches they support.
+5. REP holders call `splitMigrationRep` to mint child-universe REP across the outcome branches they support.
 
 At that point, Zoltar has turned one disputed universe into multiple child universes with separate reputation tokens. The higher-level economic meaning of those branches is left to protocols built on top.
 
 ## 9. Design Thesis
 
-Zoltar provides a forkable oracle substrate. Rather than forcing a single answer when disagreement persists, it turns unresolved decisions into explicit child universes and lets reputation capital migrate into those branches. The result is a generalized branching layer for categorical and scalar questions, with deterministic encoding, deterministic child-universe ids, and REP migration as the mechanism for expressing branch-level belief.
+Zoltar provides a forkable oracle substrate. Rather than forcing a single answer when disagreement persists, it turns unresolved decisions into explicit child universes and lets REP holders split post-fork claims across one or more selected branches. In that sense it closely follows the Colored Coins model: the protocol makes disagreement explicit by branching the state, while later coordination determines which branch carries durable value. The result is a generalized branching layer for categorical and scalar questions, with deterministic encoding, deterministic child-universe ids, and REP splitting as the mechanism for expressing branch-level belief.
