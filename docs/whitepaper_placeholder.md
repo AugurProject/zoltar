@@ -174,7 +174,7 @@ Shares can also migrate across forks. `ShareToken.migrate` burns a parent-univer
 
 ## 6. Escalation Resolution
 
-Augur Placeholder does not require every dispute to become a Zoltar fork. Instead it first attempts local resolution through [`EscalationGame`](../solidity/contracts/peripherals/EscalationGame.sol). In this repository’s architecture, the escalation game lives in Placeholder rather than in Zoltar because it is part of the application-layer market and migration workflow, not part of the minimal forkable-universe substrate itself.
+Augur Placeholder does not require every dispute to become a Zoltar fork. Instead it first attempts local resolution through [`EscalationGame`](../solidity/contracts/peripherals/EscalationGame.sol).
 
 ### Basic structure
 
@@ -208,7 +208,7 @@ At any point, the contract tracks three outcome balances. Two related but distin
 - Against the fixed `nonDecisionThreshold`, if two or more outcomes reach that level, `hasReachedNonDecision()` becomes true. That is the stronger condition that marks genuine non-decision and opens the fork path.
 - If time expires without that stronger non-decision condition, the uniquely highest balance wins.
 
-Economically, the contract distinguishes between “the contest is still live” and “local capital failed to converge strongly enough that the system should escalate toward a fork.” The paper should preserve that distinction because the contracts do.
+This distinguishes between a contest that is still live at the current running threshold and a stronger non-decision state that opens the fork path.
 
 The contract also tracks the `binding capital`, which is the median of the three balances. This determines the effective end date of the game when the system times out naturally instead of reaching non-decision.
 
@@ -216,15 +216,32 @@ The median matters because the game is trying to detect whether disagreement rem
 
 ### Payout rule
 
-Winning deposits are not paid out uniformly.
+Winning deposits are paid by `claimDepositForWinning`, and the payout depends on where that deposit sits relative to the final `binding capital`.
 
-- Deposits above the binding capital can be returned at par.
-- Deposits crossing the binding-capital boundary can receive mixed treatment.
-- Deposits fully inside the binding region can be doubled and then haircut.
+- If a winning deposit sits entirely above the binding capital, it is returned at par.
+- If a winning deposit crosses the binding-capital boundary, the portion above the boundary is returned at par. The portion inside the binding region is paid as `2 * excess - (2/5) * excess`, which is `1.6 * excess`.
+- If a winning deposit sits entirely inside the binding region, it is paid as `2 * deposit - (2/5) * deposit`, which is `1.6 * deposit`.
 
-The current winning-side payout logic can therefore return more than the original deposit for some winning positions. It can also reduce payouts through a burn or haircut mechanism. Finally, payouts are scaled down if the actual Zoltar fork threshold is lower than the game-level `nonDecisionThreshold`.
+In code terms, the contract computes an `amountToWithdraw` from the winning deposit record and emits that result through `ClaimDeposit`. The security pool or pool forker then uses that amount in the relevant withdrawal or migration path. This means deeper winning deposits can earn a `1.6x` payout, while later deposits above the binding capital only get principal back.
 
-The escalation game is thus an Augur Placeholder mechanism layered on top of Zoltar to avoid unnecessary global forks while still providing a path to fork when disagreement remains unresolved.
+Example:
+
+- Suppose the final `binding capital` is `100 REP`.
+- A winning deposit of `25 REP` that lies entirely inside that first `100 REP` is paid:
+
+$$
+\text{amountToWithdraw} = 2 \cdot 25 - \frac{2}{5} \cdot 25 = 50 - 10 = 40 \text{ REP}
+$$
+
+- A winning deposit of `30 REP` where only `10 REP` lies inside the binding region and `20 REP` lies above it is paid:
+
+$$
+\text{amountToWithdraw} = 20 + \left(2 \cdot 10 - \frac{2}{5} \cdot 10\right) = 20 + 16 = 36 \text{ REP}
+$$
+
+After that, one more adjustment can apply. If the actual Zoltar fork threshold for the universe is lower than the escalation game’s configured `nonDecisionThreshold`, the payout is scaled down proportionally by `actualForkThreshold / nonDecisionThreshold`.
+
+If the game resolves locally without a fork, users withdraw through `SecurityPool.withdrawFromEscalationGame`, which applies the winning payout on the parent pool and adjusts the vault’s pool ownership by the gain or loss relative to the original locked REP. If the game reaches non-decision and the pool forks, the parent pool does not pay those winnings out directly in operational mode. Instead, `SecurityPoolForker.migrateFromEscalationGame` calls `claimDepositForWinning` for the selected child outcome, credits the resulting REP amount into the child pool as new ownership, and migrates proportional parent collateral alongside it. If an unrelated external Zoltar fork cancels the local game before it reaches non-decision, deposits are refunded rather than paid as winners.
 
 ```
 Question end
@@ -308,8 +325,6 @@ In contract terms, Zoltar first handles the universe fork and the splitting of p
 
 ## 8. Truth Auction
 
-The truth auction belongs to Augur Placeholder, not to Zoltar.
-
 After migration, a child pool may still have less ETH collateral than is needed to represent that branch’s intended collateral base. This happens because migration can move less than the full parent-side economic state into that child universe.
 
 More precisely, the parent pool may have outstanding complete-set obligations and collateral that were economically tied to the parent universe, while only some fraction of REP-backed security and vault state migrates into a given child branch. The child branch may therefore inherit a partial economic state: enough to exist, but not enough to cleanly support the level of collateralization that participants in that branch would want if it were to continue as a standalone market.
@@ -390,9 +405,7 @@ $$
 \text{REP value securing the system} > \text{value of the obligations secured by that REP}
 $$
 
-In this implementation, the same idea should be read concretely: the value of the REP-backed security base must exceed the value of the collateralized economic state that it is protecting.
-
-Under those assumptions, the system is game-theoretically sound in the intended sense. Zoltar forks only create branches, and Placeholder carries underwriting state, collateral state, and outcome shares into them. If a participant drags value into a branch they expect others to abandon, they may capture some local advantage but also destroy the value of the branch-native REP and underwriting base they rely on there. If users and bidders instead coordinate on the branch they expect to keep using, REP migration, proportional collateral migration, and truth-auction repair can rebuild a usable market state in that branch.
+Zoltar forks only create branches, and Placeholder carries underwriting state, collateral state, and outcome shares into them. If a participant drags value into a branch they expect others to abandon, they may capture some local advantage but also destroy the value of the branch-native REP and underwriting base they rely on there. If users and bidders instead coordinate on the branch they expect to keep using, REP migration, proportional collateral migration, and truth-auction repair can rebuild a usable market state in that branch.
 
 This argument has limits. If multiple branches retain substantial durable value, the simple “one branch gets almost all the value” intuition weakens. If REP/ETH liquidity is poor or truth-auction demand is weak, collateral repair may be incomplete. If REP/ETH price discovery is unreliable, solvency operations become less trustworthy. The escalation game helps avoid unnecessary forks, but it does not remove the need for these higher-level coordination and valuation assumptions.
 
@@ -457,7 +470,3 @@ The current repository exposes several implementation constraints.
 - Retention-rate bounds, the retention-rate dip point, and several oracle and auction tuning parameters are also fixed constants in the current implementation.
 - The retention-rate curve in [`SecurityPoolUtils`](../solidity/contracts/peripherals/SecurityPoolUtils.sol) is heuristic rather than final market design.
 - Some comments in [`SecurityPool`](../solidity/contracts/peripherals/SecurityPool.sol) acknowledge open accounting questions around child-pool complete-set behavior.
-
-## 14. Design Thesis
-
-REP vaults underwrite open interest, users hold complete sets and outcome shares backed by ETH collateral, and disputes attempt local resolution before falling back to a fork. Structured migration and truth auctions then let the continuing branch rebuild a coherent economic state.
