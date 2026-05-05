@@ -13,7 +13,7 @@ The stack in this repository has two distinct protocol identities.
 - `Zoltar` is the base oracle substrate.
 - `Augur Placeholder` is the application layer built on top of Zoltar.
 
-Zoltar is responsible for universes, forks, question metadata, scalar and categorical outcome encoding, and the migration of reputation capital into child universes. Augur Placeholder is responsible for the economic system on top of that substrate: per-question security pools, REP-backed underwriting, ERC-1155 complete sets and outcome shares, a local escalation game, migration of pool state after a fork, and a batch auction that can restore missing collateral in a surviving branch.
+Zoltar is responsible for universes, forks, question metadata, scalar and categorical outcome encoding, and the migration of reputation capital into child universes. Augur Placeholder is responsible for the economic system on top of that substrate: per-question security pools, REP-backed underwriting, [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) complete sets and outcome shares, a local escalation game, migration of pool state after a fork, and a batch auction that can restore missing collateral in a surviving branch.
 
 This repository splits responsibilities in a specific way. One possible architecture is to combine colored-coin branching and escalation logic into a single foundational layer. Here, Zoltar provides the forkable universe and REP substrate, while the escalation game sits in the Augur Placeholder layer alongside security pools and migration machinery. The background design document was used as inspiration, not as an exact description of the shipped contracts.
 
@@ -27,7 +27,7 @@ Contract responsibility map:
 - [`SecurityPoolForker`](../solidity/contracts/peripherals/SecurityPoolForker.sol): pool migration across child universes
 - [`UniformPriceDualCapBatchAuction`](../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol): truth auction for missing collateral
 - [`PriceOracleManagerAndOperatorQueuer`](../solidity/contracts/peripherals/PriceOracleManagerAndOperatorQueuer.sol): REP/ETH solvency price operations
-- [`ShareToken`](../solidity/contracts/peripherals/tokens/ShareToken.sol): ERC-1155 positions and fork-aware share migration
+- [`ShareToken`](../solidity/contracts/peripherals/tokens/ShareToken.sol): [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) positions and fork-aware share migration
 
 Terminology:
 
@@ -185,7 +185,7 @@ The contract applies related conditions both at the vault level and at the whole
 
 ### Traders and complete sets
 
-Traders call `createCompleteSet` with ETH. The pool mints a complete set of ERC-1155 shares through `ShareToken`, one unit each of `Invalid`, `Yes`, and `No` for the current universe. The deposited ETH becomes `completeSetCollateralAmount`.
+Traders call `createCompleteSet` with ETH. The pool mints a complete set of [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) shares through `ShareToken`, one unit each of `Invalid`, `Yes`, and `No` for the current universe. The deposited ETH becomes `completeSetCollateralAmount`.
 
 Before finalization, a full complete set can be burned with `redeemCompleteSet` to recover its pro rata share of collateral.
 
@@ -214,11 +214,17 @@ with the lost portion becoming fees owed to REP vaults.
 
 REP withdrawal, liquidation, and bond-allowance updates depend on a valid REP/ETH price. Those operations are executed only when the pool remains solvent after the proposed change.
 
+### Liquidation
+
+Liquidation in Augur Placeholder is a transfer of risk, not a direct sale of collateral. When a vault becomes undercollateralized relative to its `securityBondAllowance`, oracle price, and `securityMultiplier`, another vault can call `performLiquidation` through the queued-oracle path. The contract snapshots the target vault's state at queue time, then uses that snapshot when the operation executes so that later state changes cannot trivially invalidate the liquidation attempt.
+
+Economically, liquidation moves some amount of debt and a corresponding amount of REP-backed ownership from the target vault to the caller vault. The receiving vault must remain solvent after taking on that additional debt, and both sides must still satisfy the minimum deposit requirements enforced by the pool. In the current implementation, this mechanism is intentionally strict: it is designed to move underwriting responsibility away from an unsafe vault and into one that can still support it.
+
 Security pools are therefore an Augur Placeholder feature, not a Zoltar feature. They turn REP into underwriting capacity for a collateral-backed outcome market.
 
 ## 6. Shares and Complete Sets
 
-[`ShareToken`](../solidity/contracts/peripherals/tokens/ShareToken.sol) is an ERC-1155 contract used by Augur Placeholder to represent outcome positions.
+[`ShareToken`](../solidity/contracts/peripherals/tokens/ShareToken.sol) is an [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) contract used by Augur Placeholder to represent outcome positions.
 
 For each complete set:
 
@@ -475,7 +481,7 @@ An end-to-end lifecycle under the current contracts looks like this:
 1. A binary question is registered in [`ZoltarQuestionData`](../solidity/contracts/ZoltarQuestionData.sol).
 2. An Augur Placeholder origin security pool is deployed for that question through [`SecurityPoolFactory`](../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol). The current implementation requires the exact categorical outcomes `Yes` and `No`.
 3. REP vault operators deposit REP with `depositRep` and set bond allowance, thereby funding security capacity.
-4. Traders mint ETH-backed complete sets through `createCompleteSet` and receive `Invalid`, `Yes`, and `No` ERC-1155 shares.
+4. Traders mint ETH-backed complete sets through `createCompleteSet` and receive `Invalid`, `Yes`, and `No` [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) shares.
 5. The question end time arrives.
 6. Participants use the Placeholder escalation game to attempt local resolution.
 7. If the escalation game converges, the question finalizes locally and winning shares can be redeemed.
@@ -493,12 +499,12 @@ The current repository exposes several implementation constraints.
 
 - The genesis universe depends on an external genesis REP token address.
 - Fork threshold and burn constants are hard-coded and explicitly marked for future review.
-- Scalar and categorical questions share one registry, but origin Augur Placeholder pools currently use only a binary `Yes` / `No` subset.
+- Scalar and categorical questions share one registry, but origin Augur Placeholder pools currently use only the binary-with-invalid market structure `Yes / No / Invalid`.
 
 ### Augur Placeholder-specific constraints
 
-- Origin security pools currently support only exact `Yes` / `No` questions.
-- Several economics constants are marked `TODO` or are clearly provisional.
+- Origin security pools currently support only the exact categorical market shape `Yes / No`, with `Invalid` added as the third Placeholder trading and resolution outcome.
+- The fork threshold divisor, fork-burn divisor, escalation-game initial deposit, retention-rate bounds, retention-rate dip point, and several oracle and auction tuning parameters are fixed constants in the current implementation and should be read as current design parameters rather than as dynamically governed values.
 - The initial escalation-game deposit is hard-coded in [`SecurityPool`](../solidity/contracts/peripherals/SecurityPool.sol).
 - The retention-rate curve in [`SecurityPoolUtils`](../solidity/contracts/peripherals/SecurityPoolUtils.sol) is heuristic rather than final market design.
 - Some comments acknowledge open accounting questions around child-pool complete-set behavior.
