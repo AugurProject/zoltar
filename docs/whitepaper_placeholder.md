@@ -90,19 +90,19 @@ Each vault can choose a `securityBondAllowance`. This is the amount of open inte
 At the vault level, the solvency condition enforced by operations such as `performWithdrawRep` is:
 
 $$
-\text{remainingRepBacking} \cdot \text{PRICE\_PRECISION} \geq \text{securityBondAllowance} \cdot \text{repPerEthPrice}
+\text{remainingRepBacking} \cdot \text{pricePrecision} \geq \text{securityBondAllowance} \cdot \text{repPerEthPrice}
 $$
 
 Here `repPerEthPrice` is oriented as:
 
 $$
-\text{repPerEthPrice} = \frac{\text{repAmount} \cdot \text{PRICE\_PRECISION}}{\text{ethAmount}}
+\text{repPerEthPrice} = \frac{\text{repAmount} \cdot \text{pricePrecision}}{\text{ethAmount}}
 $$
 
 At the liquidation boundary, the system uses a stronger condition that includes the pool’s chosen security multiplier:
 
 $$
-\text{vaultIsLiquidable if } \text{securityBondAllowance} \cdot \text{securityMultiplier} \cdot \text{repPerEthPrice} > \text{repBacking} \cdot \text{PRICE\_PRECISION}
+\text{vaultIsLiquidable if } \text{securityBondAllowance} \cdot \text{securityMultiplier} \cdot \text{repPerEthPrice} > \text{repBacking} \cdot \text{pricePrecision}
 $$
 
 The contract applies related conditions both at the vault level and at the whole-pool level before allowing operations such as `performWithdrawRep`, `performLiquidation`, and `performSetSecurityBondsAllowance`.
