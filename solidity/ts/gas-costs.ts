@@ -4,7 +4,7 @@ import { Zoltar_Zoltar } from './types/contractArtifact'
 import { getMockedEthSimulateWindowEthereum } from './testsuite/simulator/AnvilWindowEthereum'
 import { submitBid, refundLosingBids } from './testsuite/simulator/utils/contracts/auction'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './testsuite/simulator/utils/contracts/deployPeripherals'
-import { getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, migrateShares, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndQueueOperation, wrapWeth } from './testsuite/simulator/utils/contracts/peripherals'
+import { getOpenOracleExtraData, getOpenOracleReportMeta, getPendingReportId, migrateShares, openOracleSettle, openOracleSubmitInitialReport, OperationType, requestPrice, requestPriceIfNeededAndStageOperation, wrapWeth } from './testsuite/simulator/utils/contracts/peripherals'
 import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from './testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, forkZoltarWithOwnEscalationGame, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from './testsuite/simulator/utils/contracts/securityPoolForker'
 import { createCompleteSet, depositRep, depositToEscalationGame, getRepToken, redeemCompleteSet, redeemFees, redeemRep, redeemShares, updateVaultFees, withdrawFromEscalationGame } from './testsuite/simulator/utils/contracts/securityPool'
@@ -344,7 +344,7 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			const context = await setupPool('Gas queue allowance')
 			await confirmApproveAndDepositRep(alice, context)
-			return await waitForGas(alice, requestPriceIfNeededAndQueueOperation(alice, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, alice.account.address, securityBondAllowance))
+			return await waitForGas(alice, requestPriceIfNeededAndStageOperation(alice, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, alice.account.address, securityBondAllowance))
 		},
 	},
 	{
@@ -354,7 +354,7 @@ const scenarios: Scenario[] = [
 			const context = await setupPool('Gas set allowance')
 			await confirmApproveAndDepositRep(alice, context)
 			await manipulatePriceOracle(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer)
-			return await waitForGas(alice, requestPriceIfNeededAndQueueOperation(alice, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, alice.account.address, securityBondAllowance))
+			return await waitForGas(alice, requestPriceIfNeededAndStageOperation(alice, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, alice.account.address, securityBondAllowance))
 		},
 	},
 	{
@@ -364,7 +364,7 @@ const scenarios: Scenario[] = [
 			const context = await setupPool('Gas withdraw rep')
 			await confirmApproveAndDepositRep(alice, context)
 			await manipulatePriceOracle(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer)
-			return await waitForGas(alice, requestPriceIfNeededAndQueueOperation(alice, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, alice.account.address, repDepositAmount))
+			return await waitForGas(alice, requestPriceIfNeededAndStageOperation(alice, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, alice.account.address, repDepositAmount))
 		},
 	},
 	{
@@ -377,7 +377,7 @@ const scenarios: Scenario[] = [
 			await confirmApproveAndDepositRep(bob, context, repDepositAmount * 10n)
 			await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
 			await anvil.advanceTime(2n * DAY)
-			return await waitForGas(bob, requestPriceIfNeededAndQueueOperation(bob, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, alice.account.address, securityBondAllowance))
+			return await waitForGas(bob, requestPriceIfNeededAndStageOperation(bob, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, alice.account.address, securityBondAllowance))
 		},
 	},
 	{
@@ -390,7 +390,7 @@ const scenarios: Scenario[] = [
 			await confirmApproveAndDepositRep(bob, context, repDepositAmount * 10n)
 			await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
 			await anvil.advanceTime(2n * DAY)
-			await confirmTx(bob, requestPriceIfNeededAndQueueOperation(bob, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, alice.account.address, securityBondAllowance))
+			await confirmTx(bob, requestPriceIfNeededAndStageOperation(bob, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, alice.account.address, securityBondAllowance))
 			const pendingReportId = await getPendingReportId(bob, context.addresses.priceOracleManagerAndOperatorQueuer)
 			const reportMeta = await getOpenOracleReportMeta(bob, pendingReportId)
 			const amount1 = reportMeta.exactToken1Report

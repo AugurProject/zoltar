@@ -21,7 +21,7 @@ import {
 	quoteRepForEth,
 	quoteTokenForEth,
 } from '../lib/uniswapQuoter.js'
-import type { ReadClient } from '../lib/clients.js'
+import { createConnectedReadClient, type ReadClient } from '../lib/clients.js'
 
 type SimulateArgs = Parameters<ReadClient['simulateContract']>[0]
 
@@ -30,6 +30,8 @@ type RawSimulateParam = {
 	zeroForOne: boolean
 	exactAmount: bigint
 }
+
+type RawV3SimulateParam = { tokenIn: string; tokenOut: string; amountIn: bigint; fee: number; sqrtPriceLimitX96: bigint }
 
 type CapturedCall = {
 	address: string
@@ -43,7 +45,7 @@ type CapturedCall = {
 }
 
 function extractParams(args: SimulateArgs): CapturedCall {
-	const [param] = args.args as unknown as [RawSimulateParam]
+	const [param] = args.args as [RawSimulateParam]
 	return {
 		address: args.address,
 		zeroForOne: param.zeroForOne,
@@ -58,39 +60,44 @@ function extractParams(args: SimulateArgs): CapturedCall {
 
 function createCapturingClient(amountOut: bigint): { client: ReadClient; captured: CapturedCall } {
 	const captured: CapturedCall = { address: '', zeroForOne: false, currency0: '', currency1: '', fee: 0, tickSpacing: 0, hooks: '', exactAmount: 0n }
-	const client = {
-		simulateContract: async (args: SimulateArgs) => {
-			Object.assign(captured, extractParams(args))
-			return { result: [amountOut, 100000n] }
-		},
-	} as unknown as ReadClient
+	const client = createConnectedReadClient()
+	const simulateContract: ReadClient['simulateContract'] = async args => {
+		const typedArgs = args as SimulateArgs
+		Object.assign(captured, extractParams(typedArgs))
+		return { result: [amountOut, 100000n], request: {} as never } as never
+	}
+	client.simulateContract = simulateContract
 	return { client, captured }
 }
 
 function createPoolAwareClient(amountsByFee: Partial<Record<number, bigint>>): ReadClient {
-	return {
-		simulateContract: async (args: SimulateArgs) => {
-			const { fee } = extractParams(args)
-			const amountOut = amountsByFee[fee]
-			if (amountOut === undefined) {
-				throw new Error(`no pool for fee ${fee}`)
-			}
-			return { result: [amountOut, 100000n] }
-		},
-	} as unknown as ReadClient
+	const client = createConnectedReadClient()
+	const simulateContract: ReadClient['simulateContract'] = async args => {
+		const typedArgs = args as SimulateArgs
+		const { fee } = extractParams(typedArgs)
+		const amountOut = amountsByFee[fee]
+		if (amountOut === undefined) {
+			throw new Error(`no pool for fee ${fee}`)
+		}
+		return { result: [amountOut, 100000n], request: {} as never } as never
+	}
+	client.simulateContract = simulateContract
+	return client
 }
 
 function createV3FeeAwareClient(amountsByFee: Partial<Record<number, bigint>>): ReadClient {
-	return {
-		simulateContract: async (args: SimulateArgs) => {
-			const [param] = args.args as unknown as [{ tokenIn: string; tokenOut: string; amountIn: bigint; fee: number; sqrtPriceLimitX96: bigint }]
-			const amountOut = amountsByFee[param.fee]
-			if (amountOut === undefined) {
-				throw new Error(`no v3 pool for fee ${param.fee}`)
-			}
-			return { result: [amountOut, 0n, 0, 0n] }
-		},
-	} as unknown as ReadClient
+	const client = createConnectedReadClient()
+	const simulateContract: ReadClient['simulateContract'] = async args => {
+		const typedArgs = args as SimulateArgs
+		const [param] = typedArgs.args as [RawV3SimulateParam]
+		const amountOut = amountsByFee[param.fee]
+		if (amountOut === undefined) {
+			throw new Error(`no v3 pool for fee ${param.fee}`)
+		}
+		return { result: [amountOut, 0n, 0, 0n], request: {} as never } as never
+	}
+	client.simulateContract = simulateContract
+	return client
 }
 
 void describe('quoteExactInput', () => {
@@ -219,14 +226,15 @@ void describe('quoteBestV3ExactInput', () => {
 
 	void test('normalizes ETH to WETH for V3 quotes', async () => {
 		const captured: { tokenIn?: string; tokenOut?: string } = {}
-		const client = {
-			simulateContract: async (args: SimulateArgs) => {
-				const [param] = args.args as unknown as [{ tokenIn: string; tokenOut: string; amountIn: bigint; fee: number; sqrtPriceLimitX96: bigint }]
-				captured.tokenIn = param.tokenIn
-				captured.tokenOut = param.tokenOut
-				return { result: [1n, 0n, 0, 0n] }
-			},
-		} as unknown as ReadClient
+		const client = createConnectedReadClient()
+		const simulateContract: ReadClient['simulateContract'] = async args => {
+			const typedArgs = args as SimulateArgs
+			const [param] = typedArgs.args as [RawV3SimulateParam]
+			captured.tokenIn = param.tokenIn
+			captured.tokenOut = param.tokenOut
+			return { result: [1n, 0n, 0, 0n], request: {} as never } as never
+		}
+		client.simulateContract = simulateContract
 
 		await quoteBestV3ExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n, [100])
 		expect(captured.tokenIn).toBe(WETH_ADDRESS)
@@ -243,21 +251,23 @@ void describe('quoteBestV3ExactInputWithSource', () => {
 	void test('returns the best successful quote together with exact V3 pool metadata from the factory', async () => {
 		const poolAddress = getAddress('0x0000000000000000000000000000000000000abc')
 		const factoryCalls: Array<{ fee: number; tokenA: Address; tokenB: Address }> = []
-		const client = {
-			simulateContract: async (args: SimulateArgs) => {
-				const [param] = args.args as unknown as [{ tokenIn: string; tokenOut: string; amountIn: bigint; fee: number; sqrtPriceLimitX96: bigint }]
-				const amountOut = param.fee === 500 ? 9n : param.fee === 3000 ? 12n : undefined
-				if (amountOut === undefined) {
-					throw new Error(`no v3 pool for fee ${param.fee}`)
-				}
-				return { result: [amountOut, 0n, 0, 0n] }
-			},
-			readContract: async (args: { args?: unknown[] }) => {
-				const [tokenA, tokenB, fee] = args.args as [Address, Address, number]
-				factoryCalls.push({ fee, tokenA, tokenB })
-				return poolAddress
-			},
-		} as unknown as ReadClient
+		const client = createConnectedReadClient()
+		const simulateContract: ReadClient['simulateContract'] = async args => {
+			const typedArgs = args as SimulateArgs
+			const [param] = typedArgs.args as [RawV3SimulateParam]
+			const amountOut = param.fee === 500 ? 9n : param.fee === 3000 ? 12n : undefined
+			if (amountOut === undefined) {
+				throw new Error(`no v3 pool for fee ${param.fee}`)
+			}
+			return { result: [amountOut, 0n, 0, 0n], request: {} as never } as never
+		}
+		const readContract: ReadClient['readContract'] = async args => {
+			const [tokenA, tokenB, fee] = args.args as [Address, Address, number]
+			factoryCalls.push({ fee, tokenA, tokenB })
+			return poolAddress as never
+		}
+		client.simulateContract = simulateContract
+		client.readContract = readContract
 
 		const result = await quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, REP_ADDRESS, 1n, [500, 3000])
 

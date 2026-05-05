@@ -72,8 +72,8 @@ describe('Escalation Game Test Suite', () => {
 	test('depositOnOutcome reverts when outcome is out of enum range', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
 		// Values > 3 are outside enum (0=Invalid,1=Yes,2=No,3=None)
-		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, 4 as unknown as QuestionOutcome, reportBond))
-		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, 255 as unknown as QuestionOutcome, reportBond))
+		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, 4 as QuestionOutcome, reportBond))
+		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, 255 as QuestionOutcome, reportBond))
 	})
 
 	test('claimDepositForWinning reverts when outcome is None', async () => {

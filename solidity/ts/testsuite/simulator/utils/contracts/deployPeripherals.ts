@@ -16,7 +16,7 @@ import {
 	peripherals_factories_ShareTokenFactory_ShareTokenFactory,
 	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	peripherals_openOracle_OpenOracle_OpenOracle,
-	peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer,
+	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
 	peripherals_SecurityPoolUtils_SecurityPoolUtils,
@@ -151,8 +151,8 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 	getInfraContracts: () => getInfraContractAddresses(),
 	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken) =>
 		encodeDeployData({
-			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-			bytecode: `0x${peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.evm.bytecode.object}`,
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			bytecode: `0x${peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.evm.bytecode.object}`,
 			args: [openOracle, repToken],
 		}),
 	getRepTokenAddress,
