@@ -1,16 +1,14 @@
 import { useSignal } from '@preact/signals'
 import type { Hash } from 'viem'
 import { useEffect } from 'preact/hooks'
+import { AppHeaderShell } from './components/AppHeaderShell.js'
+import { AppStatusNotices } from './components/AppStatusNotices.js'
 import { DeploymentRouteContent } from './components/DeploymentRouteContent.js'
 import { MainnetGateSection } from './components/MainnetGateSection.js'
-import { OverviewPanels } from './components/OverviewPanels.js'
 import { MarketSection } from './components/MarketSection.js'
 import { NotFoundSection } from './components/NotFoundSection.js'
 import { OpenOracleSection } from './components/OpenOracleSection.js'
-import { SimulationBanner } from './components/SimulationBanner.js'
-import { TabNavigation } from './components/TabNavigation.js'
 import { SecurityPoolsSection } from './components/SecurityPoolsSection.js'
-import { ErrorNotice } from './components/ErrorNotice.js'
 import { useDeploymentFlow } from './hooks/useDeploymentFlow.js'
 import { useForkAuctionOperations } from './hooks/useForkAuctionOperations.js'
 import { useHashRoute } from './hooks/useHashRoute.js'
@@ -35,8 +33,6 @@ import type { TransactionState } from './lib/transactionState.js'
 import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
 import { getUniversePresentation, getWalletPresentation } from './lib/userCopy.js'
 import { formatUniverseCollectionLabel, formatUniverseLabel } from './lib/universe.js'
-import { TransactionHashLink } from './components/TransactionHashLink.js'
-import { TimestampValue } from './components/TimestampValue.js'
 
 export function App() {
 	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
@@ -223,6 +219,35 @@ export function App() {
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
 	const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, hasWallet: hasInjectedWallet, isSupportedChain: isMainnet })
+	const overviewProps = {
+		accountState,
+		isConnectingWallet,
+		isLoadingRepPrices,
+		isLoadingUniverseRepBalance: loadingZoltarForkAccess,
+		onConnect: () => void connectWallet(),
+		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
+		repPerEthPrice,
+		repPerEthSource,
+		repPerEthSourceUrl,
+		repUsdcPrice,
+		repUsdcSource,
+		repUsdcSourceUrl,
+		universePresentation,
+		universeLabel,
+		universeRepBalance: zoltarForkRepBalance,
+		isRefreshing,
+		walletBootstrapComplete,
+	}
+	const tabNavigationProps = {
+		route,
+		showDeployTab,
+		augurPlaceHolderDeployed: hasLoadedDeploymentStatuses && augurPlaceHolderDeployed === true && !showZoltarUniverseWarning,
+		deployRoute: DEPLOY_ROUTE,
+		marketRoute: ZOLTAR_ROUTE,
+		openOracleRoute: OPEN_ORACLE_ROUTE,
+		securityPoolsRoute: SECURITY_POOLS_ROUTE,
+		onRouteChange: navigate,
+	}
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const refreshSelectedPoolData = () => {
 		if (!walletBootstrapComplete) return
@@ -567,64 +592,16 @@ export function App() {
 
 	return (
 		<main>
-			<div className='page-notices'>
-				{showZoltarUniverseForkedWarning && zoltarUniverse !== undefined ? (
-					<div className='notice error'>
-						{formatUniverseLabel(zoltarUniverse.universeId)} has forked on <TimestampValue timestamp={zoltarUniverse.forkTime} />.
-					</div>
-				) : undefined}
-				{showAugurPlaceHolderDeploymentWarning ? <div className='notice error'>Finish setup in Deploy before using the app.</div> : undefined}
-				{walletPresentation === undefined || hasInjectedWallet ? undefined : <p className='notice warning'>{walletPresentation.detail}</p>}
-				<ErrorNotice message={errorMessage} />
-				{transactionState.value.transactionInFlightCount > 0 ? (
-					<p className='notice success'>
-						<span className='spinner' aria-hidden='true' />
-						{transactionState.value.transactionSubmitted ? (
-							<>Transaction submitted, waiting for confirmation. {transactionState.value.lastTransactionHash === undefined ? <span>Pending wallet signature</span> : <TransactionHashLink hash={transactionState.value.lastTransactionHash} />}</>
-						) : (
-							'Awaiting wallet confirmation.'
-						)}
-					</p>
-				) : transactionState.value.lastTransactionHash === undefined ? undefined : (
-					<p className='notice success'>
-						Last transaction: <TransactionHashLink hash={transactionState.value.lastTransactionHash} />
-					</p>
-				)}
-			</div>
-			{simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onRefresh={refreshState} />}
-			<div className='top-shell'>
-				<div className='top-shell-content'>
-					<OverviewPanels
-						accountState={accountState}
-						isConnectingWallet={isConnectingWallet}
-						isLoadingRepPrices={isLoadingRepPrices}
-						isLoadingUniverseRepBalance={loadingZoltarForkAccess}
-						onConnect={() => void connectWallet()}
-						onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
-						repPerEthPrice={repPerEthPrice}
-						repPerEthSource={repPerEthSource}
-						repPerEthSourceUrl={repPerEthSourceUrl}
-						repUsdcPrice={repUsdcPrice}
-						repUsdcSource={repUsdcSource}
-						repUsdcSourceUrl={repUsdcSourceUrl}
-						universePresentation={universePresentation}
-						universeLabel={universeLabel}
-						universeRepBalance={zoltarForkRepBalance}
-						isRefreshing={isRefreshing}
-						walletBootstrapComplete={walletBootstrapComplete}
-					/>
-				</div>
-				<TabNavigation
-					route={route}
-					showDeployTab={showDeployTab}
-					augurPlaceHolderDeployed={hasLoadedDeploymentStatuses && augurPlaceHolderDeployed === true && !showZoltarUniverseWarning}
-					deployRoute={DEPLOY_ROUTE}
-					marketRoute={ZOLTAR_ROUTE}
-					openOracleRoute={OPEN_ORACLE_ROUTE}
-					securityPoolsRoute={SECURITY_POOLS_ROUTE}
-					onRouteChange={navigate}
-				/>
-			</div>
+			<AppStatusNotices
+				errorMessage={errorMessage}
+				hasInjectedWallet={hasInjectedWallet}
+				showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
+				showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
+				transactionState={transactionState.value}
+				walletPresentation={walletPresentation}
+				zoltarUniverse={zoltarUniverse}
+			/>
+			<AppHeaderShell overview={overviewProps} simulationController={simulationController} tabNavigation={tabNavigationProps} onRefresh={refreshState} />
 
 			<fieldset className='route-shell' disabled={isRouteContentDisabled}>
 				{renderRouteContent()}

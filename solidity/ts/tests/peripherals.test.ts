@@ -29,6 +29,7 @@ import {
 	getCurrentRetentionRate,
 	getPoolOwnershipDenominator,
 	getRepToken,
+	getShareTokenSupply,
 	getSecurityPoolsEscalationGame,
 	getSecurityVault,
 	getSystemState,
@@ -96,6 +97,19 @@ describe('Peripherals Contract Test Suite', () => {
 			],
 		})) as Hash
 		await client.waitForTransactionReceipt({ hash })
+	}
+
+	const getVaultRepClaim = async (vaultAddress: Address) => {
+		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, vaultAddress)
+		return await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
+	}
+
+	const finalizeQuestionAsYesWithoutFork = async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		await mockWindow.advanceTime(10n * DAY)
+		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'question should finalize as yes')
 	}
 
 	beforeEach(async () => {
@@ -268,6 +282,29 @@ describe('Peripherals Contract Test Suite', () => {
 		const repClaimIncrease = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultAfterWithdrawal.repDepositShare - vaultBeforeWithdrawal.repDepositShare)
 		strictEqualTypeSafe(repClaimIncrease, 0n, 'single-sided withdrawal should only unlock the original deposit without changing ownership')
 		strictEqualTypeSafe(vaultAfterWithdrawal.lockedRepInEscalationGame, 0n, 'escalation lock should be released after withdrawal')
+	})
+
+	test('withdrawFromEscalationGame pays mixed binding-capital deposits without double counting', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 5n * 10n ** 18n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 7n * 10n ** 18n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 2n * 10n ** 18n)
+		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, 10n * 10n ** 18n)
+		await mockWindow.advanceTime(10n * DAY)
+
+		const repClaimBeforeWithdrawal = await getVaultRepClaim(client.account.address)
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n, 1n, 2n])
+		const repClaimAfterWithdrawal = await getVaultRepClaim(client.account.address)
+		const vaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+
+		strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'question should resolve to yes')
+		strictEqualTypeSafe(repClaimAfterWithdrawal - repClaimBeforeWithdrawal, 6n * 10n ** 18n, 'winning withdrawals should add only the boosted in-binding payout without double counting')
+		strictEqualTypeSafe(vaultAfterWithdrawal.lockedRepInEscalationGame, 0n, 'winning withdrawals should unlock all deposited REP')
 	})
 
 	test('can refund escalation deposits after zoltar forks on another question', async () => {
@@ -693,6 +730,72 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const totalFeesOwedToVaultsAfterFork = await getTotalFeesOwedToVaults(client, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(totalFeesOwedToVaultsRightAfterFork, totalFeesOwedToVaultsAfterFork, "parent's fees should be frozen")
+	})
+
+	test('redeemShares updates security-pool accounting as winning shares are redeemed', async () => {
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const firstHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const secondHolder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		await createCompleteSet(firstHolder, securityPoolAddresses.securityPool, 4n * 10n ** 18n)
+		await createCompleteSet(secondHolder, securityPoolAddresses.securityPool, 6n * 10n ** 18n)
+
+		const firstHolderShares = await balanceOfShares(firstHolder, securityPoolAddresses.shareToken, genesisUniverse, firstHolder.account.address)
+		const secondHolderShares = await balanceOfShares(secondHolder, securityPoolAddresses.shareToken, genesisUniverse, secondHolder.account.address)
+		const firstWinningShares = ensureDefined(firstHolderShares[1], 'first holder winning shares missing')
+		const secondWinningShares = ensureDefined(secondHolderShares[1], 'second holder winning shares missing')
+		const initialCollateral = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const initialShareSupply = await getShareTokenSupply(client, securityPoolAddresses.securityPool)
+		const firstWinningCashValue = await sharesToCash(client, securityPoolAddresses.securityPool, firstWinningShares)
+		approximatelyEqual(initialCollateral, 10n * 10n ** 18n, 10n ** 11n, 'collateral should stay close to minted complete sets before finalization')
+		strictEqualTypeSafe(initialShareSupply, firstWinningShares + secondWinningShares, 'share supply should equal the minted winning-share balances')
+
+		await finalizeQuestionAsYesWithoutFork()
+		await redeemShares(firstHolder, securityPoolAddresses.securityPool)
+
+		approximatelyEqual(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), initialCollateral - firstWinningCashValue, 10n, 'collateral should shrink after first winning redemption')
+		strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), initialShareSupply - firstWinningShares, 'share supply should shrink after first winning redemption')
+		approximatelyEqual(await sharesToCash(client, securityPoolAddresses.securityPool, secondWinningShares), initialCollateral - firstWinningCashValue, 10n, 'remaining winning shares should not be double counted')
+
+		await redeemShares(secondHolder, securityPoolAddresses.securityPool)
+
+		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), 0n, 'collateral should be empty after all winning shares are redeemed')
+		strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'share supply should be empty after all winning shares are redeemed')
+	})
+
+	test('redeemShares stays available after an unrelated late fork once the question has finalized', async () => {
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 5n * 10n ** 18n)
+		await finalizeQuestionAsYesWithoutFork()
+
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const repTotalSupplySlot = '0x' + 5n.toString(16).padStart(64, '0')
+		await mockWindow.addStateOverrides({
+			[repToken]: {
+				stateDiff: {
+					[repTotalSupplySlot]: repDeposit * 10n,
+				},
+			},
+		})
+
+		const lateForkQuestionData = {
+			...questionData,
+			title: 'late unrelated fork',
+			endTime: await mockWindow.getTime(),
+		}
+		const lateForkQuestionId = getQuestionId(lateForkQuestionData, outcomes)
+		await createQuestion(attackerClient, lateForkQuestionData, outcomes)
+		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(attackerClient, genesisUniverse, lateForkQuestionId)
+
+		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'late unrelated fork should not erase finalized market outcome')
+		await redeemShares(openInterestHolder, securityPoolAddresses.securityPool)
+		strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'winning redemption should still complete after the unrelated fork')
 	})
 
 	test('two security pools with disagreement', async () => {

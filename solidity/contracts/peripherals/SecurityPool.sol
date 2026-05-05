@@ -339,12 +339,15 @@ contract SecurityPool is ISecurityPool {
 		require(sent, 'failed to send Ether');
 	}
 
-	function redeemShares() isOperational external {
+	function redeemShares() external {
+		require(systemState == SystemState.Operational, 'System is not operational');
 		BinaryOutcomes.BinaryOutcome outcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
 		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
 		uint256 amount = shareToken.burnTokenId(tokenId, msg.sender);
 		uint256 ethValue = sharesToCash(amount);
+		shareTokenSupply -= amount;
+		completeSetCollateralAmount -= ethValue;
 		(bool sent, ) = payable(msg.sender).call{ value: ethValue }('');
 		require(sent, 'failed to send Ether');
 		emit RedeemShares(msg.sender, amount, ethValue);
