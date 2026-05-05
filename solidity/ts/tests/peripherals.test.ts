@@ -12,7 +12,7 @@ import { approveAndDepositRep, canLiquidate, handleOracleReporting, manipulatePr
 import { deployOriginSecurityPool, ensureDeploymentStatusOracleDeployed, ensureInfraDeployed, getDeploymentStatusOracleAddress, getDeploymentStepAddresses, getInfraContractAddresses, getSecurityPoolAddresses, loadDeploymentStatusOracleMask } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 
-import { balanceOfShares, balanceOfSharesInCash, getEthRaiseCap, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndQueueOperation } from '../testsuite/simulator/utils/contracts/peripherals'
+import { balanceOfShares, balanceOfSharesInCash, getEthRaiseCap, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndStageOperation } from '../testsuite/simulator/utils/contracts/peripherals'
 import { getScalarOutcomeIndex } from '../testsuite/simulator/utils/contracts/scalarOutcome'
 import { tickToPrice } from '../testsuite/simulator/utils/tickMath'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
@@ -39,6 +39,7 @@ import {
 	poolOwnershipToRep,
 	redeemCompleteSet,
 	redeemFees,
+	redeemRep,
 	redeemShares,
 	sharesToCash,
 	updateVaultFees,
@@ -490,7 +491,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(canLiquidate(initialPrice, securityPoolAllowance, repDeposit, 2n), false, 'Should not be able to liquidate yet')
 		// REP/ETH increases to 10x, 10 REP = 1 ETH (rep drops in value)
 		const forcedPrice = PRICE_PRECISION * 10n
-		await requestPriceIfNeededAndQueueOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
+		await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
 
 		await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
 
@@ -538,7 +539,7 @@ describe('Peripherals Contract Test Suite', () => {
 
 		// Queue liquidation (liquidator requests price to trigger liquidation)
 		const forcedPrice = PRICE_PRECISION * 10n
-		await requestPriceIfNeededAndQueueOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
+		await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
 
 		// Record liquidator's ownership before attack
 		const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
@@ -1030,6 +1031,82 @@ describe('Peripherals Contract Test Suite', () => {
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'yes System should be operational right away')
 		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'child contract did not record the amount correctly')
+	})
+
+	test('redeemRep removes redeemed ownership from the child pool denominator', async () => {
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const attackerVaultBeforeRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, attackerClient.account.address)
+		const attackerClaimBeforeRedeem = await poolOwnershipToRep(client, yesSecurityPool.securityPool, attackerVaultBeforeRedeem.repDepositShare)
+		const denominatorBeforeRedeem = await getPoolOwnershipDenominator(client, yesSecurityPool.securityPool)
+
+		await redeemRep(client, yesSecurityPool.securityPool, client.account.address)
+
+		const clientVaultAfterRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const denominatorAfterRedeem = await getPoolOwnershipDenominator(client, yesSecurityPool.securityPool)
+		const attackerClaimAfterRedeem = await poolOwnershipToRep(client, yesSecurityPool.securityPool, attackerVaultBeforeRedeem.repDepositShare)
+
+		strictEqualTypeSafe(clientVaultAfterRedeem.repDepositShare, 0n, 'redeeming a vault should zero out its child-pool ownership')
+		assert.ok(denominatorAfterRedeem <= denominatorBeforeRedeem, 'redeeming a vault should not increase the child pool denominator')
+		assert.ok(attackerClaimAfterRedeem <= attackerClaimBeforeRedeem, 'redeeming another vault should not increase the remaining vault claim')
+	})
+
+	test('parent pool halts on fork while a migrated child can resume operational flows', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const openInterestAmount = 10n * 10n ** 18n
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+
+		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'parent pool should enter PoolForked after the universe fork is activated')
+		await assert.rejects(createCompleteSet(client, securityPoolAddresses.securityPool, 1n), /Zoltar has forked/)
+		await assert.rejects(depositRep(client, securityPoolAddresses.securityPool, 1n), /Zoltar has forked/)
+
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).repAtFork
+		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
+		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+		const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
+		await mockWindow.advanceTime(7n * DAY + DAY)
+		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational once migration and truth-auction processing finish')
+
+		const childOpenInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		const collateralBeforeCreate = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+		await createCompleteSet(childOpenInterestHolder, yesSecurityPool.securityPool, 1n)
+		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), collateralBeforeCreate + 1n, 'operational child pool should accept new complete-set collateral')
 	})
 
 	test('can migrate escalation deposits before migrateVault', async () => {

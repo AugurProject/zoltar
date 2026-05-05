@@ -4,7 +4,7 @@ pragma solidity 0.8.33;
 import { Zoltar, FORK_THRESHOLD_DIVISOR } from '../Zoltar.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
-import { PriceOracleManagerAndOperatorQueuer } from './PriceOracleManagerAndOperatorQueuer.sol';
+import { SecurityPoolOracleCoordinator } from './SecurityPoolOracleCoordinator.sol';
 import { ISecurityPool, SecurityVault, SystemState, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
@@ -26,7 +26,7 @@ contract SecurityPool is ISecurityPool {
 	ISecurityPool immutable public parent;
 	IShareToken public immutable shareToken;
 	ReputationToken public immutable repToken;
-	PriceOracleManagerAndOperatorQueuer public immutable priceOracleManagerAndOperatorQueuer;
+	SecurityPoolOracleCoordinator public immutable priceOracleManagerAndOperatorQueuer;
 	OpenOracle public immutable openOracle;
 	EscalationGameFactory public immutable escalationGameFactory;
 	EscalationGame public escalationGame;
@@ -65,6 +65,11 @@ contract SecurityPool is ISecurityPool {
 	event RedeemRep(address caller, address vault, uint256 repAmount);
 
 	modifier isOperational { // TODO, system can be operational if the fork has happened after this question has finalized
+		// Once a universe forks, the parent pool must freeze all operational flows permanently.
+		// The continuation path lives in the outcome child pools, which can re-enter
+		// `SystemState.Operational` after migration / truth-auction processing completes.
+		// Post-fork claims use the dedicated migration and redemption functions instead of
+		// continuing to mutate the parent pool's accounting.
 		require(zoltar.getForkTime(universeId) == 0, 'Zoltar has forked');
 		require(systemState == SystemState.Operational, 'System is not operational');
 		_;
@@ -81,7 +86,7 @@ contract SecurityPool is ISecurityPool {
 		_;
 	}
 
-	constructor(address _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, PriceOracleManagerAndOperatorQueuer _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _securityMultiplier, address _truthAuction) {
+	constructor(address _securityPoolForker, ISecurityPoolFactory _securityPoolFactory, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, SecurityPoolOracleCoordinator _priceOracleManagerAndOperatorQueuer, IShareToken _shareToken, OpenOracle _openOracle, ISecurityPool _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _securityMultiplier, address _truthAuction) {
 		universeId = _universeId;
 		securityPoolFactory = _securityPoolFactory;
 		questionId = _questionId;
@@ -348,8 +353,10 @@ contract SecurityPool is ISecurityPool {
 	function redeemRep(address vault) external {
 		require(ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this) != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
 		updateVaultFees(vault);
-		uint256 repAmount = poolOwnershipToRep(securityVaults[vault].poolOwnership) - securityVaults[vault].lockedRepInEscalationGame;
+		uint256 vaultOwnership = securityVaults[vault].poolOwnership;
+		uint256 repAmount = poolOwnershipToRep(vaultOwnership) - securityVaults[vault].lockedRepInEscalationGame;
 		securityVaults[vault].poolOwnership = 0;
+		poolOwnershipDenominator -= vaultOwnership;
 		repToken.transfer(vault, repAmount);
 		emit RedeemRep(msg.sender, vault, repAmount);
 	}

@@ -1,8 +1,7 @@
-import { encodeAbiParameters, encodeDeployData, encodeFunctionData, getAddress, getCreate2Address, keccak256, parseAbiItem, toHex, zeroAddress, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type Hex, type MulticallReturnType } from 'viem'
+import { encodeAbiParameters, encodeDeployData, encodeFunctionData, getAddress, getCreate2Address, keccak256, parseAbiItem, zeroAddress, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type Hex, type MulticallReturnType } from 'viem'
 import { ABIS } from './abis.js'
-import { createRepTokenAddressHelper, createSecurityPoolAddressHelper } from './shared/addressDerivation.js'
 import { sortBigIntsAscending } from './shared/bigInt.js'
-import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from './shared/deploymentAddresses.js'
+import { createDeploymentStatusOracleAddressHelper } from './shared/deploymentAddresses.js'
 import { assertNever } from './lib/assert.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
 import { addOpenOracleBountyBuffer } from './lib/openOracle.js'
@@ -15,16 +14,13 @@ import {
 	Zoltar_Zoltar,
 	ZoltarQuestionData_ZoltarQuestionData,
 	peripherals_EscalationGame_EscalationGame,
-	peripherals_Multicall3_Multicall3,
 	peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
 	peripherals_SecurityPoolUtils_SecurityPoolUtils,
 	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
-	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
 	peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
 	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
-	peripherals_factories_ShareTokenFactory_ShareTokenFactory,
 	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	peripherals_openOracle_OpenOracle_OpenOracle,
 	peripherals_tokens_ShareToken_ShareToken,
@@ -53,7 +49,6 @@ import type {
 	ReportingDetails,
 	ReportingOutcomeKey,
 	SecurityPoolCreationResult,
-	SecurityPoolSystemState,
 	SecurityPoolVaultSummary,
 	SecurityVaultActionResult,
 	SecurityVaultDetails,
@@ -67,14 +62,54 @@ import type {
 	ZoltarMigrationActionResult,
 	ZoltarUniverseSummary,
 } from './types/contracts.js'
+import {
+	getEscalationSideLabel,
+	getMarketType,
+	getMinBigintValue,
+	getQuestionId,
+	getQuestionIdHex,
+	getReportingOutcomeKey,
+	getReportingOutcomeValue,
+	getSecurityPoolSystemState,
+	hasTimestamp,
+	hasTimestampAndNumber,
+	isBigintTriple,
+	isEscalationDepositPage,
+	isStringArray,
+	requireOpenOracleExtraDataTuple,
+	requireOpenOracleReportMetaTuple,
+	requireOpenOracleReportMetaTupleArray,
+	requireOpenOracleReportStatusTuple,
+	requireOpenOracleReportStatusTupleArray,
+	requireSecurityVaultTupleArray,
+	requireUniverseTupleArray,
+	toUint8Array,
+	type SecurityVaultTuple,
+	type UniverseTuple,
+} from './contracts/helpers.js'
+import {
+	PROXY_DEPLOYER_ADDRESS,
+	ZERO_SALT,
+	MULTICALL3_BYTECODE,
+	getEscalationGameFactoryByteCode,
+	getInfraContractAddresses,
+	getMulticall3Address,
+	getOpenOracleAddress,
+	getSecurityPoolAddresses,
+	getSecurityPoolForkerByteCode,
+	getSecurityPoolFactoryByteCode,
+	getShareTokenFactoryByteCode,
+	getZoltarAddress,
+	getZoltarInitCode,
+	getZoltarQuestionDataByteCode,
+} from './contracts/deploymentHelpers.js'
 
-const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
+export { getMulticall3Address, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
+
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
 const PROXY_DEPLOYER_RUNTIME_CODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3' satisfies Hex
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
-const ZERO_SALT = toHex(0, { size: 32 })
-const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
 const FUND_PROXY_DEPLOYER_SIGNER_AMOUNT = 10000000000000000n
 const LIQUIDATION_OPERATION_TYPE = 0
 const ESCALATION_TIME_LENGTH = 4_233_600n
@@ -94,55 +129,8 @@ type DeployedChildUniverseRecord = {
 }
 type DeployedChildUniversesPage = readonly [readonly bigint[], readonly bigint[], readonly DeployedChildUniverseRecord[]]
 type QuestionTuple = readonly [string, string, bigint, bigint, bigint, bigint, bigint, string]
-type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint, bigint]
-type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
 type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
-type OpenOracleReportMetaTuple = readonly [bigint, bigint, bigint, bigint, Address, number, Address, boolean, number, number, number, number]
-type OpenOracleReportStatusTuple = readonly [bigint, bigint, bigint, Address, number, number, Address, number, boolean, boolean]
-type OpenOracleExtraDataTuple = readonly [Hex, Address, number, number, Hex, Address, boolean, boolean, boolean]
-
-function bigintToAddress(value: bigint): Address {
-	return getAddress(`0x${value.toString(16).padStart(40, '0')}`)
-}
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
-
-function isStringArray(value: unknown): value is string[] {
-	return Array.isArray(value) && value.every(item => typeof item === 'string')
-}
-
-function isEscalationDepositPage(value: unknown): value is readonly { amount: bigint; cumulativeAmount: bigint; depositor: Address }[] {
-	return Array.isArray(value) && value.every(item => isObjectRecord(item) && typeof item['amount'] === 'bigint' && typeof item['cumulativeAmount'] === 'bigint' && typeof item['depositor'] === 'string')
-}
-
-function isBigintTriple(value: unknown): value is [bigint, bigint, bigint] {
-	return Array.isArray(value) && value.length === 3 && value.every(item => typeof item === 'bigint')
-}
-
-function getMinBigintValue(values: bigint[]) {
-	const [firstValue, ...restValues] = values
-	if (firstValue === undefined) return undefined
-
-	let minValue = firstValue
-	for (const value of restValues) {
-		if (value < minValue) {
-			minValue = value
-		}
-	}
-
-	return minValue
-}
-
-function hasTimestamp(value: unknown): value is { timestamp: bigint } {
-	return isObjectRecord(value) && typeof value['timestamp'] === 'bigint'
-}
-
-function hasTimestampAndNumber(value: unknown): value is { timestamp: bigint; number: bigint } {
-	return isObjectRecord(value) && typeof value['timestamp'] === 'bigint' && typeof value['number'] === 'bigint'
-}
 
 type SecurityPoolDeploymentQueryResult = {
 	completeSetCollateralAmount: bigint
@@ -156,78 +144,6 @@ type SecurityPoolDeploymentQueryResult = {
 	truthAuction: Address
 	universeId: bigint
 }
-
-const getSecurityPoolUtilsAddress = () =>
-	getCreate2Address({
-		bytecode: `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
-		from: PROXY_DEPLOYER_ADDRESS,
-		salt: ZERO_SALT,
-	})
-
-const getScalarOutcomesAddress = () =>
-	getCreate2Address({
-		bytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
-		from: PROXY_DEPLOYER_ADDRESS,
-		salt: ZERO_SALT,
-	})
-
-const getShareTokenFactoryByteCode = (zoltarAddress: Address) =>
-	encodeDeployData({
-		abi: peripherals_factories_ShareTokenFactory_ShareTokenFactory.abi,
-		bytecode: `0x${peripherals_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object}`,
-		args: [zoltarAddress],
-	})
-
-const getEscalationGameFactoryByteCode = () =>
-	encodeDeployData({
-		abi: peripherals_factories_EscalationGameFactory_EscalationGameFactory.abi,
-		bytecode: `0x${peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
-	})
-
-const getZoltarQuestionDataByteCode = () =>
-	encodeDeployData({
-		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		bytecode: applyLibraries(ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object),
-	})
-
-const getSecurityPoolForkerByteCode = (zoltarAddress: Address) =>
-	encodeDeployData({
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		bytecode: applyLibraries(peripherals_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),
-		args: [zoltarAddress],
-	})
-
-const getZoltarInitCode = (zoltarQuestionDataAddress: Address): Hex =>
-	encodeDeployData({
-		abi: Zoltar_Zoltar.abi,
-		bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-		args: [zoltarQuestionDataAddress],
-	})
-
-const getSecurityPoolFactoryByteCode = ({
-	escalationGameFactory,
-	openOracle,
-	priceOracleManagerAndOperatorQueuerFactory,
-	securityPoolForker,
-	shareTokenFactory,
-	uniformPriceDualCapBatchAuctionFactory,
-	zoltar,
-	zoltarQuestionData,
-}: {
-	escalationGameFactory: Address
-	openOracle: Address
-	priceOracleManagerAndOperatorQueuerFactory: Address
-	securityPoolForker: Address
-	shareTokenFactory: Address
-	uniformPriceDualCapBatchAuctionFactory: Address
-	zoltar: Address
-	zoltarQuestionData: Address
-}) =>
-	encodeDeployData({
-		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-		bytecode: applyLibraries(peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
-		args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, openOracle, zoltar, shareTokenFactory, uniformPriceDualCapBatchAuctionFactory, priceOracleManagerAndOperatorQueuerFactory],
-	})
 
 function getDeploymentStatusOracleStepAddresses() {
 	const addresses = getInfraContractAddresses()
@@ -280,95 +196,11 @@ function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracl
 	}
 }
 
-const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [
-	{
-		hash: keccak256(toHex('contracts/ScalarOutcomes.sol:ScalarOutcomes')).slice(2, 36),
-		address: getScalarOutcomesAddress(),
-	},
-	{
-		hash: keccak256(toHex('contracts/peripherals/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36),
-		address: getSecurityPoolUtilsAddress(),
-	},
-])
-
-export const { getZoltarAddress, getZoltarQuestionDataAddress } = createZoltarAddressHelpers({
-	getZoltarInitCode,
-	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
-	zeroSalt: ZERO_SALT,
-	zoltarQuestionDataBytecode: getZoltarQuestionDataByteCode,
-})
-
-const { getInfraContractAddresses } = createInfraContractAddressHelper({
-	getEscalationGameFactoryByteCode,
-	getSecurityPoolFactoryByteCode,
-	getSecurityPoolForkerByteCode,
-	getShareTokenFactoryByteCode,
-	getZoltarAddress,
-	getZoltarQuestionDataAddress,
-	multicall3Bytecode: MULTICALL3_BYTECODE,
-	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
-	priceOracleManagerAndOperatorQueuerFactoryBytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
-	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
-	scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
-	securityPoolUtilsBytecode: `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
-	uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
-	zeroSalt: ZERO_SALT,
-})
-
 const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddressHelper({
 	deploymentStatusOracleBytecode: getDeploymentStatusOracleByteCode,
 	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
 	zeroSalt: ZERO_SALT,
 })
-
-function getRepTokenAddress(universeId: bigint) {
-	return createRepTokenAddressHelper({
-		genesisRepTokenAddress: getGenesisReputationTokenAddress(),
-		getReputationTokenInitCode: zoltarAddress =>
-			encodeDeployData({
-				abi: ReputationToken_ReputationToken.abi,
-				bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
-				args: [zoltarAddress],
-			}),
-		getZoltarAddress,
-	}).getRepTokenAddress(universeId)
-}
-
-const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
-	getEscalationGameInitCode: securityPool =>
-		encodeDeployData({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
-			args: [securityPool],
-		}),
-	getInfraContracts: () => getInfraContractAddresses(),
-	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken) =>
-		encodeDeployData({
-			abi: peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.abi,
-			bytecode: `0x${peripherals_PriceOracleManagerAndOperatorQueuer_PriceOracleManagerAndOperatorQueuer.evm.bytecode.object}`,
-			args: [openOracle, repToken],
-		}),
-	getRepTokenAddress,
-	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, securityMultiplier, securityPoolFactory, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
-		encodeDeployData({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
-			args: [securityPoolForker, securityPoolFactory, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, truthAuction],
-		}),
-	getShareTokenInitCode: (securityPoolFactory, zoltarAddress, questionId) =>
-		encodeDeployData({
-			abi: peripherals_tokens_ShareToken_ShareToken.abi,
-			bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
-			args: [securityPoolFactory, zoltarAddress, questionId],
-		}),
-	getTruthAuctionInitCode: securityPoolForker =>
-		encodeDeployData({
-			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			bytecode: `0x${peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.evm.bytecode.object}`,
-			args: [securityPoolForker],
-		}),
-})
-
 async function readRequiredMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts): Promise<MulticallReturnType<TContracts, false>> {
 	return (await client.multicall({
 		allowFailure: false,
@@ -502,14 +334,6 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 	})
 	await client.waitForTransactionReceipt({ hash: deployHash })
 	return deployHash
-}
-
-export function getOpenOracleAddress() {
-	return getInfraContractAddresses().openOracle
-}
-
-export function getMulticall3Address() {
-	return getInfraContractAddresses().multicall3
 }
 
 export function getDeploymentSteps(): DeploymentStep[] {
@@ -686,103 +510,6 @@ function getDeploymentStep(id: DeploymentStepId) {
 	const step = getDeploymentSteps().find(candidate => candidate.id === id)
 	if (step === undefined) throw new Error(`Unknown deployment step: ${id}`)
 	return step
-}
-
-function getQuestionId(questionData: QuestionData, outcomeOptions: readonly string[]) {
-	return BigInt(
-		keccak256(
-			encodeAbiParameters(
-				[
-					{
-						type: 'tuple',
-						components: [
-							{ name: 'title', type: 'string' },
-							{ name: 'description', type: 'string' },
-							{ name: 'startTime', type: 'uint256' },
-							{ name: 'endTime', type: 'uint256' },
-							{ name: 'numTicks', type: 'uint256' },
-							{ name: 'displayValueMin', type: 'int256' },
-							{ name: 'displayValueMax', type: 'int256' },
-							{ name: 'answerUnit', type: 'string' },
-						],
-					},
-					{ type: 'string[]' },
-				],
-				[questionData, outcomeOptions],
-			),
-		),
-	)
-}
-
-function getQuestionIdHex(questionId: bigint) {
-	return `0x${questionId.toString(16)}`
-}
-
-function getReportingOutcomeValue(outcome: ReportingOutcomeKey) {
-	switch (outcome) {
-		case 'invalid':
-			return 0
-		case 'yes':
-			return 1
-		case 'no':
-			return 2
-		default:
-			throw new Error(`Unhandled reporting outcome: ${JSON.stringify(outcome)}`)
-	}
-}
-
-function getReportingOutcomeKey(outcome: bigint | number): ReportingOutcomeKey | 'none' {
-	switch (outcome) {
-		case 0:
-		case 0n:
-			return 'invalid'
-		case 1:
-		case 1n:
-			return 'yes'
-		case 2:
-		case 2n:
-			return 'no'
-		default:
-			return 'none'
-	}
-}
-
-function getEscalationSideLabel(key: ReportingOutcomeKey) {
-	switch (key) {
-		case 'invalid':
-			return 'Invalid'
-		case 'yes':
-			return 'Yes'
-		case 'no':
-			return 'No'
-		default:
-			throw new Error(`Unhandled escalation side: ${JSON.stringify(key)}`)
-	}
-}
-
-function getSecurityPoolSystemState(value: bigint | number): SecurityPoolSystemState {
-	switch (value) {
-		case 0:
-		case 0n:
-			return 'operational'
-		case 1:
-		case 1n:
-			return 'poolForked'
-		case 2:
-		case 2n:
-			return 'forkMigration'
-		case 3:
-		case 3n:
-			return 'forkTruthAuction'
-		default:
-			throw new Error(`Unhandled security pool system state: ${JSON.stringify(value)}`)
-	}
-}
-
-function getMarketType(questionData: QuestionData, outcomeLabels: string[]): MarketType {
-	if (outcomeLabels.length === 0 && questionData.numTicks > 0n) return 'scalar'
-	if (outcomeLabels.length === 2 && outcomeLabels[0] === 'Yes' && outcomeLabels[1] === 'No') return 'binary'
-	return 'categorical'
 }
 
 async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
@@ -1029,15 +756,18 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 					})),
 				)
 			).map(childUniverseId => BigInt(childUniverseId))
-			const childUniverseTuples = (await readRequiredMulticall(
-				client,
-				childUniverseIds.map(childUniverseId => ({
-					abi: Zoltar_Zoltar.abi,
-					functionName: 'universes',
-					address: getDeploymentStep('zoltar').address,
-					args: [childUniverseId],
-				})),
-			)) as unknown as UniverseTuple[]
+			const childUniverseTuples = requireUniverseTupleArray(
+				await readRequiredMulticall(
+					client,
+					childUniverseIds.map(childUniverseId => ({
+						abi: Zoltar_Zoltar.abi,
+						functionName: 'universes',
+						address: getDeploymentStep('zoltar').address,
+						args: [childUniverseId],
+					})),
+				),
+				'child universe tuple',
+			)
 
 			childUniverses = childOutcomeEntries.map(({ outcomeIndex, outcomeLabel }, index) => {
 				const childUniverseId = childUniverseIds[index]
@@ -1353,7 +1083,7 @@ async function loadSecurityPoolVaultSummaries(client: ReadClient, securityPoolAd
 		args: [vaultAddress],
 	}))
 	const vaultDataResults = await readRequiredMulticall(client, vaultDataContracts)
-	const vaultData = vaultDataResults as unknown as SecurityVaultTuple[]
+	const vaultData = requireSecurityVaultTupleArray(vaultDataResults, 'security vault tuple')
 	const poolOwnershipContracts: { contract: ContractFunctionParameters; index: number }[] = []
 	for (const [index, currentVaultData] of vaultData.entries()) {
 		const poolOwnership = currentVaultData[0]
@@ -1377,7 +1107,8 @@ async function loadSecurityPoolVaultSummaries(client: ReadClient, securityPoolAd
 		for (const [resultIndex, repDepositShare] of repDepositResults.entries()) {
 			const poolOwnershipContract = poolOwnershipContracts[resultIndex]
 			if (poolOwnershipContract === undefined) throw new Error('Unexpected pool ownership contract result')
-			repDeposits.set(poolOwnershipContract.index, BigInt(repDepositShare as bigint))
+			if (typeof repDepositShare !== 'bigint') throw new Error('Unexpected rep deposit result')
+			repDeposits.set(poolOwnershipContract.index, repDepositShare)
 		}
 	}
 
@@ -1548,9 +1279,9 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		]),
 		client.getBlock(),
 	])
-	const reportMeta = meta as OpenOracleReportMetaTuple
-	const reportStatus = status as OpenOracleReportStatusTuple
-	const reportExtra = extra as OpenOracleExtraDataTuple
+	const reportMeta = requireOpenOracleReportMetaTuple(meta, 'open oracle report meta')
+	const reportStatus = requireOpenOracleReportStatusTuple(status, 'open oracle report status')
+	const reportExtra = requireOpenOracleExtraDataTuple(extra, 'open oracle report extra')
 	if (!hasTimestampAndNumber(block)) throw new Error('Unexpected block response')
 	if (reportMeta[4] === zeroAddress) throw new Error(`Oracle report #${reportId.toString()} does not exist`)
 	const [token1Decimals, token2Decimals, token1Symbol, token2Symbol] = await readRequiredMulticall(client, [
@@ -1686,8 +1417,8 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			})),
 		),
 	])
-	const metas = metaResults as unknown as OpenOracleReportMetaTuple[]
-	const statuses = statusResults as unknown as OpenOracleReportStatusTuple[]
+	const metas = requireOpenOracleReportMetaTupleArray(metaResults, 'open oracle report metas')
+	const statuses = requireOpenOracleReportStatusTupleArray(statusResults, 'open oracle report statuses')
 	const tokenAddresses = new Set<Address>()
 	for (const meta of metas) {
 		if (meta[4] !== zeroAddress) tokenAddresses.add(meta[4])
@@ -2193,23 +1924,6 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 				args: [securityPoolAddress, getReportingOutcomeValue(outcome)],
 			})),
 	)
-}
-
-function toUint8(value: bigint) {
-	if (value < 0n || value > 255n) {
-		throw new Error(`Deposit index out of range: ${value.toString()}`)
-	}
-
-	const numberValue = Number(value)
-	if (!Number.isInteger(numberValue) || numberValue < 0 || numberValue > 255) {
-		throw new Error(`Deposit index out of range: ${value.toString()}`)
-	}
-
-	return numberValue
-}
-
-function toUint8Array(values: bigint[]) {
-	return values.map(value => toUint8(value))
 }
 
 export async function migrateEscalationDeposits(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {

@@ -175,8 +175,7 @@ describe.serial('OpenOracleSection integration', () => {
 
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
-		const injectedWindow = domEnvironment.window as unknown as Window & { ethereum?: InjectedEthereum }
-		injectedWindow.ethereum = createInjectedWalletShim(mockWindow, walletAddress)
+		Reflect.set(domEnvironment.window, 'ethereum', createInjectedWalletShim(mockWindow, walletAddress))
 		uiReadClient = createConnectedReadClient()
 	})
 

@@ -20,7 +20,7 @@ uint32 constant gasConsumedSettlement = 1000000; // TODO
 
 IWeth9 constant WETH = IWeth9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
-struct QueuedOperation {
+struct StagedOperation {
 	OperationType operation;
 	address initiatorVault;
 	address targetVault;
@@ -31,9 +31,9 @@ struct QueuedOperation {
 	uint256 snapshotDenominator;
 }
 
-contract PriceOracleManagerAndOperatorQueuer {
+contract SecurityPoolOracleCoordinator {
 	uint256 public pendingReportId;
-	uint256 public queuedPendingOperationId;
+	uint256 public pendingOperationSlotId;
 	uint256 public lastSettlementTimestamp;
 	uint256 public lastPrice; // (REP * PRICE_PRECISION) / ETH;
 	ReputationToken immutable reputationToken;
@@ -41,11 +41,12 @@ contract PriceOracleManagerAndOperatorQueuer {
 	OpenOracle public immutable openOracle;
 
 	event PriceReported(uint256 reportId, uint256 price);
-	event ExecutedQueuedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
+	event ExecutedStagedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
 
-	// operation queuing
-	uint256 public queuedOperationCounter;
-	mapping(uint256 => QueuedOperation) public queuedOperations;
+	// This is not a FIFO queue. We keep an append-only operation record and a single
+	// pending slot that settlement can auto-execute once a fresh oracle price arrives.
+	uint256 public stagedOperationCounter;
+	mapping(uint256 => StagedOperation) public stagedOperations;
 
 	constructor(OpenOracle _openOracle, ReputationToken _reputationToken) {
 		reputationToken = _reputationToken;
@@ -111,9 +112,9 @@ contract PriceOracleManagerAndOperatorQueuer {
 		lastSettlementTimestamp = block.timestamp;
 		lastPrice = price;
 		emit PriceReported(reportId, lastPrice);
-		if (queuedPendingOperationId != 0) { // TODO we maybe should allow executing couple operations?
-			executeQueuedOperation(queuedPendingOperationId);
-			queuedPendingOperationId = 0;
+		if (pendingOperationSlotId != 0) { // TODO we maybe should allow executing couple operations?
+			executeStagedOperation(pendingOperationSlotId);
+			pendingOperationSlotId = 0;
 		}
 	}
 
@@ -121,14 +122,14 @@ contract PriceOracleManagerAndOperatorQueuer {
 		return lastSettlementTimestamp != 0 && lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
 	}
 
-	function requestPriceIfNeededAndQueueOperation(OperationType operation, address targetVault, uint256 amount) public payable {
+	function requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, uint256 amount) public payable {
 		require(amount > 0, 'need to do non zero operation');
-		queuedOperationCounter++;
+		stagedOperationCounter++;
 		// Capture snapshot of the target vault state at queue time to prevent manipulation
 		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , , ) = securityPool.securityVaults(targetVault);
 		uint256 snapshotTotalRep = securityPool.repToken().balanceOf(address(securityPool));
 		uint256 snapshotDenominator = securityPool.poolOwnershipDenominator();
-		queuedOperations[queuedOperationCounter] = QueuedOperation({
+		stagedOperations[stagedOperationCounter] = StagedOperation({
 			operation: operation,
 			initiatorVault: msg.sender,
 			targetVault: targetVault,
@@ -142,10 +143,10 @@ contract PriceOracleManagerAndOperatorQueuer {
 		uint256 retained = 0; // amount to retain from msg.value (cost incurred)
 
 		if (isPriceValid()) {
-			executeQueuedOperation(queuedOperationCounter);
+			executeStagedOperation(stagedOperationCounter);
 			// no cost when price is valid
-		} else if (queuedPendingOperationId == 0) {
-			queuedPendingOperationId = queuedOperationCounter;
+		} else if (pendingOperationSlotId == 0) {
+			pendingOperationSlotId = stagedOperationCounter;
 			uint256 ethCost = getRequestPriceEthCost();
 			require(msg.value >= ethCost, 'not enough eth to request price');
 			retained += ethCost;
@@ -161,53 +162,53 @@ contract PriceOracleManagerAndOperatorQueuer {
 		}
 	}
 
-	function executeQueuedOperation(uint256 operationId) public {
-		require(queuedOperations[operationId].amount > 0, 'no such operation or already executed');
+	function executeStagedOperation(uint256 operationId) public {
+		require(stagedOperations[operationId].amount > 0, 'no such operation or already executed');
 		require(isPriceValid(), 'price is not valid to execute');
-		uint256 amount = queuedOperations[operationId].amount;
-		queuedOperations[operationId].amount = 0;
-		if (queuedOperations[operationId].operation == OperationType.Liquidation) {
+		uint256 amount = stagedOperations[operationId].amount;
+		stagedOperations[operationId].amount = 0;
+		if (stagedOperations[operationId].operation == OperationType.Liquidation) {
 			try
 				securityPool.performLiquidation(
-					queuedOperations[operationId].initiatorVault,
-					queuedOperations[operationId].targetVault,
+					stagedOperations[operationId].initiatorVault,
+					stagedOperations[operationId].targetVault,
 					amount,
-					queuedOperations[operationId].snapshotTargetOwnership,
-					queuedOperations[operationId].snapshotTargetAllowance,
-					queuedOperations[operationId].snapshotTotalRep,
-					queuedOperations[operationId].snapshotDenominator
+					stagedOperations[operationId].snapshotTargetOwnership,
+					stagedOperations[operationId].snapshotTargetAllowance,
+					stagedOperations[operationId].snapshotTotalRep,
+					stagedOperations[operationId].snapshotDenominator
 				)
 			{
-				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
+				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
-				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, false, reason);
 			} catch {
-				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
+				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, false, 'Unknown error');
 			}
-		} else if (queuedOperations[operationId].operation == OperationType.WithdrawRep) {
+		} else if (stagedOperations[operationId].operation == OperationType.WithdrawRep) {
 			try
-				securityPool.performWithdrawRep(queuedOperations[operationId].initiatorVault, amount)
+				securityPool.performWithdrawRep(stagedOperations[operationId].initiatorVault, amount)
 			{
-				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
+				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
-				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, false, reason);
 			} catch {
-				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
+				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, false, 'Unknown error');
 			}
 		} else {
 			try
-				securityPool.performSetSecurityBondsAllowance(queuedOperations[operationId].initiatorVault, amount)
+				securityPool.performSetSecurityBondsAllowance(stagedOperations[operationId].initiatorVault, amount)
 			{
-				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, true, '');
+				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, true, '');
 			} catch Error(string memory reason) {
-				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, reason);
+				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, false, reason);
 			} catch {
-				emit ExecutedQueuedOperation(operationId, queuedOperations[operationId].operation, false, 'Unknown error');
+				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, false, 'Unknown error');
 			}
 		}
 	}
 
-	function getQueuedOperation() public view returns (QueuedOperation memory) {
-		return queuedOperations[queuedPendingOperationId];
+	function getPendingOperationSlot() public view returns (StagedOperation memory) {
+		return stagedOperations[pendingOperationSlotId];
 	}
 }

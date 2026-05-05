@@ -43,12 +43,16 @@ void describe('active environment', () => {
 void describe('simulation backend', () => {
 	void test('reports wallet presence and returns the selected account', async () => {
 		const backend = await createSimulationBackend({ scenario: 'base' })
+		const primaryAccount = backend.accounts[0]
+		if (primaryAccount === undefined) {
+			throw new Error('Expected a primary simulation QA account')
+		}
 
 		expect(backend.id).toBe('simulation')
 		expect(backend.hasWallet()).toBe(true)
 		expect(await backend.getChainId()).toBe('0x539')
-		expect(await backend.getAccounts()).toEqual([backend.accounts[0]])
-		expect(await backend.requestAccounts()).toEqual([backend.accounts[0]])
+		expect(await backend.getAccounts()).toEqual([primaryAccount])
+		expect(await backend.requestAccounts()).toEqual([primaryAccount])
 		expect(backend.currentScenario).toBe('base')
 	})
 
@@ -73,7 +77,7 @@ void describe('simulation backend', () => {
 		unsubscribe()
 	})
 
-	void test('bootstraps with funded REP and WETH but without deployed app infrastructure', { timeout: 30_000 }, async () => {
+	void test('bootstraps with funded REP and WETH but without deployed app infrastructure', async () => {
 		const backend = await createSimulationBackend({ scenario: 'base' })
 		await backend.bootstrap()
 
@@ -99,9 +103,9 @@ void describe('simulation backend', () => {
 		expect(wethBalance > 0n).toBe(true)
 		expect(deploymentSnapshot.augurPlaceHolderDeployed).toBe(false)
 		expect(deploymentSnapshot.deploymentStatuses.every(step => step.deployed === false)).toBe(true)
-	})
+	}, 30_000)
 
-	void test('submits simulation writes without deprecated Tevm transaction RPC warnings', { timeout: 30_000 }, async () => {
+	void test('submits simulation writes without deprecated Tevm transaction RPC warnings', async () => {
 		const backend = await createSimulationBackend({ scenario: 'base' })
 		await backend.bootstrap()
 		const fromAccount = backend.accounts[0]
@@ -119,9 +123,9 @@ void describe('simulation backend', () => {
 
 		expect(receipt.transactionHash).toBe(hash)
 		expect(receipt.status).toBe('success')
-	})
+	}, 30_000)
 
-	void test('tracks simulation block, transaction, and time state as controls are used', { timeout: 30_000 }, async () => {
+	void test('tracks simulation block, transaction, and time state as controls are used', async () => {
 		const backend = await createSimulationBackend({ scenario: 'base' })
 		await backend.bootstrap()
 		const fromAccount = backend.accounts[0]
@@ -150,9 +154,9 @@ void describe('simulation backend', () => {
 		await backend.advanceTime(60n * 60n)
 		expect(backend.blockCountSinceReset).toBe(3n)
 		expect(backend.currentTimestamp > initialTimestamp).toBe(true)
-	})
+	}, 30_000)
 
-	void test('applies the configured simulation transaction receipt delay', { timeout: 30_000 }, async () => {
+	void test('applies the configured simulation transaction receipt delay', async () => {
 		const backend = await createSimulationBackend({ scenario: 'base' })
 		await backend.bootstrap()
 		const fromAccount = backend.accounts[0]
@@ -174,9 +178,9 @@ void describe('simulation backend', () => {
 		const elapsedMilliseconds = Date.now() - startTime
 
 		expect(elapsedMilliseconds >= 200).toBe(true)
-	})
+	}, 30_000)
 
-	void test('bootstraps the deployed scenario with app contracts already deployed', { timeout: 30_000 }, async () => {
+	void test('bootstraps the deployed scenario with app contracts already deployed', async () => {
 		const backend = await createSimulationBackend({ scenario: 'deployed' })
 		await backend.bootstrap()
 
@@ -185,9 +189,9 @@ void describe('simulation backend', () => {
 		expect(backend.currentScenario).toBe('deployed')
 		expect(deploymentSnapshot.augurPlaceHolderDeployed).toBe(true)
 		expect(deploymentSnapshot.deploymentStatuses.every(step => step.deployed)).toBe(true)
-	})
+	}, 30_000)
 
-	void test('bootstraps the security-pool scenario with one undercollateralized seeded vault', { timeout: 30_000 }, async () => {
+	void test('bootstraps the security-pool scenario with one undercollateralized seeded vault', async () => {
 		const backend = await createSimulationBackend({ scenario: 'security-pool' })
 		await backend.bootstrap()
 		const primaryAccount = backend.accounts[0]
@@ -213,5 +217,5 @@ void describe('simulation backend', () => {
 		expect(seededPool.totalSecurityBondAllowance).toBe(2_500n * 10n ** 18n)
 		expect(seededVault.repDepositShare).toBe(10_000n * 10n ** 18n)
 		expect(seededVault.securityBondAllowance).toBe(2_500n * 10n ** 18n)
-	})
+	}, 30_000)
 })
