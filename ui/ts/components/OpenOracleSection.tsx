@@ -328,7 +328,7 @@ function renderReportDetailsCard(
 				value={openOracleForm.reportId}
 				onInput={reportId => onOpenOracleFormChange({ reportId })}
 				action={
-					<button className='secondary' onClick={() => onLoadOracleReport(openOracleForm.reportId)} disabled={loadingOracleReport}>
+					<button className='secondary' aria-label={openOracleReportDetails === undefined ? 'Open report' : 'Refresh report'} onClick={() => onLoadOracleReport(openOracleForm.reportId)} disabled={loadingOracleReport}>
 						{loadingOracleReport ? <LoadingText>Loading...</LoadingText> : openOracleReportDetails === undefined ? 'Open report' : 'Refresh report'}
 					</button>
 				}
