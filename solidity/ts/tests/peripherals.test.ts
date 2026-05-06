@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from 'node:assert'
 import { decodeEventLog } from 'viem'
-import type { Address, Hash } from 'viem'
+import type { Abi, Address, Hash } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { sortBigIntsAscending } from '../../../shared/js/bigInt.js'
@@ -21,7 +21,7 @@ import { SystemState } from '../testsuite/simulator/types/peripheralTypes'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMigratedRep, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
-import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { getTotalRepPurchased } from '../testsuite/simulator/utils/contracts/auction'
 import {
 	createCompleteSet,
@@ -51,6 +51,28 @@ import {
 import { peripherals_EscalationGame_EscalationGame, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
+
+const getMigrationProxyAddressAbi = [
+	{
+		inputs: [
+			{
+				internalType: 'contract ISecurityPool',
+				name: 'securityPool',
+				type: 'address',
+			},
+		],
+		name: 'getMigrationProxyAddress',
+		outputs: [
+			{
+				internalType: 'address',
+				name: '',
+				type: 'address',
+			},
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+] satisfies Abi
 
 describe('Peripherals Contract Test Suite', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
@@ -1541,6 +1563,116 @@ describe('Peripherals Contract Test Suite', () => {
 
 		strictEqualTypeSafe(firstChildRepBalance, firstPoolForkData.repAtFork, 'the first child pool should receive only the REP migrated from the first parent pool')
 		strictEqualTypeSafe(secondChildRepBalance, secondPoolForkData.repAtFork, 'the second child pool should receive only the REP migrated from the second parent pool')
+	})
+
+	test('migration proxies deploy lazily at their predicted CREATE2 addresses', async () => {
+		const secondQuestionData = {
+			...questionData,
+			title: 'second security pool question for proxy deployment checks',
+		}
+		const secondQuestionId = getQuestionId(secondQuestionData, outcomes)
+		await createQuestion(client, secondQuestionData, outcomes)
+		await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier, MAX_RETENTION_RATE)
+
+		const secondPoolOwner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(secondPoolOwner, repDeposit, secondQuestionId)
+
+		const secondSecurityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, secondQuestionId, securityMultiplier)
+		const forkSourceQuestionData = {
+			...questionData,
+			title: 'fork source question for proxy deployment checks',
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const forkSourceQuestionId = getQuestionId(forkSourceQuestionData, outcomes)
+		await createQuestion(secondPoolOwner, forkSourceQuestionData, outcomes)
+		await mockWindow.setTime(forkSourceQuestionData.endTime + 1n)
+		await approveToken(secondPoolOwner, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(secondPoolOwner, genesisUniverse, forkSourceQuestionId)
+
+		const securityPoolForkerAddress = getInfraContractAddresses().securityPoolForker
+		const firstProxyAddress = await client.readContract({
+			abi: getMigrationProxyAddressAbi,
+			functionName: 'getMigrationProxyAddress',
+			address: securityPoolForkerAddress,
+			args: [securityPoolAddresses.securityPool],
+		})
+		const secondProxyAddress = await client.readContract({
+			abi: getMigrationProxyAddressAbi,
+			functionName: 'getMigrationProxyAddress',
+			address: securityPoolForkerAddress,
+			args: [secondSecurityPoolAddresses.securityPool],
+		})
+
+		assert.ok(!(await contractExists(client, firstProxyAddress)), 'first proxy should not exist before the first parent pool initiates its fork')
+		assert.ok(!(await contractExists(client, secondProxyAddress)), 'second proxy should not exist before the second parent pool initiates its fork')
+
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		assert.ok(await contractExists(client, firstProxyAddress), 'first proxy should deploy when the first parent pool initiates its fork')
+		assert.ok(!(await contractExists(client, secondProxyAddress)), 'second proxy should still be absent until its own pool initiates a fork')
+
+		await initiateSecurityPoolFork(secondPoolOwner, secondSecurityPoolAddresses.securityPool)
+		assert.ok(await contractExists(client, secondProxyAddress), 'second proxy should deploy when the second parent pool initiates its fork')
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: getMigrationProxyAddressAbi,
+				functionName: 'getMigrationProxyAddress',
+				address: securityPoolForkerAddress,
+				args: [securityPoolAddresses.securityPool],
+			}),
+			firstProxyAddress,
+			'first proxy address should stay stable after deployment',
+		)
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: getMigrationProxyAddressAbi,
+				functionName: 'getMigrationProxyAddress',
+				address: securityPoolForkerAddress,
+				args: [secondSecurityPoolAddresses.securityPool],
+			}),
+			secondProxyAddress,
+			'second proxy address should stay stable after deployment',
+		)
+	})
+
+	test('migration proxy balances match the expected lock and sweep flow', async () => {
+		const forkSourceQuestionData = {
+			...questionData,
+			title: 'fork source question for proxy balance checks',
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const forkSourceQuestionId = getQuestionId(forkSourceQuestionData, outcomes)
+		await createQuestion(client, forkSourceQuestionData, outcomes)
+		await mockWindow.setTime(forkSourceQuestionData.endTime + 1n)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
+		const securityPoolForkerAddress = getInfraContractAddresses().securityPoolForker
+		const migrationProxyAddress = await client.readContract({
+			abi: getMigrationProxyAddressAbi,
+			functionName: 'getMigrationProxyAddress',
+			address: securityPoolForkerAddress,
+			args: [securityPoolAddresses.securityPool],
+		})
+
+		assert.ok(!(await contractExists(client, migrationProxyAddress)), 'proxy should not exist before fork initiation')
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+
+		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		const yesUniverseId = getChildUniverseId(genesisUniverse, BigInt(QuestionOutcome.Yes))
+		const yesChildRepToken = getRepTokenAddress(yesUniverseId)
+
+		assert.ok(await contractExists(client, migrationProxyAddress), 'proxy should exist after fork initiation')
+		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(genesisUniverse), migrationProxyAddress), 0n, 'proxy should not keep parent REP after locking it into Zoltar')
+		strictEqualTypeSafe(await getMigrationRepBalance(client, genesisUniverse, migrationProxyAddress), forkData.repAtFork, 'proxy migration ledger should equal the parent pool REP tracked at fork time')
+		assert.ok(!(await contractExists(client, yesChildRepToken)), 'child REP token should not exist before migration splitting deploys it')
+
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		assert.ok(await contractExists(client, yesChildRepToken), 'migration splitting should deploy the child REP token')
+		strictEqualTypeSafe(await getERC20Balance(client, yesChildRepToken, migrationProxyAddress), forkData.repAtFork, 'proxy should temporarily hold the split child REP before the child pool exists')
+
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverseId, questionId, securityMultiplier).securityPool
+		strictEqualTypeSafe(await getERC20Balance(client, yesChildRepToken, migrationProxyAddress), 0n, 'proxy should sweep child REP away once the child pool exists')
+		strictEqualTypeSafe(await getERC20Balance(client, yesChildRepToken, yesSecurityPool), forkData.repAtFork, 'child pool should receive the full split REP after the proxy sweep')
 	})
 
 	test('migrateRepToZoltar keeps child-universe REP isolated when both parent pools pre-create the same child outcome', async () => {

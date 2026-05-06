@@ -29,7 +29,13 @@ contract SecurityPoolForker is ISecurityPoolForker {
 
 	mapping(ISecurityPool => ForkData) internal forkDataByPool;
 	mapping(ISecurityPool => mapping(uint8 => ISecurityPool)) internal childrenByPoolAndOutcome;
+	// Zoltar keys migration balances by `msg.sender`, so each parent pool needs its
+	// own caller identity to avoid sharing migration state with other pools in the
+	// same universe.
 	mapping(ISecurityPool => SecurityPoolMigrationProxy) internal migrationProxyByPool;
+	// Child-universe REP can be minted before the corresponding child security pool
+	// exists. Track those balances per parent/outcome until the child pool is ready
+	// to receive them.
 	mapping(ISecurityPool => mapping(uint8 => uint256)) internal pendingChildRepByPoolAndOutcome;
 	mapping(ISecurityPool => mapping(address => bool)) internal claimedAuctionProceedsByPoolAndVault;
 	mapping(address => bool) private trustedAuctionAddresses;
@@ -83,10 +89,26 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		zoltar = _zoltar;
 	}
 
+	function _getMigrationProxySalt(ISecurityPool securityPool) private pure returns (bytes32) {
+		return keccak256(abi.encode(address(securityPool)));
+	}
+
+	function getMigrationProxyAddress(ISecurityPool securityPool) public view returns (address) {
+		bytes32 salt = _getMigrationProxySalt(securityPool);
+		bytes32 initCodeHash = keccak256(abi.encodePacked(
+			type(SecurityPoolMigrationProxy).creationCode,
+			abi.encode(zoltar, securityPool.repToken(), securityPool.universeId(), address(this))
+		));
+		return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, initCodeHash)))));
+	}
+
+	// Lazily deploy one proxy per parent pool so that all Zoltar migration calls for
+	// that pool use a unique `msg.sender`. CREATE2 keeps the proxy address stable
+	// and predictable from the pool address before deployment.
 	function _getOrDeployMigrationProxy(ISecurityPool securityPool) private returns (SecurityPoolMigrationProxy migrationProxy) {
 		migrationProxy = migrationProxyByPool[securityPool];
 		if (address(migrationProxy) != address(0x0)) return migrationProxy;
-		migrationProxy = new SecurityPoolMigrationProxy(zoltar, securityPool.repToken(), securityPool.universeId(), address(this));
+		migrationProxy = new SecurityPoolMigrationProxy{ salt: _getMigrationProxySalt(securityPool) }(zoltar, securityPool.repToken(), securityPool.universeId(), address(this));
 		migrationProxyByPool[securityPool] = migrationProxy;
 	}
 
