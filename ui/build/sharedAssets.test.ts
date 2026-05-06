@@ -26,7 +26,6 @@ test('shared helper assets are mirrored into deployable ui paths', () => {
 	expect(contractsSource).toContain("from './contracts/helpers.js'")
 	expect(contractsSource).toContain("from './contracts/deploymentHelpers.js'")
 	expect(contractsSource).not.toContain('../../shared/js/')
-	expect(deploymentHelpersSource).toContain("from '../shared/addressDerivation.js'")
 	expect(deploymentHelpersSource).toContain("from '../shared/deploymentAddresses.js'")
 	expect(deploymentHelpersSource).not.toContain('../../../shared/js/')
 
