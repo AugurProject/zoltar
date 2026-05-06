@@ -300,7 +300,6 @@ export function App() {
 		navigate,
 		openOracleFormReportId: openOracleForm.reportId,
 		openOracleReportDetailsReportId: openOracleReportDetails?.reportId,
-		refreshSelectedPoolData,
 		route,
 		securityPoolAddress,
 		securityPoolResultHash: securityPoolResult?.deployPoolHash,

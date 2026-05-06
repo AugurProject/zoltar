@@ -243,7 +243,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 	const stateListeners = new Set<() => void>()
 	const impersonatedAccounts = new Set<string>()
 	let baselineState: DumpStateResult | undefined = undefined
-	let baselineBlockNumber = 0n
+	let baselineTransactionCount = 0n
 	let bootstrapError: string | undefined = undefined
 	let bootstrapLabel: string | undefined = undefined
 	let bootstrapProgress: number | undefined = undefined
@@ -273,7 +273,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 	const refreshSimulationState = async () => {
 		const chainState = await getSimulationChainState(memoryClient)
 		currentTimestamp = chainState.currentTimestamp
-		blockCountSinceReset = chainState.blockNumber >= baselineBlockNumber ? chainState.blockNumber - baselineBlockNumber : 0n
+		blockCountSinceReset = chainState.blockNumber
 	}
 
 	const sendRawTransactionInternal = async (serializedTransaction: SerializedTransaction) => {
@@ -506,11 +506,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 					scenario,
 				})
 				await refreshSimulationState()
-				const chainState = await getSimulationChainState(memoryClient)
-				baselineBlockNumber = chainState.blockNumber
-				currentTimestamp = chainState.currentTimestamp
-				blockCountSinceReset = 0n
-				transactionCountSinceReset = 0n
+				baselineTransactionCount = transactionCountSinceReset
 				bootstrapLabel = 'Simulation scenario ready'
 				bootstrapProgress = 1
 				bootstrapped = true
@@ -582,7 +578,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 				await ensureImpersonated(account)
 			}
 			selectedAccount = primaryAccount
-			transactionCountSinceReset = 0n
+			transactionCountSinceReset = baselineTransactionCount
 			await refreshSimulationState()
 			emitState()
 		},

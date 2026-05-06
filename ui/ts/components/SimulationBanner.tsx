@@ -62,9 +62,6 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 					<p className='detail'>Browser Simulation</p>
 				</div>
 			</div>
-			<div className='simulation-banner-warning'>
-				<strong>Developer controls only.</strong> These tools are part of the browser simulation harness, not the application itself.
-			</div>
 			<div className='contract-list simulation-banner-list'>
 				<div className='contract-row simulation-banner-row'>
 					<div className='contract-copy'>
@@ -107,8 +104,6 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 							<span className='badge ok'>Active</span>
 							<h3>QA account</h3>
 						</div>
-						<p className='address'>{selectedAccount.value}</p>
-						<p className='detail'>Switch between seeded accounts, reset the scenario, or move chain time forward.</p>
 					</div>
 					<select
 						className='simulation-control-select'
@@ -131,11 +126,11 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 				</div>
 				<div className='simulation-banner-stats'>
 					<div className='simulation-stat-card'>
-						<span className='simulation-stat-label'>Blocks since reset</span>
+						<span className='simulation-stat-label'>Blocks</span>
 						<strong>{blockCountSinceReset.value.toString()}</strong>
 					</div>
 					<div className='simulation-stat-card'>
-						<span className='simulation-stat-label'>Transactions since reset</span>
+						<span className='simulation-stat-label'>Transactions</span>
 						<strong>{transactionCountSinceReset.value.toString()}</strong>
 					</div>
 					<div className='simulation-stat-card simulation-stat-card-wide'>

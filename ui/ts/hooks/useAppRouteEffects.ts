@@ -1,4 +1,4 @@
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 
 type AppRoute = 'deploy' | 'not-found' | 'open-oracle' | 'security-pools' | 'zoltar'
 
@@ -10,7 +10,6 @@ type Props = {
 	navigate: (route: 'deploy' | 'open-oracle' | 'security-pools' | 'zoltar') => void
 	openOracleFormReportId: string
 	openOracleReportDetailsReportId: bigint | undefined
-	refreshSelectedPoolData: () => void
 	route: AppRoute
 	securityPoolAddress: string
 	securityPoolResultHash: string | undefined
@@ -29,7 +28,19 @@ export function shouldLoadOpenOracleReportFromUrl({ environmentReady, route, url
 	return environmentReady && route === 'open-oracle' && urlOpenOracleReportId !== ''
 }
 
-export function shouldRefreshSelectedPoolForRoute({ environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete }: { environmentReady: boolean; route: AppRoute; securityPoolAddress: string; selectedPoolSecurityPoolAddress: string | undefined; walletBootstrapComplete: boolean }) {
+export function shouldRefreshSelectedPoolForRoute({
+	environmentReady,
+	route,
+	securityPoolAddress,
+	selectedPoolSecurityPoolAddress,
+	walletBootstrapComplete,
+}: {
+	environmentReady: boolean
+	route: AppRoute
+	securityPoolAddress: string
+	selectedPoolSecurityPoolAddress: string | undefined
+	walletBootstrapComplete: boolean
+}) {
 	return environmentReady && route === 'security-pools' && walletBootstrapComplete && securityPoolAddress !== '' && selectedPoolSecurityPoolAddress === undefined
 }
 
@@ -45,7 +56,6 @@ export function useAppRouteEffects({
 	navigate,
 	openOracleFormReportId,
 	openOracleReportDetailsReportId,
-	refreshSelectedPoolData,
 	route,
 	securityPoolAddress,
 	securityPoolResultHash,
@@ -59,10 +69,26 @@ export function useAppRouteEffects({
 	urlOpenOracleReportId,
 	walletBootstrapComplete,
 }: Props) {
+	const loadOracleReportRef = useRef(loadOracleReport)
+	const loadSecurityPoolsRef = useRef(loadSecurityPools)
+	const navigateRef = useRef(navigate)
+	const lastRequestedOpenOracleReportId = useRef<string | undefined>(undefined)
+	const lastRequestedSecurityPoolAddress = useRef<string | undefined>(undefined)
+
+	loadOracleReportRef.current = loadOracleReport
+	loadSecurityPoolsRef.current = loadSecurityPools
+	navigateRef.current = navigate
+
 	useEffect(() => {
-		if (!shouldLoadOpenOracleReportFromUrl({ environmentReady, route, urlOpenOracleReportId })) return
-		void loadOracleReport(urlOpenOracleReportId)
-	}, [environmentReady, loadOracleReport, route, urlOpenOracleReportId])
+		const shouldLoadReport = shouldLoadOpenOracleReportFromUrl({ environmentReady, route, urlOpenOracleReportId })
+		if (!shouldLoadReport) {
+			lastRequestedOpenOracleReportId.current = undefined
+			return
+		}
+		if (lastRequestedOpenOracleReportId.current === urlOpenOracleReportId) return
+		lastRequestedOpenOracleReportId.current = urlOpenOracleReportId
+		void loadOracleReportRef.current(urlOpenOracleReportId)
+	}, [environmentReady, route, urlOpenOracleReportId])
 
 	useEffect(() => {
 		if (openOracleReportDetailsReportId !== undefined) {
@@ -94,28 +120,33 @@ export function useAppRouteEffects({
 				walletBootstrapComplete,
 			})
 		) {
+			if (route !== 'security-pools' || securityPoolAddress === '' || selectedPoolSecurityPoolAddress !== undefined || !environmentReady || !walletBootstrapComplete) {
+				lastRequestedSecurityPoolAddress.current = undefined
+			}
 			return
 		}
-		refreshSelectedPoolData()
-	}, [environmentReady, refreshSelectedPoolData, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete])
+		if (lastRequestedSecurityPoolAddress.current === securityPoolAddress) return
+		lastRequestedSecurityPoolAddress.current = securityPoolAddress
+		void loadSecurityPoolsRef.current(securityPoolAddress)
+	}, [environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete])
 
 	useEffect(() => {
 		if (!environmentReady) return
 		if (route !== 'security-pools') return
 		if (securityPoolResultHash === undefined) return
-		void loadSecurityPools()
-	}, [environmentReady, loadSecurityPools, route, securityPoolResultHash])
+		void loadSecurityPoolsRef.current()
+	}, [environmentReady, route, securityPoolResultHash])
 
 	useEffect(() => {
 		if (!environmentReady) return
 		if (route !== 'security-pools') return
 		if (tradingResultHash === undefined) return
-		refreshSelectedPoolData()
-	}, [environmentReady, refreshSelectedPoolData, route, tradingResultHash])
+		void loadSecurityPoolsRef.current(securityPoolAddress)
+	}, [environmentReady, route, securityPoolAddress, tradingResultHash])
 
 	useEffect(() => {
 		if (!augurPlaceHolderDeploymentMissing) return
 		if (route === 'deploy') return
-		navigate('deploy')
-	}, [augurPlaceHolderDeploymentMissing, navigate, route])
+		navigateRef.current('deploy')
+	}, [augurPlaceHolderDeploymentMissing, route])
 }
