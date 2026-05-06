@@ -162,6 +162,14 @@ function getMockRepPrice() {
 	return controller.repPerEthPrice
 }
 
+function getMockRepUsdcPrice() {
+	const controller = getActiveSimulationController()
+	if (controller === undefined) {
+		throw new Error('Simulation REP/USDC mock pricing is unavailable')
+	}
+	return controller.repPerUsdcPrice
+}
+
 function calculateMockAmountOut(tokenIn: Address, tokenOut: Address, amountIn: bigint) {
 	const repPerEthPrice = getMockRepPrice()
 	const tokenInIsEth = tokenIn === ETH_ADDRESS || tokenIn === getWethAddress()
@@ -176,18 +184,37 @@ function calculateMockAmountOut(tokenIn: Address, tokenOut: Address, amountIn: b
 	throw new Error('Simulation REP/ETH mock pricing only supports REP paired with ETH or WETH')
 }
 
+function calculateMockUsdcAmountOut(tokenIn: Address, tokenOut: Address, amountIn: bigint) {
+	const repPerUsdcPrice = getMockRepUsdcPrice()
+	const tokenInIsUsdc = tokenIn === USDC_ADDRESS
+	const tokenOutIsUsdc = tokenOut === USDC_ADDRESS
+
+	if (!tokenInIsUsdc && tokenOutIsUsdc) {
+		return (amountIn * repPerUsdcPrice) / 10n ** 18n
+	}
+	if (tokenInIsUsdc && !tokenOutIsUsdc) {
+		return (amountIn * 10n ** 18n) / repPerUsdcPrice
+	}
+	throw new Error('Simulation REP/USDC mock pricing only supports REP paired with USDC')
+}
+
 async function maybeQuoteMockRepPair(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint): Promise<{ amountOut: bigint; source: MockQuoteSource } | undefined> {
 	if (!isMockRepPricingEnabled()) return undefined
 
 	const tokenInIsEth = tokenIn === ETH_ADDRESS || tokenIn === getWethAddress()
 	const tokenOutIsEth = tokenOut === ETH_ADDRESS || tokenOut === getWethAddress()
-	if (tokenInIsEth === tokenOutIsEth) return undefined
+	const tokenInIsUsdc = tokenIn === USDC_ADDRESS
+	const tokenOutIsUsdc = tokenOut === USDC_ADDRESS
 
-	const repToken = tokenInIsEth ? tokenOut : tokenIn
+	if (!tokenInIsEth && !tokenOutIsEth && !tokenInIsUsdc && !tokenOutIsUsdc) return undefined
+	if ((tokenInIsEth || tokenOutIsEth) && (tokenInIsUsdc || tokenOutIsUsdc)) return undefined
+	if (tokenInIsEth === tokenOutIsEth && tokenInIsUsdc === tokenOutIsUsdc) return undefined
+
+	const repToken = tokenInIsEth || tokenInIsUsdc ? tokenOut : tokenIn
 	if (!(await isRepToken(client, repToken))) return undefined
 
 	return {
-		amountOut: calculateMockAmountOut(tokenIn, tokenOut, amountIn),
+		amountOut: tokenInIsUsdc || tokenOutIsUsdc ? calculateMockUsdcAmountOut(tokenIn, tokenOut, amountIn) : calculateMockAmountOut(tokenIn, tokenOut, amountIn),
 		source: {
 			label: 'MOCK',
 			poolUrl: undefined,
@@ -202,7 +229,7 @@ async function assertMockPairSupported(client: ReadClient, tokenIn: Address, tok
 	if (mockResult !== undefined) {
 		return mockResult
 	}
-	throw new Error('Simulation mock pricing only supports REP / ETH and REP / WETH pairs.')
+	throw new Error('Simulation mock pricing only supports REP / ETH, REP / WETH, and REP / USDC pairs.')
 }
 
 export function buildUniswapV4PoolId(tokenA: Address, tokenB: Address, poolConfig: PoolConfig): Hex {

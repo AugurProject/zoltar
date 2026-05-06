@@ -218,6 +218,7 @@ type SimulationEngine = {
 	reset(): Promise<void>
 	selectAccount(address: Address): Promise<void>
 	setRepPerEthPrice(value: bigint): void
+	setRepPerUsdcPrice(value: bigint): void
 	setQueryDelayMilliseconds(value: number): void
 	setTransactionDelayMilliseconds(value: number): void
 	subscribe(handler: () => void): () => void
@@ -255,6 +256,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 	let currentTimestamp = 0n
 	let queryDelayMilliseconds = 0
 	let repPerEthPrice = 10n ** 18n
+	let repPerUsdcPrice = 10n ** 6n
 	let selectedAccount = primaryAccount
 	let transactionCountSinceReset = 0n
 	let transactionDelayMilliseconds = 1_000
@@ -538,6 +540,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		isBootstrapping: bootstrapping,
 		queryDelayMilliseconds,
 		repPerEthPrice,
+		repPerUsdcPrice,
 		selectedAccount,
 		transactionCountSinceReset,
 		transactionDelayMilliseconds,
@@ -583,6 +586,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			selectedAccount = primaryAccount
 			transactionCountSinceReset = baselineTransactionCount
 			repPerEthPrice = 10n ** 18n
+			repPerUsdcPrice = 10n ** 6n
 			await refreshSimulationState()
 			emitState()
 		},
@@ -599,6 +603,13 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 				throw new Error('Simulation REP/ETH price must be greater than zero')
 			}
 			repPerEthPrice = value
+			emitState()
+		},
+		setRepPerUsdcPrice: value => {
+			if (value <= 0n) {
+				throw new Error('Simulation REP/USDC price must be greater than zero')
+			}
+			repPerUsdcPrice = value
 			emitState()
 		},
 		setQueryDelayMilliseconds: value => {

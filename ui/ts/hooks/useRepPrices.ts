@@ -55,7 +55,7 @@ export function useRepPrices(): RepPrices {
 
 				if (repUsdcResult.status === 'fulfilled') {
 					repUsdcPrice.value = repUsdcResult.value.amountOut
-					repUsdcSource.value = 'v4'
+					repUsdcSource.value = repUsdcResult.value.source.protocol === 'mock' ? 'mock' : 'v4'
 					repUsdcSourceUrl.value = repUsdcResult.value.source.poolUrl
 				} else if (!isRepPricingEnabled()) {
 					repUsdcPrice.value = undefined

@@ -12,6 +12,7 @@ export type SimulationWorkerState = {
 	isBootstrapping: boolean
 	queryDelayMilliseconds: number
 	repPerEthPrice: bigint
+	repPerUsdcPrice: bigint
 	selectedAccount: Address
 	transactionCountSinceReset: bigint
 	transactionDelayMilliseconds: number
@@ -28,6 +29,7 @@ export type SimulationWorkerCallMap = {
 	reset: { params: undefined; result: undefined }
 	selectAccount: { params: { address: Address }; result: undefined }
 	setRepPerEthPrice: { params: { value: bigint }; result: undefined }
+	setRepPerUsdcPrice: { params: { value: bigint }; result: undefined }
 	setQueryDelayMilliseconds: { params: { value: number }; result: undefined }
 	setTransactionDelayMilliseconds: { params: { value: number }; result: undefined }
 	waitForTransactionReceipt: { params: { hash: Hash }; result: TransactionReceipt }
