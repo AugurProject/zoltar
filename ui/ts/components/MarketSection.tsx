@@ -1,21 +1,18 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect } from 'preact/hooks'
 import { DataGrid } from './DataGrid.js'
 import { ForkZoltarSection } from './ForkZoltarSection.js'
 import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
 import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
 import { SectionModeTabs } from './SectionModeTabs.js'
-import { SectionBlock } from './SectionBlock.js'
+import { TabbedSectionBlock } from './TabbedSectionBlock.js'
 import { ZoltarMigrationSection } from './ZoltarMigrationSection.js'
 import { isMainnetChain } from '../lib/network.js'
-import { resolveEnumValue } from '../lib/viewState.js'
-import { readZoltarViewQueryParam, writeZoltarViewQueryParam } from '../lib/urlParams.js'
 import type { MarketSectionProps } from '../types/components.js'
-
-type ZoltarView = 'questions' | 'create' | 'fork' | 'migrate'
 
 export function MarketSection({
 	accountState,
+	activeView,
 	hasLoadedZoltarQuestions,
 	loadingZoltarForkAccess,
 	zoltarForkActiveAction,
@@ -26,6 +23,7 @@ export function MarketSection({
 	marketCreating,
 	marketError,
 	marketResult,
+	onActiveViewChange,
 	onApproveZoltarForkRep,
 	onCreateChildUniverseForOutcomeIndex,
 	onCreateMarket,
@@ -58,28 +56,23 @@ export function MarketSection({
 	zoltarUniverse,
 	zoltarUniverseState,
 }: MarketSectionProps) {
-	const [view, setView] = useState<ZoltarView>(() => resolveEnumValue<ZoltarView>(readZoltarViewQueryParam(window.location.search), 'questions', ['questions', 'create', 'fork', 'migrate']))
 	const hasForked = zoltarUniverse?.hasForked === true
 	const isMainnet = isMainnetChain(accountState.chainId)
+	const view = activeView
 	const showUniverseSummary = view === 'questions' && zoltarUniverse !== undefined
-
-	useEffect(() => {
-		const nextSearch = writeZoltarViewQueryParam(window.location.search, view)
-		window.history.replaceState({}, '', `${window.location.pathname}${nextSearch}${window.location.hash}`)
-	}, [view])
 
 	useEffect(() => {
 		if (view !== 'migrate') return
 		if (zoltarUniverse === undefined) return
 		if (hasForked) return
-		setView('questions')
-	}, [hasForked, view, zoltarUniverse])
+		onActiveViewChange('questions')
+	}, [hasForked, onActiveViewChange, view, zoltarUniverse])
 
 	const renderModeTabs = () => (
 		<SectionModeTabs
 			ariaLabel='Zoltar views'
 			value={view}
-			onChange={setView}
+			onChange={onActiveViewChange}
 			options={[
 				{ label: 'Questions', value: 'questions' },
 				{ label: 'Create Question', value: 'create' },
@@ -91,8 +84,7 @@ export function MarketSection({
 
 	return (
 		<div className='route-view-flow'>
-			<SectionBlock density='compact' title='Zoltar'>
-				{renderModeTabs()}
+			<TabbedSectionBlock density='compact' tabs={renderModeTabs()} title='Zoltar'>
 				{showUniverseSummary ? (
 					<MarketOverviewSection
 						accountAddress={accountState.address}
@@ -120,7 +112,7 @@ export function MarketSection({
 						</div>
 					</DataGrid>
 				)}
-			</SectionBlock>
+			</TabbedSectionBlock>
 			<div className='workflow-stack route-workflow-stack'>
 				{view === 'questions' ? (
 					<MarketQuestionsSection
@@ -129,7 +121,7 @@ export function MarketSection({
 						loadingZoltarQuestionCount={loadingZoltarQuestionCount}
 						loadingZoltarQuestions={loadingZoltarQuestions}
 						onLoadZoltarQuestions={onLoadZoltarQuestions}
-						onOpenForkTab={() => setView('fork')}
+						onOpenForkTab={() => onActiveViewChange('fork')}
 						onUseQuestionForFork={onUseQuestionForFork}
 						onUseQuestionForPool={onUseQuestionForPool}
 						zoltarQuestionCount={zoltarQuestionCount}
@@ -149,7 +141,7 @@ export function MarketSection({
 						marketResult={marketResult}
 						onCreateMarket={onCreateMarket}
 						onMarketFormChange={onMarketFormChange}
-						onOpenForkTab={() => setView('fork')}
+						onOpenForkTab={() => onActiveViewChange('fork')}
 						onResetMarket={onResetMarket}
 						onUseQuestionForFork={onUseQuestionForFork}
 						onUseQuestionForPool={onUseQuestionForPool}

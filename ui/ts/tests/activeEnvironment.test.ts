@@ -54,7 +54,24 @@ void describe('simulation backend', () => {
 		expect(await backend.getAccounts()).toEqual([primaryAccount])
 		expect(await backend.requestAccounts()).toEqual([primaryAccount])
 		expect(backend.currentScenario).toBe('baseline')
+		expect(backend.isBootstrapped).toBe(false)
+		expect(backend.isBootstrapping).toBe(false)
 	})
+
+	void test('tracks simulation bootstrap readiness state', async () => {
+		const backend = await createSimulationBackend({ scenario: 'baseline' })
+
+		const bootstrapPromise = backend.bootstrap()
+		expect(backend.isBootstrapping).toBe(true)
+		expect(backend.isBootstrapped).toBe(false)
+
+		await backend.waitUntilReady()
+		await bootstrapPromise
+
+		expect(backend.isBootstrapping).toBe(false)
+		expect(backend.isBootstrapped).toBe(true)
+		expect(backend.bootstrapError).toBeUndefined()
+	}, 30_000)
 
 	void test('emits account-change events when switching QA accounts', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
@@ -135,8 +152,10 @@ void describe('simulation backend', () => {
 		}
 
 		const initialTimestamp = backend.currentTimestamp
-		expect(backend.blockCountSinceReset).toBe(0n)
-		expect(backend.transactionCountSinceReset).toBe(0n)
+		const initialBlockCount = backend.blockCountSinceReset
+		const initialTransactionCount = backend.transactionCountSinceReset
+		expect(initialBlockCount > 0n).toBe(true)
+		expect(initialTransactionCount > 0n).toBe(true)
 
 		const writeClient = backend.createWriteClient(fromAccount)
 		const hash = await writeClient.sendTransaction({
@@ -145,14 +164,14 @@ void describe('simulation backend', () => {
 		})
 		await writeClient.waitForTransactionReceipt({ hash })
 
-		expect(backend.blockCountSinceReset).toBe(1n)
-		expect(backend.transactionCountSinceReset).toBe(1n)
+		expect(backend.blockCountSinceReset).toBe(initialBlockCount + 1n)
+		expect(backend.transactionCountSinceReset).toBe(initialTransactionCount + 1n)
 
 		await backend.mineBlock()
-		expect(backend.blockCountSinceReset).toBe(2n)
+		expect(backend.blockCountSinceReset).toBe(initialBlockCount + 2n)
 
 		await backend.advanceTime(60n * 60n)
-		expect(backend.blockCountSinceReset).toBe(3n)
+		expect(backend.blockCountSinceReset).toBe(initialBlockCount + 3n)
 		expect(backend.currentTimestamp > initialTimestamp).toBe(true)
 	}, 30_000)
 

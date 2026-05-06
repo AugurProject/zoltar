@@ -24,6 +24,7 @@ type UseZoltarForkParameters = {
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: () => Promise<void>
 	refreshZoltarUniverse: () => Promise<void>
+	shouldAutoLoadForkAccess: boolean
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
@@ -37,7 +38,7 @@ function formatQuestionId(questionId: bigint) {
 	return `0x${questionId.toString(16)}`
 }
 
-export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUniverse, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, refreshZoltarUniverse, zoltarUniverse }: UseZoltarForkParameters) {
+export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUniverse, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, refreshZoltarUniverse, shouldAutoLoadForkAccess, zoltarUniverse }: UseZoltarForkParameters) {
 	const forkAccessLoad = useLoadController()
 	const zoltarForkError = useSignal<string | undefined>(undefined)
 	const zoltarForkPending = useSignal(false)
@@ -232,8 +233,9 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 		)
 
 	useEffect(() => {
+		if (!shouldAutoLoadForkAccess) return
 		void loadZoltarForkAccess().catch(() => undefined)
-	}, [accountAddress, activeUniverseId, zoltarUniverse?.reputationToken, zoltarUniverse?.childUniverses.map(child => child.universeId.toString()).join(',')])
+	}, [accountAddress, activeUniverseId, shouldAutoLoadForkAccess, zoltarUniverse?.reputationToken, zoltarUniverse?.childUniverses.map(child => child.universeId.toString()).join(',')])
 
 	return {
 		approveZoltarForkRep,

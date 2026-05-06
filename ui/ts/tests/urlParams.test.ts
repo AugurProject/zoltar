@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { readOpenOracleReportIdQueryParam, readSecurityPoolQueryParam, readUniverseQueryParam, writeOpenOracleReportIdQueryParam, writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../lib/urlParams.js'
+import { readOpenOracleReportIdQueryParam, readSecurityPoolQueryParam, readUniverseQueryParam, readZoltarViewQueryParam, writeOpenOracleReportIdQueryParam, writeSecurityPoolQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '../lib/urlParams.js'
 
 void describe('url params', () => {
 	void test('reads a universe query param', () => {
@@ -30,5 +30,13 @@ void describe('url params', () => {
 		expect(writeOpenOracleReportIdQueryParam('', '42')).toBe('?openOracleReportId=42')
 		expect(writeOpenOracleReportIdQueryParam('?foo=bar', '42')).toBe('?foo=bar&openOracleReportId=42')
 		expect(writeOpenOracleReportIdQueryParam('?foo=bar&openOracleReportId=42', undefined)).toBe('?foo=bar')
+	})
+
+	void test('reads and writes a zoltar view query param', () => {
+		expect(readZoltarViewQueryParam('?zoltarView=questions')).toBe('questions')
+		expect(readZoltarViewQueryParam('?zoltarView=')).toBe(undefined)
+		expect(writeZoltarViewQueryParam('', 'questions')).toBe('?zoltarView=questions')
+		expect(writeZoltarViewQueryParam('?foo=bar', 'questions')).toBe('?foo=bar&zoltarView=questions')
+		expect(writeZoltarViewQueryParam('?foo=bar&zoltarView=questions', undefined)).toBe('?foo=bar')
 	})
 })

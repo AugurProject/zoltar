@@ -15,6 +15,7 @@ import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from
 type UseSecurityPoolCreationParameters = {
 	accountAddress: Address | undefined
 	deploymentStatuses: DeploymentStatus[]
+	enabled: boolean
 	onTransaction: (hash: Hash) => void
 	onTransactionFinished: () => void
 	onTransactionRequested: () => void
@@ -34,7 +35,7 @@ export function resolveSecurityPoolQuestionLookupInput(marketIdInput: string) {
 	}
 }
 
-export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, zoltarUniverseHasForked }: UseSecurityPoolCreationParameters) {
+export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, zoltarUniverseHasForked }: UseSecurityPoolCreationParameters) {
 	const marketDetailsLoad = useLoadController()
 	const duplicateOriginPoolCheckLoad = useLoadController()
 	const marketDetails = useSignal<MarketDetails | undefined>(undefined)
@@ -183,10 +184,12 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 	}
 
 	useEffect(() => {
+		if (!enabled) return
 		void loadDuplicateOriginPoolState()
-	}, [securityPoolForm.value.marketId, securityPoolForm.value.securityMultiplier])
+	}, [enabled, securityPoolForm.value.marketId, securityPoolForm.value.securityMultiplier])
 
 	useEffect(() => {
+		if (!enabled) return
 		const marketId = resolveSecurityPoolQuestionLookupInput(securityPoolForm.value.marketId)
 		const isCurrent = nextMarketDetailsLoad()
 
@@ -197,7 +200,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, on
 		}
 
 		void loadMarketById(marketId, { clearExisting: true, isCurrent })
-	}, [deploymentStatuses, securityPoolForm.value.marketId])
+	}, [deploymentStatuses, enabled, securityPoolForm.value.marketId])
 
 	return {
 		checkingDuplicateOriginPool: duplicateOriginPoolCheckLoad.isLoading.value,

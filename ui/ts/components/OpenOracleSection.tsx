@@ -16,6 +16,7 @@ import { RouteHeader } from './RouteHeader.js'
 import { SectionModeTabs } from './SectionModeTabs.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
+import { TabbedSectionBlock } from './TabbedSectionBlock.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -724,7 +725,7 @@ export function OpenOracleSection({
 			{view === 'create' ? (
 				<div className='workflow-stack route-workflow-stack'>
 					{renderLatestActionCard(openOracleResult)}
-					<SectionBlock actions={renderModeTabs()} title='Create Open Oracle Game' description='Create a standalone Open Oracle game directly. This does not queue an oracle-manager operation.'>
+					<TabbedSectionBlock tabs={renderModeTabs()} title='Create Open Oracle Game' description='Create a standalone Open Oracle game directly. This does not queue an oracle-manager operation.'>
 						<div className='form-grid'>
 							<div className='field-row'>
 								<label className='field'>
@@ -790,7 +791,7 @@ export function OpenOracleSection({
 								<TransactionActionButton idleLabel='Create Open Oracle Game' pendingLabel='Creating...' onClick={onCreateOpenOracleGame} pending={loadingOpenOracleCreate} availability={{ disabled: !isConnected, reason: !isConnected ? 'Connect a wallet before creating an Open Oracle game.' : undefined }} />
 							</div>
 						</div>
-					</SectionBlock>
+					</TabbedSectionBlock>
 					<ErrorNotice message={openOracleError} />
 				</div>
 			) : undefined}

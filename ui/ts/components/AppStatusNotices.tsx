@@ -9,6 +9,7 @@ import type { ZoltarUniverseSummary } from '../types/contracts.js'
 type AppStatusNoticesProps = {
 	errorMessage: string | undefined
 	hasInjectedWallet: boolean
+	simulationBootstrapError: string | undefined
 	showAugurPlaceHolderDeploymentWarning: boolean
 	showZoltarUniverseForkedWarning: boolean
 	transactionState: TransactionState
@@ -16,9 +17,10 @@ type AppStatusNoticesProps = {
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
-export function AppStatusNotices({ errorMessage, hasInjectedWallet, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, transactionState, walletPresentation, zoltarUniverse }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, hasInjectedWallet, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, transactionState, walletPresentation, zoltarUniverse }: AppStatusNoticesProps) {
 	return (
 		<div className='page-notices'>
+			{simulationBootstrapError === undefined ? undefined : <div className='notice error'>{simulationBootstrapError}</div>}
 			{showZoltarUniverseForkedWarning && zoltarUniverse !== undefined ? (
 				<div className='notice error'>
 					{formatUniverseLabel(zoltarUniverse.universeId)} has forked on <TimestampValue timestamp={zoltarUniverse.forkTime} />.

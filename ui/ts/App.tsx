@@ -28,12 +28,14 @@ import type { TransactionState } from './lib/transactionState.js'
 import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
 import { getUniversePresentation, getWalletPresentation } from './lib/userCopy.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
+import { resolveEnumValue } from './lib/viewState.js'
 import type { DeploymentRouteContentProps, MarketRouteContentProps, OpenOracleSectionProps, SecurityPoolsSectionProps } from './types/components.js'
 
 export function App() {
 	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
 	const deployNextMissingPending = useSignal(false)
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, setActiveUniverseId, setOpenOracleReport, setSecurityPoolAddress } = useUrlState()
+	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, setActiveUniverseId, setOpenOracleReport, setSecurityPoolAddress, setZoltarView, zoltarView } = useUrlState()
+	const activeZoltarView = resolveEnumValue<'questions' | 'create' | 'fork' | 'migrate'>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
 	const onTransaction = (hash: Hash) => {
 		transactionState.value = {
 			...transactionState.value,
@@ -50,7 +52,23 @@ export function App() {
 		transactionState.value = markTransactionFinished(transactionState.value)
 	}
 	const { navigate, route } = useHashRoute()
-	const { accountState, connectWallet, deploymentStatuses, errorMessage: walletErrorMessage, hasInjectedWallet, hasLoadedDeploymentStatuses, isConnectingWallet, isLoadingDeploymentStatuses, isRefreshing, refreshState, setDeploymentStatuses, walletBootstrapComplete, augurPlaceHolderDeployed } = useOnchainState()
+	const {
+		accountState,
+		augurPlaceHolderDeployed,
+		connectWallet,
+		deploymentStatuses,
+		environmentBootstrapError,
+		environmentReady,
+		errorMessage: walletErrorMessage,
+		hasInjectedWallet,
+		hasLoadedDeploymentStatuses,
+		isConnectingWallet,
+		isLoadingDeploymentStatuses,
+		isRefreshing,
+		refreshState,
+		setDeploymentStatuses,
+		walletBootstrapComplete,
+	} = useOnchainState()
 	const baseHookConfig = {
 		accountAddress: accountState.address,
 		onTransaction,
@@ -100,12 +118,13 @@ export function App() {
 		zoltarQuestions,
 		zoltarUniverse,
 		zoltarUniverseMissing,
-	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
+	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && environmentReady, deploymentStatuses })
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } =
 		useSecurityPoolCreation({
 			...baseHookConfig,
 			deploymentStatuses,
+			enabled: route === 'security-pools',
 			zoltarUniverseHasForked,
 		})
 	const {
@@ -125,7 +144,7 @@ export function App() {
 		setSecurityBondAllowance,
 		setSecurityVaultForm,
 		withdrawRep,
-	} = useSecurityVaultOperations(baseHookConfig)
+	} = useSecurityVaultOperations({ ...baseHookConfig, enabled: route === 'security-pools' })
 	const {
 		approveToken1,
 		approveToken2,
@@ -147,7 +166,7 @@ export function App() {
 		settleReport,
 		submitInitialReport,
 		wrapWethForInitialReport,
-	} = useOpenOracleOperations(baseHookConfig)
+	} = useOpenOracleOperations({ ...baseHookConfig, enabled: route === 'open-oracle' })
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
 	const { loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(baseHookConfig)
 	const {
@@ -170,7 +189,10 @@ export function App() {
 		setLiquidationAmount,
 		setLiquidationTargetVault,
 	} = useSecurityPoolsOverview(baseHookConfig)
-	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations(baseHookConfig)
+	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
+		...baseHookConfig,
+		enabled: route === 'security-pools',
+	})
 	const {
 		claimAuctionProceeds,
 		createChildUniverse,
@@ -200,7 +222,7 @@ export function App() {
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
 	const isMainnet = isSupportedAppChain(accountState.chainId)
 	const wrongNetworkMessage = accountState.address !== undefined && accountState.chainId !== undefined && !isMainnet ? getWrongNetworkMessage() : undefined
-	const augurPlaceHolderDeploymentMissing = augurPlaceHolderDeployed === false
+	const augurPlaceHolderDeploymentMissing = environmentReady && augurPlaceHolderDeployed === false
 	const showDeployTab = augurPlaceHolderDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 	const showAugurPlaceHolderDeploymentWarning = augurPlaceHolderDeploymentMissing
 	const zoltarUniverseState = resolveLoadableValueState({
@@ -208,7 +230,7 @@ export function App() {
 		isMissing: zoltarUniverseMissing,
 		value: zoltarUniverse,
 	})
-	const showZoltarUniverseWarning = zoltarUniverseState === 'missing'
+	const showZoltarUniverseWarning = environmentReady && zoltarUniverseState === 'missing'
 	const showZoltarUniverseForkedWarning = zoltarUniverse?.hasForked === true
 	const disableRouteContent = route !== 'deploy' && (augurPlaceHolderDeploymentMissing || showZoltarUniverseWarning)
 	const isRouteContentDisabled = transactionState.value.transactionInFlightCount > 0 || disableRouteContent
@@ -272,12 +294,12 @@ export function App() {
 
 	useAppRouteEffects({
 		augurPlaceHolderDeploymentMissing,
+		environmentReady,
 		loadOracleReport: async reportId => await loadOracleReport(reportId),
 		loadSecurityPools: async requestedSecurityPoolAddress => await loadSecurityPools(requestedSecurityPoolAddress),
 		navigate,
 		openOracleFormReportId: openOracleForm.reportId,
 		openOracleReportDetailsReportId: openOracleReportDetails?.reportId,
-		refreshSelectedPoolData,
 		route,
 		securityPoolAddress,
 		securityPoolResultHash: securityPoolResult?.deployPoolHash,
@@ -306,6 +328,7 @@ export function App() {
 
 	const marketRouteContentProps: MarketRouteContentProps = {
 		accountState,
+		activeView: activeZoltarView,
 		hasLoadedZoltarQuestions,
 		loadingZoltarForkAccess,
 		zoltarForkActiveAction,
@@ -318,6 +341,7 @@ export function App() {
 		marketCreating,
 		marketError,
 		marketResult,
+		onActiveViewChange: view => setZoltarView(view),
 		onApproveZoltarForkRep: amount => void approveZoltarForkRep(amount),
 		onCreateMarket: () => void createMarket(),
 		onForkZoltar: () => void forkZoltar(),
@@ -553,6 +577,7 @@ export function App() {
 			<AppStatusNotices
 				errorMessage={errorMessage}
 				hasInjectedWallet={hasInjectedWallet}
+				simulationBootstrapError={environmentBootstrapError}
 				showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
 				showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
 				transactionState={transactionState.value}

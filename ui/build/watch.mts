@@ -14,6 +14,7 @@ const SHARED_TSCONFIG_PATH = path.join(REPOSITORY_ROOT_PATH, 'shared', 'tsconfig
 const TYPE_SCRIPT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'js')
 const TYPE_SCRIPT_SOURCE_PATH = path.join(UI_ROOT_PATH, 'ts')
 const VENDOR_INPUT_PATHS = [path.join(UI_ROOT_PATH, 'build', 'vendor.mts'), path.join(UI_ROOT_PATH, 'package.json'), path.join(UI_ROOT_PATH, 'tsconfig.vendor.json'), path.join(UI_ROOT_PATH, 'bun.lock')]
+const WORKER_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'workers.mts')
 const LIVE_RELOAD_ENDPOINT = 'http://127.0.0.1:12345/__live-reload'
 
 type ManagedProcess = ReturnType<typeof spawn>
@@ -28,6 +29,9 @@ let typeScriptWatchProcess: ManagedProcess | undefined
 let vendorBuildProcess: ManagedProcess | undefined
 let vendorBuildRunning = false
 let vendorBuildQueued = false
+let workerBuildProcess: ManagedProcess | undefined
+let workerBuildRunning = false
+let workerBuildQueued = false
 let liveReloadQueued = false
 let liveReloadTimeout: NodeJS.Timeout | undefined
 
@@ -319,7 +323,7 @@ const refreshTypeScriptSourceWatchers = async () => {
 		watchFileWithCleanup(
 			filePath,
 			relativePath => {
-				queueLiveReload(relativePath)
+				void runWorkerBuild(relativePath)
 			},
 			callback => {
 				typeScriptSourceUnwatchCallbacks.push(callback)
@@ -426,6 +430,54 @@ const runVendorBuild = async (reason: string) => {
 	queueLiveReload(reason)
 }
 
+const runWorkerBuild = async (reason: string) => {
+	if (shuttingDown) return
+	if (workerBuildRunning) {
+		workerBuildQueued = true
+		return
+	}
+	workerBuildRunning = true
+	console.log(`[ui:watch] Rebuilding simulation worker because ${reason} changed`)
+	try {
+		workerBuildProcess = spawn('bun', ['./build/workers.mts'], {
+			cwd: UI_ROOT_PATH,
+			stdio: 'inherit',
+		})
+	} catch (error) {
+		workerBuildRunning = false
+		console.error('[ui:watch] Failed to start simulation worker rebuild')
+		console.error(error)
+		await shutdown(1)
+		return
+	}
+	const childProcess = workerBuildProcess
+	attachProcessErrorHandler(childProcess, 'Simulation worker rebuild')
+	let exitCode: number | null
+	let signalCode: NodeJS.Signals | null
+	try {
+		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
+	} catch (error) {
+		console.error('[ui:watch] Simulation worker rebuild failed to start')
+		console.error(error)
+		workerBuildRunning = false
+		workerBuildProcess = undefined
+		await shutdown(1)
+		return
+	}
+	workerBuildRunning = false
+	workerBuildProcess = undefined
+	if (exitCode !== 0) {
+		const failureCode = exitCode ?? 1
+		console.error(`[ui:watch] Simulation worker rebuild failed (${signalCode ?? failureCode})`)
+		await shutdown(failureCode)
+		return
+	}
+	if (workerBuildQueued) {
+		workerBuildQueued = false
+		await runWorkerBuild('queued TypeScript input')
+	}
+}
+
 const runSharedBuild = async (reason: string) => {
 	if (shuttingDown) return
 	if (sharedBuildRunning) {
@@ -464,6 +516,7 @@ const shutdown = async (exitCode: number) => {
 	clearTypeScriptSourceWatchers()
 	await stopProcess(sharedBuildProcess)
 	await stopProcess(vendorBuildProcess)
+	await stopProcess(workerBuildProcess)
 	await stopProcess(serverProcess)
 	await stopProcess(typeScriptWatchProcess)
 	process.exit(exitCode)
@@ -509,6 +562,9 @@ const main = () => {
 			void runVendorBuild(relativePath)
 		})
 	}
+	watchFile(WORKER_BUILD_PATH, relativePath => {
+		void runWorkerBuild(relativePath)
+	})
 
 	void refreshTypeScriptOutputWatchers().catch(error => {
 		console.error('[ui:watch] Failed to watch TypeScript output files')

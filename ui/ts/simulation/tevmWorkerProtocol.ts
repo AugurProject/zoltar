@@ -1,0 +1,82 @@
+import type { Address, Hash, Hex, TransactionReceipt } from 'viem'
+import type { SimulationScenario } from './scenarios.js'
+
+export type SimulationWorkerState = {
+	bootstrapError: string | undefined
+	bootstrapLabel: string | undefined
+	bootstrapProgress: number | undefined
+	blockCountSinceReset: bigint
+	currentScenario: SimulationScenario
+	currentTimestamp: bigint
+	isBootstrapped: boolean
+	isBootstrapping: boolean
+	queryDelayMilliseconds: number
+	selectedAccount: Address
+	transactionCountSinceReset: bigint
+	transactionDelayMilliseconds: number
+}
+
+export type SimulationWorkerCallMap = {
+	advanceTime: { params: { seconds: bigint }; result: undefined }
+	bootstrap: { params: undefined; result: undefined }
+	getAccounts: { params: undefined; result: readonly Address[] }
+	getState: { params: undefined; result: SimulationWorkerState }
+	installSimulationProxyDeployer: { params: { address: Address; runtimeCode: Hex }; result: undefined }
+	mineBlock: { params: undefined; result: undefined }
+	patchSimulationGenesisRepToken: { params: { repAddress: Address; zoltarAddress: Address }; result: undefined }
+	reset: { params: undefined; result: undefined }
+	selectAccount: { params: { address: Address }; result: undefined }
+	setQueryDelayMilliseconds: { params: { value: number }; result: undefined }
+	setTransactionDelayMilliseconds: { params: { value: number }; result: undefined }
+	waitForTransactionReceipt: { params: { hash: Hash }; result: TransactionReceipt }
+	waitUntilReady: { params: undefined; result: undefined }
+}
+
+export type SimulationWorkerCallMethod = keyof SimulationWorkerCallMap
+
+export type SimulationWorkerInitMessage = {
+	scenario: SimulationScenario
+	type: 'init'
+}
+
+export type SimulationWorkerCallMessage = {
+	[TMethod in SimulationWorkerCallMethod]: {
+		id: number
+		method: TMethod
+		params: SimulationWorkerCallMap[TMethod]['params']
+		type: 'call'
+	}
+}[SimulationWorkerCallMethod]
+
+export type SimulationWorkerRpcMessage = {
+	id: number
+	method: string
+	params: unknown
+	type: 'rpc'
+}
+
+export type SimulationWorkerMessage = SimulationWorkerInitMessage | SimulationWorkerCallMessage | SimulationWorkerRpcMessage
+
+export type SimulationWorkerReadyEvent = {
+	state: SimulationWorkerState
+	type: 'ready'
+}
+
+export type SimulationWorkerResultEvent = {
+	id: number
+	type: 'result'
+	value: unknown
+}
+
+export type SimulationWorkerErrorEvent = {
+	id?: number
+	message: string
+	type: 'error'
+}
+
+export type SimulationWorkerStateEvent = {
+	state: SimulationWorkerState
+	type: 'state'
+}
+
+export type SimulationWorkerEvent = SimulationWorkerErrorEvent | SimulationWorkerReadyEvent | SimulationWorkerResultEvent | SimulationWorkerStateEvent

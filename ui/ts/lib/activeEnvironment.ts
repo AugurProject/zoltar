@@ -37,7 +37,9 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 	})
 	activeBackend = simulationBackend
 	activeSimulationController = simulationBackend
-	await simulationBackend.bootstrap()
+	void simulationBackend.bootstrap().catch(error => {
+		console.error('[simulation] bootstrap failed', error)
+	})
 	return simulationBackend
 }
 

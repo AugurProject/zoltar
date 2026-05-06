@@ -84,6 +84,11 @@ export function useOnchainState() {
 	const deploymentStatusLoad = useLoadController()
 	const deploymentStatusesLoaded = useSignal(false)
 	const augurPlaceHolderDeployed = useSignal<boolean | undefined>(undefined)
+	const environmentBootstrapError = useSignal<string | undefined>(undefined)
+	const environmentBootstrapLabel = useSignal(getActiveBackend().bootstrapLabel)
+	const environmentBootstrapProgress = useSignal(getActiveBackend().bootstrapProgress)
+	const environmentReady = useSignal(getActiveBackend().isBootstrapped ?? true)
+	const environmentReadyLoad = useLoadController()
 	const walletBootstrapComplete = useSignal(false)
 	const isConnectingWallet = useSignal(false)
 	const nextRefresh = useRequestGuard()
@@ -101,18 +106,29 @@ export function useOnchainState() {
 		hasInjectedWallet.value = backend.hasWallet()
 		errorMessage.value = undefined
 
-		void deploymentStatusLoad.track(async () => {
-			try {
-				const snapshot = await loadDeploymentStatusOracleSnapshot(backend.createReadClient())
-				if (!isCurrent()) return
-				augurPlaceHolderDeployed.value = snapshot.augurPlaceHolderDeployed
-				deploymentStatuses.value = snapshot.deploymentStatuses
-				deploymentStatusesLoaded.value = true
-			} catch (error) {
-				if (!isCurrent()) return
-				errorMessage.value = getErrorMessage(error, 'Failed to refresh deployment status')
-			}
-		})
+		if (backend.isBootstrapped === false) {
+			deploymentStatusesLoaded.value = false
+			augurPlaceHolderDeployed.value = undefined
+			environmentBootstrapLabel.value = backend.bootstrapLabel
+			environmentBootstrapProgress.value = backend.bootstrapProgress
+			environmentReady.value = false
+			environmentBootstrapError.value = undefined
+		}
+
+		if (backend.isBootstrapped !== false) {
+			void deploymentStatusLoad.track(async () => {
+				try {
+					const snapshot = await loadDeploymentStatusOracleSnapshot(backend.createReadClient())
+					if (!isCurrent()) return
+					augurPlaceHolderDeployed.value = snapshot.augurPlaceHolderDeployed
+					deploymentStatuses.value = snapshot.deploymentStatuses
+					deploymentStatusesLoaded.value = true
+				} catch (error) {
+					if (!isCurrent()) return
+					errorMessage.value = getErrorMessage(error, 'Failed to refresh deployment status')
+				}
+			})
+		}
 
 		if (!shouldLoadWalletState) return
 
@@ -188,6 +204,47 @@ export function useOnchainState() {
 
 	useEffect(() => {
 		const backend = getActiveBackend()
+		if (backend.waitUntilReady === undefined || backend.isBootstrapped === true) {
+			environmentBootstrapLabel.value = backend.bootstrapLabel
+			environmentBootstrapProgress.value = backend.bootstrapProgress
+			environmentReady.value = true
+			environmentBootstrapError.value = undefined
+			return
+		}
+
+		environmentBootstrapLabel.value = backend.bootstrapLabel
+		environmentBootstrapProgress.value = backend.bootstrapProgress
+		environmentReady.value = false
+		environmentBootstrapError.value = undefined
+		let cancelled = false
+		void environmentReadyLoad.track(async () => {
+			try {
+				await backend.waitUntilReady?.()
+				if (cancelled) return
+				environmentBootstrapLabel.value = backend.bootstrapLabel
+				environmentBootstrapProgress.value = backend.bootstrapProgress
+				environmentReady.value = true
+				environmentBootstrapError.value = undefined
+				await refreshState()
+			} catch (error) {
+				if (cancelled) return
+				environmentBootstrapError.value = getErrorMessage(error, 'Failed to bootstrap simulation environment')
+			}
+		})
+
+		return () => {
+			cancelled = true
+		}
+	}, [])
+
+	useEffect(() => {
+		const backend = getActiveBackend()
+		const unsubscribeState = backend.subscribe?.(() => {
+			environmentBootstrapError.value = backend.bootstrapError
+			environmentBootstrapLabel.value = backend.bootstrapLabel
+			environmentBootstrapProgress.value = backend.bootstrapProgress
+			environmentReady.value = backend.isBootstrapped ?? true
+		})
 		const handleWalletChange = () => {
 			void refreshState()
 		}
@@ -197,6 +254,7 @@ export function useOnchainState() {
 		return () => {
 			unsubscribeChain()
 			unsubscribeAccounts()
+			unsubscribeState?.()
 		}
 	}, [])
 
@@ -205,6 +263,11 @@ export function useOnchainState() {
 		connectWallet,
 		deploymentStatuses: deploymentStatuses.value,
 		errorMessage: errorMessage.value,
+		environmentBootstrapError: environmentBootstrapError.value,
+		environmentBootstrapLabel: environmentBootstrapLabel.value,
+		environmentBootstrapProgress: environmentBootstrapProgress.value,
+		environmentReady: environmentReady.value,
+		isBootstrappingEnvironment: environmentReadyLoad.isLoading.value || getActiveBackend().isBootstrapping === true,
 		hasInjectedWallet: hasInjectedWallet.value,
 		hasLoadedDeploymentStatuses: deploymentStatusesLoaded.value,
 		isConnectingWallet: isConnectingWallet.value,
