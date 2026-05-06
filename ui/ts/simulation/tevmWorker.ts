@@ -47,6 +47,9 @@ async function handleCall(message: SimulationWorkerCallMessage) {
 		case 'selectAccount':
 			await engine.selectAccount(message.params.address)
 			return undefined
+		case 'setRepPerEthPrice':
+			engine.setRepPerEthPrice(message.params.value)
+			return undefined
 		case 'setQueryDelayMilliseconds':
 			engine.setQueryDelayMilliseconds(message.params.value)
 			return undefined

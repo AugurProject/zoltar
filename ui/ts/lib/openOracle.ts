@@ -12,7 +12,7 @@ const OPEN_ORACLE_BOUNTY_BUFFER_DENOMINATOR = 10n
 
 type OpenOracleReportStatus = 'Awaiting Initial Report' | 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'initial-report' | 'dispute' | 'settle' | 'read-only'
-export type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3' | 'Manual override' | 'Unavailable'
+export type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3' | 'MOCK' | 'Manual override' | 'Unavailable'
 export type OpenOracleInitialReportQuoteSource = Exclude<OpenOracleInitialReportPriceSource, 'Manual override' | 'Unavailable'>
 export type OpenOracleInitialReportQuoteFailureKind = 'unsupported-pair' | 'quote-failed'
 type OpenOracleGateMessage = {
@@ -442,7 +442,7 @@ export async function loadOpenOracleInitialReportPriceResult(client: Parameters<
 		return {
 			attemptedSources: [],
 			failureKind: 'unsupported-pair',
-			reason: 'Automatic Uniswap pricing is unavailable in simulation mode. Enter the initial report price manually.',
+			reason: 'Automatic pricing is unavailable for this pair in simulation mode. The simulation mock only supports REP / ETH and REP / WETH pairs.',
 			status: 'failure',
 		}
 	}
@@ -453,7 +453,7 @@ export async function loadOpenOracleInitialReportPriceResult(client: Parameters<
 		const { amountOut: token2Amount, source } = await quoteBestExactInputWithSource(client, token1, token2, token1Amount)
 		const price = calculateOpenOraclePrice(token1Amount, token2Amount)
 		if (price !== undefined) {
-			return { price, priceSource: 'Uniswap V4', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
+			return { price, priceSource: source.protocol === 'mock' ? 'MOCK' : 'Uniswap V4', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
 		}
 	} catch (error) {
 		v4Failure = error
@@ -464,7 +464,7 @@ export async function loadOpenOracleInitialReportPriceResult(client: Parameters<
 		const { amountOut: token2Amount, source } = await quoteBestV3ExactInputWithSource(client, token1, token2, token1Amount)
 		const price = calculateOpenOraclePrice(token1Amount, token2Amount)
 		if (price !== undefined) {
-			return { price, priceSource: 'Uniswap V3', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
+			return { price, priceSource: source.protocol === 'mock' ? 'MOCK' : 'Uniswap V3', priceSourceUrl: source.poolUrl, status: 'success', token2Amount }
 		}
 
 		return {

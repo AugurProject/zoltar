@@ -15,9 +15,11 @@ export type SimulationController = {
 	isBootstrapping: boolean
 	mineBlock(): Promise<void>
 	queryDelayMilliseconds: number
+	repPerEthPrice: bigint
 	reset(): Promise<void>
 	selectAccount(address: Address): Promise<void>
 	selectedAccount: Address
+	setRepPerEthPrice(value: bigint): void
 	setQueryDelayMilliseconds(value: number): void
 	subscribe(handler: () => void): () => void
 	transactionCountSinceReset: bigint

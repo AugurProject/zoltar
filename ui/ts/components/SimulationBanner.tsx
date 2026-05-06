@@ -1,6 +1,8 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import type { SimulationController } from '../simulation/controller.js'
+import { formatCurrencyInputBalance } from '../lib/formatters.js'
+import { parseDecimalInput } from '../lib/decimal.js'
 import { getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
 import { TimestampValue } from './TimestampValue.js'
 
@@ -17,6 +19,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	const isBootstrapped = useSignal(controller.isBootstrapped)
 	const isBootstrapping = useSignal(controller.isBootstrapping)
 	const queryDelayMilliseconds = useSignal(controller.queryDelayMilliseconds.toString())
+	const repPerEthPrice = useSignal(formatCurrencyInputBalance(controller.repPerEthPrice))
 	const selectedAccount = useSignal(controller.selectedAccount)
 	const bootstrapError = useSignal(controller.bootstrapError)
 	const bootstrapLabel = useSignal(controller.bootstrapLabel)
@@ -36,6 +39,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 				isBootstrapped.value = controller.isBootstrapped
 				isBootstrapping.value = controller.isBootstrapping
 				queryDelayMilliseconds.value = controller.queryDelayMilliseconds.toString()
+				repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
 				selectedAccount.value = controller.selectedAccount
 				transactionCountSinceReset.value = controller.transactionCountSinceReset
 				transactionDelayMilliseconds.value = controller.transactionDelayMilliseconds.toString()
@@ -164,6 +168,26 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 								/>
 							</label>
 							<label className='simulation-delay-field'>
+								<span className='simulation-delay-label'>REP / ETH mock price</span>
+								<input
+									className='simulation-control-input'
+									type='text'
+									inputMode='decimal'
+									value={repPerEthPrice.value}
+									disabled={busy.value}
+									onInput={event => {
+										repPerEthPrice.value = event.currentTarget.value
+									}}
+									onChange={event => {
+										try {
+											controller.setRepPerEthPrice(parseDecimalInput(event.currentTarget.value, 'REP / ETH mock price'))
+										} catch {
+											repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
+										}
+									}}
+								/>
+							</label>
+							<label className='simulation-delay-field'>
 								<span className='simulation-delay-label'>Transaction receipt delay (ms)</span>
 								<input
 									className='simulation-control-input'
@@ -182,7 +206,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 								/>
 							</label>
 						</div>
-						<p className='detail'>Query delay slows simulation reads. Transaction delay slows receipt confirmation so loading states stay visible.</p>
+						<p className='detail'>Query delay slows simulation reads. The REP / ETH mock applies to every REP token in simulation mode. Transaction delay slows receipt confirmation so loading states stay visible.</p>
 					</div>
 					<div className='button-row'>
 						<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value || !isBootstrapped.value}>

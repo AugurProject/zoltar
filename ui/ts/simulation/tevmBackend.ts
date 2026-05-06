@@ -277,6 +277,9 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 		get queryDelayMilliseconds() {
 			return requireState().queryDelayMilliseconds
 		},
+		get repPerEthPrice() {
+			return requireState().repPerEthPrice
+		},
 		requestAccounts: async () => await callWorker('getAccounts', undefined),
 		reset: async () => {
 			await callWorker('reset', undefined)
@@ -286,6 +289,12 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 		},
 		get selectedAccount() {
 			return requireState().selectedAccount
+		},
+		setRepPerEthPrice: value => {
+			patchState({
+				repPerEthPrice: value,
+			})
+			void callWorker('setRepPerEthPrice', { value })
 		},
 		setQueryDelayMilliseconds: value => {
 			patchState({

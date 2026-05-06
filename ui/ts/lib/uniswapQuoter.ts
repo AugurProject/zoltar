@@ -1,6 +1,6 @@
 import { encodeAbiParameters, getAddress, keccak256, type Address, type Hex, zeroAddress } from 'viem'
 import type { ReadClient } from './clients.js'
-import { getActiveNetworkProfile } from './activeEnvironment.js'
+import { getActiveNetworkProfile, getActiveSimulationController } from './activeEnvironment.js'
 import { MAINNET_WETH_ADDRESS } from './networkProfile.js'
 
 export const UNISWAP_V4_QUOTER_ADDRESS: Address = '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203'
@@ -37,6 +37,12 @@ type UniswapV3QuoteSource = {
 	protocol: 'v3'
 }
 
+type MockQuoteSource = {
+	label: 'MOCK'
+	poolUrl: undefined
+	protocol: 'mock'
+}
+
 // Default pool config (0.3% fee, standard tick spacing, no hooks)
 export const DEFAULT_POOL_CONFIG: PoolConfig = {
 	fee: 3000,
@@ -51,6 +57,15 @@ const COMMON_V4_POOL_CONFIGS: readonly PoolConfig[] = [
 ]
 
 const COMMON_V3_FEES = [100, 500, 3000, 10000] as const
+const ERC20_SYMBOL_ABI = [
+	{
+		name: 'symbol',
+		type: 'function',
+		stateMutability: 'view',
+		inputs: [],
+		outputs: [{ name: '', type: 'string' }],
+	},
+] as const
 
 const V3_FACTORY_ABI = [
 	{
@@ -113,12 +128,81 @@ export function getWethAddress() {
 }
 
 export function isRepPricingEnabled() {
-	return getActiveNetworkProfile().repPricingMode === 'uniswap'
+	return getActiveNetworkProfile().repPricingMode === 'uniswap' || getActiveNetworkProfile().repPricingMode === 'mock'
+}
+
+function isMockRepPricingEnabled() {
+	return getActiveNetworkProfile().repPricingMode === 'mock'
 }
 
 function assertRepPricingEnabled() {
 	if (isRepPricingEnabled()) return
 	throw new Error('Uniswap pricing is unavailable in simulation mode.')
+}
+
+async function isRepToken(client: ReadClient, token: Address) {
+	if (token === ETH_ADDRESS || token === getWethAddress()) return false
+	try {
+		const symbol = await client.readContract({
+			address: token,
+			abi: ERC20_SYMBOL_ABI,
+			functionName: 'symbol',
+		})
+		return symbol === 'REP'
+	} catch {
+		return false
+	}
+}
+
+function getMockRepPrice() {
+	const controller = getActiveSimulationController()
+	if (controller === undefined) {
+		throw new Error('Simulation REP/ETH mock pricing is unavailable')
+	}
+	return controller.repPerEthPrice
+}
+
+function calculateMockAmountOut(tokenIn: Address, tokenOut: Address, amountIn: bigint) {
+	const repPerEthPrice = getMockRepPrice()
+	const tokenInIsEth = tokenIn === ETH_ADDRESS || tokenIn === getWethAddress()
+	const tokenOutIsEth = tokenOut === ETH_ADDRESS || tokenOut === getWethAddress()
+
+	if (tokenInIsEth && !tokenOutIsEth) {
+		return (amountIn * repPerEthPrice) / 10n ** 18n
+	}
+	if (!tokenInIsEth && tokenOutIsEth) {
+		return (amountIn * 10n ** 18n) / repPerEthPrice
+	}
+	throw new Error('Simulation REP/ETH mock pricing only supports REP paired with ETH or WETH')
+}
+
+async function maybeQuoteMockRepPair(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint): Promise<{ amountOut: bigint; source: MockQuoteSource } | undefined> {
+	if (!isMockRepPricingEnabled()) return undefined
+
+	const tokenInIsEth = tokenIn === ETH_ADDRESS || tokenIn === getWethAddress()
+	const tokenOutIsEth = tokenOut === ETH_ADDRESS || tokenOut === getWethAddress()
+	if (tokenInIsEth === tokenOutIsEth) return undefined
+
+	const repToken = tokenInIsEth ? tokenOut : tokenIn
+	if (!(await isRepToken(client, repToken))) return undefined
+
+	return {
+		amountOut: calculateMockAmountOut(tokenIn, tokenOut, amountIn),
+		source: {
+			label: 'MOCK',
+			poolUrl: undefined,
+			protocol: 'mock',
+		},
+	}
+}
+
+async function assertMockPairSupported(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint) {
+	if (!isMockRepPricingEnabled()) return undefined
+	const mockResult = await maybeQuoteMockRepPair(client, tokenIn, tokenOut, amountIn)
+	if (mockResult !== undefined) {
+		return mockResult
+	}
+	throw new Error('Simulation mock pricing only supports REP / ETH and REP / WETH pairs.')
 }
 
 export function buildUniswapV4PoolId(tokenA: Address, tokenB: Address, poolConfig: PoolConfig): Hex {
@@ -139,6 +223,10 @@ export function buildUniswapV3PoolUrl(poolAddress: Address) {
 // ordering and zeroForOne direction are derived from the addresses automatically.
 export async function quoteExactInput(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, poolConfig: PoolConfig = DEFAULT_POOL_CONFIG): Promise<bigint> {
 	assertRepPricingEnabled()
+	const mockResult = await assertMockPairSupported(client, tokenIn, tokenOut, amountIn)
+	if (mockResult !== undefined) {
+		return mockResult.amountOut
+	}
 	const tokenInBig = BigInt(tokenIn)
 	const tokenOutBig = BigInt(tokenOut)
 	const zeroForOne = tokenInBig < tokenOutBig
@@ -166,8 +254,12 @@ export async function quoteExactInput(client: ReadClient, tokenIn: Address, toke
 	return result[0]
 }
 
-export async function quoteBestExactInputWithSource(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, poolConfigs: readonly PoolConfig[] = COMMON_V4_POOL_CONFIGS): Promise<{ amountOut: bigint; source: UniswapV4QuoteSource }> {
+export async function quoteBestExactInputWithSource(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, poolConfigs: readonly PoolConfig[] = COMMON_V4_POOL_CONFIGS): Promise<{ amountOut: bigint; source: UniswapV4QuoteSource | MockQuoteSource }> {
 	assertRepPricingEnabled()
+	const mockResult = await assertMockPairSupported(client, tokenIn, tokenOut, amountIn)
+	if (mockResult !== undefined) {
+		return mockResult
+	}
 	let bestAmountOut: bigint | undefined
 	let bestPoolConfig: PoolConfig | undefined
 	let lastError: unknown
@@ -288,8 +380,12 @@ async function loadUniswapV3PoolAddress(client: ReadClient, tokenIn: Address, to
 	}
 }
 
-export async function quoteBestV3ExactInputWithSource(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, fees: readonly number[] = COMMON_V3_FEES): Promise<{ amountOut: bigint; source: UniswapV3QuoteSource }> {
+export async function quoteBestV3ExactInputWithSource(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, fees: readonly number[] = COMMON_V3_FEES): Promise<{ amountOut: bigint; source: UniswapV3QuoteSource | MockQuoteSource }> {
 	assertRepPricingEnabled()
+	const mockResult = await assertMockPairSupported(client, tokenIn, tokenOut, amountIn)
+	if (mockResult !== undefined) {
+		return mockResult
+	}
 	const normalizedTokenIn = normalizeV3Token(tokenIn)
 	const normalizedTokenOut = normalizeV3Token(tokenOut)
 

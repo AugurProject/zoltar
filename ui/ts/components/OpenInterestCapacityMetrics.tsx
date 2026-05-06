@@ -6,7 +6,7 @@ import { getPoolCollateralizationPercent } from '../lib/trading.js'
 type OpenInterestCapacityMetricsProps = {
 	completeSetCollateralAmount: bigint | undefined
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | undefined
+	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
 	repPerEthSourceUrl: string | undefined
 	securityMultiplier: bigint | undefined
 	totalRepDeposit: bigint | undefined

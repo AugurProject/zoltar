@@ -118,7 +118,7 @@ function createV3FeeAwareClient(amountsByFee: Partial<Record<number, bigint>>): 
 }
 
 void describe('quoteExactInput', () => {
-	void test('rejects when REP pricing is disabled in simulation mode', async () => {
+	void test('rejects unsupported simulation pairs when only the REP / ETH mock is available', async () => {
 		setActiveEnvironmentForTesting(
 			createFakeBackend({
 				profile: createFakeSimulationProfile(),
@@ -126,8 +126,48 @@ void describe('quoteExactInput', () => {
 		)
 
 		const { client } = createCapturingClient(1n)
+		await expect(quoteRepForEth(client, 1n)).rejects.toThrow('Simulation mock pricing only supports REP / ETH and REP / WETH pairs.')
+	})
 
-		await expect(quoteRepForEth(client, 1n)).rejects.toThrow('Uniswap pricing is unavailable in simulation mode.')
+	void test('returns simulation mock REP/ETH quotes when simulation mode is active', async () => {
+		const profile = createFakeSimulationProfile()
+		setActiveEnvironmentForTesting(
+			createFakeBackend({
+				profile,
+			}),
+			{
+				accounts: [],
+				advanceTime: async () => undefined,
+				bootstrapError: undefined,
+				bootstrapLabel: undefined,
+				bootstrapProgress: undefined,
+				blockCountSinceReset: 0n,
+				currentTimestamp: 0n,
+				currentScenario: 'baseline',
+				isActive: true,
+				isBootstrapped: true,
+				isBootstrapping: false,
+				mineBlock: async () => undefined,
+				queryDelayMilliseconds: 0,
+				repPerEthPrice: 2n * 10n ** 18n,
+				reset: async () => undefined,
+				selectAccount: async () => undefined,
+				selectedAccount: getAddress('0x00000000000000000000000000000000000000a1'),
+				setRepPerEthPrice: () => undefined,
+				setQueryDelayMilliseconds: () => undefined,
+				subscribe: () => () => undefined,
+				transactionCountSinceReset: 0n,
+				transactionDelayMilliseconds: 0,
+				setTransactionDelayMilliseconds: () => undefined,
+				waitUntilReady: async () => undefined,
+			},
+		)
+
+		const client = createStubReadClient()
+		client.readContract = async () => 'REP' as never
+
+		await expect(quoteEthForToken(client, profile.genesisRepTokenAddress, 3n * 10n ** 18n)).resolves.toBe(6n * 10n ** 18n)
+		await expect(quoteTokenForEth(client, profile.genesisRepTokenAddress, 6n * 10n ** 18n)).resolves.toBe(3n * 10n ** 18n)
 	})
 
 	void test('returns amountOut from the quoter result', async () => {
