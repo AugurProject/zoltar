@@ -22,6 +22,7 @@ import { getActiveSimulationController } from './lib/activeEnvironment.js'
 import { getDeploymentSections } from './lib/deployment.js'
 import { resolveLoadableValueState } from './lib/loadState.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from './lib/network.js'
+import { createLoadSecurityVaultHandler } from './lib/securityVaultHandlers.js'
 import { getUseQuestionForPoolState } from './lib/securityPoolNavigation.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
 import type { TransactionState } from './lib/transactionState.js'
@@ -499,10 +500,7 @@ export function App() {
 				loadingSecurityVault,
 				onApproveRep: amount => void approveRep(amount),
 				onDepositRep: () => void depositRep(),
-				onLoadSecurityVault: vaultAddress => {
-					if (vaultAddress === undefined) return
-					void loadSecurityVault(vaultAddress)
-				},
+				onLoadSecurityVault: createLoadSecurityVaultHandler(loadSecurityVault),
 				onRedeemFees: () => void redeemFees(),
 				onSetSecurityBondAllowance: () => void setSecurityBondAllowance(),
 				onSecurityVaultFormChange: update => setSecurityVaultForm(current => ({ ...current, ...update })),
