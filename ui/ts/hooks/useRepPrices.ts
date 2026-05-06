@@ -17,6 +17,7 @@ type RepPrices = {
 	repUsdcSource: PriceSource | undefined
 	repUsdcSourceUrl: string | undefined
 	isLoadingRepPrices: boolean
+	refreshRepPrices: () => void
 }
 
 async function fetchRepPerEthPrice(client: ReturnType<typeof createConnectedReadClient>): Promise<{ price: bigint; source: PriceSource; sourceUrl: string | undefined }> {
@@ -39,39 +40,44 @@ export function useRepPrices(): RepPrices {
 	const repUsdcSourceUrl = useSignal<string | undefined>(undefined)
 	const repPricesLoad = useLoadController()
 
-	useEffect(() => {
+	const refreshRepPrices = () => {
 		if (!isRepPricingEnabled()) return
 
-		let cancelled = false
 		const client = createConnectedReadClient()
 
 		void repPricesLoad
 			.track(async () => {
-				const [{ price: repPerEthDisplayPrice, source: repPerEthDisplaySource, sourceUrl: repPerEthDisplaySourceUrl }, usdcQuote] = await Promise.all([fetchRepPerEthPrice(client), quoteRepForUsdcV4WithSource(client, ONE_REP)])
-				if (cancelled) return
-				repPerEthPrice.value = repPerEthDisplayPrice
-				repPerEthSource.value = repPerEthDisplaySource
-				repPerEthSourceUrl.value = repPerEthDisplaySourceUrl
-				repUsdcPrice.value = usdcQuote.amountOut
-				repUsdcSource.value = 'v4'
-				repUsdcSourceUrl.value = usdcQuote.source.poolUrl
+				const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), quoteRepForUsdcV4WithSource(client, ONE_REP)])
+
+				if (repPerEthResult.status === 'fulfilled') {
+					repPerEthPrice.value = repPerEthResult.value.price
+					repPerEthSource.value = repPerEthResult.value.source
+					repPerEthSourceUrl.value = repPerEthResult.value.sourceUrl
+				}
+
+				if (repUsdcResult.status === 'fulfilled') {
+					repUsdcPrice.value = repUsdcResult.value.amountOut
+					repUsdcSource.value = 'v4'
+					repUsdcSourceUrl.value = repUsdcResult.value.source.poolUrl
+				}
 			})
 			.catch(() => {
-				// prices unavailable — leave as undefined
+				// prices unavailable — leave the last successful values in place
 			})
+	}
 
-		return () => {
-			cancelled = true
-		}
+	useEffect(() => {
+		refreshRepPrices()
 	}, [])
 
 	return {
+		isLoadingRepPrices: repPricesLoad.isLoading.value,
 		repPerEthPrice: repPerEthPrice.value,
 		repPerEthSource: repPerEthSource.value,
 		repPerEthSourceUrl: repPerEthSourceUrl.value,
 		repUsdcPrice: repUsdcPrice.value,
 		repUsdcSource: repUsdcSource.value,
 		repUsdcSourceUrl: repUsdcSourceUrl.value,
-		isLoadingRepPrices: repPricesLoad.isLoading.value,
+		refreshRepPrices,
 	}
 }

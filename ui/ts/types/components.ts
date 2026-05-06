@@ -187,6 +187,7 @@ export type OverviewPanelsProps = {
 	isLoadingRepPrices: boolean
 	onConnect: () => void
 	onGoToGenesisUniverse: () => void
+	onRefreshRepPrices: () => void
 } & RepPerEthPriceProps
 
 export type TabNavigationProps = {

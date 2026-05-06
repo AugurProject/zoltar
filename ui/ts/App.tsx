@@ -217,7 +217,7 @@ export function App() {
 		submitBid,
 		withdrawBids,
 	} = useForkAuctionOperations(baseHookConfig)
-	const { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices } = useRepPrices()
+	const { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, refreshRepPrices } = useRepPrices()
 	const simulationController = getActiveSimulationController()
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
@@ -245,6 +245,7 @@ export function App() {
 		isLoadingUniverseRepBalance: loadingZoltarForkAccess,
 		onConnect: () => void connectWallet(),
 		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
+		onRefreshRepPrices: refreshRepPrices,
 		repPerEthPrice,
 		repPerEthSource,
 		repPerEthSourceUrl,

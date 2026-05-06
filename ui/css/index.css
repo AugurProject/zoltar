@@ -431,6 +431,19 @@ button.destructive:hover:not(:disabled) {
 	color: var(--muted);
 }
 
+.metric-label-with-action {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+.metric-label-refresh {
+	min-width: 0;
+	padding: 0.12rem 0.38rem;
+	font-size: 0.8rem;
+	line-height: 1;
+}
+
 .detail {
 	line-height: 1.6;
 	color: var(--text-secondary);

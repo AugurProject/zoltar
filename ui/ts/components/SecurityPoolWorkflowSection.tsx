@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
@@ -370,9 +371,11 @@ export function SecurityPoolWorkflowSection({
 								{loadedSelectedPool.systemState !== 'operational' ? (
 									<>
 										<MetricField label='Fork Flow'>Forked / active</MetricField>
-										<MetricField label='Truth Auction'>
-											<AddressValue address={loadedSelectedPool.truthAuctionAddress} />
-										</MetricField>
+										{loadedSelectedPool.truthAuctionAddress === zeroAddress ? undefined : (
+											<MetricField label='Truth Auction'>
+												<AddressValue address={loadedSelectedPool.truthAuctionAddress} />
+											</MetricField>
+										)}
 										<MetricField label='Fork Mode'>{loadedSelectedPool.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent / Zoltar fork'}</MetricField>
 										<MetricField label='Fork Outcome'>{loadedSelectedPool.forkOutcome}</MetricField>
 									</>

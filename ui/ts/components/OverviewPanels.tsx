@@ -13,6 +13,7 @@ export function OverviewPanels({
 	isLoadingUniverseRepBalance,
 	onConnect,
 	onGoToGenesisUniverse,
+	onRefreshRepPrices,
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
@@ -77,7 +78,16 @@ export function OverviewPanels({
 							</MetricField>
 						</>
 					) : undefined}
-					<MetricField label={<>REP/ETH {repPerEthSource === undefined ? undefined : renderSourceLink(repPerEthSource, repPerEthSourceUrl)}</>}>
+					<MetricField
+						label={
+							<span className='metric-label-with-action'>
+								<span>REP/ETH {repPerEthSource === undefined ? undefined : renderSourceLink(repPerEthSource, repPerEthSourceUrl)}</span>
+								<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isLoadingRepPrices} aria-label='Refresh Uniswap prices' title={isLoadingRepPrices ? 'Refreshing Uniswap prices...' : 'Refresh Uniswap prices'}>
+									↻
+								</button>
+							</span>
+						}
+					>
 						<CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />
 					</MetricField>
 					<MetricField label={<>REP/USDC {repUsdcSource === undefined ? undefined : renderSourceLink(repUsdcSource, repUsdcSourceUrl)}</>}>

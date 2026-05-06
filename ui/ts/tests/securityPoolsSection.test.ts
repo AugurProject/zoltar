@@ -455,4 +455,22 @@ void describe('SecurityPoolsSection', () => {
 
 		expect(document.body.querySelector('.route-summary-strip')).toBeNull()
 	})
+
+	void test('hides the truth auction metric when a listed pool has no truth auction address', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolsSection,
+				createSecurityPoolsSectionProps({
+					overview: createOverviewProps({
+						hasLoadedSecurityPools: true,
+						securityPools: [createSelectedPool()],
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Truth Auction')).toBeNull()
+	})
 })
