@@ -353,6 +353,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByText('Enter a deposit amount greater than zero.')).toBeNull()
 		expect(documentQueries.queryByText('Fork Flow')).toBeNull()
 		expect(documentQueries.queryByText('Oracle Status')).toBeNull()
+		expect(documentQueries.queryByText('Truth Auction')).toBeNull()
 		expect(documentQueries.getByText('Security Multiplier')).not.toBeNull()
 		const directoryButton = documentQueries.getByRole('button', { name: 'Directory' })
 		expect(documentQueries.getByRole('button', { name: 'Selected' })).not.toBeNull()
@@ -363,6 +364,29 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		expect(documentQueries.getByRole('heading', { name: 'Vault Directory' })).not.toBeNull()
 		expect(documentQueries.getAllByText('Locked REP').length).toBeGreaterThan(0)
+	})
+
+	test('hides the truth auction metric when the selected pool has no truth auction address', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					activeUniverseId: 1n,
+					checkedSecurityPoolAddress: zeroAddress,
+					securityPoolAddress: zeroAddress,
+					securityPools: [
+						createSelectedPool({
+							systemState: 'poolForked',
+							truthAuctionAddress: zeroAddress,
+						}),
+					],
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Truth Auction')).toBeNull()
 	})
 
 	test('shows disabled reporting actions before market end instead of a placeholder message', async () => {

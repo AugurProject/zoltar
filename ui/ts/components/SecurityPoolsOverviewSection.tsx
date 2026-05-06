@@ -14,6 +14,7 @@ import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
+import { zeroAddress } from 'viem'
 import { isMainnetChain } from '../lib/network.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
@@ -119,9 +120,11 @@ export function SecurityPoolsOverviewSection({
 										<MetricField label='Manager'>
 											<AddressValue address={pool.managerAddress} />
 										</MetricField>
-										<MetricField label='Truth Auction'>
-											<AddressValue address={pool.truthAuctionAddress} />
-										</MetricField>
+										{pool.truthAuctionAddress === zeroAddress ? undefined : (
+											<MetricField label='Truth Auction'>
+												<AddressValue address={pool.truthAuctionAddress} />
+											</MetricField>
+										)}
 									</div>
 								</WorkflowSubsection>
 

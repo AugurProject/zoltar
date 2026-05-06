@@ -34,4 +34,12 @@ describe('CollateralizationMetricField', () => {
 		expect(noActiveAllowanceValue.tagName).toBe('STRONG')
 		expect(noActiveAllowanceValue.className).toBe('metric-field-value')
 	})
+
+	test('renders a descriptive message when the REP/ETH quote is unavailable', async () => {
+		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={undefined} repPerEthSource={undefined} repPerEthSourceUrl={undefined} securityBondAllowance={1n} securityMultiplier={2n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Awaiting REP/ETH price')).not.toBeNull()
+	})
 })

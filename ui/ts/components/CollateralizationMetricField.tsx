@@ -30,7 +30,7 @@ export function CollateralizationMetricField({ className, collateralizationPerce
 
 	return (
 		<MetricField className={className} label={<span title='Uses the live Uniswap REP/ETH quote.'>Collateralization {repPerEthSource === undefined ? undefined : renderSourceLink(repPerEthSource, repPerEthSourceUrl)}</span>} valueClassName={valueClassName}>
-			{displayState === 'noActiveAllowance' ? 'No active allowance' : <CurrencyValue value={collateralizationPercent} suffix='%' copyable={false} />}
+			{displayState === 'noActiveAllowance' ? 'No active allowance' : displayState === 'unavailable' ? 'Awaiting REP/ETH price' : <CurrencyValue value={collateralizationPercent} suffix='%' copyable={false} />}
 		</MetricField>
 	)
 }
