@@ -63,6 +63,15 @@ export type SectionBlockProps = {
 	variant?: 'default' | 'embedded'
 }
 
+export type TabbedSectionBlockProps = {
+	children: ComponentChildren
+	className?: string
+	description?: ComponentChildren
+	density?: 'balanced' | 'compact'
+	tabs: ComponentChildren
+	title: ComponentChildren
+}
+
 export type RouteWorkflowPanelProps = {
 	children: ComponentChildren
 	className?: string

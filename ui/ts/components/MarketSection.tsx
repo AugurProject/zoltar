@@ -5,7 +5,7 @@ import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
 import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
 import { SectionModeTabs } from './SectionModeTabs.js'
-import { SectionBlock } from './SectionBlock.js'
+import { TabbedSectionBlock } from './TabbedSectionBlock.js'
 import { ZoltarMigrationSection } from './ZoltarMigrationSection.js'
 import { isMainnetChain } from '../lib/network.js'
 import { resolveEnumValue } from '../lib/viewState.js'
@@ -91,8 +91,7 @@ export function MarketSection({
 
 	return (
 		<div className='route-view-flow'>
-			<SectionBlock density='compact' title='Zoltar'>
-				{renderModeTabs()}
+			<TabbedSectionBlock density='compact' tabs={renderModeTabs()} title='Zoltar'>
 				{showUniverseSummary ? (
 					<MarketOverviewSection
 						accountAddress={accountState.address}
@@ -120,7 +119,7 @@ export function MarketSection({
 						</div>
 					</DataGrid>
 				)}
-			</SectionBlock>
+			</TabbedSectionBlock>
 			<div className='workflow-stack route-workflow-stack'>
 				{view === 'questions' ? (
 					<MarketQuestionsSection

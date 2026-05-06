@@ -1,9 +1,9 @@
 import { useState } from 'preact/hooks'
 import { SectionModeTabs } from './SectionModeTabs.js'
-import { SectionBlock } from './SectionBlock.js'
 import { SecurityPoolSection } from './SecurityPoolSection.js'
 import { SecurityPoolWorkflowSection } from './SecurityPoolWorkflowSection.js'
 import { SecurityPoolsOverviewSection } from './SecurityPoolsOverviewSection.js'
+import { TabbedSectionBlock } from './TabbedSectionBlock.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { resolveFirstMatchingValue } from '../lib/viewState.js'
 import type { SecurityPoolsSectionProps } from '../types/components.js'
@@ -50,9 +50,9 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 	return (
 		<div className='route-view-flow'>
 			{view === 'operate' ? undefined : (
-				<SectionBlock density='compact' title='Security pools' description='Browse deployed pools, create new pools, and operate on selected pool workflows.' actions={renderModeTabs()}>
+				<TabbedSectionBlock density='compact' title='Security pools' description='Browse deployed pools, create new pools, and operate on selected pool workflows.' tabs={renderModeTabs()}>
 					<></>
-				</SectionBlock>
+				</TabbedSectionBlock>
 			)}
 
 			{view === 'browse' ? (
