@@ -356,6 +356,7 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function redeemRep(address vault) external {
+		require(systemState == SystemState.Operational, 'System is not operational');
 		require(ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this) != BinaryOutcomes.BinaryOutcome.None, 'Question has not finalized!');
 		updateVaultFees(vault);
 		uint256 vaultOwnership = securityVaults[vault].poolOwnership;

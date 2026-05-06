@@ -145,6 +145,6 @@ bun run gas-costs
 ## Notes
 
 - `bun run setup` is the quickest way to bootstrap a fresh checkout.
-- `bun install --frozen-lockfile` must be run before standalone commands like `bun tsc` on a fresh checkout.
+- `bun install --frozen-lockfile` must be run before standalone commands like `bun run tsc` on a fresh checkout.
 - `bun run test` runs the TypeScript check first, then executes the test suite.
 - The repo uses exact dependency versions for reproducible installs.
