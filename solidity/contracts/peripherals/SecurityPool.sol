@@ -206,6 +206,8 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function sharesToCash(uint256 completeSetAmount) public view returns (uint256) {
+		if (completeSetAmount == 0) return 0;
+		if (shareTokenSupply == 0) return 0;
 		return completeSetAmount * completeSetCollateralAmount / shareTokenSupply;
 	}
 

@@ -4,26 +4,12 @@ import { createDeploymentStatusOracleAddressHelper } from '../shared/deploymentA
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	ScalarOutcomes_ScalarOutcomes,
-	Zoltar_Zoltar,
-	ZoltarQuestionData_ZoltarQuestionData,
 	peripherals_SecurityPoolUtils_SecurityPoolUtils,
 	peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
-	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
 	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	peripherals_openOracle_OpenOracle_OpenOracle,
 } from '../contractArtifact.js'
-import {
-	MULTICALL3_BYTECODE,
-	PROXY_DEPLOYER_ADDRESS,
-	ZERO_SALT,
-	getEscalationGameFactoryByteCode,
-	getInfraContractAddresses,
-	getSecurityPoolFactoryByteCode,
-	getSecurityPoolForkerByteCode,
-	getShareTokenFactoryByteCode,
-	getZoltarInitCode,
-	getZoltarQuestionDataByteCode,
-} from './deploymentHelpers.js'
+import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getEscalationGameFactoryByteCode, getInfraContractAddresses, getSecurityPoolFactoryByteCode, getSecurityPoolForkerByteCode, getShareTokenFactoryByteCode, getZoltarInitCode, getZoltarQuestionDataByteCode } from './deploymentHelpers.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, ReadClient, WriteClient } from '../types/contracts.js'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 

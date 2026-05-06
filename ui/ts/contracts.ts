@@ -1,33 +1,22 @@
-import { encodeAbiParameters, encodeDeployData, encodeFunctionData, getAddress, getCreate2Address, keccak256, parseAbiItem, zeroAddress, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type Hex, type MulticallReturnType } from 'viem'
+import { encodeFunctionData, parseAbiItem, zeroAddress, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type Hex, type MulticallReturnType, type TransactionReceipt } from 'viem'
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from './shared/bigInt.js'
-import { createDeploymentStatusOracleAddressHelper } from './shared/deploymentAddresses.js'
 import { assertNever } from './lib/assert.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './lib/securityVault.js'
 import { addOpenOracleBountyBuffer } from './lib/openOracle.js'
 import { getWethAddress } from './lib/uniswapQuoter.js'
-import { getGenesisReputationTokenAddress } from './lib/universe.js'
 import {
-	DeploymentStatusOracle_DeploymentStatusOracle,
-	ReputationToken_ReputationToken,
-	ScalarOutcomes_ScalarOutcomes,
 	Zoltar_Zoltar,
-	ZoltarQuestionData_ZoltarQuestionData,
 	peripherals_EscalationGame_EscalationGame,
 	peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
-	peripherals_SecurityPoolUtils_SecurityPoolUtils,
 	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
-	peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
 	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
-	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	peripherals_openOracle_OpenOracle_OpenOracle,
 	peripherals_tokens_ShareToken_ShareToken,
 } from './contractArtifact.js'
 import type {
-	DeploymentStatusSnapshot,
-	DeploymentStep,
 	DeploymentStepId,
 	EscalationDeposit,
 	EscalationSide,
@@ -35,23 +24,17 @@ import type {
 	ForkAuctionActionResult,
 	ForkAuctionDetails,
 	ListedSecurityPool,
-	MarketCreationResult,
-	MarketDetails,
-	MarketType,
 	OpenOracleActionResult,
 	OracleManagerDetails,
 	OracleQueueOperation,
-	QuestionData,
 	ReadClient,
 	OpenOracleReportSummary,
 	OpenOracleReportSummaryPage,
 	ReportingActionResult,
 	ReportingDetails,
 	ReportingOutcomeKey,
-	SecurityPoolCreationResult,
 	SecurityPoolVaultSummary,
 	SecurityVaultActionResult,
-	SecurityVaultDetails,
 	TradingActionResult,
 	TradingDetails,
 	TradingShareBalances,
@@ -60,13 +43,10 @@ import type {
 	ZoltarChildUniverseActionResult,
 	ZoltarForkActionResult,
 	ZoltarMigrationActionResult,
-	ZoltarUniverseSummary,
 } from './types/contracts.js'
 import {
 	getEscalationSideLabel,
-	getMarketType,
 	getMinBigintValue,
-	getQuestionId,
 	getQuestionIdHex,
 	getReportingOutcomeKey,
 	getReportingOutcomeValue,
@@ -75,60 +55,30 @@ import {
 	hasTimestampAndNumber,
 	isBigintTriple,
 	isEscalationDepositPage,
-	isStringArray,
 	requireOpenOracleExtraDataTuple,
 	requireOpenOracleReportMetaTuple,
 	requireOpenOracleReportMetaTupleArray,
 	requireOpenOracleReportStatusTuple,
 	requireOpenOracleReportStatusTupleArray,
 	requireSecurityVaultTupleArray,
-	requireUniverseTupleArray,
 	toUint8Array,
-	type SecurityVaultTuple,
-	type UniverseTuple,
 } from './contracts/helpers.js'
-import {
-	PROXY_DEPLOYER_ADDRESS,
-	ZERO_SALT,
-	MULTICALL3_BYTECODE,
-	getEscalationGameFactoryByteCode,
-	getInfraContractAddresses,
-	getMulticall3Address,
-	getOpenOracleAddress,
-	getSecurityPoolAddresses,
-	getSecurityPoolForkerByteCode,
-	getSecurityPoolFactoryByteCode,
-	getShareTokenFactoryByteCode,
-	getZoltarAddress,
-	getZoltarInitCode,
-	getZoltarQuestionDataByteCode,
-} from './contracts/deploymentHelpers.js'
+import { getInfraContractAddresses, getMulticall3Address, getOpenOracleAddress } from './contracts/deploymentHelpers.js'
+export { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from './contracts/deployment.js'
+import { getDeploymentSteps } from './contracts/deployment.js'
+export { createSecurityPool, loadSecurityVaultDetails, originSecurityPoolExists } from './contracts/securityPools.js'
+export { createMarket, loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarUniverseSummary } from './contracts/zoltar.js'
+import { loadMarketDetails } from './contracts/zoltar.js'
 
 export { getMulticall3Address, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
-
-const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
-const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
-const PROXY_DEPLOYER_RUNTIME_CODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3' satisfies Hex
-const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
-const FUND_PROXY_DEPLOYER_SIGNER_AMOUNT = 10000000000000000n
 const LIQUIDATION_OPERATION_TYPE = 0
 const ESCALATION_TIME_LENGTH = 4_233_600n
 const MIGRATION_TIME_LENGTH = 4_838_400n
 const TRUTH_AUCTION_TIME_LENGTH = 604_800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
-const ANSWER_OPTION_ABI = [parseAbiItem('function getAnswerOptionName(uint256 questionId, uint256 answer) view returns (string memory)')]
 
 const CONTRACT_PAGE_SIZE = 30n
 
-type DeployedChildUniverseRecord = {
-	forkQuestionId: bigint
-	forkTime: bigint
-	forkingOutcomeIndex: bigint
-	parentUniverseId: bigint
-	reputationToken: Address
-}
-type DeployedChildUniversesPage = readonly [readonly bigint[], readonly bigint[], readonly DeployedChildUniverseRecord[]]
-type QuestionTuple = readonly [string, string, bigint, bigint, bigint, bigint, bigint, string]
 type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 
@@ -144,63 +94,6 @@ type SecurityPoolDeploymentQueryResult = {
 	truthAuction: Address
 	universeId: bigint
 }
-
-function getDeploymentStatusOracleStepAddresses() {
-	const addresses = getInfraContractAddresses()
-	return [
-		PROXY_DEPLOYER_ADDRESS,
-		addresses.multicall3,
-		addresses.uniformPriceDualCapBatchAuctionFactory,
-		addresses.scalarOutcomes,
-		addresses.securityPoolUtils,
-		addresses.openOracle,
-		addresses.zoltarQuestionData,
-		addresses.zoltar,
-		addresses.shareTokenFactory,
-		addresses.priceOracleManagerAndOperatorQueuerFactory,
-		addresses.securityPoolForker,
-		addresses.escalationGameFactory,
-		addresses.securityPoolFactory,
-	] satisfies Address[]
-}
-
-function getDeploymentStatusOracleByteCode() {
-	return encodeDeployData({
-		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-		bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
-		args: [getDeploymentStatusOracleStepAddresses()],
-	})
-}
-
-function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracleDeployed: boolean): DeploymentStatusSnapshot {
-	const steps = getDeploymentSteps()
-	let maskIndex = 0n
-	const deploymentStatuses = steps.map(step => {
-		if (step.id === 'deploymentStatusOracle') {
-			return {
-				...step,
-				deployed: deploymentStatusOracleDeployed,
-			}
-		}
-
-		const deployed = (deployedMask & (1n << maskIndex)) !== 0n
-		maskIndex += 1n
-		return {
-			...step,
-			deployed,
-		}
-	})
-	return {
-		augurPlaceHolderDeployed: deploymentStatuses.every(step => step.deployed),
-		deploymentStatuses,
-	}
-}
-
-const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddressHelper({
-	deploymentStatusOracleBytecode: getDeploymentStatusOracleByteCode,
-	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
-	zeroSalt: ZERO_SALT,
-})
 async function readRequiredMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts): Promise<MulticallReturnType<TContracts, false>> {
 	return (await client.multicall({
 		allowFailure: false,
@@ -215,15 +108,6 @@ export async function readOptionalMulticall<const TContracts extends readonly un
 		contracts: contracts as readonly ContractFunctionParameters[],
 		multicallAddress: getMulticall3Address(),
 	})) as MulticallReturnType<TContracts, true>
-}
-
-async function deployViaProxy(client: WriteClient, bytecode: Hex) {
-	const hash = await client.sendTransaction({
-		to: PROXY_DEPLOYER_ADDRESS,
-		data: bytecode,
-	})
-	await client.waitForTransactionReceipt({ hash })
-	return hash
 }
 
 type ContractRevertReasonParams = {
@@ -270,6 +154,11 @@ function getOriginalErrorMessage(error: unknown) {
 }
 
 async function writeContractAndWait<TCallParams extends ContractRevertReasonParams>(client: WriteClient, getCallParams: () => TCallParams) {
+	const { hash } = await writeContractAndWaitForReceipt(client, getCallParams)
+	return hash
+}
+
+async function writeContractAndWaitForReceipt<TCallParams extends ContractRevertReasonParams>(client: WriteClient, getCallParams: () => TCallParams): Promise<{ hash: Hash; receipt: TransactionReceipt }> {
 	const callParams = getCallParams()
 	const data = encodeFunctionData({
 		abi: callParams.abi,
@@ -295,7 +184,7 @@ async function writeContractAndWait<TCallParams extends ContractRevertReasonPara
 		const reason = await getContractRevertReason(client, callParams)
 		throw new Error(reason ?? 'Transaction reverted')
 	}
-	return hash
+	return { hash, receipt }
 }
 
 async function readSecurityPoolUniverseId(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address) {
@@ -307,231 +196,10 @@ async function readSecurityPoolUniverseId(client: Pick<ReadClient, 'readContract
 	})
 }
 
-async function securityPoolExists(client: Pick<ReadClient, 'getCode'>, securityPoolAddress: Address) {
-	const code = await client.getCode({ address: securityPoolAddress })
-	return code !== undefined && code !== '0x'
-}
-
-async function ensureProxyDeployerDeployed(client: WriteClient) {
-	const code = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
-	if (code !== undefined && code !== '0x') return undefined
-	if (client.installSimulationProxyDeployer !== undefined) {
-		await client.installSimulationProxyDeployer({
-			address: PROXY_DEPLOYER_ADDRESS,
-			runtimeCode: PROXY_DEPLOYER_RUNTIME_CODE,
-		})
-		return ZERO_HASH
-	}
-
-	const fundHash = await client.sendTransaction({
-		to: PROXY_DEPLOYER_SIGNER,
-		value: FUND_PROXY_DEPLOYER_SIGNER_AMOUNT,
-	})
-	await client.waitForTransactionReceipt({ hash: fundHash })
-
-	const deployHash = await client.sendRawTransaction({
-		serializedTransaction: PROXY_DEPLOYER_RAW_TRANSACTION,
-	})
-	await client.waitForTransactionReceipt({ hash: deployHash })
-	return deployHash
-}
-
-export function getDeploymentSteps(): DeploymentStep[] {
-	const addresses = getInfraContractAddresses()
-
-	return [
-		{
-			id: 'proxyDeployer',
-			label: 'Proxy Deployer',
-			address: PROXY_DEPLOYER_ADDRESS,
-			dependencies: [],
-			deploy: async client => {
-				const hash = await ensureProxyDeployerDeployed(client)
-				return hash ?? ZERO_HASH
-			},
-		},
-		{
-			id: 'deploymentStatusOracle',
-			label: 'Deployment Status Oracle',
-			address: getDeploymentStatusOracleAddress(),
-			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, getDeploymentStatusOracleByteCode()),
-		},
-		{
-			id: 'multicall3',
-			label: 'Multicall3',
-			address: addresses.multicall3,
-			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, MULTICALL3_BYTECODE),
-		},
-		{
-			id: 'uniformPriceDualCapBatchAuctionFactory',
-			label: 'UniformPriceDualCapBatchAuctionFactory',
-			address: addresses.uniformPriceDualCapBatchAuctionFactory,
-			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`),
-		},
-		{
-			id: 'scalarOutcomes',
-			label: 'ScalarOutcomes',
-			address: addresses.scalarOutcomes,
-			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`),
-		},
-		{
-			id: 'securityPoolUtils',
-			label: 'SecurityPoolUtils',
-			address: addresses.securityPoolUtils,
-			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`),
-		},
-		{
-			id: 'openOracle',
-			label: 'OpenOracle',
-			address: addresses.openOracle,
-			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`),
-		},
-		{
-			id: 'zoltarQuestionData',
-			label: 'ZoltarQuestionData',
-			address: addresses.zoltarQuestionData,
-			dependencies: ['proxyDeployer', 'scalarOutcomes'],
-			deploy: async client => await deployViaProxy(client, getZoltarQuestionDataByteCode()),
-		},
-		{
-			id: 'zoltar',
-			label: 'Zoltar',
-			address: addresses.zoltar,
-			dependencies: ['proxyDeployer', 'zoltarQuestionData'],
-			deploy: async client => {
-				const hash = await deployViaProxy(client, getZoltarInitCode(addresses.zoltarQuestionData))
-				await client.patchSimulationGenesisRepToken?.({
-					repAddress: getGenesisReputationTokenAddress(),
-					zoltarAddress: addresses.zoltar,
-				})
-				return hash
-			},
-		},
-		{
-			id: 'shareTokenFactory',
-			label: 'ShareTokenFactory',
-			address: addresses.shareTokenFactory,
-			dependencies: ['proxyDeployer', 'zoltar'],
-			deploy: async client => await deployViaProxy(client, getShareTokenFactoryByteCode(addresses.zoltar)),
-		},
-		{
-			id: 'priceOracleManagerAndOperatorQueuerFactory',
-			label: 'PriceOracleManagerAndOperatorQueuerFactory',
-			address: addresses.priceOracleManagerAndOperatorQueuerFactory,
-			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`),
-		},
-		{
-			id: 'securityPoolForker',
-			label: 'SecurityPoolForker',
-			address: addresses.securityPoolForker,
-			dependencies: ['proxyDeployer', 'scalarOutcomes', 'securityPoolUtils', 'zoltar'],
-			deploy: async client => await deployViaProxy(client, getSecurityPoolForkerByteCode(addresses.zoltar)),
-		},
-		{
-			id: 'escalationGameFactory',
-			label: 'EscalationGameFactory',
-			address: addresses.escalationGameFactory,
-			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, getEscalationGameFactoryByteCode()),
-		},
-		{
-			id: 'securityPoolFactory',
-			label: 'SecurityPoolFactory',
-			address: addresses.securityPoolFactory,
-			dependencies: ['proxyDeployer', 'securityPoolForker', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'uniformPriceDualCapBatchAuctionFactory', 'priceOracleManagerAndOperatorQueuerFactory', 'securityPoolUtils'],
-			deploy: async client =>
-				await deployViaProxy(
-					client,
-					getSecurityPoolFactoryByteCode({
-						escalationGameFactory: addresses.escalationGameFactory,
-						openOracle: addresses.openOracle,
-						priceOracleManagerAndOperatorQueuerFactory: addresses.priceOracleManagerAndOperatorQueuerFactory,
-						securityPoolForker: addresses.securityPoolForker,
-						shareTokenFactory: addresses.shareTokenFactory,
-						uniformPriceDualCapBatchAuctionFactory: addresses.uniformPriceDualCapBatchAuctionFactory,
-						zoltar: addresses.zoltar,
-						zoltarQuestionData: addresses.zoltarQuestionData,
-					}),
-				),
-		},
-	]
-}
-
-async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readContract'>): Promise<bigint> {
-	return BigInt(
-		await client.readContract({
-			abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-			functionName: 'getDeploymentMask',
-			address: getDeploymentStatusOracleAddress(),
-			args: [],
-		}),
-	)
-}
-
-export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient, 'readContract' | 'getCode'>): Promise<DeploymentStatusSnapshot> {
-	const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
-	const deploymentStatusOracleCode = await client.getCode({ address: deploymentStatusOracleAddress })
-	if (deploymentStatusOracleCode === undefined || deploymentStatusOracleCode === '0x') {
-		const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
-		const proxyDeployerDeployed = proxyDeployerCode !== undefined && proxyDeployerCode !== '0x'
-		return getDeploymentStatusSnapshot(proxyDeployerDeployed ? 1n : 0n, false)
-	}
-
-	const deployedMask = await loadDeploymentStatusOracleMask(client)
-	return getDeploymentStatusSnapshot(deployedMask, true)
-}
-
-export async function loadErc20Balance(client: ReadClient, tokenAddress: Address, ownerAddress: Address) {
-	return await client.readContract({
-		abi: ABIS.mainnet.erc20,
-		functionName: 'balanceOf',
-		address: tokenAddress,
-		args: [ownerAddress],
-	})
-}
-
-export async function loadErc20Allowance(client: ReadClient, tokenAddress: Address, ownerAddress: Address, spenderAddress: Address) {
-	return await client.readContract({
-		abi: ABIS.mainnet.erc20,
-		functionName: 'allowance',
-		address: tokenAddress,
-		args: [ownerAddress, spenderAddress],
-	})
-}
-
 function getDeploymentStep(id: DeploymentStepId) {
 	const step = getDeploymentSteps().find(candidate => candidate.id === id)
 	if (step === undefined) throw new Error(`Unknown deployment step: ${id}`)
 	return step
-}
-
-async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
-	let currentIndex = 0n
-	const outcomeLabels: string[] = []
-
-	while (true) {
-		const page = await client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getOutcomeLabels',
-			address: getDeploymentStep('zoltarQuestionData').address,
-			args: [questionId, currentIndex, CONTRACT_PAGE_SIZE],
-		})
-		if (!isStringArray(page)) throw new Error('Unexpected outcome labels response')
-
-		const labels = page.filter(label => label.length > 0)
-		outcomeLabels.push(...labels)
-		if (BigInt(labels.length) !== CONTRACT_PAGE_SIZE) break
-		currentIndex += CONTRACT_PAGE_SIZE
-	}
-
-	return outcomeLabels
 }
 
 async function loadEscalationDeposits(client: ReadClient, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
@@ -564,243 +232,6 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 	return deposits
 }
 
-export async function loadMarketDetails(client: ReadClient, questionId: bigint): Promise<MarketDetails> {
-	const [question, createdAt] = await readRequiredMulticall(client, [
-		{
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'questions',
-			address: getDeploymentStep('zoltarQuestionData').address,
-			args: [questionId],
-		},
-		{
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'questionCreatedTimestamp',
-			address: getDeploymentStep('zoltarQuestionData').address,
-			args: [questionId],
-		},
-	])
-	const questionData: QuestionTuple = question
-	const [title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit] = questionData
-
-	const exists = createdAt > 0n || title !== '' || description !== '' || startTime !== 0n || endTime !== 0n || numTicks !== 0n
-	const outcomeLabels = exists ? await loadOutcomeLabels(client, questionId) : []
-
-	return {
-		answerUnit,
-		createdAt,
-		description,
-		displayValueMax,
-		displayValueMin,
-		endTime,
-		exists,
-		marketType: getMarketType({ title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit }, outcomeLabels),
-		outcomeLabels,
-		numTicks,
-		questionId: getQuestionIdHex(questionId),
-		startTime,
-		title,
-	}
-}
-
-async function loadQuestionIds(client: ReadClient): Promise<bigint[]> {
-	const questionCount = await client.readContract({
-		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		functionName: 'getQuestionCount',
-		address: getDeploymentStep('zoltarQuestionData').address,
-		args: [],
-	})
-
-	let currentIndex = 0n
-	const questionIds: bigint[] = []
-	while (currentIndex < questionCount) {
-		const page = await client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			functionName: 'getQuestions',
-			address: getDeploymentStep('zoltarQuestionData').address,
-			args: [currentIndex, CONTRACT_PAGE_SIZE],
-		})
-		if (!Array.isArray(page)) throw new Error('Unexpected question id page response')
-
-		const normalizedPage = page.filter((questionId): questionId is bigint => typeof questionId === 'bigint' && questionId !== 0n).slice(0, Number(CONTRACT_PAGE_SIZE))
-		questionIds.push(...normalizedPage)
-		if (BigInt(normalizedPage.length) !== CONTRACT_PAGE_SIZE) break
-		currentIndex += CONTRACT_PAGE_SIZE
-	}
-
-	return questionIds
-}
-
-export async function loadAllZoltarQuestions(client: ReadClient): Promise<MarketDetails[]> {
-	const questionIds = await loadQuestionIds(client)
-	return await Promise.all(questionIds.map(async questionId => await loadMarketDetails(client, questionId)))
-}
-
-export async function loadZoltarQuestionCount(client: ReadClient) {
-	return await client.readContract({
-		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		functionName: 'getQuestionCount',
-		address: getDeploymentStep('zoltarQuestionData').address,
-		args: [],
-	})
-}
-
-export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint): Promise<ZoltarUniverseSummary | undefined> {
-	const zoltarAddress = getDeploymentStep('zoltar').address
-	const [repToken, universe, forkTime, forkThreshold] = await readRequiredMulticall(client, [
-		{
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'getRepToken',
-			address: zoltarAddress,
-			args: [universeId],
-		},
-		{
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'universes',
-			address: zoltarAddress,
-			args: [universeId],
-		},
-		{
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'getForkTime',
-			address: zoltarAddress,
-			args: [universeId],
-		},
-		{
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'getForkThreshold',
-			address: zoltarAddress,
-			args: [universeId],
-		},
-	])
-	if (repToken === zeroAddress) return undefined
-
-	const totalTheoreticalSupply = await client.readContract({
-		abi: ReputationToken_ReputationToken.abi,
-		functionName: 'getTotalTheoreticalSupply',
-		address: repToken,
-		args: [],
-	})
-	const universeData: UniverseTuple = universe
-	const [storedForkTime, forkQuestionId, forkingOutcomeIndex, , parentUniverseId] = universeData
-	const hasForked = forkTime > 0n || storedForkTime > 0n
-
-	let childUniverses: ZoltarUniverseSummary['childUniverses'] = []
-	let forkQuestionDetails: MarketDetails | undefined = undefined
-	if (hasForked && forkQuestionId > 0n) {
-		const marketDetails = await loadMarketDetails(client, forkQuestionId)
-		forkQuestionDetails = marketDetails
-		if (marketDetails.marketType === 'scalar') {
-			const deployedChildUniverses: ZoltarUniverseSummary['childUniverses'] = []
-			let currentIndex = 0n
-			while (true) {
-				const page: DeployedChildUniversesPage = await client.readContract({
-					abi: Zoltar_Zoltar.abi,
-					functionName: 'getDeployedChildUniverses',
-					address: getDeploymentStep('zoltar').address,
-					args: [universeId, currentIndex, CONTRACT_PAGE_SIZE],
-				})
-				const [outcomeIndexes, childUniverseIds, childUniverseTuples] = page
-				const outcomeLabels =
-					outcomeIndexes.length === 0
-						? []
-						: (
-								await readRequiredMulticall(
-									client,
-									outcomeIndexes.map(outcomeIndex => ({
-										abi: ANSWER_OPTION_ABI,
-										functionName: 'getAnswerOptionName',
-										address: getDeploymentStep('zoltarQuestionData').address,
-										args: [forkQuestionId, outcomeIndex],
-									})),
-								)
-							).map(outcomeLabel => String(outcomeLabel))
-				const pageChildren = outcomeIndexes.map((outcomeIndex, index) => {
-					const childUniverse = childUniverseTuples[index]
-					if (childUniverse === undefined) throw new Error('Unexpected deployed child universe response')
-					const { forkTime: childForkTime, parentUniverseId: childParentUniverseId, reputationToken: childReputationToken } = childUniverse
-					const outcomeLabel = outcomeLabels[index]
-					if (outcomeLabel === undefined) throw new Error('Unexpected outcome label response')
-					const childUniverseId = childUniverseIds[index]
-					if (childUniverseId === undefined) throw new Error('Unexpected deployed child universe response')
-					return {
-						exists: childReputationToken !== zeroAddress,
-						forkTime: childForkTime,
-						outcomeIndex,
-						outcomeLabel,
-						parentUniverseId: childParentUniverseId,
-						reputationToken: childReputationToken,
-						universeId: childUniverseId,
-					}
-				})
-				deployedChildUniverses.push(...pageChildren)
-				if (BigInt(pageChildren.length) !== CONTRACT_PAGE_SIZE) break
-				currentIndex += CONTRACT_PAGE_SIZE
-			}
-			childUniverses = deployedChildUniverses
-		} else {
-			const childOutcomeEntries = [
-				{ outcomeIndex: 0n, outcomeLabel: 'Invalid' },
-				...marketDetails.outcomeLabels.map((outcomeLabel, outcomeIndex) => ({
-					outcomeIndex: BigInt(outcomeIndex + 1),
-					outcomeLabel,
-				})),
-			]
-			const childUniverseIds = (
-				await readRequiredMulticall(
-					client,
-					childOutcomeEntries.map(({ outcomeIndex }) => ({
-						abi: Zoltar_Zoltar.abi,
-						functionName: 'getChildUniverseId',
-						address: getDeploymentStep('zoltar').address,
-						args: [universeId, outcomeIndex],
-					})),
-				)
-			).map(childUniverseId => BigInt(childUniverseId))
-			const childUniverseTuples = requireUniverseTupleArray(
-				await readRequiredMulticall(
-					client,
-					childUniverseIds.map(childUniverseId => ({
-						abi: Zoltar_Zoltar.abi,
-						functionName: 'universes',
-						address: getDeploymentStep('zoltar').address,
-						args: [childUniverseId],
-					})),
-				),
-				'child universe tuple',
-			)
-
-			childUniverses = childOutcomeEntries.map(({ outcomeIndex, outcomeLabel }, index) => {
-				const childUniverseId = childUniverseIds[index]
-				if (childUniverseId === undefined) throw new Error('Unexpected child universe id response')
-				const childUniverseData = childUniverseTuples[index]
-				if (childUniverseData === undefined) throw new Error('Unexpected child universe response')
-				const [childForkTime, , , childReputationToken, childParentUniverseId] = childUniverseData
-				return {
-					exists: childReputationToken !== zeroAddress,
-					forkTime: childForkTime,
-					outcomeIndex,
-					outcomeLabel,
-					parentUniverseId: childParentUniverseId,
-					reputationToken: childReputationToken,
-					universeId: childUniverseId,
-				}
-			})
-		}
-	}
-
-	return {
-		childUniverses,
-		forkThreshold,
-		forkQuestionDetails,
-		forkTime,
-		forkingOutcomeIndex,
-		hasForked,
-		parentUniverseId,
-		reputationToken: repToken,
-		totalTheoreticalSupply,
-		universeId,
-	}
-}
 
 export async function loadReportingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
 	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId] = await readRequiredMulticall(client, [
@@ -908,142 +339,6 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	}
 }
 
-export async function createMarket(
-	client: WriteClient,
-	parameters: {
-		marketType: MarketType
-		outcomeLabels: string[]
-		questionData: QuestionData
-	},
-) {
-	const questionId = getQuestionId(parameters.questionData, parameters.outcomeLabels)
-	const createQuestionHash = await writeContractAndWait(client, () => ({
-		address: getDeploymentStep('zoltarQuestionData').address,
-		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		functionName: 'createQuestion',
-		args: [parameters.questionData, parameters.outcomeLabels],
-	}))
-
-	return {
-		questionId: getQuestionIdHex(questionId),
-		createQuestionHash,
-		marketType: parameters.marketType,
-	} satisfies MarketCreationResult
-}
-
-export async function createSecurityPool(
-	client: WriteClient,
-	parameters: {
-		currentRetentionRate: bigint
-		questionId: bigint
-		securityMultiplier: bigint
-	},
-) {
-	const deployPoolHash = await writeContractAndWait(client, () => ({
-		address: getDeploymentStep('securityPoolFactory').address,
-		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-		functionName: 'deployOriginSecurityPool',
-		args: [0n, parameters.questionId, parameters.securityMultiplier, parameters.currentRetentionRate],
-	}))
-
-	return {
-		deployPoolHash,
-		questionId: getQuestionIdHex(parameters.questionId),
-		securityPoolAddress: getSecurityPoolAddresses(zeroAddress, 0n, parameters.questionId, parameters.securityMultiplier).securityPool,
-		securityMultiplier: parameters.securityMultiplier,
-		universeId: 0n,
-	} satisfies SecurityPoolCreationResult
-}
-
-function getOriginSecurityPoolShareTokenSalt(questionId: bigint, securityMultiplier: bigint) {
-	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [securityMultiplier, questionId]))
-}
-
-function getOriginSecurityPoolShareTokenAddress(questionId: bigint, securityMultiplier: bigint) {
-	return getCreate2Address({
-		from: getInfraContractAddresses().shareTokenFactory,
-		salt: getOriginSecurityPoolShareTokenSalt(questionId, securityMultiplier),
-		bytecode: encodeDeployData({
-			abi: peripherals_tokens_ShareToken_ShareToken.abi,
-			bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
-			args: [getInfraContractAddresses().securityPoolFactory, getZoltarAddress(), questionId],
-		}),
-	})
-}
-
-export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode'>, questionId: bigint, securityMultiplier: bigint) {
-	const shareTokenAddress = getOriginSecurityPoolShareTokenAddress(questionId, securityMultiplier)
-	const code = await client.getCode({ address: shareTokenAddress })
-	return code !== undefined && code !== '0x'
-}
-
-export async function loadSecurityVaultDetails(client: ReadClient, securityPoolAddress: Address, vaultAddress: Address): Promise<SecurityVaultDetails | undefined> {
-	if (!(await securityPoolExists(client, securityPoolAddress))) return undefined
-
-	const [currentRetentionRate, managerAddress, poolOwnershipDenominator, repToken, totalSecurityBondAllowance, universeId, vaultData] = await readRequiredMulticall(client, [
-		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'currentRetentionRate',
-			address: securityPoolAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'priceOracleManagerAndOperatorQueuer',
-			address: securityPoolAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'poolOwnershipDenominator',
-			address: securityPoolAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'repToken',
-			address: securityPoolAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'totalSecurityBondAllowance',
-			address: securityPoolAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'universeId',
-			address: securityPoolAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'securityVaults',
-			address: securityPoolAddress,
-			args: [vaultAddress],
-		},
-	])
-	const vaultDataTuple: SecurityVaultTuple = vaultData
-	const [poolOwnership, securityBondAllowance, unpaidEthFees, , lockedRepInEscalationGame] = vaultDataTuple
-	const repDepositShare = poolOwnership === 0n || poolOwnershipDenominator === 0n ? 0n : await poolOwnershipToRep(client, securityPoolAddress, poolOwnership)
-
-	return {
-		currentRetentionRate: currentRetentionRate,
-		lockedRepInEscalationGame,
-		managerAddress,
-		poolOwnershipDenominator: poolOwnershipDenominator,
-		repDepositShare,
-		repToken,
-		securityBondAllowance,
-		securityPoolAddress,
-		totalSecurityBondAllowance: totalSecurityBondAllowance,
-		unpaidEthFees,
-		universeId,
-		vaultAddress,
-	}
-}
-
 async function getSecurityPoolVaultCount(client: ReadClient, securityPoolAddress: Address) {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -1059,15 +354,6 @@ async function getSecurityPoolVaults(client: ReadClient, securityPoolAddress: Ad
 		functionName: 'getVaults',
 		address: securityPoolAddress,
 		args: [startIndex, count],
-	})
-}
-
-async function poolOwnershipToRep(client: ReadClient, securityPoolAddress: Address, poolOwnership: bigint) {
-	return await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'poolOwnershipToRep',
-		address: securityPoolAddress,
-		args: [poolOwnership],
 	})
 }
 

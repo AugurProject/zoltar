@@ -16,15 +16,7 @@ type AppStatusNoticesProps = {
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
-export function AppStatusNotices({
-	errorMessage,
-	hasInjectedWallet,
-	showAugurPlaceHolderDeploymentWarning,
-	showZoltarUniverseForkedWarning,
-	transactionState,
-	walletPresentation,
-	zoltarUniverse,
-}: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, hasInjectedWallet, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, transactionState, walletPresentation, zoltarUniverse }: AppStatusNoticesProps) {
 	return (
 		<div className='page-notices'>
 			{showZoltarUniverseForkedWarning && zoltarUniverse !== undefined ? (
@@ -38,11 +30,7 @@ export function AppStatusNotices({
 			{transactionState.transactionInFlightCount > 0 ? (
 				<p className='notice success'>
 					<span className='spinner' aria-hidden='true' />
-					{transactionState.transactionSubmitted ? (
-						<>Transaction submitted, waiting for confirmation. {transactionState.lastTransactionHash === undefined ? <span>Pending wallet signature</span> : <TransactionHashLink hash={transactionState.lastTransactionHash} />}</>
-					) : (
-						'Awaiting wallet confirmation.'
-					)}
+					{transactionState.transactionSubmitted ? <>Transaction submitted, waiting for confirmation. {transactionState.lastTransactionHash === undefined ? <span>Pending wallet signature</span> : <TransactionHashLink hash={transactionState.lastTransactionHash} />}</> : 'Awaiting wallet confirmation.'}
 				</p>
 			) : transactionState.lastTransactionHash === undefined ? undefined : (
 				<p className='notice success'>
