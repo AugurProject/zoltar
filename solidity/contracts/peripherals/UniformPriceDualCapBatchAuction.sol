@@ -57,6 +57,9 @@ contract UniformPriceDualCapBatchAuction {
 	event RefundLosingBids(address bidder, IUniformPriceDualCapBatchAuction.TickIndex[] tickIndices, uint256 ethAmount);
 
 	constructor(address _owner) {
+		// Child-pool truth auctions are intentionally owned by the SecurityPoolForker
+		// contract. The forker starts/finalizes the auction and later withdraws bids on
+		// behalf of vaults so the purchased REP can be credited back into pool ownership.
 		owner = _owner;
 	}
 
@@ -132,6 +135,9 @@ contract UniformPriceDualCapBatchAuction {
 
 	function withdrawBids(address withdrawFor, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
 		require(finalized, 'not finalized');
+		// The owner is expected to be the coordinating forker contract for truth auctions,
+		// not the bidder directly. That contract calls this and then accounts the returned
+		// REP into the bidder's child-pool vault state.
 		require(msg.sender == owner, 'Only owner can call');
 
 		uint256 clearingPriceLocal = tickToPrice(clearingTick);

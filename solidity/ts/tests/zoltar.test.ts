@@ -159,6 +159,35 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(childUniverseData.parentUniverseId, genesisUniverse, 'child universe should point back to the parent')
 	})
 
+	test('deployChild rejects malformed child universe outcomes', async () => {
+		const zoltar = getZoltarAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		const questionData = {
+			title: 'malformed child deploy test',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getQuestionId(questionData, outcomes)
+		await forkUniverse(client, genesisUniverse, questionId)
+
+		const malformedOutcomeIndex = 3n
+		const childUniverseId = getChildUniverseId(genesisUniverse, malformedOutcomeIndex)
+		const childRepToken = getRepTokenAddress(childUniverseId)
+		await assert.rejects(deployChild(client, genesisUniverse, malformedOutcomeIndex), /Malformed/)
+		assert.ok(!(await contractExists(client, childRepToken)), 'malformed child universe rep token should not be deployed')
+
+		const migrationBalance = await getMigrationRepBalance(client, genesisUniverse, client.account.address)
+		await assert.rejects(splitMigrationRep(client, genesisUniverse, migrationBalance, [malformedOutcomeIndex]), /Malformed/)
+	})
+
 	test('getDeployedChildUniverses pages deployed child universes', async () => {
 		const zoltar = getZoltarAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)

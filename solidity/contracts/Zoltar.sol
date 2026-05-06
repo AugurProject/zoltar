@@ -86,6 +86,7 @@ contract Zoltar {
 	function deployChild(uint248 universeId, uint256 outcomeIndex) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked');
+		require(!zoltarQuestionData.isMalformedAnswerOption(universe.forkQuestionId, outcomeIndex), 'Malformed');
 		uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndex);
 		// Prevent overwriting an existing child universe
 		require(address(universes[childUniverseId].reputationToken) == address(0), 'Child universe already deployed');
