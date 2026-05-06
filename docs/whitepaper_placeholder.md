@@ -343,14 +343,170 @@ If `repAtForkAmount` is zero, the contract does not evaluate this division path.
 
 ### Auction mechanics
 
-- bidders submit ETH bids at ticks representing ETH/REP prices
-- the auction maintains aggregate bid depth by tick
-- finalization computes a clearing tick
-- bids above the clearing tick win fully
-- bids below the clearing tick lose and receive refunds
-- bids at the clearing tick can be partially filled
+- The auction is started by `SecurityPoolForker` on behalf of the child security pool. In the deployed child-pool flow, the auction contract’s `owner` is the `SecurityPoolForker`, so the important economic fact is not “the owner starts it,” but rather “the fork-recovery mechanism starts it with child-pool-defined repair targets.”
+- `startAuction` sets two caps:
+  - `ethRaiseCap`: how much ETH the child pool wants to raise to repair collateral
+  - `maxRepBeingSold`: the maximum REP inventory the child pool is willing to sell
+- Bidders submit ETH at discrete ticks. A tick is an integer price level on a multiplicative grid:
 
-If the auction is underfunded, the contract switches to threshold-based logic that allocates REP proportionally among bids above the underfunded threshold price.
+$$
+\text{priceAtTick} = 10^{18} \cdot 1.0001^{\text{tick}}
+$$
+
+The contract stores prices in `1e18` fixed-point units, so:
+
+- tick `0` means `1 ETH/REP`
+- positive ticks mean higher ETH per REP
+- negative ticks mean lower ETH per REP
+
+Equivalently, the conceptual inverse relation is:
+
+$$
+\text{tick} \approx \frac{\ln(\text{priceInWeiPerRep} / 10^{18})}{\ln(1.0001)}
+$$
+
+In other words, a bid at a higher tick is simply a bid willing to pay a higher ETH/REP price.
+- Finalization then walks bids from the highest ETH/REP price to the lowest ETH/REP price and stops at the first price where one of two constraints binds:
+  - the auction has raised enough ETH to hit `ethRaiseCap`
+  - the ETH collected so far, at that price, would buy all `maxRepBeingSold`
+
+In normal clearing mode:
+
+- bids above the clearing tick win in full
+- bids below the clearing tick lose and receive full ETH refunds
+- bids exactly at the clearing tick are filled in submission order until the remaining capacity at that tick is exhausted
+
+This submission ordering at the clearing tick is important. The contract stores each bid with a cumulative ETH total for that price level, and uses that running total to determine how much of each same-tick bid was actually used.
+
+In underfunded mode:
+
+- the auction cannot discover a standard clearing tick
+- the contract computes an `underfundedThreshold = ethRaised / maxRepBeingSold`
+- only bids strictly above that threshold count as winners
+- all winning ETH collectively buys the full REP inventory
+- each winning bidder receives REP pro rata to that bidder’s share of the winning ETH
+- bids at or below the threshold lose and are refunded in full
+
+This is why the auction is dual-capped: it is trying to repair up to a target amount of ETH collateral without selling more than the allowed REP inventory.
+
+```
+Auction inputs
+
+    Child branch needs ETH repair
+                |
+                v
+     +-----------------------+
+     | startAuction sets     |
+     | ethRaiseCap           |
+     | maxRepBeingSold       |
+     +-----------------------+
+                |
+                v
+     Bidders post ETH at ticks
+                |
+                v
+     Sort demand high price -> low price
+                |
+                v
+     Stop when one cap binds first
+        |                     |
+        |                     |
+        v                     v
+  ETH cap or REP cap      No standard clear
+  binds during sweep      after all bids
+        |                     |
+        v                     v
+   Normal clearing         Underfunded path
+```
+
+```
+Normal clearing intuition
+
+price (ETH/REP)
+high
+  ^
+  |   tick 103  ##########         fully filled
+  |   tick 102  #######            fully filled
+  |   tick 101  #####|---          partially filled here
+  |   tick 100  ###                refunded
+  |   tick  99  ##                 refunded
+  +----------------------------------------------> cumulative demand
+
+            clearing tick = 101
+```
+
+```
+Same-tick ordering
+
+Suppose three bids arrive at the same clearing tick:
+
+  Alice: 2 ETH   cumulative 2
+  Bob:   3 ETH   cumulative 5
+  Carol: 4 ETH   cumulative 9
+
+If only 6 ETH can be used at tick 101:
+
+  Alice: full fill   (2 / 2 used)
+  Bob:   full fill   (3 / 3 used)
+  Carol: partial     (1 / 4 used)
+```
+
+```
+Underfunded intuition
+
+REP for sale: 100
+Total winning ETH above threshold: 10
+
+Alice bids 4 ETH above threshold  -> gets 40 REP
+Bob   bids 6 ETH above threshold  -> gets 60 REP
+
+Bids at or below threshold -> full ETH refund
+```
+
+### Worked clearing example
+
+Suppose the child pool starts a truth auction with:
+
+- `ethRaiseCap = 20 ETH`
+- `maxRepBeingSold = 4 REP`
+
+Now suppose three bidders participate:
+
+- Alice bids `3 ETH` at a tick corresponding to `5 ETH/REP`
+- Bob bids `4 ETH` at a tick corresponding to `4 ETH/REP`
+- Carol bids `6 ETH` at a tick corresponding to `3 ETH/REP`
+
+Walking from highest price to lowest price:
+
+1. Alice contributes `3 ETH` at `5 ETH/REP`.
+2. Adding Bob brings cumulative demand to `7 ETH` at `4 ETH/REP`, still below the `4 REP` sale cap.
+3. Adding Carol reaches the first price where the remaining REP inventory is exhausted.
+   - At `3 ETH/REP`, selling `4 REP` requires `12 ETH`.
+   - The auction already has `7 ETH` from Alice and Bob, so only `5 ETH` of Carol’s `6 ETH` bid is used.
+
+So the outcome is:
+
+- clearing price: `3 ETH/REP`
+- Alice: fully filled for `3 ETH`, receives `1 REP`
+- Bob: fully filled for `4 ETH`, receives `4/3 REP`
+- Carol: partially filled for `5 ETH`, receives `5/3 REP`, and gets `1 ETH` refunded
+
+The total settlement is exactly:
+
+- total ETH raised: `12 ETH`
+- total REP sold: `4 REP`
+
+If “profit” is measured as execution surplus relative to each bidder’s own limit price, then:
+
+- Alice was willing to pay `5 ETH/REP` but pays the uniform clearing price of `3 ETH/REP`
+  - execution surplus: `1 REP * (5 - 3) ETH/REP = 2 ETH`
+- Bob was willing to pay `4 ETH/REP` and also pays `3 ETH/REP`
+  - execution surplus: `(4/3 REP) * (4 - 3) ETH/REP = 4/3 ETH`
+- Carol bid exactly at the clearing price
+  - execution surplus on the filled portion: `0 ETH`
+  - refund on the unfilled portion: `1 ETH`
+
+Higher-priced bids establish priority, but everyone who clears pays the same effective ETH/REP execution price, except that the marginal price level may be only partially filled.
 
 The purpose of this auction is to let a child Augur Placeholder branch reassemble collateral completeness after a Zoltar fork. REP is sold here because it is the branch-native scarce asset that migrated into the child universe along with that branch’s security claims. The auction converts part of that security capital back into the ETH collateral required for the child market to continue operating cleanly. Put differently, it monetizes branch-native REP, not trader share balances or direct vault claims.
 
@@ -371,6 +527,30 @@ Parent Placeholder pool
            |
            v
       Child pool returns to Operational
+```
+
+```
+Fork repair path with the auction in context
+
+Parent pool
+  collateral: C
+  REP-at-fork: R
+        |
+        | migrate a child branch with r REP
+        v
+Child pool before auction
+  migrated collateral ~= C * r / R
+  missing collateral  = C - C * r / R
+        |
+        | sell branch REP for ETH
+        v
+Truth auction
+  raise up to missing collateral
+  sell up to auction REP inventory
+        |
+        v
+Child pool after auction
+  operational with repaired-or-partially-repaired collateral
 ```
 
 ## 9. REP/ETH Price Oracle
