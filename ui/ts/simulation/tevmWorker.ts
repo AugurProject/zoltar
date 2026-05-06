@@ -50,6 +50,9 @@ async function handleCall(message: SimulationWorkerCallMessage) {
 		case 'setRepPerEthPrice':
 			engine.setRepPerEthPrice(message.params.value)
 			return undefined
+		case 'setRepPerUsdcPrice':
+			engine.setRepPerUsdcPrice(message.params.value)
+			return undefined
 		case 'setQueryDelayMilliseconds':
 			engine.setQueryDelayMilliseconds(message.params.value)
 			return undefined

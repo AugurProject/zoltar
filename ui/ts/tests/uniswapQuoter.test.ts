@@ -6,6 +6,7 @@ import {
 	DEFAULT_POOL_CONFIG,
 	ETH_ADDRESS,
 	REP_ADDRESS,
+	USDC_ADDRESS,
 	UNISWAP_V4_QUOTER_ADDRESS,
 	WETH_ADDRESS,
 	buildUniswapV3PoolUrl,
@@ -126,7 +127,7 @@ void describe('quoteExactInput', () => {
 		)
 
 		const { client } = createCapturingClient(1n)
-		await expect(quoteRepForEth(client, 1n)).rejects.toThrow('Simulation mock pricing only supports REP / ETH and REP / WETH pairs.')
+		await expect(quoteRepForEth(client, 1n)).rejects.toThrow('Simulation mock pricing only supports REP / ETH, REP / WETH, and REP / USDC pairs.')
 	})
 
 	void test('returns simulation mock REP/ETH quotes when simulation mode is active', async () => {
@@ -150,10 +151,12 @@ void describe('quoteExactInput', () => {
 				mineBlock: async () => undefined,
 				queryDelayMilliseconds: 0,
 				repPerEthPrice: 2n * 10n ** 18n,
+				repPerUsdcPrice: 5n * 10n ** 6n,
 				reset: async () => undefined,
 				selectAccount: async () => undefined,
 				selectedAccount: getAddress('0x00000000000000000000000000000000000000a1'),
 				setRepPerEthPrice: () => undefined,
+				setRepPerUsdcPrice: () => undefined,
 				setQueryDelayMilliseconds: () => undefined,
 				subscribe: () => () => undefined,
 				transactionCountSinceReset: 0n,
@@ -168,6 +171,8 @@ void describe('quoteExactInput', () => {
 
 		await expect(quoteEthForToken(client, profile.genesisRepTokenAddress, 3n * 10n ** 18n)).resolves.toBe(6n * 10n ** 18n)
 		await expect(quoteTokenForEth(client, profile.genesisRepTokenAddress, 6n * 10n ** 18n)).resolves.toBe(3n * 10n ** 18n)
+		await expect(quoteExactInput(client, profile.genesisRepTokenAddress, USDC_ADDRESS, 2n * 10n ** 18n)).resolves.toBe(10n * 10n ** 6n)
+		await expect(quoteExactInput(client, USDC_ADDRESS, profile.genesisRepTokenAddress, 10n * 10n ** 6n)).resolves.toBe(2n * 10n ** 18n)
 	})
 
 	void test('returns amountOut from the quoter result', async () => {

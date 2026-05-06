@@ -20,6 +20,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	const isBootstrapping = useSignal(controller.isBootstrapping)
 	const queryDelayMilliseconds = useSignal(controller.queryDelayMilliseconds.toString())
 	const repPerEthPrice = useSignal(formatCurrencyInputBalance(controller.repPerEthPrice))
+	const repPerUsdcPrice = useSignal(formatCurrencyInputBalance(controller.repPerUsdcPrice, 6))
 	const selectedAccount = useSignal(controller.selectedAccount)
 	const bootstrapError = useSignal(controller.bootstrapError)
 	const bootstrapLabel = useSignal(controller.bootstrapLabel)
@@ -40,6 +41,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 				isBootstrapping.value = controller.isBootstrapping
 				queryDelayMilliseconds.value = controller.queryDelayMilliseconds.toString()
 				repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
+				repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
 				selectedAccount.value = controller.selectedAccount
 				transactionCountSinceReset.value = controller.transactionCountSinceReset
 				transactionDelayMilliseconds.value = controller.transactionDelayMilliseconds.toString()
@@ -188,6 +190,26 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 								/>
 							</label>
 							<label className='simulation-delay-field'>
+								<span className='simulation-delay-label'>REP / USDC mock price</span>
+								<input
+									className='simulation-control-input'
+									type='text'
+									inputMode='decimal'
+									value={repPerUsdcPrice.value}
+									disabled={busy.value}
+									onInput={event => {
+										repPerUsdcPrice.value = event.currentTarget.value
+									}}
+									onChange={event => {
+										try {
+											controller.setRepPerUsdcPrice(parseDecimalInput(event.currentTarget.value, 'REP / USDC mock price', 6))
+										} catch {
+											repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
+										}
+									}}
+								/>
+							</label>
+							<label className='simulation-delay-field'>
 								<span className='simulation-delay-label'>Transaction receipt delay (ms)</span>
 								<input
 									className='simulation-control-input'
@@ -206,7 +228,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 								/>
 							</label>
 						</div>
-						<p className='detail'>Query delay slows simulation reads. The REP / ETH mock applies to every REP token in simulation mode. Transaction delay slows receipt confirmation so loading states stay visible.</p>
+						<p className='detail'>Query delay slows simulation reads. The REP / ETH and REP / USDC mocks apply to every REP token in simulation mode. Transaction delay slows receipt confirmation so loading states stay visible.</p>
 					</div>
 					<div className='button-row'>
 						<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value || !isBootstrapped.value}>

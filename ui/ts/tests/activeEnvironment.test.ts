@@ -57,6 +57,7 @@ void describe('simulation backend', () => {
 		expect(backend.isBootstrapped).toBe(false)
 		expect(backend.isBootstrapping).toBe(false)
 		expect(backend.repPerEthPrice).toBe(10n ** 18n)
+		expect(backend.repPerUsdcPrice).toBe(10n ** 6n)
 	})
 
 	void test('tracks simulation bootstrap readiness state', async () => {
@@ -206,9 +207,12 @@ void describe('simulation backend', () => {
 
 		backend.setRepPerEthPrice(3n * 10n ** 18n)
 		expect(backend.repPerEthPrice).toBe(3n * 10n ** 18n)
+		backend.setRepPerUsdcPrice(7n * 10n ** 6n)
+		expect(backend.repPerUsdcPrice).toBe(7n * 10n ** 6n)
 
 		await backend.reset()
 		expect(backend.repPerEthPrice).toBe(10n ** 18n)
+		expect(backend.repPerUsdcPrice).toBe(10n ** 6n)
 	}, 30_000)
 
 	void test('bootstraps the deployed scenario with app contracts already deployed', async () => {

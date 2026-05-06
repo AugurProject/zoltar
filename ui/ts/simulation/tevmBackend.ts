@@ -280,6 +280,9 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 		get repPerEthPrice() {
 			return requireState().repPerEthPrice
 		},
+		get repPerUsdcPrice() {
+			return requireState().repPerUsdcPrice
+		},
 		requestAccounts: async () => await callWorker('getAccounts', undefined),
 		reset: async () => {
 			await callWorker('reset', undefined)
@@ -295,6 +298,12 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 				repPerEthPrice: value,
 			})
 			void callWorker('setRepPerEthPrice', { value })
+		},
+		setRepPerUsdcPrice: value => {
+			patchState({
+				repPerUsdcPrice: value,
+			})
+			void callWorker('setRepPerUsdcPrice', { value })
 		},
 		setQueryDelayMilliseconds: value => {
 			patchState({
