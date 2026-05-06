@@ -26,6 +26,7 @@
 	"scripts": {
 		"preinstall": "bun ./scripts/link-shared-node-modules.mjs",
 		"install:anvil": "bash -lc 'if ! command -v anvil >/dev/null 2>&1; then curl -L https://foundry.paradigm.xyz | bash && export PATH=\"$HOME/.foundry/bin:$PATH\" && foundryup; fi'",
+		"ensure-contract-artifacts": "bun ./scripts/ensure-contract-artifacts.mts",
 		"shared:build": "bun x tsc --project shared/tsconfig.json",
 		"generate:shared-js": "bun run shared:build",
 		"generate:ui-contract-artifact": "bun ./ui/build/projectArtifacts.mts",
@@ -51,7 +52,7 @@
 		"ui:serve": "bun run app:serve",
 		"ui:vendor": "cd ui && bun install --frozen-lockfile && bun ./build/vendor.mts",
 		"gas-costs": "cd solidity && bun run gas-costs",
-		"test": "bun run tsc && bun test --parallel=4 --timeout 300000",
+		"test": "bun run ensure-contract-artifacts && bun run tsc && bun test --parallel=4 --timeout 300000",
 		"check": "bunx @biomejs/biome check solidity/ts ui/ts ui/build ui/dev-server.ts ui/css",
 		"check:changed": "bunx @biomejs/biome check --changed --since origin/main solidity/ts ui/ts ui/build ui/dev-server.ts ui/css",
 		"lint": "bun x @biomejs/biome check solidity/ts ui/ts ui/build ui/dev-server.ts",

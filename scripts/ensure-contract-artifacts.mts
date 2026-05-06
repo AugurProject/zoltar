@@ -1,0 +1,114 @@
+import { promises as fs } from 'node:fs'
+import * as path from 'node:path'
+import * as url from 'node:url'
+import { spawn } from 'node:child_process'
+
+const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
+const repositoryRoot = path.join(scriptDirectory, '..')
+
+const solidityRoot = path.join(repositoryRoot, 'solidity')
+const contractsRoot = path.join(solidityRoot, 'contracts')
+
+const requiredOutputs = [path.join(solidityRoot, 'artifacts', 'Contracts.json'), path.join(solidityRoot, 'ts', 'types', 'contractArtifact.ts'), path.join(solidityRoot, 'types', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'abis.ts')]
+
+const freshnessInputs = [path.join(solidityRoot, 'bun.lock'), path.join(solidityRoot, 'package.json'), path.join(solidityRoot, 'tsconfig-compile.json'), path.join(solidityRoot, 'ts', 'abi', 'abis.ts'), path.join(solidityRoot, 'ts', 'compile.ts'), path.join(repositoryRoot, 'ui', 'build', 'projectArtifacts.mts')]
+
+async function exists(filePath: string): Promise<boolean> {
+	try {
+		await fs.stat(filePath)
+		return true
+	} catch {
+		return false
+	}
+}
+
+async function getFilesRecursively(directoryPath: string): Promise<string[]> {
+	const entries = await fs.readdir(directoryPath, { withFileTypes: true })
+	const files: string[] = []
+	for (const entry of entries) {
+		const entryPath = path.join(directoryPath, entry.name)
+		if (entry.isDirectory()) {
+			files.push(...(await getFilesRecursively(entryPath)))
+			continue
+		}
+		if (entry.isFile()) files.push(entryPath)
+	}
+	return files
+}
+
+async function getNewestMtime(filePaths: readonly string[]): Promise<number> {
+	let newestMtime = Number.NEGATIVE_INFINITY
+	for (const filePath of filePaths) {
+		const stats = await fs.stat(filePath)
+		newestMtime = Math.max(newestMtime, stats.mtimeMs)
+	}
+	return newestMtime
+}
+
+async function getOldestMtime(filePaths: readonly string[]): Promise<number> {
+	let oldestMtime = Number.POSITIVE_INFINITY
+	for (const filePath of filePaths) {
+		const stats = await fs.stat(filePath)
+		oldestMtime = Math.min(oldestMtime, stats.mtimeMs)
+	}
+	return oldestMtime
+}
+
+async function contractsJsonIsReadable(contractsJsonPath: string): Promise<boolean> {
+	try {
+		JSON.parse(await fs.readFile(contractsJsonPath, 'utf8'))
+		return true
+	} catch {
+		return false
+	}
+}
+
+async function getArtifactRegenerationReason(): Promise<string | undefined> {
+	for (const outputPath of requiredOutputs) {
+		if (!(await exists(outputPath))) return `missing generated file: ${path.relative(repositoryRoot, outputPath)}`
+	}
+
+	const contractsJsonPath = path.join(solidityRoot, 'artifacts', 'Contracts.json')
+	if (!(await contractsJsonIsReadable(contractsJsonPath))) return 'solidity/artifacts/Contracts.json is unreadable'
+
+	const contractSourceFiles = await getFilesRecursively(contractsRoot)
+	const newestInputMtime = await getNewestMtime([...freshnessInputs, ...contractSourceFiles])
+	const oldestOutputMtime = await getOldestMtime(requiredOutputs)
+
+	if (newestInputMtime > oldestOutputMtime) return 'Solidity sources or artifact generation inputs are newer than the generated outputs'
+
+	return undefined
+}
+
+async function runCompileContracts(): Promise<void> {
+	await new Promise<void>((resolve, reject) => {
+		const child = spawn(process.execPath, ['run', 'compile-contracts'], {
+			cwd: repositoryRoot,
+			stdio: 'inherit',
+		})
+
+		child.on('error', reject)
+		child.on('exit', code => {
+			if (code === 0) {
+				resolve()
+				return
+			}
+			reject(new Error(`bun run compile-contracts exited with code ${code ?? 'unknown'}`))
+		})
+	})
+}
+
+export async function ensureContractArtifactsAreCurrent(): Promise<void> {
+	const regenerationReason = await getArtifactRegenerationReason()
+	if (regenerationReason === undefined) return
+
+	console.log(`Regenerating contract artifacts before tests: ${regenerationReason}`)
+	await runCompileContracts()
+}
+
+const currentScriptPath = url.fileURLToPath(import.meta.url)
+const invokedScriptPath = process.argv[1]
+
+if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
+	await ensureContractArtifactsAreCurrent()
+}
