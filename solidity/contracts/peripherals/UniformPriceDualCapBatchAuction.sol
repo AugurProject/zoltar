@@ -101,12 +101,12 @@ contract UniformPriceDualCapBatchAuction {
 		ethFilledAtClearing = ethAtClearingTick;
 		ethRaised = accumulatedEth;
 
-		uint256 ethToSend;
-		if (hitCap) {
-			uint256 clearingPrice = tickToPrice(clearingTick);
-			totalRepPurchased = accumulatedEth * clearingPrice / PRICE_PRECISION;
-			ethToSend = accumulatedEth;
-		} else {
+			uint256 ethToSend;
+			if (hitCap) {
+				uint256 clearingPrice = tickToPrice(clearingTick);
+				totalRepPurchased = clearingPrice > 0 ? accumulatedEth * PRICE_PRECISION / clearingPrice : 0;
+				ethToSend = accumulatedEth;
+			} else {
 			// Underfunded: compute threshold price (scaled ETH/REP) = totalETH * PRICE_PRECISION / maxRepBeingSold
 			underfunded = true;
 			if (maxRepBeingSold == 0) {
