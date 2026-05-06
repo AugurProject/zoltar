@@ -267,6 +267,22 @@ describe('Question Data', () => {
 		await assert.rejects(createQuestion(client, question, ['Yes', 'No', 'Yes']), { message: /Outcome option hashes not sorted/ })
 	})
 
+	test('createQuestion rejects questions whose end time is before the start time', async () => {
+		const currentTime = await mockWindow.getTime()
+		const question = {
+			title: 'Impossible timeline',
+			description: '',
+			startTime: currentTime + 200000n,
+			endTime: currentTime + 100000n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+
+		await assert.rejects(createQuestion(client, question, ['Yes', 'No']), { message: /end time must be on or after start time/ })
+	})
+
 	test('createQuestion enforces binary outcome order', async () => {
 		const question = {
 			title: 'Test Binary Order',
@@ -289,7 +305,24 @@ describe('Question Data', () => {
 		await assert.rejects(createQuestion(client, question, ['No', 'Yes']), { message: /Outcome option hashes not sorted/ })
 	})
 
-	test('createQuestion accepts non-binary outcome options in any order', async () => {
+	test('createQuestion rejects unsorted non-binary outcome options', async () => {
+		const question = {
+			title: 'Test Invalid Order',
+			description: 'Testing unsorted options',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+
+		const unsortedOutcomes = ['Apple', 'Banana', 'Cherry']
+		assert.ok(!areEqualArrays(sortStringArrayByKeccak(unsortedOutcomes), unsortedOutcomes), 'test inputs must be intentionally unsorted')
+		await assert.rejects(createQuestion(client, question, unsortedOutcomes), { message: /Outcome option hashes not sorted/ })
+	})
+
+	test('createQuestion accepts non-binary outcome options after sorting them by the contract hash order', async () => {
 		const question = {
 			title: 'Test Valid',
 			description: 'Testing valid options',
@@ -307,7 +340,7 @@ describe('Question Data', () => {
 		assert.deepStrictEqual(labels, sortStringArrayByKeccak(['Apple', 'Banana', 'Cherry']), 'outcome labels should match')
 	})
 
-	test('createQuestion accepts unique outcome options in any order', async () => {
+	test('createQuestion accepts unique outcome options once sorted into the contract order', async () => {
 		const question = {
 			title: 'Test Valid',
 			description: 'Testing valid options',

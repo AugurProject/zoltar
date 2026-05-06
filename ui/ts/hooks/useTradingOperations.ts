@@ -88,7 +88,8 @@ export function useTradingOperations({ accountAddress, enabled, onTransaction, o
 				errorFallback,
 				async (result, walletAddress) => {
 					tradingResult.value = result
-					await refreshTradingDetails(currentForm.securityPoolAddress, walletAddress)
+					const isCurrent = nextTradingDetailsLoad()
+					await refreshTradingDetails(currentForm.securityPoolAddress, walletAddress, isCurrent)
 				},
 			)
 		} finally {

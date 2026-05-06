@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { zeroAddress } from 'viem'
+import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } from 'viem'
 import { createSecurityPool } from '../contracts.js'
 import { createWalletWriteClient } from '../lib/clients.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
@@ -14,6 +14,7 @@ import { ensureInfraDeployed, getSecurityPoolAddresses } from '../../../solidity
 import { ensureZoltarDeployed } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../solidity/ts/testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../solidity/ts/testsuite/simulator/utils/utilities'
+import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory } from '../../../solidity/ts/types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -67,5 +68,41 @@ describe('security pool creation helper', () => {
 		expect(result.questionId).toBe(`0x${questionId.toString(16).padStart(64, '0')}`)
 		expect(result.securityPoolAddress).toBe(expectedAddresses.securityPool)
 		expect(result.deployPoolHash.startsWith('0x')).toBe(true)
+	})
+
+	test('uses the deployment receipt event instead of the latest global deployment record', async () => {
+		const deploySecurityPoolEvent = peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi.find((entry: (typeof peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi)[number]) => entry.type === 'event' && entry.name === 'DeploySecurityPool')
+		if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from abi')
+		const deploySecurityPoolInputs = deploySecurityPoolEvent.inputs.map(input => ({ name: input.name, type: input.type }))
+
+		const expectedSecurityPoolAddress = addressString(TEST_ADDRESSES[6]) as Address
+		const fakeClient = {
+			account: {
+				address: addressString(TEST_ADDRESSES[0]) as Address,
+			},
+			sendTransaction: async () => '0x1234',
+			waitForTransactionReceipt: async () =>
+				({
+					status: 'success',
+					logs: [
+						{
+							address: zeroAddress,
+							data: encodeAbiParameters(deploySecurityPoolInputs, [expectedSecurityPoolAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 123n, 2n, 999_999_996_848_000_000n, 0n]),
+							topics: encodeEventTopics({
+								abi: [deploySecurityPoolEvent],
+								eventName: 'DeploySecurityPool',
+							}),
+						},
+					],
+				}) as never,
+		} as unknown as WriteClient
+
+		const result = await createSecurityPool(fakeClient, {
+			currentRetentionRate: 999_999_996_848_000_000n,
+			questionId: 123n,
+			securityMultiplier: 2n,
+		})
+
+		expect(result.securityPoolAddress).toBe(expectedSecurityPoolAddress)
 	})
 })

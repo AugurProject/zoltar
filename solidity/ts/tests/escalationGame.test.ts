@@ -48,7 +48,7 @@ describe('Escalation Game Test Suite', () => {
 		})
 
 	const deployEscalationGameTestSecurityPool = async () => {
-		const zoltarAddress = await getZoltarAddress(client)
+		const zoltarAddress = getZoltarAddress()
 		const deploymentHash = await client.sendTransaction({
 			data: encodeDeployData({
 				abi: peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool.abi,
@@ -58,7 +58,7 @@ describe('Escalation Game Test Suite', () => {
 		})
 		const deploymentReceipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
 		const testSecurityPoolAddress = deploymentReceipt.contractAddress
-		if (testSecurityPoolAddress === undefined) throw new Error('test security pool deployment address missing')
+		if (testSecurityPoolAddress === undefined || testSecurityPoolAddress === null) throw new Error('test security pool deployment address missing')
 		await writeContractAndWait(
 			client,
 			async () =>

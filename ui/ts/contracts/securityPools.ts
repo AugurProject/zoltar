@@ -1,4 +1,4 @@
-import { encodeAbiParameters, encodeDeployData, encodeFunctionData, getCreate2Address, keccak256, RpcError, type Abi, type Account, type Address, type Hash, type TransactionReceipt } from 'viem'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, getCreate2Address, keccak256, RpcError, type Abi, type Account, type Address, type Hash, type TransactionReceipt } from 'viem'
 import { peripherals_SecurityPool_SecurityPool, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import type { SecurityPoolCreationResult, SecurityVaultDetails, WriteClient, ReadClient } from '../types/contracts.js'
 import { getQuestionIdHex } from './helpers.js'
@@ -83,24 +83,24 @@ async function writeContractAndWaitForReceipt<TCallParams extends ContractRevert
 	return { hash, receipt }
 }
 
-async function getLatestDeployedSecurityPoolAddress(client: Pick<WriteClient, 'readContract'>) {
-	const deploymentCount = await client.readContract({
-		address: getDeploymentStepAddress('securityPoolFactory'),
-		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-		functionName: 'securityPoolDeploymentCount',
-		args: [],
-	})
-	if (deploymentCount === 0n) throw new Error('Security pool deployment transaction succeeded without recording a deployment')
+function getSecurityPoolAddressFromReceipt(receipt: TransactionReceipt) {
+	for (const log of receipt.logs) {
+		try {
+			const decodedLog = decodeEventLog({
+				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+				data: log.data,
+				topics: log.topics,
+			})
+			if (decodedLog.eventName !== 'DeploySecurityPool') continue
+			const securityPoolAddress = decodedLog.args.securityPool
+			if (securityPoolAddress === undefined) throw new Error('Deployment event missing security pool address')
+			return securityPoolAddress
+		} catch {
+			continue
+		}
+	}
 
-	const deployments = await client.readContract({
-		address: getDeploymentStepAddress('securityPoolFactory'),
-		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-		functionName: 'securityPoolDeploymentsRange',
-		args: [deploymentCount - 1n, 1n],
-	})
-	const latestDeployment = deployments[0]
-	if (latestDeployment === undefined) throw new Error('Missing latest security pool deployment record')
-	return latestDeployment.securityPool
+	throw new Error('Security pool deployment transaction succeeded without a DeploySecurityPool event')
 }
 
 function getOriginSecurityPoolShareTokenSalt(questionId: bigint, securityMultiplier: bigint) {
@@ -141,7 +141,7 @@ export async function createSecurityPool(
 		securityMultiplier: bigint
 	},
 ) {
-	const { hash: deployPoolHash } = await writeContractAndWaitForReceipt(client, () => ({
+	const { hash: deployPoolHash, receipt } = await writeContractAndWaitForReceipt(client, () => ({
 		address: getDeploymentStepAddress('securityPoolFactory'),
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deployOriginSecurityPool',
@@ -151,7 +151,7 @@ export async function createSecurityPool(
 	return {
 		deployPoolHash,
 		questionId: getQuestionIdHex(parameters.questionId),
-		securityPoolAddress: await getLatestDeployedSecurityPoolAddress(client),
+		securityPoolAddress: getSecurityPoolAddressFromReceipt(receipt),
 		securityMultiplier: parameters.securityMultiplier,
 		universeId: 0n,
 	} satisfies SecurityPoolCreationResult
