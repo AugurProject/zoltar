@@ -17,6 +17,7 @@ uint256 constant SCALE = 1e6;
 uint256 constant LN2_SCALED = 693147;
 uint256 constant MAX_ATANH_ITERATIONS = 16;
 uint256 constant MAX_EXP_ITERATIONS = 16;
+uint256 constant EXCESS_REWARD_WINDOW_DIVISOR = 2;
 
 contract EscalationGame {
 	uint256 public startingTime;
@@ -235,20 +236,24 @@ contract EscalationGame {
 		deposits[uint8(outcome)][depositIndex].amount = 0;
 		depositor = deposit.depositor;
 		originalDepositAmount = deposit.amount;
-		uint256 maxWithdrawableBalance = getBindingCapital();
-		uint256 burnAmount;
 		uint256 depositStart = deposit.cumulativeAmount - deposit.amount;
-		if (depositStart >= maxWithdrawableBalance) {
+		uint256 bindingCapitalAmount = getBindingCapital();
+		uint256 rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR;
+		uint256 winningOutcomeBalance = balances[uint8(outcome)];
+		uint256 rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount;
+		uint256 rewardBonusPoolAmount = (bindingCapitalAmount * 3) / 5;
+		uint256 totalHaircutAmount = (bindingCapitalAmount * 2) / 5;
+		uint256 burnAmount;
+		if (rewardEligiblePrincipalAmount == 0) {
 			amountToWithdraw = deposit.amount;
 			burnAmount = 0;
 		} else {
-			uint256 withdrawableWithinBindingCapital = maxWithdrawableBalance - depositStart;
-			if (withdrawableWithinBindingCapital > deposit.amount) {
-				withdrawableWithinBindingCapital = deposit.amount;
-			}
-			uint256 withdrawableAboveBindingCapital = deposit.amount - withdrawableWithinBindingCapital;
-			burnAmount = (withdrawableWithinBindingCapital * 2) / 5;
-			amountToWithdraw = withdrawableAboveBindingCapital + withdrawableWithinBindingCapital * 2 - burnAmount;
+			uint256 eligibleEndAmount = deposit.cumulativeAmount < rewardEligibleCapAmount ? deposit.cumulativeAmount : rewardEligibleCapAmount;
+			uint256 rewardEligibleDepositAmount = eligibleEndAmount > depositStart ? eligibleEndAmount - depositStart : 0;
+			if (rewardEligibleDepositAmount > deposit.amount) rewardEligibleDepositAmount = deposit.amount;
+			uint256 bonusShare = rewardEligibleDepositAmount * rewardBonusPoolAmount / rewardEligiblePrincipalAmount;
+			burnAmount = rewardEligibleDepositAmount * totalHaircutAmount / rewardEligiblePrincipalAmount;
+			amountToWithdraw = deposit.amount + bonusShare;
 		}
 
 		// Adjust based on actual fork threshold
