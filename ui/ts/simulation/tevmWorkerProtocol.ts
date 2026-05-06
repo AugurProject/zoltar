@@ -11,6 +11,7 @@ export type SimulationWorkerState = {
 	isBootstrapped: boolean
 	isBootstrapping: boolean
 	queryDelayMilliseconds: number
+	repPerEthPrice: bigint
 	selectedAccount: Address
 	transactionCountSinceReset: bigint
 	transactionDelayMilliseconds: number
@@ -26,6 +27,7 @@ export type SimulationWorkerCallMap = {
 	patchSimulationGenesisRepToken: { params: { repAddress: Address; zoltarAddress: Address }; result: undefined }
 	reset: { params: undefined; result: undefined }
 	selectAccount: { params: { address: Address }; result: undefined }
+	setRepPerEthPrice: { params: { value: bigint }; result: undefined }
 	setQueryDelayMilliseconds: { params: { value: number }; result: undefined }
 	setTransactionDelayMilliseconds: { params: { value: number }; result: undefined }
 	waitForTransactionReceipt: { params: { hash: Hash }; result: TransactionReceipt }

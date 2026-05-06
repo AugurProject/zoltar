@@ -32,7 +32,7 @@ import type { OpenOracleInitialReportQuoteFailureKind, OpenOracleInitialReportQu
 
 type RepPerEthPriceProps = {
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | undefined
+	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
 	repPerEthSourceUrl: string | undefined
 }
 
@@ -182,7 +182,7 @@ export type OverviewPanelsProps = {
 	universeLabel: string
 	isRefreshing: boolean
 	repUsdcPrice: bigint | undefined
-	repUsdcSource: 'v4' | 'v3' | undefined
+	repUsdcSource: 'v4' | 'v3' | 'mock' | undefined
 	repUsdcSourceUrl: string | undefined
 	isLoadingRepPrices: boolean
 	onConnect: () => void
@@ -349,7 +349,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	onSecurityPoolAddressChange: (value: string) => void
 	reporting: ReportingRouteContentProps
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | undefined
+	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
 	repPerEthSourceUrl: string | undefined
 	securityPools: ListedSecurityPool[]
 	securityVault: SecurityVaultRouteContentProps
@@ -382,7 +382,7 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultResult: SecurityVaultActionResult | undefined
 	selectedPoolSecurityMultiplier: bigint | undefined
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | undefined
+	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
 	repPerEthSourceUrl: string | undefined
 	securityPoolVaults?: SecurityPoolVaultSummary[] | undefined
 }
@@ -479,7 +479,7 @@ export type TradingRouteContentProps = {
 	onRedeemShares: () => void
 	onTradingFormChange: (update: Partial<TradingFormState>) => void
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | undefined
+	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
 	repPerEthSourceUrl: string | undefined
 	selectedPool: ListedSecurityPool | undefined
 	tradingActiveAction: TradingActionResult['action'] | undefined

@@ -7,7 +7,7 @@ import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRe
 const ONE_ETH = 10n ** 18n
 const ONE_REP = 10n ** 18n
 
-type PriceSource = 'v4' | 'v3'
+type PriceSource = 'v4' | 'v3' | 'mock'
 
 type RepPrices = {
 	repPerEthPrice: bigint | undefined // REP in wei-style token units received for 1 ETH
@@ -23,11 +23,11 @@ type RepPrices = {
 async function fetchRepPerEthPrice(client: ReturnType<typeof createConnectedReadClient>): Promise<{ price: bigint; source: PriceSource; sourceUrl: string | undefined }> {
 	try {
 		const { amountOut, source } = await quoteBestExactInputWithSource(client, ETH_ADDRESS, REP_ADDRESS, ONE_ETH)
-		return { price: amountOut, source: 'v4', sourceUrl: source.poolUrl }
+		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v4', sourceUrl: source.poolUrl }
 	} catch {
 		// V4 REP/ETH pool doesn't exist yet — fall back to V3 WETH/REP (1% pool)
 		const { amountOut, source } = await quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, REP_ADDRESS, ONE_ETH)
-		return { price: amountOut, source: 'v3', sourceUrl: source.poolUrl }
+		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v3', sourceUrl: source.poolUrl }
 	}
 }
 
@@ -41,8 +41,6 @@ export function useRepPrices(): RepPrices {
 	const repPricesLoad = useLoadController()
 
 	const refreshRepPrices = () => {
-		if (!isRepPricingEnabled()) return
-
 		const client = createConnectedReadClient()
 
 		void repPricesLoad
@@ -59,6 +57,10 @@ export function useRepPrices(): RepPrices {
 					repUsdcPrice.value = repUsdcResult.value.amountOut
 					repUsdcSource.value = 'v4'
 					repUsdcSourceUrl.value = repUsdcResult.value.source.poolUrl
+				} else if (!isRepPricingEnabled()) {
+					repUsdcPrice.value = undefined
+					repUsdcSource.value = undefined
+					repUsdcSourceUrl.value = undefined
 				}
 			})
 			.catch(() => {

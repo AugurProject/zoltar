@@ -2,7 +2,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { MetricField } from './MetricField.js'
 import { getCollateralizationDisplayState, getCollateralizationTone } from '../lib/trading.js'
 
-type UniswapPriceSource = 'v4' | 'v3'
+type UniswapPriceSource = 'v4' | 'v3' | 'mock'
 
 type CollateralizationMetricFieldProps = {
 	className?: string | undefined
@@ -14,7 +14,7 @@ type CollateralizationMetricFieldProps = {
 }
 
 function renderSourceLink(source: UniswapPriceSource, sourceUrl: string | undefined) {
-	const label = `u${source === 'v4' ? '4' : '3'}`
+	const label = source === 'mock' ? 'MOCK' : `u${source === 'v4' ? '4' : '3'}`
 	if (sourceUrl === undefined) return `(${label})`
 	return (
 		<a href={sourceUrl} title={source === 'v4' ? 'Price from Uniswap V4' : 'Price from Uniswap V3'} target='_blank' rel='noreferrer'>

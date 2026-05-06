@@ -56,6 +56,7 @@ void describe('simulation backend', () => {
 		expect(backend.currentScenario).toBe('baseline')
 		expect(backend.isBootstrapped).toBe(false)
 		expect(backend.isBootstrapping).toBe(false)
+		expect(backend.repPerEthPrice).toBe(10n ** 18n)
 	})
 
 	void test('tracks simulation bootstrap readiness state', async () => {
@@ -197,6 +198,17 @@ void describe('simulation backend', () => {
 		const elapsedMilliseconds = Date.now() - startTime
 
 		expect(elapsedMilliseconds >= 200).toBe(true)
+	}, 30_000)
+
+	void test('tracks the configured simulation REP/ETH mock price and resets it with the scenario', async () => {
+		const backend = await createSimulationBackend({ scenario: 'baseline' })
+		await backend.bootstrap()
+
+		backend.setRepPerEthPrice(3n * 10n ** 18n)
+		expect(backend.repPerEthPrice).toBe(3n * 10n ** 18n)
+
+		await backend.reset()
+		expect(backend.repPerEthPrice).toBe(10n ** 18n)
 	}, 30_000)
 
 	void test('bootstraps the deployed scenario with app contracts already deployed', async () => {

@@ -8,7 +8,7 @@ export type NetworkProfile = {
 	genesisRepTokenAddress: Address
 	id: 'mainnet' | 'simulation'
 	isSupportedAppChain: boolean
-	repPricingMode: 'uniswap' | 'disabled'
+	repPricingMode: 'uniswap' | 'mock'
 	transactionExplorerBaseUrl?: string
 	wethAddress: Address
 }
@@ -50,7 +50,7 @@ export function createSimulationProfile({ genesisRepTokenAddress, wethAddress }:
 		genesisRepTokenAddress,
 		id: 'simulation',
 		isSupportedAppChain: true,
-		repPricingMode: 'disabled',
+		repPricingMode: 'mock',
 		wethAddress,
 	}
 }

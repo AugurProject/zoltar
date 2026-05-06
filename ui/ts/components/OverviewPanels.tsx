@@ -28,8 +28,8 @@ export function OverviewPanels({
 }: OverviewPanelsProps) {
 	const isWalletLoading = isConnectingWallet || (!walletBootstrapComplete && accountState.address === undefined)
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
-	const renderSourceLink = (source: 'v3' | 'v4', sourceUrl: string | undefined) => {
-		const label = `u${source === 'v4' ? '4' : '3'}`
+	const renderSourceLink = (source: 'v3' | 'v4' | 'mock', sourceUrl: string | undefined) => {
+		const label = source === 'mock' ? 'MOCK' : `u${source === 'v4' ? '4' : '3'}`
 		if (sourceUrl === undefined) return `(${label})`
 		return (
 			<a href={sourceUrl} title={source === 'v4' ? 'Price from Uniswap V4' : 'Price from Uniswap V3'} target='_blank' rel='noreferrer'>
