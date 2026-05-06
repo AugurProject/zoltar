@@ -2,6 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { h } from 'preact'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 import { MarketSection } from '../components/MarketSection.js'
 import { getDefaultMarketFormState, getDefaultZoltarMigrationFormState } from '../lib/marketForm.js'
@@ -130,5 +132,55 @@ describe('MarketSection', () => {
 		const migrateRepButton = tabButtons.find(button => button.textContent?.trim() === 'Migrate REP')
 		if (!(migrateRepButton instanceof HTMLButtonElement)) throw new Error('Expected to find the Migrate REP button')
 		expect(migrateRepButton.disabled).toBe(true)
+	})
+
+	test('auto-loads questions once when opening the questions view without loaded data', async () => {
+		const calls: string[] = []
+		const initialProps = createMarketSectionProps({
+			hasLoadedZoltarQuestions: false,
+			loadingZoltarQuestions: false,
+			onLoadZoltarQuestions: () => {
+				calls.push('load')
+			},
+			zoltarQuestionCount: 3n,
+			zoltarUniverse: createZoltarUniverse({ universeId: 7n }),
+		})
+
+		const renderedComponent = await renderIntoDocument(h(MarketSection, initialProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(calls).toEqual(['load'])
+
+		await act(() => {
+			render(
+				h(MarketSection, {
+					...initialProps,
+					onLoadZoltarQuestions: () => {
+						calls.push('rerender')
+					},
+				}),
+				renderedComponent.container,
+			)
+		})
+
+		expect(calls).toEqual(['load'])
+	})
+
+	test('does not auto-load questions when they are already loaded', async () => {
+		const calls: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					hasLoadedZoltarQuestions: true,
+					onLoadZoltarQuestions: () => {
+						calls.push('load')
+					},
+					zoltarQuestionCount: 3n,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(calls).toEqual([])
 	})
 })

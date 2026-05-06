@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { SectionModeTabs } from './SectionModeTabs.js'
 import { SecurityPoolSection } from './SecurityPoolSection.js'
 import { SecurityPoolWorkflowSection } from './SecurityPoolWorkflowSection.js'
@@ -26,6 +26,17 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 			'browse',
 		),
 	)
+	const autoLoadedBrowsePools = useRef(false)
+
+	useEffect(() => {
+		if (view !== 'browse') return
+		if (overview.loadingSecurityPools) return
+		if (overview.hasLoadedSecurityPools) return
+		if (autoLoadedBrowsePools.current) return
+		autoLoadedBrowsePools.current = true
+		overview.onLoadSecurityPools()
+	}, [overview.hasLoadedSecurityPools, overview.loadingSecurityPools, overview.onLoadSecurityPools, view])
+
 	const openView = (nextView: SecurityPoolsView, nextSecurityPoolAddress?: string) => {
 		setView(nextView)
 		const resolvedSecurityPoolAddress = nextSecurityPoolAddress ?? workflow.securityPoolAddress
