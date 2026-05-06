@@ -1,6 +1,11 @@
-# Zoltar
+# Zoltar + Augur Placeholder
 
-Zoltar is a Bun + Solidity project for building and exploring prediction markets with forked universes. The repository is split into two main parts:
+This repository contains two protocol layers:
+
+- `Zoltar`: the forkable oracle substrate
+- `Augur Placeholder`: the prediction-market application layer built on top of Zoltar
+
+The codebase is split into two main parts:
 
 - `solidity/` contains the contracts, tests, and generated contract artifacts
 - `ui/` contains the Preact frontend that reads from those contracts
@@ -38,16 +43,16 @@ Important:
 
 ## Local Development
 
-Start a local chain with `anvil`, then run the setup step once and launch the UI:
+Start a local chain with `anvil`, then run the setup step once and launch the app:
 
 1. Start `anvil`
 1. Run `bun run setup`
-1. Run `bun run ui:serve`
+1. Run `bun run app:serve`
 
-If you are iterating on the frontend and want rebuilds, use:
+If you are iterating on the app and want rebuilds, use:
 
 ```bash
-bun run ui:watch
+bun run app:watch
 ```
 
 ## Browser Simulation
@@ -55,7 +60,7 @@ bun run ui:watch
 The UI also supports a walletless browser-local simulation mode for manual QA.
 
 1. Run `bun run setup`
-1. Run `bun run ui:serve`
+1. Run `bun run app:serve`
 1. Open `http://localhost:12345/?simulate=1`
 
 This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain, seeds the QA accounts with ETH, WETH, and REP, and leaves the application contracts undeployed so the UI starts on the deploy flow.
@@ -70,22 +75,22 @@ Simulation mode details:
 
 ## Common Commands
 
-Run the UI in development mode:
+Run the full app in development mode. This includes contract generation and the frontend build pipeline:
 
 ```bash
-bun run ui:serve
+bun run app:serve
 ```
 
-Watch and rebuild the UI assets:
+Watch and rebuild the full app pipeline:
 
 ```bash
-bun run ui:watch
+bun run app:watch
 ```
 
-Build the UI:
+Build the full app:
 
 ```bash
-bun run ui:build
+bun run app:build
 ```
 
 Regenerate contract bindings and UI vendor assets:
@@ -152,5 +157,7 @@ bun run gas-costs
 
 - `bun run setup` is the quickest way to bootstrap a fresh checkout.
 - `bun install --frozen-lockfile` must be run before standalone commands like `bun run tsc` on a fresh checkout.
+- `bun run tsc` checks the app TypeScript, the Solidity-side TypeScript utilities, and the Bun build/dev scripts.
 - `bun run test` runs the TypeScript check first, then executes the test suite.
+- The legacy `ui:*` commands still exist as compatibility aliases, but `app:*` names are the clearer entrypoints because they run more than frontend-only work.
 - The repo uses exact dependency versions for reproducible installs.

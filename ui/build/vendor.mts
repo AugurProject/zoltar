@@ -7,7 +7,6 @@ import { copyProjectArtifacts } from './projectArtifacts.mts'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
-const REPOSITORY_ROOT_PATH = path.join(UI_ROOT_PATH, '..')
 const VENDOR_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'vendor')
 const MODULES_ROOT_PATH = path.join(UI_ROOT_PATH, 'node_modules')
 const INDEX_HTML_PATH = path.join(UI_ROOT_PATH, 'index.html')

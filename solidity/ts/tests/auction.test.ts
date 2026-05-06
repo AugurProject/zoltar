@@ -261,14 +261,29 @@ describe('Auction', () => {
 			assert.ok(grandTotalFilled <= maxRepBeingSold, 'total filled REP exceeds maxRepBeingSold')
 		})
 
-		test('winning bids receive exactly their requested repAmount with correct eth refund', async () => {
+		test('computeClearing selects the lower price tick when only lower-price cumulative demand exhausts supply', async () => {
+			await setupStandardAuction(client, auctionAddress, 1_000n, 100n)
+
+			const expensiveTick = tickForPrice(4n * PRICE_PRECISION)
+			const cheapTick = tickForPrice(PRICE_PRECISION)
+			const bidAmount = 100n * ATTOETH_PER_ETH
+
+			await submitBid(client, auctionAddress, expensiveTick, bidAmount)
+			await submitBid(client, auctionAddress, cheapTick, bidAmount)
+
+			const clearing = await computeClearing(client, auctionAddress)
+
+			assertExpectedClearing(clearing, cheapTick, bidAmount)
+		})
+
+		test('winning bids receive their requested REP and clearing-tick bids refund excess ETH', async () => {
 			await setupStandardAuction(client, auctionAddress)
 
 			const alice = createTestClient(0)
 			const bob = createTestClient(1)
 
 			const aliceTick = tickForPrice(PRICE_PRECISION * 2n)
-			const aliceEth = 30n * 10n ** 18n
+			const aliceEth = 190n * 10n ** 18n
 			const bobTick = tickForPrice(PRICE_PRECISION * 4n)
 			const bobEth = 20n * 10n ** 18n
 
@@ -332,7 +347,7 @@ describe('Auction', () => {
 
 			const losingEth = 2n * 10n ** 18n
 			const mediumEth = 40n * 10n ** 18n
-			const highEth = 30n * 10n ** 18n
+			const highEth = 150n * 10n ** 18n
 
 			await submitBid(alice, auctionAddress, losingTick, losingEth)
 			await submitBid(alice, auctionAddress, clearingTickBid, mediumEth)
@@ -544,7 +559,7 @@ describe('Auction', () => {
 			const afterFinalizeAuctionEth = await getETHBalance(client, auctionAddress)
 			const clearingTick = await getClearingTick(client, auctionAddress)
 			const clearingPrice = tickToPrice(clearingTick)
-			approximatelyEqual(beforeFinalizeAuctionEth - afterFinalizeAuctionEth, (maxRepBeingSold * PRICE_PRECISION) / clearingPrice, 1000n, 'Auction sent about the cap to owner')
+			approximatelyEqual(beforeFinalizeAuctionEth - afterFinalizeAuctionEth, ethRaiseCap, 1000n, 'Auction sent about the cap to owner')
 
 			const clearing = await computeClearing(client, auctionAddress)
 			const expectedFilledRep = (clearing.accumulatedEth * PRICE_PRECISION) / clearingPrice
@@ -644,7 +659,7 @@ describe('Auction', () => {
 				alicePrice: ATTOETH_PER_ETH,
 				aliceAmount: 4n * 10n ** 18n, // 4 ETH at price 1 → 4 REP
 				bobPrice: 2n * ATTOETH_PER_ETH,
-				bobAmount: 6n * 10n ** 18n, // 6 ETH at price 2 → hits remaining 6 REP (cap reached)
+				bobAmount: 12n * 10n ** 18n, // 12 ETH at price 2 → 6 REP, and repricing leaves Bob at the clearing tick
 				refundBidder: 'bob' as const,
 				expectedClearingTick: tickForPrice(2n * ATTOETH_PER_ETH),
 				expectRefundToSucceed: false, // Bob is at clearing tick → cannot refund
@@ -723,23 +738,44 @@ describe('Auction', () => {
 				return 0
 			})
 			let accumulatedEth = 0n
+			let lastValidTick = 0n
+			let lastValidEth = 0n
 			for (const bid of sorted) {
 				const price = tickToPrice(bid.tick)
-				const maxEthAtThisTick = (maxRepBeingSold * PRICE_PRECISION) / price
-				const newAccumulatedEth = accumulatedEth + bid.amount
+				let ethToTake = bid.amount
+				if (price === 0n) ethToTake = 0n
 
-				if (newAccumulatedEth > maxEthAtThisTick) {
-					const ethFilledAtClearing = accumulatedEth >= maxEthAtThisTick ? 0n : maxEthAtThisTick - accumulatedEth
-					accumulatedEth += ethFilledAtClearing
-					return { hitCap: true, foundTick: bid.tick, accumulatedEth }
+				if (accumulatedEth > 0n) {
+					const repricedRep = (accumulatedEth * PRICE_PRECISION) / price
+					if (repricedRep > maxRepBeingSold) {
+						return { hitCap: true, foundTick: lastValidTick, accumulatedEth: lastValidEth }
+					}
+				}
+
+				if (accumulatedEth >= ethRaiseCap) {
+					return { hitCap: true, foundTick: lastValidTick, accumulatedEth: lastValidEth }
+				}
+
+				const remainingCap = ethRaiseCap - accumulatedEth
+				if (ethToTake > remainingCap) ethToTake = remainingCap
+				const newAccumulatedEth = accumulatedEth + ethToTake
+				const totalRep = price === 0n ? 0n : (newAccumulatedEth * PRICE_PRECISION) / price
+
+				if (totalRep >= maxRepBeingSold) {
+					const maxEthAtThisPrice = (maxRepBeingSold * price) / PRICE_PRECISION
+					let ethUsedAtClearing = 0n
+					if (maxEthAtThisPrice > accumulatedEth) ethUsedAtClearing = maxEthAtThisPrice - accumulatedEth
+					if (ethUsedAtClearing > ethToTake) ethUsedAtClearing = ethToTake
+					return { hitCap: true, foundTick: bid.tick, accumulatedEth: accumulatedEth + ethUsedAtClearing }
 				}
 
 				if (newAccumulatedEth >= ethRaiseCap) {
-					accumulatedEth = ethRaiseCap
-					return { hitCap: true, foundTick: bid.tick, accumulatedEth }
+					return { hitCap: true, foundTick: bid.tick, accumulatedEth: newAccumulatedEth }
 				}
 
 				accumulatedEth = newAccumulatedEth
+				lastValidTick = bid.tick
+				lastValidEth = accumulatedEth
 			}
 			return { hitCap: false, foundTick: 0n, accumulatedEth: 0n }
 		}

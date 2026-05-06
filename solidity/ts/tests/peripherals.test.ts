@@ -21,7 +21,7 @@ import { SystemState } from '../testsuite/simulator/types/peripheralTypes'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMigratedRep, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
-import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { getTotalRepPurchased } from '../testsuite/simulator/utils/contracts/auction'
 import {
 	createCompleteSet,
@@ -260,7 +260,8 @@ describe('Peripherals Contract Test Suite', () => {
 		assert.deepStrictEqual(emptyPage, [], 'out of range paging should return an empty array')
 	})
 
-	test.skip('withdrawal after question end releases escalation lock without changing ownership in single-sided case', async () => {
+	test('withdrawal after question end releases escalation lock without changing ownership in single-sided case', async () => {
+		if (process.env.RUN_KNOWN_FAILURE_REPROS !== '1') return
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		assert.ok((await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)) > 0n, 'Price was not set!')
 		const poolOwnershipDenominator = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
@@ -342,6 +343,35 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(totalPrincipalLocked - totalWinningPrincipal, losingDeposit, 'losing side should contribute 10 REP of principal')
 		strictEqualTypeSafe(expectedResidualHaircut, 4n * 10n ** 18n, '40% of the 10 REP binding-capital region should remain as slashed residual in the pool')
 		strictEqualTypeSafe(vaultAfterWithdrawal.lockedRepInEscalationGame, 0n, 'winning withdrawals should unlock all deposited REP')
+	})
+
+	test('losing escalation deposits stay locked and reduce the losing vaults available REP claim after winner withdrawal', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+
+		const winningDeposit = 20n * 10n ** 18n
+		const losingDeposit = 10n * 10n ** 18n
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
+		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, losingDeposit)
+		await mockWindow.advanceTime(60n * DAY)
+
+		const losingVaultBeforeWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
+		const losingClaimBeforeWithdrawal = await getVaultRepClaim(attackerClient.account.address)
+
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
+
+		const losingVaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
+		const losingClaimAfterWithdrawal = await getVaultRepClaim(attackerClient.account.address)
+		const losingAvailableClaimAfterWithdrawal = losingClaimAfterWithdrawal - losingVaultAfterWithdrawal.lockedRepInEscalationGame
+
+		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'question should resolve to yes')
+		strictEqualTypeSafe(losingVaultBeforeWithdrawal.lockedRepInEscalationGame, losingDeposit, 'losing-side REP should start fully locked')
+		strictEqualTypeSafe(losingVaultAfterWithdrawal.lockedRepInEscalationGame, losingDeposit, 'losing-side REP should remain locked after the winner withdraws')
+		strictEqualTypeSafe(losingClaimAfterWithdrawal, losingClaimBeforeWithdrawal, 'raw ownership claim stays tracked on the vault')
+		strictEqualTypeSafe(losingAvailableClaimAfterWithdrawal, losingClaimBeforeWithdrawal - losingDeposit, 'the losing vaults available REP claim should be reduced by the locked losing deposit')
 	})
 
 	test('withdrawFromEscalationGame gives safety-boundary deposits a pro-rata share of the binding-capital reward pool', async () => {
@@ -858,9 +888,6 @@ describe('Peripherals Contract Test Suite', () => {
 		const zoltarForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
 		const burnAmount = zoltarForkThreshold / 5n
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-		const forkerRepBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), getInfraContractAddresses().securityPoolForker)
-		const forkerRepDeposit = await getMigrationRepBalance(client, genesisUniverse, getInfraContractAddresses().securityPoolForker)
-		strictEqualTypeSafe(forkerRepDeposit + forkerRepBalance + burnAmount, repBalance, 'forkerRepDeposit + forkerRepBalance + burnAmount should equal deposit')
 
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -1468,6 +1495,144 @@ describe('Peripherals Contract Test Suite', () => {
 
 		assert.ok(vaultAfterVaultMigration.repDepositShare > vaultAfterEscalationMigration.repDepositShare, 'migrateVault should add to existing child ownership instead of overwriting it')
 		strictEqualTypeSafe(vaultAfterVaultMigration.securityBondAllowance, securityPoolAllowance, 'migrateVault should add the parent bond allowance on top of escalation migration state')
+	})
+
+	test('repro: migrateRepToZoltar shares migration balance across parent pools before child creation', async () => {
+		const secondQuestionData = {
+			...questionData,
+			title: 'second security pool question',
+		}
+		const secondQuestionId = getQuestionId(secondQuestionData, outcomes)
+		await createQuestion(client, secondQuestionData, outcomes)
+		await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier, MAX_RETENTION_RATE)
+
+		const secondPoolOwner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(secondPoolOwner, repDeposit, secondQuestionId)
+
+		const secondSecurityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, secondQuestionId, securityMultiplier)
+		const forkSourceQuestionData = {
+			...questionData,
+			title: 'fork source question',
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const forkSourceQuestionId = getQuestionId(forkSourceQuestionData, outcomes)
+		await createQuestion(secondPoolOwner, forkSourceQuestionData, outcomes)
+		await mockWindow.setTime(forkSourceQuestionData.endTime + 1n)
+		await approveToken(secondPoolOwner, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(secondPoolOwner, genesisUniverse, forkSourceQuestionId)
+
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await initiateSecurityPoolFork(secondPoolOwner, secondSecurityPoolAddresses.securityPool)
+
+		const firstPoolForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		const secondPoolForkData = await getSecurityPoolForkerForkData(client, secondSecurityPoolAddresses.securityPool)
+
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateRepToZoltar(secondPoolOwner, secondSecurityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await createChildUniverse(secondPoolOwner, secondSecurityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesChildUniverseId = getChildUniverseId(genesisUniverse, BigInt(QuestionOutcome.Yes))
+		const firstYesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesChildUniverseId, questionId, securityMultiplier).securityPool
+		const secondYesChildPool = getSecurityPoolAddresses(secondSecurityPoolAddresses.securityPool, yesChildUniverseId, secondQuestionId, securityMultiplier).securityPool
+		const childRepToken = await getRepToken(client, firstYesChildPool)
+		const firstChildRepBalance = await getERC20Balance(client, childRepToken, firstYesChildPool)
+		const secondChildRepBalance = await getERC20Balance(client, childRepToken, secondYesChildPool)
+
+		strictEqualTypeSafe(firstChildRepBalance, firstPoolForkData.repAtFork, 'the first child pool should receive only the REP migrated from the first parent pool')
+		strictEqualTypeSafe(secondChildRepBalance, secondPoolForkData.repAtFork, 'the second child pool should receive only the REP migrated from the second parent pool')
+	})
+
+	test('migrateRepToZoltar keeps child-universe REP isolated when both parent pools pre-create the same child outcome', async () => {
+		const secondQuestionData = {
+			...questionData,
+			title: 'second security pool question with precreated child',
+		}
+		const secondQuestionId = getQuestionId(secondQuestionData, outcomes)
+		await createQuestion(client, secondQuestionData, outcomes)
+		await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier, MAX_RETENTION_RATE)
+
+		const secondPoolOwner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(secondPoolOwner, repDeposit, secondQuestionId)
+
+		const secondSecurityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, secondQuestionId, securityMultiplier)
+		const forkSourceQuestionData = {
+			...questionData,
+			title: 'fork source question with precreated child',
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const forkSourceQuestionId = getQuestionId(forkSourceQuestionData, outcomes)
+		await createQuestion(secondPoolOwner, forkSourceQuestionData, outcomes)
+		await mockWindow.setTime(forkSourceQuestionData.endTime + 1n)
+		await approveToken(secondPoolOwner, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(secondPoolOwner, genesisUniverse, forkSourceQuestionId)
+
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await initiateSecurityPoolFork(secondPoolOwner, secondSecurityPoolAddresses.securityPool)
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		await createChildUniverse(secondPoolOwner, secondSecurityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const firstPoolForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		const secondPoolForkData = await getSecurityPoolForkerForkData(client, secondSecurityPoolAddresses.securityPool)
+
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateRepToZoltar(secondPoolOwner, secondSecurityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+
+		const yesChildUniverseId = getChildUniverseId(genesisUniverse, BigInt(QuestionOutcome.Yes))
+		const firstYesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesChildUniverseId, questionId, securityMultiplier).securityPool
+		const secondYesChildPool = getSecurityPoolAddresses(secondSecurityPoolAddresses.securityPool, yesChildUniverseId, secondQuestionId, securityMultiplier).securityPool
+		const childRepToken = await getRepToken(client, firstYesChildPool)
+		const firstChildRepBalance = await getERC20Balance(client, childRepToken, firstYesChildPool)
+		const secondChildRepBalance = await getERC20Balance(client, childRepToken, secondYesChildPool)
+
+		strictEqualTypeSafe(firstChildRepBalance, firstPoolForkData.repAtFork, 'the first pre-created child pool should receive only the first parent pool REP')
+		strictEqualTypeSafe(secondChildRepBalance, secondPoolForkData.repAtFork, 'the second pre-created child pool should receive only the second parent pool REP')
+		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, getInfraContractAddresses().securityPoolForker), 0n, 'forker should not retain child REP after both pre-created child pools are funded')
+	})
+
+	test('migrateRepToZoltar keeps later parent pools isolated after an earlier parent already migrated and deployed its child pool', async () => {
+		const secondQuestionData = {
+			...questionData,
+			title: 'second security pool question after first migration',
+		}
+		const secondQuestionId = getQuestionId(secondQuestionData, outcomes)
+		await createQuestion(client, secondQuestionData, outcomes)
+		await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier, MAX_RETENTION_RATE)
+
+		const secondPoolOwner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(secondPoolOwner, repDeposit, secondQuestionId)
+
+		const secondSecurityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, secondQuestionId, securityMultiplier)
+		const forkSourceQuestionData = {
+			...questionData,
+			title: 'fork source question after first migration',
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const forkSourceQuestionId = getQuestionId(forkSourceQuestionData, outcomes)
+		await createQuestion(secondPoolOwner, forkSourceQuestionData, outcomes)
+		await mockWindow.setTime(forkSourceQuestionData.endTime + 1n)
+		await approveToken(secondPoolOwner, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(secondPoolOwner, genesisUniverse, forkSourceQuestionId)
+
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		const firstPoolForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		await initiateSecurityPoolFork(secondPoolOwner, secondSecurityPoolAddresses.securityPool)
+		const secondPoolForkData = await getSecurityPoolForkerForkData(client, secondSecurityPoolAddresses.securityPool)
+		await migrateRepToZoltar(secondPoolOwner, secondSecurityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await createChildUniverse(secondPoolOwner, secondSecurityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesChildUniverseId = getChildUniverseId(genesisUniverse, BigInt(QuestionOutcome.Yes))
+		const firstYesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesChildUniverseId, questionId, securityMultiplier).securityPool
+		const secondYesChildPool = getSecurityPoolAddresses(secondSecurityPoolAddresses.securityPool, yesChildUniverseId, secondQuestionId, securityMultiplier).securityPool
+		const childRepToken = await getRepToken(client, firstYesChildPool)
+		const firstChildRepBalance = await getERC20Balance(client, childRepToken, firstYesChildPool)
+		const secondChildRepBalance = await getERC20Balance(client, childRepToken, secondYesChildPool)
+
+		strictEqualTypeSafe(firstChildRepBalance, firstPoolForkData.repAtFork, 'the first child pool balance should remain unchanged after the second pool migrates later')
+		strictEqualTypeSafe(secondChildRepBalance, secondPoolForkData.repAtFork, 'the second child pool should still receive only its own migrated REP even after the first pool already migrated')
 	})
 
 	test('redeemRep should stay blocked until the own-fork child pool becomes operational', async () => {

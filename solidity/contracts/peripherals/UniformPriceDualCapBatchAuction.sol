@@ -251,7 +251,8 @@ contract UniformPriceDualCapBatchAuction {
 	function _wouldClear(uint256 candidateEth, int256 tick) internal view returns (bool) {
 		if (candidateEth >= ethRaiseCap) return true;
 		uint256 price = tickToPrice(tick);
-		uint256 rep = candidateEth * price / PRICE_PRECISION;
+		if (price == 0) return false;
+		uint256 rep = candidateEth * PRICE_PRECISION / price;
 		return rep >= maxRepBeingSold;
 	}
 
@@ -271,29 +272,29 @@ contract UniformPriceDualCapBatchAuction {
 		uint256 price = tickToPrice(node.tick);
 		uint256 ethToTake = node.totalEth;
 		// If price is zero, ignore this node's ETH for clearing calculations
-		if (price == 0) {
-			ethToTake = 0;
-		}
-		if (accEth > 0) {
-			uint256 repIfRepriced = accEth * price / PRICE_PRECISION;
-			if (repIfRepriced > maxRepBeingSold) return (true, lastValidTick, lastValidEth, lastValidEthAtTick);
-		}
+			if (price == 0) {
+				ethToTake = 0;
+			}
+			if (accEth > 0) {
+				uint256 repIfRepriced = price == 0 ? 0 : accEth * PRICE_PRECISION / price;
+				if (repIfRepriced > maxRepBeingSold) return (true, lastValidTick, lastValidEth, lastValidEthAtTick);
+			}
 
 		if (accEth >= ethRaiseCap) return (true, lastValidTick, lastValidEth, lastValidEthAtTick);
 		uint256 remainingCap = ethRaiseCap - accEth;
 		if (ethToTake > remainingCap) ethToTake = remainingCap;
 		uint256 newAccEth = accEth + ethToTake;
 
-		uint256 totalRep = newAccEth * price / PRICE_PRECISION;
+			uint256 totalRep = price == 0 ? 0 : newAccEth * PRICE_PRECISION / price;
 
-		if (totalRep >= maxRepBeingSold) {
-			// partial fill
-			uint256 maxEthAtThisPrice = maxRepBeingSold * PRICE_PRECISION / price;
-			uint256 ethUsedAtTick = 0;
-			if (maxEthAtThisPrice > accEth) ethUsedAtTick = maxEthAtThisPrice - accEth;
-			if (ethUsedAtTick > ethToTake) ethUsedAtTick = ethToTake;
-			return (true, node.tick, accEth + ethUsedAtTick, ethUsedAtTick);
-		}
+			if (totalRep >= maxRepBeingSold) {
+				// partial fill
+				uint256 maxEthAtThisPrice = maxRepBeingSold * price / PRICE_PRECISION;
+				uint256 ethUsedAtTick = 0;
+				if (maxEthAtThisPrice > accEth) ethUsedAtTick = maxEthAtThisPrice - accEth;
+				if (ethUsedAtTick > ethToTake) ethUsedAtTick = ethToTake;
+				return (true, node.tick, accEth + ethUsedAtTick, ethUsedAtTick);
+			}
 
 		if (newAccEth >= ethRaiseCap) return (true, node.tick, newAccEth, ethToTake);
 

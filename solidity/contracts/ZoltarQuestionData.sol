@@ -27,6 +27,7 @@ import { ScalarOutcomes } from './ScalarOutcomes.sol';
 	function createQuestion(QuestionData memory questionData, string[] calldata outcomeOptions) external returns (uint256) {
 		uint256 questionId = getQuestionId(questionData, outcomeOptions);
 		require(questionCreatedTimestamp[questionId] == 0, 'Question already exists');
+		require(questionData.endTime >= questionData.startTime, 'end time must be on or after start time');
 		if (outcomeOptions.length == 0) {
 			// scalar
 			require(questionData.displayValueMax > questionData.displayValueMin, 'max must be greater than min');
