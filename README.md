@@ -18,6 +18,12 @@ Install dependencies, generate contract artifacts, vendor the UI dependencies, a
 bun run setup
 ```
 
+If you plan to run individual checks manually on a fresh checkout, install dependencies first:
+
+```bash
+bun install --frozen-lockfile
+```
+
 Install `anvil` if it is not already available:
 
 ```bash
@@ -51,7 +57,7 @@ This mode does not require a wallet extension or `anvil`. Instead, it boots a Te
 Simulation mode details:
 
 - The activation flag is `?simulate=1`
-- The current seeded scenario is `?simulate=1&simScenario=baseline`
+- The default seeded scenario is `?simulate=1&simScenario=baseline`
 - The yellow simulation banner exposes developer-only controls for account switching, reset, block mining, time travel, blockchain time, block count, transaction count, and artificial transaction receipt delay
 - Uniswap-backed REP pricing is intentionally disabled in simulation mode, so quote-dependent UI paths degrade instead of using mainnet liquidity
 - The simulation chain is ephemeral and exists only in the current browser tab session
@@ -139,5 +145,6 @@ bun run gas-costs
 ## Notes
 
 - `bun run setup` is the quickest way to bootstrap a fresh checkout.
+- `bun install --frozen-lockfile` must be run before standalone commands like `bun tsc` on a fresh checkout.
 - `bun run test` runs the TypeScript check first, then executes the test suite.
 - The repo uses exact dependency versions for reproducible installs.

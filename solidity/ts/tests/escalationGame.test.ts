@@ -1,5 +1,5 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
-import type { Address } from 'viem'
+import { decodeEventLog, encodeDeployData, type Address } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
@@ -8,9 +8,9 @@ import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import assert from 'node:assert'
 import { deployEscalationGame, depositOnOutcome, getBalances, getStartingTime, getQuestionResolution } from '../testsuite/simulator/utils/contracts/escalationGame'
-import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
-import { peripherals_EscalationGame_EscalationGame } from '../types/contractArtifact'
+import { peripherals_EscalationGame_EscalationGame, peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool } from '../types/contractArtifact'
 
 const ESCALATION_TIME_LENGTH = 4233600n
 
@@ -38,6 +38,86 @@ describe('Escalation Game Test Suite', () => {
 			address: escalationGame,
 			args: [attritionCost],
 		})
+
+	const readBindingCapital = async (escalationGame: Address) =>
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getBindingCapital',
+			address: escalationGame,
+			args: [],
+		})
+
+	const deployEscalationGameTestSecurityPool = async () => {
+		const zoltarAddress = await getZoltarAddress(client)
+		const deploymentHash = await client.sendTransaction({
+			data: encodeDeployData({
+				abi: peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool.abi,
+				bytecode: `0x${peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool.evm.bytecode.object}`,
+				args: [zoltarAddress, 0n, client.account.address],
+			}),
+		})
+		const deploymentReceipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
+		const testSecurityPoolAddress = deploymentReceipt.contractAddress
+		if (testSecurityPoolAddress === undefined) throw new Error('test security pool deployment address missing')
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'deployEscalationGame',
+					args: [reportBond, nonDecisionThreshold],
+				}),
+		)
+		const escalationGameAddress = await client.readContract({
+			abi: peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool.abi,
+			functionName: 'escalationGame',
+			address: testSecurityPoolAddress,
+			args: [],
+		})
+		return { escalationGameAddress, testSecurityPoolAddress }
+	}
+
+	const depositOnOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, amount: bigint) =>
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'depositOnOutcome',
+					args: [depositor, outcome, amount],
+				}),
+		)
+
+	const claimWinningDepositAndReadClaimLog = async (testSecurityPoolAddress: Address, depositIndex: bigint, outcome: QuestionOutcome) => {
+		const claimHash = await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool.abi,
+					address: testSecurityPoolAddress,
+					functionName: 'claimDepositForWinning',
+					args: [depositIndex, outcome],
+				}),
+		)
+		const receipt = await client.waitForTransactionReceipt({ hash: claimHash })
+		const claimLog = receipt.logs
+			.map(log => {
+				try {
+					return decodeEventLog({
+						abi: peripherals_EscalationGame_EscalationGame.abi,
+						data: log.data,
+						topics: log.topics,
+					})
+				} catch {
+					return undefined
+				}
+			})
+			.find(log => log?.eventName === 'ClaimDeposit')
+		if (claimLog === undefined) throw new Error('ClaimDeposit log missing')
+		return claimLog
+	}
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
@@ -74,6 +154,23 @@ describe('Escalation Game Test Suite', () => {
 		// Values > 3 are outside enum (0=Invalid,1=Yes,2=No,3=None)
 		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, 4 as QuestionOutcome, reportBond))
 		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, 255 as QuestionOutcome, reportBond))
+	})
+
+	test('getDepositsByOutcome returns exact-length pages without zero padding', async () => {
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond * 2n)
+
+		const depositPage = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getDepositsByOutcome',
+			address: escalationGame,
+			args: [QuestionOutcome.Yes, 1n, 5n],
+		})
+
+		assert.strictEqual(depositPage.length, 1, 'deposit paging should return only the remaining entries')
+		assert.strictEqual(depositPage[0]?.amount, reportBond * 2n, 'paged deposit should retain its amount')
+		assert.strictEqual(depositPage[0]?.depositor, client.account.address, 'paged deposit should retain its depositor')
 	})
 
 	test('claimDepositForWinning reverts when outcome is None', async () => {
@@ -347,10 +444,80 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(balances.yes, amount1 + amount2, 'Yes balance increased without adjustment')
 		assert.strictEqual(balances.invalid, 0n, 'Invalid balance zero')
 		assert.strictEqual(balances.no, 0n, 'No balance zero')
-		// Advance time past game end
 		const startTime = await getStartingTime(client, escalationGame)
 		await mockWindow.setTime(startTime + ESCALATION_TIME_LENGTH + 1n)
 		const resolution = await getQuestionResolution(client, escalationGame)
 		assert.strictEqual(resolution, QuestionOutcome.Yes, 'Resolution should be Yes')
+	})
+
+	test('claimDepositForWinning pays the pro-rata reward for a deposit fully below binding capital', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const winningDepositorAddress = client.account.address
+		const losingDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0).account.address
+		const firstWinningDeposit = 5n * 10n ** 18n
+		const secondWinningDeposit = 5n * 10n ** 18n
+		const thirdWinningDeposit = 5n * 10n ** 18n
+		const excessWinningDeposit = 2n * 10n ** 18n
+		const losingDeposit = 10n * 10n ** 18n
+
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, winningDepositorAddress, QuestionOutcome.Yes, firstWinningDeposit)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, winningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, winningDepositorAddress, QuestionOutcome.Yes, thirdWinningDeposit)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, winningDepositorAddress, QuestionOutcome.Yes, excessWinningDeposit)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
+
+		const startTime = await getStartingTime(client, escalationGameAddress)
+		await mockWindow.setTime(startTime + ESCALATION_TIME_LENGTH + 1n)
+
+		assert.strictEqual(await getQuestionResolution(client, escalationGameAddress), QuestionOutcome.Yes, 'Resolution should be Yes')
+		const claimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
+		assert.strictEqual(await readBindingCapital(escalationGameAddress), losingDeposit, 'Binding capital should be the losing-side 10 REP depth')
+		assert.strictEqual(claimLog.args.amountToWithdraw, 7n * 10n ** 18n, 'The first 5 REP winning deposit should receive its 2 REP pro-rata reward share')
+	})
+
+	test('claimDepositForWinning treats the region between binding capital and the reward cap as the safety boundary', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const firstWinningDepositorAddress = client.account.address
+		const secondWinningDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0).account.address
+		const losingDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0).account.address
+		const firstWinningDeposit = 20n * 10n ** 18n
+		const secondWinningDeposit = 14n * 10n ** 18n
+		const losingDeposit = 20n * 10n ** 18n
+
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, firstWinningDepositorAddress, QuestionOutcome.Yes, firstWinningDeposit)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, secondWinningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
+
+		const startTime = await getStartingTime(client, escalationGameAddress)
+		await mockWindow.setTime(startTime + ESCALATION_TIME_LENGTH + 1n)
+
+		assert.strictEqual(await getQuestionResolution(client, escalationGameAddress), QuestionOutcome.Yes, 'Resolution should be Yes')
+		const claimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 1n, QuestionOutcome.Yes)
+		assert.strictEqual(await readBindingCapital(escalationGameAddress), losingDeposit, 'Binding capital should be the losing-side 20 REP depth')
+		assert.strictEqual(claimLog.args.amountToWithdraw, 18n * 10n ** 18n, 'The 14 REP crossing deposit should earn reward on its 10 REP safety-boundary slice and principal on its 4 REP excess slice')
+	})
+
+	test('claimDepositForWinning shares the full reward pool across actual winning principal when winning depth stays below the reward cap', async () => {
+		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const firstWinningDepositorAddress = client.account.address
+		const secondWinningDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0).account.address
+		const losingDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0).account.address
+		const firstWinningDeposit = 14n * 10n ** 18n
+		const secondWinningDeposit = 10n * 10n ** 18n
+		const losingDeposit = 20n * 10n ** 18n
+
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, firstWinningDepositorAddress, QuestionOutcome.Yes, firstWinningDeposit)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, secondWinningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
+		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
+
+		const startTime = await getStartingTime(client, escalationGameAddress)
+		await mockWindow.setTime(startTime + ESCALATION_TIME_LENGTH + 1n)
+
+		assert.strictEqual(await getQuestionResolution(client, escalationGameAddress), QuestionOutcome.Yes, 'Resolution should be Yes')
+		const firstClaimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
+		const secondClaimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 1n, QuestionOutcome.Yes)
+		assert.strictEqual(await readBindingCapital(escalationGameAddress), losingDeposit, 'Binding capital should be the losing-side 20 REP depth')
+		assert.strictEqual(firstClaimLog.args.amountToWithdraw, 21n * 10n ** 18n, 'The first 14 REP winning deposit should receive its 7 REP pro-rata reward share')
+		assert.strictEqual(secondClaimLog.args.amountToWithdraw, 15n * 10n ** 18n, 'The second 10 REP winning deposit should receive its 5 REP pro-rata reward share')
 	})
 })

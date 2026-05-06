@@ -87,6 +87,30 @@ REP vault operators call `depositRep` to transfer REP into the pool. In return t
 
 Each vault can choose a `securityBondAllowance`. This is the amount of open interest that the vault is willing to underwrite. The pool enforces both local and global solvency conditions using the REP/ETH price from `SecurityPoolOracleCoordinator`.
 
+```
+Vault operator
+    |
+    | depositRep(REP)
+    v
++----------------------+
+| SecurityPool         |
+| holds pooled REP     |
++----------------------+
+    |
+    +--> internal pool ownership accounting
+    |
+    +--> securityBondAllowance chosen by vault
+              |
+              v
+      open-interest underwriting capacity
+              |
+              v
+   solvency checks gate:
+   - withdraw REP
+   - raise allowance
+   - liquidation status
+```
+
 At the vault level, the solvency condition enforced by operations such as `performWithdrawRep` is:
 
 $$
@@ -126,6 +150,27 @@ The pool gradually converts part of complete-set collateral into fees owed to RE
 - `feeIndex`
 - `currentRetentionRate`
 
+```
+time -->
++----------------------------------------------+
+| completeSetCollateralAmount                  |
+| starts higher, then decays gradually         |
++----------------------------------------------+
+                    |
+                    | retained portion shrinks
+                    v
++----------------------------------------------+
+| totalFeesOwedToVaults                        |
+| starts lower, then grows over time           |
++----------------------------------------------+
+
+utilization rises
+    ->
+retention rate falls
+    ->
+collateral decays faster into vault fees
+```
+
 The retention rate is updated as utilization changes. The current curve in [`SecurityPoolUtils.calculateRetentionRate`](../solidity/contracts/peripherals/SecurityPoolUtils.sol) is heuristic: it begins at a high retention rate, declines linearly until 80% utilization, and then bottoms out at a lower rate. The intent is to charge more aggressively for security as utilization rises and available underwriting slack falls.
 
 When `totalSecurityBondAllowance > 0`, the utilization proxy is:
@@ -152,6 +197,25 @@ Liquidation in Augur Placeholder is a transfer of risk, not a direct sale of col
 
 Economically, liquidation moves some amount of debt and a corresponding amount of REP-backed ownership from the target vault to the caller vault. The receiving vault must remain solvent after taking on that additional debt, and both sides must still satisfy the minimum deposit requirements enforced by the pool. In the current implementation, this mechanism is intentionally strict: it is designed to move underwriting responsibility away from an unsafe vault and into one that can still support it.
 
+```
+Before liquidation
+
+Unsafe vault                     Liquidator vault
+- REP backing: too low          - REP backing: sufficient
+- bond allowance: too high      - bond allowance: can absorb more
+- at liquidation boundary
+
+                performLiquidation
+                         |
+                         v
+
+After liquidation
+
+Unsafe vault                     Liquidator vault
+- less debt / less ownership    - more debt / more ownership
+- reduced risk                  - increased underwriting role
+```
+
 ## 5. Shares and Complete Sets
 
 [`ShareToken`](../solidity/contracts/peripherals/tokens/ShareToken.sol) is an [ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) contract used by Augur Placeholder to represent outcome positions.
@@ -165,6 +229,37 @@ For each complete set:
 - one `No` share is minted
 
 The token id encodes both universe id and outcome. This makes the same question’s positions fork-aware across universes.
+
+```
+User sends ETH
+    |
+    v
+createCompleteSet
+    |
+    v
+receives one full set:
+[Invalid] [Yes] [No]
+
+Before finalization:
+[Invalid] + [Yes] + [No]
+            |
+            v
+    redeemCompleteSet
+            |
+            v
+        collateral back
+
+After finalization:
+hold winning leg only
+            |
+            v
+       redeemShares
+            |
+            v
+   winning payout only
+```
+
+Because the legs are ERC-1155 positions, they can be transferred between users before either redemption path is exercised.
 
 Before finalization, a user who holds a complete set can burn all three legs and recover collateral through the parent security pool. After finalization, a user can redeem only the winning outcome through `redeemShares`.
 
@@ -210,6 +305,23 @@ At any point, the contract tracks three outcome balances. Two related but distin
 
 This distinguishes between a contest that is still live at the current running threshold and a stronger non-decision state that opens the fork path.
 
+The same balances are compared against two different thresholds for two different purposes.
+
+```
+Three tracked balances:
+- Invalid
+- Yes
+- No
+
+Compare against running totalCost():
+- two or more above threshold -> resolution stays None
+- one side uniquely leads     -> contest may still resolve locally
+
+Compare against fixed nonDecisionThreshold:
+- two or more above threshold -> true non-decision
+                                 -> fork path opens
+```
+
 The contract also tracks the `binding capital`, which is the median of the three balances. This determines the effective end date of the game when the system times out naturally instead of reaching non-decision.
 
 The median matters because the game is trying to detect whether disagreement remains live across multiple sides rather than merely whether one side has accumulated the most stake. In that sense, `binding capital` measures the level at which the contest is still jointly sustained by competing outcomes, which is why it is the relevant quantity for timeout and payout logic.
@@ -218,26 +330,50 @@ The median matters because the game is trying to detect whether disagreement rem
 
 Winning deposits are paid by `claimDepositForWinning`, and the payout depends on where that deposit sits relative to the final `binding capital`.
 
-- If a winning deposit sits entirely above the binding capital, it is returned at par.
-- If a winning deposit crosses the binding-capital boundary, the portion above the boundary is returned at par. The portion inside the binding region is paid as `2 * excess - (2/5) * excess`, which is `1.6 * excess`.
-- If a winning deposit sits entirely inside the binding region, it is paid as `2 * deposit - (2/5) * deposit`, which is `1.6 * deposit`.
+```
+Winning deposit position relative to final binding capital
 
-In code terms, the contract computes an `amountToWithdraw` from the winning deposit record and emits that result through `ClaimDeposit`. The security pool or pool forker then uses that amount in the relevant withdrawal or migration path. This means deeper winning deposits can earn a `1.6x` payout, while later deposits above the binding capital only get principal back.
+0 ---------------- binding capital -------- reward-eligible cap -------->
+
+Case 1: below binding capital
+[======== deposit ========]
+payout = principal + pro-rata share of the reward pool
+
+Case 2: safety boundary
+                         [======== deposit ========]
+payout = principal + pro-rata share of the same reward pool
+
+Case 3: excess
+                                                   [==== deposit ====]
+payout = 1.0x on entire deposit
+```
+
+- The binding-capital region defines a fixed reward pool.
+- `40%` of that binding-capital region is burned or retained, so the remaining `60%` becomes the reward pool.
+- All winning capital in the reward-eligible window shares that fixed reward pool pro rata.
+- The reward-eligible window extends to `bindingCapitalAmount + floor(bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR)`.
+- The region between `bindingCapitalAmount` and that cap is the `safety boundary`.
+- Winning capital above the reward-eligible cap is excess and gets principal back with no additional reward.
+
+In code terms, the contract computes an `amountToWithdraw` from the winning deposit record and emits that result through `ClaimDeposit`. The security pool or pool forker then uses that amount in the relevant withdrawal or migration path. The key point is that the reward is pooled: the first `150%` of winning depth shares the same fixed bonus pool, while anything above that is excess and receives principal only.
 
 Example:
 
-- Suppose the final `binding capital` is `100 REP`.
-- A winning deposit of `25 REP` that lies entirely inside that first `100 REP` is paid:
+- Suppose the final `binding capital` is `10 REP`.
+- The reward-eligible cap is therefore `15 REP`, so the `safety boundary` is the interval `(10 REP, 15 REP]`.
+- The reward pool is `10 * 3 / 5 = 6 REP`.
+- If the winning side contributes `15 REP` inside that reward-eligible window, then each `5 REP` deposit in `[0,15]` receives `5 + 5 * 6 / 15 = 7 REP`.
+- If a later winning deposit sits above `15 REP`, it is excess and receives principal back with no share of the `6 REP` reward pool.
 
-$$
-\text{amountToWithdraw} = 2 \cdot 25 - \frac{2}{5} \cdot 25 = 50 - 10 = 40 \text{ REP}
-$$
+```
+binding capital = 10 REP
+reward-eligible window = [0,15]
+safety boundary = (10,15]
+reward pool = 6 REP
 
-- A winning deposit of `30 REP` where only `10 REP` lies inside the binding region and `20 REP` lies above it is paid:
-
-$$
-\text{amountToWithdraw} = 20 + \left(2 \cdot 10 - \frac{2}{5} \cdot 10\right) = 20 + 16 = 36 \text{ REP}
-$$
+all winning depth in [0,15] -> shares the 6 REP reward pool pro rata
+winning depth above 15      -> returned at par
+```
 
 After that, one more adjustment can apply. If the actual Zoltar fork threshold for the universe is lower than the escalation game’s configured `nonDecisionThreshold`, the payout is scaled down proportionally by `actualForkThreshold / nonDecisionThreshold`.
 
@@ -343,14 +479,170 @@ If `repAtForkAmount` is zero, the contract does not evaluate this division path.
 
 ### Auction mechanics
 
-- bidders submit ETH bids at ticks representing ETH/REP prices
-- the auction maintains aggregate bid depth by tick
-- finalization computes a clearing tick
-- bids above the clearing tick win fully
-- bids below the clearing tick lose and receive refunds
-- bids at the clearing tick can be partially filled
+- The auction is started by `SecurityPoolForker` on behalf of the child security pool.
+- `startAuction` sets two caps:
+  - `ethRaiseCap`: how much ETH the child pool wants to raise to repair collateral
+  - `maxRepBeingSold`: the maximum REP inventory the child pool is willing to sell
+- Bidders submit ETH at discrete ticks. A tick is an integer price level on a multiplicative grid:
 
-If the auction is underfunded, the contract switches to threshold-based logic that allocates REP proportionally among bids above the underfunded threshold price.
+$$
+\text{priceAtTick} = 10^{18} \cdot 1.0001^{\text{tick}}
+$$
+
+The contract stores prices in `1e18` fixed-point units, so:
+
+- tick `0` means `1 ETH/REP`
+- positive ticks mean higher ETH per REP
+- negative ticks mean lower ETH per REP
+
+Equivalently, the conceptual inverse relation is:
+
+$$
+\text{tick} \approx \frac{\ln(\text{priceInWeiPerRep} / 10^{18})}{\ln(1.0001)}
+$$
+
+In other words, a bid at a higher tick is simply a bid willing to pay a higher ETH/REP price.
+- Finalization then walks bids from the highest ETH/REP price to the lowest ETH/REP price and stops at the first price where one of two constraints binds:
+  - the auction has raised enough ETH to hit `ethRaiseCap`
+  - the ETH collected so far, at that price, would buy all `maxRepBeingSold`
+
+In normal clearing mode:
+
+- bids above the clearing tick win in full
+- bids below the clearing tick lose and receive full ETH refunds
+- bids exactly at the clearing tick are filled in submission order until the remaining capacity at that tick is exhausted
+
+This submission ordering at the clearing tick is important. The contract stores each bid with a cumulative ETH total for that price level, and uses that running total to determine how much of each same-tick bid was actually used.
+
+In underfunded mode:
+
+- the auction cannot discover a standard clearing tick
+- the contract computes an `underfundedThreshold = ethRaised / maxRepBeingSold`
+- only bids strictly above that threshold count as winners
+- all winning ETH collectively buys the full REP inventory
+- each winning bidder receives REP pro rata to that bidder’s share of the winning ETH
+- bids at or below the threshold lose and are refunded in full
+
+This is why the auction is dual-capped: it is trying to repair up to a target amount of ETH collateral without selling more than the allowed REP inventory.
+
+```
+Auction inputs
+
+    Child branch needs ETH repair
+                |
+                v
+     +-----------------------+
+     | startAuction sets     |
+     | ethRaiseCap           |
+     | maxRepBeingSold       |
+     +-----------------------+
+                |
+                v
+     Bidders post ETH at ticks
+                |
+                v
+     Sort demand high price -> low price
+                |
+                v
+     Stop when one cap binds first
+        |                     |
+        |                     |
+        v                     v
+  ETH cap or REP cap      No standard clear
+  binds during sweep      after all bids
+        |                     |
+        v                     v
+   Normal clearing         Underfunded path
+```
+
+```
+Normal clearing intuition
+
+price (ETH/REP)
+high
+  ^
+  |   tick 103  ##########         fully filled
+  |   tick 102  #######            fully filled
+  |   tick 101  #####|---          partially filled here
+  |   tick 100  ###                refunded
+  |   tick  99  ##                 refunded
+  +----------------------------------------------> cumulative demand
+
+            clearing tick = 101
+```
+
+```
+Same-tick ordering
+
+Suppose three bids arrive at the same clearing tick:
+
+  Alice: 2 ETH   cumulative 2
+  Bob:   3 ETH   cumulative 5
+  Carol: 4 ETH   cumulative 9
+
+If only 6 ETH can be used at tick 101:
+
+  Alice: full fill   (2 / 2 used)
+  Bob:   full fill   (3 / 3 used)
+  Carol: partial     (1 / 4 used)
+```
+
+```
+Underfunded intuition
+
+REP for sale: 100
+Total winning ETH above threshold: 10
+
+Alice bids 4 ETH above threshold  -> gets 40 REP
+Bob   bids 6 ETH above threshold  -> gets 60 REP
+
+Bids at or below threshold -> full ETH refund
+```
+
+### Worked clearing example
+
+Suppose the child pool starts a truth auction with:
+
+- `ethRaiseCap = 20 ETH`
+- `maxRepBeingSold = 4 REP`
+
+Now suppose three bidders participate:
+
+- Alice bids `3 ETH` at a tick corresponding to `5 ETH/REP`
+- Bob bids `4 ETH` at a tick corresponding to `4 ETH/REP`
+- Carol bids `6 ETH` at a tick corresponding to `3 ETH/REP`
+
+Walking from highest price to lowest price:
+
+1. Alice contributes `3 ETH` at `5 ETH/REP`.
+2. Adding Bob brings cumulative demand to `7 ETH` at `4 ETH/REP`, still below the `4 REP` sale cap.
+3. Adding Carol reaches the first price where the remaining REP inventory is exhausted.
+   - At `3 ETH/REP`, selling `4 REP` requires `12 ETH`.
+   - The auction already has `7 ETH` from Alice and Bob, so only `5 ETH` of Carol’s `6 ETH` bid is used.
+
+So the outcome is:
+
+- clearing price: `3 ETH/REP`
+- Alice: fully filled for `3 ETH`, receives `1 REP`
+- Bob: fully filled for `4 ETH`, receives `4/3 REP`
+- Carol: partially filled for `5 ETH`, receives `5/3 REP`, and gets `1 ETH` refunded
+
+The total settlement is exactly:
+
+- total ETH raised: `12 ETH`
+- total REP sold: `4 REP`
+
+If “profit” is measured as execution surplus relative to each bidder’s own limit price, then:
+
+- Alice was willing to pay `5 ETH/REP` but pays the uniform clearing price of `3 ETH/REP`
+  - execution surplus: `1 REP * (5 - 3) ETH/REP = 2 ETH`
+- Bob was willing to pay `4 ETH/REP` and also pays `3 ETH/REP`
+  - execution surplus: `(4/3 REP) * (4 - 3) ETH/REP = 4/3 ETH`
+- Carol bid exactly at the clearing price
+  - execution surplus on the filled portion: `0 ETH`
+  - refund on the unfilled portion: `1 ETH`
+
+Higher-priced bids establish priority, but everyone who clears pays the same effective ETH/REP execution price, except that the marginal price level may be only partially filled.
 
 The purpose of this auction is to let a child Augur Placeholder branch reassemble collateral completeness after a Zoltar fork. REP is sold here because it is the branch-native scarce asset that migrated into the child universe along with that branch’s security claims. The auction converts part of that security capital back into the ETH collateral required for the child market to continue operating cleanly. Put differently, it monetizes branch-native REP, not trader share balances or direct vault claims.
 
@@ -371,6 +663,30 @@ Parent Placeholder pool
            |
            v
       Child pool returns to Operational
+```
+
+```
+Fork repair path with the auction in context
+
+Parent pool
+  collateral: parent collateral amount
+  REP-at-fork: total REP at fork
+        |
+        | migrate a child branch with migrated REP
+        v
+Child pool before auction
+  migrated collateral ~= parent collateral amount * migrated REP / total REP at fork
+  missing collateral  = parent collateral amount - migrated collateral
+        |
+        | sell branch REP for ETH
+        v
+Truth auction
+  raise up to missing collateral
+  sell up to auction REP inventory
+        |
+        v
+Child pool after auction
+  operational with repaired-or-partially-repaired collateral
 ```
 
 ## 9. REP/ETH Price Oracle
@@ -416,6 +732,7 @@ This argument has limits. If multiple branches retain substantial durable value,
 | `NUM_OUTCOMES` | `3` | Placeholder complete sets mint `Invalid`, `Yes`, and `No` shares |
 | `TODO_INITIAL_ESCALATION_GAME_DEPOSIT` | `1 ether` | Fixed initial deposit used when the escalation game is first deployed |
 | Escalation `nonDecisionThreshold` | `totalTheoreticalRepSupply / 40` | Deployed as `repToken.getTotalTheoreticalSupply() / (FORK_THRESHOLD_DIVISOR * 2)` |
+| `EXCESS_REWARD_WINDOW_DIVISOR` | `2` | Extends the escalation reward-eligible cap to `bindingCapitalAmount + bindingCapitalAmount / 2`, so the `safety boundary` covers the extra `50%` region above binding capital |
 | `MIGRATION_TIME` | `8 weeks` | Fork-migration window before truth auction can start |
 | `AUCTION_TIME` | `1 week` | Truth-auction duration |
 | `PRICE_PRECISION` | `1e18` | Fixed-point precision for REP/ETH and retention-rate math |
@@ -446,6 +763,38 @@ This argument has limits. If multiple branches retain substantial durable value,
 ## 12. End-to-End Example
 
 An end-to-end lifecycle under the current contracts looks like this:
+
+```
+Question registered in Zoltar
+            |
+            v
+Placeholder pool deployed
+            |
+            v
+REP vaults fund security
+            |
+            v
+Users mint complete sets
+            |
+            v
+Question ends
+            |
+            v
+Escalation game
+     |                    |
+     | local winner       | non-decision
+     v                    v
+share redemption      Zoltar fork path
+                            |
+                            v
+                 pool / vault / share migration
+                            |
+                            v
+                 truth auction if collateral is short
+                            |
+                            v
+                  child pool resumes operation
+```
 
 1. A binary question is registered in [`ZoltarQuestionData`](../solidity/contracts/ZoltarQuestionData.sol).
 2. An Augur Placeholder origin security pool is deployed for that question through [`SecurityPoolFactory`](../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol). The current implementation requires the exact categorical outcomes `Yes` and `No`.
