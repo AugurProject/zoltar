@@ -237,16 +237,18 @@ contract EscalationGame {
 		originalDepositAmount = deposit.amount;
 		uint256 maxWithdrawableBalance = getBindingCapital();
 		uint256 burnAmount;
-		if (deposit.cumulativeAmount > maxWithdrawableBalance) {
+		uint256 depositStart = deposit.cumulativeAmount - deposit.amount;
+		if (depositStart >= maxWithdrawableBalance) {
 			amountToWithdraw = deposit.amount;
 			burnAmount = 0;
-		} else if (deposit.cumulativeAmount + deposit.amount > maxWithdrawableBalance) {
-			uint256 excess = (deposit.cumulativeAmount + deposit.amount - maxWithdrawableBalance);
-			burnAmount = excess * 2 / 5;
-			amountToWithdraw = (deposit.amount - excess) + excess * 2 - burnAmount;
 		} else {
-			burnAmount = (deposit.amount * 2) / 5;
-			amountToWithdraw = deposit.amount * 2 - burnAmount;
+			uint256 withdrawableWithinBindingCapital = maxWithdrawableBalance - depositStart;
+			if (withdrawableWithinBindingCapital > deposit.amount) {
+				withdrawableWithinBindingCapital = deposit.amount;
+			}
+			uint256 withdrawableAboveBindingCapital = deposit.amount - withdrawableWithinBindingCapital;
+			burnAmount = (withdrawableWithinBindingCapital * 2) / 5;
+			amountToWithdraw = withdrawableAboveBindingCapital + withdrawableWithinBindingCapital * 2 - burnAmount;
 		}
 
 		// Adjust based on actual fork threshold

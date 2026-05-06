@@ -73,6 +73,14 @@ export const getCompleteSetCollateralAmount = async (client: ReadClient, securit
 		args: [],
 	})
 
+export const getShareTokenSupply = async (client: ReadClient, securityPoolAddress: Address) =>
+	await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'shareTokenSupply',
+		address: securityPoolAddress,
+		args: [],
+	})
+
 export const getSystemState = async (client: ReadClient, securityPoolAddress: Address): Promise<SystemState> =>
 	await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
