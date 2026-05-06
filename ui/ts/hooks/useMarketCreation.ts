@@ -13,6 +13,7 @@ import { useZoltarOperations } from './useZoltarOperations.js'
 type UseMarketCreationParameters = {
 	accountAddress: Address | undefined
 	activeUniverseId: bigint
+	activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
 	autoLoadInitialData: boolean
 	deploymentStatuses: DeploymentStatus[]
 	onTransaction: (hash: Hash) => void
@@ -22,8 +23,8 @@ type UseMarketCreationParameters = {
 	refreshState: () => Promise<void>
 }
 
-export function useMarketCreation({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseMarketCreationParameters) {
-	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState })
+export function useMarketCreation({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseMarketCreationParameters) {
+	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState })
 	const { state: marketForm, setState: setMarketForm } = useFormState<MarketFormState>(getDefaultMarketFormState())
 	const marketCreating = useSignal(false)
 	const marketResult = useSignal<MarketCreationResult | undefined>(undefined)

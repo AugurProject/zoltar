@@ -12,6 +12,9 @@ export function createFakeBackend({ accountAddress, hasWallet = true, profile = 
 	const accounts = accountAddress === undefined ? [] : [accountAddress]
 
 	return {
+		bootstrapError: undefined,
+		bootstrapLabel: undefined,
+		bootstrapProgress: undefined,
 		createReadClient: () => {
 			throw new Error('Fake backend read client should not be used in this test')
 		},
@@ -25,6 +28,7 @@ export function createFakeBackend({ accountAddress, hasWallet = true, profile = 
 		id: profile.id === 'simulation' ? 'simulation' : 'injected',
 		profile,
 		requestAccounts: async () => accounts,
+		subscribe: undefined,
 		subscribeAccountsChanged: () => () => undefined,
 		subscribeChainChanged: () => () => undefined,
 	}

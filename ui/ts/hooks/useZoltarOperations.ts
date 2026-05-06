@@ -8,6 +8,7 @@ import { useZoltarUniverse } from './useZoltarUniverse.js'
 type UseZoltarOperationsParameters = {
 	accountAddress: Address | undefined
 	activeUniverseId: bigint
+	activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
 	autoLoadInitialData: boolean
 	deploymentStatuses: DeploymentStatus[]
 	onTransaction: (hash: Hash) => void
@@ -17,7 +18,7 @@ type UseZoltarOperationsParameters = {
 	refreshState: () => Promise<void>
 }
 
-export function useZoltarOperations({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseZoltarOperationsParameters) {
+export function useZoltarOperations({ accountAddress, activeUniverseId, activeZoltarView, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseZoltarOperationsParameters) {
 	const { createChildUniverse: createUniverseChildUniverse, ...universe } = useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted })
 	const refreshZoltarUniverse = useCallback(async () => {
 		await universe.refreshZoltarUniverse()
@@ -32,6 +33,7 @@ export function useZoltarOperations({ accountAddress, activeUniverseId, autoLoad
 		onTransactionSubmitted,
 		refreshState,
 		refreshZoltarUniverse,
+		shouldAutoLoadForkAccess: activeZoltarView === 'fork' || activeZoltarView === 'migrate',
 		zoltarUniverse: universe.zoltarUniverse,
 	})
 	const refreshZoltarForkAccess = useCallback(async () => {

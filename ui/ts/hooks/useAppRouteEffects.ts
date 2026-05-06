@@ -32,6 +32,10 @@ export function shouldRefreshSelectedPoolForRoute({ route, securityPoolAddress, 
 	return route === 'security-pools' && walletBootstrapComplete && securityPoolAddress !== '' && selectedPoolSecurityPoolAddress === undefined
 }
 
+export function shouldSyncSecurityPoolAddressToRouteForms({ route, securityPoolAddress }: { route: AppRoute; securityPoolAddress: string }) {
+	return route === 'security-pools' && securityPoolAddress !== ''
+}
+
 export function useAppRouteEffects({
 	augurPlaceHolderDeploymentMissing,
 	loadOracleReport,
@@ -71,11 +75,12 @@ export function useAppRouteEffects({
 	}, [openOracleFormReportId, openOracleReportDetailsReportId, setOpenOracleReport])
 
 	useEffect(() => {
+		if (!shouldSyncSecurityPoolAddressToRouteForms({ route, securityPoolAddress })) return
 		setSecurityVaultFormSecurityPoolAddress(securityPoolAddress)
 		setTradingFormSecurityPoolAddress(securityPoolAddress)
 		setForkAuctionFormSecurityPoolAddress(securityPoolAddress)
 		setReportingFormSecurityPoolAddress(securityPoolAddress)
-	}, [securityPoolAddress, setForkAuctionFormSecurityPoolAddress, setReportingFormSecurityPoolAddress, setSecurityVaultFormSecurityPoolAddress, setTradingFormSecurityPoolAddress])
+	}, [route, securityPoolAddress, setForkAuctionFormSecurityPoolAddress, setReportingFormSecurityPoolAddress, setSecurityVaultFormSecurityPoolAddress, setTradingFormSecurityPoolAddress])
 
 	useEffect(() => {
 		if (

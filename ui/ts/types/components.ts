@@ -218,6 +218,7 @@ export type DeploymentRouteContentProps = {
 
 export type MarketRouteContentProps = {
 	accountState: AccountState
+	activeView: 'create' | 'fork' | 'migrate' | 'questions'
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	onCreateMarket: () => void
@@ -228,6 +229,7 @@ export type MarketRouteContentProps = {
 	marketError: string | undefined
 	marketForm: MarketFormState
 	marketResult: MarketCreationResult | undefined
+	onActiveViewChange: (view: 'create' | 'fork' | 'migrate' | 'questions') => void
 	onResetMarket: () => void
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestions: boolean

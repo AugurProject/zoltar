@@ -313,6 +313,8 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 	const impersonatedAccounts = new Set<string>()
 	let baselineState: DumpStateResult | undefined = undefined
 	let baselineBlockNumber = 0n
+	let bootstrapLabel: string | undefined = undefined
+	let bootstrapProgress: number | undefined = undefined
 	let blockCountSinceReset = 0n
 	let bootstrapError: string | undefined = undefined
 	let bootstrapPromise: Promise<void> | undefined = undefined
@@ -384,6 +386,8 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 			if (bootstrapPromise !== undefined) return await bootstrapPromise
 			bootstrapping = true
 			bootstrapError = undefined
+			bootstrapLabel = 'Starting simulation bootstrap'
+			bootstrapProgress = 0
 			emitListeners(listeners, 'state')
 			bootstrapPromise = (async () => {
 				try {
@@ -395,6 +399,11 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 						onBaselineState: state => {
 							baselineState = state
 						},
+						onProgress: progress => {
+							bootstrapLabel = progress.label
+							bootstrapProgress = progress.value
+							emitListeners(listeners, 'state')
+						},
 						primaryAccount,
 						profile,
 						scenario,
@@ -405,12 +414,18 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 					currentTimestamp = chainState.currentTimestamp
 					blockCountSinceReset = 0n
 					transactionCountSinceReset = 0n
+					bootstrapLabel = 'Simulation scenario ready'
+					bootstrapProgress = 1
 					bootstrapped = true
 				} catch (error) {
 					bootstrapError = error instanceof Error ? error.message : 'Failed to bootstrap simulation scenario'
 					throw error
 				} finally {
 					bootstrapping = false
+					if (bootstrapped) {
+						bootstrapLabel = undefined
+						bootstrapProgress = undefined
+					}
 					emitListeners(listeners, 'state')
 				}
 			})()
@@ -418,6 +433,12 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 		},
 		get bootstrapError() {
 			return bootstrapError
+		},
+		get bootstrapLabel() {
+			return bootstrapLabel
+		},
+		get bootstrapProgress() {
+			return bootstrapProgress
 		},
 		createReadClient: () =>
 			createPublicClient({

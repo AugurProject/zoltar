@@ -5,6 +5,8 @@ export type SimulationController = {
 	accounts: readonly Address[]
 	advanceTime(seconds: bigint): Promise<void>
 	bootstrapError: string | undefined
+	bootstrapLabel: string | undefined
+	bootstrapProgress: number | undefined
 	blockCountSinceReset: bigint
 	currentTimestamp: bigint
 	currentScenario: SimulationScenario

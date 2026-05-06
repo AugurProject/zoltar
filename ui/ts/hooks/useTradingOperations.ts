@@ -13,9 +13,11 @@ import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import type { TradingFormState, WriteOperationsParameters } from '../types/app.js'
 import type { TradingActionResult, TradingDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
-type UseTradingOperationsParameters = WriteOperationsParameters
+type UseTradingOperationsParameters = WriteOperationsParameters & {
+	enabled: boolean
+}
 
-export function useTradingOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseTradingOperationsParameters) {
+export function useTradingOperations({ accountAddress, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseTradingOperationsParameters) {
 	const tradingDetailsLoad = useLoadController()
 	const nextTradingDetailsLoad = useRequestGuard()
 	const tradingDetails = useSignal<TradingDetails | undefined>(undefined)
@@ -119,6 +121,7 @@ export function useTradingOperations({ accountAddress, onTransaction, onTransact
 		)
 
 	useEffect(() => {
+		if (!enabled) return
 		targetOutcomeDefaultsKey.current = undefined
 		if (tradingForm.value.targetOutcomeIndexes !== '') {
 			tradingForm.value = {
@@ -132,15 +135,17 @@ export function useTradingOperations({ accountAddress, onTransaction, onTransact
 			tradingError.value = undefined
 			return
 		}
-	}, [tradingForm.value.securityPoolAddress])
+	}, [enabled, tradingForm.value.securityPoolAddress])
 
 	useEffect(() => {
+		if (!enabled) return
 		const isCurrent = nextTradingDetailsLoad()
 		if (resolveTradingPoolAddressInput(tradingForm.value.securityPoolAddress) === undefined) return
 		void refreshTradingDetails(tradingForm.value.securityPoolAddress, accountAddress, isCurrent)
-	}, [accountAddress, tradingForm.value.securityPoolAddress])
+	}, [accountAddress, enabled, tradingForm.value.securityPoolAddress])
 
 	useEffect(() => {
+		if (!enabled) return
 		const securityPoolAddress = resolveTradingPoolAddressInput(tradingForm.value.securityPoolAddress)
 		if (securityPoolAddress === undefined || tradingForkUniverse.value === undefined) return
 
@@ -152,7 +157,7 @@ export function useTradingOperations({ accountAddress, onTransaction, onTransact
 			targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse.value),
 		}
 		targetOutcomeDefaultsKey.current = defaultsKey
-	}, [tradingForm.value.securityPoolAddress, tradingForkUniverse.value?.forkTime, tradingForkUniverse.value?.universeId])
+	}, [enabled, tradingForm.value.securityPoolAddress, tradingForkUniverse.value?.forkTime, tradingForkUniverse.value?.universeId])
 
 	return {
 		createCompleteSet,

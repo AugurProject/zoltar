@@ -28,12 +28,14 @@ import type { TransactionState } from './lib/transactionState.js'
 import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
 import { getUniversePresentation, getWalletPresentation } from './lib/userCopy.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
+import { resolveEnumValue } from './lib/viewState.js'
 import type { DeploymentRouteContentProps, MarketRouteContentProps, OpenOracleSectionProps, SecurityPoolsSectionProps } from './types/components.js'
 
 export function App() {
 	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
 	const deployNextMissingPending = useSignal(false)
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, setActiveUniverseId, setOpenOracleReport, setSecurityPoolAddress } = useUrlState()
+	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, setActiveUniverseId, setOpenOracleReport, setSecurityPoolAddress, setZoltarView, zoltarView } = useUrlState()
+	const activeZoltarView = resolveEnumValue<'questions' | 'create' | 'fork' | 'migrate'>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
 	const onTransaction = (hash: Hash) => {
 		transactionState.value = {
 			...transactionState.value,
@@ -56,6 +58,8 @@ export function App() {
 		connectWallet,
 		deploymentStatuses,
 		environmentBootstrapError,
+		environmentBootstrapLabel,
+		environmentBootstrapProgress,
 		environmentReady,
 		errorMessage: walletErrorMessage,
 		hasInjectedWallet,
@@ -117,12 +121,13 @@ export function App() {
 		zoltarQuestions,
 		zoltarUniverse,
 		zoltarUniverseMissing,
-	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete && environmentReady, deploymentStatuses })
+	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, activeZoltarView, autoLoadInitialData: walletBootstrapComplete && environmentReady, deploymentStatuses })
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } =
 		useSecurityPoolCreation({
 			...baseHookConfig,
 			deploymentStatuses,
+			enabled: route === 'security-pools',
 			zoltarUniverseHasForked,
 		})
 	const {
@@ -142,7 +147,7 @@ export function App() {
 		setSecurityBondAllowance,
 		setSecurityVaultForm,
 		withdrawRep,
-	} = useSecurityVaultOperations(baseHookConfig)
+	} = useSecurityVaultOperations({ ...baseHookConfig, enabled: route === 'security-pools' })
 	const {
 		approveToken1,
 		approveToken2,
@@ -164,7 +169,7 @@ export function App() {
 		settleReport,
 		submitInitialReport,
 		wrapWethForInitialReport,
-	} = useOpenOracleOperations(baseHookConfig)
+	} = useOpenOracleOperations({ ...baseHookConfig, enabled: route === 'open-oracle' })
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
 	const { loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(baseHookConfig)
 	const {
@@ -187,7 +192,10 @@ export function App() {
 		setLiquidationAmount,
 		setLiquidationTargetVault,
 	} = useSecurityPoolsOverview(baseHookConfig)
-	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations(baseHookConfig)
+	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
+		...baseHookConfig,
+		enabled: route === 'security-pools',
+	})
 	const {
 		claimAuctionProceeds,
 		createChildUniverse,
@@ -323,6 +331,7 @@ export function App() {
 
 	const marketRouteContentProps: MarketRouteContentProps = {
 		accountState,
+		activeView: activeZoltarView,
 		hasLoadedZoltarQuestions,
 		loadingZoltarForkAccess,
 		zoltarForkActiveAction,
@@ -335,6 +344,7 @@ export function App() {
 		marketCreating,
 		marketError,
 		marketResult,
+		onActiveViewChange: view => setZoltarView(view),
 		onApproveZoltarForkRep: amount => void approveZoltarForkRep(amount),
 		onCreateMarket: () => void createMarket(),
 		onForkZoltar: () => void forkZoltar(),
@@ -568,6 +578,8 @@ export function App() {
 	return (
 		<main>
 			<AppStatusNotices
+				bootstrapLabel={environmentBootstrapLabel}
+				bootstrapProgress={environmentBootstrapProgress}
 				errorMessage={errorMessage}
 				hasInjectedWallet={hasInjectedWallet}
 				isBootstrappingSimulation={isBootstrappingEnvironment}

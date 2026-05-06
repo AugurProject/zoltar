@@ -27,7 +27,9 @@ import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import type { OpenOracleCreateFormState, OpenOracleFormState, WriteOperationsParameters } from '../types/app.js'
 import type { OpenOracleActionResult, OpenOracleReportDetails } from '../types/contracts.js'
 
-type UseOpenOracleOperationsParameters = WriteOperationsParameters
+type UseOpenOracleOperationsParameters = WriteOperationsParameters & {
+	enabled: boolean
+}
 
 type TokenAccessLoadResult = {
 	amount: bigint | undefined
@@ -59,7 +61,7 @@ function toReadError(error: unknown) {
 	return error instanceof Error ? error : new Error('Unknown read error')
 }
 
-export function useOpenOracleOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters) {
+export function useOpenOracleOperations({ accountAddress, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters) {
 	const loadingOpenOracleCreate = useSignal(false)
 	const oracleReportLoad = useLoadController()
 	const openOracleInitialReportPriceLoad = useLoadController()
@@ -597,15 +599,17 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 		)
 
 	useEffect(() => {
+		if (!enabled) return
 		if (openOracleReportDetails.value === undefined) {
 			resetOpenOracleInitialReportState(false)
 			return
 		}
 		void refreshOpenOracleInitialReportQuote(openOracleReportDetails.value)
 		void refreshOpenOracleInitialReportTokenAccess(openOracleReportDetails.value)
-	}, [accountAddress, openOracleReportDetails.value?.reportId, openOracleReportDetails.value?.token1, openOracleReportDetails.value?.token2, openOracleReportDetails.value?.exactToken1Report])
+	}, [accountAddress, enabled, openOracleReportDetails.value?.reportId, openOracleReportDetails.value?.token1, openOracleReportDetails.value?.token2, openOracleReportDetails.value?.exactToken1Report])
 
 	useEffect(() => {
+		if (!enabled) return
 		const loadedReport = openOracleReportDetails.value
 		if (loadedReport === undefined) return
 
@@ -638,7 +642,7 @@ export function useOpenOracleOperations({ accountAddress, onTransaction, onTrans
 			cancelled = true
 			window.clearInterval(intervalId)
 		}
-	}, [openOracleReportDetails.value?.reportId])
+	}, [enabled, openOracleReportDetails.value?.reportId])
 
 	return {
 		approveToken1,

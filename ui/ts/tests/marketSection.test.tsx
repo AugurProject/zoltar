@@ -40,6 +40,7 @@ function createZoltarUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): Z
 function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): MarketSectionProps {
 	return {
 		accountState: createAccountState(),
+		activeView: 'questions',
 		hasLoadedZoltarQuestions: false,
 		loadingZoltarForkAccess: false,
 		zoltarForkActiveAction: undefined,
@@ -50,6 +51,7 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		marketCreating: false,
 		marketError: undefined,
 		marketResult: undefined,
+		onActiveViewChange: () => undefined,
 		onApproveZoltarForkRep: () => undefined,
 		onCreateChildUniverseForOutcomeIndex: () => undefined,
 		onCreateMarket: () => undefined,

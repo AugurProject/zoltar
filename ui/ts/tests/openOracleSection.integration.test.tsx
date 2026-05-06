@@ -47,6 +47,7 @@ function createInjectedWalletShim(mockWindow: AnvilWindowEthereum, accountAddres
 function OpenOracleSectionHarness({ accountAddress }: { accountAddress: Address }) {
 	const openOracle = useOpenOracleOperations({
 		accountAddress,
+		enabled: true,
 		onTransaction: (_hash: Hash) => undefined,
 		onTransactionFinished: () => undefined,
 		onTransactionRequested: () => undefined,

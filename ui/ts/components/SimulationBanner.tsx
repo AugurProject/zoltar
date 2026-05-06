@@ -19,6 +19,8 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	const queryDelayMilliseconds = useSignal(controller.queryDelayMilliseconds.toString())
 	const selectedAccount = useSignal(controller.selectedAccount)
 	const bootstrapError = useSignal(controller.bootstrapError)
+	const bootstrapLabel = useSignal(controller.bootstrapLabel)
+	const bootstrapProgress = useSignal(controller.bootstrapProgress)
 	const transactionCountSinceReset = useSignal(controller.transactionCountSinceReset)
 	const transactionDelayMilliseconds = useSignal(controller.transactionDelayMilliseconds.toString())
 
@@ -27,6 +29,8 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 			controller.subscribe(() => {
 				blockCountSinceReset.value = controller.blockCountSinceReset
 				bootstrapError.value = controller.bootstrapError
+				bootstrapLabel.value = controller.bootstrapLabel
+				bootstrapProgress.value = controller.bootstrapProgress
 				currentTimestamp.value = controller.currentTimestamp
 				currentScenario.value = controller.currentScenario
 				isBootstrapped.value = controller.isBootstrapped
@@ -68,7 +72,15 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 							<span className={`badge ${bootstrapError.value === undefined ? (isBootstrapped.value ? 'ok' : 'pending') : 'error'}`}>{bootstrapError.value === undefined ? (isBootstrapped.value ? 'Ready' : 'Bootstrapping') : 'Error'}</span>
 							<h3>Scenario</h3>
 						</div>
-						<p className='detail'>{bootstrapError.value ?? (isBootstrapping.value ? 'Preparing the selected simulation scenario in the background.' : 'Switch scenarios to reload the browser simulation into a different seeded state.')}</p>
+						<p className='detail'>
+							{bootstrapError.value === undefined && isBootstrapping.value ? <span className='spinner' aria-hidden='true' /> : undefined}
+							{bootstrapError.value ?? (isBootstrapping.value ? (bootstrapLabel.value ?? 'Preparing the selected simulation scenario in the background.') : 'Switch scenarios to reload the browser simulation into a different seeded state.')}
+						</p>
+						{isBootstrapping.value ? (
+							<div className='notice-progress-track simulation-progress-track' aria-hidden='true'>
+								<div className='notice-progress-fill simulation-progress-fill' style={{ width: `${Math.round((bootstrapProgress.value ?? 0.08) * 100)}%` }} />
+							</div>
+						) : undefined}
 					</div>
 					<select
 						className='simulation-control-select'

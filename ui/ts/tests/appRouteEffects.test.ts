@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { shouldLoadOpenOracleReportFromUrl, shouldRefreshSelectedPoolForRoute } from '../hooks/useAppRouteEffects.js'
+import { shouldLoadOpenOracleReportFromUrl, shouldRefreshSelectedPoolForRoute, shouldSyncSecurityPoolAddressToRouteForms } from '../hooks/useAppRouteEffects.js'
 
 describe('app route effects', () => {
 	test('loads the open oracle report from the URL only on the open-oracle route', () => {
@@ -45,6 +45,29 @@ describe('app route effects', () => {
 				securityPoolAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
 				selectedPoolSecurityPoolAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
 				walletBootstrapComplete: true,
+			}),
+		).toBe(false)
+	})
+
+	test('syncs the selected security pool address into route forms only on the security-pools route', () => {
+		expect(
+			shouldSyncSecurityPoolAddressToRouteForms({
+				route: 'security-pools',
+				securityPoolAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
+			}),
+		).toBe(true)
+
+		expect(
+			shouldSyncSecurityPoolAddressToRouteForms({
+				route: 'zoltar',
+				securityPoolAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
+			}),
+		).toBe(false)
+
+		expect(
+			shouldSyncSecurityPoolAddressToRouteForms({
+				route: 'security-pools',
+				securityPoolAddress: '',
 			}),
 		).toBe(false)
 	})

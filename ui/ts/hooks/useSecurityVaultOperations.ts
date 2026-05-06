@@ -17,9 +17,11 @@ import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import type { SecurityVaultFormState, WriteOperationsParameters } from '../types/app.js'
 import type { SecurityVaultActionResult, SecurityVaultDetails } from '../types/contracts.js'
 
-type UseSecurityVaultOperationsParameters = WriteOperationsParameters
+type UseSecurityVaultOperationsParameters = WriteOperationsParameters & {
+	enabled: boolean
+}
 
-export function useSecurityVaultOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityVaultOperationsParameters) {
+export function useSecurityVaultOperations({ accountAddress, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityVaultOperationsParameters) {
 	const securityVaultLoad = useLoadController()
 	const securityVaultDetails = useSignal<SecurityVaultDetails | undefined>(undefined)
 	const securityVaultMissing = useSignal(false)
@@ -269,6 +271,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 		)
 
 	useEffect(() => {
+		if (!enabled) return
 		const selectedVaultAddress = securityVaultForm.value.selectedVaultAddress.trim()
 		if (accountAddress === undefined || securityVaultDetails.value === undefined || selectedVaultAddress === '') {
 			repBalanceLoader.signal.value = undefined
@@ -292,7 +295,7 @@ export function useSecurityVaultOperations({ accountAddress, onTransaction, onTr
 
 		void reloadSecurityVaultRepBalance(securityVaultDetails.value.repToken, accountAddress).catch(() => undefined)
 		void reloadSecurityVaultRepAllowance(securityVaultDetails.value.repToken, accountAddress, securityVaultDetails.value.securityPoolAddress).catch(() => undefined)
-	}, [accountAddress, securityVaultDetails.value?.repToken, securityVaultDetails.value?.securityPoolAddress, securityVaultForm.value.selectedVaultAddress])
+	}, [accountAddress, enabled, securityVaultDetails.value?.repToken, securityVaultDetails.value?.securityPoolAddress, securityVaultForm.value.selectedVaultAddress])
 
 	return {
 		approveRep,

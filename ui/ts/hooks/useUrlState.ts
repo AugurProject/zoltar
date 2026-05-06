@@ -1,17 +1,19 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { readOpenOracleReportIdQueryParam, readSecurityPoolQueryParam, readUniverseQueryParam, writeOpenOracleReportIdQueryParam, writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../lib/urlParams.js'
+import { readOpenOracleReportIdQueryParam, readSecurityPoolQueryParam, readUniverseQueryParam, readZoltarViewQueryParam, writeOpenOracleReportIdQueryParam, writeSecurityPoolQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '../lib/urlParams.js'
 
 type UrlState = {
 	activeUniverseId: bigint
 	openOracleReportId: string
 	securityPoolAddress: string
+	zoltarView: string
 }
 
 type UseUrlStateResult = UrlState & {
 	setActiveUniverseId: (universeId: bigint | undefined) => void
 	setOpenOracleReport: (reportId: string | undefined) => void
 	setSecurityPoolAddress: (securityPoolAddress: string) => void
+	setZoltarView: (view: string | undefined) => void
 }
 
 function readUrlState(search: string): UrlState {
@@ -19,6 +21,7 @@ function readUrlState(search: string): UrlState {
 		activeUniverseId: readUniverseQueryParam(search) ?? 0n,
 		openOracleReportId: readOpenOracleReportIdQueryParam(search) ?? '',
 		securityPoolAddress: readSecurityPoolQueryParam(search) ?? '',
+		zoltarView: readZoltarViewQueryParam(search) ?? '',
 	}
 }
 
@@ -58,12 +61,20 @@ export function useUrlState(): UseUrlStateResult {
 		urlState.value = readUrlState(nextSearch)
 	}
 
+	const setZoltarView = (view: string | undefined) => {
+		const nextSearch = writeZoltarViewQueryParam(window.location.search, view === '' ? undefined : view)
+		replaceCurrentUrl(nextSearch)
+		urlState.value = readUrlState(nextSearch)
+	}
+
 	return {
 		activeUniverseId: urlState.value.activeUniverseId,
 		openOracleReportId: urlState.value.openOracleReportId,
 		securityPoolAddress: urlState.value.securityPoolAddress,
+		zoltarView: urlState.value.zoltarView,
 		setActiveUniverseId,
 		setOpenOracleReport,
 		setSecurityPoolAddress,
+		setZoltarView,
 	}
 }

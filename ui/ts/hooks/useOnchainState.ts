@@ -85,6 +85,8 @@ export function useOnchainState() {
 	const deploymentStatusesLoaded = useSignal(false)
 	const augurPlaceHolderDeployed = useSignal<boolean | undefined>(undefined)
 	const environmentBootstrapError = useSignal<string | undefined>(undefined)
+	const environmentBootstrapLabel = useSignal(getActiveBackend().bootstrapLabel)
+	const environmentBootstrapProgress = useSignal(getActiveBackend().bootstrapProgress)
 	const environmentReady = useSignal(getActiveBackend().isBootstrapped ?? true)
 	const environmentReadyLoad = useLoadController()
 	const walletBootstrapComplete = useSignal(false)
@@ -107,6 +109,8 @@ export function useOnchainState() {
 		if (backend.isBootstrapped === false) {
 			deploymentStatusesLoaded.value = false
 			augurPlaceHolderDeployed.value = undefined
+			environmentBootstrapLabel.value = backend.bootstrapLabel
+			environmentBootstrapProgress.value = backend.bootstrapProgress
 			environmentReady.value = false
 			environmentBootstrapError.value = undefined
 		}
@@ -201,11 +205,15 @@ export function useOnchainState() {
 	useEffect(() => {
 		const backend = getActiveBackend()
 		if (backend.waitUntilReady === undefined || backend.isBootstrapped === true) {
+			environmentBootstrapLabel.value = backend.bootstrapLabel
+			environmentBootstrapProgress.value = backend.bootstrapProgress
 			environmentReady.value = true
 			environmentBootstrapError.value = undefined
 			return
 		}
 
+		environmentBootstrapLabel.value = backend.bootstrapLabel
+		environmentBootstrapProgress.value = backend.bootstrapProgress
 		environmentReady.value = false
 		environmentBootstrapError.value = undefined
 		let cancelled = false
@@ -213,6 +221,8 @@ export function useOnchainState() {
 			try {
 				await backend.waitUntilReady?.()
 				if (cancelled) return
+				environmentBootstrapLabel.value = backend.bootstrapLabel
+				environmentBootstrapProgress.value = backend.bootstrapProgress
 				environmentReady.value = true
 				environmentBootstrapError.value = undefined
 				await refreshState()
@@ -229,6 +239,12 @@ export function useOnchainState() {
 
 	useEffect(() => {
 		const backend = getActiveBackend()
+		const unsubscribeState = backend.subscribe?.(() => {
+			environmentBootstrapError.value = backend.bootstrapError
+			environmentBootstrapLabel.value = backend.bootstrapLabel
+			environmentBootstrapProgress.value = backend.bootstrapProgress
+			environmentReady.value = backend.isBootstrapped ?? true
+		})
 		const handleWalletChange = () => {
 			void refreshState()
 		}
@@ -238,6 +254,7 @@ export function useOnchainState() {
 		return () => {
 			unsubscribeChain()
 			unsubscribeAccounts()
+			unsubscribeState?.()
 		}
 	}, [])
 
@@ -247,6 +264,8 @@ export function useOnchainState() {
 		deploymentStatuses: deploymentStatuses.value,
 		errorMessage: errorMessage.value,
 		environmentBootstrapError: environmentBootstrapError.value,
+		environmentBootstrapLabel: environmentBootstrapLabel.value,
+		environmentBootstrapProgress: environmentBootstrapProgress.value,
 		environmentReady: environmentReady.value,
 		isBootstrappingEnvironment: environmentReadyLoad.isLoading.value || getActiveBackend().isBootstrapping === true,
 		hasInjectedWallet: hasInjectedWallet.value,

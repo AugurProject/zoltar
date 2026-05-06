@@ -16,6 +16,9 @@ export type CreateWriteClientCallbacks = {
 }
 
 export type ChainBackend = {
+	bootstrapError: string | undefined
+	bootstrapLabel: string | undefined
+	bootstrapProgress: number | undefined
 	createReadClient(): ReadClient
 	createWriteClient(accountAddress: Address, callbacks?: CreateWriteClientCallbacks): WriteClient
 	getAccounts(): Promise<readonly Address[]>
@@ -27,6 +30,7 @@ export type ChainBackend = {
 	isBootstrapping?: boolean
 	profile: NetworkProfile
 	requestAccounts(): Promise<readonly Address[]>
+	subscribe: ((handler: () => void) => () => void) | undefined
 	subscribeAccountsChanged(handler: () => void): () => void
 	subscribeChainChanged(handler: () => void): () => void
 	waitUntilReady?(): Promise<void>
@@ -75,6 +79,9 @@ export function createInjectedBackend(): ChainBackend {
 	const getProvider = () => getInjectedEthereum()
 
 	return {
+		bootstrapError: undefined,
+		bootstrapLabel: undefined,
+		bootstrapProgress: undefined,
 		createReadClient: () => createReadClientForProfile(MAINNET_NETWORK_PROFILE, getProvider()),
 		createWriteClient: (accountAddress, callbacks = {}) => {
 			const ethereum = getProvider()
@@ -112,6 +119,7 @@ export function createInjectedBackend(): ChainBackend {
 			if (!Array.isArray(result)) return []
 			return result.map(normalizeAccount).filter((address): address is Address => address !== undefined)
 		},
+		subscribe: undefined,
 		subscribeAccountsChanged: handler => {
 			const ethereum = getProvider()
 			ethereum?.on?.('accountsChanged', handler)

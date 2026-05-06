@@ -7,6 +7,8 @@ import type { TransactionState } from '../lib/transactionState.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
 
 type AppStatusNoticesProps = {
+	bootstrapLabel: string | undefined
+	bootstrapProgress: number | undefined
 	errorMessage: string | undefined
 	hasInjectedWallet: boolean
 	isBootstrappingSimulation: boolean
@@ -18,10 +20,21 @@ type AppStatusNoticesProps = {
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
-export function AppStatusNotices({ errorMessage, hasInjectedWallet, isBootstrappingSimulation, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, transactionState, walletPresentation, zoltarUniverse }: AppStatusNoticesProps) {
+export function AppStatusNotices({ bootstrapLabel, bootstrapProgress, errorMessage, hasInjectedWallet, isBootstrappingSimulation, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, transactionState, walletPresentation, zoltarUniverse }: AppStatusNoticesProps) {
 	return (
 		<div className='page-notices'>
-			{isBootstrappingSimulation ? <p className='notice warning'>Preparing simulation scenario in the background. Route-specific data will appear as soon as bootstrap completes.</p> : undefined}
+			{isBootstrappingSimulation ? (
+				<div className='notice warning notice-progress'>
+					<p>
+						<span className='spinner' aria-hidden='true' />
+						{bootstrapLabel ?? 'Preparing simulation scenario in the background.'}
+					</p>
+					<div className='notice-progress-track' aria-hidden='true'>
+						<div className='notice-progress-fill' style={{ width: `${Math.round((bootstrapProgress ?? 0.08) * 100)}%` }} />
+					</div>
+					<p className='detail'>Route-specific data will appear as soon as bootstrap completes.</p>
+				</div>
+			) : undefined}
 			{simulationBootstrapError === undefined ? undefined : <div className='notice error'>{simulationBootstrapError}</div>}
 			{showZoltarUniverseForkedWarning && zoltarUniverse !== undefined ? (
 				<div className='notice error'>
