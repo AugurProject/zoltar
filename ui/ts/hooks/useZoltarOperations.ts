@@ -33,7 +33,9 @@ export function useZoltarOperations({ accountAddress, activeUniverseId, activeZo
 		onTransactionSubmitted,
 		refreshState,
 		refreshZoltarUniverse,
-		shouldAutoLoadForkAccess: activeZoltarView === 'fork' || activeZoltarView === 'migrate',
+		// The overview header always displays the connected wallet's REP balance.
+		// Keep fork access loaded whenever the app has enough context to do so.
+		shouldAutoLoadForkAccess: autoLoadInitialData || activeZoltarView === 'fork' || activeZoltarView === 'migrate',
 		zoltarUniverse: universe.zoltarUniverse,
 	})
 	const refreshZoltarForkAccess = useCallback(async () => {

@@ -182,7 +182,9 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 									}}
 									onChange={event => {
 										try {
-											controller.setRepPerEthPrice(parseDecimalInput(event.currentTarget.value, 'REP / ETH mock price'))
+											void runControl(async () => {
+												controller.setRepPerEthPrice(parseDecimalInput(event.currentTarget.value, 'REP / ETH mock price'))
+											})
 										} catch {
 											repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
 										}
@@ -202,7 +204,9 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 									}}
 									onChange={event => {
 										try {
-											controller.setRepPerUsdcPrice(parseDecimalInput(event.currentTarget.value, 'REP / USDC mock price', 6))
+											void runControl(async () => {
+												controller.setRepPerUsdcPrice(parseDecimalInput(event.currentTarget.value, 'REP / USDC mock price', 6))
+											})
 										} catch {
 											repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
 										}

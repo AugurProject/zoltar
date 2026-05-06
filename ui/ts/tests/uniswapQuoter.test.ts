@@ -145,6 +145,7 @@ void describe('quoteExactInput', () => {
 				blockCountSinceReset: 0n,
 				currentTimestamp: 0n,
 				currentScenario: 'baseline',
+				dispose: async () => undefined,
 				isActive: true,
 				isBootstrapped: true,
 				isBootstrapping: false,
