@@ -60,9 +60,7 @@ export const getEscalationGameDeposits = async (client: ReadClient, escalationGa
 				address: escalationGame,
 				args: [outcome, currentIndex, CONTRACT_PAGE_SIZE],
 			})
-		)
-			.map((deposit, index) => ({ ...deposit, depositIndex: currentIndex + BigInt(index) }))
-			.filter(deposit => BigInt(deposit.depositor) !== 0x0n)
+		).map((deposit, index) => ({ ...deposit, depositIndex: currentIndex + BigInt(index) }))
 		pages.push(...newDeposits)
 		if (BigInt(newDeposits.length) !== CONTRACT_PAGE_SIZE) break
 		currentIndex += CONTRACT_PAGE_SIZE

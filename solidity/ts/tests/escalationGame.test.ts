@@ -76,6 +76,23 @@ describe('Escalation Game Test Suite', () => {
 		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, 255 as QuestionOutcome, reportBond))
 	})
 
+	test('getDepositsByOutcome returns exact-length pages without zero padding', async () => {
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond * 2n)
+
+		const depositPage = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getDepositsByOutcome',
+			address: escalationGame,
+			args: [QuestionOutcome.Yes, 1n, 5n],
+		})
+
+		assert.strictEqual(depositPage.length, 1, 'deposit paging should return only the remaining entries')
+		assert.strictEqual(depositPage[0]?.amount, reportBond * 2n, 'paged deposit should retain its amount')
+		assert.strictEqual(depositPage[0]?.depositor, client.account.address, 'paged deposit should retain its depositor')
+	})
+
 	test('claimDepositForWinning reverts when outcome is None', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond)
