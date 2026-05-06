@@ -379,8 +379,9 @@ export async function bootstrapSimulationChain({
 	profile: NetworkProfile
 	scenario: SimulationScenario
 }) {
+	await reportBootstrapProgress(onProgress, 'Initializing simulation engine', 0.01)
 	await memoryClient.tevmReady()
-	await reportBootstrapProgress(onProgress, 'Starting simulation bootstrap', 0.02)
+	await reportBootstrapProgress(onProgress, 'Preparing simulation chain', 0.03)
 	await seedAccountBalances(memoryClient, accounts, onProgress)
 	const zoltarStep = getDeploymentSteps().find(step => step.id === 'zoltar')
 	if (zoltarStep === undefined) {
