@@ -289,8 +289,9 @@ contract EscalationGame {
 
 	// TODO, for the UI, we probably want to retrieve multiple outcomes at once
 	function getDepositsByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (Deposit[] memory returnDeposits) {
-		returnDeposits = new Deposit[](numberOfEntries);
 		uint256 iterateUntil = startIndex + numberOfEntries > deposits[uint8(outcome)].length ? deposits[uint8(outcome)].length : startIndex + numberOfEntries;
+		if (iterateUntil <= startIndex) return new Deposit[](0);
+		returnDeposits = new Deposit[](iterateUntil - startIndex);
 		for (uint256 i = startIndex; i < iterateUntil; i++) {
 			returnDeposits[i - startIndex] = deposits[uint8(outcome)][i];
 		}

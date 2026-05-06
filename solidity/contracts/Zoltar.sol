@@ -55,6 +55,10 @@ contract Zoltar {
 	function forkUniverse(uint248 universeId, uint256 questionId) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime == 0, 'Universe has forked already');
+		// Zoltar intentionally treats questions as global protocol objects rather than
+		// binding them to a specific universe. Any ended question can force a fork in
+		// any unforked universe, and downstream protocols are expected to enforce any
+		// stricter universe/question relationship they require.
 		require(zoltarQuestionData.questionCreatedTimestamp(questionId) > 0, 'Question does not exist');
 		uint256 endTime = zoltarQuestionData.getQuestionEndDate(questionId);
 		require(block.timestamp >= endTime, 'Question has not ended');
@@ -86,6 +90,7 @@ contract Zoltar {
 	function deployChild(uint248 universeId, uint256 outcomeIndex) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked');
+		require(!zoltarQuestionData.isMalformedAnswerOption(universe.forkQuestionId, outcomeIndex), 'Malformed');
 		uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndex);
 		// Prevent overwriting an existing child universe
 		require(address(universes[childUniverseId].reputationToken) == address(0), 'Child universe already deployed');

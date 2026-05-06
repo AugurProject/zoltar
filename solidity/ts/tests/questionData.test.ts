@@ -6,9 +6,11 @@ import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { getInfraContractAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import assert from 'node:assert'
 import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { areEqualArrays } from '../testsuite/simulator/utils/array-utils'
+import { ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -99,7 +101,7 @@ describe('Question Data', () => {
 		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, 0n, testScalarQuestion.numTicks + 1n)), 'Malformed', 'Overflow')
 	})
 
-	test('isMalformedAnswerOption: scalar answers - bug check for high bit set', async () => {
+	test('isMalformedAnswerOption: scalar answers with high bit set follow the scalar validity rules', async () => {
 		// Create a scalar question
 		const testScalarQuestion = {
 			title: 'scalar',
@@ -144,8 +146,9 @@ describe('Question Data', () => {
 	})
 
 	test('handles large numTicks without overflow', async () => {
-		// This test demonstrates integer overflow vulnerability in isMalformedAnswerOption and getAnswerOptionName.
-		// When numTicks >= 2^120, the sum of two uint120 parts can overflow, causing valid answers to be incorrectly rejected.
+		// Regression test for the historical overflow case where numTicks >= 2^120.
+		// Valid scalar answers must remain valid even when the uint120 components would
+		// overflow if summed in a narrower integer type.
 		const hugeNumTicks = (1n << 120n) + 1000n
 		const testScalarQuestion = {
 			title: 'Huge Scalar',
@@ -167,9 +170,7 @@ describe('Question Data', () => {
 		assert.ok(secondPart > 0n && secondPart <= (1n << 120n) - 1n, 'secondPart within uint120 range')
 		const answer = combineUint256FromTwoWithInvalid(false, firstPart, secondPart)
 
-		// Currently this fails due to overflow bug.
 		const malformed = await isMalformedAnswerOption(client, questionId, answer)
-		// Expected: false (not malformed). The bug causes overflow and returns true.
 		assert.strictEqual(malformed, false, 'Valid answer with numTicks >= 2^120 incorrectly flagged as malformed due to overflow')
 
 		// getAnswerOptionName should not return Malformed or Invalid
@@ -322,5 +323,40 @@ describe('Question Data', () => {
 		const questionId2 = getQuestionId(question, ['Yes', 'No'])
 		const labels2 = await getOutcomeLabels(client, questionId2)
 		assert.deepStrictEqual(labels2, ['Yes', 'No'], 'binary outcome labels should match')
+	})
+
+	test('question pagination returns exact-length pages without zero padding', async () => {
+		const question = {
+			title: 'Paged Question',
+			description: '',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const firstOutcomes = sortStringArrayByKeccak(['Alpha', 'Beta', 'Gamma'])
+		const secondOutcomes = ['Yes', 'No']
+		await createQuestion(client, question, firstOutcomes)
+		await createQuestion(client, { ...question, title: 'Paged Question 2' }, secondOutcomes)
+		const firstQuestionId = getQuestionId(question, firstOutcomes)
+
+		const questionPage = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getQuestions',
+			address: getInfraContractAddresses().zoltarQuestionData,
+			args: [1n, 5n],
+		})
+
+		const outcomePage = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getOutcomeLabels',
+			address: getInfraContractAddresses().zoltarQuestionData,
+			args: [firstQuestionId, 1n, 5n],
+		})
+
+		assert.deepStrictEqual(questionPage.length, 1, 'question paging should return only the remaining ids')
+		assert.deepStrictEqual(outcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should return only the remaining labels')
 	})
 })

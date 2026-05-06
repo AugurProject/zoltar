@@ -152,6 +152,11 @@ contract SecurityPoolOracleCoordinator {
 			retained += ethCost;
 			// Forward exactly ethCost to requestPrice to create the report
 			this.requestPrice{value: ethCost}();
+		} else {
+			// This is intentional: only one staged operation is marked as the auto-execute
+			// pending slot for the next fresh oracle report. Additional operations are still
+			// recorded and can be executed manually via executeStagedOperation once the price
+			// becomes valid again.
 		}
 
 		// Refund the excess of msg.value that was not retained

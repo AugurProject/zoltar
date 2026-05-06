@@ -74,11 +74,10 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(questionData.questionCreatedTimestamp(questionId) > 0, 'Question does not exist');
 
 		// Validate that it's a yes-no question (exactly 2 outcomes: Yes and No)
-		// Fetch up to 3 outcomes to verify exactly 2 exist
 		string[] memory outcomes = questionData.getOutcomeLabels(questionId, 0, 3);
+		require(outcomes.length == 2, 'Question must have exactly 2 outcomes');
 		require(keccak256(bytes(outcomes[0])) == keccak256(bytes('Yes')), 'First outcome must be "Yes"');
 		require(keccak256(bytes(outcomes[1])) == keccak256(bytes('No')), 'Second outcome must be "No"');
-		require(bytes(outcomes[2]).length == 0, 'Question must have exactly 2 outcomes');
 
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		bytes32 securityPoolSalt = keccak256(abi.encode(address(0x0), universeId, questionId, securityMultiplier));

@@ -919,7 +919,8 @@ describe('Auction', () => {
 			const clearingTick = await getClearingTick(client, auctionAddress)
 			assert.strictEqual(clearingTick, zeroPriceTick, 'clearing tick should be zero-price tick')
 
-			// Withdraw should succeed without reverting (currently fails due to division by zero bug)
+			// Regression test: withdraw should succeed without reverting even when the
+			// clearing price is zero.
 			// With zero price, no REP should be filled, and all ETH should be refunded
 			const amounts = await simulateWithdrawBids(client, auctionAddress, client.account.address, [{ tick: zeroPriceTick, bidIndex: 0n }])
 			assert.strictEqual(amounts.totalFilledRep, 0n, 'filled REP should be 0 when price is zero')

@@ -55,8 +55,9 @@ import { ScalarOutcomes } from './ScalarOutcomes.sol';
 	}
 
 	function getQuestions(uint256 startIndex, uint256 numberOfEntries) external view returns (uint256[] memory returnQuestionIds) {
-		returnQuestionIds = new uint256[](numberOfEntries);
 		uint256 iterateUntil = startIndex + numberOfEntries > questionIds.length ? questionIds.length : startIndex + numberOfEntries;
+		if (iterateUntil <= startIndex) return new uint256[](0);
+		returnQuestionIds = new uint256[](iterateUntil - startIndex);
 		for (uint256 i = startIndex; i < iterateUntil; i++) {
 			returnQuestionIds[i - startIndex] = questionIds[i];
 		}
@@ -76,8 +77,9 @@ import { ScalarOutcomes } from './ScalarOutcomes.sol';
 	}
 
 	function getOutcomeLabels(uint256 questionId, uint256 startIndex, uint256 numberOfEntries) external view returns (string[] memory returnOutcomeLabels) {
-		returnOutcomeLabels = new string[](numberOfEntries);
 		uint256 iterateUntil = startIndex + numberOfEntries > outcomeLabels[questionId].length ? outcomeLabels[questionId].length : startIndex + numberOfEntries;
+		if (iterateUntil <= startIndex) return new string[](0);
+		returnOutcomeLabels = new string[](iterateUntil - startIndex);
 		for (uint256 i = startIndex; i < iterateUntil; i++) {
 			returnOutcomeLabels[i - startIndex] = outcomeLabels[questionId][i];
 		}

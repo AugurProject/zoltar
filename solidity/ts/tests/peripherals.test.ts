@@ -1511,9 +1511,8 @@ describe('Peripherals Contract Test Suite', () => {
 		await createQuestion(client, multiOutcomeQuestionData, multiOutcomes)
 		const multiOutcomeQuestionId = getQuestionId(multiOutcomeQuestionData, multiOutcomes)
 
-		// Attempt to deploy security pool with non-binary question should fail
-		// The first outcome must be "Yes", so it will fail with that message
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, multiOutcomeQuestionId, securityMultiplier, MAX_RETENTION_RATE), /First outcome must be "Yes"/)
+		// Attempt to deploy security pool with non-binary question should fail.
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, multiOutcomeQuestionId, securityMultiplier, MAX_RETENTION_RATE), /Question must have exactly 2 outcomes/)
 	})
 
 	test('cannot deploy security pool with scalar question', async () => {
@@ -1532,9 +1531,8 @@ describe('Peripherals Contract Test Suite', () => {
 		await createQuestion(client, scalarQuestionData, scalarOutcomes)
 		const scalarQuestionId = getQuestionId(scalarQuestionData, scalarOutcomes)
 
-		// Attempt to deploy security pool with scalar question should fail
-		// For scalar questions, getOutcomeLabels returns an empty array, first outcome will be empty string, not "Yes"
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, scalarQuestionId, securityMultiplier, MAX_RETENTION_RATE), /First outcome must be "Yes"/)
+		// Attempt to deploy security pool with scalar question should fail.
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, scalarQuestionId, securityMultiplier, MAX_RETENTION_RATE), /Question must have exactly 2 outcomes/)
 	})
 
 	test('cannot deploy security pool with non-existent question', async () => {
