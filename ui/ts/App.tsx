@@ -219,6 +219,10 @@ export function App() {
 	} = useForkAuctionOperations(baseHookConfig)
 	const { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, refreshRepPrices } = useRepPrices()
 	const simulationController = getActiveSimulationController()
+	const refreshSimulationView = async () => {
+		await refreshState()
+		refreshRepPrices()
+	}
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
 	const isMainnet = isSupportedAppChain(accountState.chainId)
@@ -583,7 +587,7 @@ export function App() {
 				walletPresentation={walletPresentation}
 				zoltarUniverse={zoltarUniverse}
 			/>
-			<AppHeaderShell overview={overviewProps} simulationController={simulationController} tabNavigation={tabNavigationProps} onRefresh={refreshState} />
+			<AppHeaderShell overview={overviewProps} simulationController={simulationController} tabNavigation={tabNavigationProps} onRefresh={refreshSimulationView} />
 
 			<fieldset className='route-shell' disabled={isRouteContentDisabled}>
 				<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} route={route} securityPools={securityPoolsRouteContentProps} wrongNetworkMessage={wrongNetworkMessage} />
