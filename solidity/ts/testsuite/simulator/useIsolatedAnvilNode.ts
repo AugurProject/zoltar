@@ -236,5 +236,10 @@ export const useIsolatedAnvilNode = () => {
 
 	return {
 		getAnvilWindowEthereum: () => ensureDefined(anvilWindowEthereum, 'Isolated Anvil node was not initialized'),
+		setBaselineSnapshot: async () => {
+			const currentEthereum = ensureDefined(anvilWindowEthereum, 'Isolated Anvil node was not initialized')
+			await currentEthereum.setNextBlockBaseFeePerGasToZero()
+			snapshotId = await currentEthereum.anvilSnapshot()
+		},
 	}
 }

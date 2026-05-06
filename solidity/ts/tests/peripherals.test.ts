@@ -1,4 +1,4 @@
-import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
+import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from 'node:assert'
 import { decodeEventLog } from 'viem'
 import type { Address, Hash } from 'viem'
@@ -53,7 +53,7 @@ import { peripherals_EscalationGame_EscalationGame, peripherals_factories_Securi
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Peripherals Contract Test Suite', () => {
-	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
+	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	const reportBond = 1n * 10n ** 18n
@@ -114,7 +114,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'question should finalize as yes')
 	}
 
-	beforeEach(async () => {
+	const initializePeripheralsBaseline = async () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
@@ -137,6 +137,16 @@ describe('Peripherals Contract Test Suite', () => {
 		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE)
 		await approveAndDepositRep(client, repDeposit, questionId)
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
+	}
+
+	beforeAll(async () => {
+		await initializePeripheralsBaseline()
+		await setBaselineSnapshot()
+	})
+
+	beforeEach(() => {
+		mockWindow = getAnvilWindowEthereum()
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 	})
 
 	test('can deposit rep and withdraw it', async () => {
@@ -227,6 +237,8 @@ describe('Peripherals Contract Test Suite', () => {
 		const deploymentMask = await loadDeploymentStatusOracleMask(partialClient)
 
 		strictEqualTypeSafe(deploymentMask, 1n, 'only the proxy deployer should be marked deployed before the rest of infra')
+		await initializePeripheralsBaseline()
+		await setBaselineSnapshot()
 	})
 
 	test('security pool exposes vault paging without duplicate entries', async () => {

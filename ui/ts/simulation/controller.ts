@@ -10,6 +10,7 @@ export type SimulationController = {
 	blockCountSinceReset: bigint
 	currentTimestamp: bigint
 	currentScenario: SimulationScenario
+	dispose(): Promise<void>
 	isActive: true
 	isBootstrapped: boolean
 	isBootstrapping: boolean

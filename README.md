@@ -12,16 +12,16 @@ Zoltar is a Bun + Solidity project for building and exploring prediction markets
 
 ## Setup
 
-Install dependencies, generate contract artifacts, vendor the UI dependencies, and build the frontend:
-
-```bash
-bun run setup
-```
-
-If you plan to run individual checks manually on a fresh checkout, install dependencies first:
+On a fresh checkout, start with the root dependency install:
 
 ```bash
 bun install --frozen-lockfile
+```
+
+Then run the full bootstrap:
+
+```bash
+bun run setup
 ```
 
 Install `anvil` if it is not already available:
@@ -29,6 +29,12 @@ Install `anvil` if it is not already available:
 ```bash
 bun run install:anvil
 ```
+
+Important:
+
+- `bun run setup` is the fastest way to get to a working repo after the root install.
+- Standalone commands like `bun tsc`, `bun run tsc`, `bun test`, and `bun run test` assume the root dependencies are already installed.
+- If you skip the initial `bun install --frozen-lockfile`, fresh checkouts can fail with missing packages such as `bun-types`.
 
 ## Local Development
 

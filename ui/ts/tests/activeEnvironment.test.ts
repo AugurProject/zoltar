@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from 'viem'
 import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadSecurityVaultDetails } from '../contracts.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
@@ -41,8 +41,51 @@ void describe('active environment', () => {
 })
 
 void describe('simulation backend', () => {
+	let coldBaselineBackend: Awaited<ReturnType<typeof createSimulationBackend>>
+	let warmBaselineBackend: Awaited<ReturnType<typeof createSimulationBackend>>
+	let deployedBackend: Awaited<ReturnType<typeof createSimulationBackend>>
+
+	beforeAll(async () => {
+		coldBaselineBackend = await createSimulationBackend({ scenario: 'baseline' })
+		warmBaselineBackend = await createSimulationBackend({ scenario: 'baseline' })
+		deployedBackend = await createSimulationBackend({ scenario: 'deployed' })
+		await warmBaselineBackend.bootstrap()
+		warmBaselineBackend.setTransactionDelayMilliseconds(0)
+		await deployedBackend.bootstrap()
+		deployedBackend.setTransactionDelayMilliseconds(0)
+	}, 30_000)
+
+	beforeEach(async () => {
+		const coldPrimaryAccount = coldBaselineBackend.accounts[0]
+		if (coldPrimaryAccount !== undefined && coldBaselineBackend.selectedAccount !== coldPrimaryAccount) {
+			await coldBaselineBackend.selectAccount(coldPrimaryAccount)
+		}
+		const warmPrimaryAccount = warmBaselineBackend.accounts[0]
+		if (warmPrimaryAccount !== undefined && warmBaselineBackend.selectedAccount !== warmPrimaryAccount) {
+			await warmBaselineBackend.selectAccount(warmPrimaryAccount)
+		}
+		warmBaselineBackend.setTransactionDelayMilliseconds(0)
+		const deployedPrimaryAccount = deployedBackend.accounts[0]
+		if (deployedPrimaryAccount !== undefined && deployedBackend.selectedAccount !== deployedPrimaryAccount) {
+			await deployedBackend.selectAccount(deployedPrimaryAccount)
+		}
+		deployedBackend.setTransactionDelayMilliseconds(0)
+	}, 30_000)
+
+	afterAll(async () => {
+		if (coldBaselineBackend !== undefined) {
+			await coldBaselineBackend.dispose()
+		}
+		if (warmBaselineBackend !== undefined) {
+			await warmBaselineBackend.dispose()
+		}
+		if (deployedBackend !== undefined) {
+			await deployedBackend.dispose()
+		}
+	}, 30_000)
+
 	void test('reports wallet presence and returns the selected account', async () => {
-		const backend = await createSimulationBackend({ scenario: 'baseline' })
+		const backend = coldBaselineBackend
 		const primaryAccount = backend.accounts[0]
 		if (primaryAccount === undefined) {
 			throw new Error('Expected a primary simulation QA account')
@@ -62,20 +105,24 @@ void describe('simulation backend', () => {
 	void test('tracks simulation bootstrap readiness state', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 
-		const bootstrapPromise = backend.bootstrap()
-		expect(backend.isBootstrapping).toBe(true)
-		expect(backend.isBootstrapped).toBe(false)
+		try {
+			const bootstrapPromise = backend.bootstrap()
+			expect(backend.isBootstrapping).toBe(true)
+			expect(backend.isBootstrapped).toBe(false)
 
-		await backend.waitUntilReady()
-		await bootstrapPromise
+			await backend.waitUntilReady()
+			await bootstrapPromise
 
-		expect(backend.isBootstrapping).toBe(false)
-		expect(backend.isBootstrapped).toBe(true)
-		expect(backend.bootstrapError).toBeUndefined()
+			expect(backend.isBootstrapping).toBe(false)
+			expect(backend.isBootstrapped).toBe(true)
+			expect(backend.bootstrapError).toBeUndefined()
+		} finally {
+			await backend.dispose()
+		}
 	}, 30_000)
 
 	void test('emits account-change events when switching QA accounts', async () => {
-		const backend = await createSimulationBackend({ scenario: 'baseline' })
+		const backend = coldBaselineBackend
 		const nextAccount = backend.accounts[1]
 		if (nextAccount === undefined) {
 			throw new Error('Expected a secondary simulation QA account')
@@ -96,8 +143,7 @@ void describe('simulation backend', () => {
 	})
 
 	void test('bootstraps with funded REP and WETH but without deployed app infrastructure', async () => {
-		const backend = await createSimulationBackend({ scenario: 'baseline' })
-		await backend.bootstrap()
+		const backend = warmBaselineBackend
 
 		const primaryAccount = backend.accounts[0]
 		if (primaryAccount === undefined) {
@@ -124,8 +170,7 @@ void describe('simulation backend', () => {
 	}, 30_000)
 
 	void test('submits simulation writes without deprecated Tevm transaction RPC warnings', async () => {
-		const backend = await createSimulationBackend({ scenario: 'baseline' })
-		await backend.bootstrap()
+		const backend = warmBaselineBackend
 		const fromAccount = backend.accounts[0]
 		const toAccount = backend.accounts[1]
 		if (fromAccount === undefined || toAccount === undefined) {
@@ -144,8 +189,7 @@ void describe('simulation backend', () => {
 	}, 30_000)
 
 	void test('tracks simulation block, transaction, and time state as controls are used', async () => {
-		const backend = await createSimulationBackend({ scenario: 'baseline' })
-		await backend.bootstrap()
+		const backend = warmBaselineBackend
 		const fromAccount = backend.accounts[0]
 		const toAccount = backend.accounts[1]
 		if (fromAccount === undefined || toAccount === undefined) {
@@ -177,8 +221,7 @@ void describe('simulation backend', () => {
 	}, 30_000)
 
 	void test('applies the configured simulation transaction receipt delay', async () => {
-		const backend = await createSimulationBackend({ scenario: 'baseline' })
-		await backend.bootstrap()
+		const backend = warmBaselineBackend
 		const fromAccount = backend.accounts[0]
 		const toAccount = backend.accounts[1]
 		if (fromAccount === undefined || toAccount === undefined) {
@@ -212,8 +255,7 @@ void describe('simulation backend', () => {
 	}, 30_000)
 
 	void test('bootstraps the deployed scenario with app contracts already deployed', async () => {
-		const backend = await createSimulationBackend({ scenario: 'deployed' })
-		await backend.bootstrap()
+		const backend = deployedBackend
 
 		const deploymentSnapshot = await loadDeploymentStatusOracleSnapshot(backend.createReadClient())
 

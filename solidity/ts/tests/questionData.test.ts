@@ -1,4 +1,4 @@
-import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
+import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
@@ -15,16 +15,22 @@ import { ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Question Data', () => {
-	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
+	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 
-	beforeEach(async () => {
+	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
+		await setBaselineSnapshot()
+	})
+
+	beforeEach(() => {
+		mockWindow = getAnvilWindowEthereum()
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 	})
 
 	test('can make categorical question', async () => {

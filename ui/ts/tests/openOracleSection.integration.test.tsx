@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { afterEach, beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { fireEvent, waitFor, within } from '@testing-library/dom'
 import { act } from 'preact/test-utils'
 import type { Address, Hash } from 'viem'
@@ -159,21 +159,26 @@ async function waitForLatestAction(actionName: string) {
 }
 
 describe.serial('OpenOracleSection integration', () => {
-	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
+	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	let restoreDomEnvironment: (() => void) | undefined
 	let uiReadClient: ReturnType<typeof createConnectedReadClient>
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(async () => {
+	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureProxyDeployerDeployed(client)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
+		await setBaselineSnapshot()
+	})
 
+	beforeEach(() => {
+		mockWindow = getAnvilWindowEthereum()
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
 		Reflect.set(domEnvironment.window, 'ethereum', createInjectedWalletShim(mockWindow, walletAddress))

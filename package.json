@@ -45,7 +45,7 @@
 		"ui:serve": "bun run ui:build && bun ./ui/dev-server.ts",
 		"ui:vendor": "cd ui && bun install --frozen-lockfile && bun ./build/vendor.mts",
 		"gas-costs": "cd solidity && bun run gas-costs",
-		"test": "bun run tsc && bun test --timeout 300000",
+		"test": "bun run tsc && bun test --parallel=4 --timeout 300000",
 		"check": "bunx @biomejs/biome check solidity/ts ui/ts ui/css",
 		"check:changed": "bunx @biomejs/biome check --changed --since origin/main solidity/ts ui/ts ui/css",
 		"lint": "bun x @biomejs/biome check solidity/ts ui/ts",

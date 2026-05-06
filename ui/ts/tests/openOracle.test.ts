@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { getAddress, zeroAddress, type Address } from 'viem'
 import { createOpenOracleReportInstance, getOpenOracleAddress, loadErc20Balance, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, requestOraclePrice, settleOracleReport, submitInitialOracleReport, wrapWeth as wrapUiWeth } from '../contracts.js'
 import {
@@ -131,14 +131,14 @@ function createOpenOracleLifecycleReport(
 }
 
 describe('Open Oracle helpers', () => {
-	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
+	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	let uiReadClient: ReturnType<typeof createConnectedReadClient>
 	let uiWriteClient: ReturnType<typeof createWalletWriteClient>
 	let managerAddress: Address
 
-	beforeEach(async () => {
+	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		installInjectedEthereum(mockWindow)
@@ -164,6 +164,15 @@ describe('Open Oracle helpers', () => {
 		await createQuestion(client, questionData, outcomes)
 		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, MAX_RETENTION_RATE)
 		managerAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer
+		await setBaselineSnapshot()
+	})
+
+	beforeEach(() => {
+		mockWindow = getAnvilWindowEthereum()
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		installInjectedEthereum(mockWindow)
+		uiReadClient = createConnectedReadClient()
+		uiWriteClient = createWalletWriteClient(addressString(TEST_ADDRESSES[0]))
 	})
 
 	test('getOpenOracleAddress returns the deterministic non-zero oracle address', () => {

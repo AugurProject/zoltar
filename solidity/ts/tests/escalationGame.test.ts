@@ -1,4 +1,4 @@
-import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
+import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import { decodeEventLog, encodeDeployData, type Address } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
@@ -17,7 +17,7 @@ const ESCALATION_TIME_LENGTH = 4233600n
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Escalation Game Test Suite', () => {
-	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
+	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	const reportBond = 1n * 10n ** 18n
@@ -119,12 +119,18 @@ describe('Escalation Game Test Suite', () => {
 		return claimLog
 	}
 
-	beforeEach(async () => {
+	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
+		await setBaselineSnapshot()
+	})
+
+	beforeEach(() => {
+		mockWindow = getAnvilWindowEthereum()
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 	})
 
 	test('can start a game', async () => {
