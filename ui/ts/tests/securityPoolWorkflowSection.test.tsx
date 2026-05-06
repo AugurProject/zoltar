@@ -297,7 +297,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getByRole('tablist', { name: 'Selected pool views' })).not.toBeNull()
 
 		for (const label of ['Vaults', 'Trading', 'Reporting', 'Fork']) {
-			const button = documentQueries.getByRole('button', { name: label }) as HTMLButtonElement
+			const button = documentQueries.getByRole('tab', { name: label }) as HTMLButtonElement
 			expect(button.disabled).toBe(true)
 			expect(button.title).toBe('Load a pool to open this workflow.')
 		}
@@ -355,8 +355,8 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByText('Oracle Status')).toBeNull()
 		expect(documentQueries.queryByText('Truth Auction')).toBeNull()
 		expect(documentQueries.getByText('Security Multiplier')).not.toBeNull()
-		const directoryButton = documentQueries.getByRole('button', { name: 'Directory' })
-		expect(documentQueries.getByRole('button', { name: 'Selected' })).not.toBeNull()
+		const directoryButton = documentQueries.getByRole('tab', { name: 'Directory' })
+		expect(documentQueries.getByRole('tab', { name: 'Selected' })).not.toBeNull()
 
 		await act(() => {
 			fireEvent.click(directoryButton)
@@ -405,7 +405,7 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Reporting' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Reporting' }))
 		})
 
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()

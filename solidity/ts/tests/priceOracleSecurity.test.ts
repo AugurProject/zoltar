@@ -8,6 +8,7 @@ import { TEST_ADDRESSES, DAY } from '../testsuite/simulator/utils/constants'
 import { addressString, dateToBigintSeconds } from '../testsuite/simulator/utils/bigint'
 import { setupTestAccounts, getETHBalance } from '../testsuite/simulator/utils/utilities'
 import { approveAndDepositRep } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
+import { handleOracleReporting } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { createQuestion, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
@@ -115,5 +116,33 @@ describe('Price Oracle Refund Security Tests', () => {
 		// Final balance = preBalance (unchanged)
 		const balanceAfter = await getETHBalance(client, priceOracle)
 		assert.strictEqual(balanceAfter, preBalance, `Contract should retain preexisting balance (${preBalance}) after requestPriceIfNeededAndStageOperation, but it was drained to ${balanceAfter}`)
+	})
+
+	test('failed staged operations remain retryable after oracle settlement', async () => {
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const impossibleAllowance = repDeposit * 10n
+
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+					address: priceOracle,
+					functionName: 'requestPriceIfNeededAndStageOperation',
+					args: [OperationType.SetSecurityBondsAllowance, client.account.address, impossibleAllowance],
+					value: ethCost,
+				}),
+		)
+
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+
+		const stagedOperation = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			address: priceOracle,
+			functionName: 'stagedOperations',
+			args: [1n],
+		})
+
+		assert.strictEqual(stagedOperation[3], impossibleAllowance, 'failed staged operations should retain their amount so they can be retried after the state changes')
 	})
 })

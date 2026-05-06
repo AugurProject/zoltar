@@ -20,6 +20,8 @@ contract Zoltar {
 
 	mapping(uint248 => Universe) public universes;
 	mapping(uint248 => uint256[]) public deployedChildOutcomeIndexes;
+	mapping(uint248 => uint256) private universeTheoreticalSupplies;
+	mapping(uint248 => uint256) private childUniverseTheoreticalSupplySnapshots;
 
 	struct AddressRepMigration {
 		uint256 migrationRepBalance;
@@ -35,6 +37,9 @@ contract Zoltar {
 	constructor(ZoltarQuestionData _zoltarQuestionData) {
 		zoltarQuestionData = _zoltarQuestionData;
 		universes[0] = Universe(0, 0, 0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0);
+		if (Constants.GENESIS_REPUTATION_TOKEN.code.length != 0) {
+			universeTheoreticalSupplies[0] = ReputationToken(Constants.GENESIS_REPUTATION_TOKEN).getTotalTheoreticalSupply();
+		}
 	}
 
 	function getForkTime(uint248 universeId) external view returns (uint256) {
@@ -48,8 +53,11 @@ contract Zoltar {
 	}
 
 	function getForkThreshold(uint248 universeId) public view returns (uint256) {
-		Universe memory universe = universes[universeId];
-		return universe.reputationToken.getTotalTheoreticalSupply() / FORK_THRESHOLD_DIVISOR;
+		return getUniverseTheoreticalSupply(universeId) / FORK_THRESHOLD_DIVISOR;
+	}
+
+	function getUniverseTheoreticalSupply(uint248 universeId) public view returns (uint256) {
+		return universeTheoreticalSupplies[universeId];
 	}
 
 	function forkUniverse(uint248 universeId, uint256 questionId) public {
@@ -66,6 +74,8 @@ contract Zoltar {
 		universes[universeId].forkQuestionId = questionId;
 		uint256 forkThreshold = getForkThreshold(universeId);
 		burnRep(universes[universeId].reputationToken, msg.sender, forkThreshold);
+		universeTheoreticalSupplies[universeId] -= forkThreshold;
+		childUniverseTheoreticalSupplySnapshots[universeId] = universeTheoreticalSupplies[universeId];
 		migrationRepBalances[msg.sender][universeId].migrationRepBalance = forkThreshold - forkThreshold / FORK_BURN_DIVISOR; // burn 20%
 		emit UniverseForked(msg.sender, universeId, questionId);
 	}
@@ -95,7 +105,9 @@ contract Zoltar {
 		// Prevent overwriting an existing child universe
 		require(address(universes[childUniverseId].reputationToken) == address(0), 'Child universe already deployed');
 		ReputationToken childReputationToken = new ReputationToken{ salt: bytes32(uint256(childUniverseId)) }(address(this));
-		childReputationToken.setMaxTheoreticalSupply(universe.reputationToken.getTotalTheoreticalSupply());
+		uint256 childUniverseTheoreticalSupply = childUniverseTheoreticalSupplySnapshots[universeId];
+		childReputationToken.setMaxTheoreticalSupply(childUniverseTheoreticalSupply);
+		universeTheoreticalSupplies[childUniverseId] = childUniverseTheoreticalSupply;
 		universes[childUniverseId] = Universe(0, universe.forkQuestionId, outcomeIndex, childReputationToken, universeId);
 		deployedChildOutcomeIndexes[universeId].push(outcomeIndex);
 		emit DeployChild(msg.sender, universeId, outcomeIndex, childUniverseId, childReputationToken);
@@ -123,6 +135,7 @@ contract Zoltar {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked');
 		burnRep(universe.reputationToken, msg.sender, amount);
+		universeTheoreticalSupplies[universeId] -= amount;
 		migrationRepBalances[msg.sender][universeId].migrationRepBalance += amount;
 	}
 	function splitMigrationRep(uint248 universeId, uint256 amount, uint256[] memory outcomeIndexes) public {

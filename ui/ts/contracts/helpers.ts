@@ -162,7 +162,7 @@ export function getQuestionId(questionData: QuestionData, outcomeOptions: readon
 							{ name: 'description', type: 'string' },
 							{ name: 'startTime', type: 'uint256' },
 							{ name: 'endTime', type: 'uint256' },
-							{ name: 'numTicks', type: 'uint256' },
+							{ name: 'numTicks', type: 'uint120' },
 							{ name: 'displayValueMin', type: 'int256' },
 							{ name: 'displayValueMax', type: 'int256' },
 							{ name: 'answerUnit', type: 'string' },

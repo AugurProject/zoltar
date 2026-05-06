@@ -1,5 +1,5 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
-import type { Address } from 'viem'
+import { encodeAbiParameters, keccak256, type Address } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/viem'
@@ -14,14 +14,14 @@ import { deployOriginSecurityPool, getSecurityPoolAddresses } from '../testsuite
 import { approveAndDepositRep } from '../testsuite/simulator/utils/contracts/peripheralsTestUtils'
 import { depositToEscalationGame, getSecurityVault, poolOwnershipToRep } from '../testsuite/simulator/utils/contracts/securityPool'
 import { getNonDecisionThreshold } from '../testsuite/simulator/utils/contracts/escalationGame'
-import { getTotalTheoreticalSupply, getRepTokenAddress } from '../testsuite/simulator/utils/contracts/zoltar'
+import { getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { peripherals_SecurityPool_SecurityPool } from '../types/contractArtifact'
 
 const DAY = 86400n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
 const FORK_THRESHOLD_DIVISOR = 20n
-const REP_TOTAL_SUPPLY_SLOT = '0x' + 5n.toString(16).padStart(64, '0')
+const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -92,12 +92,13 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const initialForkThreshold = initialTotalSupply / FORK_THRESHOLD_DIVISOR
 		assert.ok(initialForkThreshold > escalationThreshold, 'initial fork threshold must be greater than escalation threshold')
 
-		// Lower total supply to make actual fork threshold less than escalationThreshold
+		// Lower the tracked universe theoretical supply to make actual fork threshold less than escalationThreshold
 		const newTotalSupply = initialTotalSupply / 10n // reduce to 10% to get significant ratio
+		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
 		await mockWindow.addStateOverrides({
-			[repToken]: {
+			[getZoltarAddress()]: {
 				stateDiff: {
-					[REP_TOTAL_SUPPLY_SLOT]: newTotalSupply,
+					[universeSupplySlot]: newTotalSupply,
 				},
 			},
 		})

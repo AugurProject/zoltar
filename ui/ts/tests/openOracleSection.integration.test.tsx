@@ -216,7 +216,7 @@ describe.serial('OpenOracleSection integration', () => {
 			expect(createdReport.reportId).toBe(reportId)
 		})
 
-		await clickElement(within(document.body).getByRole('button', { name: 'Browse' }))
+		await clickElement(within(document.body).getByRole('tab', { name: 'Browse' }))
 		await waitFor(() => {
 			expect(within(document.body).getByText(`Report #${reportId.toString()}`)).not.toBeNull()
 		})
@@ -333,7 +333,7 @@ describe.serial('OpenOracleSection integration', () => {
 			expect(createdReport.reportId).toBe(reportId)
 		})
 
-		await clickElement(within(document.body).getByRole('button', { name: 'Browse' }))
+		await clickElement(within(document.body).getByRole('tab', { name: 'Browse' }))
 		await waitFor(() => {
 			expect(within(document.body).getByText(`Report #${reportId.toString()}`)).not.toBeNull()
 		})

@@ -152,7 +152,7 @@ contract UniformPriceDualCapBatchAuction {
 
 			if (underfunded) {
 				uint256 price = tickToPrice(tick);
-				if (price > underfundedThreshold) {
+				if (price >= underfundedThreshold) {
 					// Winner: allocate REP proportional to their share of underfundedWinningEth
 					uint256 numerator = bid.ethAmount * totalRepPurchased + underfundedRemainder;
 					uint256 repShare = numerator / underfundedWinningEth;
@@ -312,7 +312,7 @@ contract UniformPriceDualCapBatchAuction {
 		if (nodeId == 0) return 0;
 		Node storage node = nodes[nodeId];
 		uint256 price = tickToPrice(node.tick);
-		if (price <= threshold) {
+		if (price < threshold) {
 			// This node and left subtree are losers; only right subtree can have winners
 			return _sumWinningEth(node.right, threshold);
 		} else {

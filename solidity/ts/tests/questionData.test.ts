@@ -151,17 +151,14 @@ describe('Question Data', () => {
 		}
 	})
 
-	test('handles large numTicks without overflow', async () => {
-		// Regression test for the historical overflow case where numTicks >= 2^120.
-		// Valid scalar answers must remain valid even when the uint120 components would
-		// overflow if summed in a narrower integer type.
-		const hugeNumTicks = (1n << 120n) + 1000n
+	test('accepts scalar questions at the uint120 encoding boundary', async () => {
+		const maxScalarNumTicks = (1n << 120n) - 1n
 		const testScalarQuestion = {
-			title: 'Huge Scalar',
-			description: 'testing overflow',
+			title: 'Boundary Scalar',
+			description: 'boundary scalar encoding',
 			startTime: (await mockWindow.getTime()) + 100000n,
 			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: hugeNumTicks,
+			numTicks: maxScalarNumTicks,
 			outcomeLabels: [],
 			displayValueMin: 0n,
 			displayValueMax: 1n,
@@ -170,19 +167,25 @@ describe('Question Data', () => {
 		await createQuestion(client, testScalarQuestion, [])
 		const questionId = getQuestionId(testScalarQuestion, [])
 
-		// Encode a valid answer where firstPart + secondPart = numTicks, but the sum overflows uint120.
-		const firstPart = (1n << 120n) - 1n // max uint120
-		const secondPart = hugeNumTicks - firstPart // 1001
-		assert.ok(secondPart > 0n && secondPart <= (1n << 120n) - 1n, 'secondPart within uint120 range')
-		const answer = combineUint256FromTwoWithInvalid(false, firstPart, secondPart)
+		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, maxScalarNumTicks, 0n)), '0', 'bottom endpoint should remain encodable at the boundary')
+		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, 0n, maxScalarNumTicks)), '0.000000000000000001', 'top endpoint should remain encodable at the boundary')
+	})
 
-		const malformed = await isMalformedAnswerOption(client, questionId, answer)
-		assert.strictEqual(malformed, false, 'Valid answer with numTicks >= 2^120 incorrectly flagged as malformed due to overflow')
+	test('rejects scalar questions whose numTicks exceeds the uint120 answer encoding range', async () => {
+		const tooLargeNumTicks = 1n << 120n
+		const testScalarQuestion = {
+			title: 'Too Large Scalar',
+			description: 'too many ticks for uint120 encoding',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: tooLargeNumTicks,
+			outcomeLabels: [],
+			displayValueMin: 0n,
+			displayValueMax: 1n,
+			answerUnit: '',
+		}
 
-		// getAnswerOptionName should not return Malformed or Invalid
-		const name = await getAnswerOptionName(client, questionId, answer)
-		assert.notStrictEqual(name, 'Malformed', 'should not return Malformed')
-		assert.notStrictEqual(name, 'Invalid', 'should not return Invalid')
+		await assert.rejects(createQuestion(client, testScalarQuestion, []), /safe 120-bit unsigned integer range/)
 	})
 
 	// Test for integer overflow in getTradeInterval: maxValue - minValue exceeds int256max

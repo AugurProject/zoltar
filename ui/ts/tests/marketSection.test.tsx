@@ -125,7 +125,7 @@ describe('MarketSection', () => {
 		if (!(tabList instanceof HTMLElement)) throw new Error('Expected to find the Zoltar view tab list inside the section header')
 		expect(tabList.closest('.section-block-header')).toBe(sectionHeader)
 
-		const tabButtons = Array.from(tabList.querySelectorAll('button'))
+		const tabButtons = Array.from(tabList.querySelectorAll('[role="tab"]'))
 		const tabLabels = tabButtons.map(button => button.textContent?.trim() ?? '')
 		expect(tabLabels).toEqual(['Questions', 'Create Question', 'Fork Zoltar', 'Migrate REP'])
 
@@ -182,5 +182,47 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(calls).toEqual([])
+	})
+
+	test('retries question auto-load when the previous automatic load fails', async () => {
+		const calls: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					hasLoadedZoltarQuestions: false,
+					loadingZoltarQuestions: false,
+					onLoadZoltarQuestions: () => {
+						calls.push('load')
+						return Promise.reject(new Error('temporary failure'))
+					},
+					zoltarQuestionCount: 3n,
+					zoltarUniverse: createZoltarUniverse({ universeId: 9n }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await Promise.resolve()
+		await Promise.resolve()
+
+		await act(() => {
+			render(
+				h(
+					MarketSection,
+					createMarketSectionProps({
+						hasLoadedZoltarQuestions: false,
+						loadingZoltarQuestions: false,
+						onLoadZoltarQuestions: () => {
+							calls.push('retry')
+						},
+						zoltarQuestionCount: 3n,
+						zoltarUniverse: createZoltarUniverse({ universeId: 9n }),
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		expect(calls).toEqual(['load', 'retry'])
 	})
 })

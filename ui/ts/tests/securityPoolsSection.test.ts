@@ -404,9 +404,9 @@ void describe('SecurityPoolsSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('button', { name: 'Browse' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Create' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Operate' })).not.toBeNull()
+		expect(documentQueries.getByRole('tab', { name: 'Browse' })).not.toBeNull()
+		expect(documentQueries.getByRole('tab', { name: 'Create' })).not.toBeNull()
+		expect(documentQueries.getByRole('tab', { name: 'Operate' })).not.toBeNull()
 		expect(documentQueries.queryByText('Mode')).toBeNull()
 		expect(document.body.querySelector('.route-summary-strip')).toBeNull()
 		expect(documentQueries.queryByText('Loaded pools')).toBeNull()
@@ -448,6 +448,48 @@ void describe('SecurityPoolsSection', () => {
 		})
 
 		expect(calls).toEqual(['load'])
+	})
+
+	void test('retries the browse auto-load after an earlier automatic load fails', async () => {
+		const calls: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolsSection,
+				createSecurityPoolsSectionProps({
+					overview: createOverviewProps({
+						hasLoadedSecurityPools: false,
+						loadingSecurityPools: false,
+						onLoadSecurityPools: () => {
+							calls.push('load')
+							return Promise.reject(new Error('temporary failure'))
+						},
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await Promise.resolve()
+		await Promise.resolve()
+
+		await act(() => {
+			render(
+				h(
+					SecurityPoolsSection,
+					createSecurityPoolsSectionProps({
+						overview: createOverviewProps({
+							hasLoadedSecurityPools: false,
+							loadingSecurityPools: false,
+							onLoadSecurityPools: () => {
+								calls.push('retry')
+							},
+						}),
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		expect(calls).toEqual(['load', 'retry'])
 	})
 
 	void test('keeps the route summary hidden even when the selected pool is resolved in operate mode', async () => {

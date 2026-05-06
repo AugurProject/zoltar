@@ -6,7 +6,7 @@ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import assert from 'node:assert'
 import { addressString } from '../testsuite/simulator/utils/bigint'
-import { addRepToMigrationBalance, deployChild, ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, isZoltarDeployed, splitMigrationRep } from '../testsuite/simulator/utils/contracts/zoltar'
+import { addRepToMigrationBalance, deployChild, ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, getZoltarForkThreshold, isZoltarDeployed, splitMigrationRep } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getAnswerOptionName, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { ensureDefined } from '../testsuite/simulator/utils/testUtils'
 import { Zoltar_Zoltar } from '../types/contractArtifact'
@@ -244,6 +244,70 @@ describe('Contract Test Suite', () => {
 		assert.deepStrictEqual(emptyPage[0], [], 'out of range paging should return no outcome indexes')
 		assert.deepStrictEqual(emptyPage[1], [], 'out of range paging should return no child universe ids')
 		assert.deepStrictEqual(emptyPage[2], [], 'out of range paging should return no child universes')
+	})
+
+	test('all child universes from a single fork inherit the same theoretical supply regardless of deployment order', async () => {
+		const zoltar = getZoltarAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		const questionData = {
+			title: 'supply symmetry',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getQuestionId(questionData, outcomes)
+
+		await forkUniverse(client, genesisUniverse, questionId)
+		await deployChild(client, genesisUniverse, 0n)
+		const earlyChildSupply = await getTotalTheoreticalSupply(client, getRepTokenAddress(getChildUniverseId(genesisUniverse, 0)))
+
+		const remainingRepBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), client.account.address)
+		const additionalMigrationAmount = remainingRepBalance / 10n
+		await addRepToMigrationBalance(client, genesisUniverse, additionalMigrationAmount)
+
+		await deployChild(client, genesisUniverse, 1n)
+		const lateChildSupply = await getTotalTheoreticalSupply(client, getRepTokenAddress(getChildUniverseId(genesisUniverse, 1)))
+
+		assert.strictEqual(lateChildSupply, earlyChildSupply, 'child universes from the same fork should share the same theoretical supply snapshot')
+	})
+
+	test('genesis fork thresholds decrease after REP is burned into migration balances', async () => {
+		const zoltar = getZoltarAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+
+		const questionData = {
+			title: 'genesis threshold accounting',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		const questionId = getQuestionId(questionData, outcomes)
+
+		const initialThreshold = await getZoltarForkThreshold(client, genesisUniverse)
+		await forkUniverse(client, genesisUniverse, questionId)
+
+		const thresholdAfterFork = await getZoltarForkThreshold(client, genesisUniverse)
+		assert.ok(thresholdAfterFork < initialThreshold, 'fork threshold should decrease after the initial fork burn')
+
+		const remainingRepBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), client.account.address)
+		const additionalMigrationAmount = remainingRepBalance / 10n
+		await addRepToMigrationBalance(client, genesisUniverse, additionalMigrationAmount)
+
+		const thresholdAfterAdditionalMigration = await getZoltarForkThreshold(client, genesisUniverse)
+		assert.ok(thresholdAfterAdditionalMigration < thresholdAfterFork, 'fork threshold should keep decreasing as more genesis REP is burned into migration balance')
 	})
 
 	test('scalar slider values match the contract', async () => {

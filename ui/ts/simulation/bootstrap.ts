@@ -37,6 +37,7 @@ const SECURITY_POOL_REP_DEPOSIT = 10_000n * 10n ** 18n
 const SECURITY_BOND_ALLOWANCE = SECURITY_POOL_REP_DEPOSIT / 4n
 const WETH_TOKEN_MINT_AMOUNT = 10_000n * 10n ** 18n
 const ZOLTAR_GENESIS_REPUTATION_TOKEN_OFFSET = 3n
+const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 const ZOLTAR_UNIVERSES_SLOT = 0n
 
 async function yieldToBrowser() {
@@ -104,6 +105,10 @@ function getZoltarUniverseBaseSlot(universeId: bigint) {
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [universeId, ZOLTAR_UNIVERSES_SLOT])))
 }
 
+function getZoltarUniverseTheoreticalSupplySlot(universeId: bigint) {
+	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [universeId, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT])))
+}
+
 async function seedAccountBalances(memoryClient: TevmLikeClient, accounts: readonly Address[], onProgress?: BootstrapProgressHandler) {
 	for (const [index, account] of accounts.entries()) {
 		await memoryClient.impersonateAccount({ address: account })
@@ -164,10 +169,21 @@ async function advanceSimulationTime(memoryClient: TevmLikeClient, seconds: bigi
 
 export async function updateZoltarGenesisRepToken(memoryClient: TevmLikeClient, zoltarAddress: Address, repAddress: Address) {
 	const universeBaseSlot = getZoltarUniverseBaseSlot(GENESIS_UNIVERSE_ID)
+	const genesisTheoreticalSupplyHex = await memoryClient.getStorageAt({
+		address: repAddress,
+		slot: storageIndex(REP_TOTAL_THEORETICAL_SUPPLY_SLOT),
+	})
+	const genesisTheoreticalSupply = genesisTheoreticalSupplyHex === undefined ? 0n : BigInt(genesisTheoreticalSupplyHex)
+
 	await memoryClient.setStorageAt({
 		address: zoltarAddress,
 		index: storageIndex(universeBaseSlot + ZOLTAR_GENESIS_REPUTATION_TOKEN_OFFSET),
 		value: storageValue(BigInt(repAddress)),
+	})
+	await memoryClient.setStorageAt({
+		address: zoltarAddress,
+		index: storageIndex(getZoltarUniverseTheoreticalSupplySlot(GENESIS_UNIVERSE_ID)),
+		value: storageValue(genesisTheoreticalSupply),
 	})
 }
 

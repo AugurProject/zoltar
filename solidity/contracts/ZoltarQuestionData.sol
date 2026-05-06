@@ -3,13 +3,13 @@ pragma solidity 0.8.33;
 
 import { ScalarOutcomes } from './ScalarOutcomes.sol';
 
- contract ZoltarQuestionData {
+contract ZoltarQuestionData {
 	struct QuestionData {
 		string title;
 		string description;
 		uint256 startTime;
 		uint256 endTime;
-		uint256 numTicks;
+		uint120 numTicks;
 		int256 displayValueMin;
 		int256 displayValueMax;
 		string answerUnit;
@@ -94,7 +94,6 @@ import { ScalarOutcomes } from './ScalarOutcomes.sol';
 				return true;
 			}
 			// When invalid=false (high bit set), malformed iff sum != numTicks
-			// Use uint256 for addition to prevent overflow when numTicks > 2^120
 			uint256 sum = uint256(firstPart) + uint256(secondPart);
 			return sum != questions[questionId].numTicks;
 		}
@@ -112,7 +111,6 @@ import { ScalarOutcomes } from './ScalarOutcomes.sol';
 				if (firstPart == 0 && secondPart == 0) return 'Invalid';
 				return 'Malformed';
 			}
-			// Use uint256 for addition to prevent overflow when numTicks > 2^120
 			uint256 sum = uint256(firstPart) + uint256(secondPart);
 			if (sum == questions[questionId].numTicks) {
 				return ScalarOutcomes.getScalarOutcomeName([firstPart, secondPart], questions[questionId].answerUnit, questions[questionId].numTicks, questions[questionId].displayValueMin, questions[questionId].displayValueMax);

@@ -10,7 +10,9 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', onC
 						key={option.value}
 						className={`view-tab ${active ? 'active' : ''}`.trim()}
 						type='button'
-						aria-pressed={active}
+						role='tab'
+						aria-selected={active}
+						tabIndex={active ? 0 : -1}
 						disabled={option.disabled}
 						title={option.reason}
 						onClick={() => {

@@ -3,13 +3,27 @@ import { execFileSync } from 'node:child_process'
 import * as path from 'node:path'
 
 const cwd = process.cwd()
-const worktreeRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8' }).trim()
-const commonGitDir = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd, encoding: 'utf8' }).trim()
-const sharedRoot = path.resolve(commonGitDir, '..')
-const packageRelativePath = path.relative(worktreeRoot, cwd)
-const sharedPackageRoot = packageRelativePath === '' ? sharedRoot : path.join(sharedRoot, packageRelativePath)
 const localNodeModulesPath = path.join(cwd, 'node_modules')
-const sharedNodeModulesPath = path.join(sharedPackageRoot, 'node_modules')
+
+function tryGetGitPath(args) {
+	try {
+		return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+	} catch {
+		return undefined
+	}
+}
+
+const worktreeRoot = tryGetGitPath(['rev-parse', '--show-toplevel'])
+const commonGitDir = tryGetGitPath(['rev-parse', '--git-common-dir'])
+const sharedNodeModulesPath =
+	worktreeRoot === undefined || commonGitDir === undefined
+		? localNodeModulesPath
+		: (() => {
+				const sharedRoot = path.resolve(commonGitDir, '..')
+				const packageRelativePath = path.relative(worktreeRoot, cwd)
+				const sharedPackageRoot = packageRelativePath === '' ? sharedRoot : path.join(sharedRoot, packageRelativePath)
+				return path.join(sharedPackageRoot, 'node_modules')
+			})()
 
 const ensureDirectory = async directoryPath => {
 	const stat = await fs.lstat(directoryPath).catch(() => undefined)

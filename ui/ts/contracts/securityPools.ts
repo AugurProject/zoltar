@@ -1,86 +1,15 @@
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, getCreate2Address, keccak256, RpcError, type Abi, type Account, type Address, type Hash, type TransactionReceipt } from 'viem'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, type TransactionReceipt } from 'viem'
 import { peripherals_SecurityPool_SecurityPool, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import type { SecurityPoolCreationResult, SecurityVaultDetails, WriteClient, ReadClient } from '../types/contracts.js'
+import { writeContractAndWaitForReceipt } from './core.js'
 import { getQuestionIdHex } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
 import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
-
-type ContractRevertReasonParams = {
-	account?: Account | Address | undefined | null
-	abi: Abi | readonly unknown[]
-	address: Address
-	args?: readonly unknown[]
-	functionName: string
-	gas?: bigint
-	value?: bigint
-}
 
 function getDeploymentStepAddress(id: 'securityPoolFactory' | 'zoltarQuestionData') {
 	const step = getDeploymentSteps().find(candidate => candidate.id === id)
 	if (step === undefined) throw new Error(`Unknown deployment step: ${id}`)
 	return step.address
-}
-
-async function getContractRevertReason<TCallParams extends ContractRevertReasonParams>(client: ReadClient | WriteClient, params: TCallParams) {
-	try {
-		const data = encodeFunctionData({
-			abi: params.abi,
-			functionName: params.functionName,
-			args: params.args,
-		})
-		const account = params.account ?? undefined
-		await client.call({
-			account,
-			data,
-			gas: params.gas,
-			to: params.address,
-			value: params.value,
-		})
-		return undefined
-	} catch (error) {
-		if (error instanceof RpcError) {
-			return error.shortMessage ?? error.message ?? (error.cause instanceof Error ? error.cause.message : undefined)
-		}
-		if (error instanceof Error) return error.message
-		return undefined
-	}
-}
-
-function getOriginalErrorMessage(error: unknown) {
-	if (error instanceof RpcError) {
-		return error.shortMessage ?? error.message ?? (error.cause instanceof Error ? error.cause.message : undefined)
-	}
-	if (error instanceof Error) return error.message
-	return undefined
-}
-
-async function writeContractAndWaitForReceipt<TCallParams extends ContractRevertReasonParams>(client: WriteClient, getCallParams: () => TCallParams): Promise<{ hash: Hash; receipt: TransactionReceipt }> {
-	const callParams = getCallParams()
-	const data = encodeFunctionData({
-		abi: callParams.abi,
-		functionName: callParams.functionName,
-		args: callParams.args,
-	})
-	const account = callParams.account ?? undefined
-	let hash: Hash
-	try {
-		hash = await client.sendTransaction({
-			account,
-			data,
-			gas: callParams.gas,
-			to: callParams.address,
-			value: callParams.value,
-		})
-	} catch (error) {
-		const reason = await getContractRevertReason(client, callParams)
-		throw new Error(reason ?? getOriginalErrorMessage(error) ?? 'Transaction reverted')
-	}
-	const receipt = await client.waitForTransactionReceipt({ hash })
-	if (receipt.status === 'reverted') {
-		const reason = await getContractRevertReason(client, callParams)
-		throw new Error(reason ?? 'Transaction reverted')
-	}
-	return { hash, receipt }
 }
 
 function getSecurityPoolAddressFromReceipt(receipt: TransactionReceipt) {

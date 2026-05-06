@@ -38,7 +38,7 @@ bun run install:anvil
 Important:
 
 - `bun run setup` is the fastest way to get to a working repo after the root install.
-- Standalone commands like `bun tsc`, `bun run tsc`, `bun test`, and `bun run test` assume the root dependencies are already installed.
+- Standalone commands like `bun tsc`, `bun run tsc`, and `bun run test` assume the root dependencies are already installed.
 - If you skip the initial `bun install --frozen-lockfile`, fresh checkouts can fail with missing packages such as `bun-types`.
 
 ## Local Development
@@ -157,7 +157,7 @@ bun run gas-costs
 
 - `bun run setup` is the quickest way to bootstrap a fresh checkout.
 - `bun install --frozen-lockfile` must be run before standalone commands like `bun run tsc` on a fresh checkout.
-- `bun run tsc` checks the app TypeScript, the Solidity-side TypeScript utilities, and the Bun build/dev scripts.
+- `bun run tsc` is a pure typecheck for the app TypeScript, the Solidity-side TypeScript utilities, and the Bun build/dev scripts. It does not regenerate shared assets or vendor output.
 - `bun run test` runs the TypeScript check first, then executes the test suite.
 - The legacy `ui:*` commands still exist as compatibility aliases, but `app:*` names are the clearer entrypoints because they run more than frontend-only work.
 - The repo uses exact dependency versions for reproducible installs.

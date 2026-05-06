@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { useAppRouteEffects } from '../hooks/useAppRouteEffects.js'
+import { useUrlState } from '../hooks/useUrlState.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -36,6 +37,15 @@ function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEf
 
 function RouteEffectsHarness(props: RouteEffectsProps) {
 	useAppRouteEffects(props)
+	return null
+}
+
+function RouteEffectsWithUrlStateHarness(props: Omit<RouteEffectsProps, 'setOpenOracleReport'>) {
+	const { setOpenOracleReport } = useUrlState()
+	useAppRouteEffects({
+		...props,
+		setOpenOracleReport,
+	})
 	return null
 }
 
@@ -98,6 +108,34 @@ describe('app route effects integration', () => {
 		})
 
 		expect(calls).toEqual(['0x84834d4Dccea071b363e53952BD300F7bf56a009'])
+		await cleanup()
+		dom.cleanup()
+	})
+
+	test('does not repeatedly rewrite the open-oracle report query param across rerenders when using the real URL state hook', async () => {
+		const dom = installDomEnvironment('http://localhost/#/open-oracle')
+		const replaceStateCalls: string[] = []
+		const originalReplaceState = window.history.replaceState.bind(window.history)
+		window.history.replaceState = ((data, unused, url) => {
+			replaceStateCalls.push(String(url ?? ''))
+			return originalReplaceState(data, unused, url)
+		}) as History['replaceState']
+
+		const initialProps = createDefaultProps({
+			openOracleFormReportId: '42',
+			route: 'open-oracle',
+		})
+
+		const { cleanup, container } = await renderIntoDocument(<RouteEffectsWithUrlStateHarness {...initialProps} />)
+		expect(replaceStateCalls.length).toBe(1)
+
+		await act(() => {
+			render(<RouteEffectsWithUrlStateHarness {...initialProps} />, container)
+		})
+
+		expect(replaceStateCalls.length).toBe(1)
+
+		window.history.replaceState = originalReplaceState
 		await cleanup()
 		dom.cleanup()
 	})
