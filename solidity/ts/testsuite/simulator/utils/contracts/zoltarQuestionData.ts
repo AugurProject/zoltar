@@ -19,14 +19,15 @@ export const getOutcomeLabels = async (client: ReadClient, questionId: bigint) =
 	let currentIndex = 0n
 	const pages: string[] = []
 	do {
-		const newLabels = await client.readContract({
+		const returnedLabels = await client.readContract({
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'getOutcomeLabels',
 			address: getInfraContractAddresses().zoltarQuestionData,
 			args: [questionId, currentIndex, CONTRACT_PAGE_SIZE],
 		})
+		const newLabels = returnedLabels.filter(label => label !== '')
 		pages.push(...newLabels)
-		if (BigInt(newLabels.length) !== CONTRACT_PAGE_SIZE) break
+		if (BigInt(returnedLabels.length) !== CONTRACT_PAGE_SIZE || BigInt(newLabels.length) !== CONTRACT_PAGE_SIZE) break
 		currentIndex += CONTRACT_PAGE_SIZE
 	} while (true)
 	return pages
