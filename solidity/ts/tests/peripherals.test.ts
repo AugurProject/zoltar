@@ -1,5 +1,6 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from 'node:assert'
+import { decodeEventLog } from 'viem'
 import type { Address, Hash } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
@@ -284,7 +285,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(vaultAfterWithdrawal.lockedRepInEscalationGame, 0n, 'escalation lock should be released after withdrawal')
 	})
 
-	test('withdrawFromEscalationGame pays mixed binding-capital deposits without double counting', async () => {
+	test('withdrawFromEscalationGame shares the binding-capital reward pool across all reward-eligible winning deposits', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
@@ -292,94 +293,166 @@ describe('Peripherals Contract Test Suite', () => {
 		await approveAndDepositRep(attackerClient, repDeposit, questionId)
 
 		const firstWinningDeposit = 5n * 10n ** 18n
-		const secondWinningDeposit = 7n * 10n ** 18n
-		const thirdWinningDeposit = 2n * 10n ** 18n
+		const secondWinningDeposit = 5n * 10n ** 18n
+		const thirdWinningDeposit = 5n * 10n ** 18n
+		const fourthWinningDeposit = 2n * 10n ** 18n
 		const losingDeposit = 10n * 10n ** 18n
-		const totalWinningPrincipal = firstWinningDeposit + secondWinningDeposit + thirdWinningDeposit
+		const totalWinningPrincipal = firstWinningDeposit + secondWinningDeposit + thirdWinningDeposit + fourthWinningDeposit
 		const totalPrincipalLocked = totalWinningPrincipal + losingDeposit
 		const expectedBindingCapital = losingDeposit
-		const expectedGrossWinningPayout = 20n * 10n ** 18n
+		const expectedRewardEligibleCap = 15n * 10n ** 18n
+		const expectedRewardBonusPool = 6n * 10n ** 18n
+		const expectedGrossWinningPayout = 23n * 10n ** 18n
 		const expectedWinnerProfit = expectedGrossWinningPayout - totalWinningPrincipal
 		const expectedResidualHaircut = totalPrincipalLocked - expectedGrossWinningPayout
 
-		// Payout breakdown:
-		// - first 5 REP sits entirely inside the 10 REP binding capital and pays 1.6x => 8 REP
-		// - second 7 REP crosses the boundary, so 5 REP pays 1.6x and 2 REP returns at par => 10 REP
-		// - final 2 REP sits entirely above the boundary and returns at par => 2 REP
-		// Winners therefore receive 20 REP total, which is 6 REP more than their 14 REP principal.
-		// The remaining 4 REP is the 40% haircut on the 10 REP binding-capital region and stays in the pool.
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstWinningDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondWinningDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, thirdWinningDeposit)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, fourthWinningDeposit)
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, losingDeposit)
-		await mockWindow.advanceTime(10n * DAY)
+		await mockWindow.advanceTime(50n * DAY)
 
 		const repClaimBeforeWithdrawal = await getVaultRepClaim(client.account.address)
 		const lockedRepBeforeWithdrawal = (await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).lockedRepInEscalationGame
-		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n, 1n, 2n])
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n, 1n, 2n, 3n])
 		const repClaimAfterWithdrawal = await getVaultRepClaim(client.account.address)
 		const vaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 
 		strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'question should resolve to yes')
 		strictEqualTypeSafe(lockedRepBeforeWithdrawal, totalWinningPrincipal, 'winner should have exactly the winning-side principal locked before withdrawal')
 		strictEqualTypeSafe(expectedBindingCapital, losingDeposit, 'single losing side should set the binding capital in this scenario')
-		strictEqualTypeSafe(expectedGrossWinningPayout, 8n * 10n ** 18n + 10n * 10n ** 18n + 2n * 10n ** 18n, 'gross winning payout should match the escalation payout schedule')
+		strictEqualTypeSafe(expectedRewardEligibleCap, expectedBindingCapital + expectedBindingCapital / 2n, 'reward-eligible cap should extend 50% beyond binding capital')
+		strictEqualTypeSafe(expectedRewardBonusPool, (expectedBindingCapital * 3n) / 5n, 'binding-capital reward pool should equal the unburned 60% share')
+		strictEqualTypeSafe(expectedGrossWinningPayout, 7n * 10n ** 18n + 7n * 10n ** 18n + 7n * 10n ** 18n + 2n * 10n ** 18n, 'gross winning payout should match the pooled reward schedule')
 		strictEqualTypeSafe(repClaimAfterWithdrawal - repClaimBeforeWithdrawal, expectedWinnerProfit, 'vault claim should increase only by winner profit; the original principal was already this vaults claim before it was locked')
 		strictEqualTypeSafe(totalPrincipalLocked - totalWinningPrincipal, losingDeposit, 'losing side should contribute 10 REP of principal')
 		strictEqualTypeSafe(expectedResidualHaircut, 4n * 10n ** 18n, '40% of the 10 REP binding-capital region should remain as slashed residual in the pool')
 		strictEqualTypeSafe(vaultAfterWithdrawal.lockedRepInEscalationGame, 0n, 'winning withdrawals should unlock all deposited REP')
 	})
 
-	test('withdrawFromEscalationGame pays a full 1.6x boost for deposits entirely inside the binding-capital region', async () => {
+	test('withdrawFromEscalationGame gives safety-boundary deposits a pro-rata share of the binding-capital reward pool', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
-		const supportingWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const losingSide = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-		await approveAndDepositRep(supportingWinner, repDeposit, questionId)
+		const firstWinner = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		const losingSide = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
+		await approveAndDepositRep(firstWinner, repDeposit, questionId)
+		await approveAndDepositRep(secondWinner, repDeposit, questionId)
 		await approveAndDepositRep(losingSide, repDeposit, questionId)
 
-		const boostedWinningDeposit = 5n * 10n ** 18n
-		const supportingWinningDeposit = 10n * 10n ** 18n
-		const losingDeposit = 10n * 10n ** 18n
+		const firstWinningDeposit = 20n * 10n ** 18n
+		const secondWinningDeposit = 14n * 10n ** 18n
+		const losingDeposit = 20n * 10n ** 18n
+		const expectedFirstWinnerPayout = 28n * 10n ** 18n
+		const expectedSecondWinnerPayout = 18n * 10n ** 18n
 
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, boostedWinningDeposit)
-		await depositToEscalationGame(supportingWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, supportingWinningDeposit)
+		await depositToEscalationGame(firstWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstWinningDeposit)
+		await depositToEscalationGame(secondWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondWinningDeposit)
 		await depositToEscalationGame(losingSide, securityPoolAddresses.securityPool, QuestionOutcome.No, losingDeposit)
-		await mockWindow.advanceTime(10n * DAY)
+		await mockWindow.advanceTime(60n * DAY)
 
-		const repClaimBeforeWithdrawal = await getVaultRepClaim(client.account.address)
-		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
-		const repClaimAfterWithdrawal = await getVaultRepClaim(client.account.address)
+		const firstWithdrawalHash = await withdrawFromEscalationGame(firstWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
+		const secondWithdrawalHash = await withdrawFromEscalationGame(secondWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [1n])
+		const firstReceipt = await client.waitForTransactionReceipt({ hash: firstWithdrawalHash })
+		const secondReceipt = await client.waitForTransactionReceipt({ hash: secondWithdrawalHash })
+		const firstClaimLog = firstReceipt.logs
+			.map(log => {
+				try {
+					return decodeEventLog({
+						abi: peripherals_EscalationGame_EscalationGame.abi,
+						data: log.data,
+						topics: log.topics,
+					})
+				} catch {
+					return undefined
+				}
+			})
+			.find(log => log?.eventName === 'ClaimDeposit')
+		const secondClaimLog = secondReceipt.logs
+			.map(log => {
+				try {
+					return decodeEventLog({
+						abi: peripherals_EscalationGame_EscalationGame.abi,
+						data: log.data,
+						topics: log.topics,
+					})
+				} catch {
+					return undefined
+				}
+			})
+			.find(log => log?.eventName === 'ClaimDeposit')
+		const firstWinnerVaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, firstWinner.account.address)
+		const secondWinnerVaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, secondWinner.account.address)
 
 		strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'question should resolve to yes')
-		strictEqualTypeSafe(repClaimAfterWithdrawal - repClaimBeforeWithdrawal, 3n * 10n ** 18n, 'a 5 REP deposit fully inside the 10 REP binding-capital region should earn a 3 REP profit')
+		strictEqualTypeSafe(firstClaimLog?.args.amountToWithdraw, expectedFirstWinnerPayout, 'the first winning deposit should receive the pro-rata reward on its full 20 REP reward-eligible principal')
+		strictEqualTypeSafe(secondClaimLog?.args.amountToWithdraw, expectedSecondWinnerPayout, 'the crossing deposit should receive reward on its 10 REP safety-boundary slice and principal only on its 4 REP excess slice')
+		strictEqualTypeSafe(firstWinnerVaultAfterWithdrawal.lockedRepInEscalationGame, 0n, 'the first winner should have no REP left locked after withdrawal')
+		strictEqualTypeSafe(secondWinnerVaultAfterWithdrawal.lockedRepInEscalationGame, 0n, 'the second winner should have no REP left locked after withdrawal')
 	})
 
-	test('withdrawFromEscalationGame returns only principal for deposits entirely above the binding-capital region', async () => {
+	test('withdrawFromEscalationGame shares the full reward pool across the actual winning principal when total winning principal stays below the reward cap', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
-		const firstWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const losingSide = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const firstWinner = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		const losingSide = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 		await approveAndDepositRep(firstWinner, repDeposit, questionId)
+		await approveAndDepositRep(secondWinner, repDeposit, questionId)
 		await approveAndDepositRep(losingSide, repDeposit, questionId)
 
-		const inBindingWinningDeposit = 10n * 10n ** 18n
-		const aboveBindingWinningDeposit = 2n * 10n ** 18n
-		const losingDeposit = 10n * 10n ** 18n
+		const firstWinningDeposit = 14n * 10n ** 18n
+		const secondWinningDeposit = 10n * 10n ** 18n
+		const losingDeposit = 20n * 10n ** 18n
+		const expectedFirstWinnerPayout = 21n * 10n ** 18n
+		const expectedSecondWinnerPayout = 15n * 10n ** 18n
 
-		await depositToEscalationGame(firstWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, inBindingWinningDeposit)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, aboveBindingWinningDeposit)
+		await depositToEscalationGame(firstWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstWinningDeposit)
+		await depositToEscalationGame(secondWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondWinningDeposit)
 		await depositToEscalationGame(losingSide, securityPoolAddresses.securityPool, QuestionOutcome.No, losingDeposit)
-		await mockWindow.advanceTime(10n * DAY)
+		await mockWindow.advanceTime(60n * DAY)
 
-		const repClaimBeforeWithdrawal = await getVaultRepClaim(client.account.address)
-		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [1n])
-		const repClaimAfterWithdrawal = await getVaultRepClaim(client.account.address)
+		const firstWithdrawalHash = await withdrawFromEscalationGame(firstWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
+		const secondWithdrawalHash = await withdrawFromEscalationGame(secondWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [1n])
+		const firstReceipt = await client.waitForTransactionReceipt({ hash: firstWithdrawalHash })
+		const secondReceipt = await client.waitForTransactionReceipt({ hash: secondWithdrawalHash })
+		const firstClaimLog = firstReceipt.logs
+			.map(log => {
+				try {
+					return decodeEventLog({
+						abi: peripherals_EscalationGame_EscalationGame.abi,
+						data: log.data,
+						topics: log.topics,
+					})
+				} catch {
+					return undefined
+				}
+			})
+			.find(log => log?.eventName === 'ClaimDeposit')
+		const secondClaimLog = secondReceipt.logs
+			.map(log => {
+				try {
+					return decodeEventLog({
+						abi: peripherals_EscalationGame_EscalationGame.abi,
+						data: log.data,
+						topics: log.topics,
+					})
+				} catch {
+					return undefined
+				}
+			})
+			.find(log => log?.eventName === 'ClaimDeposit')
+		const firstWinnerVaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, firstWinner.account.address)
+		const secondWinnerVaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, secondWinner.account.address)
 
 		strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'question should resolve to yes')
-		strictEqualTypeSafe(repClaimAfterWithdrawal - repClaimBeforeWithdrawal, 0n, 'a 2 REP deposit entirely above the 10 REP binding-capital region should only unlock principal with no profit')
+		strictEqualTypeSafe(firstClaimLog?.args.amountToWithdraw, expectedFirstWinnerPayout, 'when total winning principal stays below the reward cap, the first winner should receive its pro-rata share of the full reward pool')
+		strictEqualTypeSafe(secondClaimLog?.args.amountToWithdraw, expectedSecondWinnerPayout, 'when total winning principal stays below the reward cap, the second winner should also receive its pro-rata share of the full reward pool')
+		strictEqualTypeSafe(firstWinnerVaultAfterWithdrawal.lockedRepInEscalationGame, 0n, 'the first winner should have no REP left locked after withdrawal')
+		strictEqualTypeSafe(secondWinnerVaultAfterWithdrawal.lockedRepInEscalationGame, 0n, 'the second winner should have no REP left locked after withdrawal')
 	})
 
 	test('can refund escalation deposits after zoltar forks on another question', async () => {
@@ -1634,3 +1707,4 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(newForkerBal - initialForkerBal, 2000n, 'Forker balance increase from truthAuction')
 	})
 })
+import { peripherals_EscalationGame_EscalationGame } from '../types/contractArtifact'

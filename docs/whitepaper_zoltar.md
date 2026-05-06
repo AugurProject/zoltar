@@ -51,6 +51,26 @@ This makes each branch reproducible from parent universe and outcome index alone
 
 The resulting child universes coexist. Zoltar does not, at the substrate level, select one canonical child universe and delete the others. It deterministically defines all valid branches for the forked question and leaves later economic and social coordination to determine which branch accumulates meaningful value.
 
+```
+Parent universe
+      |
+      | fork on disputed question
+      v
++-------------------+
+| parentUniverseId  |
++-------------------+
+      |
+      +--> child for Invalid
+      |
+      +--> child for outcome 1
+      |
+      +--> child for outcome 2
+      |
+      +--> child for outcome N
+```
+
+Zoltar defines the branch set; it does not choose one winner at the substrate layer.
+
 ## 3. Fork Thresholds and REP Economics
 
 The current fork threshold is:
@@ -73,6 +93,20 @@ $$
 \text{forkInitiatorMigrationBalance} = \text{forkThreshold} - \text{burnedRepAmount} = \frac{4 \cdot \text{forkThreshold}}{5}
 $$
 
+```
+Fork initiator deposits forkThreshold REP
+                    |
+                    v
+         +----------------------+
+         | threshold deposit    |
+         +----------------------+
+             |              |
+             |              |
+             v              v
+      20% burned        80% kept as
+                        migration balance
+```
+
 Genesis REP cannot be burned natively, so the contract transfers it to the configured burn address. Child-universe REP is minted and burned directly by [`ReputationToken`](../solidity/contracts/ReputationToken.sol) under Zoltar’s control.
 
 In the Colored Coins framing, the threshold deposit is the cost of forcing the branch point into existence.
@@ -93,6 +127,30 @@ Once a universe forks, child universes can be deployed lazily through `deployChi
 For categorical questions, that means `Invalid`, which is a legitimate answer state, and any in-range categorical outcome are allowed, while out-of-range values are rejected. For scalar questions, only well-formed scalar encodings are allowed.
 
 This is Zoltar’s core branching primitive. A REP holder does not choose one destination universe and abandon all others inside the substrate. Instead, the holder takes a post-fork migration balance and uses it to mint child-universe REP across one or more selected branches. If multiple child outcomes are selected, the same migrated balance is reproduced into each selected child universe. That is the key Colored Coins-style property: the fork branches the claim structure itself, and later value concentration determines which branch matters economically.
+
+```
+Post-fork migration balance
+          |
+          | splitMigrationRep(select outcomes)
+          v
+
+If user selects one branch:
+  migration balance
+        |
+        +--> child REP in selected universe only
+
+If user selects multiple branches:
+  migration balance
+        |
+        +--> child REP in Invalid universe
+        |
+        +--> child REP in outcome A universe
+        |
+        +--> child REP in outcome B universe
+
+Same migrated claim is reproduced across selected children.
+Later value concentration determines which branch matters economically.
+```
 
 The security intuition is a coordination claim: if durable value concentrates in the branch that participants regard as truthful, then branched post-fork claims can still inherit meaningful security from the pre-fork REP base even though the protocol has split them across multiple child universes.
 
@@ -145,6 +203,15 @@ In the contract’s encoding:
 
 - highest bit `0` means the answer lives in the invalid namespace
 - highest bit `1` means the answer lives in the scalar-payout namespace
+
+```
+Packed scalar answer (uint256)
+
+[ highest bit ][ first payout numerator ][ second payout numerator ]
+
+highest bit = 0  -> invalid namespace
+highest bit = 1  -> scalar payout namespace
+```
 
 The all-zero encoding is therefore the canonical `Invalid` answer for scalar questions.
 
