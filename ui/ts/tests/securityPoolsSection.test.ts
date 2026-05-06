@@ -3,6 +3,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from '@testing-library/dom'
 import { h } from 'preact'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 import { SecurityPoolsSection, shouldRefreshSelectedPoolDataOnViewOpen } from '../components/SecurityPoolsSection.js'
 import type { AccountState } from '../types/app.js'
@@ -411,6 +413,41 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('Selected pool')).toBeNull()
 		expect(documentQueries.queryByText('Pool status')).toBeNull()
 		expect(documentQueries.queryByText('Next step')).toBeNull()
+	})
+
+	void test('auto-loads pool browse data once when opening the browse view without loaded pools', async () => {
+		const calls: string[] = []
+		const initialProps = createSecurityPoolsSectionProps({
+			overview: createOverviewProps({
+				hasLoadedSecurityPools: false,
+				loadingSecurityPools: false,
+				onLoadSecurityPools: () => {
+					calls.push('load')
+				},
+			}),
+		})
+
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, initialProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(calls).toEqual(['load'])
+
+		await act(() => {
+			render(
+				h(SecurityPoolsSection, {
+					...initialProps,
+					overview: createOverviewProps({
+						hasLoadedSecurityPools: false,
+						loadingSecurityPools: false,
+						onLoadSecurityPools: () => {
+							calls.push('rerender')
+						},
+					}),
+				}),
+				renderedComponent.container,
+			)
+		})
+
+		expect(calls).toEqual(['load'])
 	})
 
 	void test('keeps the route summary hidden even when the selected pool is resolved in operate mode', async () => {

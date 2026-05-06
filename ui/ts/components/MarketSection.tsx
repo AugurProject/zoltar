@@ -1,4 +1,4 @@
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { DataGrid } from './DataGrid.js'
 import { ForkZoltarSection } from './ForkZoltarSection.js'
 import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
@@ -60,6 +60,7 @@ export function MarketSection({
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const view = activeView
 	const showUniverseSummary = view === 'questions' && zoltarUniverse !== undefined
+	const lastAutoLoadedQuestionsUniverseId = useRef<bigint | undefined>(undefined)
 
 	useEffect(() => {
 		if (view !== 'migrate') return
@@ -67,6 +68,17 @@ export function MarketSection({
 		if (hasForked) return
 		onActiveViewChange('questions')
 	}, [hasForked, onActiveViewChange, view, zoltarUniverse])
+
+	useEffect(() => {
+		if (view !== 'questions') return
+		if (loadingZoltarQuestions) return
+		if (hasLoadedZoltarQuestions) return
+		if (zoltarQuestionCount === 0n) return
+		const currentUniverseId = zoltarUniverse?.universeId
+		if (currentUniverseId !== undefined && lastAutoLoadedQuestionsUniverseId.current === currentUniverseId) return
+		lastAutoLoadedQuestionsUniverseId.current = currentUniverseId
+		onLoadZoltarQuestions()
+	}, [hasLoadedZoltarQuestions, loadingZoltarQuestions, onLoadZoltarQuestions, view, zoltarQuestionCount, zoltarUniverse?.universeId])
 
 	const renderModeTabs = () => (
 		<SectionModeTabs
