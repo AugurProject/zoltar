@@ -282,7 +282,7 @@ async function applyScenario({
 	scenario: SimulationScenario
 }) {
 	switch (scenario) {
-		case 'base':
+		case 'baseline':
 			return
 		case 'deployed':
 			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient)

@@ -6,9 +6,11 @@ import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { setupTestAccounts, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
 import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
+import { getInfraContractAddresses } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import assert from 'node:assert'
 import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
 import { areEqualArrays } from '../testsuite/simulator/utils/array-utils'
+import { ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -321,5 +323,40 @@ describe('Question Data', () => {
 		const questionId2 = getQuestionId(question, ['Yes', 'No'])
 		const labels2 = await getOutcomeLabels(client, questionId2)
 		assert.deepStrictEqual(labels2, ['Yes', 'No'], 'binary outcome labels should match')
+	})
+
+	test('question pagination returns exact-length pages without zero padding', async () => {
+		const question = {
+			title: 'Paged Question',
+			description: '',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const firstOutcomes = sortStringArrayByKeccak(['Alpha', 'Beta', 'Gamma'])
+		const secondOutcomes = ['Yes', 'No']
+		await createQuestion(client, question, firstOutcomes)
+		await createQuestion(client, { ...question, title: 'Paged Question 2' }, secondOutcomes)
+		const firstQuestionId = getQuestionId(question, firstOutcomes)
+
+		const questionPage = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getQuestions',
+			address: getInfraContractAddresses().zoltarQuestionData,
+			args: [1n, 5n],
+		})
+
+		const outcomePage = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getOutcomeLabels',
+			address: getInfraContractAddresses().zoltarQuestionData,
+			args: [firstQuestionId, 1n, 5n],
+		})
+
+		assert.deepStrictEqual(questionPage.length, 1, 'question paging should return only the remaining ids')
+		assert.deepStrictEqual(outcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should return only the remaining labels')
 	})
 })

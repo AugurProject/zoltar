@@ -117,10 +117,8 @@ async function loadOutcomeLabels(client: ReadClient, questionId: bigint) {
 			args: [questionId, currentIndex, CONTRACT_PAGE_SIZE],
 		})
 		if (!isStringArray(page)) throw new Error('Unexpected outcome labels response')
-
-		const labels = page.filter(label => label.length > 0)
-		outcomeLabels.push(...labels)
-		if (BigInt(labels.length) !== CONTRACT_PAGE_SIZE) break
+		outcomeLabels.push(...page)
+		if (BigInt(page.length) !== CONTRACT_PAGE_SIZE) break
 		currentIndex += CONTRACT_PAGE_SIZE
 	}
 
@@ -145,10 +143,9 @@ async function loadQuestionIds(client: ReadClient): Promise<bigint[]> {
 			args: [currentIndex, CONTRACT_PAGE_SIZE],
 		})
 		if (!Array.isArray(page)) throw new Error('Unexpected question id page response')
-
-		const normalizedPage = page.filter((questionId): questionId is bigint => typeof questionId === 'bigint' && questionId !== 0n).slice(0, Number(CONTRACT_PAGE_SIZE))
-		questionIds.push(...normalizedPage)
-		if (BigInt(normalizedPage.length) !== CONTRACT_PAGE_SIZE) break
+		if (!page.every((questionId): questionId is bigint => typeof questionId === 'bigint')) throw new Error('Unexpected question id page response')
+		questionIds.push(...page)
+		if (BigInt(page.length) !== CONTRACT_PAGE_SIZE) break
 		currentIndex += CONTRACT_PAGE_SIZE
 	}
 
