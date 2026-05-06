@@ -99,7 +99,7 @@ describe('Question Data', () => {
 		assert.strictEqual(await getAnswerOptionName(client, questionId, combineUint256FromTwoWithInvalid(false, 0n, testScalarQuestion.numTicks + 1n)), 'Malformed', 'Overflow')
 	})
 
-	test('isMalformedAnswerOption: scalar answers - bug check for high bit set', async () => {
+	test('isMalformedAnswerOption: scalar answers with high bit set follow the scalar validity rules', async () => {
 		// Create a scalar question
 		const testScalarQuestion = {
 			title: 'scalar',
@@ -144,8 +144,9 @@ describe('Question Data', () => {
 	})
 
 	test('handles large numTicks without overflow', async () => {
-		// This test demonstrates integer overflow vulnerability in isMalformedAnswerOption and getAnswerOptionName.
-		// When numTicks >= 2^120, the sum of two uint120 parts can overflow, causing valid answers to be incorrectly rejected.
+		// Regression test for the historical overflow case where numTicks >= 2^120.
+		// Valid scalar answers must remain valid even when the uint120 components would
+		// overflow if summed in a narrower integer type.
 		const hugeNumTicks = (1n << 120n) + 1000n
 		const testScalarQuestion = {
 			title: 'Huge Scalar',
@@ -167,9 +168,7 @@ describe('Question Data', () => {
 		assert.ok(secondPart > 0n && secondPart <= (1n << 120n) - 1n, 'secondPart within uint120 range')
 		const answer = combineUint256FromTwoWithInvalid(false, firstPart, secondPart)
 
-		// Currently this fails due to overflow bug.
 		const malformed = await isMalformedAnswerOption(client, questionId, answer)
-		// Expected: false (not malformed). The bug causes overflow and returns true.
 		assert.strictEqual(malformed, false, 'Valid answer with numTicks >= 2^120 incorrectly flagged as malformed due to overflow')
 
 		// getAnswerOptionName should not return Malformed or Invalid
