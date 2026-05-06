@@ -1,4 +1,4 @@
-import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
+import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
@@ -28,7 +28,7 @@ const DEFAULT_MAX_REP = 100n
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Auction', () => {
-	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
+	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	let auctionAddress: Address
@@ -138,7 +138,7 @@ describe('Auction', () => {
 		assert.ok(tick >= MIN_TICK && tick <= MAX_TICK, `clearing tick ${tick} outside [${MIN_TICK}, ${MAX_TICK}]`)
 	}
 
-	beforeEach(async () => {
+	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		await setupTestAccounts(mockWindow)
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
@@ -147,6 +147,12 @@ describe('Auction', () => {
 		await deployUniformPriceDualCapBatchAuction(client, client.account.address)
 		auctionAddress = getUniformPriceDualCapBatchAuctionAddress(client.account.address)
 		assert.ok(await contractExists(client, auctionAddress), 'auction exists')
+		await setBaselineSnapshot()
+	})
+
+	beforeEach(() => {
+		mockWindow = getAnvilWindowEthereum()
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 	})
 
 	// ============ Test Suites ============

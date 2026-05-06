@@ -70,9 +70,21 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 	let nextRequestId = 1
 	let currentState: SimulationWorkerState | undefined = undefined
 	let bootstrapPromise: Promise<void> | undefined = undefined
+	let disposed = false
+
+	const rejectPendingRequests = (error: Error) => {
+		for (const pendingRequest of pendingRequests.values()) {
+			pendingRequest.reject(error)
+		}
+		pendingRequests.clear()
+	}
 
 	const requestFromWorker = <TResult>(message: WorkerRequestMessage): Promise<TResult> =>
 		new Promise((resolve, reject) => {
+			if (disposed) {
+				reject(new Error('Simulation backend has been disposed'))
+				return
+			}
 			const requestId = nextRequestId
 			nextRequestId += 1
 			pendingRequests.set(requestId, {
@@ -257,6 +269,14 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 		},
 		get currentScenario() {
 			return requireState().currentScenario
+		},
+		dispose: async () => {
+			if (disposed) return
+			disposed = true
+			worker.onmessage = null
+			worker.onerror = null
+			rejectPendingRequests(new Error('Simulation backend has been disposed'))
+			worker.terminate()
 		},
 		get isBootstrapped() {
 			return requireState().isBootstrapped
