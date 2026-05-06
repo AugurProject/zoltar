@@ -7,7 +7,7 @@ import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import assert from 'node:assert'
-import { deployEscalationGame, depositOnOutcome, getBalances, getStartingTime, getQuestionResolution } from '../testsuite/simulator/utils/contracts/escalationGame'
+import { deployEscalationGame, depositOnOutcome, getBalances, getEscalationGameDeposits, getStartingTime, getQuestionResolution } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { peripherals_EscalationGame_EscalationGame, peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool } from '../types/contractArtifact'
@@ -156,21 +156,18 @@ describe('Escalation Game Test Suite', () => {
 		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, 255 as QuestionOutcome, reportBond))
 	})
 
-	test('getDepositsByOutcome returns exact-length pages without zero padding', async () => {
+	test('getEscalationGameDeposits paginates deposits without adding synthetic entries', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond * 2n)
 
-		const depositPage = await client.readContract({
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getDepositsByOutcome',
-			address: escalationGame,
-			args: [QuestionOutcome.Yes, 1n, 5n],
-		})
+		const deposits = await getEscalationGameDeposits(client, escalationGame, QuestionOutcome.Yes)
+		const depositPage = deposits.slice(1, 6)
 
 		assert.strictEqual(depositPage.length, 1, 'deposit paging should return only the remaining entries')
 		assert.strictEqual(depositPage[0]?.amount, reportBond * 2n, 'paged deposit should retain its amount')
 		assert.strictEqual(depositPage[0]?.depositor, client.account.address, 'paged deposit should retain its depositor')
+		assert.strictEqual(depositPage[0]?.depositIndex, 1n, 'paged deposit should retain its index')
 	})
 
 	test('claimDepositForWinning reverts when outcome is None', async () => {

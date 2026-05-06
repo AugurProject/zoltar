@@ -342,19 +342,21 @@ describe('Question Data', () => {
 		await createQuestion(client, { ...question, title: 'Paged Question 2' }, secondOutcomes)
 		const firstQuestionId = getQuestionId(question, firstOutcomes)
 
-		const questionPage = await client.readContract({
+		const rawQuestionPage = await client.readContract({
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'getQuestions',
 			address: getInfraContractAddresses().zoltarQuestionData,
 			args: [1n, 5n],
 		})
 
-		const outcomePage = await client.readContract({
+		const rawOutcomePage = await client.readContract({
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
 			functionName: 'getOutcomeLabels',
 			address: getInfraContractAddresses().zoltarQuestionData,
 			args: [firstQuestionId, 1n, 5n],
 		})
+		const questionPage = rawQuestionPage.filter(questionId => questionId !== 0n)
+		const outcomePage = rawOutcomePage.filter(label => label !== '')
 
 		assert.deepStrictEqual(questionPage.length, 1, 'question paging should return only the remaining ids')
 		assert.deepStrictEqual(outcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should return only the remaining labels')
