@@ -39,6 +39,7 @@
 		"tsc": "bun run shared:build && bun run ui:shared && bun x tsc --noEmit",
 		"ui:setup": "bun install --frozen-lockfile && cd solidity && bun install --frozen-lockfile && bun run setup && cd .. && bun run generate && cd ui && bun install --frozen-lockfile && bun run build && bun run build:tests",
 		"ui:build": "bun run generate && cd ui && bun install --frozen-lockfile && bun run build && bun run build:tests",
+		"ui:workers": "cd ui && bun ./build/workers.mts",
 		"ui:shared": "bun ./ui/build/shared.mts",
 		"ui:watch": "bun run ui:build && bun ./ui/build/watch.mts",
 		"ui:serve": "bun run ui:build && bun ./ui/dev-server.ts",
@@ -54,5 +55,10 @@
 		"knip:fix": "bun x knip --fix",
 		"ui:docker": "docker build -f ui/Dockerfile . -t zoltar-ui && docker run --add-host=host.docker.internal:host-gateway zoltar-ui",
 		"anvil:docker": "docker run --rm --name anvil -p 8545:8545 --entrypoint anvil ghcr.io/foundry-rs/foundry:v1.5.1 --host 0.0.0.0 --port 8545 --block-base-fee-per-gas 0 --gas-price 0 --no-priority-fee --chain-id 1"
+	},
+	"knip": {
+		"ignore": [
+			"ui/build/workers.mts"
+		]
 	}
 }

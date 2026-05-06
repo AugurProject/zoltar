@@ -45,6 +45,24 @@ async function yieldToBrowser() {
 	})
 }
 
+async function withTimeout<TResult>(work: Promise<TResult>, timeoutMilliseconds: number, message: string) {
+	let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined
+	try {
+		return await Promise.race([
+			work,
+			new Promise<TResult>((_, reject) => {
+				timeoutId = setTimeout(() => {
+					reject(new Error(message))
+				}, timeoutMilliseconds)
+			}),
+		])
+	} finally {
+		if (timeoutId !== undefined) {
+			clearTimeout(timeoutId)
+		}
+	}
+}
+
 function clampProgress(value: number) {
 	return Math.max(0, Math.min(1, value))
 }
@@ -380,7 +398,7 @@ export async function bootstrapSimulationChain({
 	scenario: SimulationScenario
 }) {
 	await reportBootstrapProgress(onProgress, 'Initializing simulation engine', 0.01)
-	await memoryClient.tevmReady()
+	await withTimeout(memoryClient.tevmReady(), 20_000, 'Simulation engine initialization timed out. Firefox may be struggling with main-thread simulation startup.')
 	await reportBootstrapProgress(onProgress, 'Preparing simulation chain', 0.03)
 	await seedAccountBalances(memoryClient, accounts, onProgress)
 	const zoltarStep = getDeploymentSteps().find(step => step.id === 'zoltar')

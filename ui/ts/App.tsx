@@ -58,13 +58,10 @@ export function App() {
 		connectWallet,
 		deploymentStatuses,
 		environmentBootstrapError,
-		environmentBootstrapLabel,
-		environmentBootstrapProgress,
 		environmentReady,
 		errorMessage: walletErrorMessage,
 		hasInjectedWallet,
 		hasLoadedDeploymentStatuses,
-		isBootstrappingEnvironment,
 		isConnectingWallet,
 		isLoadingDeploymentStatuses,
 		isRefreshing,
@@ -578,11 +575,8 @@ export function App() {
 	return (
 		<main>
 			<AppStatusNotices
-				bootstrapLabel={environmentBootstrapLabel}
-				bootstrapProgress={environmentBootstrapProgress}
 				errorMessage={errorMessage}
 				hasInjectedWallet={hasInjectedWallet}
-				isBootstrappingSimulation={isBootstrappingEnvironment}
 				simulationBootstrapError={environmentBootstrapError}
 				showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
 				showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
