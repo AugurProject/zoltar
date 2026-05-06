@@ -314,8 +314,12 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 	let baselineState: DumpStateResult | undefined = undefined
 	let baselineBlockNumber = 0n
 	let blockCountSinceReset = 0n
+	let bootstrapError: string | undefined = undefined
+	let bootstrapPromise: Promise<void> | undefined = undefined
+	let bootstrapped = false
+	let bootstrapping = false
 	let currentTimestamp = 0n
-	let queryDelayMilliseconds = 100
+	let queryDelayMilliseconds = 0
 	let selectedAccount = primaryAccount
 	let transactionCountSinceReset = 0n
 	let transactionDelayMilliseconds = 1_000
@@ -377,25 +381,43 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 			emitListeners(listeners, 'state')
 		},
 		bootstrap: async () => {
-			await bootstrapSimulationChain({
-				accounts: QA_ACCOUNTS,
-				createReadClient: createBootstrapReadClient,
-				createWriteClient: createBootstrapWriteClient,
-				memoryClient,
-				onBaselineState: state => {
-					baselineState = state
-				},
-				primaryAccount,
-				profile,
-				scenario,
-			})
-			await refreshSimulationState()
-			const chainState = await getSimulationChainState(memoryClient)
-			baselineBlockNumber = chainState.blockNumber
-			currentTimestamp = chainState.currentTimestamp
-			blockCountSinceReset = 0n
-			transactionCountSinceReset = 0n
+			if (bootstrapPromise !== undefined) return await bootstrapPromise
+			bootstrapping = true
+			bootstrapError = undefined
 			emitListeners(listeners, 'state')
+			bootstrapPromise = (async () => {
+				try {
+					await bootstrapSimulationChain({
+						accounts: QA_ACCOUNTS,
+						createReadClient: createBootstrapReadClient,
+						createWriteClient: createBootstrapWriteClient,
+						memoryClient,
+						onBaselineState: state => {
+							baselineState = state
+						},
+						primaryAccount,
+						profile,
+						scenario,
+					})
+					await refreshSimulationState()
+					const chainState = await getSimulationChainState(memoryClient)
+					baselineBlockNumber = chainState.blockNumber
+					currentTimestamp = chainState.currentTimestamp
+					blockCountSinceReset = 0n
+					transactionCountSinceReset = 0n
+					bootstrapped = true
+				} catch (error) {
+					bootstrapError = error instanceof Error ? error.message : 'Failed to bootstrap simulation scenario'
+					throw error
+				} finally {
+					bootstrapping = false
+					emitListeners(listeners, 'state')
+				}
+			})()
+			return await bootstrapPromise
+		},
+		get bootstrapError() {
+			return bootstrapError
 		},
 		createReadClient: () =>
 			createPublicClient({
@@ -429,6 +451,12 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 		},
 		get currentScenario() {
 			return scenario
+		},
+		get isBootstrapped() {
+			return bootstrapped
+		},
+		get isBootstrapping() {
+			return bootstrapping
 		},
 		getAccounts: async () => [selectedAccount],
 		getChainId: async () => profile.chainIdHex,
@@ -502,6 +530,9 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 		},
 		get transactionDelayMilliseconds() {
 			return transactionDelayMilliseconds
+		},
+		waitUntilReady: async () => {
+			await backend.bootstrap()
 		},
 	}
 

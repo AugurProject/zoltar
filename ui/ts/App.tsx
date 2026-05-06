@@ -50,7 +50,24 @@ export function App() {
 		transactionState.value = markTransactionFinished(transactionState.value)
 	}
 	const { navigate, route } = useHashRoute()
-	const { accountState, connectWallet, deploymentStatuses, errorMessage: walletErrorMessage, hasInjectedWallet, hasLoadedDeploymentStatuses, isConnectingWallet, isLoadingDeploymentStatuses, isRefreshing, refreshState, setDeploymentStatuses, walletBootstrapComplete, augurPlaceHolderDeployed } = useOnchainState()
+	const {
+		accountState,
+		augurPlaceHolderDeployed,
+		connectWallet,
+		deploymentStatuses,
+		environmentBootstrapError,
+		environmentReady,
+		errorMessage: walletErrorMessage,
+		hasInjectedWallet,
+		hasLoadedDeploymentStatuses,
+		isBootstrappingEnvironment,
+		isConnectingWallet,
+		isLoadingDeploymentStatuses,
+		isRefreshing,
+		refreshState,
+		setDeploymentStatuses,
+		walletBootstrapComplete,
+	} = useOnchainState()
 	const baseHookConfig = {
 		accountAddress: accountState.address,
 		onTransaction,
@@ -100,7 +117,7 @@ export function App() {
 		zoltarQuestions,
 		zoltarUniverse,
 		zoltarUniverseMissing,
-	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete, deploymentStatuses })
+	} = useMarketCreation({ ...baseHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete && environmentReady, deploymentStatuses })
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const { checkingDuplicateOriginPool, createPool, duplicateOriginPoolExists, loadMarket, loadMarketById, loadingMarketDetails, marketDetails, poolCreationMarketDetails, resetSecurityPoolCreation, securityPoolCreating, securityPoolError, securityPoolForm, securityPoolResult, setSecurityPoolForm } =
 		useSecurityPoolCreation({
@@ -200,7 +217,7 @@ export function App() {
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
 	const isMainnet = isSupportedAppChain(accountState.chainId)
 	const wrongNetworkMessage = accountState.address !== undefined && accountState.chainId !== undefined && !isMainnet ? getWrongNetworkMessage() : undefined
-	const augurPlaceHolderDeploymentMissing = augurPlaceHolderDeployed === false
+	const augurPlaceHolderDeploymentMissing = environmentReady && augurPlaceHolderDeployed === false
 	const showDeployTab = augurPlaceHolderDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 	const showAugurPlaceHolderDeploymentWarning = augurPlaceHolderDeploymentMissing
 	const zoltarUniverseState = resolveLoadableValueState({
@@ -208,7 +225,7 @@ export function App() {
 		isMissing: zoltarUniverseMissing,
 		value: zoltarUniverse,
 	})
-	const showZoltarUniverseWarning = zoltarUniverseState === 'missing'
+	const showZoltarUniverseWarning = environmentReady && zoltarUniverseState === 'missing'
 	const showZoltarUniverseForkedWarning = zoltarUniverse?.hasForked === true
 	const disableRouteContent = route !== 'deploy' && (augurPlaceHolderDeploymentMissing || showZoltarUniverseWarning)
 	const isRouteContentDisabled = transactionState.value.transactionInFlightCount > 0 || disableRouteContent
@@ -553,6 +570,8 @@ export function App() {
 			<AppStatusNotices
 				errorMessage={errorMessage}
 				hasInjectedWallet={hasInjectedWallet}
+				isBootstrappingSimulation={isBootstrappingEnvironment}
+				simulationBootstrapError={environmentBootstrapError}
 				showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
 				showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
 				transactionState={transactionState.value}

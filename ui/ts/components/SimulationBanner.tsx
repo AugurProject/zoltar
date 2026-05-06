@@ -14,8 +14,11 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	const blockCountSinceReset = useSignal(controller.blockCountSinceReset)
 	const currentTimestamp = useSignal(controller.currentTimestamp)
 	const currentScenario = useSignal(controller.currentScenario)
+	const isBootstrapped = useSignal(controller.isBootstrapped)
+	const isBootstrapping = useSignal(controller.isBootstrapping)
 	const queryDelayMilliseconds = useSignal(controller.queryDelayMilliseconds.toString())
 	const selectedAccount = useSignal(controller.selectedAccount)
+	const bootstrapError = useSignal(controller.bootstrapError)
 	const transactionCountSinceReset = useSignal(controller.transactionCountSinceReset)
 	const transactionDelayMilliseconds = useSignal(controller.transactionDelayMilliseconds.toString())
 
@@ -23,8 +26,11 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 		() =>
 			controller.subscribe(() => {
 				blockCountSinceReset.value = controller.blockCountSinceReset
+				bootstrapError.value = controller.bootstrapError
 				currentTimestamp.value = controller.currentTimestamp
 				currentScenario.value = controller.currentScenario
+				isBootstrapped.value = controller.isBootstrapped
+				isBootstrapping.value = controller.isBootstrapping
 				queryDelayMilliseconds.value = controller.queryDelayMilliseconds.toString()
 				selectedAccount.value = controller.selectedAccount
 				transactionCountSinceReset.value = controller.transactionCountSinceReset
@@ -59,15 +65,15 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 				<div className='contract-row simulation-banner-row'>
 					<div className='contract-copy'>
 						<div className='contract-topline'>
-							<span className='badge ok'>Active</span>
+							<span className={`badge ${bootstrapError.value === undefined ? (isBootstrapped.value ? 'ok' : 'pending') : 'error'}`}>{bootstrapError.value === undefined ? (isBootstrapped.value ? 'Ready' : 'Bootstrapping') : 'Error'}</span>
 							<h3>Scenario</h3>
 						</div>
-						<p className='detail'>Switch scenarios to reload the browser simulation into a different seeded state.</p>
+						<p className='detail'>{bootstrapError.value ?? (isBootstrapping.value ? 'Preparing the selected simulation scenario in the background.' : 'Switch scenarios to reload the browser simulation into a different seeded state.')}</p>
 					</div>
 					<select
 						className='simulation-control-select'
 						value={currentScenario.value}
-						disabled={busy.value}
+						disabled={busy.value || isBootstrapping.value}
 						onChange={event => {
 							const nextScenario = event.currentTarget.value
 							const nextUrl = new URL(window.location.href)
@@ -95,7 +101,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 					<select
 						className='simulation-control-select'
 						value={selectedAccount.value}
-						disabled={busy.value}
+						disabled={busy.value || !isBootstrapped.value}
 						onChange={event => {
 							const nextAccount = controller.accounts.find(account => account === event.currentTarget.value)
 							if (nextAccount === undefined) return
@@ -172,16 +178,16 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 						<p className='detail'>Query delay slows simulation reads. Transaction delay slows receipt confirmation so loading states stay visible.</p>
 					</div>
 					<div className='button-row'>
-						<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value}>
+						<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value || !isBootstrapped.value}>
 							Reset scenario
 						</button>
-						<button className='secondary' onClick={() => void runControl(async () => await controller.mineBlock())} disabled={busy.value}>
+						<button className='secondary' onClick={() => void runControl(async () => await controller.mineBlock())} disabled={busy.value || !isBootstrapped.value}>
 							Mine block
 						</button>
-						<button className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(60n * 60n))} disabled={busy.value}>
+						<button className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(60n * 60n))} disabled={busy.value || !isBootstrapped.value}>
 							+1 hour
 						</button>
-						<button className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(24n * 60n * 60n))} disabled={busy.value}>
+						<button className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(24n * 60n * 60n))} disabled={busy.value || !isBootstrapped.value}>
 							+1 day
 						</button>
 					</div>

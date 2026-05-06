@@ -1,5 +1,7 @@
 import { useEffect } from 'preact/hooks'
 
+type AppRoute = 'deploy' | 'not-found' | 'open-oracle' | 'security-pools' | 'zoltar'
+
 type Props = {
 	augurPlaceHolderDeploymentMissing: boolean
 	loadOracleReport: (reportId: string) => Promise<void>
@@ -8,7 +10,7 @@ type Props = {
 	openOracleFormReportId: string
 	openOracleReportDetailsReportId: bigint | undefined
 	refreshSelectedPoolData: () => void
-	route: 'deploy' | 'not-found' | 'open-oracle' | 'security-pools' | 'zoltar'
+	route: AppRoute
 	securityPoolAddress: string
 	securityPoolResultHash: string | undefined
 	selectedPoolSecurityPoolAddress: string | undefined
@@ -20,6 +22,14 @@ type Props = {
 	tradingResultHash: string | undefined
 	urlOpenOracleReportId: string
 	walletBootstrapComplete: boolean
+}
+
+export function shouldLoadOpenOracleReportFromUrl({ route, urlOpenOracleReportId }: { route: AppRoute; urlOpenOracleReportId: string }) {
+	return route === 'open-oracle' && urlOpenOracleReportId !== ''
+}
+
+export function shouldRefreshSelectedPoolForRoute({ route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete }: { route: AppRoute; securityPoolAddress: string; selectedPoolSecurityPoolAddress: string | undefined; walletBootstrapComplete: boolean }) {
+	return route === 'security-pools' && walletBootstrapComplete && securityPoolAddress !== '' && selectedPoolSecurityPoolAddress === undefined
 }
 
 export function useAppRouteEffects({
@@ -44,9 +54,9 @@ export function useAppRouteEffects({
 	walletBootstrapComplete,
 }: Props) {
 	useEffect(() => {
-		if (urlOpenOracleReportId === '') return
+		if (!shouldLoadOpenOracleReportFromUrl({ route, urlOpenOracleReportId })) return
 		void loadOracleReport(urlOpenOracleReportId)
-	}, [loadOracleReport, urlOpenOracleReportId])
+	}, [loadOracleReport, route, urlOpenOracleReportId])
 
 	useEffect(() => {
 		if (openOracleReportDetailsReportId !== undefined) {
@@ -68,19 +78,30 @@ export function useAppRouteEffects({
 	}, [securityPoolAddress, setForkAuctionFormSecurityPoolAddress, setReportingFormSecurityPoolAddress, setSecurityVaultFormSecurityPoolAddress, setTradingFormSecurityPoolAddress])
 
 	useEffect(() => {
-		if (selectedPoolSecurityPoolAddress !== undefined) return
+		if (
+			!shouldRefreshSelectedPoolForRoute({
+				route,
+				securityPoolAddress,
+				selectedPoolSecurityPoolAddress,
+				walletBootstrapComplete,
+			})
+		) {
+			return
+		}
 		refreshSelectedPoolData()
-	}, [refreshSelectedPoolData, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete])
+	}, [refreshSelectedPoolData, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete])
 
 	useEffect(() => {
+		if (route !== 'security-pools') return
 		if (securityPoolResultHash === undefined) return
 		void loadSecurityPools()
-	}, [loadSecurityPools, securityPoolResultHash])
+	}, [loadSecurityPools, route, securityPoolResultHash])
 
 	useEffect(() => {
+		if (route !== 'security-pools') return
 		if (tradingResultHash === undefined) return
 		refreshSelectedPoolData()
-	}, [refreshSelectedPoolData, tradingResultHash])
+	}, [refreshSelectedPoolData, route, tradingResultHash])
 
 	useEffect(() => {
 		if (!augurPlaceHolderDeploymentMissing) return

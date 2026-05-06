@@ -9,6 +9,8 @@ import type { ZoltarUniverseSummary } from '../types/contracts.js'
 type AppStatusNoticesProps = {
 	errorMessage: string | undefined
 	hasInjectedWallet: boolean
+	isBootstrappingSimulation: boolean
+	simulationBootstrapError: string | undefined
 	showAugurPlaceHolderDeploymentWarning: boolean
 	showZoltarUniverseForkedWarning: boolean
 	transactionState: TransactionState
@@ -16,9 +18,11 @@ type AppStatusNoticesProps = {
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
-export function AppStatusNotices({ errorMessage, hasInjectedWallet, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, transactionState, walletPresentation, zoltarUniverse }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, hasInjectedWallet, isBootstrappingSimulation, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, transactionState, walletPresentation, zoltarUniverse }: AppStatusNoticesProps) {
 	return (
 		<div className='page-notices'>
+			{isBootstrappingSimulation ? <p className='notice warning'>Preparing simulation scenario in the background. Route-specific data will appear as soon as bootstrap completes.</p> : undefined}
+			{simulationBootstrapError === undefined ? undefined : <div className='notice error'>{simulationBootstrapError}</div>}
 			{showZoltarUniverseForkedWarning && zoltarUniverse !== undefined ? (
 				<div className='notice error'>
 					{formatUniverseLabel(zoltarUniverse.universeId)} has forked on <TimestampValue timestamp={zoltarUniverse.forkTime} />.

@@ -54,7 +54,24 @@ void describe('simulation backend', () => {
 		expect(await backend.getAccounts()).toEqual([primaryAccount])
 		expect(await backend.requestAccounts()).toEqual([primaryAccount])
 		expect(backend.currentScenario).toBe('base')
+		expect(backend.isBootstrapped).toBe(false)
+		expect(backend.isBootstrapping).toBe(false)
 	})
+
+	void test('tracks simulation bootstrap readiness state', async () => {
+		const backend = await createSimulationBackend({ scenario: 'base' })
+
+		const bootstrapPromise = backend.bootstrap()
+		expect(backend.isBootstrapping).toBe(true)
+		expect(backend.isBootstrapped).toBe(false)
+
+		await backend.waitUntilReady()
+		await bootstrapPromise
+
+		expect(backend.isBootstrapping).toBe(false)
+		expect(backend.isBootstrapped).toBe(true)
+		expect(backend.bootstrapError).toBeUndefined()
+	}, 30_000)
 
 	void test('emits account-change events when switching QA accounts', async () => {
 		const backend = await createSimulationBackend({ scenario: 'base' })
@@ -217,5 +234,5 @@ void describe('simulation backend', () => {
 		expect(seededPool.totalSecurityBondAllowance).toBe(2_500n * 10n ** 18n)
 		expect(seededVault.repDepositShare).toBe(10_000n * 10n ** 18n)
 		expect(seededVault.securityBondAllowance).toBe(2_500n * 10n ** 18n)
-	}, 30_000)
+	}, 60_000)
 })

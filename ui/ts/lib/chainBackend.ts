@@ -23,10 +23,13 @@ export type ChainBackend = {
 	getProvider(): InjectedEthereum | undefined
 	hasWallet(): boolean
 	id: 'injected' | 'simulation'
+	isBootstrapped?: boolean
+	isBootstrapping?: boolean
 	profile: NetworkProfile
 	requestAccounts(): Promise<readonly Address[]>
 	subscribeAccountsChanged(handler: () => void): () => void
 	subscribeChainChanged(handler: () => void): () => void
+	waitUntilReady?(): Promise<void>
 }
 
 function createReadClientForProfile(profile: NetworkProfile, ethereum?: InjectedEthereum): ReadClient {

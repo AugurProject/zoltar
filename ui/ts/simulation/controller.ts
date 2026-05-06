@@ -4,10 +4,13 @@ import type { SimulationScenario } from './scenarios.js'
 export type SimulationController = {
 	accounts: readonly Address[]
 	advanceTime(seconds: bigint): Promise<void>
+	bootstrapError: string | undefined
 	blockCountSinceReset: bigint
 	currentTimestamp: bigint
 	currentScenario: SimulationScenario
 	isActive: true
+	isBootstrapped: boolean
+	isBootstrapping: boolean
 	mineBlock(): Promise<void>
 	queryDelayMilliseconds: number
 	reset(): Promise<void>
@@ -18,4 +21,5 @@ export type SimulationController = {
 	transactionCountSinceReset: bigint
 	transactionDelayMilliseconds: number
 	setTransactionDelayMilliseconds(value: number): void
+	waitUntilReady(): Promise<void>
 }
