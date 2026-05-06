@@ -159,7 +159,7 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(childUniverseData.parentUniverseId, genesisUniverse, 'child universe should point back to the parent')
 	})
 
-	test('splitMigrationRep rejects malformed child universe outcomes even if deployChild is called directly', async () => {
+	test('deployChild rejects malformed child universe outcomes', async () => {
 		const zoltar = getZoltarAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 
@@ -181,8 +181,8 @@ describe('Contract Test Suite', () => {
 		const malformedOutcomeIndex = 3n
 		const childUniverseId = getChildUniverseId(genesisUniverse, malformedOutcomeIndex)
 		const childRepToken = getRepTokenAddress(childUniverseId)
-		await deployChild(client, genesisUniverse, malformedOutcomeIndex)
-		assert.ok(await contractExists(client, childRepToken), 'direct deployChild should still deploy the deterministic malformed child universe token')
+		await assert.rejects(deployChild(client, genesisUniverse, malformedOutcomeIndex), /Malformed/)
+		assert.ok(!(await contractExists(client, childRepToken)), 'malformed child universe rep token should not be deployed')
 
 		const migrationBalance = await getMigrationRepBalance(client, genesisUniverse, client.account.address)
 		await assert.rejects(splitMigrationRep(client, genesisUniverse, migrationBalance, [malformedOutcomeIndex]), /Malformed/)
