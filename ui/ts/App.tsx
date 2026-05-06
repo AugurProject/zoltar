@@ -282,15 +282,11 @@ export function App() {
 		securityPoolAddress,
 		securityPoolResultHash: securityPoolResult?.deployPoolHash,
 		selectedPoolSecurityPoolAddress: selectedPool?.securityPoolAddress,
-		setForkAuctionFormSecurityPoolAddress: nextSecurityPoolAddress =>
-			setForkAuctionForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
+		setForkAuctionFormSecurityPoolAddress: nextSecurityPoolAddress => setForkAuctionForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
 		setOpenOracleReport,
-		setReportingFormSecurityPoolAddress: nextSecurityPoolAddress =>
-			setReportingForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
-		setSecurityVaultFormSecurityPoolAddress: nextSecurityPoolAddress =>
-			setSecurityVaultForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
-		setTradingFormSecurityPoolAddress: nextSecurityPoolAddress =>
-			setTradingForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
+		setReportingFormSecurityPoolAddress: nextSecurityPoolAddress => setReportingForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
+		setSecurityVaultFormSecurityPoolAddress: nextSecurityPoolAddress => setSecurityVaultForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
+		setTradingFormSecurityPoolAddress: nextSecurityPoolAddress => setTradingForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
 		tradingResultHash: tradingResult?.hash,
 		urlOpenOracleReportId,
 		walletBootstrapComplete,
@@ -566,14 +562,7 @@ export function App() {
 			<AppHeaderShell overview={overviewProps} simulationController={simulationController} tabNavigation={tabNavigationProps} onRefresh={refreshState} />
 
 			<fieldset className='route-shell' disabled={isRouteContentDisabled}>
-				<AppRouteContent
-					deploy={deployRouteContentProps}
-					market={marketRouteContentProps}
-					openOracle={openOracleRouteContentProps}
-					route={route}
-					securityPools={securityPoolsRouteContentProps}
-					wrongNetworkMessage={wrongNetworkMessage}
-				/>
+				<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} route={route} securityPools={securityPoolsRouteContentProps} wrongNetworkMessage={wrongNetworkMessage} />
 			</fieldset>
 		</main>
 	)

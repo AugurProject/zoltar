@@ -1,18 +1,7 @@
 import { encodeFunctionData, parseAbiItem, zeroAddress, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType } from 'viem'
-import {
-	ReputationToken_ReputationToken,
-	Zoltar_Zoltar,
-	ZoltarQuestionData_ZoltarQuestionData,
-} from '../contractArtifact.js'
+import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../contractArtifact.js'
 import type { MarketCreationResult, MarketDetails, MarketType, QuestionData, ReadClient, WriteClient, ZoltarUniverseSummary } from '../types/contracts.js'
-import {
-	getMarketType,
-	getQuestionId,
-	getQuestionIdHex,
-	isStringArray,
-	requireUniverseTupleArray,
-	type UniverseTuple,
-} from './helpers.js'
+import { getMarketType, getQuestionId, getQuestionIdHex, isStringArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
 import { getMulticall3Address } from './deploymentHelpers.js'
 

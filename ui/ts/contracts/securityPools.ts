@@ -1,9 +1,5 @@
 import { encodeAbiParameters, encodeDeployData, encodeFunctionData, getCreate2Address, keccak256, RpcError, type Abi, type Account, type Address, type Hash, type TransactionReceipt } from 'viem'
-import {
-	peripherals_SecurityPool_SecurityPool,
-	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
-	peripherals_tokens_ShareToken_ShareToken,
-} from '../contractArtifact.js'
+import { peripherals_SecurityPool_SecurityPool, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import type { SecurityPoolCreationResult, SecurityVaultDetails, WriteClient, ReadClient } from '../types/contracts.js'
 import { getQuestionIdHex } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'

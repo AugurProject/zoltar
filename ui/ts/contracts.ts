@@ -232,7 +232,6 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 	return deposits
 }
 
-
 export async function loadReportingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
 	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId] = await readRequiredMulticall(client, [
 		{

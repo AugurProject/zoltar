@@ -3,7 +3,7 @@ import type { MarketType, QuestionData, ReportingOutcomeKey, SecurityPoolSystemS
 
 type IntegerLike = bigint | number
 
-export type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint, bigint]
+type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint, bigint]
 export type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
 type OpenOracleReportMetaTuple = readonly [bigint, bigint, bigint, bigint, Address, IntegerLike, Address, boolean, IntegerLike, IntegerLike, IntegerLike, IntegerLike]
 type OpenOracleReportStatusTuple = readonly [bigint, bigint, bigint, Address, IntegerLike, IntegerLike, Address, IntegerLike, boolean, boolean]
