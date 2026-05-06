@@ -294,6 +294,7 @@ export function App() {
 
 	useAppRouteEffects({
 		augurPlaceHolderDeploymentMissing,
+		environmentReady,
 		loadOracleReport: async reportId => await loadOracleReport(reportId),
 		loadSecurityPools: async requestedSecurityPoolAddress => await loadSecurityPools(requestedSecurityPoolAddress),
 		navigate,

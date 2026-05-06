@@ -4,6 +4,7 @@ type AppRoute = 'deploy' | 'not-found' | 'open-oracle' | 'security-pools' | 'zol
 
 type Props = {
 	augurPlaceHolderDeploymentMissing: boolean
+	environmentReady: boolean
 	loadOracleReport: (reportId: string) => Promise<void>
 	loadSecurityPools: (securityPoolAddress?: string) => Promise<void>
 	navigate: (route: 'deploy' | 'open-oracle' | 'security-pools' | 'zoltar') => void
@@ -24,12 +25,12 @@ type Props = {
 	walletBootstrapComplete: boolean
 }
 
-export function shouldLoadOpenOracleReportFromUrl({ route, urlOpenOracleReportId }: { route: AppRoute; urlOpenOracleReportId: string }) {
-	return route === 'open-oracle' && urlOpenOracleReportId !== ''
+export function shouldLoadOpenOracleReportFromUrl({ environmentReady, route, urlOpenOracleReportId }: { environmentReady: boolean; route: AppRoute; urlOpenOracleReportId: string }) {
+	return environmentReady && route === 'open-oracle' && urlOpenOracleReportId !== ''
 }
 
-export function shouldRefreshSelectedPoolForRoute({ route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete }: { route: AppRoute; securityPoolAddress: string; selectedPoolSecurityPoolAddress: string | undefined; walletBootstrapComplete: boolean }) {
-	return route === 'security-pools' && walletBootstrapComplete && securityPoolAddress !== '' && selectedPoolSecurityPoolAddress === undefined
+export function shouldRefreshSelectedPoolForRoute({ environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete }: { environmentReady: boolean; route: AppRoute; securityPoolAddress: string; selectedPoolSecurityPoolAddress: string | undefined; walletBootstrapComplete: boolean }) {
+	return environmentReady && route === 'security-pools' && walletBootstrapComplete && securityPoolAddress !== '' && selectedPoolSecurityPoolAddress === undefined
 }
 
 export function shouldSyncSecurityPoolAddressToRouteForms({ route, securityPoolAddress }: { route: AppRoute; securityPoolAddress: string }) {
@@ -38,6 +39,7 @@ export function shouldSyncSecurityPoolAddressToRouteForms({ route, securityPoolA
 
 export function useAppRouteEffects({
 	augurPlaceHolderDeploymentMissing,
+	environmentReady,
 	loadOracleReport,
 	loadSecurityPools,
 	navigate,
@@ -58,9 +60,9 @@ export function useAppRouteEffects({
 	walletBootstrapComplete,
 }: Props) {
 	useEffect(() => {
-		if (!shouldLoadOpenOracleReportFromUrl({ route, urlOpenOracleReportId })) return
+		if (!shouldLoadOpenOracleReportFromUrl({ environmentReady, route, urlOpenOracleReportId })) return
 		void loadOracleReport(urlOpenOracleReportId)
-	}, [loadOracleReport, route, urlOpenOracleReportId])
+	}, [environmentReady, loadOracleReport, route, urlOpenOracleReportId])
 
 	useEffect(() => {
 		if (openOracleReportDetailsReportId !== undefined) {
@@ -85,6 +87,7 @@ export function useAppRouteEffects({
 	useEffect(() => {
 		if (
 			!shouldRefreshSelectedPoolForRoute({
+				environmentReady,
 				route,
 				securityPoolAddress,
 				selectedPoolSecurityPoolAddress,
@@ -94,19 +97,21 @@ export function useAppRouteEffects({
 			return
 		}
 		refreshSelectedPoolData()
-	}, [refreshSelectedPoolData, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete])
+	}, [environmentReady, refreshSelectedPoolData, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete])
 
 	useEffect(() => {
+		if (!environmentReady) return
 		if (route !== 'security-pools') return
 		if (securityPoolResultHash === undefined) return
 		void loadSecurityPools()
-	}, [loadSecurityPools, route, securityPoolResultHash])
+	}, [environmentReady, loadSecurityPools, route, securityPoolResultHash])
 
 	useEffect(() => {
+		if (!environmentReady) return
 		if (route !== 'security-pools') return
 		if (tradingResultHash === undefined) return
 		refreshSelectedPoolData()
-	}, [refreshSelectedPoolData, route, tradingResultHash])
+	}, [environmentReady, refreshSelectedPoolData, route, tradingResultHash])
 
 	useEffect(() => {
 		if (!augurPlaceHolderDeploymentMissing) return

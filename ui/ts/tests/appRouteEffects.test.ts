@@ -5,15 +5,17 @@ import { shouldLoadOpenOracleReportFromUrl, shouldRefreshSelectedPoolForRoute, s
 
 describe('app route effects', () => {
 	test('loads the open oracle report from the URL only on the open-oracle route', () => {
-		expect(shouldLoadOpenOracleReportFromUrl({ route: 'open-oracle', urlOpenOracleReportId: '1' })).toBe(true)
-		expect(shouldLoadOpenOracleReportFromUrl({ route: 'zoltar', urlOpenOracleReportId: '1' })).toBe(false)
-		expect(shouldLoadOpenOracleReportFromUrl({ route: 'security-pools', urlOpenOracleReportId: '1' })).toBe(false)
-		expect(shouldLoadOpenOracleReportFromUrl({ route: 'open-oracle', urlOpenOracleReportId: '' })).toBe(false)
+		expect(shouldLoadOpenOracleReportFromUrl({ environmentReady: true, route: 'open-oracle', urlOpenOracleReportId: '1' })).toBe(true)
+		expect(shouldLoadOpenOracleReportFromUrl({ environmentReady: false, route: 'open-oracle', urlOpenOracleReportId: '1' })).toBe(false)
+		expect(shouldLoadOpenOracleReportFromUrl({ environmentReady: true, route: 'zoltar', urlOpenOracleReportId: '1' })).toBe(false)
+		expect(shouldLoadOpenOracleReportFromUrl({ environmentReady: true, route: 'security-pools', urlOpenOracleReportId: '1' })).toBe(false)
+		expect(shouldLoadOpenOracleReportFromUrl({ environmentReady: true, route: 'open-oracle', urlOpenOracleReportId: '' })).toBe(false)
 	})
 
 	test('refreshes the selected pool only on the security-pools route when the pool is unresolved', () => {
 		expect(
 			shouldRefreshSelectedPoolForRoute({
+				environmentReady: true,
 				route: 'security-pools',
 				securityPoolAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
 				selectedPoolSecurityPoolAddress: undefined,
@@ -23,6 +25,17 @@ describe('app route effects', () => {
 
 		expect(
 			shouldRefreshSelectedPoolForRoute({
+				environmentReady: false,
+				route: 'security-pools',
+				securityPoolAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
+				selectedPoolSecurityPoolAddress: undefined,
+				walletBootstrapComplete: true,
+			}),
+		).toBe(false)
+
+		expect(
+			shouldRefreshSelectedPoolForRoute({
+				environmentReady: true,
 				route: 'zoltar',
 				securityPoolAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
 				selectedPoolSecurityPoolAddress: undefined,
@@ -32,6 +45,7 @@ describe('app route effects', () => {
 
 		expect(
 			shouldRefreshSelectedPoolForRoute({
+				environmentReady: true,
 				route: 'security-pools',
 				securityPoolAddress: '',
 				selectedPoolSecurityPoolAddress: undefined,
@@ -41,6 +55,7 @@ describe('app route effects', () => {
 
 		expect(
 			shouldRefreshSelectedPoolForRoute({
+				environmentReady: true,
 				route: 'security-pools',
 				securityPoolAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
 				selectedPoolSecurityPoolAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
