@@ -47,11 +47,7 @@ import {
 	updateVaultFees,
 	withdrawFromEscalationGame,
 } from '../testsuite/simulator/utils/contracts/securityPool'
-import {
-	peripherals_EscalationGame_EscalationGame,
-	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
-	peripherals_tokens_ShareToken_ShareToken,
-} from '../types/contractArtifact'
+import { peripherals_EscalationGame_EscalationGame, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
