@@ -29,6 +29,7 @@ contract UniformPriceDualCapBatchAuction {
 
 	mapping(uint256 => Node) private nodes;
 	mapping(int256 => Bid[]) private bidsAtTick;
+	mapping(int256 => mapping(uint256 => uint256)) private refundedBidPrefixTree;
 
 	uint256 private root;
 	uint256 private nextId = 1;
@@ -175,7 +176,7 @@ contract UniformPriceDualCapBatchAuction {
 					} // else: price is zero, filled REP remains 0
 				} else {
 					// Tick == clearingTick: partial fill
-					uint256 previousCumulativeEth = _getActiveCumulativeEthBeforeIndex(tick, index);
+					uint256 previousCumulativeEth = bid.cumulativeEth - bid.ethAmount - _getRefundedCumulativeEthBeforeIndex(tick, index);
 					uint256 ethUsed;
 					uint256 cumulativeEth = previousCumulativeEth + bid.ethAmount;
 					if (ethFilledAtClearing <= previousCumulativeEth) {
@@ -225,6 +226,7 @@ contract UniformPriceDualCapBatchAuction {
 			// Zero out bid to prevent double withdrawal
 			bid.ethAmount = 0;
 			bid.claimed = true;
+			_addRefundedBidPrefixAmount(tick, index + 1, originalEth);
 
 			totalEthToRefund += originalEth;
 
@@ -432,11 +434,25 @@ contract UniformPriceDualCapBatchAuction {
 		root = _decrease(root, tick, ethAmount);
 	}
 
-	function _getActiveCumulativeEthBeforeIndex(int256 tick, uint256 index) internal view returns (uint256 cumulativeEth) {
-		Bid[] storage bids = bidsAtTick[tick];
-		for (uint256 i = 0; i < index; i++) {
-			cumulativeEth += bids[i].ethAmount;
+	function _getRefundedCumulativeEthBeforeIndex(int256 tick, uint256 index) internal view returns (uint256 cumulativeEth) {
+		uint256 treeIndex = index;
+		while (treeIndex > 0) {
+			cumulativeEth += refundedBidPrefixTree[tick][treeIndex];
+			treeIndex -= _leastSignificantBit(treeIndex);
 		}
+	}
+
+	function _addRefundedBidPrefixAmount(int256 tick, uint256 index, uint256 amount) internal {
+		uint256 bidCount = bidsAtTick[tick].length;
+		uint256 treeIndex = index;
+		while (treeIndex <= bidCount) {
+			refundedBidPrefixTree[tick][treeIndex] += amount;
+			treeIndex += _leastSignificantBit(treeIndex);
+		}
+	}
+
+	function _leastSignificantBit(uint256 value) internal pure returns (uint256) {
+		return value & (~value + 1);
 	}
 
 	function _decrease(uint256 nodeId, int256 tick, uint256 ethAmount) internal returns (uint256) {

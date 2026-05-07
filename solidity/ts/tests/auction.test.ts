@@ -13,6 +13,7 @@ import { ensureZoltarDeployed } from '../testsuite/simulator/utils/contracts/zol
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { getUniformPriceDualCapBatchAuctionAddress } from '../testsuite/simulator/utils/contracts/deployments'
 import { addressString } from '../testsuite/simulator/utils/bigint'
+import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../types/contractArtifact'
 
 // ============ MODULE-LEVEL CONSTANTS ============
 const ATTOETH_PER_ETH = 10n ** 18n
@@ -26,6 +27,8 @@ const DEFAULT_ETH_RAISE_CAP = 200_000n
 const DEFAULT_MAX_REP = 100n
 const AUCTION_NODES_SLOT = 0n
 const AUCTION_BIDS_AT_TICK_SLOT = 1n
+const AUCTION_REFUNDED_BID_PREFIX_TREE_SLOT = 2n
+const BID_STRUCT_SLOT_COUNT = 4n
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -138,6 +141,72 @@ describe('Auction', () => {
 
 	function assertClearingTickInRange(tick: bigint): void {
 		assert.ok(tick >= MIN_TICK && tick <= MAX_TICK, `clearing tick ${tick} outside [${MIN_TICK}, ${MAX_TICK}]`)
+	}
+
+	const buildFenwickTreeEntries = (bidCount: bigint, refundedBidCount: bigint, bidAmount: bigint) => {
+		const entries = new Map<bigint, bigint>()
+		const addAtIndex = (oneBasedIndex: bigint, amount: bigint) => {
+			let treeIndex = oneBasedIndex
+			while (treeIndex <= bidCount) {
+				entries.set(treeIndex, (entries.get(treeIndex) ?? 0n) + amount)
+				treeIndex += treeIndex & -treeIndex
+			}
+		}
+
+		for (let refundedIndex = 1n; refundedIndex <= refundedBidCount; refundedIndex++) {
+			addAtIndex(refundedIndex, bidAmount)
+		}
+
+		return entries
+	}
+
+	const estimateWithdrawGasWithManyRefundedPredecessors = async (bidCount: bigint) => {
+		const ownerClient = createTestClient(Number((bidCount % 5n) + 1n))
+		await deployUniformPriceDualCapBatchAuction(client, ownerClient.account.address)
+		const localAuctionAddress = getUniformPriceDualCapBatchAuctionAddress(ownerClient.account.address)
+		const sameTick = 0n
+		const bidAmount = 1n * ATTOETH_PER_ETH
+		await startAuction(ownerClient, localAuctionAddress, 10n * bidAmount, bidAmount)
+
+		for (let bidIndex = 0n; bidIndex < bidCount; bidIndex++) {
+			await submitBid(ownerClient, localAuctionAddress, sameTick, bidAmount)
+		}
+
+		const bidArraySlot = keccak256(encodeAbiParameters([{ type: 'int256' }, { type: 'uint256' }], [sameTick, AUCTION_BIDS_AT_TICK_SLOT]))
+		const bidDataStartSlot = BigInt(keccak256(encodeAbiParameters([{ type: 'bytes32' }], [bidArraySlot])))
+		const nodeBaseSlot = BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [1n, AUCTION_NODES_SLOT])))
+		const refundedTreeOuterSlot = keccak256(encodeAbiParameters([{ type: 'int256' }, { type: 'uint256' }], [sameTick, AUCTION_REFUNDED_BID_PREFIX_TREE_SLOT]))
+		const stateDiff: Record<string, bigint> = {
+			[`0x${(nodeBaseSlot + 1n).toString(16)}`]: bidAmount,
+			[`0x${(nodeBaseSlot + 2n).toString(16)}`]: bidAmount,
+		}
+
+		for (let bidIndex = 0n; bidIndex < bidCount - 1n; bidIndex++) {
+			const claimedSlot = bidDataStartSlot + bidIndex * BID_STRUCT_SLOT_COUNT + 3n
+			const ethAmountSlot = bidDataStartSlot + bidIndex * BID_STRUCT_SLOT_COUNT + 1n
+			stateDiff[`0x${claimedSlot.toString(16)}`] = 1n
+			stateDiff[`0x${ethAmountSlot.toString(16)}`] = 0n
+		}
+
+		for (const [treeIndex, value] of buildFenwickTreeEntries(bidCount, bidCount - 1n, bidAmount)) {
+			const treeSlot = keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'bytes32' }], [treeIndex, refundedTreeOuterSlot]))
+			stateDiff[treeSlot] = value
+		}
+
+		await mockWindow.addStateOverrides({
+			[localAuctionAddress]: {
+				stateDiff,
+			},
+		})
+
+		await finalizeAndVerify(ownerClient, localAuctionAddress)
+
+		return await ownerClient.estimateContractGas({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'withdrawBids',
+			address: localAuctionAddress,
+			args: [ownerClient.account.address, [{ bidIndex: bidCount - 1n, tick: sameTick }]],
+		})
 	}
 
 	beforeAll(async () => {
@@ -424,6 +493,16 @@ describe('Auction', () => {
 
 			strictEqualTypeSafe(secondBidWithdrawal.totalFilledRep, expectedSecondBidRep, 'the second active bid should receive its full fill after an earlier bid is cleared from the tick')
 			strictEqualTypeSafe(secondBidWithdrawal.totalEthRefund, 0n, 'the fully filled second active bid should not receive an ETH refund')
+		})
+
+		test('withdraw gas for a same-tick bid with many refunded predecessors avoids linear growth', async () => {
+			const gasWithThirtyTwoBids = await estimateWithdrawGasWithManyRefundedPredecessors(32n)
+			const gasWithFiveHundredTwelveBids = await estimateWithdrawGasWithManyRefundedPredecessors(512n)
+
+			assert.ok(
+				gasWithFiveHundredTwelveBids < gasWithThirtyTwoBids * 4n,
+				`withdraw gas should stay sublinear in the number of refunded same-tick predecessors: 32 bids=${gasWithThirtyTwoBids.toString()}, 512 bids=${gasWithFiveHundredTwelveBids.toString()}`,
+			)
 		})
 
 		test('winner unaffected after bidder refunds multiple losing bids', async () => {
