@@ -18,6 +18,7 @@ contract UniformPriceDualCapBatchAuction {
 		address bidder;
 		uint256 ethAmount;
 		uint256 cumulativeEth;
+		bool claimed;
 	}
 
 	int256 constant MIN_TICK = -524288;
@@ -148,7 +149,7 @@ contract UniformPriceDualCapBatchAuction {
 
 			Bid storage bid = bidsAtTick[tick][index];
 			require(bid.bidder == withdrawFor, 'not their bid');
-			require(bid.ethAmount > 0, 'already claimed');
+			require(bid.ethAmount > 0 && !bid.claimed, 'already claimed');
 
 			if (underfunded) {
 				uint256 price = tickToPrice(tick);
@@ -174,11 +175,12 @@ contract UniformPriceDualCapBatchAuction {
 					} // else: price is zero, filled REP remains 0
 				} else {
 					// Tick == clearingTick: partial fill
-					uint256 previousCumulativeEth = bid.cumulativeEth - bid.ethAmount;
+					uint256 previousCumulativeEth = _getActiveCumulativeEthBeforeIndex(tick, index);
 					uint256 ethUsed;
+					uint256 cumulativeEth = previousCumulativeEth + bid.ethAmount;
 					if (ethFilledAtClearing <= previousCumulativeEth) {
 						ethUsed = 0;
-					} else if (ethFilledAtClearing >= bid.cumulativeEth) {
+					} else if (ethFilledAtClearing >= cumulativeEth) {
 						ethUsed = bid.ethAmount;
 					} else {
 						ethUsed = ethFilledAtClearing - previousCumulativeEth;
@@ -190,7 +192,7 @@ contract UniformPriceDualCapBatchAuction {
 					totalEthRefund += bid.ethAmount - ethUsed;
 				}
 			}
-			bid.ethAmount = 0; // prevent double withdrawals
+			bid.claimed = true;
 		}
 
 		emit WithdrawBids(withdrawFor, tickIndices, totalFilledRep, totalEthRefund);
@@ -216,12 +218,13 @@ contract UniformPriceDualCapBatchAuction {
 
 			Bid storage bid = bidsAtTick[tick][index];
 			require(bid.bidder == msg.sender, 'not bidder');
-			require(bid.ethAmount > 0, 'already withdrawn');
+			require(bid.ethAmount > 0 && !bid.claimed, 'already withdrawn');
 
 			uint256 originalEth = bid.ethAmount;
 
 			// Zero out bid to prevent double withdrawal
 			bid.ethAmount = 0;
+			bid.claimed = true;
 
 			totalEthToRefund += originalEth;
 
@@ -332,7 +335,7 @@ contract UniformPriceDualCapBatchAuction {
 			uint256 newId = nextId++;
 			nodes[newId] = Node({ tick: tick, totalEth: ethAmount, subtreeEth: ethAmount, left: 0, right: 0, height: 1 });
 
-			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: ethAmount }));
+			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: ethAmount, claimed: false }));
 
 			return newId;
 		}
@@ -341,7 +344,7 @@ contract UniformPriceDualCapBatchAuction {
 		if (tick == node.tick) {
 			node.totalEth += ethAmount;
 			uint256 cumulativeEth = bidsAtTick[tick].length == 0 ? ethAmount : bidsAtTick[tick][bidsAtTick[tick].length - 1].cumulativeEth + ethAmount;
-			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: cumulativeEth }));
+			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: cumulativeEth, claimed: false }));
 		} else if (tick < node.tick) {
 			node.left = _insert(node.left, tick, bidder, ethAmount);
 		} else {
@@ -427,6 +430,13 @@ contract UniformPriceDualCapBatchAuction {
 
 	function _decreaseAtPrice(int256 tick, uint256 ethAmount) internal {
 		root = _decrease(root, tick, ethAmount);
+	}
+
+	function _getActiveCumulativeEthBeforeIndex(int256 tick, uint256 index) internal view returns (uint256 cumulativeEth) {
+		Bid[] storage bids = bidsAtTick[tick];
+		for (uint256 i = 0; i < index; i++) {
+			cumulativeEth += bids[i].ethAmount;
+		}
 	}
 
 	function _decrease(uint256 nodeId, int256 tick, uint256 ethAmount) internal returns (uint256) {

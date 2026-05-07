@@ -14,6 +14,7 @@ import { getDefaultSecurityVaultFormState, parseRepAmountInput } from '../lib/ma
 import { requireDefined } from '../lib/required.js'
 import { getSelectedVaultAddress } from '../lib/securityVault.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
+import { useRequestGuard } from '../lib/requestGuard.js'
 import type { SecurityVaultFormState, WriteOperationsParameters } from '../types/app.js'
 import type { SecurityVaultActionResult, SecurityVaultDetails } from '../types/contracts.js'
 
@@ -31,6 +32,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	const repAllowanceLoader = useErc20AllowanceLoader()
 	const securityVaultActiveAction = useSignal<SecurityVaultActionResult['action'] | undefined>(undefined)
 	const securityVaultResult = useSignal<SecurityVaultActionResult | undefined>(undefined)
+	const nextSecurityVaultLoad = useRequestGuard()
 
 	const resolveSelectedVaultAddress = () => {
 		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress), 'Connect a wallet before loading a security vault')
@@ -57,12 +59,14 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 		return details
 	}
 
+	const matchesLoadedSecurityVault = (details: SecurityVaultDetails | undefined, securityPoolAddress: Address, vaultAddress: Address) => details !== undefined && sameAddress(details.securityPoolAddress, securityPoolAddress) && sameAddress(details.vaultAddress, vaultAddress)
+
 	const refreshVaultFees = async (vaultAddress: Address, securityPoolAddress: Address) => {
 		await updateSecurityVaultFees(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress)
 	}
 
 	const loadExistingSecurityVaultDetails = async (securityPoolAddress: Address, vaultAddress: Address, missingPoolMessage: string) => {
-		const details = securityVaultDetails.value ?? (await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress))
+		const details = matchesLoadedSecurityVault(securityVaultDetails.value, securityPoolAddress, vaultAddress) ? securityVaultDetails.value : await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress)
 		if (details !== undefined) return details
 
 		securityVaultDetails.value = undefined
@@ -78,6 +82,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	}
 
 	const loadSecurityVault = async (vaultAddressInput?: string) => {
+		const isCurrent = nextSecurityVaultLoad()
 		await securityVaultLoad.run({
 			onStart: () => {
 				securityVaultError.value = undefined
@@ -93,6 +98,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 					}
 				}
 				const details = await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress)
+				if (!isCurrent()) return undefined
 				securityVaultDetails.value = details
 				securityVaultMissing.value = details === undefined
 				if (details === undefined) {
@@ -119,6 +125,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 			},
 			onSuccess: () => undefined,
 			onError: (error: unknown) => {
+				if (!isCurrent()) return
 				securityVaultDetails.value = undefined
 				securityVaultMissing.value = false
 				repBalanceLoader.signal.value = undefined

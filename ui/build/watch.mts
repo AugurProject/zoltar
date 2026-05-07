@@ -11,6 +11,11 @@ const DEV_SERVER_PATH = path.join(UI_ROOT_PATH, 'dev-server.ts')
 const INDEX_HTML_PATH = path.join(UI_ROOT_PATH, 'index.html')
 const SHARED_SOURCE_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'shared', 'ts')
 const SHARED_TSCONFIG_PATH = path.join(REPOSITORY_ROOT_PATH, 'shared', 'tsconfig.json')
+const SOLIDITY_CONTRACTS_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'contracts')
+const SOLIDITY_ABI_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'abi', 'abis.ts')
+const SOLIDITY_COMPILE_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'compile.ts')
+const SOLIDITY_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'artifacts', 'Contracts.json')
+const PROJECT_ARTIFACT_BUILD_PATH = path.join(UI_ROOT_PATH, 'build', 'projectArtifacts.mts')
 const TYPE_SCRIPT_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'js')
 const TYPE_SCRIPT_SOURCE_PATH = path.join(UI_ROOT_PATH, 'ts')
 const VENDOR_INPUT_PATHS = [path.join(UI_ROOT_PATH, 'build', 'vendor.mts'), path.join(UI_ROOT_PATH, 'package.json'), path.join(UI_ROOT_PATH, 'tsconfig.vendor.json'), path.join(UI_ROOT_PATH, 'bun.lock')]
@@ -32,6 +37,12 @@ let vendorBuildQueued = false
 let workerBuildProcess: ManagedProcess | undefined
 let workerBuildRunning = false
 let workerBuildQueued = false
+let contractBuildProcess: ManagedProcess | undefined
+let contractBuildRunning = false
+let contractBuildQueued = false
+let projectArtifactBuildProcess: ManagedProcess | undefined
+let projectArtifactBuildRunning = false
+let projectArtifactBuildQueued = false
 let liveReloadQueued = false
 let liveReloadTimeout: NodeJS.Timeout | undefined
 
@@ -39,6 +50,7 @@ const unwatchCallbacks: Array<() => void> = []
 let sharedSourceUnwatchCallbacks: Array<() => void> = []
 let typeScriptOutputUnwatchCallbacks: Array<() => void> = []
 let typeScriptSourceUnwatchCallbacks: Array<() => void> = []
+let contractSourceUnwatchCallbacks: Array<() => void> = []
 
 const waitForProcessExit = async (childProcess: ManagedProcess) => {
 	return await new Promise<{ exitCode: number | null; signalCode: NodeJS.Signals | null }>((resolve, reject) => {
@@ -216,6 +228,13 @@ const clearTypeScriptSourceWatchers = () => {
 	typeScriptSourceUnwatchCallbacks = []
 }
 
+const clearContractSourceWatchers = () => {
+	for (const unwatch of contractSourceUnwatchCallbacks) {
+		unwatch()
+	}
+	contractSourceUnwatchCallbacks = []
+}
+
 const watchDirectoryForTypeScriptOutputs = (directoryPath: string, refreshWatchers: () => void) => {
 	let debounceTimeout: NodeJS.Timeout | undefined
 	const watcher = fs.watch(directoryPath, (_eventType, filename) => {
@@ -261,6 +280,24 @@ const watchDirectoryForSharedSources = (directoryPath: string, refreshWatchers: 
 		}, 120)
 	})
 	sharedSourceUnwatchCallbacks.push(() => {
+		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
+		watcher.close()
+	})
+}
+
+const watchDirectoryForContractSources = (directoryPath: string, refreshWatchers: () => void) => {
+	let debounceTimeout: NodeJS.Timeout | undefined
+	const watcher = fs.watch(directoryPath, (eventType, filename) => {
+		if (eventType !== 'rename') return
+		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
+		debounceTimeout = setTimeout(() => {
+			debounceTimeout = undefined
+			refreshWatchers()
+			const changedPath = typeof filename === 'string' && filename.length > 0 ? path.join(directoryPath, filename) : directoryPath
+			void runContractBuild(path.relative(UI_ROOT_PATH, changedPath).replaceAll('\\', '/'))
+		}, 120)
+	})
+	contractSourceUnwatchCallbacks.push(() => {
 		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
 		watcher.close()
 	})
@@ -327,6 +364,28 @@ const refreshTypeScriptSourceWatchers = async () => {
 			},
 			callback => {
 				typeScriptSourceUnwatchCallbacks.push(callback)
+			},
+		)
+	}
+}
+
+const refreshContractSourceWatchers = async () => {
+	clearContractSourceWatchers()
+	const directories = await getAllDirectories(SOLIDITY_CONTRACTS_ROOT_PATH)
+	for (const directoryPath of directories) {
+		watchDirectoryForContractSources(directoryPath, () => {
+			void refreshContractSourceWatchers()
+		})
+	}
+	const files = await getAllFiles(SOLIDITY_CONTRACTS_ROOT_PATH)
+	for (const filePath of files) {
+		watchFileWithCleanup(
+			filePath,
+			relativePath => {
+				void runContractBuild(relativePath)
+			},
+			callback => {
+				contractSourceUnwatchCallbacks.push(callback)
 			},
 		)
 	}
@@ -499,6 +558,106 @@ const runSharedBuild = async (reason: string) => {
 	queueLiveReload(reason)
 }
 
+const runProjectArtifactBuild = async (reason: string) => {
+	if (shuttingDown) return
+	if (projectArtifactBuildRunning) {
+		projectArtifactBuildQueued = true
+		return
+	}
+	projectArtifactBuildRunning = true
+	console.log(`[ui:watch] Rebuilding UI contract artifacts because ${reason} changed`)
+	try {
+		projectArtifactBuildProcess = spawn('bun', ['run', 'generate:ui-contract-artifact'], {
+			cwd: REPOSITORY_ROOT_PATH,
+			stdio: 'inherit',
+		})
+	} catch (error) {
+		projectArtifactBuildRunning = false
+		console.error('[ui:watch] Failed to start UI contract artifact rebuild')
+		console.error(error)
+		await shutdown(1)
+		return
+	}
+	const childProcess = projectArtifactBuildProcess
+	attachProcessErrorHandler(childProcess, 'UI contract artifact rebuild')
+	let exitCode: number | null
+	let signalCode: NodeJS.Signals | null
+	try {
+		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
+	} catch (error) {
+		console.error('[ui:watch] UI contract artifact rebuild failed to start')
+		console.error(error)
+		projectArtifactBuildRunning = false
+		projectArtifactBuildProcess = undefined
+		await shutdown(1)
+		return
+	}
+	projectArtifactBuildRunning = false
+	projectArtifactBuildProcess = undefined
+	if (exitCode !== 0) {
+		const failureCode = exitCode ?? 1
+		console.error(`[ui:watch] UI contract artifact rebuild failed (${signalCode ?? failureCode})`)
+		await shutdown(failureCode)
+		return
+	}
+	if (projectArtifactBuildQueued) {
+		projectArtifactBuildQueued = false
+		await runProjectArtifactBuild('queued project artifact input')
+		return
+	}
+	queueLiveReload(reason)
+}
+
+const runContractBuild = async (reason: string) => {
+	if (shuttingDown) return
+	if (contractBuildRunning) {
+		contractBuildQueued = true
+		return
+	}
+	contractBuildRunning = true
+	console.log(`[ui:watch] Rebuilding Solidity contracts and UI artifacts because ${reason} changed`)
+	try {
+		contractBuildProcess = spawn('bun', ['run', 'generate:contracts'], {
+			cwd: REPOSITORY_ROOT_PATH,
+			stdio: 'inherit',
+		})
+	} catch (error) {
+		contractBuildRunning = false
+		console.error('[ui:watch] Failed to start Solidity rebuild')
+		console.error(error)
+		await shutdown(1)
+		return
+	}
+	const childProcess = contractBuildProcess
+	attachProcessErrorHandler(childProcess, 'Solidity rebuild')
+	let exitCode: number | null
+	let signalCode: NodeJS.Signals | null
+	try {
+		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
+	} catch (error) {
+		console.error('[ui:watch] Solidity rebuild failed to start')
+		console.error(error)
+		contractBuildRunning = false
+		contractBuildProcess = undefined
+		await shutdown(1)
+		return
+	}
+	contractBuildRunning = false
+	contractBuildProcess = undefined
+	if (exitCode !== 0) {
+		const failureCode = exitCode ?? 1
+		console.error(`[ui:watch] Solidity rebuild failed (${signalCode ?? failureCode})`)
+		await shutdown(failureCode)
+		return
+	}
+	if (contractBuildQueued) {
+		contractBuildQueued = false
+		await runContractBuild('queued Solidity input')
+		return
+	}
+	queueLiveReload(reason)
+}
+
 const watchFile = (filePath: string, onChange: (relativePath: string) => void) => {
 	watchFileWithCleanup(filePath, onChange, callback => {
 		unwatchCallbacks.push(callback)
@@ -514,9 +673,12 @@ const shutdown = async (exitCode: number) => {
 	clearSharedSourceWatchers()
 	clearTypeScriptOutputWatchers()
 	clearTypeScriptSourceWatchers()
+	clearContractSourceWatchers()
 	await stopProcess(sharedBuildProcess)
 	await stopProcess(vendorBuildProcess)
 	await stopProcess(workerBuildProcess)
+	await stopProcess(contractBuildProcess)
+	await stopProcess(projectArtifactBuildProcess)
 	await stopProcess(serverProcess)
 	await stopProcess(typeScriptWatchProcess)
 	process.exit(exitCode)
@@ -565,6 +727,18 @@ const main = () => {
 	watchFile(WORKER_BUILD_PATH, relativePath => {
 		void runWorkerBuild(relativePath)
 	})
+	watchFile(PROJECT_ARTIFACT_BUILD_PATH, relativePath => {
+		void runProjectArtifactBuild(relativePath)
+	})
+	watchFile(SOLIDITY_ABI_INPUT_PATH, relativePath => {
+		void runContractBuild(relativePath)
+	})
+	watchFile(SOLIDITY_COMPILE_INPUT_PATH, relativePath => {
+		void runContractBuild(relativePath)
+	})
+	watchFile(SOLIDITY_ARTIFACTS_JSON_PATH, relativePath => {
+		void runProjectArtifactBuild(relativePath)
+	})
 
 	void refreshTypeScriptOutputWatchers().catch(error => {
 		console.error('[ui:watch] Failed to watch TypeScript output files')
@@ -584,6 +758,12 @@ const main = () => {
 
 	void refreshTypeScriptSourceWatchers().catch(error => {
 		console.error('[ui:watch] Failed to watch TypeScript source files')
+		console.error(error)
+		void shutdown(1)
+	})
+
+	void refreshContractSourceWatchers().catch(error => {
+		console.error('[ui:watch] Failed to watch Solidity contract source files')
 		console.error(error)
 		void shutdown(1)
 	})

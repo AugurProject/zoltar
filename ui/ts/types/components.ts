@@ -133,7 +133,9 @@ export type VaultMetricGridProps = {
 export type ViewTabOption<TValue extends string> = {
 	disabled?: boolean
 	href?: string
+	id?: string
 	label: ComponentChildren
+	panelId?: string
 	reason?: string
 	value: TValue
 }

@@ -130,4 +130,26 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const expected = (depositAmount * actualForkThreshold) / escalationThreshold
 		assert.strictEqual(repAfter - repBefore, expected - depositAmount, 'scaled amount mismatch')
 	})
+
+	test('deploys the escalation game with the tracked Zoltar fork threshold instead of the token supply', async () => {
+		const depositAmount = 1n * 10n ** 18n
+		const repToken = getRepTokenAddress(genesisUniverse)
+		const initialTotalSupply = await getTotalTheoreticalSupply(client, repToken)
+		const overriddenTotalSupply = initialTotalSupply / 10n
+		const expectedThreshold = overriddenTotalSupply / FORK_THRESHOLD_DIVISOR / 2n
+		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
+
+		await mockWindow.addStateOverrides({
+			[getZoltarAddress()]: {
+				stateDiff: {
+					[universeSupplySlot]: overriddenTotalSupply,
+				},
+			},
+		})
+
+		await mockWindow.setTime(questionEndDate + 1n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount)
+
+		assert.strictEqual(await getNonDecisionThreshold(client, securityPoolAddresses.escalationGame), expectedThreshold, 'escalation threshold should follow Zoltar tracked supply')
+	})
 })

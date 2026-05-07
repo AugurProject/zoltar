@@ -86,11 +86,9 @@ export function createApplyLinkedLibrariesHelper(libraryReplacements: () => read
 }
 
 export function createZoltarAddressHelpers(config: ZoltarAddressConfig) {
-	const getZoltarQuestionDataAddress = () =>
-		getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.zoltarQuestionDataBytecode())
+	const getZoltarQuestionDataAddress = () => getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.zoltarQuestionDataBytecode())
 
-	const getZoltarAddress = () =>
-		getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getZoltarInitCode(getZoltarQuestionDataAddress()))
+	const getZoltarAddress = () => getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getZoltarInitCode(getZoltarQuestionDataAddress()))
 
 	return {
 		getZoltarAddress,
@@ -139,8 +137,7 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 }
 
 export function createDeploymentStatusOracleAddressHelper(config: DeploymentStatusOracleAddressConfig) {
-	const getDeploymentStatusOracleAddress = () =>
-		getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.deploymentStatusOracleBytecode())
+	const getDeploymentStatusOracleAddress = () => getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.deploymentStatusOracleBytecode())
 
 	return {
 		getDeploymentStatusOracleAddress,

@@ -38,6 +38,9 @@ contract Zoltar {
 		zoltarQuestionData = _zoltarQuestionData;
 		universes[0] = Universe(0, 0, 0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0);
 		if (Constants.GENESIS_REPUTATION_TOKEN.code.length != 0) {
+			// The configured genesis token must expose `getTotalTheoreticalSupply()`.
+			// This constructor intentionally relies on that non-ERC20 extension when wiring
+			// the genesis universe to an external REP deployment.
 			universeTheoreticalSupplies[0] = ReputationToken(Constants.GENESIS_REPUTATION_TOKEN).getTotalTheoreticalSupply();
 		}
 	}
@@ -63,9 +66,9 @@ contract Zoltar {
 	function forkUniverse(uint248 universeId, uint256 questionId) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime == 0, 'Universe has forked already');
-		// Zoltar intentionally treats questions as global protocol objects rather than
-		// binding them to a specific universe. Any ended question can force a fork in
-		// any unforked universe, and downstream protocols are expected to enforce any
+		// Intended behavior: Zoltar treats questions as global protocol objects rather
+		// than binding them to a specific universe. Any ended question can force a fork
+		// in any unforked universe, and downstream protocols are expected to enforce any
 		// stricter universe/question relationship they require.
 		require(zoltarQuestionData.questionCreatedTimestamp(questionId) > 0, 'Question does not exist');
 		uint256 endTime = zoltarQuestionData.getQuestionEndDate(questionId);

@@ -1901,6 +1901,55 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(migratedVaultAfterClaim.securityBondAllowance, expectedAllowanceAfterClaim, 'claimAuctionProceeds should preserve migrated allowance and add the auction-acquired allowance on top')
 	})
 
+	test('claimAuctionProceeds allows a vault to claim winning bids across multiple calls', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+
+		const openInterestAmount = 10n * 10n ** 18n
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+
+		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).repAtFork
+		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
+		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+		const firstBidEth = expectedEthToBuy / 2n
+		const secondBidEth = expectedEthToBuy - firstBidEth
+		const firstAuctionTick = await participateAuction(client, yesSecurityPool.truthAuction, repAtFork / 8n, firstBidEth)
+		const secondAuctionTick = await participateAuction(client, yesSecurityPool.truthAuction, repAtFork / 8n, secondBidEth)
+
+		await mockWindow.advanceTime(7n * DAY + DAY)
+		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+		await claimAuctionProceeds(client, yesSecurityPool.securityPool, client.account.address, [{ tick: firstAuctionTick, bidIndex: 0n }])
+		const vaultAfterFirstClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const repAfterFirstClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, vaultAfterFirstClaim.repDepositShare)
+
+		await claimAuctionProceeds(client, yesSecurityPool.securityPool, client.account.address, [{ tick: secondAuctionTick, bidIndex: 1n }])
+		const vaultAfterSecondClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		const repAfterSecondClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, vaultAfterSecondClaim.repDepositShare)
+
+		assert.ok(repAfterFirstClaim > 0n, 'first claim should credit some REP-backed ownership')
+		assert.ok(repAfterSecondClaim > repAfterFirstClaim, 'second claim should be able to add the remaining winning bid')
+	})
+
 	test('cannot deploy security pool with non-binary question', async () => {
 		// Create a question with 3 outcomes (not yes/no binary)
 		const multiOutcomeQuestionData = {

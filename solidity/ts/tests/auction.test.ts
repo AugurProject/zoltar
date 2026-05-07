@@ -4,7 +4,7 @@ import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
-import type { Address } from 'viem'
+import { encodeAbiParameters, keccak256, type Address } from 'viem'
 import { computeClearing, deployUniformPriceDualCapBatchAuction, finalize, getClearingTick, getMinBidSize, getTotalRepPurchased, simulateWithdrawBids, isFinalized, refundLosingBids, startAuction, submitBid, withdrawBids, getEthRaiseCap, getEthRaised } from '../testsuite/simulator/utils/contracts/auction'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
 import { priceToClosestTick, tickToPrice } from '../testsuite/simulator/utils/tickMath'
@@ -24,6 +24,8 @@ const DEFAULT_TOLERANCE = 1000n
 
 const DEFAULT_ETH_RAISE_CAP = 200_000n
 const DEFAULT_MAX_REP = 100n
+const AUCTION_NODES_SLOT = 0n
+const AUCTION_BIDS_AT_TICK_SLOT = 1n
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -383,6 +385,45 @@ describe('Auction', () => {
 			await assertFairPayoutForUser(client, auctionAddress, alice.account.address, remainingBids, clearingTick)
 
 			await assertContractEmpty(client, auctionAddress)
+		})
+
+		test('partial fill calculations ignore cleared earlier bids at the same tick', async () => {
+			const raiseCap = 1_000n * ATTOETH_PER_ETH
+			const maxRepBeingSold = 100n * ATTOETH_PER_ETH
+			const sameTick = 0n
+			const bidAmount = 60n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, raiseCap, maxRepBeingSold)
+
+			const alice = createTestClient(0)
+			await submitBid(alice, auctionAddress, sameTick, bidAmount)
+			await submitBid(alice, auctionAddress, sameTick, bidAmount)
+			await submitBid(alice, auctionAddress, sameTick, bidAmount)
+
+			const nodeBaseSlot = keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [1n, AUCTION_NODES_SLOT]))
+			const bidArraySlot = keccak256(encodeAbiParameters([{ type: 'int256' }, { type: 'uint256' }], [sameTick, AUCTION_BIDS_AT_TICK_SLOT]))
+			const bidDataSlot = keccak256(encodeAbiParameters([{ type: 'bytes32' }], [bidArraySlot]))
+			const firstBidEthAmountSlot = `0x${(BigInt(bidDataSlot) + 1n).toString(16)}`
+			const nodeTotalEthSlot = `0x${(BigInt(nodeBaseSlot) + 1n).toString(16)}`
+			const nodeSubtreeEthSlot = `0x${(BigInt(nodeBaseSlot) + 2n).toString(16)}`
+			const activeTotalEth = 2n * bidAmount
+
+			await mockWindow.addStateOverrides({
+				[auctionAddress]: {
+					stateDiff: {
+						[firstBidEthAmountSlot]: 0n,
+						[nodeTotalEthSlot]: activeTotalEth,
+						[nodeSubtreeEthSlot]: activeTotalEth,
+					},
+				},
+			})
+
+			await finalizeAndVerify(client, auctionAddress)
+
+			const secondBidWithdrawal = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: sameTick, bidIndex: 1n }])
+			const expectedSecondBidRep = bidAmount
+
+			strictEqualTypeSafe(secondBidWithdrawal.totalFilledRep, expectedSecondBidRep, 'the second active bid should receive its full fill after an earlier bid is cleared from the tick')
+			strictEqualTypeSafe(secondBidWithdrawal.totalEthRefund, 0n, 'the fully filled second active bid should not receive an ETH refund')
 		})
 
 		test('winner unaffected after bidder refunds multiple losing bids', async () => {

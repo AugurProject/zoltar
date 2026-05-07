@@ -8,10 +8,14 @@ const repositoryRoot = path.join(scriptDirectory, '..')
 
 const solidityRoot = path.join(repositoryRoot, 'solidity')
 const contractsRoot = path.join(solidityRoot, 'contracts')
+const sharedRoot = path.join(repositoryRoot, 'shared')
+const sharedSourceRoot = path.join(sharedRoot, 'ts')
 
 const requiredOutputs = [path.join(solidityRoot, 'artifacts', 'Contracts.json'), path.join(solidityRoot, 'ts', 'types', 'contractArtifact.ts'), path.join(solidityRoot, 'types', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'contractArtifact.ts'), path.join(repositoryRoot, 'ui', 'ts', 'abis.ts')]
+const requiredSharedOutputs = [path.join(sharedRoot, 'js', 'addressDerivation.js'), path.join(sharedRoot, 'js', 'bigInt.js'), path.join(sharedRoot, 'js', 'deploymentAddresses.js')]
 
 const freshnessInputs = [path.join(solidityRoot, 'bun.lock'), path.join(solidityRoot, 'package.json'), path.join(solidityRoot, 'tsconfig-compile.json'), path.join(solidityRoot, 'ts', 'abi', 'abis.ts'), path.join(solidityRoot, 'ts', 'compile.ts'), path.join(repositoryRoot, 'ui', 'build', 'projectArtifacts.mts')]
+const sharedFreshnessInputs = [path.join(sharedRoot, 'tsconfig.json')]
 
 async function exists(filePath: string): Promise<boolean> {
 	try {
@@ -81,8 +85,16 @@ async function getArtifactRegenerationReason(): Promise<string | undefined> {
 }
 
 async function runCompileContracts(): Promise<void> {
+	await runBunScript(['run', 'compile-contracts'], `bun run compile-contracts`)
+}
+
+async function runSharedBuild(): Promise<void> {
+	await runBunScript(['run', 'shared:build'], `bun run shared:build`)
+}
+
+async function runBunScript(args: string[], label: string): Promise<void> {
 	await new Promise<void>((resolve, reject) => {
-		const child = spawn(process.execPath, ['run', 'compile-contracts'], {
+		const child = spawn(process.execPath, args, {
 			cwd: repositoryRoot,
 			stdio: 'inherit',
 		})
@@ -93,12 +105,32 @@ async function runCompileContracts(): Promise<void> {
 				resolve()
 				return
 			}
-			reject(new Error(`bun run compile-contracts exited with code ${code ?? 'unknown'}`))
+			reject(new Error(`${label} exited with code ${code ?? 'unknown'}`))
 		})
 	})
 }
 
+async function getSharedBuildRegenerationReason(): Promise<string | undefined> {
+	for (const outputPath of requiredSharedOutputs) {
+		if (!(await exists(outputPath))) return `missing shared build output: ${path.relative(repositoryRoot, outputPath)}`
+	}
+
+	const sharedSourceFiles = await getFilesRecursively(sharedSourceRoot)
+	const newestInputMtime = await getNewestMtime([...sharedFreshnessInputs, ...sharedSourceFiles])
+	const oldestOutputMtime = await getOldestMtime(requiredSharedOutputs)
+
+	if (newestInputMtime > oldestOutputMtime) return 'Shared TypeScript sources are newer than shared/js outputs'
+
+	return undefined
+}
+
 export async function ensureContractArtifactsAreCurrent(): Promise<void> {
+	const sharedRegenerationReason = await getSharedBuildRegenerationReason()
+	if (sharedRegenerationReason !== undefined) {
+		console.log(`Regenerating shared build outputs before tests: ${sharedRegenerationReason}`)
+		await runSharedBuild()
+	}
+
 	const regenerationReason = await getArtifactRegenerationReason()
 	if (regenerationReason === undefined) return
 

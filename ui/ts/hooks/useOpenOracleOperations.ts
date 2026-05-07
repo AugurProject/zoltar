@@ -100,6 +100,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 	const openOracleInitialReportTokenAccessRefreshing = useSignal(false)
 	const nextOpenOracleInitialReportPriceLoad = useRequestGuard()
 	const nextOpenOracleInitialReportTokenAccessLoad = useRequestGuard()
+	const nextOracleReportLoad = useRequestGuard()
 
 	const setOpenOracleInitialReportTokenAccessMode = (mode: 'idle' | 'initial' | 'background') => {
 		openOracleInitialReportTokenAccessLoadingInitial.value = mode === 'initial'
@@ -352,6 +353,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 	const loadOracleReportById = async (reportId: bigint) => await loadOpenOracleReportDetails(createConnectedReadClient(), getOpenOracleAddress(), reportId)
 
 	const loadOracleReport = async (reportIdInput?: string) => {
+		const isCurrent = nextOracleReportLoad()
 		await oracleReportLoad.run({
 			onStart: () => {
 				openOracleError.value = undefined
@@ -366,12 +368,15 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 					}
 				}
 				const details = await loadOracleReportById(reportId)
+				if (!isCurrent()) throw new Error('Stale oracle report load')
 				return { details, reportId } satisfies LoadedOracleReportResult
 			},
 			onSuccess: ({ details }: LoadedOracleReportResult) => {
+				if (!isCurrent()) return
 				applyLoadedOracleReport(details, { resetPrice: true })
 			},
 			onError: (error: unknown) => {
+				if (!isCurrent()) return
 				openOracleReportDetails.value = undefined
 				loadedOpenOracleReportId.value = undefined
 				resetOpenOracleInitialReportState(false)
