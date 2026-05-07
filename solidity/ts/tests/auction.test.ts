@@ -33,7 +33,7 @@ const AUCTION_NEXT_ID_SLOT = 4n
 const AUCTION_MAX_REP_BEING_SOLD_SLOT = 5n
 const AUCTION_ETH_RAISE_CAP_SLOT = 6n
 const BID_STRUCT_SLOT_COUNT = 4n
-const NODE_STRUCT_SLOT_COUNT = 11n
+const NODE_STRUCT_SLOT_COUNT = 8n
 const MAX_DISTINCT_TICK_COUNT = 1_048_577n
 const FINALIZE_GAS_LIMIT = 20_000_000n
 
@@ -276,7 +276,7 @@ describe('Auction', () => {
 			const remainingNodes = height - nodeId + 1n
 			const nodeBaseSlot = getMappingBaseSlot(nodeId, AUCTION_NODES_SLOT)
 			const tick = nodeId - 1n
-			const values = [tick, bidAmount, remainingNodes * bidAmount, 0n, nodeId === height ? 0n : nodeId + 1n, remainingNodes, remainingNodes * bidAmount, bidAmount, tick, tick, height - 1n]
+			const values = [tick, bidAmount, remainingNodes * bidAmount, 0n, nodeId === height ? 0n : nodeId + 1n, remainingNodes, remainingNodes * bidAmount, tick]
 
 			strictEqualTypeSafe(BigInt(values.length), NODE_STRUCT_SLOT_COUNT, 'synthetic node slot count mismatch')
 			for (let index = 0; index < values.length; index++) {
