@@ -37,7 +37,6 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	// exists. Track those balances per parent/outcome until the child pool is ready
 	// to receive them.
 	mapping(ISecurityPool => mapping(uint8 => uint256)) internal pendingChildRepByPoolAndOutcome;
-	mapping(ISecurityPool => mapping(address => bool)) internal claimedAuctionProceedsByPoolAndVault;
 	mapping(address => bool) private trustedAuctionAddresses;
 
 	event InitiateSecurityPoolFork(uint256 repAtFork);
@@ -323,9 +322,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	// we should also move a share of bad debt in the system to this vault
 	// anyone can call these so that we can liquidate them if needed
 	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) public {
-		require(claimedAuctionProceedsByPoolAndVault[securityPool][vault] == false, 'Already Claimed');
 		require(forkDataByPool[securityPool].truthAuction.finalized(), 'Auction needs to be finalized');
-		claimedAuctionProceedsByPoolAndVault[securityPool][vault] = true;
 		(uint256 amount, ) = forkDataByPool[securityPool].truthAuction.withdrawBids(vault, tickIndices);
 		require(amount > 0, 'Did not purchase anything'); // not really necessary, but good for testing
 		uint256 poolOwnershipAmount = repToPoolOwnership(securityPool, amount);

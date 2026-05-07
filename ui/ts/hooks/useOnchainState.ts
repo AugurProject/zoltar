@@ -168,7 +168,7 @@ export function useOnchainState() {
 						wethBalancePromise,
 					})
 				} else {
-					accountState.value = { ...accountState.value, chainId: backend.profile.chainIdHex, wethBalance: undefined }
+					accountState.value = { ...accountState.value, chainId: backend.profile.chainIdHex, ethBalance: undefined, wethBalance: undefined }
 				}
 			} catch (error) {
 				if (!isCurrent()) return

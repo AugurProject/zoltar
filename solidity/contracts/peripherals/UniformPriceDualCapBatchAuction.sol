@@ -12,12 +12,15 @@ contract UniformPriceDualCapBatchAuction {
 		uint256 left;
 		uint256 right;
 		uint256 height;
+		uint256 subtreeClearingEth; // total ETH in subtree that can contribute to clearing
+		int256 minClearingTick;
 	}
 
 	struct Bid {
 		address bidder;
 		uint256 ethAmount;
 		uint256 cumulativeEth;
+		bool claimed;
 	}
 
 	int256 constant MIN_TICK = -524288;
@@ -28,6 +31,7 @@ contract UniformPriceDualCapBatchAuction {
 
 	mapping(uint256 => Node) private nodes;
 	mapping(int256 => Bid[]) private bidsAtTick;
+	mapping(int256 => mapping(uint256 => uint256)) private refundedBidPrefixTree;
 
 	uint256 private root;
 	uint256 private nextId = 1;
@@ -148,7 +152,7 @@ contract UniformPriceDualCapBatchAuction {
 
 			Bid storage bid = bidsAtTick[tick][index];
 			require(bid.bidder == withdrawFor, 'not their bid');
-			require(bid.ethAmount > 0, 'already claimed');
+			require(bid.ethAmount > 0 && !bid.claimed, 'already claimed');
 
 			if (underfunded) {
 				uint256 price = tickToPrice(tick);
@@ -174,11 +178,12 @@ contract UniformPriceDualCapBatchAuction {
 					} // else: price is zero, filled REP remains 0
 				} else {
 					// Tick == clearingTick: partial fill
-					uint256 previousCumulativeEth = bid.cumulativeEth - bid.ethAmount;
+					uint256 previousCumulativeEth = bid.cumulativeEth - bid.ethAmount - _getRefundedCumulativeEthBeforeIndex(tick, index);
 					uint256 ethUsed;
+					uint256 cumulativeEth = previousCumulativeEth + bid.ethAmount;
 					if (ethFilledAtClearing <= previousCumulativeEth) {
 						ethUsed = 0;
-					} else if (ethFilledAtClearing >= bid.cumulativeEth) {
+					} else if (ethFilledAtClearing >= cumulativeEth) {
 						ethUsed = bid.ethAmount;
 					} else {
 						ethUsed = ethFilledAtClearing - previousCumulativeEth;
@@ -190,7 +195,7 @@ contract UniformPriceDualCapBatchAuction {
 					totalEthRefund += bid.ethAmount - ethUsed;
 				}
 			}
-			bid.ethAmount = 0; // prevent double withdrawals
+			bid.claimed = true;
 		}
 
 		emit WithdrawBids(withdrawFor, tickIndices, totalFilledRep, totalEthRefund);
@@ -216,12 +221,14 @@ contract UniformPriceDualCapBatchAuction {
 
 			Bid storage bid = bidsAtTick[tick][index];
 			require(bid.bidder == msg.sender, 'not bidder');
-			require(bid.ethAmount > 0, 'already withdrawn');
+			require(bid.ethAmount > 0 && !bid.claimed, 'already withdrawn');
 
 			uint256 originalEth = bid.ethAmount;
 
 			// Zero out bid to prevent double withdrawal
 			bid.ethAmount = 0;
+			bid.claimed = true;
+			_addRefundedBidPrefixAmount(tick, index + 1, originalEth);
 
 			totalEthToRefund += originalEth;
 
@@ -256,45 +263,65 @@ contract UniformPriceDualCapBatchAuction {
 		return rep >= maxRepBeingSold;
 	}
 
+	function _subtreeWouldClear(uint256 nodeId, uint256 accEth) internal view returns (bool) {
+		if (nodeId == 0) return false;
+		Node storage node = nodes[nodeId];
+		if (node.subtreeClearingEth == 0) return false;
+		return _wouldClear(accEth + node.subtreeClearingEth, node.minClearingTick);
+	}
+
+	function _getEthAtTick(uint256 nodeId, int256 tick) internal view returns (uint256) {
+		if (nodeId == 0) return 0;
+		Node storage node = nodes[nodeId];
+		if (tick == node.tick) return node.totalEth;
+		if (tick < node.tick) return _getEthAtTick(node.left, tick);
+		return _getEthAtTick(node.right, tick);
+	}
+
 	function _compute(uint256 nodeId, uint256 accEth, int256 lastValidTick, uint256 lastValidEth, uint256 lastValidEthAtTick) internal view returns (bool, int256, uint256, uint256) {
 		if (nodeId == 0) return (false, lastValidTick, accEth, 0);
 		Node storage node = nodes[nodeId];
-		uint256 rightEth = node.right != 0 ? nodes[node.right].subtreeEth : 0;
+		if (!_subtreeWouldClear(nodeId, accEth)) {
+			uint256 skippedEthAtTick = _getEthAtTick(nodeId, node.minClearingTick);
+			return (false, node.minClearingTick, accEth + node.subtreeClearingEth, skippedEthAtTick);
+		}
 
-		if (rightEth > 0) {
-			(bool found, int256 tickOut, uint256 ethOut, uint256 ethAtTickOut) = _compute(node.right, accEth, lastValidTick, lastValidEth, lastValidEthAtTick);
-			if (found) return (found, tickOut, ethOut, ethAtTickOut);
-			accEth = ethOut;
-			lastValidTick = tickOut;
-			lastValidEth = ethOut;
+		if (node.right != 0) {
+			if (_subtreeWouldClear(node.right, accEth)) {
+				return _compute(node.right, accEth, lastValidTick, lastValidEth, lastValidEthAtTick);
+			}
+
+			Node storage rightNode = nodes[node.right];
+			accEth += rightNode.subtreeClearingEth;
+			if (rightNode.subtreeClearingEth > 0) {
+				lastValidTick = rightNode.minClearingTick;
+				lastValidEth = accEth;
+				lastValidEthAtTick = _getEthAtTick(node.right, rightNode.minClearingTick);
+			}
 		}
 
 		uint256 price = tickToPrice(node.tick);
-		uint256 ethToTake = node.totalEth;
-		// If price is zero, ignore this node's ETH for clearing calculations
-			if (price == 0) {
-				ethToTake = 0;
-			}
-			if (accEth > 0) {
-				uint256 repIfRepriced = price == 0 ? 0 : accEth * PRICE_PRECISION / price;
-				if (repIfRepriced > maxRepBeingSold) return (true, lastValidTick, lastValidEth, lastValidEthAtTick);
-			}
+		uint256 ethToTake = price == 0 ? 0 : node.totalEth;
+		if (accEth > 0) {
+			uint256 repIfRepriced = price == 0 ? 0 : accEth * PRICE_PRECISION / price;
+			if (repIfRepriced > maxRepBeingSold) return (true, lastValidTick, lastValidEth, lastValidEthAtTick);
+		}
 
 		if (accEth >= ethRaiseCap) return (true, lastValidTick, lastValidEth, lastValidEthAtTick);
 		uint256 remainingCap = ethRaiseCap - accEth;
 		if (ethToTake > remainingCap) ethToTake = remainingCap;
 		uint256 newAccEth = accEth + ethToTake;
 
-			uint256 totalRep = price == 0 ? 0 : newAccEth * PRICE_PRECISION / price;
+		uint256 totalRep = price == 0 ? 0 : newAccEth * PRICE_PRECISION / price;
 
-			if (totalRep >= maxRepBeingSold) {
-				// partial fill
-				uint256 maxEthAtThisPrice = maxRepBeingSold * price / PRICE_PRECISION;
-				uint256 ethUsedAtTick = 0;
-				if (maxEthAtThisPrice > accEth) ethUsedAtTick = maxEthAtThisPrice - accEth;
-				if (ethUsedAtTick > ethToTake) ethUsedAtTick = ethToTake;
-				return (true, node.tick, accEth + ethUsedAtTick, ethUsedAtTick);
-			}
+		if (totalRep >= maxRepBeingSold) {
+			// partial fill
+			uint256 maxEthAtThisPrice = maxRepBeingSold * price / PRICE_PRECISION;
+			uint256 ethUsedAtTick = 0;
+			if (maxEthAtThisPrice > accEth) ethUsedAtTick = maxEthAtThisPrice - accEth;
+			if (ethUsedAtTick > ethToTake) ethUsedAtTick = ethToTake;
+			return (true, node.tick, accEth + ethUsedAtTick, ethUsedAtTick);
+		}
 
 		if (newAccEth >= ethRaiseCap) return (true, node.tick, newAccEth, ethToTake);
 
@@ -311,6 +338,8 @@ contract UniformPriceDualCapBatchAuction {
 	function _sumWinningEth(uint256 nodeId, uint256 threshold) internal returns (uint256) {
 		if (nodeId == 0) return 0;
 		Node storage node = nodes[nodeId];
+		if (tickToPrice(nodes[_maxNode(nodeId)].tick) < threshold) return 0;
+		if (tickToPrice(nodes[_minNode(nodeId)].tick) >= threshold) return node.subtreeEth;
 		uint256 price = tickToPrice(node.tick);
 		if (price < threshold) {
 			// This node and left subtree are losers; only right subtree can have winners
@@ -330,9 +359,19 @@ contract UniformPriceDualCapBatchAuction {
  function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {
 		if (nodeId == 0) {
 			uint256 newId = nextId++;
-			nodes[newId] = Node({ tick: tick, totalEth: ethAmount, subtreeEth: ethAmount, left: 0, right: 0, height: 1 });
+			uint256 nodeClearingEth = tickToPrice(tick) == 0 ? 0 : ethAmount;
+			nodes[newId] = Node({
+				tick: tick,
+				totalEth: ethAmount,
+				subtreeEth: ethAmount,
+				left: 0,
+				right: 0,
+				height: 1,
+				subtreeClearingEth: nodeClearingEth,
+				minClearingTick: nodeClearingEth == 0 ? int256(0) : tick
+			});
 
-			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: ethAmount }));
+			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: ethAmount, claimed: false }));
 
 			return newId;
 		}
@@ -341,7 +380,7 @@ contract UniformPriceDualCapBatchAuction {
 		if (tick == node.tick) {
 			node.totalEth += ethAmount;
 			uint256 cumulativeEth = bidsAtTick[tick].length == 0 ? ethAmount : bidsAtTick[tick][bidsAtTick[tick].length - 1].cumulativeEth + ethAmount;
-			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: cumulativeEth }));
+			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: cumulativeEth, claimed: false }));
 		} else if (tick < node.tick) {
 			node.left = _insert(node.left, tick, bidder, ethAmount);
 		} else {
@@ -354,18 +393,29 @@ contract UniformPriceDualCapBatchAuction {
 
 	function _update(uint256 nodeId) internal {
 		Node storage node = nodes[nodeId];
-		uint256 leftEth; uint256 rightEth; uint256 leftH; uint256 rightH;
+		uint256 leftEth; uint256 rightEth; uint256 leftH; uint256 rightH; uint256 leftClearingEth; uint256 rightClearingEth;
 		if (node.left != 0) {
 			leftEth = nodes[node.left].subtreeEth;
 			leftH = nodes[node.left].height;
+			leftClearingEth = nodes[node.left].subtreeClearingEth;
 		}
 		if (node.right != 0) {
 			rightEth = nodes[node.right].subtreeEth;
 			rightH = nodes[node.right].height;
+			rightClearingEth = nodes[node.right].subtreeClearingEth;
 		}
 
+		uint256 nodeClearingEth = tickToPrice(node.tick) == 0 ? 0 : node.totalEth;
 		node.subtreeEth = node.totalEth + leftEth + rightEth;
+		node.subtreeClearingEth = nodeClearingEth + leftClearingEth + rightClearingEth;
 		node.height = 1 + (leftH > rightH ? leftH : rightH);
+		if (leftClearingEth > 0) {
+			node.minClearingTick = nodes[node.left].minClearingTick;
+		} else if (nodeClearingEth > 0) {
+			node.minClearingTick = node.tick;
+		} else {
+			node.minClearingTick = rightClearingEth == 0 ? int256(0) : nodes[node.right].minClearingTick;
+		}
 	}
 
 	function _height(uint256 nodeId) internal view returns (uint256) { return nodeId == 0 ? 0 : nodes[nodeId].height; }
@@ -427,6 +477,27 @@ contract UniformPriceDualCapBatchAuction {
 
 	function _decreaseAtPrice(int256 tick, uint256 ethAmount) internal {
 		root = _decrease(root, tick, ethAmount);
+	}
+
+	function _getRefundedCumulativeEthBeforeIndex(int256 tick, uint256 index) internal view returns (uint256 cumulativeEth) {
+		uint256 treeIndex = index;
+		while (treeIndex > 0) {
+			cumulativeEth += refundedBidPrefixTree[tick][treeIndex];
+			treeIndex -= _leastSignificantBit(treeIndex);
+		}
+	}
+
+	function _addRefundedBidPrefixAmount(int256 tick, uint256 index, uint256 amount) internal {
+		uint256 bidCount = bidsAtTick[tick].length;
+		uint256 treeIndex = index;
+		while (treeIndex <= bidCount) {
+			refundedBidPrefixTree[tick][treeIndex] += amount;
+			treeIndex += _leastSignificantBit(treeIndex);
+		}
+	}
+
+	function _leastSignificantBit(uint256 value) internal pure returns (uint256) {
+		return value & (~value + 1);
 	}
 
 	function _decrease(uint256 nodeId, int256 tick, uint256 ethAmount) internal returns (uint256) {
@@ -506,6 +577,14 @@ contract UniformPriceDualCapBatchAuction {
 		uint256 current = nodeId;
 		while (nodes[current].left != 0) {
 			current = nodes[current].left;
+		}
+		return current;
+	}
+
+	function _maxNode(uint256 nodeId) internal view returns (uint256) {
+		uint256 current = nodeId;
+		while (nodes[current].right != 0) {
+			current = nodes[current].right;
 		}
 		return current;
 	}

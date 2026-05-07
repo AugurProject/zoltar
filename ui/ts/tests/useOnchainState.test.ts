@@ -118,4 +118,30 @@ void describe('loadWalletState', () => {
 		expect(accountState.ethBalance).toBe(123n)
 		expect(accountState.wethBalance).toBe(456n)
 	})
+
+	void test('does not mutate balances when no wallet is connected', async () => {
+		let accountState: AccountState = {
+			address: undefined,
+			chainId: '0x1',
+			ethBalance: 123n,
+			wethBalance: 456n,
+		}
+
+		await loadWalletState({
+			chainIdPromise: undefined,
+			connectedAddress: undefined,
+			ethBalancePromise: undefined,
+			getAccountState: () => accountState,
+			isCurrent: () => true,
+			setAccountState: state => {
+				accountState = state
+			},
+			setErrorMessage: () => undefined,
+			trackLoad: async work => await work(),
+			wethBalancePromise: undefined,
+		})
+
+		expect(accountState.ethBalance).toBe(123n)
+		expect(accountState.wethBalance).toBe(456n)
+	})
 })
