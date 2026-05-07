@@ -171,77 +171,95 @@ void describe('simulation backend', () => {
 	}, 30_000)
 
 	void test('submits simulation writes without deprecated Tevm transaction RPC warnings', async () => {
-		const backend = warmBaselineBackend
-		const fromAccount = backend.accounts[0]
-		const toAccount = backend.accounts[1]
-		if (fromAccount === undefined || toAccount === undefined) {
-			throw new Error('Expected seeded simulation QA accounts')
+		const backend = await createSimulationBackend({ scenario: 'baseline' })
+		await backend.bootstrap()
+
+		try {
+			const fromAccount = backend.accounts[0]
+			const toAccount = backend.accounts[1]
+			if (fromAccount === undefined || toAccount === undefined) {
+				throw new Error('Expected seeded simulation QA accounts')
+			}
+
+			const writeClient = backend.createWriteClient(fromAccount)
+			const hash = await writeClient.sendTransaction({
+				to: getAddress(toAccount),
+				value: 1n,
+			})
+			const receipt = await writeClient.waitForTransactionReceipt({ hash })
+
+			expect(receipt.transactionHash).toBe(hash)
+			expect(receipt.status).toBe('success')
+		} finally {
+			await backend.dispose()
 		}
-
-		const writeClient = backend.createWriteClient(fromAccount)
-		const hash = await writeClient.sendTransaction({
-			to: getAddress(toAccount),
-			value: 1n,
-		})
-		const receipt = await writeClient.waitForTransactionReceipt({ hash })
-
-		expect(receipt.transactionHash).toBe(hash)
-		expect(receipt.status).toBe('success')
 	}, 30_000)
 
 	void test('tracks simulation block, transaction, and time state as controls are used', async () => {
-		const backend = warmBaselineBackend
-		const fromAccount = backend.accounts[0]
-		const toAccount = backend.accounts[1]
-		if (fromAccount === undefined || toAccount === undefined) {
-			throw new Error('Expected seeded simulation QA accounts')
+		const backend = await createSimulationBackend({ scenario: 'baseline' })
+		await backend.bootstrap()
+
+		try {
+			const fromAccount = backend.accounts[0]
+			const toAccount = backend.accounts[1]
+			if (fromAccount === undefined || toAccount === undefined) {
+				throw new Error('Expected seeded simulation QA accounts')
+			}
+
+			const initialTimestamp = backend.currentTimestamp
+			const initialBlockCount = backend.blockCountSinceReset
+			const initialTransactionCount = backend.transactionCountSinceReset
+			expect(initialBlockCount > 0n).toBe(true)
+			expect(initialTransactionCount > 0n).toBe(true)
+
+			const writeClient = backend.createWriteClient(fromAccount)
+			const hash = await writeClient.sendTransaction({
+				to: getAddress(toAccount),
+				value: 1n,
+			})
+			await writeClient.waitForTransactionReceipt({ hash })
+
+			expect(backend.blockCountSinceReset).toBe(initialBlockCount + 1n)
+			expect(backend.transactionCountSinceReset).toBe(initialTransactionCount + 1n)
+
+			await backend.mineBlock()
+			expect(backend.blockCountSinceReset).toBe(initialBlockCount + 2n)
+
+			await backend.advanceTime(60n * 60n)
+			expect(backend.blockCountSinceReset).toBe(initialBlockCount + 3n)
+			expect(backend.currentTimestamp > initialTimestamp).toBe(true)
+		} finally {
+			await backend.dispose()
 		}
-
-		const initialTimestamp = backend.currentTimestamp
-		const initialBlockCount = backend.blockCountSinceReset
-		const initialTransactionCount = backend.transactionCountSinceReset
-		expect(initialBlockCount > 0n).toBe(true)
-		expect(initialTransactionCount > 0n).toBe(true)
-
-		const writeClient = backend.createWriteClient(fromAccount)
-		const hash = await writeClient.sendTransaction({
-			to: getAddress(toAccount),
-			value: 1n,
-		})
-		await writeClient.waitForTransactionReceipt({ hash })
-
-		expect(backend.blockCountSinceReset).toBe(initialBlockCount + 1n)
-		expect(backend.transactionCountSinceReset).toBe(initialTransactionCount + 1n)
-
-		await backend.mineBlock()
-		expect(backend.blockCountSinceReset).toBe(initialBlockCount + 2n)
-
-		await backend.advanceTime(60n * 60n)
-		expect(backend.blockCountSinceReset).toBe(initialBlockCount + 3n)
-		expect(backend.currentTimestamp > initialTimestamp).toBe(true)
 	}, 30_000)
 
 	void test('applies the configured simulation transaction receipt delay', async () => {
-		const backend = warmBaselineBackend
-		const fromAccount = backend.accounts[0]
-		const toAccount = backend.accounts[1]
-		if (fromAccount === undefined || toAccount === undefined) {
-			throw new Error('Expected seeded simulation QA accounts')
+		const backend = await createSimulationBackend({ scenario: 'baseline' })
+		await backend.bootstrap()
+
+		try {
+			const fromAccount = backend.accounts[0]
+			const toAccount = backend.accounts[1]
+			if (fromAccount === undefined || toAccount === undefined) {
+				throw new Error('Expected seeded simulation QA accounts')
+			}
+
+			backend.setTransactionDelayMilliseconds(250)
+			expect(backend.transactionDelayMilliseconds).toBe(250)
+
+			const writeClient = backend.createWriteClient(fromAccount)
+			const hash = await writeClient.sendTransaction({
+				to: getAddress(toAccount),
+				value: 1n,
+			})
+			const startTime = Date.now()
+			await writeClient.waitForTransactionReceipt({ hash })
+			const elapsedMilliseconds = Date.now() - startTime
+
+			expect(elapsedMilliseconds >= 200).toBe(true)
+		} finally {
+			await backend.dispose()
 		}
-
-		backend.setTransactionDelayMilliseconds(250)
-		expect(backend.transactionDelayMilliseconds).toBe(250)
-
-		const writeClient = backend.createWriteClient(fromAccount)
-		const hash = await writeClient.sendTransaction({
-			to: getAddress(toAccount),
-			value: 1n,
-		})
-		const startTime = Date.now()
-		await writeClient.waitForTransactionReceipt({ hash })
-		const elapsedMilliseconds = Date.now() - startTime
-
-		expect(elapsedMilliseconds >= 200).toBe(true)
 	}, 30_000)
 
 	void test('tracks the configured simulation REP/ETH mock price and resets it with the scenario', async () => {

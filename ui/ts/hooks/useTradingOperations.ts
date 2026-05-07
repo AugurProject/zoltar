@@ -123,6 +123,7 @@ export function useTradingOperations({ accountAddress, enabled, onTransaction, o
 
 	useEffect(() => {
 		if (!enabled) return
+		nextTradingDetailsLoad()
 		targetOutcomeDefaultsKey.current = undefined
 		if (tradingForm.value.targetOutcomeIndexes !== '') {
 			tradingForm.value = {

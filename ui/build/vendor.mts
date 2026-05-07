@@ -9,7 +9,6 @@ const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const UI_ROOT_PATH = path.join(directoryOfThisFile, '..')
 const VENDOR_OUTPUT_PATH = path.join(UI_ROOT_PATH, 'vendor')
 const MODULES_ROOT_PATH = path.join(UI_ROOT_PATH, 'node_modules')
-const INDEX_HTML_PATH = path.join(UI_ROOT_PATH, 'index.html')
 
 type Dependency = { packageName: string; packageToVendor?: string; subfolderToVendor: string; mainEntrypointFile: string; alternateEntrypoints: Record<string, string> }
 const dependencyPaths: Dependency[] = [
@@ -18,16 +17,11 @@ const dependencyPaths: Dependency[] = [
 	{ packageName: 'preact/hooks', subfolderToVendor: 'dist', mainEntrypointFile: 'hooks.module.js', alternateEntrypoints: {} },
 	{ packageName: '@preact/signals', subfolderToVendor: 'dist', mainEntrypointFile: 'signals.module.js', alternateEntrypoints: {} },
 	{ packageName: '@preact/signals-core', subfolderToVendor: 'dist', mainEntrypointFile: 'signals-core.module.js', alternateEntrypoints: {} },
-	{ packageName: 'viem', subfolderToVendor: '_esm', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-	{ packageName: 'viem/chains', packageToVendor: 'viem/_esm', subfolderToVendor: 'chains', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-	{ packageName: 'viem/window', packageToVendor: 'viem/_esm', subfolderToVendor: 'window', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-	{ packageName: 'viem/actions', packageToVendor: 'viem/_esm', subfolderToVendor: 'actions', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
 	{ packageName: 'abitype', subfolderToVendor: 'dist/esm', mainEntrypointFile: 'exports/index.js', alternateEntrypoints: {} },
 	{ packageName: '@noble/hashes', subfolderToVendor: 'esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { crypto: 'crypto.js', sha3: 'sha3.js', utils: 'utils.js', _assert: '_assert.js', sha256: 'sha256.js', sha512: 'sha512.js', pbkdf2: 'pbkdf2.js', hmac: 'hmac.js', ripemd160: 'ripemd160.js' } },
 	{ packageName: '@noble/curves', subfolderToVendor: 'esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { secp256k1: 'secp256k1.js', 'abstract/modular': 'abstract/modular.js', 'abstract/utils': 'abstract/utils.js' } },
 	{ packageName: 'funtypes', subfolderToVendor: 'lib', mainEntrypointFile: 'index.mjs', alternateEntrypoints: {} },
 	{ packageName: 'ox', subfolderToVendor: '_esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { BlockOverrides: 'core/BlockOverrides.js', AbiConstructor: 'core/AbiConstructor.js', AbiFunction: 'core/AbiFunction.js' } },
-	{ packageName: 'tevm', subfolderToVendor: '_esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { common: 'common/index.js' } },
 ]
 
 async function vendorDependencies() {
@@ -47,21 +41,6 @@ async function vendorDependencies() {
 		const destinationDirectoryPath = path.join(VENDOR_OUTPUT_PATH, packageToVendor || packageName)
 		await recursiveDirectoryCopy(sourceDirectoryPath, destinationDirectoryPath, inclusionPredicate, rewriteSourceMapSourcePath.bind(undefined, packageName))
 	}
-
-	const oldIndexHtml = await fs.readFile(INDEX_HTML_PATH, 'utf8')
-	const importmap = dependencyPaths.reduce(
-		(importmap, { packageName, mainEntrypointFile, alternateEntrypoints }) => {
-			importmap.imports[packageName] = `./vendor/${packageName}/${mainEntrypointFile}`
-			for (const [alternateEntrypointName, alternateEntrypointFile] of Object.entries(alternateEntrypoints)) {
-				importmap.imports[`${packageName}/${alternateEntrypointName}`] = `./vendor/${packageName}/${alternateEntrypointFile}`
-			}
-			return importmap
-		},
-		{ imports: {} as Record<string, string> },
-	)
-	const importmapJson = JSON.stringify(importmap, undefined, '\t').replace(/^/gm, '\t\t')
-	const newIndexHtml = oldIndexHtml.replace(/<script type='importmap'>[\s\S]*?<\/script>/m, `<script type='importmap'>\n${importmapJson}\n\t</script>`)
-	await fs.writeFile(INDEX_HTML_PATH, newIndexHtml)
 }
 
 // rewrite the source paths in sourcemap files so they show up in the debugger in a reasonable location and if two source maps refer to the same (relative) path, we end up with them distinguished in the browser debugger
@@ -80,53 +59,37 @@ async function rewriteSourceMapSourcePath(packageName: string, sourcePath: strin
 }
 
 async function bundleViem() {
-	const viemSrcDir = path.join(MODULES_ROOT_PATH, 'viem', '_esm')
-	const viemTmpOut = path.join(directoryOfThisFile, 'tmp-viem-bundle')
-
 	await esbuild.build({
 		entryPoints: {
-			index: path.join(viemSrcDir, 'index.js'),
-			'chains/index': path.join(viemSrcDir, 'chains', 'index.js'),
-			'window/index': path.join(viemSrcDir, 'window', 'index.js'),
-			'actions/index': path.join(viemSrcDir, 'actions', 'index.js'),
+			index: path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'index.js'),
+			'chains/index': path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'chains', 'index.js'),
+			'window/index': path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'window', 'index.js'),
+			'actions/index': path.join(MODULES_ROOT_PATH, 'viem', '_esm', 'actions', 'index.js'),
 			'accounts/index': path.join(MODULES_ROOT_PATH, 'viem', 'accounts', 'index.js'),
 			'utils/index': path.join(MODULES_ROOT_PATH, 'viem', 'utils', 'index.js'),
 		},
 		format: 'esm',
-		outdir: viemTmpOut,
+		outdir: path.join(VENDOR_OUTPUT_PATH, 'viem'),
 		bundle: true,
 		platform: 'browser',
 		sourcemap: true,
 		target: 'esnext',
 	})
-
-	await fs.rm(viemSrcDir, { recursive: true, force: true })
-	await fs.mkdir(viemSrcDir, { recursive: true })
-	await recursiveDirectoryCopy(viemTmpOut, viemSrcDir, async () => true)
-	await fs.rm(viemTmpOut, { recursive: true, force: true })
 }
 
 async function bundleTevm() {
-	const tevmSrcDir = path.join(MODULES_ROOT_PATH, 'tevm', '_esm')
-	const tevmTmpOut = path.join(directoryOfThisFile, 'tmp-tevm-bundle')
-
 	await esbuild.build({
 		entryPoints: {
 			index: path.join(MODULES_ROOT_PATH, 'tevm', 'index.js'),
 			'common/index': path.join(MODULES_ROOT_PATH, '@tevm', 'common', 'dist', 'index.js'),
 		},
 		format: 'esm',
-		outdir: tevmTmpOut,
+		outdir: path.join(VENDOR_OUTPUT_PATH, 'tevm'),
 		bundle: true,
 		platform: 'browser',
 		sourcemap: true,
 		target: 'esnext',
 	})
-
-	await fs.rm(tevmSrcDir, { recursive: true, force: true })
-	await fs.mkdir(tevmSrcDir, { recursive: true })
-	await recursiveDirectoryCopy(tevmTmpOut, tevmSrcDir, async () => true)
-	await fs.rm(tevmTmpOut, { recursive: true, force: true })
 }
 
 const vendor = async () => {

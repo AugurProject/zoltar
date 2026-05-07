@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import { useEffect } from 'preact/hooks'
+import { useCallback, useEffect } from 'preact/hooks'
 import { readOpenOracleReportIdQueryParam, readSecurityPoolQueryParam, readUniverseQueryParam, readZoltarViewQueryParam, writeOpenOracleReportIdQueryParam, writeSecurityPoolQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '../lib/urlParams.js'
 
 type UrlState = {
@@ -43,29 +43,43 @@ export function useUrlState(): UseUrlStateResult {
 		}
 	}, [])
 
-	const setActiveUniverseId = (universeId: bigint | undefined) => {
-		const nextSearch = writeUniverseQueryParam(window.location.search, universeId)
+	const applyUrlStateUpdate = useCallback((nextSearch: string) => {
+		if (nextSearch === window.location.search) return
 		replaceCurrentUrl(nextSearch)
 		urlState.value = readUrlState(nextSearch)
-	}
+	}, [])
 
-	const setSecurityPoolAddress = (securityPoolAddress: string) => {
-		const nextSearch = writeSecurityPoolQueryParam(window.location.search, securityPoolAddress === '' ? undefined : securityPoolAddress)
-		replaceCurrentUrl(nextSearch)
-		urlState.value = readUrlState(nextSearch)
-	}
+	const setActiveUniverseId = useCallback(
+		(universeId: bigint | undefined) => {
+			const nextSearch = writeUniverseQueryParam(window.location.search, universeId)
+			applyUrlStateUpdate(nextSearch)
+		},
+		[applyUrlStateUpdate],
+	)
 
-	const setOpenOracleReport = (reportId: string | undefined) => {
-		const nextSearch = writeOpenOracleReportIdQueryParam(window.location.search, reportId === '' ? undefined : reportId)
-		replaceCurrentUrl(nextSearch)
-		urlState.value = readUrlState(nextSearch)
-	}
+	const setSecurityPoolAddress = useCallback(
+		(securityPoolAddress: string) => {
+			const nextSearch = writeSecurityPoolQueryParam(window.location.search, securityPoolAddress === '' ? undefined : securityPoolAddress)
+			applyUrlStateUpdate(nextSearch)
+		},
+		[applyUrlStateUpdate],
+	)
 
-	const setZoltarView = (view: string | undefined) => {
-		const nextSearch = writeZoltarViewQueryParam(window.location.search, view === '' ? undefined : view)
-		replaceCurrentUrl(nextSearch)
-		urlState.value = readUrlState(nextSearch)
-	}
+	const setOpenOracleReport = useCallback(
+		(reportId: string | undefined) => {
+			const nextSearch = writeOpenOracleReportIdQueryParam(window.location.search, reportId === '' ? undefined : reportId)
+			applyUrlStateUpdate(nextSearch)
+		},
+		[applyUrlStateUpdate],
+	)
+
+	const setZoltarView = useCallback(
+		(view: string | undefined) => {
+			const nextSearch = writeZoltarViewQueryParam(window.location.search, view === '' ? undefined : view)
+			applyUrlStateUpdate(nextSearch)
+		},
+		[applyUrlStateUpdate],
+	)
 
 	return {
 		activeUniverseId: urlState.value.activeUniverseId,

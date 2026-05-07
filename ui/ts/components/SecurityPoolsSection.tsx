@@ -34,7 +34,9 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 		if (overview.hasLoadedSecurityPools) return
 		if (autoLoadedBrowsePools.current) return
 		autoLoadedBrowsePools.current = true
-		overview.onLoadSecurityPools()
+		void Promise.resolve(overview.onLoadSecurityPools()).catch(() => {
+			autoLoadedBrowsePools.current = false
+		})
 	}, [overview.hasLoadedSecurityPools, overview.loadingSecurityPools, overview.onLoadSecurityPools, view])
 
 	const openView = (nextView: SecurityPoolsView, nextSecurityPoolAddress?: string) => {
@@ -42,7 +44,7 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 		const resolvedSecurityPoolAddress = nextSecurityPoolAddress ?? workflow.securityPoolAddress
 		const selectedPoolExists = overview.securityPools.some(pool => sameCaseInsensitiveText(pool.securityPoolAddress, resolvedSecurityPoolAddress))
 		if (!shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress: workflow.securityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolExists })) return
-		workflow.onRefreshSelectedPoolData()
+		workflow.onRefreshSelectedPoolData(resolvedSecurityPoolAddress)
 	}
 	const renderModeTabs = () => (
 		<SectionModeTabs

@@ -35,6 +35,12 @@ export function resolveSecurityPoolQuestionLookupInput(marketIdInput: string) {
 	}
 }
 
+function parseQuestionIdInput(marketId: string) {
+	const trimmedMarketId = marketId.trim()
+	if (trimmedMarketId === '') throw new Error('Question ID is required')
+	return BigInt(trimmedMarketId)
+}
+
 export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, zoltarUniverseHasForked }: UseSecurityPoolCreationParameters) {
 	const marketDetailsLoad = useLoadController()
 	const duplicateOriginPoolCheckLoad = useLoadController()
@@ -49,6 +55,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 	const nextDuplicateCheck = useRequestGuard()
 
 	const loadDuplicateOriginPoolState = async () => {
+		const isCurrent = nextDuplicateCheck()
 		const marketId = securityPoolForm.value.marketId.trim()
 		const securityMultiplierInput = securityPoolForm.value.securityMultiplier.trim()
 		if (marketId === '' || securityMultiplierInput === '') {
@@ -66,7 +73,6 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 			return
 		}
 
-		const isCurrent = nextDuplicateCheck()
 		await duplicateOriginPoolCheckLoad.track(async () => {
 			try {
 				const exists = await originSecurityPoolExists(createConnectedReadClient(), questionId, securityMultiplier)
@@ -95,10 +101,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 				}
 			},
 			load: async () => {
-				const { questionId } = createSecurityPoolParameters({
-					...securityPoolForm.value,
-					marketId,
-				})
+				const questionId = parseQuestionIdInput(marketId)
 				const details = await loadMarketDetails(createConnectedReadClient(), questionId)
 				return details
 			},

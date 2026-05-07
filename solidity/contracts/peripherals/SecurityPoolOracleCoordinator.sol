@@ -170,46 +170,52 @@ contract SecurityPoolOracleCoordinator {
 	function executeStagedOperation(uint256 operationId) public {
 		require(stagedOperations[operationId].amount > 0, 'no such operation or already executed');
 		require(isPriceValid(), 'price is not valid to execute');
-		uint256 amount = stagedOperations[operationId].amount;
-		stagedOperations[operationId].amount = 0;
-		if (stagedOperations[operationId].operation == OperationType.Liquidation) {
+		StagedOperation memory stagedOperation = stagedOperations[operationId];
+		bool success;
+		if (stagedOperation.operation == OperationType.Liquidation) {
 			try
 				securityPool.performLiquidation(
-					stagedOperations[operationId].initiatorVault,
-					stagedOperations[operationId].targetVault,
-					amount,
-					stagedOperations[operationId].snapshotTargetOwnership,
-					stagedOperations[operationId].snapshotTargetAllowance,
-					stagedOperations[operationId].snapshotTotalRep,
-					stagedOperations[operationId].snapshotDenominator
+					stagedOperation.initiatorVault,
+					stagedOperation.targetVault,
+					stagedOperation.amount,
+					stagedOperation.snapshotTargetOwnership,
+					stagedOperation.snapshotTargetAllowance,
+					stagedOperation.snapshotTotalRep,
+					stagedOperation.snapshotDenominator
 				)
 			{
-				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, true, '');
+				success = true;
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
-				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, false, reason);
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
 			} catch {
-				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, false, 'Unknown error');
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
-		} else if (stagedOperations[operationId].operation == OperationType.WithdrawRep) {
+		} else if (stagedOperation.operation == OperationType.WithdrawRep) {
 			try
-				securityPool.performWithdrawRep(stagedOperations[operationId].initiatorVault, amount)
+				securityPool.performWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount)
 			{
-				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, true, '');
+				success = true;
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
-				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, false, reason);
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
 			} catch {
-				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, false, 'Unknown error');
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
 		} else {
 			try
-				securityPool.performSetSecurityBondsAllowance(stagedOperations[operationId].initiatorVault, amount)
+				securityPool.performSetSecurityBondsAllowance(stagedOperation.initiatorVault, stagedOperation.amount)
 			{
-				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, true, '');
+				success = true;
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');
 			} catch Error(string memory reason) {
-				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, false, reason);
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, reason);
 			} catch {
-				emit ExecutedStagedOperation(operationId, stagedOperations[operationId].operation, false, 'Unknown error');
+				emit ExecutedStagedOperation(operationId, stagedOperation.operation, false, 'Unknown error');
 			}
+		}
+		if (success) {
+			stagedOperations[operationId].amount = 0;
 		}
 	}
 

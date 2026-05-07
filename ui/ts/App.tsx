@@ -273,10 +273,11 @@ export function App() {
 		onRouteChange: navigate,
 	}
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
-	const refreshSelectedPoolData = () => {
+	const refreshSelectedPoolData = (requestedSecurityPoolAddress?: string) => {
+		const nextSecurityPoolAddress = requestedSecurityPoolAddress ?? securityPoolAddress
 		if (!walletBootstrapComplete) return
-		if (!securityPoolAddress.startsWith('0x') || securityPoolAddress.length !== 42) return
-		void loadSecurityPools(securityPoolAddress)
+		if (!nextSecurityPoolAddress.startsWith('0x') || nextSecurityPoolAddress.length !== 42) return
+		void loadSecurityPools(nextSecurityPoolAddress)
 	}
 	const onDeployNextMissing = async () => {
 		if (deployNextMissingPending.value) return

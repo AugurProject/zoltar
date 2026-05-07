@@ -483,6 +483,27 @@ describe('Auction', () => {
 			await assertContractEmpty(client, auctionAddress)
 		})
 
+		test('underfunded auctions treat bids exactly at the threshold price as winners', async () => {
+			const ethRaiseCap = 1_000n * 10n ** 18n
+			const maxRepBeingSold = 100n * 10n ** 18n
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+			const alice = createTestClient(0)
+			const thresholdPrice = PRICE_PRECISION / 2n
+			const thresholdTick = tickForPrice(thresholdPrice)
+			const aliceEth = (maxRepBeingSold * tickToPrice(thresholdTick)) / PRICE_PRECISION
+
+			await submitBid(alice, auctionAddress, thresholdTick, aliceEth)
+			await finalize(client, auctionAddress)
+
+			const totalRep = await getTotalRepPurchased(client, auctionAddress)
+			strictEqualTypeSafe(totalRep, maxRepBeingSold, 'all REP should clear when demand sits exactly at the underfunded threshold')
+
+			const withdrawal = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: thresholdTick, bidIndex: 0n }])
+			strictEqualTypeSafe(withdrawal.totalEthRefund, 0n, 'threshold-clearing winner should not receive an ETH refund')
+			approximatelyEqual(withdrawal.totalFilledRep, maxRepBeingSold, DEFAULT_TOLERANCE, 'threshold-clearing winner should receive the full REP allocation')
+		})
+
 		test('auction time limit prevents bids after expiration', async () => {
 			const ethRaiseCap = 100n * 10n ** 18n
 			const maxRepBeingSold = 10n * 10n ** 18n
@@ -963,10 +984,9 @@ describe('Auction', () => {
 
 			// Regression test: withdraw should succeed without reverting even when the
 			// clearing price is zero.
-			// With zero price, no REP should be filled, and all ETH should be refunded
 			const amounts = await simulateWithdrawBids(client, auctionAddress, client.account.address, [{ tick: zeroPriceTick, bidIndex: 0n }])
-			assert.strictEqual(amounts.totalFilledRep, 0n, 'filled REP should be 0 when price is zero')
-			assert.strictEqual(amounts.totalEthRefund, bidAmount, 'full ETH refund expected')
+			assert.strictEqual(amounts.totalFilledRep, 1n, 'zero-price clearing bids should receive the full underfunded REP allocation')
+			assert.strictEqual(amounts.totalEthRefund, 0n, 'zero-price clearing winners should not receive an ETH refund')
 
 			// Actual withdrawBids should also succeed
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: zeroPriceTick, bidIndex: 0n }])

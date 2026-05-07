@@ -77,7 +77,9 @@ export function MarketSection({
 		const currentUniverseId = zoltarUniverse?.universeId
 		if (currentUniverseId !== undefined && lastAutoLoadedQuestionsUniverseId.current === currentUniverseId) return
 		lastAutoLoadedQuestionsUniverseId.current = currentUniverseId
-		onLoadZoltarQuestions()
+		void Promise.resolve(onLoadZoltarQuestions()).catch(() => {
+			lastAutoLoadedQuestionsUniverseId.current = undefined
+		})
 	}, [hasLoadedZoltarQuestions, loadingZoltarQuestions, onLoadZoltarQuestions, view, zoltarQuestionCount, zoltarUniverse?.universeId])
 
 	const renderModeTabs = () => (
