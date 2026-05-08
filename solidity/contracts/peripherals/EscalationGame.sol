@@ -314,12 +314,16 @@ contract EscalationGame {
 		Deposit[] storage outcomeDeposits = deposits[uint8(outcome)];
 		if (startIndex >= outcomeDeposits.length || scanCount == 0) return new uint256[](0);
 		uint256 endIndex = startIndex + scanCount;
-		if (endIndex > outcomeDeposits.length) endIndex = outcomeDeposits.length;
+		if (endIndex > outcomeDeposits.length) {
+			endIndex = outcomeDeposits.length;
+		}
 
 		uint256 matchCount = 0;
 		for (uint256 index = startIndex; index < endIndex; index++) {
 			Deposit storage deposit = outcomeDeposits[index];
-			if (deposit.depositor == depositor && deposit.amount > 0) matchCount++;
+			if (deposit.depositor == depositor && deposit.amount > 0) {
+				matchCount++;
+			}
 		}
 
 		depositIndexes = new uint256[](matchCount);

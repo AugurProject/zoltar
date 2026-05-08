@@ -445,7 +445,9 @@ contract SecurityPool is ISecurityPool {
 					(depositor, originalDepositAmount) = escalationGame.forfeitLosingDeposit(depositIndexes[index], outcome);
 				}
 			}
-			if (beneficiaryVault == address(0x0)) beneficiaryVault = depositor;
+			if (beneficiaryVault == address(0x0)) {
+				beneficiaryVault = depositor;
+			}
 			require(depositor == beneficiaryVault, 'all deposits must belong to one vault');
 			securityVaults[depositor].lockedRepInEscalationGame -= originalDepositAmount;
 			totalLockedRepInEscalationGame -= originalDepositAmount;
