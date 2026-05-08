@@ -12,9 +12,9 @@ Run each command individually and address any issues before proceeding to the ne
    ```
    - **UI-only exception**: If the change only affects `ui/` and does not touch `solidity/`, generated contract artifacts, or anything that depends on refreshed contract output, run:
       ```bash
-      bun x tsc
+      cd ui && bun x tsc --project tsconfig.json
       ```
-      (We emit JS even for UI-only changes so the live-reload watcher notices the rebuild.)
+      (Root `bun run tsc` is typecheck-only. UI JS emission for the live-reload watcher comes from `ui/tsconfig.json`.)
    - **Contract exception**: If contracts or generated contract outputs changed, run the full `bun run tsc`.
 
 2. **Tests**: Run all tests
@@ -103,5 +103,5 @@ This test-driven approach ensures:
 - - If a test or typecheck fails because `solidity/ts/types/contractArtifact.ts`, `solidity/artifacts/Contracts.json`, or `ui/ts/contractArtifact.ts` is missing, run `bun run generate`. If only the Solidity-side artifact files are needed, `bun run compile-contracts` is sufficient.
 - - The `ui/js/` tree is generated from `ui/ts/`. In particular, `ui/js/tests/` is generated from `ui/ts/tests/` via `cd ui && bun run build:tests`. Do not manually edit generated `ui/js/**` files, and do not regenerate or commit them unless the user explicitly asks for generated-output updates.
 - - On a fresh checkout, use `bun install --frozen-lockfile && bun run setup` for the full local install. For UI-only work, `bun install --frozen-lockfile && bun run ui:build` is sufficient and will also regenerate `shared/js/` and `ui/ts/contractArtifact.ts`.
-- - Do not assume `bun run tsc` regenerates contract artifacts unless the script definition has been updated to do so. UI-only changes still need to emit JS so the watcher reloads correctly; use `bun x tsc` instead of `--noEmit`.
+- - Do not assume `bun run tsc` regenerates contract artifacts unless the script definition has been updated to do so. Root `bun run tsc` remains a pure typecheck. For UI-only changes that need emitted JS for the watcher, use `cd ui && bun x tsc --project tsconfig.json`.
 - - Never edit files directly in any `js/` directory. Changes may be overwritten by TypeScript compilation. Always use the corresponding `.ts` or `.tsx` source files.

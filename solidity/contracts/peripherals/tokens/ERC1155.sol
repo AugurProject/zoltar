@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.33;
 
+import { IERC165 } from '../interfaces/IERC165.sol';
 import { IERC1155 } from '../interfaces/IERC1155.sol';
+import { IERC1155Receiver } from '../interfaces/IERC1155Receiver.sol';
 
 /**
 * @title Standard ERC1155 token
@@ -11,6 +13,10 @@ import { IERC1155 } from '../interfaces/IERC1155.sol';
 * Originally based on code by Enjin: https://github.com/enjin/erc-1155
 */
 contract ERC1155 is IERC1155 {
+	bytes4 private constant ERC1155_RECEIVED_SELECTOR = 0xf23a6e61;
+	bytes4 private constant ERC1155_BATCH_RECEIVED_SELECTOR = 0xbc197c81;
+	bytes4 private constant ERC1155_INTERFACE_ID = 0xd9b67a26;
+	bytes4 private constant ERC165_INTERFACE_ID = 0x01ffc9a7;
 
 	// Mapping from token ID to account balances
 	mapping (uint256 => mapping(address => uint256)) public _balances;
@@ -22,6 +28,10 @@ contract ERC1155 is IERC1155 {
 	mapping (address => mapping(address => bool)) public _operatorApprovals;
 
 	constructor() {}
+
+	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+		return interfaceId == ERC165_INTERFACE_ID || interfaceId == ERC1155_INTERFACE_ID;
+	}
 
 	/**
 		@dev Get the specified address' balance for token with specified ID.
@@ -112,17 +122,30 @@ contract ERC1155 is IERC1155 {
 		address to,
 		uint256 id,
 		uint256 value
+		)
+			external
+		{
+			_transferFrom(from, to, id, value, '');
+		}
+
+	function safeTransferFrom(
+		address from,
+		address to,
+		uint256 id,
+		uint256 value,
+		bytes calldata data
 	)
 		external
 	{
-		_transferFrom(from, to, id, value);
+		_transferFrom(from, to, id, value, data);
 	}
 
 	function _transferFrom(
 		address from,
 		address to,
 		uint256 id,
-		uint256 value
+		uint256 value,
+		bytes memory data
 	)
 		internal
 	{
@@ -132,7 +155,38 @@ contract ERC1155 is IERC1155 {
 			"ERC1155: need operator approval for 3rd party transfers"
 		);
 
-		_internalTransferFrom(from, to, id, value);
+		_internalTransferFrom(from, to, id, value, data);
+	}
+
+	function _internalTransferFrom(
+		address from,
+		address to,
+		uint256 id,
+		uint256 value,
+		bytes memory data
+	)
+		internal
+		virtual
+	{
+		_balances[id][from] = _balances[id][from] - value;
+		_balances[id][to] = _balances[id][to] + value;
+
+		emit TransferSingle(msg.sender, from, to, id, value);
+		_doSafeTransferAcceptanceCheck(msg.sender, from, to, id, value, data);
+	}
+
+	/**
+		@dev Legacy helper preserved for existing internal call sites that do not pass data.
+	*/
+	function _transferFrom(
+		address from,
+		address to,
+		uint256 id,
+		uint256 value
+	)
+		internal
+	{
+		_transferFrom(from, to, id, value, '');
 	}
 
 	function _internalTransferFrom(
@@ -144,10 +198,7 @@ contract ERC1155 is IERC1155 {
 		internal
 		virtual
 	{
-		_balances[id][from] = _balances[id][from] - value;
-		_balances[id][to] = _balances[id][to] + value;
-
-		emit TransferSingle(msg.sender, from, to, id, value);
+		_internalTransferFrom(from, to, id, value, '');
 	}
 
 	/**
@@ -165,17 +216,30 @@ contract ERC1155 is IERC1155 {
 		address to,
 		uint256[] calldata ids,
 		uint256[] calldata values
+		)
+			external
+		{
+			_batchTransferFrom(from, to, ids, values, '');
+		}
+
+	function safeBatchTransferFrom(
+		address from,
+		address to,
+		uint256[] calldata ids,
+		uint256[] calldata values,
+		bytes calldata data
 	)
 		external
 	{
-		_batchTransferFrom(from, to, ids, values);
+		_batchTransferFrom(from, to, ids, values, data);
 	}
 
 	function _batchTransferFrom(
 		address from,
 		address to,
 		uint256[] memory ids,
-		uint256[] memory values
+		uint256[] memory values,
+		bytes memory data
 	)
 		internal
 	{
@@ -189,14 +253,15 @@ contract ERC1155 is IERC1155 {
 			"ERC1155: need operator approval for 3rd party transfers"
 		);
 
-		_internalBatchTransferFrom(from, to, ids, values);
+		_internalBatchTransferFrom(from, to, ids, values, data);
 	}
 
 	function _internalBatchTransferFrom(
 		address from,
 		address to,
 		uint256[] memory ids,
-		uint256[] memory values
+		uint256[] memory values,
+		bytes memory data
 	)
 		internal
 		virtual
@@ -210,6 +275,33 @@ contract ERC1155 is IERC1155 {
 		}
 
 		emit TransferBatch(msg.sender, from, to, ids, values);
+		_doSafeBatchTransferAcceptanceCheck(msg.sender, from, to, ids, values, data);
+	}
+
+	/**
+		@dev Legacy helper preserved for existing internal call sites that do not pass data.
+	*/
+	function _batchTransferFrom(
+		address from,
+		address to,
+		uint256[] memory ids,
+		uint256[] memory values
+	)
+		internal
+	{
+		_batchTransferFrom(from, to, ids, values, '');
+	}
+
+	function _internalBatchTransferFrom(
+		address from,
+		address to,
+		uint256[] memory ids,
+		uint256[] memory values
+	)
+		internal
+		virtual
+	{
+		_internalBatchTransferFrom(from, to, ids, values, '');
 	}
 
 	/**
@@ -225,6 +317,7 @@ contract ERC1155 is IERC1155 {
 		_supplies[id] = _supplies[id] + value;
 
 		emit TransferSingle(msg.sender, address(0), to, id, value);
+		_doSafeTransferAcceptanceCheck(msg.sender, address(0), to, id, value, '');
 	}
 
 	/**
@@ -243,6 +336,7 @@ contract ERC1155 is IERC1155 {
 		}
 
 		emit TransferBatch(msg.sender, address(0), to, ids, values);
+		_doSafeBatchTransferAcceptanceCheck(msg.sender, address(0), to, ids, values, '');
 	}
 
 	/**
@@ -275,5 +369,23 @@ contract ERC1155 is IERC1155 {
 		}
 
 		emit TransferBatch(msg.sender, account, address(0), ids, values);
+	}
+
+	function _doSafeTransferAcceptanceCheck(address operator, address from, address to, uint256 id, uint256 value, bytes memory data) private {
+		if (to.code.length == 0) return;
+		try IERC1155Receiver(to).onERC1155Received(operator, from, id, value, data) returns (bytes4 response) {
+			require(response == ERC1155_RECEIVED_SELECTOR, 'ERC1155: receiver rejected tokens');
+		} catch {
+			revert('ERC1155: transfer to non ERC1155Receiver implementer');
+		}
+	}
+
+	function _doSafeBatchTransferAcceptanceCheck(address operator, address from, address to, uint256[] memory ids, uint256[] memory values, bytes memory data) private {
+		if (to.code.length == 0) return;
+		try IERC1155Receiver(to).onERC1155BatchReceived(operator, from, ids, values, data) returns (bytes4 response) {
+			require(response == ERC1155_BATCH_RECEIVED_SELECTOR, 'ERC1155: receiver rejected tokens');
+		} catch {
+			revert('ERC1155: transfer to non ERC1155Receiver implementer');
+		}
 	}
 }

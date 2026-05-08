@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '@testing-library/dom'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 import { SecurityPoolWorkflowSection } from '../components/SecurityPoolWorkflowSection.js'
@@ -252,8 +253,10 @@ function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolWorkflow
 		onLoadPoolOracleManager: () => undefined,
 		onOpenLiquidationModal: () => undefined,
 		onQueueLiquidation: () => undefined,
+		onExecutePendingPoolOperation: () => undefined,
 		onRefreshSelectedPoolData: () => undefined,
 		onRequestPoolPrice: () => undefined,
+		onSelectedPoolViewChange: () => undefined,
 		onSecurityPoolAddressChange: () => undefined,
 		onViewPendingReport: () => undefined,
 		poolOracleActiveAction: undefined,
@@ -264,6 +267,7 @@ function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolWorkflow
 		repPerEthSource: undefined,
 		repPerEthSourceUrl: undefined,
 		reporting: createReportingProps(),
+		selectedPoolView: '',
 		securityPoolAddress: '',
 		securityPoolOverviewActiveAction: undefined,
 		securityPools: [],
@@ -397,6 +401,7 @@ describe('SecurityPoolWorkflowSection', () => {
 					checkedSecurityPoolAddress: zeroAddress,
 					securityPoolAddress: zeroAddress,
 					securityPools: [createSelectedPool({ marketDetails: futureMarket })],
+					selectedPoolView: 'reporting',
 				})}
 				showHeader={false}
 			/>,
@@ -404,10 +409,6 @@ describe('SecurityPoolWorkflowSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('tab', { name: 'Reporting' }))
-		})
-
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Report Outcome' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
@@ -417,5 +418,105 @@ describe('SecurityPoolWorkflowSection', () => {
 		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)
 		expect(reportButton.title).toBe('Reporting opens after market end.')
+	})
+
+	test('uses the lifted selected pool view state and reports tab changes through the shared setter', async () => {
+		const selectedViews: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					onSelectedPoolViewChange: view => {
+						selectedViews.push(view ?? '')
+					},
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					selectedPoolView: 'reporting',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect((documentQueries.getByRole('tab', { name: 'Reporting' }) as HTMLElement).getAttribute('aria-selected')).toBe('true')
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Fork' }))
+		})
+
+		expect(selectedViews).toEqual(['fork'])
+	})
+
+	test('retries reporting autoload on rerender until matching details are available', async () => {
+		let reportingLoadCalls = 0
+		const baseProps = createSecurityPoolWorkflowProps({
+			checkedSecurityPoolAddress: zeroAddress,
+			reporting: createReportingProps({
+				onLoadReporting: () => {
+					reportingLoadCalls += 1
+				},
+			}),
+			securityPoolAddress: zeroAddress,
+			securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }) })],
+			selectedPoolView: 'reporting',
+		})
+
+		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(reportingLoadCalls).toBe(1)
+
+		await act(async () => {
+			render(
+				<SecurityPoolWorkflowSection
+					{...baseProps}
+					reporting={createReportingProps({
+						onLoadReporting: () => {
+							reportingLoadCalls += 1
+						},
+					})}
+					showHeader={false}
+				/>,
+				renderedComponent.container,
+			)
+		})
+
+		expect(reportingLoadCalls).toBe(2)
+	})
+
+	test('retries fork autoload on rerender until matching details are available', async () => {
+		let forkLoadCalls = 0
+		const baseProps = createSecurityPoolWorkflowProps({
+			checkedSecurityPoolAddress: zeroAddress,
+			forkAuction: createForkAuctionProps({
+				onLoadForkAuction: () => {
+					forkLoadCalls += 1
+				},
+			}),
+			securityPoolAddress: zeroAddress,
+			securityPools: [createSelectedPool()],
+			selectedPoolView: 'fork',
+		})
+
+		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(forkLoadCalls).toBe(1)
+
+		await act(async () => {
+			render(
+				<SecurityPoolWorkflowSection
+					{...baseProps}
+					forkAuction={createForkAuctionProps({
+						onLoadForkAuction: () => {
+							forkLoadCalls += 1
+						},
+					})}
+					showHeader={false}
+				/>,
+				renderedComponent.container,
+			)
+		})
+
+		expect(forkLoadCalls).toBe(2)
 	})
 })

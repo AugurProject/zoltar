@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
-import { loadOracleManagerDetails, requestOraclePrice } from '../contracts.js'
+import { executeOracleManagerStagedOperation, loadOracleManagerDetails, requestOraclePrice } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { sameAddress } from '../lib/address.js'
@@ -78,7 +78,38 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 		}
 	}
 
+	const executePendingPoolOperation = async (managerAddress: Address, operationId: bigint) => {
+		poolPriceOracleResult.value = undefined
+		try {
+			poolOracleActiveAction.value = 'executeStagedOperation'
+			await runWriteAction(
+				{
+					accountAddress,
+					missingWalletMessage: 'Connect a wallet before executing a staged operation',
+					onTransaction,
+					onTransactionFinished,
+					onTransactionRequested,
+					refreshErrorFallback: 'Staged operation execution succeeded, but refreshing price oracle details failed',
+					refreshState: async () => {
+						await loadPoolOracleManager(managerAddress)
+					},
+					setErrorMessage: message => {
+						poolOracleManagerError.value = message
+					},
+				},
+				async walletAddress => await executeOracleManagerStagedOperation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, operationId),
+				'Failed to execute staged operation',
+				result => {
+					poolPriceOracleResult.value = result
+				},
+			)
+		} finally {
+			poolOracleActiveAction.value = undefined
+		}
+	}
+
 	return {
+		executePendingPoolOperation,
 		loadingPoolOracleManager: poolOracleManagerLoad.isLoading.value,
 		loadPoolOracleManager,
 		poolOracleActiveAction: poolOracleActiveAction.value,

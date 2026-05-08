@@ -61,6 +61,9 @@ interface ISecurityPool {
 
 	function repToPoolOwnership(uint256 repAmount) external view returns (uint256);
 	function poolOwnershipToRep(uint256 poolOwnership) external view returns (uint256);
+	function getAvailableRepBalance() external view returns (uint256);
+	function getTotalRepBalance() external view returns (uint256);
+	function isEscalationResolved() external view returns (bool);
 
 	function setStartingParams(uint256 currentRetentionRate, uint256 completeSetCollateralAmount) external;
 

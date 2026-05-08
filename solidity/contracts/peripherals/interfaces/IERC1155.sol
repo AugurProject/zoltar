@@ -19,11 +19,13 @@ limitations under the License.
 
 pragma solidity 0.8.33;
 
+import './IERC165.sol';
+
 
 /// @title ERC-1155 Multi Token Standard
 /// @dev See https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1155.md
 /// Note: The ERC-165 identifier for this interface is 0xd9b67a26.
-interface IERC1155 {
+interface IERC1155 is IERC165 {
 
 	/// @dev Either TransferSingle or TransferBatch MUST emit when tokens are transferred,
 	///      including zero value transfers as well as minting or burning.
@@ -88,7 +90,8 @@ interface IERC1155 {
 		address from,
 		address to,
 		uint256 id,
-		uint256 value
+		uint256 value,
+		bytes calldata data
 	)
 		external;
 
@@ -107,7 +110,8 @@ interface IERC1155 {
 		address from,
 		address to,
 		uint256[] calldata ids,
-		uint256[] calldata values
+		uint256[] calldata values,
+		bytes calldata data
 	)
 		external;
 

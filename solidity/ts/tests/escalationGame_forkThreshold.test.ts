@@ -110,7 +110,6 @@ describe('Escalation Game Fork Threshold Test', () => {
 		await mockWindow.advanceTime(10n * DAY)
 
 		// Withdraw via SecurityPool's withdrawFromEscalationGame
-		// Get vault ownership before withdrawal
 		const repBefore = await getUserRepClaim(client, securityPoolAddresses.securityPool)
 		await writeContractAndWait(
 			client,
@@ -124,9 +123,9 @@ describe('Escalation Game Fork Threshold Test', () => {
 		)
 		const repAfter = await getUserRepClaim(client, securityPoolAddresses.securityPool)
 
-		// Expected amount: depositAmount scaled by the ratio of thresholds
-		// Net REP claim should change by `expected - depositAmount`, because the original deposit
-		// was already part of the vault's ownership and only locked while the game was active.
+		// Expected amount: depositAmount scaled by the ratio of thresholds.
+		// The vault claim helper tracks total collateral claim even while REP is locked in
+		// escalation, so withdrawal changes the claim only by the payout delta.
 		const expected = (depositAmount * actualForkThreshold) / escalationThreshold
 		assert.strictEqual(repAfter - repBefore, expected - depositAmount, 'scaled amount mismatch')
 	})

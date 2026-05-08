@@ -266,8 +266,8 @@ contract SecurityPoolForker is ISecurityPoolForker {
 					_finalizeTruthAuction(securityPool, 0);
 					return;
 				}
-				// sell all but very small amount of REP for ETH. We cannot sell all for accounting purposes, as `poolOwnershipDenominator` cannot be infinite
-				// only migratedRep gets this guarantee that some of their rep never gets sold
+				// Sell effectively all REP for ETH while leaving only a tiny migrated-rep residue unsold.
+				// We cannot sell literally all REP because `poolOwnershipDenominator` still needs a finite anchor.
 				forkDataByPool[securityPool].truthAuction.startAuction(ethToBuy, forkDataByPool[parent].repAtFork - forkDataByPool[securityPool].migratedRep / SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR);
 			}
 		}

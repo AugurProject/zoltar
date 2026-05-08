@@ -26,7 +26,7 @@
 		"contracts": "cd ../solidity && bun run setup",
 		"generate:shared-js": "cd .. && bun run shared:build",
 		"generate:contract-artifact": "cd .. && bun run generate:ui-contract-artifact",
-		"generate:vendor": "bun install --frozen-lockfile && bun --tsconfig-override=tsconfig.vendor.json ./build/vendor.mts",
+		"generate:vendor": "bun --tsconfig-override=tsconfig.vendor.json ./build/vendor.mts",
 		"generate": "bun run generate:shared-js && bun run generate:contract-artifact && bun run generate:vendor",
 		"setup": "bun install --frozen-lockfile && bun run contracts && bun run build",
 		"shared": "cd .. && bun run shared:build && bun run ui:shared",

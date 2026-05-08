@@ -371,10 +371,16 @@ export async function redeemSecurityVaultFees(client: WriteClient, securityPoolA
 }
 
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp] = await readRequiredMulticall(client, [
+	const [lastPrice, pendingOperationSlotId, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 			functionName: 'lastPrice',
+			address: managerAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'pendingOperationSlotId',
 			address: managerAddress,
 			args: [],
 		},
@@ -408,8 +414,28 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 
 	let callbackStateHash: Hex | undefined
 	let exactToken1Report: bigint | undefined
+	let pendingOperation: import('./types/contracts.js').StagedOracleOperation | undefined
 	let token1: Address | undefined
 	let token2: Address | undefined
+
+	if (pendingOperationSlotId > 0n) {
+		const stagedOperation = await client.readContract({
+			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+			functionName: 'getPendingOperationSlot',
+			address: managerAddress,
+			args: [],
+		})
+
+		if (stagedOperation.amount > 0n) {
+			pendingOperation = {
+				amount: stagedOperation.amount,
+				initiatorVault: stagedOperation.initiatorVault,
+				operation: resolveOracleQueueOperation(stagedOperation.operation),
+				operationId: pendingOperationSlotId,
+				targetVault: stagedOperation.targetVault,
+			}
+		}
+	}
 
 	if (pendingReportId > 0n) {
 		const [extraData, reportMeta] = await readRequiredMulticall(client, [
@@ -441,11 +467,26 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		lastSettlementTimestamp,
 		managerAddress,
 		openOracleAddress: resolvedOracleAddress,
+		pendingOperation,
+		pendingOperationSlotId,
 		pendingReportId,
 		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
 		requestPriceEthCost,
 		token1,
 		token2,
+	}
+}
+
+function resolveOracleQueueOperation(operation: bigint | number): OracleQueueOperation {
+	switch (Number(operation)) {
+		case 0:
+			return 'liquidation'
+		case 1:
+			return 'withdrawRep'
+		case 2:
+			return 'setSecurityBondsAllowance'
+		default:
+			throw new Error(`Unknown oracle operation: ${operation}`)
 	}
 }
 
@@ -739,6 +780,19 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action: 'requestPrice',
+		hash,
+	} satisfies OpenOracleActionResult
+}
+
+export async function executeOracleManagerStagedOperation(client: WriteClient, managerAddress: Address, operationId: bigint) {
+	const hash = await writeContractAndWait(client, () => ({
+		address: managerAddress,
+		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+		functionName: 'executeStagedOperation',
+		args: [operationId],
+	}))
+	return {
+		action: 'executeStagedOperation',
 		hash,
 	} satisfies OpenOracleActionResult
 }
