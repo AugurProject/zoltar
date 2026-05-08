@@ -42,9 +42,17 @@ If the user is connected to an unsupported chain, the route content is replaced 
 
 ### App Shell Controls
 
-- `Connect wallet` connects the injected wallet when no account is connected.
-- The REP/ETH refresh button reloads the displayed REP pricing source.
-- The top route tabs switch between `Deploy`, `Zoltar`, `Security Pools`, and `Open Oracle`.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Connect wallet` | Connect the injected wallet. | No field input. | Disabled while a wallet connection is already in progress. |
+| REP/ETH refresh | Reload the displayed REP/ETH quote. | No field input. | Disabled while REP prices are already refreshing. |
+| `Go to Genesis universe` | Reset the active universe context back to universe `0`. | No field input. | Only shown when the overview renders a universe-state hint that offers recovery back to the genesis universe. |
+| Top route tabs | Switch between `Deploy`, `Zoltar`, `Security Pools`, and `Open Oracle`. | No field input. | Non-deploy routes are disabled until setup prerequisites are satisfied. |
+
+### App Shell Read-Only Surfaces
+
+- The overview can show source labels or links for REP pricing, including Uniswap and simulation mock sources.
+- The overview can show a universe-state hint when the active universe context needs correction or recovery.
 
 ## Global Notices and Transaction State
 
@@ -57,6 +65,12 @@ Above the route content, the app can show page-wide notices for:
 - transaction progress and the most recent transaction hash
 
 Transaction state is shared across the app. While a transaction is waiting on wallet confirmation or onchain confirmation, the UI shows a global pending notice. Buttons that launched pending actions also keep their loading state in place and stay disabled until the action resolves.
+
+### Global Notice Variants
+
+- A pending transaction notice can show `Awaiting wallet confirmation.` before a signature is submitted.
+- After submission, the pending notice can show the transaction hash while confirmation is still pending.
+- After the pending state resolves, the app can keep showing the last transaction hash as a success notice.
 
 ## Simulation Mode
 
@@ -75,16 +89,18 @@ Simulation mode is intended for walletless or repeatable manual QA. It seeds kno
 
 ### Simulation Controls
 
-- The scenario selector changes the seeded simulation scenario and reloads the page into that scenario.
-- The QA account selector switches which seeded account the UI uses.
-- `Query delay (ms)` adds artificial latency to read calls.
-- `REP / ETH mock price` sets the simulated REP/ETH price.
-- `REP / USDC mock price` sets the simulated REP/USDC price.
-- `Transaction receipt delay (ms)` adds artificial latency before simulated transactions confirm.
-- `Reset scenario` resets the simulation back to its seeded state.
-- `Mine block` advances the simulation by one block.
-- `+1 hour` advances simulation time by one hour.
-- `+1 day` advances simulation time by one day.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| Scenario selector | Switch the seeded simulation scenario and reload the page into that scenario. | Must be one of the known simulation scenarios. | Disabled while the simulation is busy or bootstrapping. |
+| QA account selector | Switch the active seeded account. | Must match one of the available simulated accounts. | Disabled while the simulation is busy or before bootstrap finishes. |
+| `Query delay (ms)` | Add artificial latency to read calls. | Numeric milliseconds. | Not disabled in normal simulation operation. |
+| `REP / ETH mock price` | Set the simulated REP/ETH price. | Must parse as a decimal price. Invalid edits revert to the current controller value. | Disabled while the simulation is busy. |
+| `REP / USDC mock price` | Set the simulated REP/USDC price. | Must parse as a decimal price. Invalid edits revert to the current controller value. | Disabled while the simulation is busy. |
+| `Transaction receipt delay (ms)` | Add artificial latency before simulated transactions confirm. | Numeric milliseconds. | Disabled while the simulation is busy. |
+| `Reset scenario` | Reset the simulation back to its seeded state. | No field input. | Disabled while busy or before bootstrap finishes. |
+| `Mine block` | Advance the simulation by one block. | No field input. | Disabled while busy or before bootstrap finishes. |
+| `+1 hour` | Advance simulation time by one hour. | No field input. | Disabled while busy or before bootstrap finishes. |
+| `+1 day` | Advance simulation time by one day. | No field input. | Disabled while busy or before bootstrap finishes. |
 
 ## URL-Driven State and Deep Linking
 
@@ -124,9 +140,10 @@ When setup is incomplete, this route becomes the prerequisite path for the rest 
 
 #### Deploy Controls
 
-- `Deploy Next Missing` submits the next deployable deterministic deployment step.
-- Per-group deployment actions deploy individual contracts inside the grouped deployment sections.
-- The route header summary is read-only and shows deployment progress rather than accepting input.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Deploy Next Missing` | Submit the next deployable deterministic deployment step. | No text input. Uses the next undeployed eligible step. | Disabled when no account is connected, the wallet is not on mainnet, no deployable step exists, another deployment is busy, or a deploy-next action is already pending. |
+| Per-step deploy actions | Deploy one explicit contract step inside a deployment group. | No text input. Step prerequisites must already be satisfied. | Disabled when no account is connected, the wallet is not on mainnet, the step is already deployed, the step is blocked by prerequisites, or another deployment is already busy. |
 
 ### Zoltar
 
@@ -143,316 +160,248 @@ The top tabbed block summarizes the active universe. In `Questions`, it can show
 
 The `Questions` view is used to fetch and browse questions in the active universe.
 
-It supports:
+#### Questions Controls
 
-- loading or refreshing the question list
-- reviewing each question in a record card
-- sending a question into the fork flow with `Use For Fork`
-- sending a binary question into the pool-creation flow with `Use For Create Pool`
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Questions`, `Create Question`, `Fork Zoltar`, `Migrate REP` tabs | Switch between Zoltar subviews. | No field input. | `Migrate REP` is disabled until the universe has forked. |
+| `Fetch Questions` | Load questions for the active universe. | No field input. | Disabled while questions are loading or when question count is zero. |
+| `Refresh Questions` | Reload the question list. | No field input. | Disabled while questions are loading. |
+| `Use For Fork` | Copy the selected question into the fork flow and open `Fork Zoltar`. | Question must already exist in the loaded list. | Disabled after the universe has already forked. |
+| `Use For Create Pool` | Copy a binary question into Security Pools create mode. | Question must already exist in the loaded list. | Disabled for non-binary questions. |
+| `Deploy Universe` in `Child Universes` | Deploy one not-yet-deployed child universe after fork. | Requires connected wallet, mainnet, a forked universe, and a child universe entry that does not already exist. | Disabled when no wallet is connected, the wallet is not on mainnet, the universe has not forked yet, or the selected child universe already exists. |
+| Scalar child-universe deployment controls | Deploy scalar child universes from the scalar-specific deployment panel. | Require connected wallet, mainnet, a forked scalar universe, and a valid selected scalar outcome. | Disabled whenever the scalar child-universe deployment flow's wallet, network, fork-state, or outcome-selection guards fail. |
 
-If the universe has already forked, the fork action is disabled and replaced with an already-forked state.
+#### Questions Read-Only Surfaces
 
-##### Questions Controls
-
-- `Questions`, `Create Question`, `Fork Zoltar`, and `Migrate REP` are the Zoltar view tabs.
-- `Fetch Questions` loads the question list the first time.
-- `Refresh Questions` reloads the question list after an earlier load.
-- `No Questions` appears as a disabled state when the universe has no questions.
-- `Use For Fork` copies the selected question into the fork workflow and opens the `Fork Zoltar` tab.
-- `Use For Create Pool` copies a binary question into the Security Pools create flow and navigates there.
+- The overview can show universe status, fork time, fork threshold, reputation token, and total theoretical supply.
+- After fork, the overview can show the selected fork question as a dedicated record card.
+- Child universes render with existence status, outcome details, and deployment availability.
 
 #### Create Question
 
-The `Create Question` view creates new Zoltar questions. The form supports:
+The `Create Question` view creates new Zoltar questions. The form supports `Binary`, `Categorical`, and `Scalar`.
 
-- `Binary`
-- `Categorical`
-- `Scalar`
+#### Create Question Controls
 
-The operator can set title, description, timing, and type-specific fields. Scalar questions also show a live preview once the scalar inputs are valid enough to derive the outcome ticks.
-
-After creation, the UI shows the created question as a record card and exposes follow-up actions:
-
-- `Use For Fork`
-- `Use For Create Pool`
-- `Create Another Question`
-
-This makes the view both a creation flow and a handoff point into downstream workflows.
-
-##### Create Question Fields and Buttons
-
-- `Question Type` chooses between `Binary`, `Categorical`, and `Scalar`.
-- `Title` sets the market title shown in question cards and summaries.
-- `Description` adds optional explanatory text for the question.
-- `Start Time` sets when the market becomes active.
-- `End Time` sets when the market closes.
-- `Outcomes` appears for categorical markets and lets the operator add, edit, and remove categorical labels.
-- `Add Outcome` adds another categorical outcome row.
-- `Remove` deletes one categorical outcome row.
-- `Scalar Min`, `Scalar Increment`, `Scalar Max`, and `Answer Unit` appear for scalar markets and define the scalar range and display unit.
-- The scalar preview is read-only and shows how the scalar tick slider resolves from the entered bounds.
-- `Create Question` submits the new question.
-- After creation, `Use For Fork` passes the new question into the fork flow.
-- After creation, `Use For Create Pool` passes the new question into pool creation when the question is binary.
-- `Create Another Question` clears the result card and returns to the input form.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Question Type` | Choose between `Binary`, `Categorical`, and `Scalar`. | Must be one of the supported market types. | Never disabled in the base form. |
+| `Title` | Set the market title. | Required. | Never disabled in the base form. |
+| `Description` | Add optional explanatory text. | Free text. | Never disabled in the base form. |
+| `Start Time` | Set when the market becomes active. | Optional, but if present must parse as a valid timestamp. | Never disabled in the base form. |
+| `End Time` | Set when the market closes. | Required and must parse as a valid timestamp later than `Start Time`. | Never disabled in the base form. |
+| `Outcomes` | Enter categorical outcome labels. | For `Categorical`, needs at least two non-empty unique outcomes. | Only shown for categorical questions. |
+| `Add Outcome` | Add another categorical outcome row. | No direct validation. | Only shown for categorical questions. |
+| `Remove` | Remove one categorical outcome row. | No direct validation. | Only shown for categorical questions. |
+| `Scalar Min` | Define the scalar lower bound. | Required for scalar questions and must participate in a valid scalar range. | Only shown for scalar questions. |
+| `Scalar Increment` | Define the scalar tick spacing. | Required for scalar questions and must parse into a valid scalar increment. | Only shown for scalar questions. |
+| `Scalar Max` | Define the scalar upper bound. | Required for scalar questions and must be greater than `Scalar Min`. | Only shown for scalar questions. |
+| `Answer Unit` | Define the scalar display unit. | Free text. | Only shown for scalar questions. |
+| Scalar preview | Show how the scalar tick space resolves. | Requires valid scalar inputs. | Hidden until scalar inputs are sufficiently valid. |
+| `Create Question` | Submit the new question. | Requires a connected wallet, Ethereum mainnet, and a valid form. | Disabled until the wallet is connected, the wallet is on mainnet, and the full form validates. |
+| `Use For Fork` after creation | Send the created question into the fork flow. | Created question must exist. | Disabled after the universe has already forked. |
+| `Use For Create Pool` after creation | Send the created question into pool creation. | Created question must be binary. | Disabled for non-binary questions. |
+| `Create Another Question` | Clear the result state and return to the form. | No field input. | Not disabled in the success state. |
 
 #### Fork Zoltar
 
-The `Fork Zoltar` view is focused on selecting the fork question and executing the fork path. It surfaces:
+The `Fork Zoltar` view is focused on selecting the fork question and executing the fork path.
 
-- the selected question context
-- REP approval state
-- fork eligibility and block reasons
-- the active fork transaction state
+#### Fork Zoltar Controls
 
-Operators typically arrive here by selecting `Use For Fork` from the questions list or from a newly created question.
-
-##### Fork Zoltar Fields and Buttons
-
-- The REP approval control approves enough REP to satisfy the fork threshold.
-- `Fork Question ID` selects the question that will trigger the universe fork.
-- The selected-question card is read-only and confirms which question will be used.
-- `Fork Zoltar` submits the fork transaction once wallet, network, REP balance, approval, and question selection all satisfy the guard conditions.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| REP approval control | Approve enough REP to satisfy the fork threshold. | Required amount is the universe fork threshold. | Blocked when no wallet is connected, the wallet is not on mainnet, or Zoltar is already forked. |
+| `Fork Question ID` | Select the question that will trigger the fork. | Must resolve to a valid question from the loaded question set. | Disabled after Zoltar has already forked or while a fork is pending. |
+| Selected question card | Confirm which question will be used. | Read-only. | Hidden until a valid selected question resolves. |
+| `Fork Zoltar` | Submit the fork transaction. | Requires connected wallet, mainnet, loaded universe, valid selected question, enough REP balance, and enough REP approval. | Disabled whenever any fork guard condition fails. |
 
 #### Migrate REP
 
 The `Migrate REP` view handles post-fork REP preparation and migration into child universes.
 
-It only becomes usable after the universe has forked. Before that, the tab remains disabled and shows the reason directly in the UI. Once enabled, it supports preparing REP for migration and executing migration actions into child-universe balances.
+#### Migrate REP Controls
 
-##### Migrate REP Fields and Buttons
-
-- `Migration Amount` sets how much REP should move through the migration workflow.
-- `Max` fills `Migration Amount` with all wallet REP plus already prepared migration REP available in the universe.
-- The REP approval control approves any additional REP still needed to prepare the chosen migration amount.
-- The migration outcome selector lists child universes and lets the operator choose which outcome universes receive the split.
-- `Add Next Outcome` adds the next unselected child universe to the split set.
-- Outcome toggles select or deselect individual target universes.
-- `Prepare REP` moves wallet REP into the migration balance for the active universe.
-- `Split REP` splits prepared migration REP across the selected outcome universes.
-- The migration summary card is read-only and shows the last migration action, amount, and selected outcomes.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Migration Amount` | Set how much REP moves through the migration workflow. | Must parse into a REP amount greater than zero. | Disabled while migration is pending or before the universe has forked. |
+| `Max` | Fill `Migration Amount` with all available wallet REP plus prepared migration REP. | No direct validation beyond available balance. | Disabled while migration is pending, before fork, or when no REP is available. |
+| REP approval control | Approve any additional REP still needed to prepare the selected amount. | Required amount is the missing preparation amount. | Blocked by missing wallet, wrong network, missing universe, no valid amount, or no fork. |
+| Outcome universe selector | Choose which child universes receive split REP. | Selected outcomes must parse as valid outcome indexes and map to valid child universes. | Disabled while migration is pending. |
+| `Add Next Outcome` | Add the next unselected outcome universe. | No direct validation. | Disabled while migration is pending or when no further outcome exists. |
+| Outcome toggles | Select or deselect individual target universes. | Target set must remain parseable into valid indexes. | Disabled while migration is pending. |
+| `Prepare REP` | Move wallet REP into migration balance. | Requires connected wallet, mainnet, loaded universe, valid amount, forked universe, enough wallet REP, and enough approval. | Disabled whenever preparation is unnecessary or any guard condition fails. |
+| `Split REP` | Split prepared migration REP across selected outcomes. | Requires connected wallet, mainnet, loaded universe, valid amount, enough prepared REP, at least one selected outcome, and sufficient split capacity. | Disabled whenever any split guard condition fails. |
 
 ### Security Pools
 
-The `Security Pools` route has three high-level modes:
-
-- `Browse`
-- `Create`
-- `Operate`
+The `Security Pools` route has three high-level modes: `Browse`, `Create`, and `Operate`.
 
 #### Browse
 
-`Browse` loads the pool registry and lists deployed pools. From here, the operator can:
+`Browse` loads the pool registry and lists deployed pools.
 
-- inspect deployed pool records
-- open a selected pool into the `Operate` workspace
-- access liquidation entry points where the loaded pool and vault context exposes them
+#### Browse Controls
 
-The route auto-loads pool data when this view opens for the first time.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Browse`, `Create`, `Operate` tabs | Switch between Security Pools modes. | No field input. | Not disabled by default, though `Operate` only becomes useful once a pool is selected. |
+| `Refresh pools` | Reload the pool registry and all listed pool summaries. | No field input. | Disabled while pool registry loading is already in progress. |
+| Pool selection actions | Open a listed pool into `Operate`. | Pool must exist in the loaded list. | Not disabled in the normal browse state. |
+| Liquidation entry actions | Open liquidation from a listed vault. | Requires a pool/vault context that supports liquidation. | Disabled when the wallet is missing, not on mainnet, or the price-oracle state makes liquidation unavailable. |
+| Queued-liquidation success notice | Show the most recent queued liquidation transaction hash. | Read-only. | Only shown after a liquidation queue action succeeds. |
 
-##### Browse Controls
+##### Liquidation Modal Controls
 
-- `Browse`, `Create`, and `Operate` are the Security Pools route tabs.
-- Pool selection actions open the selected pool inside `Operate`.
-- Liquidation entry buttons appear only where the loaded vault and oracle-manager context makes liquidation available.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Target Vault` | Choose which vault address should be liquidated. | Required non-empty address input for the queue action to proceed. | Not disabled while the modal is open. |
+| `Liquidation Amount` | Set the liquidation amount to queue. | Required non-empty amount input for the queue action to proceed. | Not disabled while the modal is open. |
+| `Cancel` | Close the liquidation modal without submitting. | No field input. | Not disabled while the modal is open. |
+| `Close` | Close the liquidation modal from the header. | No field input. | Not disabled while the modal is open. |
+| `Queue Liquidation` | Submit the liquidation-queue transaction for the selected manager, pool, vault, and amount. | Requires connected wallet, mainnet, loaded manager address, loaded pool address, non-empty target vault, and non-empty liquidation amount. | Disabled whenever any of those queue-liquidation guard conditions fail. |
+
+#### Browse Read-Only Surfaces
+
+- Each pool card exposes question details, pool metrics, manager address, and truth-auction address when one exists.
+- Each vault card in browse mode exposes vault metrics even before the operator opens the full vault workflow.
+- The browse screen can render empty, loading, and error states through the pool-registry presentation hint and error notice.
 
 #### Create
 
-`Create` is the pool-deployment workflow. It guides the operator through:
+`Create` is the pool-deployment workflow.
 
-- loading or confirming the binary market question context
-- checking for existing pools tied to the same origin question
-- reviewing existing pool records for that question
-- configuring pool parameters such as the security multiplier and retention rate
-- deploying the pool
+#### Create Controls
 
-This view is designed to receive a binary question from Zoltar through the `Use For Create Pool` handoff.
-
-##### Create Fields and Buttons
-
-- `Question ID` selects the binary question used as the pool's origin market.
-- `Security Multiplier` sets the collateralization multiplier for the pool.
-- `Open Interest Fee / Year (%)` sets the pool's retention-rate-based open-interest fee.
-- `Create Pool` submits a pool deployment for the entered question and settings.
-- `Open Pool` appears after a successful deployment and jumps into the new pool's `Operate` workspace.
-- `Create Another Pool` appears after a successful deployment and resets the create form.
-- The `Question Context` section is read-only and shows the loaded market.
-- The `Existing Pools` section is read-only and lists pools already created for the same question.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Question ID` | Select the binary question used as the pool's origin market. | Must parse as a valid decimal or hex bigint. | Never disabled in the base form. |
+| `Security Multiplier` | Set the pool collateralization multiplier. | Must parse as a bigint. | Never disabled in the base form. |
+| `Open Interest Fee / Year (%)` | Set the retention-rate-based open-interest fee. | Must parse as a valid retention-rate percentage. | Never disabled in the base form. |
+| `Create Pool` | Submit the pool deployment. | Requires connected wallet, mainnet, no pending duplicate check, no pending pool creation, loaded binary market, no matching duplicate pool, and no Zoltar fork. | Disabled whenever any of those guards fail. |
+| `Open Pool` | Jump into the created pool's `Operate` workspace. | Requires a successful pool creation result. | Only shown after a successful deployment. |
+| `Create Another Pool` | Reset the create flow after a success. | No field input. | Only shown after a successful deployment. |
 
 #### Operate
 
-`Operate` opens a selected-pool workspace. If the app has a valid `securityPool` query param but has not yet loaded that pool into the registry view, it refreshes selected-pool data automatically.
+`Operate` opens a selected-pool workspace with `Vaults`, `Trading`, `Reporting`, and `Fork` subviews.
 
-The selected pool workspace includes summary data such as:
+#### Operate Controls
 
-- pool status and question context
-- the pool's oracle-manager context
-- price-oracle refresh controls
-- a `Request New Price` action when the oracle-manager state allows it
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| Vertical workflow tabs | Switch between `Vaults`, `Trading`, `Reporting`, and `Fork`. | No field input. | Individual views can be disabled when pool state or universe state locks the workflow. |
+| `Security Pool Address` | Select the pool that should be opened in the selected-pool workspace. | Free-form address interpreted by the selected-pool loader. | Not disabled in the normal selected-pool header. |
+| `Refresh pool` | Reload the selected pool from chain state. | No field input. | Disabled when no pool address is present or while pool loading is already in progress. |
+| `Refresh Oracle` | Reload the pool oracle-manager view. | No field input. | Disabled while oracle-manager details are loading. |
+| `Load Price Oracle` | Load oracle-manager details for the first time. | No field input. | Disabled while oracle-manager details are loading. |
+| `Request New Price` | Queue or request a fresh price. | Requires a loaded oracle-manager and any pool-level oracle preconditions. | Disabled when the local guard message says price request is not currently available. |
+| Pending report link | Open the current pending report inside `Open Oracle`. | Requires a loaded oracle-manager with a non-zero pending report id. | Hidden when there is no pending report. |
 
-If the selected pool belongs to a different universe than the app's active universe, the UI shows a universe mismatch warning and tells the operator to switch to the same universe before using the pool.
+#### Operate Read-Only Surfaces
 
-Inside `Operate`, the main subviews are:
-
-- `Vaults`
-- `Trading`
-- `Reporting`
-- `Fork`
-
-##### Operate Controls
-
-- The vertical workflow tabs switch between `Vaults`, `Trading`, `Reporting`, and `Fork`.
-- `Refresh Oracle` reloads the pool oracle-manager view.
-- `Request New Price` asks the oracle-manager flow to queue or request a fresh price when allowed.
-- The pool summary and question cards are read-only and anchor the active pool context.
+- The selected-pool header can show a lookup-state hint before a pool resolves.
+- The `Pool Summary` surface shows status, vault count, security multiplier, open interest fee, total security bond allowance, manager address, last price, settlement timestamp, expiry, and, when relevant, fork and truth-auction data.
+- A success notice can appear after requesting a new price.
+- If the selected pool belongs to a different universe than the app's active universe, a dedicated `Universe Mismatch` warning appears.
+- If the selected pool has not reached a usable state for the chosen workflow, the UI can replace that workflow with a locked-state hint instead of the action panel.
 
 ##### Vaults
 
-The `Vaults` subview is split again into:
+The `Vaults` subview has `Directory` and `Selected` modes.
 
-- `Directory`
-- `Selected`
+###### Vaults Controls
 
-`Directory` lists vaults for the selected pool. From there, the operator can:
-
-- choose a vault with `Select Vault`
-- open liquidation for a vault when the loaded context allows it
-
-`Selected` focuses on a single vault and its actions. The vault workflow supports:
-
-- claiming fees
-- depositing REP
-- setting security bond allowance
-- withdrawing REP
-
-If the selected vault is not owned by the connected account, the UI keeps the vault visible but explains that the actions are read-only until the operator selects their own vault.
-
-###### Vaults Fields and Buttons
-
-- `Directory` and `Selected` are the vault-local view tabs inside the `Vaults` workspace.
-- `Selected Vault Address` chooses which vault to inspect or operate on.
-- `Refresh` reloads the selected vault from chain state.
-- `Select Vault` copies a vault from the directory into the selected-vault workflow.
-- `Liquidate Vault` opens the liquidation flow for that vault when the current pool and oracle state allows it.
-- `Claim Fees` redeems claimable ETH fees from the selected owned vault.
-- `REP Deposit Amount` sets the REP deposit amount.
-- Deposit `Max` fills the REP deposit field from the wallet REP balance.
-- The REP approval control approves enough REP for the deposit amount.
-- `Create / Deposit REP` creates a new vault if needed or deposits REP into the selected owned vault.
-- `Security Bond Allowance Amount` sets the new security bond allowance in ETH terms.
-- `Set Security Bond Allowance` queues the allowance update for the selected owned vault.
-- `REP Withdraw Amount` sets how much withdrawable REP to remove from the vault.
-- Withdraw `Max` fills the withdrawal field with the vault's currently withdrawable REP.
-- `Withdraw REP` queues the REP withdrawal for the selected owned vault.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Directory` / `Selected` tabs | Switch between vault directory and selected-vault workflow. | No field input. | Not disabled by default. |
+| `Selected Vault Address` | Choose which vault to inspect or operate on. | Free-form address input interpreted by the vault load flow. | Not disabled in the normal selected-pool state. |
+| `Refresh` | Reload the selected vault from chain state. | No field input. | Disabled while vault loading is in progress. |
+| `Select Vault` | Copy a directory vault into the selected-vault workflow. | Vault must exist in the listed pool vaults. | Not disabled in the normal directory state. |
+| `Liquidate Vault` | Open liquidation for the chosen vault. | Requires pool/oracle context that allows liquidation. | Disabled when the wallet is missing, not on mainnet, or oracle state blocks liquidation. |
+| `Claim Fees` | Redeem claimable ETH fees from the selected owned vault. | Requires loaded vault details with claimable fees. | Disabled unless the selected vault is owned by the account, the wallet is on mainnet, and fees are claimable. |
+| `REP Deposit Amount` | Set the REP deposit amount. | Must parse into a valid REP amount. | Not disabled in the normal selected-vault state. |
+| Deposit `Max` | Fill the deposit field from wallet REP balance. | No direct validation. | Disabled when wallet REP balance is unavailable. |
+| REP approval control | Approve enough REP for the selected deposit amount. | Required amount is the parsed deposit amount. | Blocked when the wallet is missing, the selected vault is not owned, the pool is missing, or the vault has not been refreshed. |
+| `Create / Deposit REP` | Create a new vault if needed or deposit REP into the selected owned vault. | Requires connected wallet, mainnet, owned vault, sufficient REP approval, sufficient REP balance, and at least `10 REP` for a brand-new vault. | Disabled whenever any deposit guard condition fails. |
+| `Security Bond Allowance Amount` | Set the new security bond allowance in ETH terms. | Must parse into a valid REP-style amount greater than zero. | Not disabled in the normal selected-vault state. |
+| `Set Security Bond Allowance` | Queue the allowance update. | Requires connected wallet, mainnet, owned vault, loaded vault details, valid oracle price, and positive allowance amount. | Disabled whenever any allowance guard condition fails. |
+| `REP Withdraw Amount` | Set how much withdrawable REP to remove. | Must parse into a valid REP amount. | Not disabled in the normal selected-vault state. |
+| Withdraw `Max` | Fill the withdrawal amount with currently withdrawable REP. | No direct validation. | Disabled when withdrawable REP is unavailable. |
+| `Withdraw REP` | Queue the REP withdrawal. | Requires connected wallet, mainnet, owned vault, valid oracle price, non-zero withdraw amount, and available withdrawable REP. | Disabled whenever any withdraw guard condition fails. |
 
 ##### Trading
 
-The `Trading` subview handles share and complete-set flows for the selected pool. It supports:
+The `Trading` subview handles complete-set and share flows.
 
-- minting complete sets
-- redeeming complete sets
-- migrating forked shares
-- redeeming resolved shares
+###### Trading Controls
 
-This is the pool-level share operations workspace rather than a general exchange UI.
-
-###### Trading Fields and Buttons
-
-- `Security Pool Address` appears when the trading section is used standalone and selects the target pool.
-- `Mint Complete Sets Amount` sets how many complete sets to mint.
-- `Mint Complete Sets` submits the mint transaction.
-- `Redeem Complete Sets Amount` sets how many complete sets to redeem back into collateral.
-- Redeem `Max` fills the redemption amount from the wallet's maximum redeemable complete sets.
-- `Redeem Complete Sets` submits the complete-set redemption.
-- `Share Outcome To Migrate` chooses which share side is being migrated after a fork.
-- The share-migration target selector chooses the destination child outcomes for migrated shares.
-- `Select All` in the target selector fills all available destination outcomes.
-- `Clear` clears the selected migration targets.
-- Individual target toggles add or remove a destination outcome.
-- `Migrate Shares` submits the share migration.
-- `Redeem Shares` redeems finalized or otherwise redeemable shares.
-- The `Your Shares` metrics are read-only and show wallet balances for `Yes`, `No`, `Invalid`, and `Total Complete Sets`.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Security Pool Address` | Select the target pool when trading is used standalone. | Free-form address interpreted by the selected pool loader. | Hidden in embedded pool workflows. |
+| `Mint Complete Sets Amount` | Set how many complete sets to mint. | Must parse into a positive trading amount within remaining mint capacity. | Not disabled in the normal form, but action depends on the guard. |
+| `Mint Complete Sets` | Submit the mint transaction. | Requires loaded pool, connected wallet, mainnet, unforked universe, operational pool, available capacity, valid amount, and enough ETH. | Disabled whenever any mint guard condition fails. |
+| `Redeem Complete Sets Amount` | Set how many complete sets to redeem. | Must parse into a positive trading amount not above the wallet maximum. | Not disabled in the normal form. |
+| Redeem `Max` | Fill the redemption amount from the wallet maximum. | No direct validation. | Disabled when the redeemable maximum is unavailable or zero. |
+| `Redeem Complete Sets` | Submit complete-set redemption. | Requires loaded pool, connected wallet, mainnet, unforked universe, operational pool, loaded balances, and a valid redeem amount within the maximum. | Disabled whenever any redeem-complete-set guard condition fails. |
+| `Share Outcome To Migrate` | Choose which share side is being migrated after a fork. | Must be one of the supported reporting outcomes. | Disabled until the universe has forked. |
+| Share migration target selector | Choose destination child outcomes for migrated shares. | Target child universes must parse and resolve as valid destinations. | Disabled until the universe has forked. |
+| `Select All` / `Clear` / target toggles | Manage migration target selection. | Target set must remain valid. | Disabled until the universe has forked. |
+| `Migrate Shares` | Submit share migration. | Requires loaded pool, connected wallet, mainnet, forked universe, loaded fork targets, at least one valid target, loaded share balances, and wallet balance for the selected share side. | Disabled whenever any share-migration guard condition fails. |
+| `Redeem Shares` | Redeem finalized or otherwise redeemable shares. | Requires loaded pool, connected wallet, mainnet, unforked universe, operational pool, and finalized market outcome. | Disabled whenever any redeem-shares guard condition fails. |
 
 ##### Reporting
 
-The `Reporting` subview focuses on escalation and reporting for the selected pool. It shows the reporting context and supports:
+The `Reporting` subview handles reporting and escalation.
 
-- loading the reporting or escalation state
-- reporting an outcome
-- withdrawing escalation deposits
+###### Reporting Controls
 
-It is the main operator view for the pool's reporting and dispute lifecycle.
-
-###### Reporting Fields and Buttons
-
-- `Security Pool Address` appears when the reporting section is used standalone and selects the target pool.
-- `Refresh reporting` loads or reloads escalation and reporting state for the selected pool.
-- `Outcome Side` chooses which reporting side the next contribution or withdrawal targets.
-- `Report / Contribution Amount` sets the REP amount to stake on the selected reporting side.
-- `Report / Contribute On Selected Side` submits the reporting or contribution transaction.
-- `Withdraw Deposit Indexes` optionally narrows withdrawal to specific deposit indexes on the selected side.
-- Leaving `Withdraw Deposit Indexes` empty means withdraw all of the operator's deposits on that side.
-- `Withdraw Escalation Deposits` submits the withdrawal transaction.
-- The reporting preview text is read-only and estimates possible profit if the selected side wins and later contributions do not change the pool.
-- The escalation metrics and side cards are read-only and summarize bond size, threshold, timer, leading outcome, and user stake.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Security Pool Address` | Select the target pool when reporting is used standalone. | Free-form address interpreted by the reporting loader. | Hidden in embedded pool workflows. |
+| `Refresh reporting` | Load or reload escalation/reporting state. | No field input. | Disabled while reporting details are loading or when the workflow is locked by pool state. |
+| `Outcome Side` | Choose the reporting side for contribution or withdrawal. | Must be one of the supported reporting outcomes. | Disabled when the workflow is locked. |
+| `Report / Contribution Amount` | Set the REP amount to stake on the selected side. | Must parse into a valid positive REP amount. | Disabled when the workflow is locked. |
+| `Report / Contribute On Selected Side` | Submit reporting or contribution. | Requires unlocked workflow, connected wallet, mainnet, loaded reporting details, and valid positive amount. | Disabled whenever any reporting guard condition fails. |
+| `Withdraw Deposit Indexes` | Optionally narrow withdrawal to specific deposits. | Optional input. If used, it must match the downstream withdrawal parser's expected format. | Disabled when the workflow is locked. |
+| `Withdraw Escalation Deposits` | Submit the withdrawal. | Requires unlocked workflow, connected wallet, mainnet, loaded reporting details, and at least one withdrawable user deposit on the selected side. | Disabled whenever any withdrawal guard condition fails. |
 
 ##### Fork
 
-The `Fork` subview is the selected pool's fork and truth-auction workspace. It covers the lifecycle from fork initiation through migration and auction settlement.
+The `Fork` subview handles the selected pool's fork and truth-auction lifecycle.
 
-The actions exposed here include:
+###### Fork Controls
 
-- forking with the operator's own escalation
-- initiating a pool fork
-- direct universe fork actions
-- creating child universes
-- migrating REP, vault state, and escalation deposits
-- starting the truth auction
-- submitting bids
-- finalizing the truth auction
-- refunding losing bids
-- claiming auction proceeds
-- withdrawing bids
-
-This is the deepest lifecycle workspace in the Security Pools route.
-
-###### Fork Fields and Buttons
-
-- `Security Pool Address` selects the pool whose fork and auction lifecycle is being inspected.
-- `Refresh fork` loads or reloads the fork and truth-auction state.
-- `Initiate`, `Migration`, `Auction`, and `Settlement` are lifecycle tabs for the fork workspace.
-- `Fork With Own Escalation` starts a fork using the operator's own escalation path.
-- `Initiate Pool Fork` triggers the pool-level fork path.
-- `Direct Fork Universe ID` sets the universe to fork directly.
-- `Direct Fork Question ID` sets the direct fork question.
-- `Fork Universe Directly` submits the direct universe fork.
-- `Outcome` in `Create Child Universe` selects which child outcome universe to deploy.
-- `Create ... Child Universe` deploys the child universe for the selected outcome.
-- `REP Migration Outcomes` lists the REP migration outcome names or keys used when migrating REP into Zoltar from the pool flow.
-- `Migrate REP To Zoltar` submits that REP migration.
-- `Outcome` in `Migrate Vault` selects which child outcome receives the migrated vault.
-- `Vault Address` in `Migrate Vault` chooses which vault to migrate. Leaving it empty uses the connected wallet's vault context.
-- `Migrate Vault` submits the vault migration.
-- `Outcome` in `Migrate Escalation Deposits` selects which child outcome receives the migrated deposits.
-- `Escalation Deposit Indexes` selects which deposit indexes to migrate.
-- `Migrate Escalation Deposits` submits the escalation deposit migration.
-- `Start Truth Auction` starts the truth auction once the lifecycle reaches that stage.
-- `Bid Tick` sets the tick for the submitted bid.
-- `Bid Amount (ETH)` sets the ETH amount offered in the bid.
-- `Submit Bid` submits the auction bid.
-- The bid estimate text is read-only and shows the approximate REP that would be purchased at the current clearing price.
-- `Finalize Truth Auction` finalizes the auction once it is ready.
-- `Refund Tick` selects the tick for a losing-bid refund.
-- `Refund Bid Index` selects the bid index to refund.
-- `Refund Losing Bid` submits the refund.
-- `Vault Address` in `Claim Auction Proceeds` selects the vault that should claim auction proceeds. Leaving it empty uses the connected wallet's vault context.
-- `Claim Bid Tick` selects the winning bid tick to claim against.
-- `Claim Bid Index` selects the winning bid index to claim against.
-- `Claim Auction Proceeds` claims proceeds for that bid position.
-- `Withdraw For Address` selects the address whose bids should be withdrawn. Leaving it empty uses the connected wallet.
-- `Withdraw Tick` selects the auction tick to withdraw from.
-- `Withdraw Bid Index` selects the bid index to withdraw.
-- `Withdraw Bids` submits the withdrawal.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Security Pool Address` | Select the pool whose fork lifecycle is being inspected. | Free-form address interpreted by the fork loader. | Hidden in embedded pool workflows. |
+| `Refresh fork` | Load or reload fork and truth-auction state. | No field input. | Disabled while fork details are loading. |
+| Lifecycle tabs | Switch between `Initiate`, `Migration`, `Auction`, and `Settlement`. | No field input. | Not disabled by default, though later stages can show explanatory messages when the pool has not progressed that far. |
+| `Fork With Own Escalation` | Start a fork using the operator's own escalation path. | No extra field input. | Disabled when the wallet is missing, not on mainnet, or the broader workflow is disabled. |
+| `Initiate Pool Fork` | Trigger the pool-level fork path. | No extra field input. | Disabled when the wallet is missing, not on mainnet, or the broader workflow is disabled. |
+| `Direct Fork Universe ID` | Set the universe to fork directly. | Must be parseable by the direct-fork action path. | Field itself is not disabled in the active stage panel. |
+| `Direct Fork Question ID` | Set the direct fork question. | Must be parseable by the direct-fork action path. | Field itself is not disabled in the active stage panel. |
+| `Fork Universe Directly` | Submit the direct universe fork. | Requires connected wallet, mainnet, enabled workflow, and parseable direct-fork inputs. | Disabled whenever the base fork action guard fails. |
+| `Outcome` in child/migration actions | Choose the child outcome used by the action. | Must be one of the supported reporting outcomes. | Not disabled unless the broader stage panel is disabled. |
+| `Create ... Child Universe` | Deploy the child universe for the selected outcome. | Requires connected wallet, mainnet, enabled workflow, and a selected outcome. | Disabled whenever the base fork action guard fails. |
+| `REP Migration Outcomes` | Describe which outcomes should receive migrated REP through the pool flow. | Must be parseable by the migration action path. | Not disabled unless the broader stage panel is disabled. |
+| `Migrate REP To Zoltar` | Submit REP migration to Zoltar through the pool flow. | Requires connected wallet, mainnet, enabled workflow, and parseable migration outcomes. | Disabled whenever the base fork action guard fails. |
+| `Vault Address` in `Migrate Vault` | Choose which vault to migrate. | Optional. Empty falls back to connected-wallet vault context. | Not disabled unless the broader stage panel is disabled. |
+| `Migrate Vault` | Submit vault migration. | Requires connected wallet, mainnet, enabled workflow, and any required parseable fields. | Disabled whenever the base fork action guard fails. |
+| `Escalation Deposit Indexes` | Choose which escalation deposits to migrate. | Must be parseable by the deposit-migration path. | Not disabled unless the broader stage panel is disabled. |
+| `Migrate Escalation Deposits` | Submit escalation deposit migration. | Requires connected wallet, mainnet, enabled workflow, and parseable indexes. | Disabled whenever the base fork action guard fails. |
+| `Start Truth Auction` | Start the truth auction. | No extra field input. | Disabled when the wallet is missing, not on mainnet, or the broader workflow is disabled. |
+| `Bid Tick` | Set the tick for a bid. | Must be parseable by the bid action path. | Field itself is not disabled unless the stage panel is disabled. |
+| `Bid Amount (ETH)` | Set the ETH amount for a bid. | Must be parseable by the bid action path. | Field itself is not disabled unless the stage panel is disabled. |
+| `Submit Bid` | Submit the truth-auction bid. | Requires connected wallet, mainnet, enabled workflow, and parseable bid inputs. | Disabled whenever the base fork action guard fails. |
+| `Finalize Truth Auction` | Finalize the auction once ready. | No extra field input. | Disabled when the wallet is missing, not on mainnet, or the broader workflow is disabled. |
+| `Refund Tick` / `Refund Bid Index` | Choose a losing bid to refund. | Must be parseable by the refund action path. | Fields themselves are not disabled unless the stage panel is disabled. |
+| `Refund Losing Bid` | Submit the refund. | Requires connected wallet, mainnet, enabled workflow, and parseable refund inputs. | Disabled whenever the base fork action guard fails. |
+| `Vault Address` / `Claim Bid Tick` / `Claim Bid Index` | Choose which vault and winning bid position to claim against. | Must be parseable by the claim action path. Vault address is optional and can fall back to the connected wallet. | Fields themselves are not disabled unless the stage panel is disabled. |
+| `Claim Auction Proceeds` | Claim proceeds for a winning bid position. | Requires connected wallet, mainnet, enabled workflow, and parseable claim inputs. | Disabled whenever the base fork action guard fails. |
+| `Withdraw For Address` / `Withdraw Tick` / `Withdraw Bid Index` | Choose which bids to withdraw. | Must be parseable by the withdraw action path. Withdraw-for address is optional and can fall back to the connected wallet. | Fields themselves are not disabled unless the stage panel is disabled. |
+| `Withdraw Bids` | Submit bid withdrawal. | Requires connected wallet, mainnet, enabled workflow, and parseable withdraw inputs. | Disabled whenever the base fork action guard fails. |
 
 #### Security Pools Route Handoffs
 
@@ -475,130 +424,110 @@ The first two are route-level entry points. The third becomes the focused report
 
 #### Browse Reports
 
-`Browse` loads paginated Open Oracle report summaries. The route header shows:
+`Browse` loads paginated Open Oracle report summaries.
 
-- total browse count
-- page
-- the selected report id, if any
+#### Browse Controls
 
-Inside the browse section, the operator can:
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Browse`, `Create`, `Selected Report` tabs | Switch between Open Oracle views. | No field input. | `Selected Report` is still reachable even before a report is loaded, but it will show a loading or missing state until a report resolves. |
+| `Previous Page` | Load the previous report-summary page. | No field input. | Disabled on the first page or while browse data is loading. |
+| `Next Page` | Load the next report-summary page. | No field input. | Disabled on the last page or while browse data is loading. |
+| `Open report` | Load a selected report into the selected-report workspace. | Report id comes from the loaded report card. | Not disabled in the normal browse list. |
 
-- page through report summaries
-- inspect per-report status badges
-- open a report with `Open report`
+#### Browse Read-Only Surfaces
 
-The page size is fixed.
-
-##### Browse Fields and Buttons
-
-- `Browse`, `Create`, and `Selected Report` are the Open Oracle route tabs.
-- `Previous Page` loads the prior report-summary page.
-- `Next Page` loads the next report-summary page.
-- `Open report` loads a selected report into the `Selected Report` workspace.
-- The route header metrics are read-only and show browse count, page, and selected report id.
+- Each report summary card exposes token pair, current price, current reporter, current token amounts, report timestamp, and settlement timestamp.
+- A latest-action card can appear after a recent Oracle action, including report creation.
+- The browse route can render loading, empty, and error states when report summaries are being fetched.
 
 #### Create Open Oracle Game
 
-`Create` is a direct report-instance creation flow. It is separate from any pool oracle-manager workflow and creates a standalone Open Oracle game.
+`Create` is a direct report-instance creation flow.
 
-The form exposes fields for:
+#### Create Open Oracle Game Controls
 
-- token addresses
-- exact token1 report amount
-- settler reward
-- ETH value to send
-- fee percentage
-- multiplier
-- settlement time
-- escalation halt
-- dispute delay
-- protocol fee
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Token1 Address` | Set the first token contract. | Parsed by the create-game action path. | Never disabled in the base form. |
+| `Token2 Address` | Set the second token contract. | Parsed by the create-game action path. | Never disabled in the base form. |
+| `Exact Token1 Report` | Set the exact token1 report amount. | Parsed by the create-game action path. | Never disabled in the base form. |
+| `Settler Reward` | Set the ETH reward paid to the settler. | Parsed by the create-game action path. | Never disabled in the base form. |
+| `ETH Value To Send` | Set the ETH value attached to creation. | Parsed by the create-game action path. | Never disabled in the base form. |
+| `Fee Percentage` | Set the fee percentage. | Parsed by the create-game action path. | Never disabled in the base form. |
+| `Multiplier` | Set the oracle multiplier. | Parsed by the create-game action path. | Never disabled in the base form. |
+| `Settlement Time` | Set the base settlement delay. | Parsed by the create-game action path. | Never disabled in the base form. |
+| `Escalation Halt` | Set the escalation halt threshold. | Parsed by the create-game action path. | Never disabled in the base form. |
+| `Dispute Delay` | Set the dispute delay. | Parsed by the create-game action path. | Never disabled in the base form. |
+| `Protocol Fee` | Set the protocol fee share. | Parsed by the create-game action path. | Never disabled in the base form. |
+| `Create Open Oracle Game` | Submit the standalone game creation. | Requires a connected wallet. Most field correctness is enforced by the action path rather than by front-end validation in this component. | Disabled until a wallet is connected. |
 
-The main action is `Create Open Oracle Game`.
+#### Create Open Oracle Game Read-Only Surfaces
 
-##### Create Open Oracle Game Fields and Buttons
-
-- `Token1 Address` sets the first token contract for the oracle game.
-- `Token2 Address` sets the second token contract.
-- `Exact Token1 Report` sets the exact token1 amount that reports must satisfy.
-- `Settler Reward` sets the ETH reward paid to the settler.
-- `ETH Value To Send` sets the ETH value attached to the creation transaction.
-- `Fee Percentage` sets the report fee percentage.
-- `Multiplier` sets the oracle multiplier.
-- `Settlement Time` sets the base settlement delay.
-- `Escalation Halt` sets the escalation halt threshold.
-- `Dispute Delay` sets the delay before disputes or settlement progression.
-- `Protocol Fee` sets the protocol fee share.
-- `Create Open Oracle Game` submits the standalone game creation.
+- A latest-action card can appear after recent Open Oracle create actions.
+- The create route can show an error notice below the form when the action fails.
 
 #### Selected Report
 
-`Selected Report` is the loaded report workspace. The UI chooses the visible action mode from the report state and presents one of the following paths.
+`Selected Report` is the loaded report workspace.
 
-##### Selected Report Fields and Buttons
+#### Selected Report Controls
 
-- `Report ID` chooses which report to load in the selected-report workspace.
-- `Open report` loads the report if nothing is loaded yet.
-- `Refresh report` reloads the report if it is already loaded.
-- The report summary and identity/economics/status/settlement/callback sections are read-only and expose the full report state.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Report ID` | Choose which report to load in the selected-report workspace. | Must identify a loadable report for the workspace to become actionable. | Never disabled in the base selected-report form. |
+| `Open report` | Load the selected report when no report is currently loaded. | Uses the entered report id. | Disabled while a report is already loading. |
+| `Refresh report` | Reload the selected report when one is already loaded. | Uses the current report id. | Disabled while a report is already loading. |
+
+#### Selected Report Read-Only Surfaces
+
+- The loaded report card shows a status badge such as awaiting initial report, pending, disputed, or settled.
+- The top summary grid exposes report id, oracle address, current reporter, current price, and settlement timestamp.
+- The report body is broken into read-only sections for `Identity`, `Economics`, `Status`, `Settlement`, and `Callback / Extra`.
+- When no report is loaded, the selected-report screen can show an explicit missing or loading state hint rather than the full report body.
 
 ##### Initial Report
 
-When the report still needs its first report, the UI exposes:
+The `Initial Report` mode appears while the report still needs its first report.
 
-- manual price entry
-- `Fetch price from Uniswap`
-- token approval controls for both tokens
-- optional ETH-to-WETH wrapping when needed
-- `Submit Initial Report`
+###### Initial Report Controls
 
-The section also shows the price source and any visible prerequisite or blocking messages.
-
-###### Initial Report Fields and Buttons
-
-- `Price (token1 / token2)` sets the initial reported price.
-- `Fetch price from Uniswap` asks the UI to populate the price from the quote source.
-- The token approval controls approve enough `token1` and `token2` to satisfy the initial report deposit requirements.
-- `Wrap needed ETH to WETH` appears only when the report needs additional WETH and wrapping is possible.
-- `Submit Initial Report` submits the first report.
-- The price source line and WETH requirement messages are read-only and explain how the current submission values were derived.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Price (token1 / token2)` | Set the initial reported price. | Must parse into a valid price before token2 approval and full submission can resolve. | Not disabled in the normal initial-report state. |
+| `Fetch price from Uniswap` | Populate the price from the quote source. | No field input. | Disabled while quote loading is already in progress. |
+| Token1 approval control | Approve enough token1 for the initial report. | Required amount is derived from the report requirements. | Disabled when no wallet is connected. |
+| Token2 approval control | Approve enough token2 for the initial report. | Required amount depends on a valid price-derived token2 amount. | Disabled when no wallet is connected or until a valid price produces a valid token2 amount. |
+| `Wrap needed ETH to WETH` | Wrap ETH into WETH when additional WETH is required. | Wrap requirement is derived from the report state and wallet balances. | Hidden unless wrap is needed. When shown, disabled unless the wallet is connected and wrapping is currently possible. |
+| `Submit Initial Report` | Submit the first report. | Requires connected wallet, report still awaiting initial report, valid price-derived amounts, satisfied token approvals, and satisfied WETH wrap requirements if any. | Disabled whenever any submission guard condition fails. |
 
 ##### Dispute Report
 
-When the report is in a disputable state, the UI exposes:
+The `Dispute Report` mode appears while a report is in a disputable lifecycle window.
 
-- token selection for the swap-out side
-- new token amounts
-- `Dispute & Swap`
+###### Dispute Report Controls
 
-If settlement is also eligible, the selected report view can show a parallel `Settle Report` action alongside the dispute flow.
-
-###### Dispute Report Fields and Buttons
-
-- `Token to Swap Out` chooses which side of the pair is swapped out during dispute.
-- `New token1 Amount` sets the replacement amount for token1.
-- `New token2 Amount` sets the replacement amount for token2.
-- `Dispute & Swap` submits the dispute transaction.
-- `Settle Report` may also appear here when settlement is already allowed in parallel with dispute.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Token to Swap Out` | Choose which side of the pair is swapped out during dispute. | Must be one of the supported pair tokens. | Not disabled in normal dispute mode. |
+| `New token1 Amount` | Set the replacement amount for token1. | Must parse by the downstream dispute flow. | Not disabled in normal dispute mode. |
+| `New token2 Amount` | Set the replacement amount for token2. | Must parse by the downstream dispute flow. | Not disabled in normal dispute mode. |
+| `Dispute & Swap` | Submit the dispute transaction. | Requires connected wallet, loaded report, and report state that is currently disputable. | Disabled whenever any dispute guard condition fails. |
+| `Settle Report` in dispute mode | Settle if the report has already reached settlement eligibility. | Requires connected wallet, loaded report, and report state that is currently settleable. | Disabled whenever any settle guard condition fails. |
 
 ##### Settle Report
 
-When the report is ready for settlement, the selected report workspace exposes settlement directly through `Settle Report`.
+The `Settle Report` mode appears when dispute is no longer allowed but settlement is ready.
 
-###### Settle Report Buttons
+###### Settle Report Controls
 
-- `Settle Report` finalizes the report when the report lifecycle and timing allow settlement.
+| Control | Purpose | Validation | Disabled when |
+| --- | --- | --- | --- |
+| `Settle Report` | Finalize the report. | Requires connected wallet, loaded report, initial report already present, report not already settled, and settlement window already open. | Disabled whenever any settle guard condition fails. |
 
 ##### Settled Report
 
 Once settled, the report stays available in a read-oriented state with status and summary fields, but the actionable lifecycle moves to a completed presentation.
-
-Across these modes, button availability is used heavily to communicate unmet prerequisites such as:
-
-- no connected wallet
-- no loaded report
-- invalid approval or token state
-- report-state-specific restrictions on dispute or settlement
 
 ## Common Journeys
 
@@ -619,6 +548,12 @@ These handoffs are part of the operator flow, not separate apps.
 - Query params can reopen prior working context, so a page refresh may return to a previously selected universe, pool, report, or Zoltar subview.
 - Simulation mode changes both the backend and the data assumptions. It is useful for QA, but it is not a mainnet-equivalent environment.
 - Once a universe has forked, several actions change availability. In particular, some fork-related setup actions disappear or become disabled, while migration actions become relevant.
+
+## Exceptional States
+
+- If the user lands on an unsupported hash route, the app renders a dedicated `404` route with `Return to Deploy`, `Open Zoltar`, and `Open Security Pools`.
+- If the wallet is on the wrong network, the app replaces the selected route content with a mainnet-gate route that instructs the operator to switch to Ethereum mainnet.
+- Across the app, many sections use explicit empty, loading, missing, blocked, and success presentations instead of leaving panels blank.
 
 ## Contributor Note
 
