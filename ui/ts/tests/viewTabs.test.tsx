@@ -71,4 +71,23 @@ describe('ViewTabs', () => {
 		expect(selectedValue).toBe('overview')
 		expect(document.activeElement).toBe(overviewTab)
 	})
+
+	test('renders real links when href metadata is provided', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ViewTabs
+				ariaLabel='Route Tabs'
+				value='overview'
+				onChange={() => undefined}
+				options={[
+					{ href: '#/overview', label: 'Overview', value: 'overview' },
+					{ href: '#/details', label: 'Details', value: 'details' },
+				]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const overviewLink = within(document.body).getByRole('tab', { name: 'Overview' }) as HTMLAnchorElement
+		expect(overviewLink.tagName).toBe('A')
+		expect(overviewLink.getAttribute('href')).toBe('#/overview')
+	})
 })

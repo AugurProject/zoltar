@@ -127,7 +127,7 @@ contract SecurityPoolOracleCoordinator {
 		stagedOperationCounter++;
 		// Capture snapshot of the target vault state at queue time to prevent manipulation
 		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , , ) = securityPool.securityVaults(targetVault);
-		uint256 snapshotTotalRep = securityPool.repToken().balanceOf(address(securityPool));
+		uint256 snapshotTotalRep = securityPool.getAvailableRepBalance();
 		uint256 snapshotDenominator = securityPool.poolOwnershipDenominator();
 		stagedOperations[stagedOperationCounter] = StagedOperation({
 			operation: operation,

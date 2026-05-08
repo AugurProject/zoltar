@@ -22,6 +22,13 @@ export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'
 export type SecurityPoolSystemState = 'operational' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
 export type ForkAuctionAction = 'forkWithOwnEscalation' | 'initiateFork' | 'createChildUniverse' | 'migrateRepToZoltar' | 'migrateVault' | 'migrateEscalationDeposits' | 'startTruthAuction' | 'submitBid' | 'refundLosingBids' | 'finalizeTruthAuction' | 'claimAuctionProceeds' | 'forkUniverse' | 'withdrawBids'
 export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
+export type StagedOracleOperation = {
+	amount: bigint
+	initiatorVault: Address
+	operation: OracleQueueOperation
+	operationId: bigint
+	targetVault: Address
+}
 
 export type QuestionData = {
 	title: string
@@ -144,6 +151,8 @@ export type OracleManagerDetails = {
 	lastSettlementTimestamp: bigint
 	managerAddress: Address
 	openOracleAddress: Address
+	pendingOperation: StagedOracleOperation | undefined
+	pendingOperationSlotId: bigint
 	pendingReportId: bigint
 	priceValidUntilTimestamp: bigint | undefined
 	requestPriceEthCost: bigint
@@ -152,7 +161,7 @@ export type OracleManagerDetails = {
 }
 
 export type OpenOracleActionResult = ActionResult & {
-	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'queueOperation' | 'requestPrice' | 'settle' | 'submitInitialReport' | 'wrapWeth'
+	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'submitInitialReport' | 'wrapWeth'
 }
 
 export type OpenOracleReportSummary = {

@@ -40,6 +40,7 @@ contract SecurityPool is ISecurityPool {
 	uint256 public poolOwnershipDenominator;
 	uint256 public securityMultiplier;
 	uint256 public shareTokenSupply;
+	uint256 public totalLockedRepInEscalationGame;
 
 	uint256 public totalFeesOwedToVaults;
 	uint256 public lastUpdatedFeeAccumulator;
@@ -185,10 +186,12 @@ contract SecurityPool is ISecurityPool {
 		uint256 ownershipToWithdraw = repToPoolOwnership(repAmount);
 		uint256 withdrawOwnership = ownershipToWithdraw + repToPoolOwnership(SecurityPoolUtils.MIN_REP_DEPOSIT) > securityVaults[vault].poolOwnership ? securityVaults[vault].poolOwnership : ownershipToWithdraw;
 		uint256 withdrawRepAmount = poolOwnershipToRep(withdrawOwnership);
+		uint256 availableRepBalance = getAvailableRepBalance();
 
 		uint256 oldRep = poolOwnershipToRep(securityVaults[vault].poolOwnership);
+		require(oldRep >= securityVaults[vault].lockedRepInEscalationGame + withdrawRepAmount, 'withdraw would use locked REP');
 		require((oldRep - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= securityVaults[vault].securityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Local Security Bond Allowance broken');
-		require((repToken.balanceOf(address(this)) - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= totalSecurityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Global Security Bond Allowance broken');
+		require((availableRepBalance - withdrawRepAmount) * SecurityPoolUtils.PRICE_PRECISION >= totalSecurityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice(), 'Global Security Bond Allowance broken');
 
 		securityVaults[vault].poolOwnership -= withdrawOwnership;
 		poolOwnershipDenominator -= withdrawOwnership;
@@ -197,12 +200,18 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function repToPoolOwnership(uint256 repAmount) public view returns (uint256) {
-		if (poolOwnershipDenominator == 0) return repAmount * SecurityPoolUtils.PRICE_PRECISION;
-		return repAmount * poolOwnershipDenominator / repToken.balanceOf(address(this));
+		uint256 availableRepBalance = getAvailableRepBalance();
+		if (poolOwnershipDenominator == 0 || availableRepBalance == 0) return repAmount * SecurityPoolUtils.PRICE_PRECISION;
+		return repAmount * poolOwnershipDenominator / availableRepBalance;
 	}
 
 	function poolOwnershipToRep(uint256 poolOwnership) public view returns (uint256) {
-		return poolOwnership * repToken.balanceOf(address(this)) / poolOwnershipDenominator;
+		if (poolOwnershipDenominator == 0) return 0;
+		return poolOwnership * getAvailableRepBalance() / poolOwnershipDenominator;
+	}
+
+	function getAvailableRepBalance() public view returns (uint256) {
+		return repToken.balanceOf(address(this)) - totalLockedRepInEscalationGame;
 	}
 
 	function sharesToCash(uint256 completeSetAmount) public view returns (uint256) {
@@ -307,7 +316,7 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[callerVault].securityBondAllowance = amount;
 
 		require(poolOwnershipToRep(securityVaults[callerVault].poolOwnership) * SecurityPoolUtils.PRICE_PRECISION > amount * priceOracleManagerAndOperatorQueuer.lastPrice());
-		require(repToken.balanceOf(address(this)) * SecurityPoolUtils.PRICE_PRECISION > totalSecurityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice());
+		require(getAvailableRepBalance() * SecurityPoolUtils.PRICE_PRECISION > totalSecurityBondAllowance * priceOracleManagerAndOperatorQueuer.lastPrice());
 		require(totalSecurityBondAllowance >= completeSetCollateralAmount, 'minted too many complete sets to allow this');
 		require(securityVaults[callerVault].securityBondAllowance >= SecurityPoolUtils.MIN_SECURITY_BOND_DEBT || securityVaults[callerVault].securityBondAllowance == 0, 'min deposit requirement');
 		emit SecurityBondAllowanceChange(callerVault, oldAllowance, amount);
@@ -377,7 +386,9 @@ contract SecurityPool is ISecurityPool {
 			require(block.timestamp > endTime, 'question has not ended');
 			escalationGame = escalationGameFactory.deployEscalationGame(TODO_INITIAL_ESCALATION_GAME_DEPOSIT, zoltar.getForkThreshold(universeId) / 2);
 		}
-		securityVaults[msg.sender].lockedRepInEscalationGame += escalationGame.depositOnOutcome(msg.sender, outcome, maxAmount);
+		uint256 depositedAmount = escalationGame.depositOnOutcome(msg.sender, outcome, maxAmount);
+		securityVaults[msg.sender].lockedRepInEscalationGame += depositedAmount;
+		totalLockedRepInEscalationGame += depositedAmount;
 		require(poolOwnershipToRep(securityVaults[msg.sender].poolOwnership) >= securityVaults[msg.sender].lockedRepInEscalationGame, 'Not enough REP');
 	}
 
@@ -400,6 +411,7 @@ contract SecurityPool is ISecurityPool {
 				(depositor, amountToWithdraw, originalDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index], msg.sender);
 			}
 			securityVaults[depositor].lockedRepInEscalationGame -= originalDepositAmount;
+			totalLockedRepInEscalationGame -= originalDepositAmount;
 			if (amountToWithdraw > originalDepositAmount) {
 				securityVaults[depositor].poolOwnership += repToPoolOwnership(amountToWithdraw - originalDepositAmount);
 			} else if (amountToWithdraw < originalDepositAmount) {

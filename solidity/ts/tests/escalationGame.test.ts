@@ -150,6 +150,13 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(outcomeBalancesAfterDeposit.invalid, 0n, 'invalid stake')
 	})
 
+	test('empty started game resolves to invalid after timeout', async () => {
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
+		const startingTime = await getStartingTime(client, escalationGame)
+		await mockWindow.setTime(startingTime + ESCALATION_TIME_LENGTH + 1n)
+		assert.strictEqual(await getQuestionResolution(client, escalationGame), QuestionOutcome.Invalid, 'empty game should resolve as invalid')
+	})
+
 	test('depositOnOutcome reverts when outcome is None', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
 		await assert.rejects(depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.None, reportBond))

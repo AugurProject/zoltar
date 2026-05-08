@@ -848,6 +848,8 @@ describe('Open Oracle helpers', () => {
 		expect(details.managerAddress).toBe(managerAddress)
 		expect(details.openOracleAddress).toBe(getOpenOracleAddress())
 		expect(details.pendingReportId).toBe(0n)
+		expect(details.pendingOperation).toBe(undefined)
+		expect(details.pendingOperationSlotId).toBe(0n)
 		expect(details.lastPrice).toBe(0n)
 		expect(details.lastSettlementTimestamp).toBe(0n)
 		expect(details.isPriceValid).toBe(false)

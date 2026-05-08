@@ -35,7 +35,7 @@ import type { DeploymentRouteContentProps, MarketRouteContentProps, OpenOracleSe
 export function App() {
 	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
 	const deployNextMissingPending = useSignal(false)
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, setActiveUniverseId, setOpenOracleReport, setSecurityPoolAddress, setZoltarView, zoltarView } = useUrlState()
+	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setSecurityPoolAddress, setSelectedPoolView, setZoltarView, zoltarView } = useUrlState()
 	const activeZoltarView = resolveEnumValue<'questions' | 'create' | 'fork' | 'migrate'>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
 	const onTransaction = (hash: Hash) => {
 		transactionState.value = {
@@ -169,7 +169,7 @@ export function App() {
 		wrapWethForInitialReport,
 	} = useOpenOracleOperations({ ...baseHookConfig, enabled: route === 'open-oracle' })
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
-	const { loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(baseHookConfig)
+	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(baseHookConfig)
 	const {
 		checkedSecurityPoolAddress,
 		closeLiquidationModal,
@@ -465,11 +465,13 @@ export function App() {
 			onLiquidationTargetVaultChange: setLiquidationTargetVault,
 			onOpenLiquidationModal: (managerAddress: Address, selectedSecurityPoolAddress: Address, vaultAddress: Address) => openLiquidationModal(managerAddress, selectedSecurityPoolAddress, vaultAddress),
 			onQueueLiquidation: (managerAddress: Address, selectedSecurityPoolAddress: Address) => void queueLiquidation(managerAddress, selectedSecurityPoolAddress),
+			onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint) => void executePendingPoolOperation(managerAddress, operationId),
 			loadingPoolOracleManager,
 			loadingSecurityPools,
 			onLoadPoolOracleManager: (managerAddress: Address) => void loadPoolOracleManager(managerAddress),
 			onRequestPoolPrice: (managerAddress: Address) => void requestPoolPrice(managerAddress),
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
+			onSelectedPoolViewChange: setSelectedPoolView,
 			onViewPendingReport: reportId => {
 				setOpenOracleForm(current => ({ ...current, reportId: reportId.toString() }))
 				navigate('open-oracle')
@@ -480,6 +482,7 @@ export function App() {
 			poolOracleManagerDetails,
 			poolOracleManagerError,
 			poolPriceOracleResult,
+			selectedPoolView,
 			onSecurityPoolAddressChange: value => {
 				setSecurityPoolAddress(value)
 			},

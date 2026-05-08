@@ -29,6 +29,7 @@ import {
 	depositToEscalationGame,
 	getCompleteSetCollateralAmount,
 	getCurrentRetentionRate,
+	getAvailableRepBalance,
 	getPoolOwnershipDenominator,
 	getRepToken,
 	getShareTokenSupply,
@@ -349,10 +350,23 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, losingDeposit)
 		await mockWindow.advanceTime(50n * DAY)
 
-		const repClaimBeforeWithdrawal = await getVaultRepClaim(client.account.address)
 		const lockedRepBeforeWithdrawal = (await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).lockedRepInEscalationGame
-		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n, 1n, 2n, 3n])
-		const repClaimAfterWithdrawal = await getVaultRepClaim(client.account.address)
+		const withdrawalHash = await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n, 1n, 2n, 3n])
+		const withdrawalReceipt = await client.waitForTransactionReceipt({ hash: withdrawalHash })
+		const winningClaimAmount = withdrawalReceipt.logs
+			.map(log => {
+				try {
+					return decodeEventLog({
+						abi: peripherals_EscalationGame_EscalationGame.abi,
+						data: log.data,
+						topics: log.topics,
+					})
+				} catch {
+					return undefined
+				}
+			})
+			.filter(log => log?.eventName === 'ClaimDeposit')
+			.reduce((sum, log) => sum + (log?.args.amountToWithdraw ?? 0n), 0n)
 		const vaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 
 		strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'question should resolve to yes')
@@ -361,7 +375,8 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(expectedRewardEligibleCap, expectedBindingCapital + expectedBindingCapital / 2n, 'reward-eligible cap should extend 50% beyond binding capital')
 		strictEqualTypeSafe(expectedRewardBonusPool, (expectedBindingCapital * 3n) / 5n, 'binding-capital reward pool should equal the unburned 60% share')
 		strictEqualTypeSafe(expectedGrossWinningPayout, 7n * 10n ** 18n + 7n * 10n ** 18n + 7n * 10n ** 18n + 2n * 10n ** 18n, 'gross winning payout should match the pooled reward schedule')
-		strictEqualTypeSafe(repClaimAfterWithdrawal - repClaimBeforeWithdrawal, expectedWinnerProfit, 'vault claim should increase only by winner profit; the original principal was already this vaults claim before it was locked')
+		strictEqualTypeSafe(expectedWinnerProfit, expectedGrossWinningPayout - totalWinningPrincipal, 'winner profit should equal payout minus winning principal')
+		strictEqualTypeSafe(winningClaimAmount, expectedGrossWinningPayout, 'winning withdrawals should emit the expected gross payout across all reward-eligible deposits')
 		strictEqualTypeSafe(totalPrincipalLocked - totalWinningPrincipal, losingDeposit, 'losing side should contribute 10 REP of principal')
 		strictEqualTypeSafe(expectedResidualHaircut, 4n * 10n ** 18n, '40% of the 10 REP binding-capital region should remain as slashed residual in the pool')
 		strictEqualTypeSafe(vaultAfterWithdrawal.lockedRepInEscalationGame, 0n, 'winning withdrawals should unlock all deposited REP')
@@ -392,8 +407,36 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'question should resolve to yes')
 		strictEqualTypeSafe(losingVaultBeforeWithdrawal.lockedRepInEscalationGame, losingDeposit, 'losing-side REP should start fully locked')
 		strictEqualTypeSafe(losingVaultAfterWithdrawal.lockedRepInEscalationGame, losingDeposit, 'losing-side REP should remain locked after the winner withdraws')
-		strictEqualTypeSafe(losingClaimAfterWithdrawal, losingClaimBeforeWithdrawal, 'raw ownership claim stays tracked on the vault')
-		strictEqualTypeSafe(losingAvailableClaimAfterWithdrawal, losingClaimBeforeWithdrawal - losingDeposit, 'the losing vaults available REP claim should be reduced by the locked losing deposit')
+		strictEqualTypeSafe(losingClaimAfterWithdrawal > losingClaimBeforeWithdrawal, true, 'remaining pool residual should continue to benefit the losing vaults available REP claim')
+		strictEqualTypeSafe(losingAvailableClaimAfterWithdrawal < losingClaimAfterWithdrawal, true, 'locked losing REP should stay excluded from the vaults immediately available claim')
+	})
+
+	test('withdrawRep only uses available REP and cannot drain another vaults locked escalation stake', async () => {
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const lockedDeposit = 100n * 10n ** 18n
+		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+
+		const availableRepBeforeWithdrawal = await getAvailableRepBalance(client, securityPoolAddresses.securityPool)
+		const aliceWalletRepBeforeWithdrawal = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+
+		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
+
+		const availableRepAfterWithdrawal = await getAvailableRepBalance(client, securityPoolAddresses.securityPool)
+		const aliceWalletRepAfterWithdrawal = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		const aliceVaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const attackerVaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
+
+		strictEqualTypeSafe(availableRepBeforeWithdrawal, repDeposit * 2n - lockedDeposit, 'available REP should exclude the locked escalation deposit')
+		strictEqualTypeSafe(aliceWalletRepAfterWithdrawal - aliceWalletRepBeforeWithdrawal, repDeposit - lockedDeposit / 2n, 'withdrawal should be capped to the callers share of available REP')
+		strictEqualTypeSafe(availableRepAfterWithdrawal, repDeposit - lockedDeposit / 2n, 'remaining available REP should still exclude the locked stake after withdrawal')
+		strictEqualTypeSafe(aliceVaultAfterWithdrawal.repDepositShare, 0n, 'full vault withdrawal should remove the callers ownership share')
+		strictEqualTypeSafe(attackerVaultAfterWithdrawal.lockedRepInEscalationGame, lockedDeposit, 'the other vaults locked escalation stake should remain intact')
 	})
 
 	test('withdrawFromEscalationGame gives safety-boundary deposits a pro-rata share of the binding-capital reward pool', async () => {

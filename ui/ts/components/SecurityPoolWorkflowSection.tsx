@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
@@ -35,7 +35,6 @@ import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVau
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
-import { readSelectedPoolViewQueryParam, writeSelectedPoolViewQueryParam } from '../lib/urlParams.js'
 import { resolveEnumValue } from '../lib/viewState.js'
 import { formatDuration, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../lib/securityVault.js'
@@ -132,6 +131,17 @@ export function getOraclePriceExpiryDisplay({ currentTimestamp, lastSettlementTi
 	return timeRemaining === 0n ? 'Expired' : formatDuration(timeRemaining)
 }
 
+function getPendingOperationLabel(operation: 'liquidation' | 'setSecurityBondsAllowance' | 'withdrawRep') {
+	switch (operation) {
+		case 'liquidation':
+			return 'Liquidation'
+		case 'withdrawRep':
+			return 'Withdraw REP'
+		case 'setSecurityBondsAllowance':
+			return 'Set Bond Allowance'
+	}
+}
+
 export function getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails, selectedPoolManagerAddress }: { poolOracleManagerDetails: OracleManagerDetails | undefined; selectedPoolManagerAddress: string | undefined }) {
 	if (!sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return undefined
 	return poolOracleManagerDetails
@@ -162,6 +172,7 @@ export function SecurityPoolWorkflowSection({
 	onLoadPoolOracleManager,
 	onOpenLiquidationModal,
 	onQueueLiquidation,
+	onExecutePendingPoolOperation,
 	onRefreshSelectedPoolData,
 	onRequestPoolPrice,
 	onViewPendingReport,
@@ -174,15 +185,18 @@ export function SecurityPoolWorkflowSection({
 	repPerEthSource,
 	repPerEthSourceUrl,
 	reporting,
+	selectedPoolView,
 	securityPoolOverviewActiveAction,
 	securityPoolAddress,
 	securityPools,
 	securityVault,
 	modeTabs,
+	onSelectedPoolViewChange,
 	showHeader = true,
 	trading,
 }: SecurityPoolWorkflowRouteContentProps & { modeTabs?: ComponentChildren; showHeader?: boolean }) {
-	const [view, setView] = useState<SelectedPoolView>(() => resolveSelectedPoolView(readSelectedPoolViewQueryParam(window.location.search)))
+	const view = resolveSelectedPoolView(selectedPoolView)
+	const [manualPendingOperationId, setManualPendingOperationId] = useState('')
 	const [vaultView, setVaultView] = useState<SelectedVaultView>('selected-vault')
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedPool = securityPools.find(pool => sameCaseInsensitiveText(pool.securityPoolAddress, securityPoolAddress))
@@ -238,7 +252,6 @@ export function SecurityPoolWorkflowSection({
 		{ label: 'Selected', value: 'selected-vault' },
 	]
 	const selectedPoolManagerAddress = selectedPool?.managerAddress
-	const selectedPoolManagerAddressKey = normalizeAddress(selectedPoolManagerAddress)
 	const currentPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({
 		poolOracleManagerDetails,
 		selectedPoolManagerAddress,
@@ -252,10 +265,6 @@ export function SecurityPoolWorkflowSection({
 		hasSelectedPoolAddress,
 		selectedPoolLookupState,
 	})
-	const lastAutoLoadedManagerAddress = useRef<string | undefined>(undefined)
-	const lastReportingLoadedPoolAddress = useRef<string | undefined>(undefined)
-	const lastForkLoadedPoolAddress = useRef<string | undefined>(undefined)
-	const lastSelectedPoolVaultDefaultKey = useRef<string | undefined>(undefined)
 	const loadedSelectedPool = selectedPool
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
 	const requestPriceGuardMessage =
@@ -268,6 +277,30 @@ export function SecurityPoolWorkflowSection({
 					: currentPoolOracleManagerDetails?.pendingReportId !== undefined && currentPoolOracleManagerDetails.pendingReportId > 0n
 						? 'A pending price report already exists for this pool.'
 						: undefined
+	const selectedPendingOperationId = currentPoolOracleManagerDetails?.pendingOperationSlotId ?? 0n
+	const pendingOperationInput = manualPendingOperationId.trim() !== '' ? manualPendingOperationId.trim() : selectedPendingOperationId > 0n ? selectedPendingOperationId.toString() : ''
+	const resolvedPendingOperationId =
+		pendingOperationInput === ''
+			? undefined
+			: (() => {
+					try {
+						return BigInt(pendingOperationInput)
+					} catch {
+						return undefined
+					}
+				})()
+	const executePendingOperationGuardMessage =
+		accountState.address === undefined
+			? 'Connect a wallet before executing a staged operation.'
+			: !isMainnet
+				? 'Switch to Ethereum mainnet before executing a staged operation.'
+				: currentPoolOracleManagerDetails === undefined
+					? 'Load the price oracle before executing a staged operation.'
+					: currentPoolOracleManagerDetails.isPriceValid === false
+						? 'Wait for a valid oracle price before executing a staged operation.'
+						: resolvedPendingOperationId === undefined
+							? 'Enter a valid staged operation id.'
+							: undefined
 	const selectedPoolLookupPresentation =
 		selectedPoolLookupDisplay === 'empty'
 			? {
@@ -285,47 +318,39 @@ export function SecurityPoolWorkflowSection({
 	) : securityVault.securityVaultMissing ? (
 		<StateHint presentation={{ key: 'not_found', badgeLabel: 'Not found', badgeTone: 'blocked', detail: 'Try another vault address.' }} />
 	) : undefined
+	const selectedPoolVaultDefaultKey = `${normalizeAddress(selectedPool?.securityPoolAddress) ?? ''}:${normalizeAddress(accountState.address) ?? ''}`
 
 	useEffect(() => {
 		if (selectedPoolManagerAddress === undefined) return
 		if (sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return
-		if (lastAutoLoadedManagerAddress.current === selectedPoolManagerAddressKey) return
-		lastAutoLoadedManagerAddress.current = selectedPoolManagerAddressKey
+		if (loadingPoolOracleManager) return
 		void onLoadPoolOracleManager(selectedPoolManagerAddress)
-	}, [onLoadPoolOracleManager, poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress, selectedPoolManagerAddressKey])
+	}, [loadingPoolOracleManager, onLoadPoolOracleManager, poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress])
 
 	useEffect(() => {
 		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
 		if (normalizedSelectedPoolAddress === undefined) return
-		const selectedPoolVaultDefaultKey = `${normalizedSelectedPoolAddress}:${normalizeAddress(accountState.address) ?? ''}`
-		if (lastSelectedPoolVaultDefaultKey.current === selectedPoolVaultDefaultKey) return
-		lastSelectedPoolVaultDefaultKey.current = selectedPoolVaultDefaultKey
 		setVaultView('selected-vault')
 		if (accountState.address === undefined) return
 		if (isSelectedVaultOwnedByAccountHelper(securityVault.securityVaultForm.selectedVaultAddress, accountState.address)) return
 		securityVault.onSecurityVaultFormChange({ selectedVaultAddress: accountState.address.toString() })
-	}, [accountState.address, selectedPool?.securityPoolAddress, securityVault.onSecurityVaultFormChange, securityVault.securityVaultForm.selectedVaultAddress])
+	}, [accountState.address, securityVault.onSecurityVaultFormChange, securityVault.securityVaultForm.selectedVaultAddress, selectedPoolVaultDefaultKey])
 
 	useEffect(() => {
 		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
 		if (view !== 'reporting' || !reportingReady || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) return
-		if (lastReportingLoadedPoolAddress.current === normalizedSelectedPoolAddress) return
-		lastReportingLoadedPoolAddress.current = normalizedSelectedPoolAddress
+		if (sameAddress(reporting.reportingDetails?.securityPoolAddress, normalizedSelectedPoolAddress)) return
+		if (reporting.loadingReportingDetails) return
 		void reporting.onLoadReporting()
-	}, [reporting.onLoadReporting, reportingReady, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
+	}, [reporting.loadingReportingDetails, reporting.onLoadReporting, reporting.reportingDetails?.securityPoolAddress, reportingReady, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
 
 	useEffect(() => {
 		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
 		if (view !== 'fork' || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) return
-		if (lastForkLoadedPoolAddress.current === normalizedSelectedPoolAddress) return
-		lastForkLoadedPoolAddress.current = normalizedSelectedPoolAddress
+		if (sameAddress(forkAuction.forkAuctionDetails?.securityPoolAddress, normalizedSelectedPoolAddress)) return
+		if (forkAuction.loadingForkAuctionDetails) return
 		void forkAuction.onLoadForkAuction()
-	}, [forkAuction.onLoadForkAuction, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
-
-	useEffect(() => {
-		const nextSearch = writeSelectedPoolViewQueryParam(window.location.search, hasSelectedPoolAddress ? view : undefined)
-		window.history.replaceState({}, '', `${window.location.pathname}${nextSearch}${window.location.hash}`)
-	}, [hasSelectedPoolAddress, view])
+	}, [forkAuction.forkAuctionDetails?.securityPoolAddress, forkAuction.loadingForkAuctionDetails, forkAuction.onLoadForkAuction, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
 
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Selected Pool'>
@@ -411,23 +436,59 @@ export function SecurityPoolWorkflowSection({
 							<ErrorNotice message={poolOracleManagerError} />
 							{poolPriceOracleResult === undefined ? undefined : (
 								<p className='notice success'>
-									Requested price: <TransactionHashLink hash={poolPriceOracleResult.hash} />
+									{poolPriceOracleResult.action === 'executeStagedOperation' ? 'Executed staged operation' : 'Requested price'}: <TransactionHashLink hash={poolPriceOracleResult.hash} />
 								</p>
 							)}
 							{currentPoolOracleManagerDetails === undefined ? <p className='detail'>Load the price oracle to inspect the latest settlement details.</p> : undefined}
+							{currentPoolOracleManagerDetails?.pendingOperation === undefined ? undefined : (
+								<SectionBlock density='compact' headingLevel={4} title='Queued Operation' variant='embedded'>
+									<div className='workflow-metric-grid'>
+										<MetricField label='Operation Id'>{currentPoolOracleManagerDetails.pendingOperation.operationId.toString()}</MetricField>
+										<MetricField label='Operation'>{getPendingOperationLabel(currentPoolOracleManagerDetails.pendingOperation.operation)}</MetricField>
+										<MetricField label='Initiator'>
+											<AddressValue address={currentPoolOracleManagerDetails.pendingOperation.initiatorVault} />
+										</MetricField>
+										<MetricField label='Target Vault'>
+											<AddressValue address={currentPoolOracleManagerDetails.pendingOperation.targetVault} />
+										</MetricField>
+										<MetricField label='Amount'>
+											<CurrencyValue value={currentPoolOracleManagerDetails.pendingOperation.amount} />
+										</MetricField>
+									</div>
+								</SectionBlock>
+							)}
+							{currentPoolOracleManagerDetails === undefined ? undefined : (
+								<label className='field'>
+									<span>Staged Operation Id</span>
+									<FormInput value={manualPendingOperationId} onInput={event => setManualPendingOperationId(event.currentTarget.value)} placeholder={selectedPendingOperationId > 0n ? selectedPendingOperationId.toString() : '0'} />
+								</label>
+							)}
 							<div className='actions'>
 								<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
 									{loadingPoolOracleManager ? <LoadingText>Refreshing oracle...</LoadingText> : currentPoolOracleManagerDetails === undefined ? 'Load Price Oracle' : 'Refresh Oracle'}
 								</button>
 								{currentPoolOracleManagerDetails === undefined ? undefined : (
-									<TransactionActionButton
-										idleLabel='Request New Price'
-										pendingLabel='Requesting new price...'
-										onClick={() => onRequestPoolPrice(loadedSelectedPool.managerAddress)}
-										pending={poolOracleActiveAction === 'requestPrice'}
-										tone='secondary'
-										availability={{ disabled: requestPriceGuardMessage !== undefined, reason: requestPriceGuardMessage }}
-									/>
+									<>
+										<TransactionActionButton
+											idleLabel='Request New Price'
+											pendingLabel='Requesting new price...'
+											onClick={() => onRequestPoolPrice(loadedSelectedPool.managerAddress)}
+											pending={poolOracleActiveAction === 'requestPrice'}
+											tone='secondary'
+											availability={{ disabled: requestPriceGuardMessage !== undefined, reason: requestPriceGuardMessage }}
+										/>
+										<TransactionActionButton
+											idleLabel='Execute Staged Operation'
+											pendingLabel='Executing staged operation...'
+											onClick={() => {
+												if (resolvedPendingOperationId === undefined) return
+												onExecutePendingPoolOperation(loadedSelectedPool.managerAddress, resolvedPendingOperationId)
+											}}
+											pending={poolOracleActiveAction === 'executeStagedOperation'}
+											tone='secondary'
+											availability={{ disabled: executePendingOperationGuardMessage !== undefined, reason: executePendingOperationGuardMessage }}
+										/>
+									</>
 								)}
 							</div>
 						</SectionBlock>
@@ -456,7 +517,7 @@ export function SecurityPoolWorkflowSection({
 			<section className='selected-pool-workspace'>
 				<div className='selected-pool-workspace-grid'>
 					<div className='selected-pool-workflow-rail'>
-						<ViewTabs ariaLabel='Selected pool views' className='selected-pool-workflow-nav' orientation='vertical' size='compact' value={view} onChange={setView} options={selectedPoolViewOptions} />
+						<ViewTabs ariaLabel='Selected pool views' className='selected-pool-workflow-nav' orientation='vertical' size='compact' value={view} onChange={nextView => onSelectedPoolViewChange(hasSelectedPoolAddress ? nextView : undefined)} options={selectedPoolViewOptions} />
 					</div>
 
 					<div className='selected-pool-workflow-content'>

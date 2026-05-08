@@ -139,4 +139,26 @@ describe('app route effects integration', () => {
 		await cleanup()
 		dom.cleanup()
 	})
+
+	test('refreshes the selected pool with its route address after pool creation succeeds', async () => {
+		const dom = installDomEnvironment('http://localhost/#/security-pools')
+		const calls: Array<string | undefined> = []
+		const securityPoolAddress = '0x84834d4Dccea071b363e53952BD300F7bf56a009'
+		const props = createDefaultProps({
+			route: 'security-pools',
+			securityPoolAddress,
+			securityPoolResultHash: '0xabc',
+			loadSecurityPools: async nextSecurityPoolAddress => {
+				calls.push(nextSecurityPoolAddress)
+			},
+		})
+
+		const { cleanup } = await renderIntoDocument(<RouteEffectsHarness {...props} />)
+
+		expect(calls).toContain(securityPoolAddress)
+		expect(calls).not.toContain(undefined)
+
+		await cleanup()
+		dom.cleanup()
+	})
 })

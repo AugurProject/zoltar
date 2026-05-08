@@ -124,11 +124,11 @@ describe('Escalation Game Fork Threshold Test', () => {
 		)
 		const repAfter = await getUserRepClaim(client, securityPoolAddresses.securityPool)
 
-		// Expected amount: depositAmount scaled by the ratio of thresholds
-		// Net REP claim should change by `expected - depositAmount`, because the original deposit
-		// was already part of the vault's ownership and only locked while the game was active.
+		// Expected amount: depositAmount scaled by the ratio of thresholds.
+		// The vault claim helper now excludes locked escalation REP while the game is active,
+		// so withdrawing should increase the available claim by the full scaled payout.
 		const expected = (depositAmount * actualForkThreshold) / escalationThreshold
-		assert.strictEqual(repAfter - repBefore, expected - depositAmount, 'scaled amount mismatch')
+		assert.strictEqual(repAfter - repBefore, expected, 'scaled amount mismatch')
 	})
 
 	test('deploys the escalation game with the tracked Zoltar fork threshold instead of the token supply', async () => {

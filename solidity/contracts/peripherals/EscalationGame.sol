@@ -157,6 +157,7 @@ contract EscalationGame {
 		uint8 yesOver = balances[1] >= currentTotalCost ? 1 : 0;
 		uint8 noOver = balances[2] >= currentTotalCost ? 1 : 0;
 		if (invalidOver + yesOver + noOver >= 2) return BinaryOutcomes.BinaryOutcome.None; // if two or more outcomes are over the total cost, the game is still going
+		if (balances[0] == 0 && balances[1] == 0 && balances[2] == 0) return BinaryOutcomes.BinaryOutcome.Invalid;
 		// the game has ended due to timeout
 		if (balances[0] > balances[1] && balances[0] > balances[2]) return BinaryOutcomes.BinaryOutcome.Invalid;
 		if (balances[1] > balances[0] && balances[1] > balances[2]) return BinaryOutcomes.BinaryOutcome.Yes;

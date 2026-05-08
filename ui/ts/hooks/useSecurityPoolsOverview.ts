@@ -8,6 +8,7 @@ import { getErrorMessage } from '../lib/errors.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
+import { useRequestGuard } from '../lib/requestGuard.js'
 import type { ListedSecurityPool, SecurityPoolOverviewActionResult } from '../types/contracts.js'
 
 type UseSecurityPoolsOverviewParameters = {
@@ -32,17 +33,22 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 	const securityPoolOverviewError = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewResult = useSignal<SecurityPoolOverviewActionResult | undefined>(undefined)
 	const securityPools = useSignal<ListedSecurityPool[]>([])
+	const nextSecurityPoolsLoad = useRequestGuard()
 
 	const loadSecurityPools = async (securityPoolAddress?: string) => {
 		const normalizedCheckedAddress = normalizeAddress(securityPoolAddress)
+		const isCurrent = nextSecurityPoolsLoad()
+		const nextCheckedAddress = normalizedCheckedAddress ?? checkedSecurityPoolAddress.value
 		await securityPoolsLoad.run({
+			isCurrent,
 			onStart: () => {
+				if (!isCurrent()) return
 				securityPoolOverviewError.value = undefined
 			},
 			load: async () => await loadAllSecurityPools(createConnectedReadClient()),
 			onSuccess: pools => {
 				hasLoadedSecurityPools.value = true
-				checkedSecurityPoolAddress.value = normalizedCheckedAddress
+				checkedSecurityPoolAddress.value = nextCheckedAddress
 				securityPools.value = pools
 			},
 			onError: error => {

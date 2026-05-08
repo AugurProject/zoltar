@@ -134,8 +134,8 @@ export function useAppRouteEffects({
 		if (!environmentReady) return
 		if (route !== 'security-pools') return
 		if (securityPoolResultHash === undefined) return
-		void loadSecurityPoolsRef.current()
-	}, [environmentReady, route, securityPoolResultHash])
+		void loadSecurityPoolsRef.current(securityPoolAddress === '' ? undefined : securityPoolAddress)
+	}, [environmentReady, route, securityPoolAddress, securityPoolResultHash])
 
 	useEffect(() => {
 		if (!environmentReady) return
