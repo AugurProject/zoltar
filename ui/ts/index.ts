@@ -9,6 +9,11 @@ function rerender() {
 	render(element, document.body)
 }
 
-void initializeActiveEnvironment().then(() => {
-	rerender()
-})
+void initializeActiveEnvironment()
+	.then(() => {
+		rerender()
+	})
+	.catch(error => {
+		console.error('[ui] failed to initialize active environment', error)
+		render(createElement('div', { className: 'notice error' }, 'Failed to initialize the app environment. Check the console for details.'), document.body)
+	})

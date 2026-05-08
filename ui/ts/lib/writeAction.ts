@@ -30,7 +30,7 @@ export function buildWriteActionConfig(params: Omit<WriteOperationsParameters, '
 
 export async function runWriteAction<TResult extends { hash: Hash }>(parameters: RunWriteActionParameters, action: (walletAddress: Address) => Promise<TResult | undefined>, errorFallback: string, onSuccess?: (result: TResult, walletAddress: Address) => Promise<void> | void) {
 	if (parameters.accountAddress === undefined) {
-		parameters.setErrorMessage('Connect wallet to continue.')
+		parameters.setErrorMessage(parameters.missingWalletMessage)
 		return
 	}
 

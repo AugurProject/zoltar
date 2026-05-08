@@ -44,7 +44,12 @@ export async function copyProjectArtifacts() {
 	await fs.writeFile(CONTRACT_ARTIFACT_OUTPUT_PATH, `${contracts.join('\n\n')}\n`)
 }
 
-copyProjectArtifacts().catch(error => {
-	console.error(error)
-	process.exit(1)
-})
+const currentScriptPath = url.fileURLToPath(import.meta.url)
+const invokedScriptPath = process.argv[1]
+
+if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
+	copyProjectArtifacts().catch(error => {
+		console.error(error)
+		process.exit(1)
+	})
+}

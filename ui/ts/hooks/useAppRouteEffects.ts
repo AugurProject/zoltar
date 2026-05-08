@@ -44,8 +44,8 @@ export function shouldRefreshSelectedPoolForRoute({
 	return environmentReady && route === 'security-pools' && walletBootstrapComplete && securityPoolAddress !== '' && selectedPoolSecurityPoolAddress === undefined
 }
 
-export function shouldSyncSecurityPoolAddressToRouteForms({ route, securityPoolAddress }: { route: AppRoute; securityPoolAddress: string }) {
-	return route === 'security-pools' && securityPoolAddress !== ''
+export function shouldSyncSecurityPoolAddressToRouteForms({ route }: { route: AppRoute; securityPoolAddress: string }) {
+	return route === 'security-pools'
 }
 
 export function useAppRouteEffects({

@@ -223,6 +223,24 @@ describe('Open Oracle helpers', () => {
 		expect(firstPage.reports.map(report => report.price)).toEqual([0n, 0n])
 	})
 
+	test('createOpenOracleReportInstance rejects numeric parameters above Number.MAX_SAFE_INTEGER', async () => {
+		await expect(
+			createOpenOracleReportInstance(uiWriteClient, {
+				disputeDelay: Number.MAX_SAFE_INTEGER + 1,
+				escalationHalt: 0n,
+				exactToken1Report: 1n,
+				ethValue: 1_100n,
+				feePercentage: 100,
+				multiplier: 100,
+				protocolFee: 100,
+				settlementTime: 60,
+				settlerReward: 1_000n,
+				token1Address: addressString(GENESIS_REPUTATION_TOKEN),
+				token2Address: WETH_ADDRESS,
+			}),
+		).rejects.toThrow('Dispute delay exceeds the maximum safe integer range')
+	})
+
 	test('initial report price helpers derive a Uniswap default price and preserve quote failure metadata', async () => {
 		const quote = await loadOpenOracleInitialReportPrice(createQuoteClient(25n), getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000a2'), 100n)
 		expect(quote).toEqual({

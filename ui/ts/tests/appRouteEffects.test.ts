@@ -84,6 +84,6 @@ describe('app route effects', () => {
 				route: 'security-pools',
 				securityPoolAddress: '',
 			}),
-		).toBe(false)
+		).toBe(true)
 	})
 })

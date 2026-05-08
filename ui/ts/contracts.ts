@@ -743,6 +743,18 @@ export async function createOpenOracleReportInstance(
 		token2Address: Address
 	},
 ) {
+	const assertSafeInteger = (value: number, label: string) => {
+		if (!Number.isSafeInteger(value)) {
+			throw new Error(`${label} exceeds the maximum safe integer range`)
+		}
+	}
+
+	assertSafeInteger(parameters.disputeDelay, 'Dispute delay')
+	assertSafeInteger(parameters.feePercentage, 'Fee percentage')
+	assertSafeInteger(parameters.multiplier, 'Multiplier')
+	assertSafeInteger(parameters.protocolFee, 'Protocol fee')
+	assertSafeInteger(parameters.settlementTime, 'Settlement time')
+
 	const callParams = {
 		address: getOpenOracleAddress(),
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
