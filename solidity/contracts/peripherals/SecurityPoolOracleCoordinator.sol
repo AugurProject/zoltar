@@ -124,10 +124,13 @@ contract SecurityPoolOracleCoordinator {
 
 	function requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, uint256 amount) public payable {
 		require(amount > 0, 'need to do non zero operation');
+		require(!securityPool.isEscalationResolved(), 'question already resolved');
 		stagedOperationCounter++;
-		// Capture snapshot of the target vault state at queue time to prevent manipulation
+		// Capture snapshot of the target vault state at queue time to prevent manipulation.
+		// Liquidation should value the vaults full collateral claim. That means using the pools
+		// total REP balance here rather than only the currently withdrawable balance.
 		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , , ) = securityPool.securityVaults(targetVault);
-		uint256 snapshotTotalRep = securityPool.getAvailableRepBalance();
+		uint256 snapshotTotalRep = securityPool.getTotalRepBalance();
 		uint256 snapshotDenominator = securityPool.poolOwnershipDenominator();
 		stagedOperations[stagedOperationCounter] = StagedOperation({
 			operation: operation,
@@ -174,15 +177,15 @@ contract SecurityPoolOracleCoordinator {
 		bool success;
 		if (stagedOperation.operation == OperationType.Liquidation) {
 			try
-				securityPool.performLiquidation(
-					stagedOperation.initiatorVault,
-					stagedOperation.targetVault,
-					stagedOperation.amount,
-					stagedOperation.snapshotTargetOwnership,
-					stagedOperation.snapshotTargetAllowance,
-					stagedOperation.snapshotTotalRep,
-					stagedOperation.snapshotDenominator
-				)
+					securityPool.performLiquidation(
+						stagedOperation.initiatorVault,
+						stagedOperation.targetVault,
+						stagedOperation.amount,
+						stagedOperation.snapshotTargetOwnership,
+						stagedOperation.snapshotTargetAllowance,
+						stagedOperation.snapshotTotalRep,
+						stagedOperation.snapshotDenominator
+					)
 			{
 				success = true;
 				emit ExecutedStagedOperation(operationId, stagedOperation.operation, true, '');

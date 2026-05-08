@@ -20,7 +20,7 @@ import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import { SystemState } from '../testsuite/simulator/types/peripheralTypes'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testsuite/simulator/utils/testUtils'
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getMigratedRep, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateFromEscalationGame, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testsuite/simulator/utils/contracts/securityPoolForker'
-import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond } from '../testsuite/simulator/utils/contracts/escalationGame'
+import { getEscalationGameDeposits, getNonDecisionThreshold, getQuestionResolution, getStartBond, getUnsettledDepositIndexesByOutcomeAndDepositor } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../testsuite/simulator/utils/contracts/zoltar'
 import { getTotalRepPurchased } from '../testsuite/simulator/utils/contracts/auction'
 import {
@@ -407,7 +407,7 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'question should resolve to yes')
 		strictEqualTypeSafe(losingVaultBeforeWithdrawal.lockedRepInEscalationGame, losingDeposit, 'losing-side REP should start fully locked')
 		strictEqualTypeSafe(losingVaultAfterWithdrawal.lockedRepInEscalationGame, losingDeposit, 'losing-side REP should remain locked after the winner withdraws')
-		strictEqualTypeSafe(losingClaimAfterWithdrawal > losingClaimBeforeWithdrawal, true, 'remaining pool residual should continue to benefit the losing vaults available REP claim')
+		strictEqualTypeSafe(losingClaimAfterWithdrawal, losingClaimBeforeWithdrawal, 'losing total collateral claim should stay unchanged while the losing principal remains locked')
 		strictEqualTypeSafe(losingAvailableClaimAfterWithdrawal < losingClaimAfterWithdrawal, true, 'locked losing REP should stay excluded from the vaults immediately available claim')
 	})
 
@@ -433,10 +433,34 @@ describe('Peripherals Contract Test Suite', () => {
 		const attackerVaultAfterWithdrawal = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
 
 		strictEqualTypeSafe(availableRepBeforeWithdrawal, repDeposit * 2n - lockedDeposit, 'available REP should exclude the locked escalation deposit')
-		strictEqualTypeSafe(aliceWalletRepAfterWithdrawal - aliceWalletRepBeforeWithdrawal, repDeposit - lockedDeposit / 2n, 'withdrawal should be capped to the callers share of available REP')
-		strictEqualTypeSafe(availableRepAfterWithdrawal, repDeposit - lockedDeposit / 2n, 'remaining available REP should still exclude the locked stake after withdrawal')
+		strictEqualTypeSafe(aliceWalletRepAfterWithdrawal - aliceWalletRepBeforeWithdrawal, repDeposit, 'withdrawal should still allow the caller to exit its full unlocked collateral claim')
+		strictEqualTypeSafe(availableRepAfterWithdrawal, repDeposit - lockedDeposit, 'remaining available REP should still exclude the locked stake after withdrawal')
 		strictEqualTypeSafe(aliceVaultAfterWithdrawal.repDepositShare, 0n, 'full vault withdrawal should remove the callers ownership share')
 		strictEqualTypeSafe(attackerVaultAfterWithdrawal.lockedRepInEscalationGame, lockedDeposit, 'the other vaults locked escalation stake should remain intact')
+	})
+
+	test('redeemRep requires settled escalation deposits after question finalization', async () => {
+		await finalizeQuestionAsYesWithoutFork()
+
+		const walletRepBeforeRedeem = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		await assert.rejects(redeemRep(client, securityPoolAddresses.securityPool, client.account.address), /settle escalation deposits first/)
+
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
+		const settledRepClaim = await getVaultRepClaim(client.account.address)
+		await redeemRep(client, securityPoolAddresses.securityPool, client.account.address)
+
+		const vaultAfterRedeem = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const walletRepAfterRedeem = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+
+		strictEqualTypeSafe(vaultAfterRedeem.repDepositShare, 0n, 'redeemRep should empty the vault once escalation is settled')
+		strictEqualTypeSafe(vaultAfterRedeem.lockedRepInEscalationGame, 0n, 'settling escalation should clear the lock before redemption')
+		strictEqualTypeSafe(walletRepAfterRedeem - walletRepBeforeRedeem, settledRepClaim, 'redeemRep should pay out the fully settled REP claim')
+	})
+
+	test('oracle-staged collateral operations are rejected once escalation resolves', async () => {
+		await finalizeQuestionAsYesWithoutFork()
+
+		await assert.rejects(requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, 1n), /question already resolved/)
 	})
 
 	test('withdrawFromEscalationGame gives safety-boundary deposits a pro-rata share of the binding-capital reward pool', async () => {
@@ -624,7 +648,24 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
 
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n]), /Wrong outcome/)
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n]), /Invalid deposit index/)
+	})
+
+	test('winning escalation settlement cannot be processed twice and unsettled deposit discovery updates accordingly', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		await mockWindow.advanceTime(10n * DAY)
+
+		const unsettledBefore = await getUnsettledDepositIndexesByOutcomeAndDepositor(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes, client.account.address, 0n, 10n)
+		strictEqualTypeSafe(unsettledBefore.length, 1, 'the winning deposit should be discoverable before settlement')
+		strictEqualTypeSafe(unsettledBefore[0], 0n, 'the first winning deposit should be returned')
+
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
+
+		const unsettledAfter = await getUnsettledDepositIndexesByOutcomeAndDepositor(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes, client.account.address, 0n, 10n)
+		strictEqualTypeSafe(unsettledAfter.length, 0, 'settled winning deposits should disappear from discovery results')
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /deposit already settled/)
 	})
 
 	test('withdrawFromEscalationGame rejects none outcome after external fork cancellation', async () => {
@@ -657,7 +698,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.None, [0n]), /Invalid outcome: None/)
 	})
 
-	test('canceled deposit cannot be withdrawn before escalation game is canceled', async () => {
+	test('losing escalation deposits can be settled after resolution and stop counting as locked collateral', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
@@ -671,8 +712,34 @@ describe('Peripherals Contract Test Suite', () => {
 
 		const noDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
 		const canceledCandidateDeposit = ensureDefined(noDeposits[0], 'no escalation deposit missing')
+		const attackerClaimBeforeSettlement = await getVaultRepClaim(attackerClient.account.address)
 
-		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [canceledCandidateDeposit.depositIndex]), /Wrong outcome/)
+		await withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [canceledCandidateDeposit.depositIndex])
+		const attackerVaultAfterSettlement = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
+		const attackerClaimAfterSettlement = await getVaultRepClaim(attackerClient.account.address)
+		strictEqualTypeSafe(attackerVaultAfterSettlement.lockedRepInEscalationGame, 0n, 'losing-side settlement should clear the resolved escalation lock')
+		approximatelyEqual(attackerClaimAfterSettlement, attackerClaimBeforeSettlement - reportBond, 1n, 'settling a losing escalation deposit should realize the REP loss')
+		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [canceledCandidateDeposit.depositIndex]), /deposit already settled/)
+	})
+
+	test('canceled escalation deposits cannot be refunded twice after an external fork', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const otherQuestionData = {
+			...questionData,
+			title: 'duplicate canceled settlement source question',
+		}
+		const otherQuestionId = getQuestionId(otherQuestionData, outcomes)
+		await createQuestion(attackerClient, otherQuestionData, outcomes)
+		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(attackerClient, genesisUniverse, otherQuestionId)
+
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /deposit already settled/)
 	})
 
 	test('cannot refund an active escalation deposit before zoltar forks', async () => {
@@ -687,15 +754,14 @@ describe('Peripherals Contract Test Suite', () => {
 	test('withdrawFromEscalationGame rejects withdrawing another users deposit', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
 
 		const yesDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		const ourDeposit = ensureDefined(yesDeposits[0], 'yesDeposits[0] is undefined')
 		strictEqualTypeSafe(ourDeposit.depositor, client.account.address, 'wrong depositor')
-
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await approveAndDepositRep(attackerClient, repDeposit, questionId)
 
 		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [ourDeposit.depositIndex]), /Only deposit owner can withdraw/)
 	})
@@ -825,7 +891,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const vaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const snapshotTargetOwnership = vaultBefore.repDepositShare
 		const snapshotTargetAllowance = vaultBefore.securityBondAllowance
-		const snapshotTotalRep = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+		const snapshotTotalRep = await getAvailableRepBalance(client, securityPoolAddresses.securityPool)
 		const snapshotDenominator = await getPoolOwnershipDenominator(client, securityPoolAddresses.securityPool)
 
 		const snapshotExpectedRepDeposit = (snapshotTargetOwnership * snapshotTotalRep) / snapshotDenominator
@@ -875,6 +941,59 @@ describe('Peripherals Contract Test Suite', () => {
 		// Verify that the REP amount taken (repToMove) matches the reduction in target's claim
 		const claimReduction = (targetOwnershipChange * totalRepAfter) / denominatorAfter
 		approximatelyEqual(claimReduction, repToMove, 1n, 'Claim reduction should equal repToMove')
+	})
+
+	test('liquidation continues to count a vaults own escalation lock as backing collateral', async () => {
+		const securityPoolAllowance = 400n * 10n ** 18n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+		await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n)
+
+		strictEqualTypeSafe(canLiquidate(PRICE_PRECISION, securityPoolAllowance, repDeposit, 2n), false, 'vault should start safe before locking REP')
+
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const lockedDeposit = 300n * 10n ** 18n
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
+
+		const targetVaultAfterLock = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+
+		strictEqualTypeSafe(targetVaultAfterLock.lockedRepInEscalationGame, lockedDeposit, 'target vault should have the escalation principal marked as locked')
+		strictEqualTypeSafe(canLiquidate(PRICE_PRECISION, securityPoolAllowance, await getVaultRepClaim(client.account.address), 2n), false, 'the vault should remain safe because its own escalation principal still backs its allowance')
+
+		await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
+
+		const targetVaultAfterLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		strictEqualTypeSafe(targetVaultAfterLiquidation.securityBondAllowance, securityPoolAllowance, 'liquidation should fail because the targets locked REP still counts as backing')
+	})
+
+	test('locking REP in escalation preserves total collateral claims and only reduces the lockers withdrawable balance', async () => {
+		const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(secondVaultClient, repDeposit, questionId)
+
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const lockedDeposit = 100n * 10n ** 18n
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
+
+		const firstVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const secondVault = await getSecurityVault(client, securityPoolAddresses.securityPool, secondVaultClient.account.address)
+		const firstVaultTotalClaim = await getVaultRepClaim(client.account.address)
+		const secondVaultTotalClaim = await getVaultRepClaim(secondVaultClient.account.address)
+		const availableRepBalance = await getAvailableRepBalance(client, securityPoolAddresses.securityPool)
+
+		strictEqualTypeSafe(firstVaultTotalClaim, repDeposit, 'locking REP should not reduce the lockers total collateral claim')
+		strictEqualTypeSafe(secondVaultTotalClaim, repDeposit, 'locking REP should not reduce another vaults total collateral claim')
+		strictEqualTypeSafe(firstVault.lockedRepInEscalationGame, lockedDeposit, 'the lockers escalation principal should be tracked as locked')
+		strictEqualTypeSafe(firstVaultTotalClaim - firstVault.lockedRepInEscalationGame, repDeposit - lockedDeposit, 'the lockers withdrawable REP should shrink by the locked amount')
+		strictEqualTypeSafe(secondVault.lockedRepInEscalationGame, 0n, 'the unrelated vault should have no locked REP')
+		strictEqualTypeSafe(secondVaultTotalClaim - secondVault.lockedRepInEscalationGame, repDeposit, 'the unrelated vault should keep its full withdrawable REP')
+		strictEqualTypeSafe(availableRepBalance, repDeposit * 2n - lockedDeposit, 'pool available REP should exclude only the escalation-locked principal')
 	})
 
 	test('Open Interest Fees (non forking)', async () => {
