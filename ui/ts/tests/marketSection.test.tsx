@@ -13,6 +13,7 @@ import type { MarketSectionProps } from '../types/components.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled } from './testUtils/transactionActionButton.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -284,6 +285,7 @@ describe('MarketSection', () => {
 		})
 		expect(documentQueries.getByRole('dialog')).not.toBeNull()
 		expect(documentQueries.getAllByText('Fork Zoltar').length > 0).toBe(true)
+		expectTransactionButtonDisabled(document.body, 'Fork Zoltar', 'Select a valid fork question before forking Zoltar.')
 	})
 
 	test('opens root-universe child-universe deployment in a modal', async () => {

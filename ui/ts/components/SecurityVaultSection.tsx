@@ -20,8 +20,8 @@ import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/format
 import { balanceShortage } from '../lib/inputs.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
+import { getVaultApprovalGuardMessage, getVaultClaimFeesGuardMessage, getVaultDepositGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
-import { getWalletPresentation } from '../lib/userCopy.js'
 import { getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
@@ -118,6 +118,13 @@ export function SecurityVaultSection({
 			return undefined
 		}
 	})()
+	const withdrawAmount = (() => {
+		try {
+			return parseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount, 'REP withdraw amount')
+		} catch {
+			return undefined
+		}
+	})()
 	const securityBondAllowance = securityVaultDetails?.securityBondAllowance ?? 0n
 	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(securityVaultDetails?.managerAddress, oracleManagerDetails)
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
@@ -131,52 +138,41 @@ export function SecurityVaultSection({
 	const hasInsufficientRepBalance = repBalanceGap !== undefined && repBalanceGap > 0n
 	const canSetSecurityBondAllowance = selectedVaultIsOwnedByAccount && isMainnet && securityVaultDetails !== undefined && hasValidOraclePrice && securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > 0n
 	const canWithdrawRep = selectedVaultIsOwnedByAccount && accountState.address !== undefined && isMainnet && hasValidOraclePrice && hasWithdrawAmount && withdrawableRepAmount !== undefined && withdrawableRepAmount > 0n
-	const claimFeesGuardMessage = !selectedVaultIsOwnedByAccount ? 'Select your own vault to claim fees.' : !isMainnet ? 'Switch to Ethereum mainnet before claiming fees.' : !hasClaimableFees ? 'No claimable fees are available for this vault.' : undefined
-	const setSecurityBondAllowanceGuardMessage = !selectedVaultIsOwnedByAccount
-		? 'Select your own vault to set the security bond allowance.'
-		: !isMainnet
-			? 'Switch to Ethereum mainnet before setting the security bond allowance.'
-			: securityVaultDetails === undefined
-				? 'Refresh the vault before setting the security bond allowance.'
-				: !hasValidOraclePrice
-					? 'A valid oracle price is required before setting the security bond allowance.'
-					: securityBondAllowanceAmount === undefined || securityBondAllowanceAmount <= 0n
-						? 'Enter a security bond allowance greater than zero.'
-						: undefined
-	const depositGuardMessage = !selectedVaultIsOwnedByAccount
-		? 'Select your own vault to deposit REP.'
-		: accountState.address === undefined
-			? 'Connect a wallet before depositing REP.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before depositing REP.'
-				: !hasSufficientDepositAllowance
-					? 'Approve enough REP before depositing.'
-					: hasInsufficientRepBalance
-						? `Need ${formatCurrencyBalance(repBalanceGap ?? 0n)} more REP in this wallet.`
-						: isDepositBelowMinimum
-							? `New vaults require at least ${formatCurrencyBalance(MIN_SECURITY_VAULT_REP_DEPOSIT)} REP in the first deposit.`
-							: undefined
-	const withdrawRepGuardMessage = !selectedVaultIsOwnedByAccount
-		? 'Select your own vault to withdraw REP.'
-		: accountState.address === undefined
-			? 'Connect a wallet before withdrawing REP.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before withdrawing REP.'
-				: !hasValidOraclePrice
-					? 'A valid oracle price is required before withdrawing REP.'
-					: !hasWithdrawAmount
-						? 'Enter a REP withdraw amount.'
-						: withdrawableRepAmount === undefined || withdrawableRepAmount <= 0n
-							? 'No REP is currently withdrawable from this vault.'
-							: undefined
-	const approvalGuardMessage = (() => {
-		const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, isMainnet })
-		if (walletPresentation !== undefined) return walletPresentation.detail
-		if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to approve REP.'
-		if (securityVaultMissing) return 'Choose a pool first.'
-		if (securityVaultDetails === undefined) return 'Refresh the vault first.'
-		return undefined
-	})()
+	const claimFeesGuardMessage = getVaultClaimFeesGuardMessage({
+		hasClaimableFees,
+		isMainnet,
+		selectedVaultIsOwnedByAccount,
+	})
+	const setSecurityBondAllowanceGuardMessage = getVaultSetSecurityBondAllowanceGuardMessage({
+		hasValidOraclePrice,
+		isMainnet,
+		securityBondAllowanceAmount,
+		selectedVaultDetailsLoaded: securityVaultDetails !== undefined,
+		selectedVaultIsOwnedByAccount,
+	})
+	const depositGuardMessage = getVaultDepositGuardMessage({
+		accountAddress: accountState.address,
+		approvalSatisfied: hasSufficientDepositAllowance,
+		isDepositBelowMinimum,
+		isMainnet,
+		repBalanceGap: hasInsufficientRepBalance ? repBalanceGap : undefined,
+		selectedVaultDetailsLoaded: securityVaultDetails !== undefined,
+		selectedVaultIsOwnedByAccount,
+	})
+	const withdrawRepGuardMessage = getVaultWithdrawGuardMessage({
+		accountAddress: accountState.address,
+		hasValidOraclePrice,
+		isMainnet,
+		selectedVaultIsOwnedByAccount,
+		withdrawAmount: hasWithdrawAmount ? withdrawAmount : undefined,
+		withdrawableRepAmount,
+	})
+	const approvalGuardMessage = getVaultApprovalGuardMessage({
+		accountAddress: accountState.address,
+		isMainnet,
+		selectedVaultDetailsLoaded: !securityVaultMissing && securityVaultDetails !== undefined,
+		selectedVaultIsOwnedByAccount,
+	})
 	const latestActionLabel =
 		securityVaultResult === undefined
 			? undefined

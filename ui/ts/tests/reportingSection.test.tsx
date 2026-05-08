@@ -10,6 +10,7 @@ import type { MarketDetails, ReportingDetails } from '../types/contracts.js'
 import type { ReportingSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from './testUtils/transactionActionButton.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -119,5 +120,33 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByText('Reporting Workflow')).not.toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(true)
 		expect(document.body.textContent?.includes('Selected side has')).toBe(true)
+	})
+
+	test('disables reporting buttons when deterministic prerequisites are missing', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					accountState: createAccountState({ address: undefined }),
+					reportingForm: {
+						...createReportingForm(),
+						reportAmount: '',
+						selectedOutcome: 'no',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Connect a wallet before reporting on a market.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw Escalation Deposits', 'Connect a wallet before withdrawing escalation deposits.')
+	})
+
+	test('enables reporting actions when the selected side can accept reports and has deposits to withdraw', async () => {
+		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
+		expectTransactionButtonEnabled(document.body, 'Withdraw Escalation Deposits')
 	})
 })

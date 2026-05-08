@@ -9,6 +9,7 @@ import type { DeploymentRouteContentProps } from '../types/components.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from './testUtils/transactionActionButton.js'
 
 function createStep(id: DeploymentStatus['id'], label: string, deployed: boolean, dependencies: DeploymentStatus['id'][] = []): DeploymentStatus {
 	return {
@@ -70,5 +71,27 @@ describe('DeploymentRouteContent', () => {
 		})
 		if (completedAccordion === undefined) throw new Error('Expected completed deployment group accordion')
 		expect(completedAccordion.hasAttribute('open')).toBe(false)
+	})
+
+	test('disables deploy-next and blocked per-step actions until prerequisites are satisfied', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(DeploymentRouteContent, {
+				...createProps(),
+				accountAddress: undefined,
+				deploymentStatuses: [createStep('proxyDeployer', 'Proxy Deployer', true), createStep('scalarOutcomes', 'Scalar Outcomes', false, ['deploymentStatusOracle'])],
+				deploymentSections: [{ title: 'Zoltar', steps: [createStep('scalarOutcomes', 'Scalar Outcomes', false, ['deploymentStatusOracle'])] }],
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Deploy Next Missing', 'Connect wallet to continue.')
+		expectTransactionButtonDisabled(document.body, 'Deploy', 'Connect wallet to deploy this contract.')
+	})
+
+	test('enables deploy-next when a deterministic step is ready to deploy', async () => {
+		const renderedComponent = await renderIntoDocument(h(DeploymentRouteContent, createProps()))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonEnabled(document.body, 'Deploy Next Missing')
 	})
 })

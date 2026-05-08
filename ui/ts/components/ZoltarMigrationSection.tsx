@@ -18,7 +18,8 @@ import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/format
 import { parseBigIntListInput } from '../lib/inputs.js'
 import { parseRepAmountInput as parseMigrationAmountInput } from '../lib/marketForm.js'
 import { deriveTokenApprovalRequirement, type TokenApprovalState } from '../lib/tokenApproval.js'
-import { getUniversePresentation, getWalletPresentation } from '../lib/userCopy.js'
+import { getUniversePresentation } from '../lib/userCopy.js'
+import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
 import type { ZoltarMigrationFormState } from '../types/app.js'
 import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -55,15 +56,6 @@ function getMigrationOutcomeIndexes(value: string) {
 
 function getMigrationAmountSource(preparedRepBalance: bigint | undefined, repBalance: bigint | undefined) {
 	return (preparedRepBalance ?? 0n) + (repBalance ?? 0n)
-}
-
-function getMigrationGuardMessage(accountAddress: Address | undefined, isMainnet: boolean, rootUniverse: ZoltarUniverseSummary | undefined, loadingZoltarForkAccess: boolean, hasForked: boolean, loadingZoltarUniverse: boolean, notForkedAction: string): string | undefined {
-	const walletPresentation = getWalletPresentation({ accountAddress, isMainnet })
-	if (walletPresentation !== undefined) return walletPresentation.detail
-	if (rootUniverse === undefined) return loadingZoltarUniverse ? undefined : 'Refresh universe first.'
-	if (loadingZoltarForkAccess) return undefined
-	if (!hasForked) return notForkedAction
-	return undefined
 }
 
 function getMissingPreparationAmount(targetAmount: bigint, preparedRepBalance: bigint | undefined) {

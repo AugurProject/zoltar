@@ -18,6 +18,7 @@ import { UniverseLink } from './UniverseLink.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { isMainnetChain } from '../lib/network.js'
 import { formatOpenInterestFeePerYearPercent, openInterestFeePerYearBigint } from '../lib/retentionRate.js'
+import { getSecurityPoolCreateDisabledReason } from '../lib/securityPoolCreationGuards.js'
 import type { ReadinessBlocker, SecurityPoolSectionProps } from '../types/components.js'
 
 export function SecurityPoolSection({
@@ -44,27 +45,17 @@ export function SecurityPoolSection({
 	zoltarUniverseHasForked,
 }: SecurityPoolSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
-	const isPoolActionPending = securityPoolCreating || checkingDuplicateOriginPool
 	const hasSecurityPoolResult = securityPoolResult !== undefined
-	const isCreateDisabled = accountState.address === undefined || !isMainnet || isPoolActionPending || duplicateOriginPoolExists || marketDetails?.marketType !== 'binary' || zoltarUniverseHasForked
-	const createDisabledReason =
-		accountState.address === undefined
-			? 'Connect a wallet before creating a security pool.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before creating a security pool.'
-				: checkingDuplicateOriginPool
-					? 'Checking whether a pool already exists for this question and security multiplier.'
-					: securityPoolCreating
-						? 'Security pool creation is already in progress.'
-						: duplicateOriginPoolExists
-							? 'A pool for this question and security multiplier already exists.'
-							: marketDetails === undefined
-								? 'Load a binary market before creating a pool.'
-								: marketDetails.marketType !== 'binary'
-									? 'Security pools can only be created for binary markets.'
-									: zoltarUniverseHasForked
-										? 'Security pools cannot be created after Zoltar has forked.'
-										: undefined
+	const createDisabledReason = getSecurityPoolCreateDisabledReason({
+		accountAddress: accountState.address,
+		checkingDuplicateOriginPool,
+		duplicateOriginPoolExists,
+		isMainnet,
+		marketDetails,
+		securityPoolCreating,
+		zoltarUniverseHasForked,
+	})
+	const isCreateDisabled = createDisabledReason !== undefined
 	const matchingPools = marketDetails === undefined ? [] : securityPools.filter(pool => sameCaseInsensitiveText(pool.questionId, marketDetails.questionId))
 	const hasMatchingSecurityMultiplier = matchingPools.some(pool => pool.securityMultiplier.toString() === securityPoolForm.securityMultiplier.trim())
 	let createdQuestionDetails = undefined

@@ -44,9 +44,10 @@ import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration, form
 import { parseRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
+import { getVaultApprovalGuardMessage, getVaultClaimFeesGuardMessage, getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
 import { getOracleManagerPriceValidUntilTimestamp, getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
-import { getPoolRegistryPresentation, getWalletPresentation } from '../lib/userCopy.js'
+import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import { resolveEnumValue } from '../lib/viewState.js'
@@ -346,53 +347,41 @@ export function SecurityPoolWorkflowSection({
 	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(selectedVaultDetails?.repDepositShare, depositAmount)
 	const hasClaimableFees = selectedVaultDetails !== undefined && selectedVaultDetails.unpaidEthFees > 0n
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? currentPoolOracleManagerDetails?.priceValidUntilTimestamp : undefined
-	const approvalGuardMessage = (() => {
-		const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, isMainnet })
-		if (walletPresentation !== undefined) return walletPresentation.detail
-		if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to approve REP.'
-		if (selectedVaultDetails === undefined) return 'Refresh the vault first.'
-		return undefined
-	})()
-	const depositGuardMessage = !selectedVaultIsOwnedByAccount
-		? 'Select your own vault to deposit REP.'
-		: accountState.address === undefined
-			? 'Connect a wallet before depositing REP.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before depositing REP.'
-				: selectedVaultDetails === undefined
-					? 'Refresh the vault before depositing REP.'
-					: !approvalRequirement.hasSufficientApproval
-						? 'Approve enough REP before depositing.'
-						: repBalanceGap !== undefined && repBalanceGap > 0n
-							? `Need ${formatCurrencyBalance(repBalanceGap)} more REP in this wallet.`
-							: isDepositBelowMinimum
-								? `New vaults require at least ${formatCurrencyBalance(MIN_SECURITY_VAULT_REP_DEPOSIT)} REP in the first deposit.`
-								: undefined
-	const withdrawRepGuardMessage = !selectedVaultIsOwnedByAccount
-		? 'Select your own vault to withdraw REP.'
-		: accountState.address === undefined
-			? 'Connect a wallet before withdrawing REP.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before withdrawing REP.'
-				: !hasValidOraclePrice
-					? 'A valid oracle price is required before withdrawing REP.'
-					: withdrawAmount === undefined || withdrawAmount <= 0n
-						? 'Enter a valid REP withdraw amount.'
-						: withdrawableRepAmount === undefined || withdrawableRepAmount <= 0n
-							? 'No REP is currently withdrawable from this vault.'
-							: undefined
-	const setSecurityBondAllowanceGuardMessage = !selectedVaultIsOwnedByAccount
-		? 'Select your own vault to set the security bond allowance.'
-		: !isMainnet
-			? 'Switch to Ethereum mainnet before setting the security bond allowance.'
-			: selectedVaultDetails === undefined
-				? 'Refresh the vault before setting the security bond allowance.'
-				: !hasValidOraclePrice
-					? 'A valid oracle price is required before setting the security bond allowance.'
-					: securityBondAllowanceAmount === undefined || securityBondAllowanceAmount <= 0n
-						? 'Enter a security bond allowance greater than zero.'
-						: undefined
-	const claimFeesGuardMessage = !selectedVaultIsOwnedByAccount ? 'Select your own vault to claim fees.' : !isMainnet ? 'Switch to Ethereum mainnet before claiming fees.' : !hasClaimableFees ? 'No claimable fees are available for this vault.' : undefined
+	const approvalGuardMessage = getVaultApprovalGuardMessage({
+		accountAddress: accountState.address,
+		isMainnet,
+		selectedVaultDetailsLoaded: selectedVaultDetails !== undefined,
+		selectedVaultIsOwnedByAccount,
+	})
+	const depositGuardMessage = getVaultDepositGuardMessage({
+		accountAddress: accountState.address,
+		approvalSatisfied: approvalRequirement.hasSufficientApproval,
+		isDepositBelowMinimum,
+		isMainnet,
+		repBalanceGap,
+		selectedVaultDetailsLoaded: selectedVaultDetails !== undefined,
+		selectedVaultIsOwnedByAccount,
+	})
+	const withdrawRepGuardMessage = getVaultWithdrawGuardMessage({
+		accountAddress: accountState.address,
+		hasValidOraclePrice,
+		isMainnet,
+		selectedVaultIsOwnedByAccount,
+		withdrawAmount,
+		withdrawableRepAmount,
+	})
+	const setSecurityBondAllowanceGuardMessage = getVaultSetSecurityBondAllowanceGuardMessage({
+		hasValidOraclePrice,
+		isMainnet,
+		securityBondAllowanceAmount,
+		selectedVaultDetailsLoaded: selectedVaultDetails !== undefined,
+		selectedVaultIsOwnedByAccount,
+	})
+	const claimFeesGuardMessage = getVaultClaimFeesGuardMessage({
+		hasClaimableFees,
+		isMainnet,
+		selectedVaultIsOwnedByAccount,
+	})
 	const selectedPoolStage = getSecurityPoolStagePresentation({
 		activeUniverseId,
 		pool: selectedPool,
@@ -455,16 +444,12 @@ export function SecurityPoolWorkflowSection({
 	})
 	const loadedSelectedPool = selectedPool
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
-	const requestPriceGuardMessage =
-		accountState.address === undefined
-			? 'Connect a wallet before requesting a new price.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before requesting a new price.'
-				: loadedSelectedPool === undefined
-					? 'Load a security pool before requesting a new price.'
-					: currentPoolOracleManagerDetails?.pendingReportId !== undefined && currentPoolOracleManagerDetails.pendingReportId > 0n
-						? 'A pending price report already exists for this pool.'
-						: undefined
+	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({
+		accountAddress: accountState.address,
+		hasLoadedSelectedPool: loadedSelectedPool !== undefined,
+		isMainnet,
+		pendingReportId: currentPoolOracleManagerDetails?.pendingReportId,
+	})
 	const selectedPendingOperationId = currentPoolOracleManagerDetails?.pendingOperationSlotId ?? 0n
 	const pendingOperationInput = manualPendingOperationId.trim() !== '' ? manualPendingOperationId.trim() : selectedPendingOperationId > 0n ? selectedPendingOperationId.toString() : ''
 	const resolvedPendingOperationId =
@@ -477,18 +462,13 @@ export function SecurityPoolWorkflowSection({
 						return undefined
 					}
 				})()
-	const executePendingOperationGuardMessage =
-		accountState.address === undefined
-			? 'Connect a wallet before executing a staged operation.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before executing a staged operation.'
-				: currentPoolOracleManagerDetails === undefined
-					? 'Load the price oracle before executing a staged operation.'
-					: currentPoolOracleManagerDetails.isPriceValid === false
-						? 'Wait for a valid oracle price before executing a staged operation.'
-						: resolvedPendingOperationId === undefined
-							? 'Enter a valid staged operation id.'
-							: undefined
+	const executePendingOperationGuardMessage = getVaultExecutePendingOperationGuardMessage({
+		accountAddress: accountState.address,
+		hasLoadedOracleManager: currentPoolOracleManagerDetails !== undefined,
+		isMainnet,
+		isPriceValid: currentPoolOracleManagerDetails?.isPriceValid,
+		resolvedPendingOperationId,
+	})
 	const selectedPoolLookupPresentation =
 		selectedPoolLookupDisplay === 'empty'
 			? {

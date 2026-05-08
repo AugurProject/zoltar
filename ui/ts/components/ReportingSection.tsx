@@ -22,6 +22,7 @@ import { WorkflowSummaryStrip } from './WorkflowSummaryStrip.js'
 import { formatDuration } from '../lib/formatters.js'
 import { parseOptionalBigIntInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
+import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome } from '../lib/reportingDomain.js'
 import type { LifecycleStagePresentation, ReportingSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
@@ -87,30 +88,21 @@ export function ReportingSection({
 	const selectedSide = reportingDetails?.sides.find(side => side.key === reportingForm.selectedOutcome)
 	const selectedEstimate = selectedSide === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(selectedSide.balance, totalBalance, selectedAmount)
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
-	const reportGuardMessage =
-		lockedReason ??
-		(accountState.address === undefined
-			? 'Connect a wallet before reporting on a market.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before reporting on a market.'
-				: reportingDetails === undefined
-					? 'Load reporting details before reporting on an outcome.'
-					: reportingForm.reportAmount.trim() === ''
-						? 'Enter a report amount greater than zero.'
-						: selectedAmount === undefined || selectedAmount <= 0n
-							? 'Enter a valid report amount greater than zero.'
-							: undefined)
-	const withdrawGuardMessage =
-		lockedReason ??
-		(accountState.address === undefined
-			? 'Connect a wallet before withdrawing escalation deposits.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before withdrawing escalation deposits.'
-				: reportingDetails === undefined
-					? 'Load reporting details before withdrawing escalation deposits.'
-					: selectedSide === undefined || selectedSide.userDeposits.length === 0
-						? 'No deposits are available to withdraw on the selected side.'
-						: undefined)
+	const reportGuardMessage = getReportingReportGuardMessage({
+		accountAddress: accountState.address,
+		isMainnet,
+		lockedReason,
+		reportAmount: reportingForm.reportAmount,
+		reportingDetailsLoaded: reportingDetails !== undefined,
+		selectedAmount,
+	})
+	const withdrawGuardMessage = getReportingWithdrawGuardMessage({
+		accountAddress: accountState.address,
+		hasUserDepositsOnSelectedSide: (selectedSide?.userDeposits.length ?? 0) > 0,
+		isMainnet,
+		lockedReason,
+		reportingDetailsLoaded: reportingDetails !== undefined,
+	})
 	const latestReportingAction =
 		reportingResult === undefined ? undefined : (
 			<LatestActionSection

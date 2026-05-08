@@ -11,6 +11,7 @@ import type { ListedSecurityPool, MarketDetails, SecurityPoolVaultSummary, Secur
 import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled } from './testUtils/transactionActionButton.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -369,6 +370,34 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		expect(documentQueries.getByRole('heading', { name: 'Vault Directory' })).not.toBeNull()
 		expect(documentQueries.getAllByText('Locked REP').length).toBeGreaterThan(0)
+	})
+
+	test('keeps vault launcher buttons disabled until a selected vault is loaded', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					securityVault: createSecurityVaultProps({
+						securityVaultForm: {
+							depositAmount: '10',
+							repWithdrawAmount: '1',
+							securityBondAllowanceAmount: '1',
+							securityPoolAddress: zeroAddress,
+							selectedVaultAddress: '',
+						},
+					}),
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Deposit REP', 'Refresh the selected vault first.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Refresh the selected vault first.')
+		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance', 'Refresh the selected vault first.')
+		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'Refresh the selected vault first.')
 	})
 
 	test('hides the truth auction metric when the selected pool has no truth auction address', async () => {

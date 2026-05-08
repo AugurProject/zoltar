@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { zeroAddress } from 'viem'
-import { findNextDeployableStep, getDeploymentSections, getPrerequisiteLabel } from '../lib/deployment.js'
+import { findNextDeployableStep, getDeploymentSections, getDeploymentStepAvailability, getDeployNextMissingAvailability, getPrerequisiteLabel } from '../lib/deployment.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 import { getDeploymentSteps, getMulticall3Address, getOpenOracleAddress, loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '../contracts.js'
@@ -62,6 +62,54 @@ void describe('deployment helpers', () => {
 		const steps = [createStep('zoltar', false, ['securityPoolFactory'])]
 
 		expect(findNextDeployableStep(steps)).toBe(undefined)
+	})
+
+	void test('getDeployNextMissingAvailability disables when no wallet or wrong network is available', () => {
+		const nextMissingStep = createStep('scalarOutcomes', false)
+
+		expect(
+			getDeployNextMissingAvailability({
+				accountAddress: undefined,
+				busyStepId: undefined,
+				deployNextMissingPending: false,
+				isMainnet: true,
+				nextMissingStep,
+			}),
+		).toEqual({ disabled: true, reason: 'Connect wallet to continue.' })
+
+		expect(
+			getDeployNextMissingAvailability({
+				accountAddress: zeroAddress,
+				busyStepId: undefined,
+				deployNextMissingPending: false,
+				isMainnet: false,
+				nextMissingStep,
+			}),
+		).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet to continue.' })
+	})
+
+	void test('getDeploymentStepAvailability blocks undeployed steps behind prerequisites and allows ready steps', () => {
+		const blockedStep = createStep('zoltar', false, ['scalarOutcomes'])
+		expect(
+			getDeploymentStepAvailability({
+				accountAddress: zeroAddress,
+				busyStepId: undefined,
+				isMainnet: true,
+				prerequisiteLabel: 'Scalar Outcomes',
+				step: blockedStep,
+			}),
+		).toEqual({ disabled: true, reason: 'Waiting for Scalar Outcomes.' })
+
+		const readyStep = createStep('scalarOutcomes', false)
+		expect(
+			getDeploymentStepAvailability({
+				accountAddress: zeroAddress,
+				busyStepId: undefined,
+				isMainnet: true,
+				prerequisiteLabel: undefined,
+				step: readyStep,
+			}),
+		).toEqual({ disabled: false, reason: undefined })
 	})
 
 	void test('getDeploymentSteps includes the deployment status oracle as a proxy deployer step', () => {
