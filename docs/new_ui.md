@@ -126,6 +126,14 @@ This redesign is not intended to:
 
 ## Core Design Changes
 
+When the redesign has to choose between competing priorities, use this order:
+
+1. preserve workflow correctness
+2. preserve clarity of state and blockers
+3. reduce visual and interaction noise
+4. improve speed of execution
+5. improve visual refinement
+
 ### 1. Stronger Route Structure
 
 Each major route should follow a stricter composition:
@@ -383,6 +391,14 @@ What stays the same:
 - report deep-linking and route handoffs
 
 ## Route Specs
+
+This section describes the target route behavior and the intended user-facing structure for each major workspace.
+
+Use it to answer:
+
+- what the redesigned route should feel like
+- what changes from the current UI
+- which actions stay inline versus move to modal execution
 
 ## Route-by-Route Redesign
 
@@ -832,6 +848,19 @@ The right split is:
 ## Implementation Blueprint
 
 Someone implementing this redesign should apply the same page contract everywhere.
+
+### Canonical rules
+
+When sections in this document overlap, use these as the controlling rules:
+
+- route = state, scope, readiness, and action choice
+- modal = execution, confirmation, and operation-specific inputs
+- global blockers appear once per route
+- action cards show only local blockers
+- creation flows usually stay inline unless this document explicitly says otherwise
+- selected object identity and lifecycle stage stay visible while working
+- advanced detail remains available but visually secondary
+- copy stays short and high-signal by default
 
 ### Shared page contract
 
@@ -1742,6 +1771,15 @@ Do not regress on:
 
 ## Implementation
 
+This section is the build-facing layer of the document.
+
+Use it to answer:
+
+- which shared modules should exist
+- how current controls map into the redesign
+- which states must remain supported
+- how to phase the rollout without losing important behavior
+
 ## Route Implementation Requirements
 
 This section is the practical build checklist for the redesign. It should be enough for an implementer to translate the existing UI into the redesigned one without inventing the interaction model from scratch.
@@ -2235,11 +2273,11 @@ If the redesign is implemented incrementally, use this dependency order:
 
 If this redesign is implemented incrementally, start here:
 
-1. convert vault actions to modal-first
-2. convert trading actions to modal-first
-3. convert reporting actions to modal-first
-4. convert Open Oracle selected-report actions to modal-first
-5. add `ActionReadinessPanel`, `NextActionPanel`, and `RequirementsChecklist` to the main routes
+1. build the shared action-card, modal, notice, and sticky-context foundations
+2. convert vault actions to modal-first
+3. convert trading actions to modal-first
+4. convert reporting actions to modal-first
+5. convert Open Oracle selected-report actions to modal-first
 
 This would capture most of the clarity benefit without redesigning every page at once.
 
