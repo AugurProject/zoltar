@@ -267,30 +267,28 @@ contract EscalationGame {
 		emit ClaimDeposit(amountToWithdraw, burnAmount);
 	}
 
-	function refundCanceledDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome, address expectedDepositor) public returns (address depositor, uint256 amountToWithdraw) {
+	function refundCanceledDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amountToWithdraw) {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		require(securityPool.zoltar().getForkTime(securityPool.universeId()) > 0, 'Zoltar has not forked');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
 		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
 		require(deposit.amount > 0, 'deposit already settled');
-		require(deposit.depositor == expectedDepositor, 'Only deposit owner can withdraw');
 		deposits[uint8(outcome)][depositIndex].amount = 0;
 		depositor = deposit.depositor;
 		amountToWithdraw = deposit.amount;
 		emit WithdrawDeposit(depositor, outcome, amountToWithdraw, depositIndex);
 	}
 
-	function withdrawDeposit(uint256 depositIndex, address expectedDepositor) public returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
+	function withdrawDeposit(uint256 depositIndex) public returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
 		// if system hasnt forked, check outcome is winning
 		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();
-		require(deposits[uint8(questionResolution)][depositIndex].depositor == expectedDepositor, 'Only deposit owner can withdraw');
 		(depositor, amountToWithdraw, originalDepositAmount) = claimDepositForWinning(depositIndex, questionResolution);
 		emit WithdrawDeposit(depositor, questionResolution, amountToWithdraw, depositIndex);
 	}
 
-	function forfeitLosingDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome, address expectedDepositor) public returns (address depositor, uint256 originalDepositAmount) {
+	function forfeitLosingDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 originalDepositAmount) {
 		require(msg.sender == address(securityPool), 'Only Security Pool can withdraw');
 		require(nonDecisionTimestamp == 0, 'System has reached non-decision');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome: None');
@@ -300,7 +298,6 @@ contract EscalationGame {
 		require(depositIndex < deposits[uint8(outcome)].length, 'Invalid deposit index');
 		Deposit memory deposit = deposits[uint8(outcome)][depositIndex];
 		require(deposit.amount > 0, 'deposit already settled');
-		require(deposit.depositor == expectedDepositor, 'Only deposit owner can withdraw');
 		deposits[uint8(outcome)][depositIndex].amount = 0;
 		depositor = deposit.depositor;
 		originalDepositAmount = deposit.amount;

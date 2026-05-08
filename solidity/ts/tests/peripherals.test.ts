@@ -751,7 +751,7 @@ describe('Peripherals Contract Test Suite', () => {
 		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n]), /Question has not finalized!/)
 	})
 
-	test('withdrawFromEscalationGame rejects withdrawing another users deposit', async () => {
+	test('third parties can permissionlessly settle another vaults resolved escalation deposits', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -763,7 +763,11 @@ describe('Peripherals Contract Test Suite', () => {
 		const ourDeposit = ensureDefined(yesDeposits[0], 'yesDeposits[0] is undefined')
 		strictEqualTypeSafe(ourDeposit.depositor, client.account.address, 'wrong depositor')
 
-		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [ourDeposit.depositIndex]), /Only deposit owner can withdraw/)
+		const clientVaultBeforeSettlement = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		await withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [ourDeposit.depositIndex])
+		const clientVaultAfterSettlement = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		strictEqualTypeSafe(clientVaultAfterSettlement.lockedRepInEscalationGame, 0n, 'permissionless settlement should clear the owners lock')
+		strictEqualTypeSafe(clientVaultAfterSettlement.repDepositShare >= clientVaultBeforeSettlement.repDepositShare, true, 'permissionless settlement should preserve or increase the owners vault claim')
 	})
 
 	test('create child universe test', async () => {

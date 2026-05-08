@@ -428,6 +428,7 @@ contract SecurityPool is ISecurityPool {
 		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this);
 		bool gameCanceledByExternalFork = questionOutcome == BinaryOutcomes.BinaryOutcome.None && zoltar.getForkTime(universeId) > 0 && !escalationGame.hasReachedNonDecision();
 		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None || gameCanceledByExternalFork, 'Question has not finalized!');
+		address beneficiaryVault = address(0x0);
 		uint256 totalAmountToWithdraw = 0;
 		uint256 totalOriginalDepositAmount = 0;
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
@@ -435,25 +436,26 @@ contract SecurityPool is ISecurityPool {
 			uint256 amountToWithdraw;
 			uint256 originalDepositAmount;
 			if (gameCanceledByExternalFork) {
-				(depositor, amountToWithdraw) = escalationGame.refundCanceledDeposit(depositIndexes[index], outcome, msg.sender);
+				(depositor, amountToWithdraw) = escalationGame.refundCanceledDeposit(depositIndexes[index], outcome);
 				originalDepositAmount = amountToWithdraw;
 			} else {
 				if (outcome == questionOutcome) {
-					(depositor, amountToWithdraw, originalDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index], msg.sender);
+					(depositor, amountToWithdraw, originalDepositAmount) = escalationGame.withdrawDeposit(depositIndexes[index]);
 				} else {
-					(depositor, originalDepositAmount) = escalationGame.forfeitLosingDeposit(depositIndexes[index], outcome, msg.sender);
+					(depositor, originalDepositAmount) = escalationGame.forfeitLosingDeposit(depositIndexes[index], outcome);
 				}
 			}
-			require(depositor == msg.sender, 'Only deposit owner can withdraw');
+			if (beneficiaryVault == address(0x0)) beneficiaryVault = depositor;
+			require(depositor == beneficiaryVault, 'all deposits must belong to one vault');
 			securityVaults[depositor].lockedRepInEscalationGame -= originalDepositAmount;
 			totalLockedRepInEscalationGame -= originalDepositAmount;
 			totalAmountToWithdraw += amountToWithdraw;
 			totalOriginalDepositAmount += originalDepositAmount;
 		}
 		if (totalAmountToWithdraw > totalOriginalDepositAmount) {
-			securityVaults[msg.sender].poolOwnership += repToPoolOwnership(totalAmountToWithdraw - totalOriginalDepositAmount);
+			securityVaults[beneficiaryVault].poolOwnership += repToPoolOwnership(totalAmountToWithdraw - totalOriginalDepositAmount);
 		} else if (totalAmountToWithdraw < totalOriginalDepositAmount) {
-			securityVaults[msg.sender].poolOwnership -= repToPoolOwnership(totalOriginalDepositAmount - totalAmountToWithdraw);
+			securityVaults[beneficiaryVault].poolOwnership -= repToPoolOwnership(totalOriginalDepositAmount - totalAmountToWithdraw);
 		}
 	}
 
