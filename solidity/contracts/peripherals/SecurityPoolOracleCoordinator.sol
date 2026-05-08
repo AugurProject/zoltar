@@ -15,11 +15,6 @@ enum OperationType {
 	SetSecurityBondsAllowance
 }
 
-uint256 constant gasConsumedOpenOracleReportPrice = 100000; // TODO
-uint32 constant gasConsumedSettlement = 1000000; // TODO
-
-IWeth9 constant WETH = IWeth9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-
 struct StagedOperation {
 	OperationType operation;
 	address initiatorVault;
@@ -39,6 +34,20 @@ contract SecurityPoolOracleCoordinator {
 	ReputationToken immutable reputationToken;
 	ISecurityPool public securityPool;
 	OpenOracle public immutable openOracle;
+	IWeth9 public immutable weth;
+	uint256 public immutable gasConsumedOpenOracleReportPrice;
+	uint32 public immutable gasConsumedSettlement;
+	uint256 public immutable exactToken1Report;
+	uint48 public immutable settlementTime;
+	uint24 public immutable disputeDelay;
+	uint24 public immutable protocolFee;
+	uint24 public immutable feePercentage;
+	uint16 public immutable multiplier;
+	bool public immutable timeType;
+	bool public immutable trackDisputes;
+	bool public immutable keepFee;
+	address public immutable protocolFeeRecipient;
+	bool public immutable feeToken;
 
 	event PriceReported(uint256 reportId, uint256 price);
 	event ExecutedStagedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
@@ -48,9 +57,40 @@ contract SecurityPoolOracleCoordinator {
 	uint256 public stagedOperationCounter;
 	mapping(uint256 => StagedOperation) public stagedOperations;
 
-	constructor(OpenOracle _openOracle, ReputationToken _reputationToken) {
+	constructor(
+		OpenOracle _openOracle,
+		ReputationToken _reputationToken,
+		IWeth9 _weth,
+		uint256 _gasConsumedOpenOracleReportPrice,
+		uint32 _gasConsumedSettlement,
+		uint256 _exactToken1Report,
+		uint48 _settlementTime,
+		uint24 _disputeDelay,
+		uint24 _protocolFee,
+		uint24 _feePercentage,
+		uint16 _multiplier,
+		bool _timeType,
+		bool _trackDisputes,
+		bool _keepFee,
+		address _protocolFeeRecipient,
+		bool _feeToken
+	) {
 		reputationToken = _reputationToken;
 		openOracle = _openOracle;
+		weth = _weth;
+		gasConsumedOpenOracleReportPrice = _gasConsumedOpenOracleReportPrice;
+		gasConsumedSettlement = _gasConsumedSettlement;
+		exactToken1Report = _exactToken1Report;
+		settlementTime = _settlementTime;
+		disputeDelay = _disputeDelay;
+		protocolFee = _protocolFee;
+		feePercentage = _feePercentage;
+		multiplier = _multiplier;
+		timeType = _timeType;
+		trackDisputes = _trackDisputes;
+		keepFee = _keepFee;
+		protocolFeeRecipient = _protocolFeeRecipient;
+		feeToken = _feeToken;
 	}
 
 	function setSecurityPool(ISecurityPool _securityPool) public {
@@ -63,38 +103,37 @@ contract SecurityPoolOracleCoordinator {
 		lastPrice = _lastPrice;
 	}
 
-	function getRequestPriceEthCost() public view returns (uint256) {// TODO, probably something else
+	function getRequestPriceEthCost() public view returns (uint256) {
 		// https://github.com/j0i0m0b0o/openOracleBase/blob/feeTokenChange/src/OpenOracle.sol#L100
-		uint256 ethCost = block.basefee * 4 * (gasConsumedSettlement + gasConsumedOpenOracleReportPrice) + 101; // TODO, probably something else
+		uint256 ethCost = block.basefee * 4 * (gasConsumedSettlement + gasConsumedOpenOracleReportPrice) + 101;
 		return ethCost;
 	}
 	function requestPrice() public payable {
 		require(pendingReportId == 0, 'Already pending request');
 		// https://github.com/j0i0m0b0o/openOracleBase/blob/feeTokenChange/src/OpenOracle.sol#L100
-		uint256 ethCost = getRequestPriceEthCost();// TODO, probably something else
+		uint256 ethCost = getRequestPriceEthCost();
 		require(msg.value >= ethCost, 'not big enough eth bounty');
 
-		// TODO, research more on how to set these params
 		OpenOracle.CreateReportParams memory reportparams = OpenOracle.CreateReportParams({
-			exactToken1Report: 26392439800,//block.basefee * 200 / lastPrice, // initial oracle liquidity in token1
+			exactToken1Report: exactToken1Report,
 			escalationHalt: reputationToken.totalSupply() / 100000, // amount of token1 past which escalation stops but disputes can still happen
 			settlerReward: block.basefee * 2 * gasConsumedOpenOracleReportPrice, // eth paid to settler in wei
 			token1Address: address(reputationToken), // address of token1 in the oracle report instance
-			settlementTime: 15 * 12,//~15 blocks // report instance can settle if no disputes within this timeframe
-			disputeDelay: 0, // time disputes must wait after every new report
-			protocolFee: 0, // fee paid to protocolFeeRecipient. 1000 = 0.01%
-			token2Address: address(WETH), // address of token2 in the oracle report instance
+			settlementTime: settlementTime,
+			disputeDelay: disputeDelay,
+			protocolFee: protocolFee,
+			token2Address: address(weth), // address of token2 in the oracle report instance
 			callbackGasLimit: gasConsumedSettlement, // gas the settlement callback must use
-			feePercentage: 10000, // 0.1% atm, TODO,// fee paid to previous reporter. 1000 = 0.01%
-			multiplier: 140, // amount by which newAmount1 must increase versus old amount1. 140 = 1.4x
-			timeType: true, // true for block timestamp, false for block number
-			trackDisputes: false, // true keeps a readable dispute history for smart contracts
-			keepFee: false, // true means initial reporter keeps the initial reporter reward. if false, it goes to protocolFeeRecipient
+			feePercentage: feePercentage,
+			multiplier: multiplier,
+			timeType: timeType,
+			trackDisputes: trackDisputes,
+			keepFee: keepFee,
 			callbackContract: address(this), // contract address for settle to call back into
 			callbackSelector: this.openOracleReportPrice.selector, // method in the callbackContract you want called.
-			protocolFeeRecipient: address(0x0), // address that receives protocol fees and initial reporter rewards if keepFee set to false
-			feeToken: true //if true, protocol fees + fees paid to previous reporter are in tokenToSwap. if false, in not(tokenToSwap)
-		}); //typically if feeToken true, fees are paid in less valuable token, if false, fees paid in more valuable token
+			protocolFeeRecipient: protocolFeeRecipient,
+			feeToken: feeToken
+		});
 
 		pendingReportId = openOracle.createReportInstance{value: ethCost}(reportparams);
 

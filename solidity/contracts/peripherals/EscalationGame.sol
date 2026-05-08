@@ -203,13 +203,14 @@ contract EscalationGame {
 
 		// Check if new balance ties with existing maximum and another outcome has that maximum, and max is below threshold.
 		// Ties at/above threshold are allowed (to trigger nonDecision/fork).
-		bool otherHasMax = (outcomeIdx == 0) ? (b1 == maxBal || b2 == maxBal) :
-		                    (outcomeIdx == 1) ? (b0 == maxBal || b2 == maxBal) :
-		                    (b0 == maxBal || b1 == maxBal);
-		if (newBalance == maxBal && otherHasMax && maxBal < nonDecisionThreshold) {
-			effectiveDeposit -= 1;
-			newBalance = currentBalance + effectiveDeposit;
-		}
+			bool otherHasMax = (outcomeIdx == 0) ? (b1 == maxBal || b2 == maxBal) :
+			                    (outcomeIdx == 1) ? (b0 == maxBal || b2 == maxBal) :
+			                    (b0 == maxBal || b1 == maxBal);
+			if (newBalance == maxBal && otherHasMax && maxBal < nonDecisionThreshold) {
+				effectiveDeposit -= 1;
+				require(effectiveDeposit >= startBond, 'tie adjustment would break min deposit');
+				newBalance = currentBalance + effectiveDeposit;
+			}
 
 		// Update the balance
 		balances[outcomeIdx] = newBalance;

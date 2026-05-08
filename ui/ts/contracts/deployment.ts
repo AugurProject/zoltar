@@ -1,15 +1,20 @@
 import { encodeDeployData, getAddress, type Address, type Hash, type Hex } from 'viem'
 import { ABIS } from '../abis.js'
 import { createDeploymentStatusOracleAddressHelper } from '../shared/deploymentAddresses.js'
+import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
 import {
-	DeploymentStatusOracle_DeploymentStatusOracle,
-	ScalarOutcomes_ScalarOutcomes,
-	peripherals_SecurityPoolUtils_SecurityPoolUtils,
-	peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
-	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
-	peripherals_openOracle_OpenOracle_OpenOracle,
-} from '../contractArtifact.js'
-import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getEscalationGameFactoryByteCode, getInfraContractAddresses, getSecurityPoolFactoryByteCode, getSecurityPoolForkerByteCode, getShareTokenFactoryByteCode, getZoltarInitCode, getZoltarQuestionDataByteCode } from './deploymentHelpers.js'
+	MULTICALL3_BYTECODE,
+	PROXY_DEPLOYER_ADDRESS,
+	ZERO_SALT,
+	getEscalationGameFactoryByteCode,
+	getInfraContractAddresses,
+	getPriceOracleManagerAndOperatorQueuerFactoryByteCode,
+	getSecurityPoolFactoryByteCode,
+	getSecurityPoolForkerByteCode,
+	getShareTokenFactoryByteCode,
+	getZoltarInitCode,
+	getZoltarQuestionDataByteCode,
+} from './deploymentHelpers.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, ReadClient, WriteClient } from '../types/contracts.js'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 
@@ -209,7 +214,7 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			label: 'Price Oracle Manager Factory',
 			address: addresses.priceOracleManagerAndOperatorQueuerFactory,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`),
+			deploy: async client => await deployViaProxy(client, getPriceOracleManagerAndOperatorQueuerFactoryByteCode()),
 		},
 		{
 			id: 'securityPoolForker',

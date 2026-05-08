@@ -124,6 +124,27 @@ describe('Peripherals Contract Test Suite', () => {
 		await client.waitForTransactionReceipt({ hash })
 	}
 
+	const transferRepToAddress = async (sender: WriteClient, recipient: Address, amount: bigint) => {
+		const hash = await sender.writeContract({
+			abi: [
+				{
+					type: 'function',
+					name: 'transfer',
+					stateMutability: 'nonpayable',
+					inputs: [
+						{ name: 'recipient', type: 'address' },
+						{ name: 'amount', type: 'uint256' },
+					],
+					outputs: [{ name: '', type: 'bool' }],
+				},
+			],
+			address: getRepTokenAddress(genesisUniverse),
+			functionName: 'transfer',
+			args: [recipient, amount],
+		})
+		await sender.waitForTransactionReceipt({ hash })
+	}
+
 	const getVaultRepClaim = async (vaultAddress: Address) => {
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, vaultAddress)
 		return await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
@@ -594,7 +615,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRep(attackerClient, repDeposit, questionId)
 
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + 1n)
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
 
 		const aliceDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
@@ -705,7 +726,7 @@ describe('Peripherals Contract Test Suite', () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRep(attackerClient, repDeposit, questionId)
 
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + 1n)
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
 
 		await mockWindow.advanceTime(10n * DAY)
@@ -832,6 +853,42 @@ describe('Peripherals Contract Test Suite', () => {
 		strictEqualTypeSafe(childCurrentRetentionRate, MAX_RETENTION_RATE, 'child retention rate should match')
 		strictEqualTypeSafe(childCompleteSetCollateralAmount, 0n, 'child complete set collateral should default to zero during fork')
 		strictEqualTypeSafe(await getLastPrice(client, childManagerAddress), await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 'child manager should inherit the parent price')
+	})
+
+	test('forkZoltarWithOwnEscalationGame ignores stray REP already sitting on the forker', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		const strayRep = 7n * 10n ** 18n
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const zoltarForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
+		const burnAmount = zoltarForkThreshold / 5n
+
+		await mockWindow.setTime(endTime + 10000n)
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		const repBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
+		await transferRepToAddress(client, getInfraContractAddresses().securityPoolForker, strayRep)
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+
+		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		strictEqualTypeSafe(forkData.repAtFork, repBalance - burnAmount, 'repAtFork should only track the parent pool REP after the own-game fork')
+	})
+
+	test('initiateSecurityPoolFork ignores stray REP transferred to the forker after the own-game fork', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		const strayRep = 9n * 10n ** 18n
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const zoltarForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
+		const burnAmount = zoltarForkThreshold / 5n
+
+		await mockWindow.setTime(endTime + 10000n)
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		const repBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await transferRepToAddress(client, getInfraContractAddresses().securityPoolForker, strayRep)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+
+		const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+		strictEqualTypeSafe(forkData.repAtFork, repBalance - burnAmount, 'repAtFork should ignore unrelated REP transferred to the forker after the own-game fork')
 	})
 
 	test('Can Liquidate', async () => {

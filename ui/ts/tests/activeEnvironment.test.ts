@@ -12,6 +12,21 @@ afterEach(() => {
 	resetActiveEnvironmentForTesting()
 })
 
+async function createBootstrappedSimulationBackendWithRetry(scenario: 'baseline' | 'deployed' | 'security-pool', maxAttempts = 2) {
+	let lastError: unknown = undefined
+	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+		const backend = await createSimulationBackend({ scenario })
+		try {
+			await backend.bootstrap()
+			return backend
+		} catch (error) {
+			lastError = error
+			await backend.dispose()
+		}
+	}
+	throw lastError instanceof Error ? lastError : new Error(`Failed to bootstrap ${scenario} simulation backend`)
+}
+
 void describe('active environment', () => {
 	void test('uses the injected backend by default when no environment has been initialized', () => {
 		expect(getActiveBackend().id).toBe('injected')
@@ -66,11 +81,9 @@ void describe('simulation backend', () => {
 
 	beforeAll(async () => {
 		coldBaselineBackend = await createSimulationBackend({ scenario: 'baseline' })
-		warmBaselineBackend = await createSimulationBackend({ scenario: 'baseline' })
-		deployedBackend = await createSimulationBackend({ scenario: 'deployed' })
-		await warmBaselineBackend.bootstrap()
+		warmBaselineBackend = await createBootstrappedSimulationBackendWithRetry('baseline')
+		deployedBackend = await createBootstrappedSimulationBackendWithRetry('deployed')
 		warmBaselineBackend.setTransactionDelayMilliseconds(0)
-		await deployedBackend.bootstrap()
 		deployedBackend.setTransactionDelayMilliseconds(0)
 	}, 30_000)
 

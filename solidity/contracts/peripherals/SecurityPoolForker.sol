@@ -159,11 +159,13 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		require(zoltar.getForkTime(universe) > 0, 'Zoltar needs to have forked before Security Pool can do so');
 		require(securityPool.systemState() == SystemState.Operational, 'System is not operational');
 		require(address(escalationGame) == address(0x0) || escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'question has been finalized already');
-		securityPool.activateForkMode();
 		ReputationToken rep = securityPool.repToken();
+		uint256 repBalanceBefore = rep.balanceOf(address(this));
+		securityPool.activateForkMode();
 		SecurityPoolMigrationProxy migrationProxy = _getOrDeployMigrationProxy(securityPool);
 		uint256 previousMigrationBalance = zoltar.getMigrationRepBalance(address(migrationProxy), universe);
-		uint256 repToLock = rep.balanceOf(address(this));
+		uint256 repBalanceAfter = rep.balanceOf(address(this));
+		uint256 repToLock = repBalanceAfter - repBalanceBefore;
 		if (repToLock > 0) rep.transfer(address(migrationProxy), repToLock);
 		uint256 proxyRepBalance = rep.balanceOf(address(migrationProxy));
 		if (proxyRepBalance > 0) migrationProxy.lockRep(proxyRepBalance);
@@ -273,7 +275,10 @@ contract SecurityPoolForker is ISecurityPoolForker {
 					return;
 				}
 				// Sell effectively all REP for ETH while leaving only a tiny migrated-rep residue unsold.
-				// We cannot sell literally all REP because `poolOwnershipDenominator` still needs a finite anchor.
+				// This intentionally parses as `repAtFork - (migratedRep / divisor)`: the parent
+				// pool keeps its full REP-at-fork anchor, and only the tiny unsold residue is scaled
+				// down by the haircut divisor. We cannot sell literally all REP because
+				// `poolOwnershipDenominator` still needs a finite anchor.
 				forkDataByPool[securityPool].truthAuction.startAuction(ethToBuy, forkDataByPool[parent].repAtFork - forkDataByPool[securityPool].migratedRep / SecurityPoolUtils.MAX_AUCTION_VAULT_HAIRCUT_DIVISOR);
 			}
 		}
@@ -315,11 +320,13 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) public {
 		EscalationGame escalationGame = securityPool.escalationGame();
 		require(address(escalationGame) != address(0x0) && escalationGame.nonDecisionTimestamp() > 0, 'escalation game has not triggered fork');
+		ReputationToken rep = securityPool.repToken();
+		uint256 repBalanceBefore = rep.balanceOf(address(this));
 		securityPool.drainAllRep();
 		forkDataByPool[securityPool].ownFork = true;
 		SecurityPoolMigrationProxy migrationProxy = _getOrDeployMigrationProxy(securityPool);
-		ReputationToken rep = securityPool.repToken();
-		uint256 repToFork = rep.balanceOf(address(this));
+		uint256 repBalanceAfter = rep.balanceOf(address(this));
+		uint256 repToFork = repBalanceAfter - repBalanceBefore;
 		if (repToFork > 0) rep.transfer(address(migrationProxy), repToFork);
 		migrationProxy.forkUniverse(securityPool.questionId());
 	}
