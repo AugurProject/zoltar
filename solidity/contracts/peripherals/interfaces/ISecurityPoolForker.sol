@@ -10,6 +10,7 @@ interface ISecurityPoolForker {
 	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] memory outcomeIndices) external;
 	function createChildUniverse(ISecurityPool securityPool, uint8 outcomeIndex) external;
 	function migrateVault(ISecurityPool securityPool, uint8 outcomeIndex) external;
+	function migrateFromEscalationGame(ISecurityPool securityPool, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256[] memory depositIndexes) external;
 	function startTruthAuction(ISecurityPool securityPool) external;
 	function finalizeTruthAuction(ISecurityPool securityPool) external;
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external;

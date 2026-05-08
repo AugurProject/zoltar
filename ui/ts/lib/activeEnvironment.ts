@@ -26,9 +26,13 @@ function getSimulationScenario(search: string): SimulationScenario {
 }
 
 export async function initializeActiveEnvironment(location: LocationLike = window.location) {
+	if (activeSimulationController !== undefined) {
+		await activeSimulationController.dispose()
+		activeSimulationController = undefined
+	}
+
 	if (!shouldUseSimulationLocation(location)) {
 		activeBackend = injectedBackend
-		activeSimulationController = undefined
 		return injectedBackend
 	}
 

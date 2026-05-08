@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
+import { fireEvent, within } from '@testing-library/dom'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { useAppRouteEffects } from '../hooks/useAppRouteEffects.js'
@@ -47,6 +48,23 @@ function RouteEffectsWithUrlStateHarness(props: Omit<RouteEffectsProps, 'setOpen
 		setOpenOracleReport,
 	})
 	return null
+}
+
+function UrlStateHarness() {
+	const { openOracleReportId, securityPoolAddress, setOpenOracleReport, setSecurityPoolAddress } = useUrlState()
+
+	return (
+		<div>
+			<div id='report-id'>{openOracleReportId}</div>
+			<div id='security-pool'>{securityPoolAddress}</div>
+			<button type='button' onClick={() => setOpenOracleReport('42')}>
+				Set Report
+			</button>
+			<button type='button' onClick={() => setSecurityPoolAddress('0x84834d4Dccea071b363e53952BD300F7bf56a009')}>
+				Set Pool
+			</button>
+		</div>
+	)
 }
 
 describe('app route effects integration', () => {
@@ -112,14 +130,14 @@ describe('app route effects integration', () => {
 		dom.cleanup()
 	})
 
-	test('does not repeatedly rewrite the open-oracle report query param across rerenders when using the real URL state hook', async () => {
+	test('does not repeatedly push the open-oracle report query param across rerenders when using the real URL state hook', async () => {
 		const dom = installDomEnvironment('http://localhost/#/open-oracle')
-		const replaceStateCalls: string[] = []
-		const originalReplaceState = window.history.replaceState.bind(window.history)
-		window.history.replaceState = ((data, unused, url) => {
-			replaceStateCalls.push(String(url ?? ''))
-			return originalReplaceState(data, unused, url)
-		}) as History['replaceState']
+		const pushStateCalls: string[] = []
+		const originalPushState = window.history.pushState.bind(window.history)
+		window.history.pushState = ((data, unused, url) => {
+			pushStateCalls.push(String(url ?? ''))
+			return originalPushState(data, unused, url)
+		}) as History['pushState']
 
 		const initialProps = createDefaultProps({
 			openOracleFormReportId: '42',
@@ -127,15 +145,44 @@ describe('app route effects integration', () => {
 		})
 
 		const { cleanup, container } = await renderIntoDocument(<RouteEffectsWithUrlStateHarness {...initialProps} />)
-		expect(replaceStateCalls.length).toBe(1)
+		expect(pushStateCalls.length).toBe(1)
 
 		await act(() => {
 			render(<RouteEffectsWithUrlStateHarness {...initialProps} />, container)
 		})
 
-		expect(replaceStateCalls.length).toBe(1)
+		expect(pushStateCalls.length).toBe(1)
 
-		window.history.replaceState = originalReplaceState
+		window.history.pushState = originalPushState
+		await cleanup()
+		dom.cleanup()
+	})
+
+	test('pushes new URL state so browser back navigation restores the previous deep link', async () => {
+		const dom = installDomEnvironment('http://localhost/#/open-oracle')
+		const { cleanup } = await renderIntoDocument(<UrlStateHarness />)
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Set Report' }))
+		})
+		expect(window.location.search).toContain('openOracleReportId=42')
+		expect(document.getElementById('report-id')?.textContent).toBe('42')
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Set Pool' }))
+		})
+		expect(window.location.search).toContain('securityPool=0x84834d4Dccea071b363e53952BD300F7bf56a009')
+
+		await act(() => {
+			window.history.back()
+			window.dispatchEvent(new Event('popstate'))
+		})
+
+		expect(window.location.search).toContain('openOracleReportId=42')
+		expect(window.location.search).not.toContain('securityPool=')
+		expect(document.getElementById('report-id')?.textContent).toBe('42')
+		expect(document.getElementById('security-pool')?.textContent).toBe('')
+
 		await cleanup()
 		dom.cleanup()
 	})
@@ -157,6 +204,43 @@ describe('app route effects integration', () => {
 
 		expect(calls).toContain(securityPoolAddress)
 		expect(calls).not.toContain(undefined)
+
+		await cleanup()
+		dom.cleanup()
+	})
+
+	test('clears route-backed pool forms when the selected pool address is cleared', async () => {
+		const dom = installDomEnvironment('http://localhost/#/security-pools')
+		const securityVaultUpdates: string[] = []
+		const tradingUpdates: string[] = []
+		const forkUpdates: string[] = []
+		const reportingUpdates: string[] = []
+
+		const { cleanup } = await renderIntoDocument(
+			<RouteEffectsHarness
+				{...createDefaultProps({
+					route: 'security-pools',
+					securityPoolAddress: '',
+					setForkAuctionFormSecurityPoolAddress: value => {
+						forkUpdates.push(value)
+					},
+					setReportingFormSecurityPoolAddress: value => {
+						reportingUpdates.push(value)
+					},
+					setSecurityVaultFormSecurityPoolAddress: value => {
+						securityVaultUpdates.push(value)
+					},
+					setTradingFormSecurityPoolAddress: value => {
+						tradingUpdates.push(value)
+					},
+				})}
+			/>,
+		)
+
+		expect(securityVaultUpdates).toEqual([''])
+		expect(tradingUpdates).toEqual([''])
+		expect(forkUpdates).toEqual([''])
+		expect(reportingUpdates).toEqual([''])
 
 		await cleanup()
 		dom.cleanup()

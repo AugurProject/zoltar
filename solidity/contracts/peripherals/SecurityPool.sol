@@ -480,6 +480,13 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[vault].feeIndex = vaultFeeIndex;
 	}
 
+	function clearEscalationLockForForkMigration(address vault, uint256 repAmount) external onlyForker {
+		require(securityVaults[vault].lockedRepInEscalationGame >= repAmount, 'insufficient locked REP');
+		require(totalLockedRepInEscalationGame >= repAmount, 'insufficient total locked REP');
+		securityVaults[vault].lockedRepInEscalationGame -= repAmount;
+		totalLockedRepInEscalationGame -= repAmount;
+	}
+
 	function _trackVault(address vault) private {
 		require(vault != address(0x0), 'invalid vault');
 		if (vaultIndexesPlusOne[vault] != 0) return;

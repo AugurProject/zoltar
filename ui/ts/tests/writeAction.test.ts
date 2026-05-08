@@ -8,6 +8,28 @@ const walletAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const transactionHash = '0x00000000000000000000000000000000000000000000000000000000000000a1'
 
 describe('runWriteAction', () => {
+	test('uses the provided missing-wallet message when no wallet is connected', async () => {
+		let errorMessage: string | undefined
+
+		await runWriteAction(
+			{
+				accountAddress: undefined,
+				missingWalletMessage: 'Connect a wallet before creating a question',
+				onTransaction: () => undefined,
+				onTransactionFinished: () => undefined,
+				onTransactionRequested: () => undefined,
+				refreshState: async () => undefined,
+				setErrorMessage: message => {
+					errorMessage = message
+				},
+			},
+			async () => ({ hash: transactionHash }),
+			'Failed to create question',
+		)
+
+		expect(errorMessage).toBe('Connect a wallet before creating a question')
+	})
+
 	test('uses the action fallback when the write action fails', async () => {
 		let errorMessage: string | undefined
 

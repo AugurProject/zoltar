@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { getAddress } from 'viem'
 import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadSecurityVaultDetails } from '../contracts.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
-import { getActiveBackend, resetActiveEnvironmentForTesting, setActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
+import { getActiveBackend, initializeActiveEnvironment, resetActiveEnvironmentForTesting, setActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
@@ -37,6 +37,25 @@ void describe('active environment', () => {
 
 		expect(isSupportedAppChain('0x539')).toBe(true)
 		expect(getWrongNetworkMessage()).toBeUndefined()
+	})
+
+	void test('disposes an existing simulation controller when reinitializing into injected mode', async () => {
+		let disposeCalls = 0
+		setActiveEnvironmentForTesting(
+			createFakeBackend({
+				profile: createFakeSimulationProfile(),
+			}),
+			{
+				dispose: async () => {
+					disposeCalls += 1
+				},
+			} as Awaited<ReturnType<typeof createSimulationBackend>>,
+		)
+
+		await initializeActiveEnvironment({ hostname: 'localhost', search: '' })
+
+		expect(disposeCalls).toBe(1)
+		expect(getActiveBackend().id).toBe('injected')
 	})
 })
 

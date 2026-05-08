@@ -19,6 +19,8 @@ struct ForkData {
 	uint256 truthAuctionStarted;
 	uint256 migratedRep;
 	uint256 auctionedSecurityBondAllowance;
+	uint256 claimedAuctionRepPurchased;
+	uint256 claimedAuctionedSecurityBondAllowance;
 
 	bool ownFork;
 	uint8 outcomeIndex;
@@ -46,7 +48,7 @@ contract SecurityPoolForker is ISecurityPoolForker {
 	event ClaimAuctionProceeds(address vault, uint256 amount, uint256 poolOwnershipAmount, uint256 poolOwnershipDenominator);
 	event MigrateRepFromParent(address vault, uint256 parentSecurityBondAllowance, uint256 parentPoolOwnership);
 	event FinalizeAuction(uint256 repAvailable, uint256 migratedRep, uint256 repPurchased, uint256 poolOwnershipDenominator, uint256 completeSetCollateralAmount);
-	event MigrateFromEscalationGame(ISecurityPool parent, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint8[] depositIndexes, uint256 totalRep, uint256 newOwnership);
+	event MigrateFromEscalationGame(ISecurityPool parent, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256[] depositIndexes, uint256 totalRep, uint256 newOwnership);
 
 	function repToPoolOwnership(ISecurityPool securityPool, uint256 repAmount) public view returns (uint256) {
 		uint256 poolOwnershipDenominator = securityPool.poolOwnershipDenominator();
@@ -188,25 +190,29 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		_getOrDeployChildPool(parent, outcomeIndex);
 	}
 
-	function migrateFromEscalationGame(ISecurityPool parent, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint8[] memory depositIndexes) public {
+	function migrateFromEscalationGame(ISecurityPool parent, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256[] memory depositIndexes) public {
 		EscalationGame escalationGame = parent.escalationGame();
 		ISecurityPool child = _getOrDeployChildPool(parent, uint8(outcomeIndex));
 		require(address(escalationGame) != address(0x0), 'escalation game needs to be deployed');
+		require(escalationGame.nonDecisionTimestamp() > 0, 'escalation game has not reached non-decision');
 		uint256 parentRepAtFork = forkDataByPool[parent].repAtFork;
 		uint256 repMigratedFromEscalationGame = 0;
+		uint256 migratedPrincipal = 0;
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
-			(address depositor, uint256 amountToWithdraw, ) = escalationGame.claimDepositForWinning(depositIndexes[index], outcomeIndex);
+			(address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) = escalationGame.claimDepositForWinning(depositIndexes[index], outcomeIndex);
 			require(depositor == vault, 'deposit was not for this vault');
 			repMigratedFromEscalationGame += amountToWithdraw;
+			migratedPrincipal += originalDepositAmount;
+			parent.clearEscalationLockForForkMigration(vault, originalDepositAmount);
 		}
 		(uint256 currentPoolOwnership, uint256 currentSecurityBondAllowance, , uint256 currentFeeIndex, ) = child.securityVaults(vault);
 		uint256 ownershipDelta = repToPoolOwnership(child, repMigratedFromEscalationGame);
 		child.configureVault(vault, currentPoolOwnership + ownershipDelta, currentSecurityBondAllowance, currentFeeIndex);
-		forkDataByPool[child].migratedRep += repMigratedFromEscalationGame;
+		forkDataByPool[child].migratedRep += migratedPrincipal;
 		emit MigrateFromEscalationGame(parent, vault, outcomeIndex, depositIndexes, repMigratedFromEscalationGame, ownershipDelta);
 		// migrate open interest
 		if (parentRepAtFork > 0) {
-			parent.transferEth(payable(child), parent.completeSetCollateralAmount() * repMigratedFromEscalationGame / parentRepAtFork);
+			parent.transferEth(payable(child), parent.completeSetCollateralAmount() * migratedPrincipal / parentRepAtFork);
 		}
 	}
 
@@ -327,8 +333,18 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		require(amount > 0, 'Did not purchase anything'); // not really necessary, but good for testing
 		uint256 poolOwnershipAmount = repToPoolOwnership(securityPool, amount);
 		(uint256 poolOwnership, uint256 currentSecurityBondAllowance, , uint256 currentFeeIndex, ) = securityPool.securityVaults(vault);
-		uint256 newSecurityBondAllowance = forkDataByPool[securityPool].auctionedSecurityBondAllowance * amount / forkDataByPool[securityPool].truthAuction.totalRepPurchased();
-		securityPool.configureVault(vault, poolOwnership + poolOwnershipAmount, currentSecurityBondAllowance + newSecurityBondAllowance, currentFeeIndex);
+		ForkData storage data = forkDataByPool[securityPool];
+		uint256 totalRepPurchased = data.truthAuction.totalRepPurchased();
+		uint256 newSecurityBondAllowance;
+		if (data.claimedAuctionRepPurchased + amount == totalRepPurchased) {
+			newSecurityBondAllowance = data.auctionedSecurityBondAllowance - data.claimedAuctionedSecurityBondAllowance;
+		} else {
+			newSecurityBondAllowance = data.auctionedSecurityBondAllowance * amount / totalRepPurchased;
+		}
+		data.claimedAuctionRepPurchased += amount;
+		data.claimedAuctionedSecurityBondAllowance += newSecurityBondAllowance;
+		uint256 nextFeeIndex = currentSecurityBondAllowance > 0 ? currentFeeIndex : securityPool.feeIndex();
+		securityPool.configureVault(vault, poolOwnership + poolOwnershipAmount, currentSecurityBondAllowance + newSecurityBondAllowance, nextFeeIndex);
 		emit ClaimAuctionProceeds(vault, amount, poolOwnershipAmount, securityPool.poolOwnershipDenominator());
 	}
 

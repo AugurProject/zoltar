@@ -39,8 +39,8 @@ function readUrlState(search: string): UrlState {
 	}
 }
 
-function replaceCurrentUrl(nextSearch: string) {
-	window.history.replaceState({}, '', `${window.location.pathname}${nextSearch}${window.location.hash}`)
+function pushCurrentUrl(nextSearch: string) {
+	window.history.pushState({}, '', `${window.location.pathname}${nextSearch}${window.location.hash}`)
 }
 
 export function useUrlState(): UseUrlStateResult {
@@ -59,7 +59,7 @@ export function useUrlState(): UseUrlStateResult {
 
 	const applyUrlStateUpdate = useCallback((nextSearch: string) => {
 		if (nextSearch === window.location.search) return
-		replaceCurrentUrl(nextSearch)
+		pushCurrentUrl(nextSearch)
 		urlState.value = readUrlState(nextSearch)
 	}, [])
 
