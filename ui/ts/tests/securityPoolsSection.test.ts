@@ -552,7 +552,53 @@ void describe('SecurityPoolsSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
+		const metricLabels = Array.from(document.body.querySelectorAll('.metric-label')).map(element => element.textContent?.trim() ?? '')
+		expect(metricLabels.includes('Truth Auction')).toBe(false)
+	})
+
+	void test('filters the browse registry by search text and system state', async () => {
+		const operationalPool = createSelectedPool({
+			marketDetails: createMarketDetails({ title: 'First pool question' }),
+			questionId: '0x01',
+			securityPoolAddress: '0x0000000000000000000000000000000000000001',
+			systemState: 'operational',
+		})
+		const forkedPool = createSelectedPool({
+			marketDetails: createMarketDetails({ title: 'Second pool question' }),
+			questionId: '0x02',
+			securityPoolAddress: '0x0000000000000000000000000000000000000002',
+			systemState: 'poolForked',
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolsSection,
+				createSecurityPoolsSectionProps({
+					overview: createOverviewProps({
+						hasLoadedSecurityPools: true,
+						securityPools: [operationalPool, forkedPool],
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Truth Auction')).toBeNull()
+		const searchInput = documentQueries.getByPlaceholderText('Search by pool address, question ID, or question text')
+		if (!(searchInput instanceof HTMLInputElement)) throw new Error('Expected search input')
+		searchInput.value = 'second'
+		await act(() => {
+			searchInput.dispatchEvent(new window.Event('input', { bubbles: true }))
+		})
+		expect(documentQueries.queryByText('First pool question')).toBeNull()
+		expect(documentQueries.getAllByText('Second pool question').length).toBeGreaterThan(0)
+
+		const systemStateSelect = documentQueries.getByLabelText('System State')
+		if (!(systemStateSelect instanceof window.HTMLSelectElement)) throw new Error('Expected system state filter')
+		systemStateSelect.value = 'operational'
+		await act(() => {
+			systemStateSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
+		})
+		expect(documentQueries.queryByText('Second pool question')).toBeNull()
+		expect(documentQueries.getByText('No pools match the current search and filter settings.')).not.toBeNull()
 	})
 })

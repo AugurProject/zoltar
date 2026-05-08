@@ -1,6 +1,8 @@
+import { ResultBanner } from './ResultBanner.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
+import { WorkflowSummaryStrip } from './WorkflowSummaryStrip.js'
 import { LatestActionSection } from './LatestActionSection.js'
 import { MetricField } from './MetricField.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
@@ -13,7 +15,25 @@ import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/format
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
 import { getDefaultShareMigrationTargetOutcomeIndexes, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage } from '../lib/trading.js'
+import type { WorkflowOutcomePresentation } from '../types/components.js'
 import type { TradingSectionProps } from '../types/components.js'
+
+function getTradingOutcomePresentation(tradingResult: TradingSectionProps['tradingResult']): WorkflowOutcomePresentation | undefined {
+	if (tradingResult === undefined) return undefined
+
+	switch (tradingResult.action) {
+		case 'createCompleteSet':
+			return { title: 'Complete sets minted', detail: 'The wallet now holds additional complete sets for this pool.', nextStep: 'Review your balances or redeem/migrate shares as needed.' }
+		case 'redeemCompleteSet':
+			return { title: 'Complete sets redeemed', detail: 'Matching yes/no/invalid shares were redeemed back into collateral.', nextStep: 'Confirm the reduced share balances and remaining mint capacity.' }
+		case 'migrateShares':
+			return { title: 'Shares migrated', detail: 'Forked shares were routed into the selected child-universe outcomes.', nextStep: 'Review the target universe balances before redeeming or continuing migration.' }
+		case 'redeemShares':
+			return { title: 'Resolved shares redeemed', detail: 'Redeemable resolved shares were converted into their claim value.', nextStep: 'Check the post-redemption wallet balances and any remaining winning shares.' }
+		default:
+			return undefined
+	}
+}
 
 export function TradingSection({
 	accountState,
@@ -134,8 +154,11 @@ export function TradingSection({
 				]}
 			/>
 		)
+	const tradingOutcome = getTradingOutcomePresentation(tradingResult)
 	const sections = (
 		<>
+			<ResultBanner outcome={tradingOutcome} />
+			<WorkflowSummaryStrip currentStep={poolUniverseHasForked ? 'Migrate / Redeem' : 'Mint / Redeem'} steps={['Mint / Redeem', 'Migrate / Redeem']} title='Trading Workflow' />
 			{!showSecurityPoolAddressInput ? undefined : (
 				<SectionBlock density='compact'>
 					<label className='field'>
@@ -159,16 +182,23 @@ export function TradingSection({
 			)}
 
 			<SectionBlock title='Mint Complete Sets'>
+				{selectedPool === undefined ? undefined : (
+					<p className='detail'>
+						Current capacity uses <strong>{selectedPool.totalSecurityBondAllowance.toString()}</strong> allowance against <strong>{selectedPool.totalRepDeposit.toString()}</strong> REP backing.
+					</p>
+				)}
 				<label className='field'>
 					<span>Mint Complete Sets Amount</span>
 					<FormInput value={tradingForm.completeSetAmount} inputMode='decimal' onInput={event => onTradingFormChange({ completeSetAmount: event.currentTarget.value })} />
 				</label>
+				{mintGuardMessage === undefined ? undefined : <p className='detail'>{mintGuardMessage}</p>}
 				<div className='actions'>
 					<TransactionActionButton idleLabel='Mint Complete Sets' pendingLabel='Minting complete sets...' onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} availability={{ disabled: mintGuardMessage !== undefined, reason: mintGuardMessage }} />
 				</div>
 			</SectionBlock>
 
 			<SectionBlock title='Redeem Complete Sets'>
+				<p className='detail'>Redeeming complete sets requires matching yes, no, and invalid shares. Use the total complete sets metric above as the ceiling.</p>
 				<label className='field'>
 					<span>Redeem Complete Sets Amount</span>
 					<div className='field-inline'>
@@ -186,6 +216,7 @@ export function TradingSection({
 						</button>
 					</div>
 				</label>
+				{redeemCompleteSetGuardMessage === undefined ? undefined : <p className='detail'>{redeemCompleteSetGuardMessage}</p>}
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel='Redeem Complete Sets'
@@ -199,6 +230,7 @@ export function TradingSection({
 			</SectionBlock>
 
 			<SectionBlock title='Migrate Forked Shares'>
+				<p className='detail'>Migration is comparison-heavy, so the child-universe targets stay inline with the selected share outcome.</p>
 				<label className='field'>
 					<span>Share Outcome To Migrate</span>
 					<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={tradingForm.selectedShareOutcome} onChange={selectedShareOutcome => onTradingFormChange({ selectedShareOutcome })} disabled={shareMigrationSelectionDisabled} />
@@ -212,12 +244,14 @@ export function TradingSection({
 					selectedOutcomeIndexes={selectedTargetOutcomeIndexes}
 					selectedOutcomeIndexSet={selectedTargetOutcomeIndexSet}
 				/>
+				{migrateSharesGuardMessage === undefined ? undefined : <p className='detail'>{migrateSharesGuardMessage}</p>}
 				<div className='actions'>
 					<TransactionActionButton idleLabel='Migrate Shares' pendingLabel='Migrating shares...' onClick={onMigrateShares} pending={tradingActiveAction === 'migrateShares'} tone='secondary' availability={{ disabled: migrateSharesGuardMessage !== undefined, reason: migrateSharesGuardMessage }} />
 				</div>
 			</SectionBlock>
 
 			<SectionBlock title='Redeem Resolved Shares'>
+				{redeemSharesGuardMessage === undefined ? undefined : <p className='detail'>{redeemSharesGuardMessage}</p>}
 				<div className='actions'>
 					<TransactionActionButton idleLabel='Redeem Shares' pendingLabel='Redeeming shares...' onClick={onRedeemShares} pending={tradingActiveAction === 'redeemShares'} tone='secondary' availability={{ disabled: redeemSharesGuardMessage !== undefined, reason: redeemSharesGuardMessage }} />
 				</div>

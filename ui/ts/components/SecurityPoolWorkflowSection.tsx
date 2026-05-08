@@ -4,43 +4,55 @@ import { zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
+import { ActionReadinessPanel } from './ActionReadinessPanel.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
+import { LifecycleStageBanner } from './LifecycleStageBanner.js'
 import { LiquidationModal } from './LiquidationModal.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
+import { OperationModal } from './OperationModal.js'
 import { OpenInterestCapacityMetrics } from './OpenInterestCapacityMetrics.js'
+import { ResultBanner } from './ResultBanner.js'
 import { getQuestionTitle } from './Question.js'
 import { ReportingSection } from './ReportingSection.js'
+import { RequirementsChecklist } from './RequirementsChecklist.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
-import { SecurityVaultSection, SelectedVaultSummarySection } from './SecurityVaultSection.js'
+import { SelectedVaultSummarySection } from './SecurityVaultSection.js'
+import { StickyObjectContext } from './StickyObjectContext.js'
 import { StateHint } from './StateHint.js'
+import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TradingSection } from './TradingSection.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
+import { WorkflowSummaryStrip } from './WorkflowSummaryStrip.js'
 import { ViewTabs } from './ViewTabs.js'
 import { TimestampValue } from './TimestampValue.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
+import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
+import { getSecurityPoolStagePresentation } from '../lib/securityPoolStage.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
+import { balanceShortage } from '../lib/inputs.js'
 import { hasForkActivity } from '../lib/forkAuction.js'
 import { resolveRequestedLoadableValueState, type LoadableValueState } from '../lib/loadState.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '../lib/formatters.js'
+import { parseRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
-import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
-import { getPoolRegistryPresentation } from '../lib/userCopy.js'
+import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
+import { getOracleManagerPriceValidUntilTimestamp, getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
+import { getPoolRegistryPresentation, getWalletPresentation } from '../lib/userCopy.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import { resolveEnumValue } from '../lib/viewState.js'
-import { formatDuration, formatRoundedCurrencyBalance } from '../lib/formatters.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '../lib/securityVault.js'
 import { getTimeRemaining } from '../lib/time.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolSystemState } from '../types/contracts.js'
-import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../types/components.js'
+import type { ReadinessAction, SecurityPoolWorkflowRouteContentProps, ViewTabOption, WorkflowOutcomePresentation } from '../types/components.js'
 
 type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'fork'
 type SelectedVaultView = 'browse-vaults' | 'selected-vault'
@@ -154,6 +166,51 @@ export function getSelectedPoolOracleMetricValues({ lastOraclePrice, lastOracleS
 	}
 }
 
+type VaultActionModal = 'claim-fees' | 'deposit-rep' | 'set-bond-allowance' | 'withdraw-rep' | undefined
+
+function getVaultWorkflowOutcomePresentation(action: SecurityPoolWorkflowRouteContentProps['securityVault']['securityVaultResult']): WorkflowOutcomePresentation | undefined {
+	if (action === undefined) return undefined
+
+	switch (action.action) {
+		case 'approveRep':
+			return {
+				detail: 'REP approval updated for the selected vault workflow.',
+				nextStep: 'Return to the deposit modal and submit the deposit.',
+				title: 'REP Approval Updated',
+			}
+		case 'depositRep':
+			return {
+				detail: 'The selected vault received additional REP.',
+				nextStep: 'Review the updated vault summary and continue with bond or reporting work if needed.',
+				title: 'REP Deposited',
+			}
+		case 'queueSetSecurityBondAllowance':
+			return {
+				detail: 'A new security bond allowance was queued for the selected vault.',
+				nextStep: 'Watch the staged operation state in Pool Summary and execute it when valid.',
+				title: 'Bond Allowance Queued',
+			}
+		case 'queueWithdrawRep':
+			return {
+				detail: 'A REP withdrawal was queued for the selected vault.',
+				nextStep: 'Watch the staged operation state in Pool Summary and execute it when valid.',
+				title: 'REP Withdrawal Queued',
+			}
+		case 'redeemFees':
+			return {
+				detail: 'Claimable fees were redeemed from the selected vault.',
+				nextStep: 'Refresh the vault to confirm the remaining fee balance.',
+				title: 'Fees Claimed',
+			}
+		case 'updateVaultFees':
+			return {
+				detail: 'Vault fees were updated on-chain.',
+				nextStep: 'Refresh the vault summary to confirm the latest fee state.',
+				title: 'Vault Fees Updated',
+			}
+	}
+}
+
 export function SecurityPoolWorkflowSection({
 	accountState,
 	activeUniverseId,
@@ -198,6 +255,7 @@ export function SecurityPoolWorkflowSection({
 	const view = resolveSelectedPoolView(selectedPoolView)
 	const [manualPendingOperationId, setManualPendingOperationId] = useState('')
 	const [vaultView, setVaultView] = useState<SelectedVaultView>('selected-vault')
+	const [vaultActionModal, setVaultActionModal] = useState<VaultActionModal>(undefined)
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedPool = securityPools.find(pool => sameCaseInsensitiveText(pool.securityPoolAddress, securityPoolAddress))
 	const currentReportingDetails = sameAddress(reporting.reportingDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) ? reporting.reportingDetails : undefined
@@ -259,6 +317,136 @@ export function SecurityPoolWorkflowSection({
 	const selectedVaultAddressInput = securityVault.securityVaultForm.selectedVaultAddress ?? ''
 	const selectedVaultAddress = getSelectedVaultAddress(selectedVaultAddressInput, accountState.address) ?? ''
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddressInput, accountState.address)
+	const selectedVaultDetails = securityVault.securityVaultDetails
+	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(selectedVaultDetails?.managerAddress, currentPoolOracleManagerDetails)
+	const depositAmount = (() => {
+		try {
+			return parseRepAmountInput(securityVault.securityVaultForm.depositAmount ?? '', 'REP deposit amount')
+		} catch {
+			return undefined
+		}
+	})()
+	const withdrawAmount = (() => {
+		try {
+			return parseRepAmountInput(securityVault.securityVaultForm.repWithdrawAmount ?? '', 'REP withdraw amount')
+		} catch {
+			return undefined
+		}
+	})()
+	const securityBondAllowanceAmount = (() => {
+		try {
+			return parseRepAmountInput(securityVault.securityVaultForm.securityBondAllowanceAmount ?? '', 'Security bond allowance')
+		} catch {
+			return undefined
+		}
+	})()
+	const approvalRequirement = deriveTokenApprovalRequirement(depositAmount, securityVault.securityVaultRepApproval.value)
+	const repBalanceGap = balanceShortage(depositAmount, securityVault.securityVaultRepBalance)
+	const withdrawableRepAmount = selectedVaultDetails === undefined ? undefined : selectedVaultDetails.repDepositShare > selectedVaultDetails.lockedRepInEscalationGame ? selectedVaultDetails.repDepositShare - selectedVaultDetails.lockedRepInEscalationGame : 0n
+	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(selectedVaultDetails?.repDepositShare, depositAmount)
+	const hasClaimableFees = selectedVaultDetails !== undefined && selectedVaultDetails.unpaidEthFees > 0n
+	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? currentPoolOracleManagerDetails?.priceValidUntilTimestamp : undefined
+	const approvalGuardMessage = (() => {
+		const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, isMainnet })
+		if (walletPresentation !== undefined) return walletPresentation.detail
+		if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to approve REP.'
+		if (selectedVaultDetails === undefined) return 'Refresh the vault first.'
+		return undefined
+	})()
+	const depositGuardMessage = !selectedVaultIsOwnedByAccount
+		? 'Select your own vault to deposit REP.'
+		: accountState.address === undefined
+			? 'Connect a wallet before depositing REP.'
+			: !isMainnet
+				? 'Switch to Ethereum mainnet before depositing REP.'
+				: selectedVaultDetails === undefined
+					? 'Refresh the vault before depositing REP.'
+					: !approvalRequirement.hasSufficientApproval
+						? 'Approve enough REP before depositing.'
+						: repBalanceGap !== undefined && repBalanceGap > 0n
+							? `Need ${formatCurrencyBalance(repBalanceGap)} more REP in this wallet.`
+							: isDepositBelowMinimum
+								? `New vaults require at least ${formatCurrencyBalance(MIN_SECURITY_VAULT_REP_DEPOSIT)} REP in the first deposit.`
+								: undefined
+	const withdrawRepGuardMessage = !selectedVaultIsOwnedByAccount
+		? 'Select your own vault to withdraw REP.'
+		: accountState.address === undefined
+			? 'Connect a wallet before withdrawing REP.'
+			: !isMainnet
+				? 'Switch to Ethereum mainnet before withdrawing REP.'
+				: !hasValidOraclePrice
+					? 'A valid oracle price is required before withdrawing REP.'
+					: withdrawAmount === undefined || withdrawAmount <= 0n
+						? 'Enter a valid REP withdraw amount.'
+						: withdrawableRepAmount === undefined || withdrawableRepAmount <= 0n
+							? 'No REP is currently withdrawable from this vault.'
+							: undefined
+	const setSecurityBondAllowanceGuardMessage = !selectedVaultIsOwnedByAccount
+		? 'Select your own vault to set the security bond allowance.'
+		: !isMainnet
+			? 'Switch to Ethereum mainnet before setting the security bond allowance.'
+			: selectedVaultDetails === undefined
+				? 'Refresh the vault before setting the security bond allowance.'
+				: !hasValidOraclePrice
+					? 'A valid oracle price is required before setting the security bond allowance.'
+					: securityBondAllowanceAmount === undefined || securityBondAllowanceAmount <= 0n
+						? 'Enter a security bond allowance greater than zero.'
+						: undefined
+	const claimFeesGuardMessage = !selectedVaultIsOwnedByAccount ? 'Select your own vault to claim fees.' : !isMainnet ? 'Switch to Ethereum mainnet before claiming fees.' : !hasClaimableFees ? 'No claimable fees are available for this vault.' : undefined
+	const selectedPoolStage = getSecurityPoolStagePresentation({
+		activeUniverseId,
+		pool: selectedPool,
+		poolOracleManagerDetails: currentPoolOracleManagerDetails,
+		reportingReady,
+	})
+	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
+		{
+			actionLabel: 'Deposit REP',
+			description: 'Add REP to the selected vault, including approval from inside the operation.',
+			key: 'deposit-rep',
+			onAction: () => setVaultActionModal('deposit-rep'),
+			readiness: depositGuardMessage === undefined ? 'ready' : 'warning',
+			title: 'Deposit REP',
+			...(selectedVaultDetails === undefined ? { blocker: 'Refresh the selected vault first.' } : selectedVaultAddress === '' ? { blocker: 'Select a vault first.' } : {}),
+		},
+		{
+			actionLabel: 'Withdraw REP',
+			description: 'Queue a REP withdrawal once a valid oracle price exists.',
+			key: 'withdraw-rep',
+			onAction: () => setVaultActionModal('withdraw-rep'),
+			readiness: withdrawRepGuardMessage === undefined ? 'ready' : 'warning',
+			title: 'Withdraw REP',
+			...(selectedVaultDetails === undefined ? { blocker: 'Refresh the selected vault first.' } : selectedVaultAddress === '' ? { blocker: 'Select a vault first.' } : {}),
+		},
+		{
+			actionLabel: 'Set Bond Allowance',
+			description: 'Queue a new security bond allowance using the current oracle price context.',
+			key: 'set-bond-allowance',
+			onAction: () => setVaultActionModal('set-bond-allowance'),
+			readiness: setSecurityBondAllowanceGuardMessage === undefined ? 'ready' : 'warning',
+			title: 'Set Bond Allowance',
+			...(selectedVaultDetails === undefined ? { blocker: 'Refresh the selected vault first.' } : selectedVaultAddress === '' ? { blocker: 'Select a vault first.' } : {}),
+		},
+		{
+			actionLabel: 'Claim Fees',
+			description: 'Review claimable fees and confirm the fee redemption for the selected vault.',
+			key: 'claim-fees',
+			onAction: () => setVaultActionModal('claim-fees'),
+			readiness: claimFeesGuardMessage === undefined ? 'ready' : 'warning',
+			title: 'Claim Fees',
+			...(selectedVaultDetails === undefined ? { blocker: 'Refresh the selected vault first.' } : selectedVaultAddress === '' ? { blocker: 'Select a vault first.' } : {}),
+		},
+		{
+			actionLabel: 'Liquidate Vault',
+			description: 'Queue a high-risk liquidation against the selected vault.',
+			key: 'liquidate-vault',
+			readiness: currentPoolOracleManagerDetails?.isPriceValid === false ? 'blocked' : 'warning',
+			title: 'Liquidate Vault',
+			...(selectedPool === undefined || selectedVaultAddress === '' ? { blocker: 'Select a pool and vault first.' } : {}),
+			...(selectedPool === undefined || selectedVaultAddress === '' ? {} : { onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultAddress as `0x${string}`) }),
+		},
+	] satisfies ReadinessAction[])
+	const vaultWorkflowOutcome = getVaultWorkflowOutcomePresentation(securityVault.securityVaultResult)
 	const selectedPoolQuestionTitle = marketDetails === undefined ? undefined : getQuestionTitle(marketDetails)
 	const selectedPoolQuestionDescription = marketDetails === undefined ? undefined : marketDetails.description.trim() === '' ? 'No description provided.' : marketDetails.description
 	const selectedPoolLookupDisplay = getSelectedPoolLookupDisplay({
@@ -352,8 +540,34 @@ export function SecurityPoolWorkflowSection({
 		void forkAuction.onLoadForkAuction()
 	}, [forkAuction.forkAuctionDetails?.securityPoolAddress, forkAuction.loadingForkAuctionDetails, forkAuction.onLoadForkAuction, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
 
+	useEffect(() => {
+		if (securityVault.securityVaultResult === undefined) return
+		setVaultActionModal(undefined)
+	}, [securityVault.securityVaultResult])
+
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Selected Pool'>
+			<StickyObjectContext
+				eyebrow='Security Pools Operate'
+				title={getSelectedPoolCardTitle({ hasSelectedPoolAddress, resolvedPoolTitle: selectedPoolQuestionTitle })}
+				items={[
+					{ label: 'Pool', value: hasSelectedPoolAddress ? securityPoolAddress : 'None selected' },
+					{ label: 'Universe', value: selectedPool?.universeId === undefined ? formatUniverseLabel(activeUniverseId) : formatUniverseLabel(selectedPool.universeId) },
+					{ label: 'Stage', value: selectedPoolStage?.label ?? 'Waiting for pool' },
+					{ label: 'Primary Action', value: view === 'vaults' ? 'Vault operations' : view === 'trading' ? 'Trading' : view === 'reporting' ? 'Reporting' : 'Fork workflow' },
+				]}
+			/>
+
+			<LifecycleStageBanner stage={selectedPoolStage} />
+
+			{view === 'vaults' ? <ActionReadinessPanel actions={vaultReadinessActions} title='Vault execution flows' /> : undefined}
+
+			{view === 'reporting' ? <WorkflowSummaryStrip currentStep={reportingReady ? 'Reporting' : 'Awaiting Market End'} steps={['Pool selected', 'Market ends', 'Reporting', 'Withdrawals']} title='Reporting Workflow' /> : undefined}
+
+			{view === 'fork' ? <WorkflowSummaryStrip currentStep={selectedPoolState === 'operational' ? 'Operational' : 'Fork workflow'} steps={['Operational', 'Fork', 'Auction', 'Settlement']} title='Fork Workflow' /> : undefined}
+
+			<ResultBanner outcome={vaultWorkflowOutcome} />
+
 			<SectionBlock density='compact' title='Security pools' actions={<div className='actions'>{modeTabs}</div>}>
 				<LookupFieldRow
 					label='Security Pool Address'
@@ -613,7 +827,25 @@ export function SecurityPoolWorkflowSection({
 												)}
 											</SectionBlock>
 										) : (
-											<SecurityVaultSection {...securityVault} autoLoadVault compactLayout oracleManagerDetails={currentPoolOracleManagerDetails} showHeader={false} showLookupSection={false} showSecurityPoolAddressInput={false} showSummarySection={false} />
+											<div className='workflow-stack'>
+												<SectionBlock title='Vault Action Launchers' description='The page stays focused on vault state. Execution happens inside focused modals.'>
+													<div className='vault-action-launcher-grid'>
+														{vaultReadinessActions.map(action => (
+															<section key={action.key} className={`action-launcher-card ${action.readiness}`}>
+																<div className='action-launcher-card-copy'>
+																	<h4>{action.title}</h4>
+																	<p className='detail'>{action.description}</p>
+																	{action.blocker === undefined ? undefined : <p className='detail'>Blocked: {action.blocker}</p>}
+																</div>
+																<div className='action-launcher-card-actions'>
+																	<TransactionActionButton idleLabel={action.actionLabel} pendingLabel='Opening...' onClick={() => action.onAction?.()} tone='secondary' availability={{ disabled: action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }} />
+																</div>
+															</section>
+														))}
+													</div>
+												</SectionBlock>
+												<ErrorNotice message={securityVault.securityVaultError} />
+											</div>
 										)}
 									</div>
 								) : undefined}
@@ -650,6 +882,187 @@ export function SecurityPoolWorkflowSection({
 					</div>
 				</div>
 			</section>
+
+			<OperationModal isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title='Deposit REP' description='Review the selected vault, complete REP approval if needed, then deposit REP.'>
+				{selectedVaultDetails === undefined ? <p className='detail'>Refresh the selected vault before depositing REP.</p> : null}
+				{selectedVaultDetails === undefined ? null : (
+					<>
+						<SelectedVaultSummarySection
+							repPerEthPrice={repPerEthPrice}
+							repPerEthSource={repPerEthSource}
+							repPerEthSourceUrl={repPerEthSourceUrl}
+							securityBondAllowance={selectedVaultDetails.securityBondAllowance}
+							securityVaultDetails={selectedVaultDetails}
+							securityVaultRepApproval={securityVault.securityVaultRepApproval}
+							selectedPoolSecurityMultiplier={securityVault.selectedPoolSecurityMultiplier}
+							selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
+							variant='embedded'
+						/>
+						<label className='field'>
+							<span>REP Deposit Amount</span>
+							<div className='field-inline'>
+								<FormInput className='field-inline-input' value={securityVault.securityVaultForm.depositAmount} onInput={event => securityVault.onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} />
+								<button
+									className='quiet field-inline-action'
+									type='button'
+									onClick={() => {
+										if (securityVault.securityVaultRepBalance === undefined) return
+										securityVault.onSecurityVaultFormChange({ depositAmount: formatCurrencyInputBalance(securityVault.securityVaultRepBalance) })
+									}}
+									disabled={securityVault.securityVaultRepBalance === undefined}
+								>
+									Max
+								</button>
+							</div>
+						</label>
+						<TokenApprovalControl
+							actionLabel='depositing REP'
+							allowanceError={securityVault.securityVaultRepApproval.error}
+							allowanceLoading={securityVault.securityVaultRepApproval.loading}
+							approvedAmount={securityVault.securityVaultRepApproval.value}
+							guardMessage={approvalGuardMessage}
+							onApprove={amount => securityVault.onApproveRep(amount)}
+							pending={securityVault.securityVaultActiveAction === 'approveRep'}
+							pendingLabel='Approving REP...'
+							requiredAmount={depositAmount}
+							resetKey={`${selectedVaultDetails.repToken}:${selectedVaultDetails.securityPoolAddress}:${depositAmount?.toString() ?? ''}`}
+							tokenSymbol='REP'
+							tokenUnits={18}
+						/>
+						<RequirementsChecklist
+							items={[
+								{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
+								{ key: 'approval', label: 'REP approval is sufficient for the deposit amount', resolved: approvalRequirement.hasSufficientApproval, ...(approvalRequirement.hasSufficientApproval ? {} : { detail: 'Approve REP inside this modal before depositing.' }) },
+								{ key: 'balance', label: 'Wallet REP balance covers the deposit amount', resolved: repBalanceGap === undefined || repBalanceGap <= 0n, ...(repBalanceGap !== undefined && repBalanceGap > 0n ? { detail: `Need ${formatCurrencyBalance(repBalanceGap)} more REP.` } : {}) },
+								{ key: 'minimum', label: 'First deposit meets the vault minimum', resolved: !isDepositBelowMinimum, ...(isDepositBelowMinimum ? { detail: `First deposits must be at least ${formatCurrencyBalance(MIN_SECURITY_VAULT_REP_DEPOSIT)} REP.` } : {}) },
+							]}
+						/>
+						<div className='actions'>
+							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
+								Cancel
+							</button>
+							<TransactionActionButton idleLabel='Create / Deposit REP' pendingLabel='Depositing REP...' onClick={() => securityVault.onDepositRep()} pending={securityVault.securityVaultActiveAction === 'depositRep'} availability={{ disabled: depositGuardMessage !== undefined, reason: depositGuardMessage }} />
+						</div>
+					</>
+				)}
+			</OperationModal>
+
+			<OperationModal isOpen={vaultActionModal === 'withdraw-rep'} onClose={() => setVaultActionModal(undefined)} title='Withdraw REP' description='Queue a REP withdrawal after reviewing the current withdrawable balance and oracle validity.'>
+				{selectedVaultDetails === undefined ? <p className='detail'>Refresh the selected vault before withdrawing REP.</p> : null}
+				{selectedVaultDetails === undefined ? null : (
+					<>
+						<SelectedVaultSummarySection
+							repPerEthPrice={repPerEthPrice}
+							repPerEthSource={repPerEthSource}
+							repPerEthSourceUrl={repPerEthSourceUrl}
+							securityBondAllowance={selectedVaultDetails.securityBondAllowance}
+							securityVaultDetails={selectedVaultDetails}
+							securityVaultRepApproval={securityVault.securityVaultRepApproval}
+							selectedPoolSecurityMultiplier={securityVault.selectedPoolSecurityMultiplier}
+							selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
+							variant='embedded'
+						/>
+						<div className='workflow-metric-grid'>
+							<MetricField label='Withdrawable REP'>{withdrawableRepAmount === undefined ? '—' : <CurrencyValue value={withdrawableRepAmount} suffix='REP' />}</MetricField>
+							<MetricField label='Price Valid Until'>{oraclePriceValidUntilTimestamp === undefined ? 'Unavailable' : <TimestampValue timestamp={oraclePriceValidUntilTimestamp} />}</MetricField>
+						</div>
+						<label className='field'>
+							<span>REP Withdraw Amount</span>
+							<div className='field-inline'>
+								<FormInput className='field-inline-input' value={securityVault.securityVaultForm.repWithdrawAmount} onInput={event => securityVault.onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} />
+								<button
+									className='quiet field-inline-action'
+									type='button'
+									onClick={() => {
+										if (withdrawableRepAmount === undefined) return
+										securityVault.onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(withdrawableRepAmount) })
+									}}
+									disabled={withdrawableRepAmount === undefined}
+								>
+									Max
+								</button>
+							</div>
+						</label>
+						<RequirementsChecklist
+							items={[
+								{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
+								{ key: 'oracle', label: 'A valid oracle price is available', resolved: hasValidOraclePrice },
+								{ key: 'withdrawable', label: 'The vault has withdrawable REP', resolved: withdrawableRepAmount !== undefined && withdrawableRepAmount > 0n },
+							]}
+						/>
+						<div className='actions'>
+							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
+								Cancel
+							</button>
+							<TransactionActionButton
+								idleLabel='Withdraw REP'
+								pendingLabel='Queueing REP withdrawal...'
+								onClick={() => securityVault.onWithdrawRep()}
+								pending={securityVault.securityVaultActiveAction === 'queueWithdrawRep'}
+								tone='secondary'
+								availability={{ disabled: withdrawRepGuardMessage !== undefined, reason: withdrawRepGuardMessage }}
+							/>
+						</div>
+					</>
+				)}
+			</OperationModal>
+
+			<OperationModal isOpen={vaultActionModal === 'set-bond-allowance'} onClose={() => setVaultActionModal(undefined)} title='Set Bond Allowance' description='Queue a new bond allowance using the latest valid oracle price for the selected vault.'>
+				{selectedVaultDetails === undefined ? <p className='detail'>Refresh the selected vault before changing its bond allowance.</p> : null}
+				{selectedVaultDetails === undefined ? null : (
+					<>
+						<div className='workflow-metric-grid'>
+							<MetricField label='Current Bond Allowance'>
+								<CurrencyValue value={selectedVaultDetails.securityBondAllowance} suffix='ETH' />
+							</MetricField>
+							<MetricField label='Price Valid Until'>{oraclePriceValidUntilTimestamp === undefined ? 'Unavailable' : <TimestampValue timestamp={oraclePriceValidUntilTimestamp} />}</MetricField>
+						</div>
+						<label className='field'>
+							<span>Security Bond Allowance Amount</span>
+							<FormInput value={securityVault.securityVaultForm.securityBondAllowanceAmount} onInput={event => securityVault.onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} />
+						</label>
+						<RequirementsChecklist
+							items={[
+								{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
+								{ key: 'oracle', label: 'A valid oracle price is available', resolved: hasValidOraclePrice },
+								{ key: 'allowance', label: 'Allowance amount is greater than zero', resolved: securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > 0n },
+							]}
+						/>
+						<div className='actions'>
+							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
+								Cancel
+							</button>
+							<TransactionActionButton
+								idleLabel='Set Security Bond Allowance'
+								pendingLabel='Queueing allowance update...'
+								onClick={() => securityVault.onSetSecurityBondAllowance()}
+								pending={securityVault.securityVaultActiveAction === 'queueSetSecurityBondAllowance'}
+								tone='secondary'
+								availability={{ disabled: setSecurityBondAllowanceGuardMessage !== undefined, reason: setSecurityBondAllowanceGuardMessage }}
+							/>
+						</div>
+					</>
+				)}
+			</OperationModal>
+
+			<OperationModal isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title='Claim Fees' description='Confirm the claimable fee balance before submitting the fee redemption for this vault.'>
+				<div className='workflow-metric-grid'>
+					<MetricField label='Claimable Fees'>{selectedVaultDetails === undefined ? '—' : <CurrencyValue value={selectedVaultDetails.unpaidEthFees} suffix='ETH' />}</MetricField>
+					<MetricField label='Vault'>{selectedVaultAddress === '' ? 'None selected' : selectedVaultAddress}</MetricField>
+				</div>
+				<RequirementsChecklist
+					items={[
+						{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
+						{ key: 'fees', label: 'Claimable fees are available', resolved: hasClaimableFees },
+					]}
+				/>
+				<div className='actions'>
+					<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
+						Cancel
+					</button>
+					<TransactionActionButton idleLabel='Claim Fees' pendingLabel='Claiming fees...' onClick={() => securityVault.onRedeemFees()} pending={securityVault.securityVaultActiveAction === 'redeemFees'} availability={{ disabled: claimFeesGuardMessage !== undefined, reason: claimFeesGuardMessage }} />
+				</div>
+			</OperationModal>
 
 			<LiquidationModal
 				accountAddress={accountState.address}

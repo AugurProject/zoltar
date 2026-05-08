@@ -1,4 +1,4 @@
-import { encodeDeployData, getCreate2Address, keccak256, toHex, type Address, type Hex } from 'viem'
+import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, toHex, type Address, type Hex } from 'viem'
 import { createApplyLinkedLibrariesHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '../shared/deploymentAddresses.js'
 import { bigintToAddress } from './helpers.js'
 import {
@@ -73,11 +73,13 @@ export const getEscalationGameFactoryByteCode = () =>
 	})
 
 export const getPriceOracleManagerAndOperatorQueuerFactoryByteCode = () =>
-	encodeDeployData({
-		abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
-		bytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
-		args: [MAINNET_WETH_ADDRESS, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_EXACT_TOKEN1_REPORT, ORACLE_SETTLEMENT_TIME, ORACLE_DISPUTE_DELAY, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE, ORACLE_MULTIPLIER, ORACLE_TIME_TYPE, ORACLE_TRACK_DISPUTES, ORACLE_KEEP_FEE, ORACLE_PROTOCOL_FEE_RECIPIENT, ORACLE_FEE_TOKEN],
-	})
+	concatHex([
+		`0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
+		encodeAbiParameters(
+			[{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'bool' }, { type: 'bool' }, { type: 'bool' }, { type: 'address' }, { type: 'bool' }],
+			[MAINNET_WETH_ADDRESS, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_EXACT_TOKEN1_REPORT, ORACLE_SETTLEMENT_TIME, ORACLE_DISPUTE_DELAY, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE, ORACLE_MULTIPLIER, ORACLE_TIME_TYPE, ORACLE_TRACK_DISPUTES, ORACLE_KEEP_FEE, ORACLE_PROTOCOL_FEE_RECIPIENT, ORACLE_FEE_TOKEN],
+		),
+	])
 
 export const getZoltarQuestionDataByteCode = () =>
 	encodeDeployData({

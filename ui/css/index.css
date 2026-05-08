@@ -2224,6 +2224,256 @@ strong.metric-value-danger {
 	align-self: end;
 }
 
+.notice-stack-item {
+	display: grid;
+	gap: 0.3rem;
+}
+
+.notice-stack-item.blocking {
+	background: var(--notice-error-gradient);
+}
+
+.notice-stack-item.warning {
+	background: linear-gradient(180deg, rgba(92, 72, 20, 0.9) 0%, rgba(61, 44, 13, 0.9) 100%);
+	border-color: var(--warning-border);
+}
+
+.notice-stack-item.pending {
+	background: linear-gradient(180deg, rgba(16, 43, 64, 0.92) 0%, rgba(8, 28, 46, 0.92) 100%);
+	border-color: var(--interactive-border);
+}
+
+.notice-stack-item.success {
+	background: linear-gradient(180deg, rgba(11, 51, 43, 0.92) 0%, rgba(8, 34, 29, 0.92) 100%);
+	border-color: var(--success-border);
+}
+
+.notice-title {
+	font-size: var(--font-caption);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.environment-gate,
+.sticky-object-context,
+.lifecycle-stage-banner,
+.action-readiness-panel,
+.result-banner,
+.workflow-summary-strip {
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-section);
+	background: linear-gradient(180deg, rgba(13, 26, 43, 0.9) 0%, rgba(9, 18, 31, 0.94) 100%);
+	box-shadow: var(--glow-inset-subtle);
+}
+
+.environment-gate,
+.lifecycle-stage-banner,
+.action-readiness-panel,
+.result-banner,
+.workflow-summary-strip {
+	padding: 1rem 1.1rem;
+}
+
+.environment-gate.critical,
+.lifecycle-stage-banner.critical {
+	border-color: var(--danger-border);
+}
+
+.environment-gate.warning,
+.lifecycle-stage-banner.warning {
+	border-color: var(--warning-border);
+}
+
+.lifecycle-stage-banner.success {
+	border-color: var(--success-border);
+}
+
+.sticky-object-context {
+	position: sticky;
+	top: 0.8rem;
+	z-index: 3;
+	padding: 0.95rem 1.1rem;
+	display: grid;
+	gap: 0.9rem;
+}
+
+.sticky-object-context-copy,
+.action-readiness-panel-header,
+.lifecycle-stage-banner-main {
+	display: grid;
+	gap: 0.3rem;
+}
+
+.sticky-object-context h3,
+.lifecycle-stage-banner h3,
+.action-readiness-panel h3,
+.result-banner h3,
+.environment-gate h3 {
+	margin: 0;
+	font-size: var(--font-h3-section);
+}
+
+.sticky-object-context-items,
+.lifecycle-stage-banner-lists,
+.action-readiness-grid,
+.vault-action-launcher-grid,
+.workflow-summary-strip-steps {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.sticky-object-context-items {
+	grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.sticky-object-context-item,
+.action-launcher-card {
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-control);
+	background: var(--surface-inset);
+	padding: 0.8rem 0.9rem;
+}
+
+.sticky-object-context-item {
+	display: grid;
+	gap: 0.25rem;
+}
+
+.sticky-object-context-item span,
+.panel-label {
+	font-size: var(--font-label);
+	color: var(--muted);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.sticky-object-context-item strong {
+	font-size: var(--font-body);
+}
+
+.lifecycle-stage-banner {
+	display: grid;
+	gap: 0.9rem;
+}
+
+.lifecycle-stage-banner-lists {
+	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+.stage-list,
+.requirements-checklist {
+	margin: 0;
+	padding-left: 1rem;
+	display: grid;
+	gap: 0.35rem;
+}
+
+.action-readiness-panel-header {
+	grid-template-columns: 1fr auto;
+	align-items: start;
+	margin-bottom: 0.9rem;
+}
+
+.action-readiness-grid,
+.vault-action-launcher-grid {
+	grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+.action-launcher-card {
+	display: grid;
+	gap: 0.8rem;
+}
+
+.action-launcher-card h4 {
+	margin: 0;
+	font-size: var(--font-base);
+}
+
+.action-launcher-card.ready {
+	border-color: var(--success-border);
+}
+
+.action-launcher-card.warning {
+	border-color: var(--warning-border);
+}
+
+.action-launcher-card.blocked {
+	border-color: var(--danger-border);
+}
+
+.action-launcher-card-actions {
+	display: flex;
+	justify-content: flex-start;
+}
+
+.read-only-detail-accordion {
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-control);
+	background: rgba(9, 18, 31, 0.5);
+	padding: 0.1rem 0.9rem;
+}
+
+.read-only-detail-accordion summary {
+	cursor: pointer;
+	padding: 0.85rem 0;
+	font-weight: 600;
+}
+
+.read-only-detail-accordion-content {
+	padding: 0 0 0.95rem;
+}
+
+.operation-modal-panel {
+	width: min(54rem, calc(100vw - 2rem));
+}
+
+.operation-modal-body {
+	display: grid;
+	gap: 1rem;
+}
+
+.workflow-summary-strip-steps {
+	grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+	margin-top: 0.75rem;
+}
+
+.workflow-summary-strip-steps span {
+	border: 1px solid var(--border-subtle);
+	border-radius: 999px;
+	padding: 0.45rem 0.7rem;
+	text-align: center;
+	color: var(--text-secondary);
+}
+
+.workflow-summary-strip-steps span.current {
+	border-color: var(--interactive-border-hover);
+	background: var(--interactive-bg);
+	color: var(--text);
+}
+
+.filter-toolbar {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+	gap: 0.85rem;
+	margin-bottom: 1rem;
+}
+
+.report-detail-stack,
+.advanced-detail-stack {
+	display: grid;
+	gap: 0.75rem;
+}
+
+@media (max-width: 800px) {
+	.sticky-object-context {
+		top: 0;
+	}
+
+	.action-readiness-panel-header {
+		grid-template-columns: 1fr;
+	}
+}
+
 .field {
 	display: grid;
 	gap: 0.5rem;

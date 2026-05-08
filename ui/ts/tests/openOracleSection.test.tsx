@@ -326,6 +326,62 @@ function renderDisputeActionSection({
 	)
 }
 
+function renderSettleActionSection({
+	accountState = createAccountState(),
+	openOracleForm = createOpenOracleForm(),
+	openOracleReportDetails = createOpenOracleReportDetails({
+		currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+		currentTime: 161n,
+		disputeDelay: 10n,
+		reportTimestamp: 100n,
+		settlementTime: 60n,
+	}),
+}: {
+	accountState?: AccountState
+	openOracleForm?: OpenOracleFormState
+	openOracleReportDetails?: OpenOracleReportDetails
+} = {}) {
+	return renderSelectedReportActionSection(
+		'settle',
+		accountState.address !== undefined,
+		undefined,
+		openOracleForm,
+		deriveOpenOracleInitialReportSubmissionDetails({
+			approvedToken1Amount: 0n,
+			approvedToken2Amount: 0n,
+			defaultPrice: undefined,
+			defaultPriceError: undefined,
+			defaultPriceSource: undefined,
+			defaultPriceSourceUrl: undefined,
+			priceInput: '',
+			quoteAttemptedSources: undefined,
+			quoteFailureReason: undefined,
+			reportDetails: undefined,
+			token1AllowanceError: undefined,
+			token1Balance: undefined,
+			token1BalanceError: undefined,
+			token1Decimals: openOracleReportDetails.token1Decimals,
+			token2AllowanceError: undefined,
+			token2Balance: undefined,
+			token2BalanceError: undefined,
+			token2Decimals: openOracleReportDetails.token2Decimals,
+			walletEthBalance: undefined,
+		}),
+		createOpenOracleInitialReportState(),
+		openOracleReportDetails.token1Symbol,
+		openOracleReportDetails.token2Symbol,
+		() => undefined,
+		() => undefined,
+		() => undefined,
+		() => undefined,
+		() => undefined,
+		() => undefined,
+		() => undefined,
+		() => undefined,
+		openOracleReportDetails,
+	)
+}
+
 void describe('OpenOracleSection', () => {
 	void test('removes the redundant wallet metric row from the selected initial report action', () => {
 		const section = renderInitialReportActionSection()
@@ -377,7 +433,7 @@ void describe('OpenOracleSection', () => {
 	})
 
 	void test('renders settle-only controls after the dispute window closes', () => {
-		const section = renderDisputeActionSection({
+		const section = renderSettleActionSection({
 			openOracleReportDetails: createOpenOracleReportDetails({
 				currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
 				currentTime: 161n,
@@ -411,14 +467,14 @@ void describe('OpenOracleSection', () => {
 		})
 
 		const disputeButton = findButton(section, 'Dispute & Swap')
-		const settleButton = findButton(section, 'Settle Report')
-		if (disputeButton === undefined || settleButton === undefined) {
-			throw new Error('Expected dispute action buttons to render')
+		if (disputeButton === undefined) {
+			throw new Error('Expected dispute action button to render')
 		}
 
 		expect(getButtonDisabled(disputeButton)).toBe(true)
-		expect(getButtonDisabled(settleButton)).toBe(true)
+		expect(findButton(section, 'Settle Report')).toBeUndefined()
 		expect(getButtonDisabledReason(disputeButton)).toBe('This report is not ready to dispute yet.')
-		expect(getButtonDisabledReason(settleButton)).toBe('This report can be settled in less than a minute if no disputes occur.')
+		expect(getSectionTitles(section)).toContain('Current Report State')
+		expect(getSectionTitles(section)).toContain('Dispute Report')
 	})
 })

@@ -81,6 +81,7 @@ export function SecurityPoolsSection({ createPool, overview, workflow }: Securit
 			{view === 'create' ? (
 				<SecurityPoolSection
 					{...createPool}
+					onReturnToBrowse={() => openView('browse')}
 					showHeader={false}
 					onOpenCreatedPool={securityPoolAddress => {
 						workflow.onSecurityPoolAddressChange(securityPoolAddress)
