@@ -176,9 +176,25 @@ Many write actions should work like the current liquidation flow:
 
 This is the biggest proposed interaction change.
 
-## Modal-First Transaction Pattern
+## Decision-Complete Modal Pattern
 
 ### Pattern
+
+Use a transactional modal only when the operator can see everything important needed to make the decision inside that modal without needing to scan the page behind it.
+
+A write flow is a good modal candidate when:
+
+- it has one narrow transaction intent
+- the required context can be summarized compactly
+- the user does not need to compare multiple live tables, sides, or workflow stages while editing inputs
+- approvals, warnings, balances, and final submit can fit in one bounded surface without loss of clarity
+
+A write flow should stay inline when:
+
+- the operator needs to compare several live state surfaces before deciding
+- the workflow depends on side-by-side comparison across outcomes, balances, stages, or target sets
+- the route itself is the decision surface and the transaction control is only one part of it
+- moving the inputs into a modal would hide meaningful context instead of simplifying the action
 
 Every modal-first write flow should follow the same structure:
 
@@ -234,6 +250,15 @@ This keeps the main route cleaner and preserves all current safety checks.
 
 The page should still tell the user that approval is required before they open the modal. The modal should execute the approval, not surprise the user with the need for it.
 
+### Decision rule
+
+Default rule:
+
+- page = object state, comparisons, readiness, and action choice
+- modal = execution only when the execution surface can also contain the full decision context
+
+If the user would need to keep looking back at the page to compare state before submitting, the flow should not be modal-first.
+
 ## Global vs Local Readiness
 
 The redesign should separate universal environment state from action-specific readiness.
@@ -271,13 +296,26 @@ These are strong candidates:
 - vault withdraw REP
 - set security bond allowance
 - claim fees
+- create child universe
+- initial report submission
+- dispute report
+- settle report
+- fork Zoltar
+
+These actions fit the modal pattern because their decision context can be restated compactly inside the modal.
+
+### Flows that can stay inline
+
+Some actions should remain inline even if they mutate state, because the route is still the best decision surface:
+
 - mint complete sets
 - redeem complete sets
 - migrate shares
 - redeem shares
 - report outcome / contribute
 - withdraw escalation deposits
-- create child universe
+- prepare REP
+- split REP
 - migrate REP to Zoltar from pool flow
 - migrate vault
 - migrate escalation deposits
@@ -286,16 +324,8 @@ These are strong candidates:
 - refund losing bid
 - claim auction proceeds
 - withdraw bids
-- initial report submission
-- dispute report
-- settle report
-- fork Zoltar
-- prepare REP
-- split REP
 
-### Flows that can stay inline
-
-Some lightweight actions can remain inline if they do not need extra inputs:
+Some lightweight actions can also remain inline if they do not need extra inputs:
 
 - refresh actions
 - navigation actions
@@ -339,7 +369,8 @@ After:
 
 - universe stage becomes much more visible
 - post-fork actions become more prominent when relevant
-- `Fork Zoltar`, `Prepare REP`, and `Split REP` move to modal execution
+- `Fork Zoltar` can move to modal execution because its decision context is compact
+- `Prepare REP` and `Split REP` should stay inline if the operator needs to compare balances, selected universes, and split capacity on-page
 - question-to-pool and question-to-fork handoffs become more explicit
 
 What stays the same:
@@ -495,7 +526,7 @@ Modal contents:
 
 #### Migration
 
-This should also become modal-first for the actual write operations.
+This should stay route-native unless the migration surface can show the full balance, target-universe, and split-capacity context inside one bounded execution surface without loss of clarity.
 
 Base route should show:
 
@@ -509,7 +540,7 @@ Primary actions:
 - `Prepare REP`
 - `Split REP`
 
-Each opens its own modal or a shared two-step migration modal.
+The default implementation should keep the controls inline and instead improve grouping, readiness explanation, and comparison layout.
 
 ### Security Pools
 
@@ -558,11 +589,11 @@ Proposed layout:
 
 1. selected pool header
 2. pool summary
-3. action readiness panel
+3. workflow-scoped readiness panel
 4. workflow tabs
 5. advanced details
 
-The pool summary should stay read-only. Actions should move into modals.
+The pool summary should stay read-only. Action launchers should appear only for flows that satisfy the decision-complete modal rule.
 
 ##### Vaults
 
@@ -605,18 +636,15 @@ Current issue:
 
 Proposed change:
 
-- replace inline forms with action cards:
-  - `Mint Complete Sets`
-  - `Redeem Complete Sets`
-  - `Migrate Shares`
-  - `Redeem Shares`
-
-Each opens a focused modal.
+- keep trading in the route as a decision surface
+- reduce visual weight with clearer subsections and action cards
+- keep inputs adjacent to balances, max values, and migration-target context
 
 Benefits:
 
 - no more always-visible amount fields for unrelated actions
 - per-flow validation stays local to the action
+- operators can still compare shares, redeemable sets, and migration targets without leaving the page
 
 ##### Reporting
 
@@ -626,18 +654,9 @@ Current issue:
 
 Proposed change:
 
-- keep escalation metrics and side summaries inline
-- move write actions to modals:
-  - `Report / Contribute`
-  - `Withdraw Deposits`
-
-Each modal should show:
-
-- selected outcome side
-- current bond and threshold context
-- user stake on that side
-- amount or deposit-index input
-- submit action
+- keep escalation metrics, side summaries, and write controls inline
+- tighten the layout so contribution and withdrawal controls feel scoped, not buried
+- keep amount and deposit-index inputs beside the side and payout context they depend on
 
 ##### Fork
 
@@ -648,7 +667,8 @@ Current issue:
 Proposed change:
 
 - keep lifecycle tabs and read-only state inline
-- make every actual fork/auction operation modal-first
+- only move fork or auction actions into modals when the full stage and economic decision context fits inside the modal
+- otherwise keep the action inline in a focused stage section
 
 Examples:
 
@@ -658,7 +678,7 @@ Examples:
 - `Submit Bid`
 - `Claim Auction Proceeds`
 
-Each modal should carry the exact stage context needed for that one action.
+Each modal, when used, should carry the exact stage context needed for that one action. If that context is too large or comparison-heavy, the action should stay on-page.
 
 ### Open Oracle
 
@@ -719,7 +739,8 @@ The redesign should introduce a small shared set of higher-level components:
   - shows the recommended next action and why without hiding other available actions
   - should be treated as a recommendation surface, not a single-path workflow surface
 - `ActionReadinessPanel`
-  - shows the full set of available actions plus action-specific readiness and blockers for the current object
+  - shows workflow-scoped actions plus action-specific readiness and blockers for the current object
+  - should summarize by workflow first rather than flatten every action on the route into one long list
 - `EnvironmentGate`
   - shows global blockers such as disconnected wallet, wrong network, or incomplete setup only when they are failing
 - `RequirementsChecklist`
@@ -871,9 +892,15 @@ Every route or deep object workspace should be built from these layers:
 3. environment gate if failing
 4. lifecycle stage banner when relevant
 5. action readiness panel
-6. action launcher cards
+6. workflow action area
 7. supporting read-only records
 8. advanced diagnostics or historical details
+
+The workflow action area may be composed of:
+
+- modal launcher cards for decision-complete actions
+- scoped inline action sections for comparison-heavy workflows
+- a mix of both when different actions in the same workspace need different interaction models
 
 ### Shared interaction contract
 
@@ -897,6 +924,7 @@ Apply these rules across all routes:
 - global blockers such as disconnected wallet, wrong network, or incomplete setup appear once per route
 - action cards only show local blockers
 - if an action needs approval, the route should say approval is needed and the modal should execute it
+- if the full decision context cannot fit in the modal, keep the action inline
 - if an action is blocked by stage, the stage banner and the action card should agree on why
 - if an action completes, the result surface should explain the state change and next step
 - if a record is selected, its identity and stage should remain visible while the user works
@@ -1558,6 +1586,8 @@ All transactional modals should follow these rules:
 - loading spinners should stay inside the action button that initiated the transaction
 - the modal can repeat blocked requirements, but the route should already show them before click
 - the modal should be for execution, not first-time discovery of core prerequisites
+- the modal should contain all decision-critical information needed for submission
+- if meaningful comparison with on-page state is still required, the flow should stay inline
 
 ## What Should Stay Inline
 
@@ -1574,12 +1604,15 @@ Keep these inline:
 - read-only summaries
 - question creation form
 - pool creation form
+- complex trading forms
+- reporting forms that depend on side-by-side escalation context
+- migration and auction flows that require multi-surface comparison
 
 Rationale:
 
 - context selection belongs to the route
 - object creation forms that define a new record can remain page-native
-- transactional state changes on existing records benefit most from modals
+- transactional state changes on existing records benefit from modals only when the modal can also be the full decision surface
 
 ## State And URL Contract
 
@@ -1857,8 +1890,9 @@ Redesign requirements:
 - keep `Create` inline with a stronger requirements strip and clearer post-success handoff
 - make `Operate` use a sticky selected-pool context bar
 - separate `Pool State`, `Action Readiness`, `Workflow Tabs`, and `Advanced Details`
-- convert state-changing operations on existing records to modal execution
-- keep lists and read-only summaries visible while modals handle execution
+- use modal execution only for state-changing operations whose full decision context fits inside the modal
+- keep comparison-heavy decision workflows route-native
+- keep lists and read-only summaries visible while modals handle bounded execution flows
 
 #### Security Pools `Operate > Vaults`
 
@@ -1876,8 +1910,9 @@ Do not keep multiple unrelated amount inputs open on the page at the same time.
 Build this surface around:
 
 - trading state summary
-- action launcher cards for mint, redeem, migrate, and share redemption
+- compact action sections for mint, redeem, migrate, and share redemption
 - compact readiness and result surfaces
+- inputs that stay adjacent to balances, max values, and migration targets
 
 #### Security Pools `Operate > Reporting`
 
@@ -1886,7 +1921,8 @@ Build this surface around:
 - reporting stage banner
 - escalation metrics
 - outcome-side context
-- modal launchers for reporting and withdrawal
+- scoped inline action sections for reporting and withdrawal
+- local readiness and payout context beside the relevant inputs
 
 #### Security Pools `Operate > Fork`
 
@@ -1975,11 +2011,16 @@ For `Operate`:
 
 1. sticky selected-pool context
 2. pool stage banner
-3. workflow tabs
-4. action readiness panel
-5. action launcher group
+3. workflow-scoped action readiness panel
+4. workflow tabs
+5. workflow action area
 6. supporting data panels
 7. advanced details
+
+In this layout:
+
+- the readiness panel summarizes the currently relevant workflow choices before the user commits to a detailed workspace
+- the workflow action area may contain modal launchers, inline action sections, or a mix of both depending on whether the workflow satisfies the decision-complete modal rule
 
 ### Open Oracle Layout Contract
 
@@ -2032,9 +2073,9 @@ This section maps the most important current UI controls into their redesigned h
 - `Fork Zoltar`
   - moves from inline workflow to modal execution
 - `Prepare REP`
-  - moves to modal execution
+  - stays inline unless its decision context can be shown completely in a bounded execution surface
 - `Split REP`
-  - moves to modal execution
+  - stays inline because target-universe and split-capacity comparison is part of the decision
 - child-universe deployment actions
   - remain visible in post-fork actions
   - can launch focused execution modals if inputs are needed
@@ -2058,20 +2099,20 @@ This section maps the most important current UI controls into their redesigned h
 - `Claim Fees`
   - moves from inline button to action card plus modal or confirmation modal
 - `Mint Complete Sets`
-  - moves to action card plus modal
+  - moves to a cleaner inline action section with stronger readiness and local context
 - `Redeem Complete Sets`
-  - moves to action card plus modal
+  - moves to a cleaner inline action section with stronger readiness and local context
 - `Migrate Shares`
-  - moves to action card plus modal
+  - stays inline with adjacent target-selection context
 - `Redeem Shares`
-  - moves to action card plus modal
+  - stays inline as a compact action section
 - `Report / Contribute`
-  - moves to action card plus modal
+  - stays inline with side and payout context visible
 - `Withdraw Escalation Deposits`
-  - moves to action card plus modal
+  - stays inline with deposit context visible
 - fork and auction actions
   - remain visible in stage-specific action groups
-  - execute through focused modals
+  - use focused modals only when stage and economic context can fit cleanly inside them
 
 ### Open Oracle
 
@@ -2096,27 +2137,13 @@ The redesign should define and build these modal surfaces explicitly.
 - `Withdraw REP`
 - `Set Security Bond Allowance`
 - `Claim Fees`
-- `Mint Complete Sets`
-- `Redeem Complete Sets`
-- `Migrate Shares`
-- `Redeem Shares`
-- `Report / Contribute`
-- `Withdraw Escalation Deposits`
 - `Fork Zoltar`
-- `Prepare REP`
-- `Split REP`
 - `Create Child Universe`
-- `Migrate REP To Zoltar`
-- `Migrate Vault`
-- `Migrate Escalation Deposits`
-- `Start Truth Auction`
-- `Submit Bid`
-- `Refund Losing Bid`
-- `Claim Auction Proceeds`
-- `Withdraw Bids`
 - `Submit Initial Report`
 - `Dispute & Swap`
 - `Settle Report`
+
+Additional fork and auction modals may be added selectively, but only when the full decision context can be shown inside the modal without relying on the underlying page.
 
 ### Modal Contract
 
@@ -2186,7 +2213,7 @@ The redesign should define a small set of presentation patterns and reuse them c
 - lifecycle summary
   - before / now / next framing
 - action card group
-  - local blockers plus execution launchers
+  - local blockers plus either execution launchers or scoped inline action sections
 - advanced detail accordion
   - collapsible technical detail
 
@@ -2262,10 +2289,11 @@ If the redesign is implemented incrementally, use this dependency order:
 
 ### Mitigation
 
-- use modal-first mainly for state-changing operations on existing entities
+- use modal-first only for state-changing operations whose full decision context fits inside the modal
 - keep action prerequisites and blockers visible on the route
 - show universal environment blockers once per route instead of duplicating them per action
 - keep object creation inline where it improves flow
+- keep comparison-heavy workflows route-native
 - support deep links back to the underlying route context
 - preserve advanced read-only details outside the modal
 
@@ -2275,9 +2303,9 @@ If this redesign is implemented incrementally, start here:
 
 1. build the shared action-card, modal, notice, and sticky-context foundations
 2. convert vault actions to modal-first
-3. convert trading actions to modal-first
-4. convert reporting actions to modal-first
-5. convert Open Oracle selected-report actions to modal-first
+3. restructure trading and reporting into cleaner inline decision surfaces
+4. convert Open Oracle selected-report actions to modal-first
+5. evaluate fork and auction actions one by one against the decision-complete modal rule
 
 This would capture most of the clarity benefit without redesigning every page at once.
 
