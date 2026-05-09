@@ -261,6 +261,8 @@ describe('MarketSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByText('Active Root Universe').length).toBeGreaterThan(0)
 		expect(documentQueries.getByText('The root universe is active and unforked. Question creation and fork preparation remain the primary workflows.')).not.toBeNull()
+		expect(documentQueries.queryByText('Available')).toBeNull()
+		expect(documentQueries.queryByText('Blocked')).toBeNull()
 		expect(documentQueries.getAllByText('Universe').length).toBeGreaterThan(0)
 		expect(documentQueries.getAllByText('Questions').length).toBeGreaterThan(0)
 	})

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { zeroAddress } from 'viem'
-import { ActionReadinessPanel } from './ActionReadinessPanel.js'
+import { ActionLauncherCard } from './ActionLauncherCard.js'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { DataGrid } from './DataGrid.js'
@@ -463,7 +463,13 @@ function renderReportDetailsCard(
 				]}
 			/>
 			<LifecycleStageBanner stage={stage} />
-			<ActionReadinessPanel actions={readinessActions} title='Selected report actions' />
+			<SectionBlock title='Selected Report Actions' description='Open a focused action flow for the selected report when it is available.'>
+				<div className='action-readiness-grid'>
+					{readinessActions.map(action => (
+						<ActionLauncherCard key={action.key} action={action} />
+					))}
+				</div>
+			</SectionBlock>
 			<SectionBlock actions={modeTabs} badge={<span className={`badge ${statusTone}`}>{status}</span>} title='Selected Report'>
 				{reportControls}
 				<DataGrid className='question-summary-grid'>

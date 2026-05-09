@@ -16,7 +16,6 @@ export function ActionLauncherCard({ action, children, pending = false, pendingL
 			<div className='action-launcher-card-copy'>
 				<h4>{action.title}</h4>
 				<p className='detail'>{action.description}</p>
-				{action.blocker === undefined ? undefined : <p className='detail'>Blocked: {action.blocker}</p>}
 				{children}
 			</div>
 			<div className='action-launcher-card-actions'>

@@ -344,10 +344,18 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Security pools' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Pool Summary' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Pool Summary' })).toBeNull()
+		expect(documentQueries.queryByText('Action Readiness')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Price Oracle' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Pool Summary' })).toBeNull()
 		expect(documentQueries.queryByText('Workflow')).toBeNull()
+		expect(documentQueries.getByText('Question description')).not.toBeNull()
+		expect(documentQueries.getByText('Total REP Deposited')).not.toBeNull()
+		expect(documentQueries.getByText('Oracle Expires In')).not.toBeNull()
+		const selectedPoolContext = document.body.querySelector('.sticky-object-context.static')
+		if (!(selectedPoolContext instanceof HTMLElement)) {
+			throw new Error('Expected a non-sticky selected pool context card')
+		}
 		expect(documentQueries.getByRole('heading', { name: 'Vault Operations' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Lookup' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Vault Summary' })).not.toBeNull()
@@ -358,6 +366,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getAllByText('Approved REP').length).toBeGreaterThan(0)
 		expect(documentQueries.queryByText('Enter a deposit amount greater than zero.')).toBeNull()
 		expect(documentQueries.queryByText('Fork Flow')).toBeNull()
+		expect(documentQueries.queryByText(/^Blocked:/)).toBeNull()
 		expect(documentQueries.queryByText('Oracle Status')).toBeNull()
 		expect(documentQueries.queryByText('Truth Auction')).toBeNull()
 		expect(documentQueries.getByText('Security Multiplier')).not.toBeNull()
@@ -443,7 +452,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Report Outcome' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
 		expect(documentQueries.queryByText('Reporting unlocks after the market end timestamp for the selected pool.')).toBeNull()
-		expect(documentQueries.getAllByText('Reporting opens after market end.').length).toBeGreaterThan(0)
+		expect(documentQueries.queryByText('Reporting opens after market end.')).toBeNull()
 
 		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)

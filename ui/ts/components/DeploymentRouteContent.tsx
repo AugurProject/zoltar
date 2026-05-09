@@ -1,4 +1,3 @@
-import { ActionReadinessPanel } from './ActionReadinessPanel.js'
 import type { ComponentChildren } from 'preact'
 import { LoadableValue } from './LoadableValue.js'
 import { DeploymentSection } from './DeploymentSection.js'
@@ -8,7 +7,6 @@ import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { DataGrid } from './DataGrid.js'
 import { findNextDeployableStep, getDeployNextMissingAvailability } from '../lib/deployment.js'
-import type { ReadinessAction } from '../types/components.js'
 import type { DeploymentRouteContentProps } from '../types/components.js'
 
 export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextMissingPending, deploymentSections, deploymentStatuses, isLoadingDeploymentStatuses, isMainnet, onDeploy, onDeployNextMissing }: DeploymentRouteContentProps) {
@@ -22,15 +20,6 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 		isMainnet,
 		nextMissingStep,
 	})
-	const nextDeployAction: ReadinessAction = {
-		actionLabel: 'Deploy Next Missing',
-		description: nextMissingStep === undefined ? 'Every deterministic contract is already deployed.' : `The next deployable step is ${nextMissingStep.label}. Deploy it first before using lower-priority per-step actions.`,
-		key: 'deploy-next-missing',
-		readiness: deployNextAvailability.disabled ? 'blocked' : 'ready',
-		...(deployNextAvailability.disabled ? {} : { onAction: onDeployNextMissing }),
-		...(deployNextAvailability.reason === undefined ? {} : { blocker: deployNextAvailability.reason }),
-		title: nextMissingStep === undefined ? 'Deployment Complete' : `Next: ${nextMissingStep.label}`,
-	}
 	let buttonContent: ComponentChildren = 'Deploy Next Missing'
 	if (deployNextMissingPending) {
 		buttonContent = 'Deploying...'
@@ -62,7 +51,6 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 					</DataGrid>
 				}
 			/>
-			<ActionReadinessPanel actions={[nextDeployAction]} title='Deployment Readiness' />
 			<SectionBlock title='Deployment Groups' description={!isLoadingDeploymentStatuses && nextMissingStep !== undefined ? `Next deployable contract: ${nextMissingStep.label}` : 'All deterministic contracts are deployed in grouped sections.'}>
 				<div className='workflow-stack'>
 					{deploymentSections.map(section => {

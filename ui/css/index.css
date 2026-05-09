@@ -2257,7 +2257,6 @@ strong.metric-value-danger {
 .environment-gate,
 .sticky-object-context,
 .lifecycle-stage-banner,
-.action-readiness-panel,
 .result-banner,
 .workflow-summary-strip {
 	border: 1px solid var(--border-default);
@@ -2268,7 +2267,6 @@ strong.metric-value-danger {
 
 .environment-gate,
 .lifecycle-stage-banner,
-.action-readiness-panel,
 .result-banner,
 .workflow-summary-strip {
 	padding: 1rem 1.1rem;
@@ -2297,8 +2295,13 @@ strong.metric-value-danger {
 	gap: 0.9rem;
 }
 
+.sticky-object-context.static {
+	position: static;
+	top: auto;
+	z-index: auto;
+}
+
 .sticky-object-context-copy,
-.action-readiness-panel-header,
 .lifecycle-stage-banner-main {
 	display: grid;
 	gap: 0.3rem;
@@ -2306,7 +2309,6 @@ strong.metric-value-danger {
 
 .sticky-object-context h3,
 .lifecycle-stage-banner h3,
-.action-readiness-panel h3,
 .result-banner h3,
 .environment-gate h3 {
 	margin: 0;
@@ -2314,12 +2316,18 @@ strong.metric-value-danger {
 }
 
 .sticky-object-context-items,
-.lifecycle-stage-banner-lists,
 .action-readiness-grid,
 .vault-action-launcher-grid,
 .workflow-summary-strip-steps {
 	display: grid;
 	gap: 0.75rem;
+}
+
+.sticky-object-context-body {
+	display: grid;
+	gap: 0.9rem;
+	padding-top: 0.15rem;
+	border-top: 1px solid var(--border-subtle);
 }
 
 .sticky-object-context-items {
@@ -2356,22 +2364,12 @@ strong.metric-value-danger {
 	gap: 0.9rem;
 }
 
-.lifecycle-stage-banner-lists {
-	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-}
-
 .stage-list,
 .requirements-checklist {
 	margin: 0;
 	padding-left: 1rem;
 	display: grid;
 	gap: 0.35rem;
-}
-
-.action-readiness-panel-header {
-	grid-template-columns: 1fr auto;
-	align-items: start;
-	margin-bottom: 0.9rem;
 }
 
 .action-readiness-grid,
@@ -3101,10 +3099,6 @@ button:focus-visible {
 	justify-content: center;
 }
 
-.disabled-reason {
-	color: var(--warning);
-}
-
 .overview-panel {
 	padding: var(--space-5) var(--space-6);
 	border: 1px solid var(--divider-strong);
@@ -3232,23 +3226,25 @@ button:focus-visible {
 	gap: var(--space-3);
 }
 
-.selected-pool-summary-card {
-	padding: 1rem 1.05rem;
+.selected-pool-context-summary,
+.selected-pool-context-overview {
+	display: grid;
 	gap: 0.85rem;
 }
 
-.selected-pool-summary-card .entity-card-body {
+.selected-pool-context-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
 	gap: 0.75rem;
 }
 
-.selected-pool-summary-card .workflow-metric-grid,
-.selected-pool-summary-card .workflow-vault-grid {
-	gap: 0.6rem 0.85rem;
-}
-
-.selected-pool-summary-card .workflow-metric-grid > div,
-.selected-pool-summary-card .workflow-vault-grid > div {
-	padding-top: 0.4rem;
+.selected-pool-context-grid > div {
+	display: grid;
+	gap: 0.35rem;
+	padding: 0.8rem 0.9rem;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-control);
+	background: rgba(255, 255, 255, 0.03);
 }
 
 .selected-pool-summary-question {
@@ -3265,6 +3261,10 @@ button:focus-visible {
 
 .selected-pool-summary-detail {
 	max-width: 42rem;
+}
+
+.selected-pool-context-description {
+	max-width: 52rem;
 }
 
 .vault-workspace {

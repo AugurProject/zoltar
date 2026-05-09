@@ -117,6 +117,8 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByText('Active').length).toBeGreaterThan(0)
+		expect(documentQueries.queryByText('Available')).toBeNull()
+		expect(documentQueries.queryByText('Blocked')).toBeNull()
 		expect(documentQueries.getByText('Reporting Workflow')).not.toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(true)
 		expect(document.body.textContent?.includes('Selected side has')).toBe(true)
@@ -140,6 +142,7 @@ describe('ReportingSection', () => {
 
 		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Connect a wallet before reporting on a market.')
 		expectTransactionButtonDisabled(document.body, 'Withdraw Escalation Deposits', 'Connect a wallet before withdrawing escalation deposits.')
+		expect(document.body.querySelector('.disabled-reason')).toBeNull()
 	})
 
 	test('enables reporting actions when the selected side can accept reports and has deposits to withdraw', async () => {

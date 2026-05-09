@@ -474,6 +474,7 @@ void describe('OpenOracleSection', () => {
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(findButton(section, 'Settle Report')).toBeUndefined()
 		expect(getButtonDisabledReason(disputeButton)).toBe('This report is not ready to dispute yet.')
+		expect(getTextContent(section).includes('Blocked:')).toBe(false)
 		expect(getSectionTitles(section)).toContain('Current Report State')
 		expect(getSectionTitles(section)).toContain('Dispute Report')
 	})

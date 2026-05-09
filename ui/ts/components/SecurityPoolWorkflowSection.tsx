@@ -1,10 +1,10 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'
+import { ActionLauncherCard } from './ActionLauncherCard.js'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
-import { ActionReadinessPanel } from './ActionReadinessPanel.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
@@ -529,6 +529,7 @@ export function SecurityPoolWorkflowSection({
 		<RouteWorkflowPanel showHeader={showHeader} title='Selected Pool'>
 			<StickyObjectContext
 				eyebrow='Security Pools Operate'
+				sticky={false}
 				title={getSelectedPoolCardTitle({ hasSelectedPoolAddress, resolvedPoolTitle: selectedPoolQuestionTitle })}
 				items={[
 					{ label: 'Pool', value: hasSelectedPoolAddress ? securityPoolAddress : 'None selected' },
@@ -536,11 +537,70 @@ export function SecurityPoolWorkflowSection({
 					{ label: 'Stage', value: selectedPoolStage?.label ?? 'Waiting for pool' },
 					{ label: 'Primary Action', value: view === 'vaults' ? 'Vault operations' : view === 'trading' ? 'Trading' : view === 'reporting' ? 'Reporting' : 'Fork workflow' },
 				]}
-			/>
+			>
+				{loadedSelectedPool === undefined ? undefined : (
+					<div className='selected-pool-context-summary'>
+						<div className='selected-pool-context-overview'>
+							{selectedPoolQuestionDescription === undefined ? undefined : <p className='detail selected-pool-context-description'>{selectedPoolQuestionDescription}</p>}
+							<div className='selected-pool-context-grid'>
+								<MetricField label='Status'>{loadedSelectedPool.systemState}</MetricField>
+								<MetricField label='Vaults'>{loadedSelectedPool.vaultCount.toString()}</MetricField>
+								<MetricField label='Security Multiplier'>{loadedSelectedPool.securityMultiplier.toString()}</MetricField>
+								<MetricField label='Open Interest Fee / Year'>
+									<CurrencyValue value={openInterestFeePerYearBigint(loadedSelectedPool.currentRetentionRate)} suffix='%' />
+								</MetricField>
+								<MetricField label='Total REP Deposited'>
+									<CurrencyValue value={loadedSelectedPool.totalRepDeposit} suffix='REP' />
+								</MetricField>
+								<MetricField label='Total Security Bond Allowance'>
+									<CurrencyValue value={loadedSelectedPool.totalSecurityBondAllowance} suffix='ETH' />
+								</MetricField>
+								<OpenInterestCapacityMetrics
+									completeSetCollateralAmount={loadedSelectedPool.completeSetCollateralAmount}
+									repPerEthPrice={repPerEthPrice}
+									repPerEthSource={repPerEthSource}
+									repPerEthSourceUrl={repPerEthSourceUrl}
+									securityMultiplier={loadedSelectedPool.securityMultiplier}
+									totalRepDeposit={loadedSelectedPool.totalRepDeposit}
+									totalSecurityBondAllowance={loadedSelectedPool.totalSecurityBondAllowance}
+								/>
+								<MetricField label='Last Price'>{getOracleLastPriceDisplay(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues ?? { lastPrice: 0n, lastSettlementTimestamp: 0n })}</MetricField>
+								<MetricField label='Oracle Expires In'>
+									{getOraclePriceExpiryDisplay({
+										currentTimestamp,
+										lastSettlementTimestamp: (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp ?? 0n,
+										priceValidUntilTimestamp: currentPoolOracleManagerDetails?.priceValidUntilTimestamp,
+									})}
+								</MetricField>
+								<MetricField label='Manager'>
+									<AddressValue address={loadedSelectedPool.managerAddress} />
+								</MetricField>
+								<MetricField label='Reporting'>{reportingReady ? 'Unlocked' : 'After market end'}</MetricField>
+								{loadedSelectedPool.systemState === 'operational' ? undefined : (
+									<>
+										<MetricField label='Fork Mode'>{loadedSelectedPool.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent / Zoltar fork'}</MetricField>
+										<MetricField label='Fork Outcome'>{loadedSelectedPool.forkOutcome}</MetricField>
+										{loadedSelectedPool.truthAuctionAddress === zeroAddress ? undefined : (
+											<MetricField label='Truth Auction'>
+												<AddressValue address={loadedSelectedPool.truthAuctionAddress} />
+											</MetricField>
+										)}
+									</>
+								)}
+								{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
+									<MetricField label='Pending Request'>
+										<button className='link' type='button' onClick={() => onViewPendingReport(currentPoolOracleManagerDetails.pendingReportId)}>
+											Report #{currentPoolOracleManagerDetails.pendingReportId.toString()}
+										</button>
+									</MetricField>
+								)}
+							</div>
+						</div>
+					</div>
+				)}
+			</StickyObjectContext>
 
 			<LifecycleStageBanner stage={selectedPoolStage} />
-
-			{view === 'vaults' ? <ActionReadinessPanel actions={vaultReadinessActions} title='Vault execution flows' /> : undefined}
 
 			{view === 'reporting' ? <WorkflowSummaryStrip currentStep={reportingReady ? 'Reporting' : 'Awaiting Market End'} steps={['Pool selected', 'Market ends', 'Reporting', 'Withdrawals']} title='Reporting Workflow' /> : undefined}
 
@@ -563,68 +623,16 @@ export function SecurityPoolWorkflowSection({
 				{selectedPoolLookupPresentation === undefined ? undefined : <StateHint presentation={selectedPoolLookupPresentation} />}
 				{loadedSelectedPool === undefined ? undefined : (
 					<>
-						<SectionBlock density='compact' headingLevel={4} title='Pool Summary' variant='embedded'>
+						<SectionBlock density='compact' headingLevel={4} title='Pool Oracle & Pending Operations' variant='embedded'>
 							<div className='workflow-metric-grid'>
-								<MetricField label='Status'>{loadedSelectedPool.systemState}</MetricField>
-								<MetricField label='Vaults'>{loadedSelectedPool.vaultCount.toString()}</MetricField>
-								<MetricField label='Security Multiplier'>{loadedSelectedPool.securityMultiplier.toString()}</MetricField>
-								<MetricField label='Open Interest Fee / Year'>
-									<CurrencyValue value={openInterestFeePerYearBigint(loadedSelectedPool.currentRetentionRate)} suffix='%' />
-								</MetricField>
-								<MetricField label='Total Security Bond Allowance'>
-									<CurrencyValue value={loadedSelectedPool.totalSecurityBondAllowance} suffix='ETH' />
-								</MetricField>
-								<OpenInterestCapacityMetrics
-									completeSetCollateralAmount={loadedSelectedPool.completeSetCollateralAmount}
-									repPerEthPrice={repPerEthPrice}
-									repPerEthSource={repPerEthSource}
-									repPerEthSourceUrl={repPerEthSourceUrl}
-									securityMultiplier={loadedSelectedPool.securityMultiplier}
-									totalRepDeposit={loadedSelectedPool.totalRepDeposit}
-									totalSecurityBondAllowance={loadedSelectedPool.totalSecurityBondAllowance}
-								/>
-								{reportingReady ? <MetricField label='Reporting'>Unlocked</MetricField> : undefined}
-								<MetricField label='Manager'>
-									<AddressValue address={loadedSelectedPool.managerAddress} />
-								</MetricField>
-								{loadedSelectedPool.systemState !== 'operational' ? (
-									<>
-										<MetricField label='Fork Flow'>Forked / active</MetricField>
-										{loadedSelectedPool.truthAuctionAddress === zeroAddress ? undefined : (
-											<MetricField label='Truth Auction'>
-												<AddressValue address={loadedSelectedPool.truthAuctionAddress} />
-											</MetricField>
-										)}
-										<MetricField label='Fork Mode'>{loadedSelectedPool.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent / Zoltar fork'}</MetricField>
-										<MetricField label='Fork Outcome'>{loadedSelectedPool.forkOutcome}</MetricField>
-									</>
-								) : undefined}
-								<MetricField label='Last Price'>{getOracleLastPriceDisplay(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues ?? { lastPrice: 0n, lastSettlementTimestamp: 0n })}</MetricField>
 								<MetricField label='Set At'>
 									<TimestampValue timestamp={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp ?? 0n} zeroText='Never' />
 								</MetricField>
-								<MetricField label='Expires In'>
-									{getOraclePriceExpiryDisplay({
-										currentTimestamp,
-										lastSettlementTimestamp: (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp ?? 0n,
-										priceValidUntilTimestamp: currentPoolOracleManagerDetails?.priceValidUntilTimestamp,
-									})}
-								</MetricField>
+								<MetricField label='Price Window'>{currentPoolOracleManagerDetails?.isPriceValid === undefined ? 'Load oracle details' : currentPoolOracleManagerDetails.isPriceValid ? 'Valid' : 'Expired'}</MetricField>
 								{currentPoolOracleManagerDetails === undefined ? undefined : (
-									<>
-										<MetricField label='Pending Request'>
-											{currentPoolOracleManagerDetails.pendingReportId > 0n ? (
-												<button className='link' type='button' onClick={() => onViewPendingReport(currentPoolOracleManagerDetails.pendingReportId)}>
-													Report #{currentPoolOracleManagerDetails.pendingReportId.toString()} (security pool/price)
-												</button>
-											) : (
-												'None'
-											)}
-										</MetricField>
-										<MetricField label='Request Cost'>
-											<CurrencyValue value={currentPoolOracleManagerDetails.requestPriceEthCost} suffix='ETH' />
-										</MetricField>
-									</>
+									<MetricField label='Request Cost'>
+										<CurrencyValue value={currentPoolOracleManagerDetails.requestPriceEthCost} suffix='ETH' />
+									</MetricField>
 								)}
 							</div>
 							<ErrorNotice message={poolOracleManagerError} />
@@ -686,15 +694,6 @@ export function SecurityPoolWorkflowSection({
 								)}
 							</div>
 						</SectionBlock>
-
-						{selectedPoolQuestionTitle === undefined ? undefined : (
-							<SectionBlock density='compact' headingLevel={4} title='Question' variant='embedded'>
-								<div className='selected-pool-summary-question'>
-									<strong className='selected-pool-summary-title'>{selectedPoolQuestionTitle}</strong>
-									<p className='detail selected-pool-summary-detail'>{selectedPoolQuestionDescription}</p>
-								</div>
-							</SectionBlock>
-						)}
 					</>
 				)}
 			</SectionBlock>
@@ -811,16 +810,7 @@ export function SecurityPoolWorkflowSection({
 												<SectionBlock title='Vault Action Launchers' description='The page stays focused on vault state. Execution happens inside focused modals.'>
 													<div className='vault-action-launcher-grid'>
 														{vaultReadinessActions.map(action => (
-															<section key={action.key} className={`action-launcher-card ${action.readiness}`}>
-																<div className='action-launcher-card-copy'>
-																	<h4>{action.title}</h4>
-																	<p className='detail'>{action.description}</p>
-																	{action.blocker === undefined ? undefined : <p className='detail'>Blocked: {action.blocker}</p>}
-																</div>
-																<div className='action-launcher-card-actions'>
-																	<TransactionActionButton idleLabel={action.actionLabel} pendingLabel='Opening...' onClick={() => action.onAction?.()} tone='secondary' availability={{ disabled: action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }} />
-																</div>
-															</section>
+															<ActionLauncherCard key={action.key} action={action} />
 														))}
 													</div>
 												</SectionBlock>

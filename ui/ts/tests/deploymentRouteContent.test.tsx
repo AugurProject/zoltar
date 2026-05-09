@@ -57,13 +57,14 @@ describe('DeploymentRouteContent', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('shows deployment readiness and collapses completed groups by default', async () => {
+	test('shows deployment summary and collapses completed groups by default', async () => {
 		const renderedComponent = await renderIntoDocument(h(DeploymentRouteContent, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Deployment Readiness')).not.toBeNull()
-		expect(documentQueries.getByText('Next: Scalar Outcomes')).not.toBeNull()
+		expect(documentQueries.queryByText('Deployment Readiness')).toBeNull()
+		expect(documentQueries.getAllByText('Next deployable').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('Scalar Outcomes').length).toBeGreaterThan(0)
 
 		const completedAccordion = Array.from(document.body.querySelectorAll('details')).find(detail => {
 			const summaryText = detail.querySelector('summary')?.textContent
