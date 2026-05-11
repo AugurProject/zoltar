@@ -216,13 +216,17 @@ export function SecurityPoolsOverviewSection({
 			<LiquidationModal
 				accountAddress={accountState.address}
 				closeLiquidationModal={closeLiquidationModal}
+				currentPoolOracleManagerDetails={undefined}
 				isMainnet={isMainnet}
 				liquidationAmount={liquidationAmount}
 				liquidationManagerAddress={liquidationManagerAddress}
 				liquidationModalOpen={liquidationModalOpen}
 				liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}
+				loadingPoolOracleManager={false}
 				liquidationTargetVault={liquidationTargetVault}
+				onSelectedPoolViewChange={() => undefined}
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
+				securityPoolOverviewResult={securityPoolOverviewResult}
 				onLiquidationAmountChange={onLiquidationAmountChange}
 				onLiquidationTargetVaultChange={onLiquidationTargetVaultChange}
 				onQueueLiquidation={onQueueLiquidation}

@@ -1211,13 +1211,17 @@ export function SecurityPoolWorkflowSection({
 			<LiquidationModal
 				accountAddress={accountState.address}
 				closeLiquidationModal={closeLiquidationModal}
+				currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
 				isMainnet={isMainnet}
 				liquidationAmount={liquidationAmount}
 				liquidationManagerAddress={liquidationManagerAddress}
 				liquidationModalOpen={liquidationModalOpen}
 				liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}
+				loadingPoolOracleManager={loadingPoolOracleManager}
 				liquidationTargetVault={liquidationTargetVault}
+				onSelectedPoolViewChange={onSelectedPoolViewChange}
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
+				securityPoolOverviewResult={securityPoolOverviewResult}
 				onLiquidationAmountChange={onLiquidationAmountChange}
 				onLiquidationTargetVaultChange={onLiquidationTargetVaultChange}
 				onQueueLiquidation={onQueueLiquidation}
