@@ -17,7 +17,19 @@ import { UniverseLink } from './UniverseLink.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
-import { getDefaultShareMigrationTargetOutcomeIndexes, getRemainingMintCapacity, getSelectedOutcomeShareBalance, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage, hasRepBackedPoolWithNoActiveAllowance, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE } from '../lib/trading.js'
+import {
+	getDefaultShareMigrationTargetOutcomeIndexes,
+	getRemainingMintCapacity,
+	getSelectedOutcomeShareBalance,
+	getTradingMigrateSharesGuardMessage,
+	getTradingMintGuardMessage,
+	getTradingRedeemCompleteSetGuardMessage,
+	getTradingRedeemSharesGuardMessage,
+	hasRepBackedPoolWithNoActiveAllowance,
+	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
+	NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE,
+	SHARE_MIGRATION_AFTER_FORK_MESSAGE,
+} from '../lib/trading.js'
 import type { ReadinessAction, WorkflowOutcomePresentation } from '../types/components.js'
 import type { TradingSectionProps } from '../types/components.js'
 
@@ -121,36 +133,59 @@ export function TradingSection({
 	})
 	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.totalSecurityBondAllowance, selectedPool?.completeSetCollateralAmount)
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, tradingForm.selectedShareOutcome)
-	const mintLauncherBlocker =
-		!hasSelectedPool ? 'Load a pool before minting complete sets.'
-		: accountState.address === undefined ? 'Connect a wallet before minting complete sets.'
-		: !isMainnet ? 'Switch to Ethereum mainnet before minting complete sets.'
-		: poolUniverseHasForked === true ? 'Minting is unavailable after this universe has forked.'
-		: selectedPool?.systemState !== undefined && selectedPool.systemState !== 'operational' ? 'Minting is only available while the pool is operational.'
-		: remainingMintCapacity === undefined ? 'Loading mint capacity.'
-		: remainingMintCapacity === 0n ? hasRepBackedPoolWithNoActiveAllowance(selectedPool?.totalRepDeposit, selectedPool?.totalSecurityBondAllowance) ? NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE : 'No mint capacity remaining.'
-		: undefined
-	const redeemCompleteSetsLauncherBlocker =
-		!hasSelectedPool ? 'Load a pool before redeeming complete sets.'
-		: accountState.address === undefined ? 'Connect a wallet before redeeming complete sets.'
-		: !isMainnet ? 'Switch to Ethereum mainnet before redeeming complete sets.'
-		: poolUniverseHasForked === true ? 'Redeeming complete sets is unavailable after this universe has forked.'
-		: selectedPool?.systemState !== undefined && selectedPool.systemState !== 'operational' ? 'Redeeming complete sets is only available while the pool is operational.'
-		: loadingTradingDetails ? 'Loading wallet share balances.'
-		: maxRedeemableCompleteSets === undefined ? 'Loading wallet share balances.'
-		: maxRedeemableCompleteSets === 0n ? NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
-		: undefined
-	const migrateSharesLauncherBlocker =
-		!hasSelectedPool ? 'Load a pool before migrating shares.'
-		: accountState.address === undefined ? 'Connect a wallet before migrating shares.'
-		: !isMainnet ? 'Switch to Ethereum mainnet before migrating shares.'
-		: poolUniverseHasForked !== true ? SHARE_MIGRATION_AFTER_FORK_MESSAGE
-		: loadingTradingForkUniverse ? 'Loading fork target universes.'
-		: tradingForkUniverse === undefined || !tradingForkUniverse.hasForked ? 'Refresh the fork target universes.'
-		: loadingTradingDetails ? 'Loading wallet share balances.'
-		: selectedOutcomeBalance === undefined ? 'Loading wallet share balances.'
-		: selectedOutcomeBalance === 0n ? `No ${getReportingOutcomeLabel(tradingForm.selectedShareOutcome)} shares available to migrate.`
-		: undefined
+	const mintLauncherBlocker = !hasSelectedPool
+		? 'Load a pool before minting complete sets.'
+		: accountState.address === undefined
+			? 'Connect a wallet before minting complete sets.'
+			: !isMainnet
+				? 'Switch to Ethereum mainnet before minting complete sets.'
+				: poolUniverseHasForked === true
+					? 'Minting is unavailable after this universe has forked.'
+					: selectedPool?.systemState !== undefined && selectedPool.systemState !== 'operational'
+						? 'Minting is only available while the pool is operational.'
+						: remainingMintCapacity === undefined
+							? 'Loading mint capacity.'
+							: remainingMintCapacity === 0n
+								? hasRepBackedPoolWithNoActiveAllowance(selectedPool?.totalRepDeposit, selectedPool?.totalSecurityBondAllowance)
+									? NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
+									: 'No mint capacity remaining.'
+								: undefined
+	const redeemCompleteSetsLauncherBlocker = !hasSelectedPool
+		? 'Load a pool before redeeming complete sets.'
+		: accountState.address === undefined
+			? 'Connect a wallet before redeeming complete sets.'
+			: !isMainnet
+				? 'Switch to Ethereum mainnet before redeeming complete sets.'
+				: poolUniverseHasForked === true
+					? 'Redeeming complete sets is unavailable after this universe has forked.'
+					: selectedPool?.systemState !== undefined && selectedPool.systemState !== 'operational'
+						? 'Redeeming complete sets is only available while the pool is operational.'
+						: loadingTradingDetails
+							? 'Loading wallet share balances.'
+							: maxRedeemableCompleteSets === undefined
+								? 'Loading wallet share balances.'
+								: maxRedeemableCompleteSets === 0n
+									? NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
+									: undefined
+	const migrateSharesLauncherBlocker = !hasSelectedPool
+		? 'Load a pool before migrating shares.'
+		: accountState.address === undefined
+			? 'Connect a wallet before migrating shares.'
+			: !isMainnet
+				? 'Switch to Ethereum mainnet before migrating shares.'
+				: poolUniverseHasForked !== true
+					? SHARE_MIGRATION_AFTER_FORK_MESSAGE
+					: loadingTradingForkUniverse
+						? 'Loading fork target universes.'
+						: tradingForkUniverse === undefined || !tradingForkUniverse.hasForked
+							? 'Refresh the fork target universes.'
+							: loadingTradingDetails
+								? 'Loading wallet share balances.'
+								: selectedOutcomeBalance === undefined
+									? 'Loading wallet share balances.'
+									: selectedOutcomeBalance === 0n
+										? `No ${getReportingOutcomeLabel(tradingForm.selectedShareOutcome)} shares available to migrate.`
+										: undefined
 	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
 	const setAllTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse) })
@@ -229,12 +264,7 @@ export function TradingSection({
 	]
 
 	useEffect(() => {
-		if (
-			tradingResult?.action !== 'createCompleteSet' &&
-			tradingResult?.action !== 'redeemCompleteSet' &&
-			tradingResult?.action !== 'migrateShares' &&
-			tradingResult?.action !== 'redeemShares'
-		) {
+		if (tradingResult?.action !== 'createCompleteSet' && tradingResult?.action !== 'redeemCompleteSet' && tradingResult?.action !== 'migrateShares' && tradingResult?.action !== 'redeemShares') {
 			return
 		}
 		setActiveModal(undefined)

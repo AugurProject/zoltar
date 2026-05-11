@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { h } from 'preact'
 import { zeroAddress } from 'viem'
 import { SecurityPoolSection } from '../components/SecurityPoolSection.js'
@@ -120,5 +120,17 @@ describe('SecurityPoolSection', () => {
 		const enabledRender = await renderIntoDocument(h(SecurityPoolSection, createProps()))
 		cleanupRenderedComponent = enabledRender.cleanup
 		expectTransactionButtonEnabled(document.body, 'Create Pool')
+	})
+
+	test('renders only the create pool section in create mode', async () => {
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps()))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const headings = Array.from(document.querySelectorAll('h3')).map(heading => heading.textContent?.trim())
+
+		expect(headings).toContain('Create Pool')
+		expect(headings).not.toContain('Question Context')
+		expect(headings).not.toContain('Requirements')
+		expect(headings).not.toContain('Existing Pools')
 	})
 })

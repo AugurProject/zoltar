@@ -52,7 +52,17 @@ export function readSecurityPoolQueryParam(search: string) {
 }
 
 export function writeSecurityPoolQueryParam(search: string, securityPoolAddress: string | undefined) {
-	return writeStringQueryParam(search, SECURITY_POOL_QUERY_PARAM, securityPoolAddress)
+	const params = new URLSearchParams(search)
+	if (securityPoolAddress === undefined || securityPoolAddress.trim() === '') {
+		params.delete(SECURITY_POOL_QUERY_PARAM)
+		params.delete(SELECTED_POOL_VIEW_QUERY_PARAM)
+	} else {
+		params.set(SECURITY_POOL_QUERY_PARAM, securityPoolAddress.trim())
+		params.set(SECURITY_POOLS_VIEW_QUERY_PARAM, 'operate')
+	}
+
+	const nextSearch = params.toString()
+	return nextSearch === '' ? '' : `?${nextSearch}`
 }
 
 export function readZoltarViewQueryParam(search: string) {
@@ -68,7 +78,20 @@ export function readSecurityPoolsViewQueryParam(search: string) {
 }
 
 export function writeSecurityPoolsViewQueryParam(search: string, view: string | undefined) {
-	return writeStringQueryParam(search, SECURITY_POOLS_VIEW_QUERY_PARAM, view)
+	const params = new URLSearchParams(search)
+	if (view === undefined || view.trim() === '') {
+		params.delete(SECURITY_POOLS_VIEW_QUERY_PARAM)
+	} else {
+		params.set(SECURITY_POOLS_VIEW_QUERY_PARAM, view.trim())
+	}
+
+	if (view !== 'operate') {
+		params.delete(SECURITY_POOL_QUERY_PARAM)
+		params.delete(SELECTED_POOL_VIEW_QUERY_PARAM)
+	}
+
+	const nextSearch = params.toString()
+	return nextSearch === '' ? '' : `?${nextSearch}`
 }
 
 export function readSelectedPoolViewQueryParam(search: string) {
@@ -76,7 +99,16 @@ export function readSelectedPoolViewQueryParam(search: string) {
 }
 
 export function writeSelectedPoolViewQueryParam(search: string, view: string | undefined) {
-	return writeStringQueryParam(search, SELECTED_POOL_VIEW_QUERY_PARAM, view)
+	const params = new URLSearchParams(search)
+	if (view === undefined || view.trim() === '') {
+		params.delete(SELECTED_POOL_VIEW_QUERY_PARAM)
+	} else {
+		params.set(SELECTED_POOL_VIEW_QUERY_PARAM, view.trim())
+		params.set(SECURITY_POOLS_VIEW_QUERY_PARAM, 'operate')
+	}
+
+	const nextSearch = params.toString()
+	return nextSearch === '' ? '' : `?${nextSearch}`
 }
 
 export function readOpenOracleReportIdQueryParam(search: string) {
@@ -88,9 +120,30 @@ export function readOpenOracleViewQueryParam(search: string) {
 }
 
 export function writeOpenOracleViewQueryParam(search: string, view: string | undefined) {
-	return writeStringQueryParam(search, OPEN_ORACLE_VIEW_QUERY_PARAM, view)
+	const params = new URLSearchParams(search)
+	if (view === undefined || view.trim() === '') {
+		params.delete(OPEN_ORACLE_VIEW_QUERY_PARAM)
+	} else {
+		params.set(OPEN_ORACLE_VIEW_QUERY_PARAM, view.trim())
+	}
+
+	if (view !== 'selected-report') {
+		params.delete(OPEN_ORACLE_REPORT_ID_QUERY_PARAM)
+	}
+
+	const nextSearch = params.toString()
+	return nextSearch === '' ? '' : `?${nextSearch}`
 }
 
 export function writeOpenOracleReportIdQueryParam(search: string, reportId: string | undefined) {
-	return writeStringQueryParam(search, OPEN_ORACLE_REPORT_ID_QUERY_PARAM, reportId)
+	const params = new URLSearchParams(search)
+	if (reportId === undefined || reportId.trim() === '') {
+		params.delete(OPEN_ORACLE_REPORT_ID_QUERY_PARAM)
+	} else {
+		params.set(OPEN_ORACLE_REPORT_ID_QUERY_PARAM, reportId.trim())
+		params.set(OPEN_ORACLE_VIEW_QUERY_PARAM, 'selected-report')
+	}
+
+	const nextSearch = params.toString()
+	return nextSearch === '' ? '' : `?${nextSearch}`
 }
