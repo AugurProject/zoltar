@@ -41,6 +41,52 @@ export type ActionAvailability = {
 	reason: string | undefined
 }
 
+export type NoticeTone = 'blocking' | 'warning' | 'pending' | 'success'
+
+export type NoticeItem = {
+	detail: ComponentChildren
+	id: string
+	title?: ComponentChildren
+	tone: NoticeTone
+}
+
+export type StickyContextItem = {
+	label: string
+	value: ComponentChildren
+}
+
+export type LifecycleStagePresentation = {
+	availableActions: string[]
+	blockedActions: string[]
+	detail: string
+	key: string
+	label: string
+	tone: 'critical' | 'default' | 'success' | 'warning'
+}
+
+export type ReadinessBlocker = {
+	detail?: string
+	key: string
+	label: string
+	resolved: boolean
+}
+
+export type ReadinessAction = {
+	actionLabel: string
+	blocker?: string
+	description: string
+	onAction?: () => void
+	readiness: 'blocked' | 'ready' | 'warning'
+	key: string
+	title: string
+}
+
+export type WorkflowOutcomePresentation = {
+	detail: string
+	nextStep?: string
+	title: string
+}
+
 export type RouteHeaderProps = {
 	actions?: ComponentChildren
 	badge?: ComponentChildren
@@ -162,6 +208,14 @@ export type TransactionActionButtonProps = {
 	showDisabledReason?: boolean
 	tone?: 'primary' | 'secondary'
 	type?: 'button' | 'submit'
+}
+
+export type OperationModalProps = {
+	children: ComponentChildren
+	description?: ComponentChildren
+	isOpen: boolean
+	onClose: () => void
+	title: ComponentChildren
 }
 
 export type DeploymentSectionProps = {
@@ -289,6 +343,7 @@ export type SecurityPoolRouteContentProps = {
 
 export type MarketSectionProps = MarketRouteContentProps
 export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
+	onReturnToBrowse?: () => void
 	showHeader?: boolean
 }
 

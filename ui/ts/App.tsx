@@ -242,6 +242,14 @@ export function App() {
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
 	const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, hasWallet: hasInjectedWallet, isSupportedChain: isMainnet })
+	const showTransactionSuccessNotice =
+		route === 'deploy'
+			? true
+			: route === 'open-oracle'
+				? openOracleResult === undefined
+				: route === 'security-pools'
+					? securityPoolResult === undefined && securityPoolOverviewResult === undefined && securityVaultResult === undefined && tradingResult === undefined && reportingResult === undefined && forkAuctionResult === undefined && poolPriceOracleResult === undefined
+					: true
 	const overviewProps = {
 		accountState,
 		isConnectingWallet,
@@ -586,6 +594,7 @@ export function App() {
 				hasInjectedWallet={hasInjectedWallet}
 				simulationBootstrapError={environmentBootstrapError}
 				showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
+				showTransactionSuccessNotice={showTransactionSuccessNotice}
 				showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
 				transactionState={transactionState.value}
 				walletPresentation={walletPresentation}

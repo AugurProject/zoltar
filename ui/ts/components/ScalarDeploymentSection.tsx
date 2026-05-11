@@ -1,10 +1,12 @@
-import { useState } from 'preact/hooks'
+import { useRef, useState } from 'preact/hooks'
 import type { Address } from 'viem'
 import { ChildUniversesSection } from './ChildUniversesSection.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { useEffect } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
+import { OperationModal } from './OperationModal.js'
+import { RequirementsChecklist } from './RequirementsChecklist.js'
 import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
@@ -26,6 +28,8 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const [scalarOutcomeTick, setScalarOutcomeTick] = useState('0')
 	const [scalarOutcomeInvalid, setScalarOutcomeInvalid] = useState(false)
 	const [scalarDeployError, setScalarDeployError] = useState<string | undefined>(undefined)
+	const [deployModalOpen, setDeployModalOpen] = useState(false)
+	const previousPendingOutcomeIndexRef = useRef<bigint | undefined>(undefined)
 
 	if (questionDetails === undefined) {
 		return (
@@ -56,12 +60,27 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 						? 'This child universe is already deployed.'
 						: scalarDeployError
 	const scalarDeployPending = zoltarChildUniversePendingOutcomeIndex === selectedScalarOutcomeIndex
+	const scalarDeployRequirements = [
+		{ key: 'forked', label: 'Universe is forked', resolved: hasForked, ...(hasForked ? {} : { detail: 'Fork Zoltar before deploying child universes.' }) },
+		{ key: 'wallet', label: 'Wallet connected', resolved: accountAddress !== undefined, ...(accountAddress !== undefined ? {} : { detail: 'Connect a wallet before deploying a child universe.' }) },
+		{ key: 'mainnet', label: 'Ethereum mainnet selected', resolved: isMainnet, ...(isMainnet ? {} : { detail: 'Switch to Ethereum mainnet before deploying a child universe.' }) },
+		{ key: 'exists', label: 'Child universe not already deployed', resolved: !selectedScalarChildExists, ...(selectedScalarChildExists ? { detail: 'This child universe is already deployed.' } : {}) },
+	]
 
 	useEffect(() => {
 		const nextTick = clampScalarTickIndex(selectedScalarTick, questionDetails.numTicks).toString()
 		if (nextTick === scalarOutcomeTick) return
 		setScalarOutcomeTick(nextTick)
 	}, [questionDetails.numTicks, scalarOutcomeTick, selectedScalarTick])
+
+	useEffect(() => {
+		if (previousPendingOutcomeIndexRef.current === undefined || scalarDeployPending) {
+			previousPendingOutcomeIndexRef.current = zoltarChildUniversePendingOutcomeIndex
+			return
+		}
+		setDeployModalOpen(false)
+		previousPendingOutcomeIndexRef.current = zoltarChildUniversePendingOutcomeIndex
+	}, [scalarDeployPending, zoltarChildUniversePendingOutcomeIndex])
 
 	return (
 		<WorkflowSubsection badge={<span className='detail'>Scalar forks can deploy one outcome universe at a time.</span>} title='Child Universes'>
@@ -75,17 +94,17 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 			<ScalarOutcomePicker
 				action={
 					<TransactionActionButton
-						idleLabel={selectedScalarChildExists ? 'Deployed' : scalarOutcomeInvalid ? 'Deploy Invalid Universe' : 'Deploy Universe'}
-						pendingLabel='Deploying universe...'
+						idleLabel={selectedScalarChildExists ? 'Deployed' : scalarOutcomeInvalid ? 'Open Invalid Universe Flow' : 'Open Universe Flow'}
+						pendingLabel='Opening...'
 						onClick={() => {
 							try {
 								setScalarDeployError(undefined)
-								onCreateChildUniverseForOutcomeIndex(selectedScalarOutcomeIndex)
+								setDeployModalOpen(true)
 							} catch (error) {
 								setScalarDeployError(error instanceof Error ? error.message : 'Selected tick is invalid')
 							}
 						}}
-						pending={scalarDeployPending}
+						pending={false}
 						tone='secondary'
 						availability={{ disabled: !canDeployScalarChild || scalarDeployError !== undefined, reason: deployReason }}
 					/>
@@ -109,6 +128,30 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				selectedTick={clampedScalarOutcomeTick}
 				selectedTickLabel={scalarOutcomeInvalid ? 'Invalid' : `${clampedScalarOutcomeTick} / ${questionDetails.numTicks.toString()}`}
 			/>
+			<OperationModal isOpen={deployModalOpen} onClose={() => setDeployModalOpen(false)} title='Create Child Universe' description='Confirm the selected scalar outcome and deploy its child universe in one bounded execution flow.'>
+				{selectedScalarChild === undefined ? undefined : (
+					<>
+						<ChildUniversesSection
+							childUniverses={[selectedScalarChild]}
+							emptyMessage='No child universe selected.'
+							headerTitle='Selected Child Universe'
+							renderBadge={child => <span className={`badge ${child.exists ? 'ok' : 'pending'}`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
+							renderBody={child => <ChildUniverseDetails child={child} />}
+						/>
+						<RequirementsChecklist items={scalarDeployRequirements} />
+						<div className='actions'>
+							<TransactionActionButton
+								idleLabel={scalarOutcomeInvalid ? 'Deploy Invalid Universe' : 'Deploy Universe'}
+								pendingLabel='Deploying universe...'
+								onClick={() => onCreateChildUniverseForOutcomeIndex(selectedScalarOutcomeIndex)}
+								pending={scalarDeployPending}
+								tone='secondary'
+								availability={{ disabled: !canDeployScalarChild || scalarDeployError !== undefined, reason: deployReason }}
+							/>
+						</div>
+					</>
+				)}
+			</OperationModal>
 			<ErrorNotice message={scalarDeployError} />
 			<ErrorNotice message={zoltarChildUniverseError} />
 		</WorkflowSubsection>

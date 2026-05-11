@@ -224,7 +224,11 @@ describe.serial('OpenOracleSection integration', () => {
 
 		await waitFor(() => getSectionByTitle('Selected Report'))
 		await waitFor(() => {
-			expect(within(document.body).getByText('Initial Report')).not.toBeNull()
+			expect(within(document.body).getByRole('button', { name: 'Initial Report' })).not.toBeNull()
+		})
+		await clickElement(within(document.body).getByRole('button', { name: 'Initial Report' }))
+		await waitFor(() => {
+			expect(within(document.body).getByRole('heading', { level: 4, name: 'Initial Report' })).not.toBeNull()
 		})
 		expect(within(document.body).queryByRole('heading', { level: 2, name: 'Open Oracle' })).toBeNull()
 		expect(within(document.body).queryByRole('heading', { level: 3, name: 'Report Details' })).toBeNull()
@@ -341,7 +345,11 @@ describe.serial('OpenOracleSection integration', () => {
 
 		await waitFor(() => getSectionByTitle('Selected Report'))
 		await waitFor(() => {
-			expect(within(document.body).getByText('Initial Report')).not.toBeNull()
+			expect(within(document.body).getByRole('button', { name: 'Initial Report' })).not.toBeNull()
+		})
+		await clickElement(within(document.body).getByRole('button', { name: 'Initial Report' }))
+		await waitFor(() => {
+			expect(within(document.body).getByRole('heading', { level: 4, name: 'Initial Report' })).not.toBeNull()
 		})
 		expect(within(document.body).queryByRole('heading', { level: 2, name: 'Open Oracle' })).toBeNull()
 		expect(within(document.body).queryByRole('heading', { level: 3, name: 'Report Details' })).toBeNull()
@@ -405,8 +413,10 @@ describe.serial('OpenOracleSection integration', () => {
 			expect(getOpenOracleSelectedReportActionMode(refreshedReport)).toBe('settle')
 		})
 
+		await clickElement(within(document.body).getByRole('button', { name: 'Settle Report' }))
 		await waitFor(() => {
-			const settleButton = within(document.body).getByRole('button', { name: 'Settle Report' }) as HTMLButtonElement
+			const dialog = within(document.body).getByRole('dialog')
+			const settleButton = within(dialog).getByRole('button', { name: 'Settle Report' }) as HTMLButtonElement
 			expect(within(document.body).queryByRole('button', { name: 'Dispute & Swap' })).toBeNull()
 			expect(settleButton.disabled).toBe(false)
 			expect(within(document.body).queryByText('Dispute window closed. Settle Report instead.')).toBeNull()

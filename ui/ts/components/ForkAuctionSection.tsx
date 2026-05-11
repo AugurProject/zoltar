@@ -2,16 +2,21 @@ import { Fragment } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { AddressValue } from './AddressValue.js'
+import { ActionLauncherCard } from './ActionLauncherCard.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
+import { LifecycleStageBanner } from './LifecycleStageBanner.js'
 import { LatestActionSection } from './LatestActionSection.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
+import { OperationModal } from './OperationModal.js'
 import { Question } from './Question.js'
+import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
+import { RequirementsChecklist } from './RequirementsChecklist.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
@@ -19,12 +24,13 @@ import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { ViewTabs } from './ViewTabs.js'
+import { WorkflowSummaryStrip } from './WorkflowSummaryStrip.js'
 import { AUCTION_TIME_SECONDS, type ForkAuctionStageView, estimateRepPurchased, getForkAuctionStageView, getForkStageDescription, getForkStageDescriptionForState, getOutcomeActionLabel, getSystemStateLabel, getTimeRemaining, hasForkActivity, MIGRATION_TIME_SECONDS } from '../lib/forkAuction.js'
 import { formatDuration } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
-import type { ForkAuctionSectionProps } from '../types/components.js'
+import type { ForkAuctionSectionProps, LifecycleStagePresentation, ReadinessAction } from '../types/components.js'
 
 const UNKNOWN_VALUE = '—'
 const UNAVAILABLE_UNTIL_FORK = 'Unavailable until fork'
@@ -142,6 +148,25 @@ function estimateBidRep(bidAmount: string, selectedAuctionPrice: bigint | undefi
 	}
 }
 
+function getForkLifecycleStagePresentation(currentStage: ForkAuctionStageView, description: string | undefined): LifecycleStagePresentation {
+	const availableActions =
+		currentStage === 'initiate'
+			? ['Initiate pool fork', 'Fork with own escalation']
+			: currentStage === 'migration'
+				? ['Create child universe', 'Migrate REP', 'Migrate vault', 'Migrate escalation deposits']
+				: currentStage === 'auction'
+					? ['Start truth auction', 'Submit bid']
+					: ['Finalize truth auction', 'Refund bids', 'Claim proceeds', 'Withdraw bids']
+	return {
+		availableActions,
+		blockedActions: [],
+		detail: description ?? `The pool is currently in the ${getStageLabel(currentStage)} stage.`,
+		key: currentStage,
+		label: getStageLabel(currentStage),
+		tone: currentStage === 'auction' ? 'warning' : currentStage === 'settlement' ? 'success' : 'default',
+	}
+}
+
 export function ForkAuctionSection({
 	accountState,
 	disabled = false,
@@ -204,6 +229,7 @@ export function ForkAuctionSection({
 					truthAuctionStartedAt: forkAuctionDetails?.truthAuctionStartedAt ?? previewPool?.truthAuctionStartedAt ?? 0n,
 				})
 	const [selectedStage, setSelectedStage] = useState<ForkAuctionStageView>(currentStage)
+	const [childUniverseModalOpen, setChildUniverseModalOpen] = useState(false)
 	const lastPoolKeyRef = useRef<string | undefined>(undefined)
 	const selectedStageAheadMessage = getStageAheadMessage(selectedStage, currentStage)
 	const truthAuctionFallback = forkAuctionDetails?.truthAuction === undefined ? forkOnlyFallbackText : UNKNOWN_VALUE
@@ -231,6 +257,22 @@ export function ForkAuctionSection({
 	const underfundedDisplay = forkAuctionDetails?.truthAuction === undefined ? forkOnlyFallbackText : forkAuctionDetails.truthAuction.underfunded ? 'Yes' : 'No'
 	const claimingAvailableDisplay = forkAuctionDetails === undefined ? (hasPreviewForkActivity ? UNKNOWN_VALUE : UNAVAILABLE_UNTIL_FORK) : forkAuctionDetails.claimingAvailable ? 'Yes' : 'No'
 	const baseDisabledReason = disabledMessage ?? (accountState.address === undefined ? 'Connect a wallet before using fork and auction actions.' : !isMainnet ? 'Switch to Ethereum mainnet before using fork and auction actions.' : undefined)
+	const stagePresentation = getForkLifecycleStagePresentation(currentStage, forkStageDescription)
+	const childUniverseRequirements = [
+		{ key: 'pool', label: 'Forked pool loaded', resolved: hasLoadedPoolContext, ...(hasLoadedPoolContext ? {} : { detail: 'Load a forked pool before creating a child universe.' }) },
+		{ key: 'outcome', label: 'Outcome selected', resolved: forkAuctionForm.selectedOutcome !== undefined, ...(forkAuctionForm.selectedOutcome === undefined ? { detail: 'Select the outcome whose child universe you want to create.' } : {}) },
+		{ key: 'wallet', label: 'Wallet connected', resolved: accountState.address !== undefined, ...(accountState.address !== undefined ? {} : { detail: 'Connect a wallet before creating a child universe.' }) },
+		{ key: 'mainnet', label: 'Ethereum mainnet selected', resolved: isMainnet, ...(isMainnet ? {} : { detail: 'Switch to Ethereum mainnet before creating a child universe.' }) },
+	]
+	const createChildUniverseLauncherAction: ReadinessAction = {
+		actionLabel: 'Open Child Universe Flow',
+		description: 'Review the selected outcome and confirm the child-universe creation in a bounded execution modal.',
+		key: 'create-child-universe',
+		...(hasLoadedPoolContext ? { onAction: () => setChildUniverseModalOpen(true) } : {}),
+		readiness: hasLoadedPoolContext ? 'ready' : 'blocked',
+		title: `Create ${getOutcomeActionLabel(forkAuctionForm.selectedOutcome)} Child Universe`,
+		...(hasLoadedPoolContext ? {} : { blocker: 'Load fork details for this pool first.' }),
+	}
 
 	const renderStageActionButton = ({ action, idleLabel, onClick, pendingLabel, tone = 'secondary' }: { action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>; idleLabel: string; onClick: () => void; pendingLabel: string; tone?: 'primary' | 'secondary' }) => (
 		<TransactionActionButton idleLabel={idleLabel} pendingLabel={pendingLabel} onClick={onClick} pending={forkAuctionActiveAction === action} tone={tone} availability={{ disabled: disabled || accountState.address === undefined || !isMainnet, reason: baseDisabledReason }} />
@@ -241,6 +283,11 @@ export function ForkAuctionSection({
 		lastPoolKeyRef.current = securityPoolAddress
 		setSelectedStage(currentStage)
 	}, [currentStage, securityPoolAddress])
+
+	useEffect(() => {
+		if (forkAuctionResult?.action !== 'createChildUniverse') return
+		setChildUniverseModalOpen(false)
+	}, [forkAuctionResult])
 
 	const poolSummaryMetrics: DisplayMetric[] = [
 		{ label: 'Security Pool', value: renderAddress(securityPoolAddress) },
@@ -361,7 +408,9 @@ export function ForkAuctionSection({
 							<span>Outcome</span>
 							<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
 						</label>
-						<div className='actions'>{renderStageActionButton({ action: 'createChildUniverse', idleLabel: `Create ${getOutcomeActionLabel(forkAuctionForm.selectedOutcome)} Child Universe`, onClick: onCreateChildUniverse, pendingLabel: 'Creating child universe...', tone: 'primary' })}</div>
+						<ActionLauncherCard action={createChildUniverseLauncherAction}>
+							<p className='detail'>Selected outcome: {getReportingOutcomeLabel(forkAuctionForm.selectedOutcome)}</p>
+						</ActionLauncherCard>
 					</div>
 				</SectionBlock>
 
@@ -492,7 +541,9 @@ export function ForkAuctionSection({
 
 	const content = (
 		<>
-			<SectionBlock title='Pool Context'>
+			<LifecycleStageBanner stage={stagePresentation} />
+			<WorkflowSummaryStrip currentStep={getStageLabel(currentStage)} steps={STAGE_VIEWS.map(stage => getStageLabel(stage))} title='Fork Workflow' />
+			<ReadOnlyDetailAccordion title='Pool Context'>
 				<div className='form-grid'>
 					{showSecurityPoolAddressInput ? (
 						<LookupFieldRow
@@ -512,7 +563,7 @@ export function ForkAuctionSection({
 					{disabledMessage === undefined ? undefined : <p className='detail'>{disabledMessage}</p>}
 					{forkStageDescription === undefined ? undefined : <p className='detail'>{forkStageDescription}</p>}
 				</div>
-			</SectionBlock>
+			</ReadOnlyDetailAccordion>
 
 			{question === undefined ? undefined : (
 				<EntityCard title='Question' variant='record'>
@@ -520,7 +571,7 @@ export function ForkAuctionSection({
 				</EntityCard>
 			)}
 
-			{hasLoadedPoolContext ? <SectionBlock title='Live Snapshot'>{renderSummaryMetricGrid(liveSnapshotMetrics)}</SectionBlock> : undefined}
+			{hasLoadedPoolContext ? <ReadOnlyDetailAccordion title='Live Snapshot'>{renderSummaryMetricGrid(liveSnapshotMetrics)}</ReadOnlyDetailAccordion> : undefined}
 
 			{forkAuctionResult === undefined ? undefined : (
 				<LatestActionSection
@@ -551,6 +602,19 @@ export function ForkAuctionSection({
 			) : undefined}
 
 			{hasLoadedPoolContext ? stagePanel : undefined}
+
+			<OperationModal isOpen={childUniverseModalOpen} onClose={() => setChildUniverseModalOpen(false)} title='Create Child Universe' description='Confirm the selected fork outcome and create its child universe in one bounded transaction flow.'>
+				<SectionBlock headingLevel={4} title='Child Universe Context' variant='embedded'>
+					<div className='workflow-metric-grid'>
+						<MetricField label='Selected Outcome'>{getReportingOutcomeLabel(forkAuctionForm.selectedOutcome)}</MetricField>
+						<MetricField label='Pool'>{securityPoolAddress === undefined ? UNKNOWN_VALUE : <AddressValue address={securityPoolAddress} />}</MetricField>
+						<MetricField label='Universe'>{universeId === undefined ? UNKNOWN_VALUE : <UniverseLink universeId={universeId} />}</MetricField>
+						<MetricField label='Stage'>{getStageLabel(currentStage)}</MetricField>
+					</div>
+				</SectionBlock>
+				<RequirementsChecklist items={childUniverseRequirements} />
+				<div className='actions'>{renderStageActionButton({ action: 'createChildUniverse', idleLabel: `Create ${getOutcomeActionLabel(forkAuctionForm.selectedOutcome)} Child Universe`, onClick: onCreateChildUniverse, pendingLabel: 'Creating child universe...', tone: 'primary' })}</div>
+			</OperationModal>
 
 			<ErrorNotice message={forkAuctionError} />
 		</>

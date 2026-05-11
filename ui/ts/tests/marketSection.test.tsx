@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { fireEvent, within } from '@testing-library/dom'
 import { h } from 'preact'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -12,6 +13,7 @@ import type { MarketSectionProps } from '../types/components.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled } from './testUtils/transactionActionButton.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -36,6 +38,24 @@ function createZoltarUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): Z
 		totalTheoreticalSupply: 1000n,
 		universeId: 1n,
 		...overrides,
+	}
+}
+
+function createBinaryForkQuestion() {
+	return {
+		answerUnit: '',
+		createdAt: 1n,
+		description: 'Fork question',
+		displayValueMax: 2n,
+		displayValueMin: 0n,
+		endTime: 2n,
+		exists: true,
+		marketType: 'binary' as const,
+		numTicks: 2n,
+		outcomeLabels: ['Yes', 'No'],
+		questionId: '0x01',
+		startTime: 1n,
+		title: 'Fork question title',
 	}
 }
 
@@ -224,5 +244,92 @@ describe('MarketSection', () => {
 		})
 
 		expect(calls).toEqual(['load', 'retry'])
+	})
+
+	test('shows the universe stage banner and sticky context for questions view', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					activeView: 'questions',
+					zoltarQuestionCount: 4n,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getAllByText('Active Root Universe').length).toBeGreaterThan(0)
+		expect(documentQueries.getByText('The root universe is active and unforked. Question creation and fork preparation remain the primary workflows.')).not.toBeNull()
+		expect(documentQueries.queryByText('Available')).toBeNull()
+		expect(documentQueries.queryByText('Blocked')).toBeNull()
+		expect(documentQueries.getAllByText('Universe').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('Questions').length).toBeGreaterThan(0)
+	})
+
+	test('opens the fork workflow in a modal instead of rendering it inline', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					activeView: 'fork',
+					zoltarQuestionCount: 2n,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('dialog')).toBeNull()
+		const openForkButton = documentQueries.getByRole('button', { name: 'Open Fork Flow' })
+		await act(() => {
+			openForkButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+		})
+		expect(documentQueries.getByRole('dialog')).not.toBeNull()
+		expect(documentQueries.getAllByText('Fork Zoltar').length > 0).toBe(true)
+		expectTransactionButtonDisabled(document.body, 'Fork Zoltar', 'Select a valid fork question before forking Zoltar.')
+	})
+
+	test('opens root-universe child-universe deployment in a modal', async () => {
+		let createChildUniverseCallCount = 0
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					activeView: 'questions',
+					onCreateChildUniverseForOutcomeIndex: () => {
+						createChildUniverseCallCount += 1
+					},
+					zoltarUniverse: createZoltarUniverse({
+						childUniverses: [
+							{
+								exists: false,
+								forkTime: 1n,
+								outcomeIndex: 1n,
+								outcomeLabel: 'Yes',
+								parentUniverseId: 1n,
+								reputationToken: zeroAddress,
+								universeId: 2n,
+							},
+						],
+						forkQuestionDetails: createBinaryForkQuestion(),
+						hasForked: true,
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Open Universe Flow' }))
+		await Promise.resolve()
+
+		const modal = documentQueries.getByRole('dialog')
+		const modalQueries = within(modal)
+		expect(modalQueries.getByText('Create Child Universe')).not.toBeNull()
+		expect(modalQueries.getByText('Selected Child Universe')).not.toBeNull()
+
+		fireEvent.click(modalQueries.getByRole('button', { name: 'Deploy Universe' }))
+		expect(createChildUniverseCallCount).toBe(1)
 	})
 })

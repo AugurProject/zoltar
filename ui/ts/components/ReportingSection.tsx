@@ -4,24 +4,60 @@ import { EntityCard } from './EntityCard.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
+import { LifecycleStageBanner } from './LifecycleStageBanner.js'
 import { EscalationSide } from './EscalationSide.js'
 import { LatestActionSection } from './LatestActionSection.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
+import { ResultBanner } from './ResultBanner.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
+import { WorkflowSummaryStrip } from './WorkflowSummaryStrip.js'
 import { formatDuration } from '../lib/formatters.js'
 import { parseOptionalBigIntInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
+import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome } from '../lib/reportingDomain.js'
-import type { ReportingSectionProps } from '../types/components.js'
+import type { LifecycleStagePresentation, ReportingSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
+
+function getReportingStagePresentation({ effectiveCurrentTimestamp, marketDetails, reportingDetails }: { effectiveCurrentTimestamp: bigint | undefined; marketDetails: ReportingSectionProps['previewMarketDetails']; reportingDetails: ReportingSectionProps['reportingDetails'] }): LifecycleStagePresentation | undefined {
+	if (marketDetails === undefined) return undefined
+	if (effectiveCurrentTimestamp !== undefined && effectiveCurrentTimestamp < marketDetails.endTime) {
+		return {
+			availableActions: ['Monitor question end'],
+			blockedActions: ['Report / Contribute', 'Withdraw escalation deposits'],
+			detail: 'Reporting is still locked because the market end time has not passed yet.',
+			key: 'reporting-locked',
+			label: 'Pre-Reporting',
+			tone: 'warning',
+		}
+	}
+
+	const phase = reportingDetails === undefined ? 'Reporting Open' : getEscalationPhase(reportingDetails)
+	return {
+		availableActions: ['Report / Contribute', 'Withdraw escalation deposits'],
+		blockedActions: [],
+		detail: `The current escalation lifecycle phase is ${phase}. Contribution and withdrawal actions stay inline because side-by-side context matters.`,
+		key: 'reporting-open',
+		label: phase,
+		tone: 'default',
+	}
+}
+
+function getReportingOutcomePresentation(result: ReportingSectionProps['reportingResult']): WorkflowOutcomePresentation | undefined {
+	if (result === undefined) return undefined
+	if (result.action === 'reportOutcome') {
+		return { title: 'Reporting contribution submitted', detail: `Contributed on the ${getReportingOutcomeLabel(result.outcome)} side.`, nextStep: 'Review the leading side and updated bond before contributing again.' }
+	}
+	return { title: 'Escalation deposits withdrawn', detail: `Withdrew deposits from the ${getReportingOutcomeLabel(result.outcome)} side.`, nextStep: 'Confirm the remaining deposits and whether any other sides are still withdrawable.' }
+}
 
 export function ReportingSection({
 	accountState,
@@ -52,30 +88,21 @@ export function ReportingSection({
 	const selectedSide = reportingDetails?.sides.find(side => side.key === reportingForm.selectedOutcome)
 	const selectedEstimate = selectedSide === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(selectedSide.balance, totalBalance, selectedAmount)
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
-	const reportGuardMessage =
-		lockedReason ??
-		(accountState.address === undefined
-			? 'Connect a wallet before reporting on a market.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before reporting on a market.'
-				: reportingDetails === undefined
-					? 'Load reporting details before reporting on an outcome.'
-					: reportingForm.reportAmount.trim() === ''
-						? 'Enter a report amount greater than zero.'
-						: selectedAmount === undefined || selectedAmount <= 0n
-							? 'Enter a valid report amount greater than zero.'
-							: undefined)
-	const withdrawGuardMessage =
-		lockedReason ??
-		(accountState.address === undefined
-			? 'Connect a wallet before withdrawing escalation deposits.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before withdrawing escalation deposits.'
-				: reportingDetails === undefined
-					? 'Load reporting details before withdrawing escalation deposits.'
-					: selectedSide === undefined || selectedSide.userDeposits.length === 0
-						? 'No deposits are available to withdraw on the selected side.'
-						: undefined)
+	const reportGuardMessage = getReportingReportGuardMessage({
+		accountAddress: accountState.address,
+		isMainnet,
+		lockedReason,
+		reportAmount: reportingForm.reportAmount,
+		reportingDetailsLoaded: reportingDetails !== undefined,
+		selectedAmount,
+	})
+	const withdrawGuardMessage = getReportingWithdrawGuardMessage({
+		accountAddress: accountState.address,
+		hasUserDepositsOnSelectedSide: (selectedSide?.userDeposits.length ?? 0) > 0,
+		isMainnet,
+		lockedReason,
+		reportingDetailsLoaded: reportingDetails !== undefined,
+	})
 	const latestReportingAction =
 		reportingResult === undefined ? undefined : (
 			<LatestActionSection
@@ -90,9 +117,14 @@ export function ReportingSection({
 				]}
 			/>
 		)
+	const reportingStage = getReportingStagePresentation({ effectiveCurrentTimestamp, marketDetails, reportingDetails })
+	const reportingOutcome = getReportingOutcomePresentation(reportingResult)
 
 	const sections = (
 		<>
+			<ResultBanner outcome={reportingOutcome} />
+			{reportingStage === undefined ? undefined : <LifecycleStageBanner stage={reportingStage} />}
+			<WorkflowSummaryStrip currentStep={reportingStage?.label ?? 'Reporting'} steps={['Reporting Open', 'Escalation', 'Withdrawal']} title='Reporting Workflow' />
 			<SectionBlock title='Reporting Context'>
 				{showSecurityPoolAddressInput ? (
 					<LookupFieldRow
@@ -198,6 +230,11 @@ export function ReportingSection({
 			{latestReportingAction}
 
 			<SectionBlock title='Report Outcome'>
+				{selectedSide === undefined ? undefined : (
+					<p className='detail'>
+						Selected side currently has <CurrencyValue value={selectedSide.balance} suffix='REP' /> deposited.
+					</p>
+				)}
 				<label className='field'>
 					<span>Outcome Side</span>
 					<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={reportingForm.selectedOutcome} onChange={selectedOutcome => onReportingFormChange({ selectedOutcome })} disabled={reportingLocked} />
@@ -222,6 +259,11 @@ export function ReportingSection({
 			</SectionBlock>
 
 			<SectionBlock title='Withdraw Escalation Deposits'>
+				{selectedSide === undefined ? undefined : (
+					<p className='detail'>
+						Selected side has <strong>{selectedSide.userDeposits.length.toString()}</strong> withdrawable deposit entries for the connected wallet.
+					</p>
+				)}
 				<label className='field'>
 					<span>Withdraw Deposit Indexes</span>
 					<FormInput value={reportingForm.withdrawDepositIndexes} onInput={event => onReportingFormChange({ withdrawDepositIndexes: event.currentTarget.value })} placeholder='Leave empty to withdraw all your deposits on the selected side' disabled={reportingLocked} />
