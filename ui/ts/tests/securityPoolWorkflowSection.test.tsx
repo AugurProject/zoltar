@@ -510,6 +510,12 @@ describe('SecurityPoolWorkflowSection', () => {
 						securityVaultResult: {
 							action: 'queueWithdrawRep',
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000bb',
+							stagedExecution: {
+								errorMessage: undefined,
+								operation: 'withdrawRep',
+								operationId: 7n,
+								success: true,
+							},
 						},
 					}),
 				})}
@@ -630,6 +636,193 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(dialogQueries.getByText('A valid oracle price was already available, so the withdrawal executed immediately and no staged operation was created.')).not.toBeNull()
 	})
 
+	test('shows withdraw failure details when the staged execution event reports a rejection', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+						pendingOperation: undefined,
+						pendingOperationSlotId: 0n,
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						securityVaultDetails: createSecurityVaultDetails(),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '10000',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+						securityVaultResult: {
+							action: 'queueWithdrawRep',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000be',
+							stagedExecution: {
+								errorMessage: 'Local Security Bond Allowance broken',
+								operation: 'withdrawRep',
+								operationId: 8n,
+								success: false,
+							},
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Withdraw REP' })[0] as HTMLElement)
+		})
+
+		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
+		const dialogQueries = within(withdrawDialog)
+		expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Failed' })).not.toBeNull()
+		expect(dialogQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
+		expect(dialogQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
+	})
+
+	test('refreshes the selected pool and loaded vault after an immediate REP withdrawal execution', async () => {
+		const refreshSelectedPoolCalls: Array<string | undefined> = []
+		const loadSecurityVaultCalls: Array<string | undefined> = []
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					onRefreshSelectedPoolData: securityPoolAddressInput => {
+						refreshSelectedPoolCalls.push(securityPoolAddressInput)
+					},
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+						pendingOperation: undefined,
+						pendingOperationSlotId: 0n,
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						onLoadSecurityVault: vaultAddress => {
+							loadSecurityVaultCalls.push(vaultAddress)
+						},
+						securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress, vaultAddress: zeroAddress }),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '1',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+						securityVaultResult: {
+							action: 'queueWithdrawRep',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000dd',
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(refreshSelectedPoolCalls).toEqual([selectedPoolAddress])
+		expect(loadSecurityVaultCalls).toEqual([undefined])
+	})
+
+	test('refreshes the selected pool and loaded vault after executing a staged operation', async () => {
+		const refreshSelectedPoolCalls: Array<string | undefined> = []
+		const loadSecurityVaultCalls: Array<string | undefined> = []
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					onRefreshSelectedPoolData: securityPoolAddressInput => {
+						refreshSelectedPoolCalls.push(securityPoolAddressInput)
+					},
+					poolPriceOracleResult: {
+						action: 'executeStagedOperation',
+						hash: '0x00000000000000000000000000000000000000000000000000000000000000cc',
+					},
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						onLoadSecurityVault: vaultAddress => {
+							loadSecurityVaultCalls.push(vaultAddress)
+						},
+						securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress, vaultAddress: zeroAddress }),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(refreshSelectedPoolCalls).toEqual([selectedPoolAddress])
+		expect(loadSecurityVaultCalls).toEqual([undefined])
+	})
+
+	test('does not refresh the selected pool after a failed staged operation execution and shows the failure reason in staged operations', async () => {
+		const refreshSelectedPoolCalls: Array<string | undefined> = []
+		const loadSecurityVaultCalls: Array<string | undefined> = []
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					onRefreshSelectedPoolData: securityPoolAddressInput => {
+						refreshSelectedPoolCalls.push(securityPoolAddressInput)
+					},
+					poolPriceOracleResult: {
+						action: 'executeStagedOperation',
+						hash: '0x00000000000000000000000000000000000000000000000000000000000000ce',
+						stagedExecution: {
+							errorMessage: 'Local Security Bond Allowance broken',
+							operation: 'withdrawRep',
+							operationId: 12n,
+							success: false,
+						},
+					},
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						onLoadSecurityVault: vaultAddress => {
+							loadSecurityVaultCalls.push(vaultAddress)
+						},
+						securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress, vaultAddress: zeroAddress }),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+					selectedPoolView: 'staged-operations',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(refreshSelectedPoolCalls).toEqual([])
+		expect(loadSecurityVaultCalls).toEqual([])
+		expect(within(document.body).getByText('Local Security Bond Allowance broken')).not.toBeNull()
+	})
+
 	test('keeps vault launcher buttons disabled until a selected vault is loaded', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -656,6 +849,55 @@ describe('SecurityPoolWorkflowSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Refresh the selected vault first.')
 		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance', 'Refresh the selected vault first.')
 		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'Refresh the selected vault first.')
+	})
+
+	test('caps REP withdrawals to the oracle-backed amount in the seeded security-pool shape', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+						lastPrice: 3n * 10n ** 18n,
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [
+						createSelectedPool({
+							managerAddress: zeroAddress,
+							securityPoolAddress: selectedPoolAddress,
+							totalRepDeposit: 10_000n * 10n ** 18n,
+							totalSecurityBondAllowance: 2_500n * 10n ** 18n,
+						}),
+					],
+					securityVault: createSecurityVaultProps({
+						securityVaultDetails: createSecurityVaultDetails({
+							repDepositShare: 10_000n * 10n ** 18n,
+							securityBondAllowance: 2_500n * 10n ** 18n,
+							securityPoolAddress: selectedPoolAddress,
+						}),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '10000',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Withdraw REP' })[0] as HTMLElement)
+		})
+
+		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
+		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Reduce the withdrawal to 2 500 REP or less.')
 	})
 
 	test('hides the truth auction metric when the selected pool has no truth auction address', async () => {

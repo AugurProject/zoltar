@@ -98,7 +98,20 @@ export function LiquidationModal({
 
 	const queuedLiquidationOperation =
 		securityPoolOverviewResult?.action !== 'queueLiquidation' || currentPoolOracleManagerDetails?.pendingOperation?.operation !== 'liquidation' || currentPoolOracleManagerDetails.pendingOperation.targetVault !== liquidationTargetVault ? undefined : currentPoolOracleManagerDetails.pendingOperation
-	const queuedLiquidationStatus = securityPoolOverviewResult?.action !== 'queueLiquidation' ? undefined : loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined ? 'refreshing' : queuedLiquidationOperation !== undefined ? 'queued' : currentPoolOracleManagerDetails.isPriceValid ? 'executed' : 'missing'
+	const queuedLiquidationStatus =
+		securityPoolOverviewResult?.action !== 'queueLiquidation'
+			? undefined
+			: securityPoolOverviewResult.stagedExecution !== undefined
+				? securityPoolOverviewResult.stagedExecution.success
+					? 'executed'
+					: 'failed'
+				: loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined
+					? 'refreshing'
+					: queuedLiquidationOperation !== undefined
+						? 'queued'
+						: currentPoolOracleManagerDetails.isPriceValid
+							? 'executed'
+							: 'missing'
 
 	return (
 		<div className='modal-backdrop' role='presentation' onClick={closeLiquidationModal}>
@@ -134,6 +147,16 @@ export function LiquidationModal({
 							</div>
 						</section>
 					)
+				) : queuedLiquidationStatus === 'failed' ? (
+					<section className='entity-card compact'>
+						<div className='entity-card-header'>
+							<div>
+								<h4>Liquidation Failed</h4>
+							</div>
+							<span className='badge blocked'>Failed</span>
+						</div>
+						<p className='detail'>{securityPoolOverviewResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the liquidation immediately, but the security pool rejected it.'}</p>
+					</section>
 				) : queuedLiquidationStatus === 'executed' ? (
 					<section className='entity-card compact'>
 						<div className='entity-card-header'>

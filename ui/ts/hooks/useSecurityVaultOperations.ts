@@ -233,6 +233,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				return {
 					action: 'queueSetSecurityBondAllowance',
 					hash: result.hash,
+					...(result.stagedExecution === undefined ? {} : { stagedExecution: result.stagedExecution }),
 				} satisfies SecurityVaultActionResult
 			},
 			'Failed to set security bond allowance',
@@ -269,11 +270,15 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				return {
 					action: 'queueWithdrawRep',
 					hash: result.hash,
+					...(result.stagedExecution === undefined ? {} : { stagedExecution: result.stagedExecution }),
 				} satisfies SecurityVaultActionResult
 			},
 			'Failed to withdraw REP',
 			async (_result, securityPoolAddress, vaultAddress) => {
 				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
+				const details = securityVaultDetails.value
+				if (details === undefined) return
+				await reloadSecurityVaultRepBalance(details.repToken, vaultAddress)
 			},
 		)
 

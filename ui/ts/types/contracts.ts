@@ -30,6 +30,13 @@ export type StagedOracleOperation = {
 	targetVault: Address
 }
 
+export type StagedOracleExecutionResult = {
+	errorMessage: string | undefined
+	operation: OracleQueueOperation
+	operationId: bigint
+	success: boolean
+}
+
 export type QuestionData = {
 	title: string
 	description: string
@@ -141,6 +148,7 @@ export type SecurityVaultDetails = {
 
 export type SecurityVaultActionResult = ActionResult & {
 	action: 'approveRep' | 'depositRep' | 'queueSetSecurityBondAllowance' | 'queueWithdrawRep' | 'redeemFees' | 'updateVaultFees'
+	stagedExecution?: StagedOracleExecutionResult
 }
 
 export type OracleManagerDetails = {
@@ -162,6 +170,7 @@ export type OracleManagerDetails = {
 
 export type OpenOracleActionResult = ActionResult & {
 	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'submitInitialReport' | 'wrapWeth'
+	stagedExecution?: StagedOracleExecutionResult
 }
 
 export type OpenOracleReportSummary = {
@@ -274,6 +283,7 @@ export type SecurityPoolVaultSummary = {
 export type SecurityPoolOverviewActionResult = ActionResult & {
 	action: 'queueLiquidation'
 	securityPoolAddress: Address
+	stagedExecution?: StagedOracleExecutionResult
 }
 
 export type TradingShareBalances = {

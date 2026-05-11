@@ -77,8 +77,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 				async walletAddress => {
 					const targetVault = parseAddressInput(liquidationTargetVault.value, 'Target vault')
 					const amount = parseBigIntInput(liquidationAmount.value, 'Liquidation amount')
-					const hash = await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount)
-					return { hash }
+					return await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount)
 				},
 				'Failed to queue liquidation',
 				result => {
@@ -86,6 +85,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 						action: 'queueLiquidation',
 						hash: result.hash,
 						securityPoolAddress,
+						...(result.stagedExecution === undefined ? {} : { stagedExecution: result.stagedExecution }),
 					}
 				},
 			)

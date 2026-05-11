@@ -59,6 +59,7 @@ export function getVaultWithdrawGuardMessage({
 	if (!hasValidOraclePrice) return 'A valid oracle price is required before withdrawing REP.'
 	if (withdrawAmount === undefined || withdrawAmount <= 0n) return 'Enter a valid REP withdraw amount.'
 	if (withdrawableRepAmount === undefined || withdrawableRepAmount <= 0n) return 'No REP is currently withdrawable from this vault.'
+	if (withdrawAmount > withdrawableRepAmount) return `Reduce the withdrawal to ${formatCurrencyBalance(withdrawableRepAmount)} REP or less.`
 	return undefined
 }
 

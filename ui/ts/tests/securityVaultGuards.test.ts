@@ -68,6 +68,17 @@ describe('security vault guards', () => {
 		).toBe('A valid oracle price is required before withdrawing REP.')
 
 		expect(
+			getVaultWithdrawGuardMessage({
+				accountAddress: zeroAddress,
+				hasValidOraclePrice: true,
+				isMainnet: true,
+				selectedVaultIsOwnedByAccount: true,
+				withdrawAmount: 10_000n * 10n ** 18n,
+				withdrawableRepAmount: 2_500n * 10n ** 18n,
+			}),
+		).toBe('Reduce the withdrawal to 2 500 REP or less.')
+
+		expect(
 			getVaultSetSecurityBondAllowanceGuardMessage({
 				hasValidOraclePrice: true,
 				isMainnet: true,

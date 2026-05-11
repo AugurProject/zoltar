@@ -227,6 +227,12 @@ describe('LiquidationModal', () => {
 					action: 'queueLiquidation',
 					hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
 					securityPoolAddress: zeroAddress,
+					stagedExecution: {
+						errorMessage: undefined,
+						operation: 'liquidation',
+						operationId: 3n,
+						success: true,
+					},
 				}}
 			/>,
 		)
@@ -234,6 +240,49 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
+	})
+
+	test('shows liquidation failure details when the staged execution event reports a rejection', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<LiquidationModal
+				accountAddress={zeroAddress}
+				closeLiquidationModal={() => undefined}
+				currentPoolOracleManagerDetails={createOracleManagerDetails({
+					isPriceValid: true,
+					pendingOperation: undefined,
+					pendingOperationSlotId: 0n,
+				})}
+				isMainnet
+				liquidationAmount='5'
+				liquidationManagerAddress={zeroAddress}
+				liquidationModalOpen
+				liquidationSecurityPoolAddress={zeroAddress}
+				loadingPoolOracleManager={false}
+				liquidationTargetVault={zeroAddress}
+				onSelectedPoolViewChange={() => undefined}
+				onLiquidationAmountChange={() => undefined}
+				onLiquidationTargetVaultChange={() => undefined}
+				onQueueLiquidation={() => undefined}
+				securityPoolOverviewActiveAction={undefined}
+				securityPoolOverviewResult={{
+					action: 'queueLiquidation',
+					hash: '0x00000000000000000000000000000000000000000000000000000000000000ab',
+					securityPoolAddress: zeroAddress,
+					stagedExecution: {
+						errorMessage: 'Local Security Bond Allowance broken',
+						operation: 'liquidation',
+						operationId: 4n,
+						success: false,
+					},
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
+		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
 	})
 })
