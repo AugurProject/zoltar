@@ -2,6 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '@testing-library/dom'
+import { render } from 'preact'
+import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 import { LiquidationModal } from '../components/LiquidationModal.js'
@@ -73,5 +75,50 @@ describe('LiquidationModal', () => {
 		expect(document.body.querySelector("[role='dialog']")).toBeNull()
 		expect(document.activeElement).toBe(opener)
 		opener.remove()
+	})
+
+	test('keeps focus on the edited input while the modal rerenders', async () => {
+		function LiquidationHarness() {
+			const [liquidationAmount, setLiquidationAmount] = useState('1')
+
+			return (
+				<LiquidationModal
+					accountAddress={zeroAddress}
+					closeLiquidationModal={() => undefined}
+					isMainnet
+					liquidationAmount={liquidationAmount}
+					liquidationManagerAddress={zeroAddress}
+					liquidationModalOpen
+					liquidationSecurityPoolAddress={zeroAddress}
+					liquidationTargetVault={zeroAddress}
+					onLiquidationAmountChange={setLiquidationAmount}
+					onLiquidationTargetVaultChange={() => undefined}
+					onQueueLiquidation={() => undefined}
+					securityPoolOverviewActiveAction={undefined}
+				/>
+			)
+		}
+
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		await act(() => {
+			render(<LiquidationHarness />, container)
+		})
+
+		const amountInput = within(container).getByLabelText('Liquidation Amount') as HTMLInputElement
+		amountInput.focus()
+		expect(document.activeElement).toBe(amountInput)
+
+		await act(() => {
+			fireEvent.input(amountInput, { target: { value: '12' } })
+		})
+
+		const rerenderedAmountInput = within(container).getByLabelText('Liquidation Amount') as HTMLInputElement
+		expect(rerenderedAmountInput.value).toBe('12')
+		expect(document.activeElement).toBe(rerenderedAmountInput)
+
+		render(null, container)
+		container.remove()
 	})
 })

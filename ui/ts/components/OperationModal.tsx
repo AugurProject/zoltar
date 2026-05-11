@@ -4,13 +4,18 @@ import type { OperationModalProps } from '../types/components.js'
 export function OperationModal({ children, description, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+	const onCloseRef = useRef(onClose)
+
+	useEffect(() => {
+		onCloseRef.current = onClose
+	}, [onClose])
 
 	useEffect(() => {
 		if (!isOpen) return
 		const previouslyFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
 		closeButtonRef.current?.focus()
 		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') onClose()
+			if (event.key === 'Escape') onCloseRef.current()
 			if (event.key !== 'Tab') return
 			const focusableElements = dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href], select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")
 			if (focusableElements === undefined || focusableElements.length === 0) return
@@ -32,7 +37,7 @@ export function OperationModal({ children, description, isOpen, onClose, title }
 			document.removeEventListener('keydown', handleKeyDown)
 			previouslyFocusedElement?.focus()
 		}
-	}, [isOpen, onClose])
+	}, [isOpen])
 
 	if (!isOpen) return undefined
 

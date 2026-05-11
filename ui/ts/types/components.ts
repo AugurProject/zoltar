@@ -395,6 +395,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
+	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	poolOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	poolOracleManagerDetails: OracleManagerDetails | undefined
 	poolOracleManagerError: string | undefined

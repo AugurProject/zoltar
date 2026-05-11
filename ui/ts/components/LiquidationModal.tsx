@@ -36,13 +36,18 @@ export function LiquidationModal({
 }: LiquidationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+	const onCloseRef = useRef(closeLiquidationModal)
+
+	useEffect(() => {
+		onCloseRef.current = closeLiquidationModal
+	}, [closeLiquidationModal])
 
 	useEffect(() => {
 		if (!liquidationModalOpen) return
 		const previouslyFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
 		closeButtonRef.current?.focus()
 		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') closeLiquidationModal()
+			if (event.key === 'Escape') onCloseRef.current()
 			if (event.key !== 'Tab') return
 			const focusableElements = dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href], select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")
 			if (focusableElements === undefined || focusableElements.length === 0) return
@@ -64,7 +69,7 @@ export function LiquidationModal({
 			document.removeEventListener('keydown', handleKeyDown)
 			previouslyFocusedElement?.focus()
 		}
-	}, [liquidationModalOpen, closeLiquidationModal])
+	}, [liquidationModalOpen])
 
 	if (!liquidationModalOpen) return undefined
 	const queueLiquidationReason =

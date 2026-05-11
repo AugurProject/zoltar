@@ -242,6 +242,7 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 		selectedPoolView: '',
 		securityPoolAddress: '',
 		securityPoolOverviewActiveAction: undefined,
+		securityPoolOverviewResult: undefined,
 		securityPools: [],
 		securityVault: createSecurityVaultProps(),
 		trading: createTradingProps(),
