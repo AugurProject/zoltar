@@ -41,7 +41,6 @@ export function OperationModal({ children, description, isOpen, onClose, title }
 			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' aria-modal='true' aria-labelledby='operation-modal-title' onClick={event => event.stopPropagation()}>
 				<div className='modal-header'>
 					<div>
-						<p className='panel-label'>Execution</p>
 						<h3 id='operation-modal-title'>{title}</h3>
 					</div>
 					<button ref={closeButtonRef} className='quiet' type='button' onClick={onClose}>

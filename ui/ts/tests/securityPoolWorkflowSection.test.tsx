@@ -301,7 +301,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('tablist', { name: 'Selected pool views' })).not.toBeNull()
 
-		for (const label of ['Vaults', 'Trading', 'Reporting', 'Fork']) {
+		for (const label of ['Vaults', 'Trading', 'Reporting', 'Fork', 'Staged Operations', 'Price Oracle']) {
 			const button = documentQueries.getByRole('tab', { name: label }) as HTMLButtonElement
 			expect(button.disabled).toBe(true)
 			expect(button.title).toBe('Load a pool to open this workflow.')
@@ -310,6 +310,24 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Pool Workflows' })).not.toBeNull()
 		expect(documentQueries.getByText('No pool selected.')).not.toBeNull()
 		expect(documentQueries.queryByText('Locked')).toBeNull()
+	})
+
+	test('shows a pool not found card when the selected address does not resolve', async () => {
+		const missingAddress = '0x00000000000000000000000000000000000000ab'
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: missingAddress,
+					securityPoolAddress: missingAddress,
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Pool not found' })).not.toBeNull()
+		expect(documentQueries.getByText('This security pool address was not found.')).not.toBeNull()
 	})
 
 	test('renders a vault workspace header and local mode switch for a loaded pool', async () => {
@@ -367,14 +385,17 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Lookup' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Vault Summary' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Vault' })).toBeNull()
-		expect(documentQueries.getByLabelText('Selected Vault Address')).not.toBeNull()
+		expect(documentQueries.getByText('Selected Vault Address')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Vault Action Launchers' })).not.toBeNull()
+		expect(documentQueries.getByRole('tab', { name: 'Staged Operations' })).not.toBeNull()
+		expect(documentQueries.getByRole('tab', { name: 'Price Oracle' })).not.toBeNull()
 		expect(documentQueries.getAllByRole('button', { name: 'Claim Fees' }).length).toBeGreaterThan(0)
 		expect(documentQueries.getAllByText('Approved REP').length).toBeGreaterThan(0)
 		expect(documentQueries.queryByText('Enter a deposit amount greater than zero.')).toBeNull()
 		expect(documentQueries.queryByText('Fork Flow')).toBeNull()
 		expect(documentQueries.queryByText(/^Blocked:/)).toBeNull()
 		expect(documentQueries.queryByText('Oracle Status')).toBeNull()
+		expect(documentQueries.queryByText('After market end')).toBeNull()
 		expect(documentQueries.queryByText('Truth Auction')).toBeNull()
 		expect(documentQueries.getByText('Security Multiplier')).not.toBeNull()
 		const directoryButton = documentQueries.getByRole('tab', { name: 'Directory' })
@@ -466,6 +487,131 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(reportButton.title).toBe('Reporting opens after market end.')
 	})
 
+	test('renders staged operations management inside the staged operations tab instead of a standalone section', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					poolOracleManagerDetails: {
+						callbackStateHash: undefined,
+						exactToken1Report: undefined,
+						isPriceValid: true,
+						lastPrice: 2n * 10n ** 18n,
+						lastSettlementTimestamp: 100n,
+						managerAddress: zeroAddress,
+						openOracleAddress: zeroAddress,
+						pendingOperation: undefined,
+						pendingOperationSlotId: 0n,
+						pendingReportId: 0n,
+						priceValidUntilTimestamp: 1000n,
+						requestPriceEthCost: 1n,
+						token1: zeroAddress,
+						token2: zeroAddress,
+					},
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					selectedPoolView: 'staged-operations',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect((documentQueries.getByRole('tab', { name: 'Staged Operations' }) as HTMLElement).getAttribute('aria-selected')).toBe('true')
+		expect(documentQueries.getByRole('heading', { name: 'Staged Operations' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Pool Oracle & Pending Operations' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Staged Operations List' })).not.toBeNull()
+		expect(documentQueries.getByText('No staged operations are currently queued for this pool.')).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Request New Price' })).toBeNull()
+	})
+
+	test('lists staged operations in the staged operations tab', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					poolOracleManagerDetails: {
+						callbackStateHash: undefined,
+						exactToken1Report: undefined,
+						isPriceValid: true,
+						lastPrice: 2n * 10n ** 18n,
+						lastSettlementTimestamp: 100n,
+						managerAddress: zeroAddress,
+						openOracleAddress: zeroAddress,
+						pendingOperation: {
+							amount: 5n * 10n ** 18n,
+							initiatorVault: zeroAddress,
+							operation: 'withdrawRep',
+							operationId: 7n,
+							targetVault: zeroAddress,
+						},
+						pendingOperationSlotId: 7n,
+						pendingReportId: 12n,
+						priceValidUntilTimestamp: 1000n,
+						requestPriceEthCost: 1n,
+						token1: zeroAddress,
+						token2: zeroAddress,
+					},
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					selectedPoolView: 'staged-operations',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Withdraw REP')).not.toBeNull()
+		expect(documentQueries.getByText('7')).not.toBeNull()
+		expect(documentQueries.queryByText('Pending Price Request')).toBeNull()
+	})
+
+	test('renders price oracle details and request controls in the price oracle tab', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					poolOracleManagerDetails: {
+						callbackStateHash: undefined,
+						exactToken1Report: undefined,
+						isPriceValid: true,
+						lastPrice: 2n * 10n ** 18n,
+						lastSettlementTimestamp: 100n,
+						managerAddress: zeroAddress,
+						openOracleAddress: zeroAddress,
+						pendingOperation: undefined,
+						pendingOperationSlotId: 0n,
+						pendingReportId: 12n,
+						priceValidUntilTimestamp: 1000n,
+						requestPriceEthCost: 1n,
+						token1: zeroAddress,
+						token2: zeroAddress,
+					},
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					selectedPoolView: 'price-oracle',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect((documentQueries.getByRole('tab', { name: 'Price Oracle' }) as HTMLElement).getAttribute('aria-selected')).toBe('true')
+		const priceOracleSection = documentQueries.getByRole('heading', { name: 'Price Oracle' }).closest('section')
+		if (!(priceOracleSection instanceof HTMLElement)) {
+			throw new Error('Expected the Price Oracle section to render')
+		}
+		const sectionQueries = within(priceOracleSection)
+		expect(sectionQueries.getByRole('heading', { name: 'Price Oracle' })).not.toBeNull()
+		expect(sectionQueries.getByText('Price Window')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Request New Price' })).not.toBeNull()
+		expect(sectionQueries.getByText('Pending Request')).not.toBeNull()
+		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()
+	})
+
 	test('uses the lifted selected pool view state and reports tab changes through the shared setter', async () => {
 		const selectedViews: string[] = []
 		const renderedComponent = await renderIntoDocument(
@@ -488,10 +634,10 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect((documentQueries.getByRole('tab', { name: 'Reporting' }) as HTMLElement).getAttribute('aria-selected')).toBe('true')
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('tab', { name: 'Fork' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Staged Operations' }))
 		})
 
-		expect(selectedViews).toEqual(['fork'])
+		expect(selectedViews).toEqual(['staged-operations'])
 	})
 
 	test('retries reporting autoload on rerender until matching details are available', async () => {

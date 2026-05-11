@@ -134,7 +134,7 @@ describe('OpenOracleSection route create view', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('renders requirements and create-success handoff actions in create view', async () => {
+	test('renders create-success handoff actions in create view', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				OpenOracleSection,
@@ -149,7 +149,6 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Resolve these checks before creating a new Open Oracle game.')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Return to Browse' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Create Another' })).not.toBeNull()
 	})

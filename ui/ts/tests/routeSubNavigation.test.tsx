@@ -39,6 +39,8 @@ describe('RouteSubNavigation', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Zoltar > Questions')).toBeNull()
+		expect(document.body.querySelector('.route-subnav-shell')).not.toBeNull()
+		expect(document.body.querySelector('.route-subtab-nav')).not.toBeNull()
 
 		const questionsTab = documentQueries.getByRole('tab', { name: 'Questions' }) as HTMLAnchorElement
 		expect(questionsTab.tagName).toBe('A')

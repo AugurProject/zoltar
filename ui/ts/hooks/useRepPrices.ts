@@ -2,7 +2,7 @@ import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
-import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource, ETH_ADDRESS, REP_ADDRESS, isRepPricingEnabled } from '../lib/uniswapQuoter.js'
+import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource, ETH_ADDRESS, getRepAddress, isRepPricingEnabled } from '../lib/uniswapQuoter.js'
 
 const ONE_ETH = 10n ** 18n
 const ONE_REP = 10n ** 18n
@@ -21,12 +21,13 @@ type RepPrices = {
 }
 
 async function fetchRepPerEthPrice(client: ReturnType<typeof createConnectedReadClient>): Promise<{ price: bigint; source: PriceSource; sourceUrl: string | undefined }> {
+	const repAddress = getRepAddress()
 	try {
-		const { amountOut, source } = await quoteBestExactInputWithSource(client, ETH_ADDRESS, REP_ADDRESS, ONE_ETH)
+		const { amountOut, source } = await quoteBestExactInputWithSource(client, ETH_ADDRESS, repAddress, ONE_ETH)
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v4', sourceUrl: source.poolUrl }
 	} catch {
 		// V4 REP/ETH pool doesn't exist yet — fall back to V3 WETH/REP (1% pool)
-		const { amountOut, source } = await quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, REP_ADDRESS, ONE_ETH)
+		const { amountOut, source } = await quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, repAddress, ONE_ETH)
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v3', sourceUrl: source.poolUrl }
 	}
 }

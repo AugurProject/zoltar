@@ -410,7 +410,7 @@ void describe('quoteRepForEth', () => {
 	void test('uses REP_ADDRESS as the input token', async () => {
 		const { client, captured } = createCapturingClient(1n)
 		await quoteRepForEth(client, 1n)
-		expect(captured.currency1).toBe(REP_ADDRESS)
+		expect(captured.currency1.toLowerCase()).toBe(REP_ADDRESS.toLowerCase())
 		expect(captured.zeroForOne).toBe(false)
 	})
 })
@@ -425,7 +425,7 @@ void describe('quoteEthForRep', () => {
 	void test('uses REP_ADDRESS as the output token', async () => {
 		const { client, captured } = createCapturingClient(1n)
 		await quoteEthForRep(client, 1n)
-		expect(captured.currency1).toBe(REP_ADDRESS)
+		expect(captured.currency1.toLowerCase()).toBe(REP_ADDRESS.toLowerCase())
 		expect(captured.zeroForOne).toBe(true)
 	})
 })

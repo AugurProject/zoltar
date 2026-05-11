@@ -18,27 +18,12 @@ import {
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 
 void describe('selected pool workflow lookup state', () => {
-	void test('uses a stable card title until a pool resolves', () => {
-		expect(
-			getSelectedPoolCardTitle({
-				hasSelectedPoolAddress: false,
-				resolvedPoolTitle: undefined,
-			}),
-		).toBe('Select a security pool')
+	void test('uses a single stable operate header title', () => {
+		expect(getSelectedPoolCardTitle()).toBe('Operate Security Pool')
 
-		expect(
-			getSelectedPoolCardTitle({
-				hasSelectedPoolAddress: true,
-				resolvedPoolTitle: undefined,
-			}),
-		).toBe('Selected Pool')
+		expect(getSelectedPoolCardTitle()).toBe('Operate Security Pool')
 
-		expect(
-			getSelectedPoolCardTitle({
-				hasSelectedPoolAddress: true,
-				resolvedPoolTitle: 'Will REP exceed threshold?',
-			}),
-		).toBe('Will REP exceed threshold?')
+		expect(getSelectedPoolCardTitle()).toBe('Operate Security Pool')
 	})
 
 	void test('adds only the empty selected-pool state on top of loadable lookup states', () => {
@@ -83,6 +68,8 @@ void describe('selected pool workflow lookup state', () => {
 		expect(resolveSelectedPoolView('resolution')).toBe('reporting')
 		expect(resolveSelectedPoolView('reporting')).toBe('reporting')
 		expect(resolveSelectedPoolView('fork')).toBe('fork')
+		expect(resolveSelectedPoolView('oracle')).toBe('staged-operations')
+		expect(resolveSelectedPoolView('price-oracle')).toBe('price-oracle')
 	})
 })
 

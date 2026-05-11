@@ -9,7 +9,6 @@ export function ResultBanner({ outcome }: ResultBannerProps) {
 
 	return (
 		<section className='result-banner'>
-			<p className='panel-label'>Latest Outcome</p>
 			<h3>{outcome.title}</h3>
 			<p className='detail'>{outcome.detail}</p>
 			{outcome.nextStep === undefined ? undefined : <p className='detail'>Next: {outcome.nextStep}</p>}

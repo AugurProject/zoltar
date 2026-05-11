@@ -108,8 +108,8 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 					) : (
 						<ChildUniversesSection
 							childUniverses={rootUniverse.childUniverses}
-							emptyMessage='No child universes yet.'
-							headerSubtitle={hasForked ? 'Deploy child universes as needed for fork resolution.' : 'Child universes become deployable after the universe forks.'}
+							emptyMessage='No child universes'
+							headerSubtitle={hasForked ? 'Deploy child universes as needed for fork resolution.' : undefined}
 							headerTitle='Child Universes'
 							action={child => ({
 								availability: {

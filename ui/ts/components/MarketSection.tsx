@@ -1,40 +1,14 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { ActionLauncherCard } from './ActionLauncherCard.js'
 import { DataGrid } from './DataGrid.js'
 import { ForkZoltarSection } from './ForkZoltarSection.js'
-import { LifecycleStageBanner } from './LifecycleStageBanner.js'
 import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
 import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
 import { OperationModal } from './OperationModal.js'
 import { SectionBlock } from './SectionBlock.js'
-import { StickyObjectContext } from './StickyObjectContext.js'
-import type { LifecycleStagePresentation, ReadinessAction } from '../types/components.js'
 import { ZoltarMigrationSection } from './ZoltarMigrationSection.js'
 import { isMainnetChain } from '../lib/network.js'
 import type { MarketSectionProps } from '../types/components.js'
-
-function getUniverseStagePresentation(hasForked: boolean, questionCount: bigint): LifecycleStagePresentation {
-	if (hasForked) {
-		return {
-			availableActions: ['Migrate REP', 'Review forked questions', 'Create child universes'],
-			blockedActions: ['Fork Zoltar'],
-			detail: 'The root universe has forked. Migration and child-universe flows are now the primary next actions.',
-			key: 'forked',
-			label: 'Forked Universe',
-			tone: 'warning',
-		}
-	}
-
-	return {
-		availableActions: ['Create Question', 'Fork Zoltar'],
-		blockedActions: questionCount === 0n ? ['Use Question for Fork'] : [],
-		detail: 'The root universe is active and unforked. Question creation and fork preparation remain the primary workflows.',
-		key: 'unforked',
-		label: 'Active Root Universe',
-		tone: 'default',
-	}
-}
 
 export function MarketSection({
 	accountState,
@@ -88,15 +62,6 @@ export function MarketSection({
 	const showUniverseSummary = view === 'questions' && zoltarUniverse !== undefined
 	const lastAutoLoadedQuestionsUniverseId = useRef<bigint | undefined>(undefined)
 	const [forkModalOpen, setForkModalOpen] = useState(false)
-	const universeStage = getUniverseStagePresentation(hasForked, zoltarQuestionCount ?? 0n)
-	const forkAction: ReadinessAction = {
-		actionLabel: 'Open Fork Flow',
-		description: hasForked ? 'Review the forked universe and any selected question details in a bounded modal.' : 'Review approvals, threshold, and the selected fork question in a bounded modal before submitting the fork.',
-		key: 'fork-zoltar',
-		onAction: () => setForkModalOpen(true),
-		readiness: hasForked ? 'warning' : 'ready',
-		title: 'Fork Zoltar',
-	}
 
 	useEffect(() => {
 		if (view !== 'migrate') return
@@ -155,16 +120,6 @@ export function MarketSection({
 				)}
 			</SectionBlock>
 			<div className='workflow-stack route-workflow-stack'>
-				<StickyObjectContext
-					title='Universe Context'
-					items={[
-						{ label: 'Universe', value: zoltarUniverse?.universeId.toString() ?? 'Loading...' },
-						{ label: 'Stage', value: universeStage.label },
-						{ label: 'Questions', value: (zoltarQuestionCount ?? 0n).toString() },
-					]}
-				/>
-				<LifecycleStageBanner stage={universeStage} />
-
 				{view === 'questions' ? (
 					<>
 						{hasForked ? (
@@ -213,8 +168,13 @@ export function MarketSection({
 
 				{view === 'fork' ? (
 					<>
-						<SectionBlock title='Fork Workflow' description='Fork execution now opens in a bounded modal so approvals, threshold checks, and the selected question stay in one surface.'>
-							<ActionLauncherCard action={forkAction}>{zoltarForkQuestionId.trim() === '' ? undefined : <p className='detail'>Selected fork question: {zoltarForkQuestionId}</p>}</ActionLauncherCard>
+						<SectionBlock title='Fork'>
+							<div className='actions'>
+								<button className='primary' type='button' onClick={() => setForkModalOpen(true)}>
+									Open Fork Flow
+								</button>
+							</div>
+							{zoltarForkQuestionId.trim() === '' ? undefined : <p className='detail'>Selected fork question: {zoltarForkQuestionId}</p>}
 						</SectionBlock>
 						<OperationModal isOpen={forkModalOpen} onClose={() => setForkModalOpen(false)} title='Fork Zoltar'>
 							<ForkZoltarSection

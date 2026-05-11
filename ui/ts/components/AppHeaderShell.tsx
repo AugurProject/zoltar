@@ -21,8 +21,10 @@ export function AppHeaderShell({ overview, simulationController, subNavigation, 
 				<div className='top-shell-content'>
 					<OverviewPanels {...overview} />
 				</div>
-				<TabNavigation {...tabNavigation} />
-				{subNavigation}
+				<div className='app-nav-stack'>
+					<TabNavigation {...tabNavigation} />
+					{subNavigation}
+				</div>
 			</div>
 		</>
 	)

@@ -235,7 +235,7 @@ describe('MarketSection', () => {
 		expect(calls).toEqual(['load', 'retry'])
 	})
 
-	test('shows the universe stage banner and sticky context for questions view', async () => {
+	test('does not render redundant universe summary cards for questions view', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				MarketSection,
@@ -248,12 +248,10 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getAllByText('Active Root Universe').length).toBeGreaterThan(0)
-		expect(documentQueries.getByText('The root universe is active and unforked. Question creation and fork preparation remain the primary workflows.')).not.toBeNull()
-		expect(documentQueries.queryByText('Available')).toBeNull()
-		expect(documentQueries.queryByText('Blocked')).toBeNull()
-		expect(documentQueries.getAllByText('Universe').length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByText('Questions').length).toBeGreaterThan(0)
+		expect(documentQueries.queryByText('Active Root Universe')).toBeNull()
+		expect(documentQueries.queryByText('The root universe is active and unforked. Question creation and fork preparation remain the primary workflows.')).toBeNull()
+		expect(documentQueries.queryByText('Forked Universe')).toBeNull()
+		expect(documentQueries.queryByText('Universe Context')).toBeNull()
 	})
 
 	test('opens the fork workflow in a modal instead of rendering it inline', async () => {

@@ -85,7 +85,6 @@ export function LiquidationModal({
 			<section ref={dialogRef} className='modal-panel' role='dialog' aria-modal='true' aria-labelledby='liquidation-modal-title' onClick={event => event.stopPropagation()}>
 				<div className='modal-header'>
 					<div>
-						<p className='panel-label'>Liquidation</p>
 						<h3 id='liquidation-modal-title'>Queue a vault liquidation</h3>
 					</div>
 					<button ref={closeButtonRef} className='quiet' onClick={closeLiquidationModal}>

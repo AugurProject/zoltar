@@ -8,7 +8,6 @@ import { EntityCard } from './EntityCard.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
-import { LifecycleStageBanner } from './LifecycleStageBanner.js'
 import { LatestActionSection } from './LatestActionSection.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
@@ -24,13 +23,12 @@ import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { ViewTabs } from './ViewTabs.js'
-import { WorkflowSummaryStrip } from './WorkflowSummaryStrip.js'
 import { AUCTION_TIME_SECONDS, type ForkAuctionStageView, estimateRepPurchased, getForkAuctionStageView, getForkStageDescription, getForkStageDescriptionForState, getOutcomeActionLabel, getSystemStateLabel, getTimeRemaining, hasForkActivity, MIGRATION_TIME_SECONDS } from '../lib/forkAuction.js'
 import { formatDuration } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
-import type { ForkAuctionSectionProps, LifecycleStagePresentation, ReadinessAction } from '../types/components.js'
+import type { ForkAuctionSectionProps, ReadinessAction } from '../types/components.js'
 
 const UNKNOWN_VALUE = '—'
 const UNAVAILABLE_UNTIL_FORK = 'Unavailable until fork'
@@ -148,25 +146,6 @@ function estimateBidRep(bidAmount: string, selectedAuctionPrice: bigint | undefi
 	}
 }
 
-function getForkLifecycleStagePresentation(currentStage: ForkAuctionStageView, description: string | undefined): LifecycleStagePresentation {
-	const availableActions =
-		currentStage === 'initiate'
-			? ['Initiate pool fork', 'Fork with own escalation']
-			: currentStage === 'migration'
-				? ['Create child universe', 'Migrate REP', 'Migrate vault', 'Migrate escalation deposits']
-				: currentStage === 'auction'
-					? ['Start truth auction', 'Submit bid']
-					: ['Finalize truth auction', 'Refund bids', 'Claim proceeds', 'Withdraw bids']
-	return {
-		availableActions,
-		blockedActions: [],
-		detail: description ?? `The pool is currently in the ${getStageLabel(currentStage)} stage.`,
-		key: currentStage,
-		label: getStageLabel(currentStage),
-		tone: currentStage === 'auction' ? 'warning' : currentStage === 'settlement' ? 'success' : 'default',
-	}
-}
-
 export function ForkAuctionSection({
 	accountState,
 	disabled = false,
@@ -257,7 +236,6 @@ export function ForkAuctionSection({
 	const underfundedDisplay = forkAuctionDetails?.truthAuction === undefined ? forkOnlyFallbackText : forkAuctionDetails.truthAuction.underfunded ? 'Yes' : 'No'
 	const claimingAvailableDisplay = forkAuctionDetails === undefined ? (hasPreviewForkActivity ? UNKNOWN_VALUE : UNAVAILABLE_UNTIL_FORK) : forkAuctionDetails.claimingAvailable ? 'Yes' : 'No'
 	const baseDisabledReason = disabledMessage ?? (accountState.address === undefined ? 'Connect a wallet before using fork and auction actions.' : !isMainnet ? 'Switch to Ethereum mainnet before using fork and auction actions.' : undefined)
-	const stagePresentation = getForkLifecycleStagePresentation(currentStage, forkStageDescription)
 	const childUniverseRequirements = [
 		{ key: 'pool', label: 'Forked pool loaded', resolved: hasLoadedPoolContext, ...(hasLoadedPoolContext ? {} : { detail: 'Load a forked pool before creating a child universe.' }) },
 		{ key: 'outcome', label: 'Outcome selected', resolved: forkAuctionForm.selectedOutcome !== undefined, ...(forkAuctionForm.selectedOutcome === undefined ? { detail: 'Select the outcome whose child universe you want to create.' } : {}) },
@@ -541,11 +519,9 @@ export function ForkAuctionSection({
 
 	const content = (
 		<>
-			<LifecycleStageBanner stage={stagePresentation} />
-			<WorkflowSummaryStrip currentStep={getStageLabel(currentStage)} steps={STAGE_VIEWS.map(stage => getStageLabel(stage))} title='Fork Workflow' />
-			<ReadOnlyDetailAccordion title='Pool Context'>
-				<div className='form-grid'>
-					{showSecurityPoolAddressInput ? (
+			{showSecurityPoolAddressInput ? (
+				<ReadOnlyDetailAccordion title='Pool Context'>
+					<div className='form-grid'>
 						<LookupFieldRow
 							label='Security Pool Address'
 							value={forkAuctionForm.securityPoolAddress}
@@ -557,13 +533,13 @@ export function ForkAuctionSection({
 								</button>
 							}
 						/>
-					) : undefined}
 
-					{hasLoadedPoolContext ? renderSummaryMetricGrid(poolSummaryMetrics) : <p className='detail'>Load a pool to inspect fork progress, migration, and the truth auction.</p>}
-					{disabledMessage === undefined ? undefined : <p className='detail'>{disabledMessage}</p>}
-					{forkStageDescription === undefined ? undefined : <p className='detail'>{forkStageDescription}</p>}
-				</div>
-			</ReadOnlyDetailAccordion>
+						{hasLoadedPoolContext ? renderSummaryMetricGrid(poolSummaryMetrics) : <p className='detail'>Load a pool to inspect fork progress, migration, and the truth auction.</p>}
+						{disabledMessage === undefined ? undefined : <p className='detail'>{disabledMessage}</p>}
+						{forkStageDescription === undefined ? undefined : <p className='detail'>{forkStageDescription}</p>}
+					</div>
+				</ReadOnlyDetailAccordion>
+			) : undefined}
 
 			{question === undefined ? undefined : (
 				<EntityCard title='Question' variant='record'>

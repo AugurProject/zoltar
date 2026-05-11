@@ -263,13 +263,13 @@ function createSecurityPoolSeedParameters(currentTimestamp: bigint): {
 		outcomeLabels: ['Yes', 'No'],
 		questionData: {
 			answerUnit: '',
-			description: 'Seeded simulation security pool',
+			description: '',
 			displayValueMax: 0n,
 			displayValueMin: 0n,
 			endTime: currentTimestamp + 365n * DAY_IN_SECONDS,
 			numTicks: 0n,
 			startTime: 0n,
-			title: 'Simulation security pool',
+			title: 'Will this resolve?',
 		},
 	}
 }
