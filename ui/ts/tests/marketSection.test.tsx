@@ -130,7 +130,7 @@ describe('MarketSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('renders the Zoltar title and view tabs in the same section header', async () => {
+	test('renders the Zoltar title without local view tabs in the section header', async () => {
 		const renderedComponent = await renderIntoDocument(h(MarketSection, createMarketSectionProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -140,18 +140,7 @@ describe('MarketSection', () => {
 
 		const sectionHeader = zoltarTitle.closest('.section-block-header')
 		if (sectionHeader === null) throw new Error('Expected Zoltar title to render inside a section header')
-
-		const tabList = sectionHeader.querySelector('[role="tablist"][aria-label="Zoltar views"]')
-		if (!(tabList instanceof HTMLElement)) throw new Error('Expected to find the Zoltar view tab list inside the section header')
-		expect(tabList.closest('.section-block-header')).toBe(sectionHeader)
-
-		const tabButtons = Array.from(tabList.querySelectorAll('[role="tab"]'))
-		const tabLabels = tabButtons.map(button => button.textContent?.trim() ?? '')
-		expect(tabLabels).toEqual(['Questions', 'Create Question', 'Fork Zoltar', 'Migrate REP'])
-
-		const migrateRepButton = tabButtons.find(button => button.textContent?.trim() === 'Migrate REP')
-		if (!(migrateRepButton instanceof HTMLButtonElement)) throw new Error('Expected to find the Migrate REP button')
-		expect(migrateRepButton.disabled).toBe(true)
+		expect(sectionHeader.querySelector('[role="tablist"][aria-label="Zoltar views"]')).toBeNull()
 	})
 
 	test('auto-loads questions once when opening the questions view without loaded data', async () => {

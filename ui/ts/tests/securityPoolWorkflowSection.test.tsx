@@ -343,7 +343,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Security pools' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Security pools' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Pool Summary' })).toBeNull()
 		expect(documentQueries.queryByText('Action Readiness')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Price Oracle' })).toBeNull()
@@ -356,6 +356,13 @@ describe('SecurityPoolWorkflowSection', () => {
 		if (!(selectedPoolContext instanceof HTMLElement)) {
 			throw new Error('Expected a non-sticky selected pool context card')
 		}
+		const lookupLabel = within(selectedPoolContext).getByText('Security Pool Address')
+		const firstSummaryMetric = within(selectedPoolContext).getByText('Total REP Deposited')
+		const lookupPosition = selectedPoolContext.textContent?.indexOf(lookupLabel.textContent ?? '') ?? -1
+		const summaryPosition = selectedPoolContext.textContent?.indexOf(firstSummaryMetric.textContent ?? '') ?? -1
+		expect(lookupPosition).toBeGreaterThanOrEqual(0)
+		expect(summaryPosition).toBeGreaterThanOrEqual(0)
+		expect(lookupPosition < summaryPosition).toBe(true)
 		expect(documentQueries.getByRole('heading', { name: 'Vault Operations' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Lookup' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Vault Summary' })).not.toBeNull()

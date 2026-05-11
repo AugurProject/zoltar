@@ -109,15 +109,6 @@ export type SectionBlockProps = {
 	variant?: 'default' | 'embedded'
 }
 
-export type TabbedSectionBlockProps = {
-	children: ComponentChildren
-	className?: string
-	description?: ComponentChildren
-	density?: 'balanced' | 'compact'
-	tabs: ComponentChildren
-	title: ComponentChildren
-}
-
 export type RouteWorkflowPanelProps = {
 	children: ComponentChildren
 	className?: string
@@ -257,6 +248,10 @@ export type TabNavigationProps = {
 	onRouteChange: (route: Exclude<Route, 'not-found'>) => void
 }
 
+export type ZoltarView = 'create' | 'fork' | 'migrate' | 'questions'
+
+export type SecurityPoolsView = 'browse' | 'create' | 'operate'
+
 export type MainnetGateSectionProps = {
 	message: string
 }
@@ -275,7 +270,7 @@ export type DeploymentRouteContentProps = {
 
 export type MarketRouteContentProps = {
 	accountState: AccountState
-	activeView: 'create' | 'fork' | 'migrate' | 'questions'
+	activeView: ZoltarView
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	onCreateMarket: () => void
@@ -286,7 +281,7 @@ export type MarketRouteContentProps = {
 	marketError: string | undefined
 	marketForm: MarketFormState
 	marketResult: MarketCreationResult | undefined
-	onActiveViewChange: (view: 'create' | 'fork' | 'migrate' | 'questions') => void
+	onActiveViewChange: (view: ZoltarView) => void
 	onResetMarket: () => void
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestions: boolean
@@ -417,7 +412,9 @@ export type SecurityPoolWorkflowRouteContentProps = {
 }
 
 export type SecurityPoolsSectionProps = {
+	activeView: SecurityPoolsView
 	createPool: SecurityPoolRouteContentProps
+	onActiveViewChange: (view: SecurityPoolsView) => void
 	overview: SecurityPoolsOverviewRouteContentProps
 	workflow: SecurityPoolWorkflowRouteContentProps
 }
@@ -504,7 +501,10 @@ export type OpenOracleRouteContentProps = {
 
 export type OpenOracleView = 'browse' | 'create' | 'selected-report'
 
-export type OpenOracleSectionProps = OpenOracleRouteContentProps & { initialView: OpenOracleView | undefined }
+export type OpenOracleSectionProps = OpenOracleRouteContentProps & {
+	activeView: OpenOracleView
+	onActiveViewChange: (view: OpenOracleView) => void
+}
 
 export type ReportingRouteContentProps = {
 	accountState: AccountState

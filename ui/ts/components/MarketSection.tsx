@@ -8,9 +8,7 @@ import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
 import { OperationModal } from './OperationModal.js'
 import { SectionBlock } from './SectionBlock.js'
-import { SectionModeTabs } from './SectionModeTabs.js'
 import { StickyObjectContext } from './StickyObjectContext.js'
-import { TabbedSectionBlock } from './TabbedSectionBlock.js'
 import type { LifecycleStagePresentation, ReadinessAction } from '../types/components.js'
 import { ZoltarMigrationSection } from './ZoltarMigrationSection.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -125,23 +123,9 @@ export function MarketSection({
 		})
 	}, [hasLoadedZoltarQuestions, loadingZoltarQuestions, onLoadZoltarQuestions, view, zoltarQuestionCount, zoltarUniverse?.universeId])
 
-	const renderModeTabs = () => (
-		<SectionModeTabs
-			ariaLabel='Zoltar views'
-			value={view}
-			onChange={onActiveViewChange}
-			options={[
-				{ label: 'Questions', value: 'questions' },
-				{ label: 'Create Question', value: 'create' },
-				{ label: 'Fork Zoltar', value: 'fork' },
-				{ label: 'Migrate REP', value: 'migrate', disabled: !hasForked, ...(!hasForked ? { reason: 'Fork Zoltar before migrating REP.' } : {}) },
-			]}
-		/>
-	)
-
 	return (
 		<div className='route-view-flow'>
-			<TabbedSectionBlock density='compact' tabs={renderModeTabs()} title='Zoltar'>
+			<SectionBlock density='compact' title='Zoltar'>
 				{showUniverseSummary ? (
 					<MarketOverviewSection
 						accountAddress={accountState.address}
@@ -169,7 +153,7 @@ export function MarketSection({
 						</div>
 					</DataGrid>
 				)}
-			</TabbedSectionBlock>
+			</SectionBlock>
 			<div className='workflow-stack route-workflow-stack'>
 				<StickyObjectContext
 					title='Universe Context'

@@ -25,10 +25,11 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 
 function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps> = {}): OpenOracleSectionProps {
 	return {
+		activeView: 'create',
 		accountState: createAccountState(),
-		initialView: 'create',
 		loadingOpenOracleCreate: false,
 		loadingOracleReport: false,
+		onActiveViewChange: () => undefined,
 		onApproveToken1: () => undefined,
 		onApproveToken2: () => undefined,
 		onCreateOpenOracleGame: () => undefined,
@@ -158,7 +159,7 @@ describe('OpenOracleSection route create view', () => {
 			h(
 				OpenOracleSection,
 				createOpenOracleSectionProps({
-					initialView: 'selected-report',
+					activeView: 'selected-report',
 					openOracleReportDetails: createOpenOracleReportDetails({
 						currentReporter: '0x3000000000000000000000000000000000000000',
 						currentTime: 100n,

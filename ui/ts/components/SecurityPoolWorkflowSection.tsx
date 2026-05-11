@@ -1,4 +1,3 @@
-import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'
 import { ActionLauncherCard } from './ActionLauncherCard.js'
@@ -8,7 +7,6 @@ import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
-import { LifecycleStageBanner } from './LifecycleStageBanner.js'
 import { LiquidationModal } from './LiquidationModal.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
@@ -248,11 +246,10 @@ export function SecurityPoolWorkflowSection({
 	securityPoolAddress,
 	securityPools,
 	securityVault,
-	modeTabs,
 	onSelectedPoolViewChange,
 	showHeader = true,
 	trading,
-}: SecurityPoolWorkflowRouteContentProps & { modeTabs?: ComponentChildren; showHeader?: boolean }) {
+}: SecurityPoolWorkflowRouteContentProps & { showHeader?: boolean }) {
 	const view = resolveSelectedPoolView(selectedPoolView)
 	const [manualPendingOperationId, setManualPendingOperationId] = useState('')
 	const [vaultView, setVaultView] = useState<SelectedVaultView>('selected-vault')
@@ -538,6 +535,17 @@ export function SecurityPoolWorkflowSection({
 					{ label: 'Primary Action', value: view === 'vaults' ? 'Vault operations' : view === 'trading' ? 'Trading' : view === 'reporting' ? 'Reporting' : 'Fork workflow' },
 				]}
 			>
+				<div className='selected-pool-context-controls'>
+					<div className='selected-pool-context-controls-row'>
+						<button className='secondary' onClick={() => onRefreshSelectedPoolData()} disabled={!hasSelectedPoolAddress || loadingSecurityPools}>
+							{loadingSecurityPools ? <LoadingText>Refreshing pool...</LoadingText> : 'Refresh pool'}
+						</button>
+					</div>
+					<div className='selected-pool-context-lookup'>
+						<LookupFieldRow label='Security Pool Address' value={securityPoolAddress} onInput={onSecurityPoolAddressChange} placeholder='0x...' />
+					</div>
+					{selectedPoolLookupPresentation === undefined ? undefined : <StateHint presentation={selectedPoolLookupPresentation} />}
+				</div>
 				{loadedSelectedPool === undefined ? undefined : (
 					<div className='selected-pool-context-summary'>
 						<div className='selected-pool-context-overview'>
@@ -600,103 +608,85 @@ export function SecurityPoolWorkflowSection({
 				)}
 			</StickyObjectContext>
 
-			<LifecycleStageBanner stage={selectedPoolStage} />
-
 			{view === 'reporting' ? <WorkflowSummaryStrip currentStep={reportingReady ? 'Reporting' : 'Awaiting Market End'} steps={['Pool selected', 'Market ends', 'Reporting', 'Withdrawals']} title='Reporting Workflow' /> : undefined}
 
 			{view === 'fork' ? <WorkflowSummaryStrip currentStep={selectedPoolState === 'operational' ? 'Operational' : 'Fork workflow'} steps={['Operational', 'Fork', 'Auction', 'Settlement']} title='Fork Workflow' /> : undefined}
 
 			<ResultBanner outcome={vaultWorkflowOutcome} />
 
-			<SectionBlock density='compact' title='Security pools' actions={<div className='actions'>{modeTabs}</div>}>
-				<LookupFieldRow
-					label='Security Pool Address'
-					value={securityPoolAddress}
-					onInput={onSecurityPoolAddressChange}
-					placeholder='0x...'
-					action={
-						<button className='secondary' onClick={() => onRefreshSelectedPoolData()} disabled={!hasSelectedPoolAddress || loadingSecurityPools}>
-							{loadingSecurityPools ? <LoadingText>Refreshing pool...</LoadingText> : 'Refresh pool'}
-						</button>
-					}
-				/>
-				{selectedPoolLookupPresentation === undefined ? undefined : <StateHint presentation={selectedPoolLookupPresentation} />}
-				{loadedSelectedPool === undefined ? undefined : (
-					<>
-						<SectionBlock density='compact' headingLevel={4} title='Pool Oracle & Pending Operations' variant='embedded'>
+			{loadedSelectedPool === undefined ? undefined : (
+				<SectionBlock density='compact' title='Pool Oracle & Pending Operations'>
+					<div className='workflow-metric-grid'>
+						<MetricField label='Set At'>
+							<TimestampValue timestamp={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp ?? 0n} zeroText='Never' />
+						</MetricField>
+						<MetricField label='Price Window'>{currentPoolOracleManagerDetails?.isPriceValid === undefined ? 'Load oracle details' : currentPoolOracleManagerDetails.isPriceValid ? 'Valid' : 'Expired'}</MetricField>
+						{currentPoolOracleManagerDetails === undefined ? undefined : (
+							<MetricField label='Request Cost'>
+								<CurrencyValue value={currentPoolOracleManagerDetails.requestPriceEthCost} suffix='ETH' />
+							</MetricField>
+						)}
+					</div>
+					<ErrorNotice message={poolOracleManagerError} />
+					{poolPriceOracleResult === undefined ? undefined : (
+						<p className='notice success'>
+							{poolPriceOracleResult.action === 'executeStagedOperation' ? 'Executed staged operation' : 'Requested price'}: <TransactionHashLink hash={poolPriceOracleResult.hash} />
+						</p>
+					)}
+					{currentPoolOracleManagerDetails === undefined ? <p className='detail'>Load the price oracle to inspect the latest settlement details.</p> : undefined}
+					{currentPoolOracleManagerDetails?.pendingOperation === undefined ? undefined : (
+						<SectionBlock density='compact' headingLevel={4} title='Queued Operation' variant='embedded'>
 							<div className='workflow-metric-grid'>
-								<MetricField label='Set At'>
-									<TimestampValue timestamp={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp ?? 0n} zeroText='Never' />
+								<MetricField label='Operation Id'>{currentPoolOracleManagerDetails.pendingOperation.operationId.toString()}</MetricField>
+								<MetricField label='Operation'>{getPendingOperationLabel(currentPoolOracleManagerDetails.pendingOperation.operation)}</MetricField>
+								<MetricField label='Initiator'>
+									<AddressValue address={currentPoolOracleManagerDetails.pendingOperation.initiatorVault} />
 								</MetricField>
-								<MetricField label='Price Window'>{currentPoolOracleManagerDetails?.isPriceValid === undefined ? 'Load oracle details' : currentPoolOracleManagerDetails.isPriceValid ? 'Valid' : 'Expired'}</MetricField>
-								{currentPoolOracleManagerDetails === undefined ? undefined : (
-									<MetricField label='Request Cost'>
-										<CurrencyValue value={currentPoolOracleManagerDetails.requestPriceEthCost} suffix='ETH' />
-									</MetricField>
-								)}
-							</div>
-							<ErrorNotice message={poolOracleManagerError} />
-							{poolPriceOracleResult === undefined ? undefined : (
-								<p className='notice success'>
-									{poolPriceOracleResult.action === 'executeStagedOperation' ? 'Executed staged operation' : 'Requested price'}: <TransactionHashLink hash={poolPriceOracleResult.hash} />
-								</p>
-							)}
-							{currentPoolOracleManagerDetails === undefined ? <p className='detail'>Load the price oracle to inspect the latest settlement details.</p> : undefined}
-							{currentPoolOracleManagerDetails?.pendingOperation === undefined ? undefined : (
-								<SectionBlock density='compact' headingLevel={4} title='Queued Operation' variant='embedded'>
-									<div className='workflow-metric-grid'>
-										<MetricField label='Operation Id'>{currentPoolOracleManagerDetails.pendingOperation.operationId.toString()}</MetricField>
-										<MetricField label='Operation'>{getPendingOperationLabel(currentPoolOracleManagerDetails.pendingOperation.operation)}</MetricField>
-										<MetricField label='Initiator'>
-											<AddressValue address={currentPoolOracleManagerDetails.pendingOperation.initiatorVault} />
-										</MetricField>
-										<MetricField label='Target Vault'>
-											<AddressValue address={currentPoolOracleManagerDetails.pendingOperation.targetVault} />
-										</MetricField>
-										<MetricField label='Amount'>
-											<CurrencyValue value={currentPoolOracleManagerDetails.pendingOperation.amount} />
-										</MetricField>
-									</div>
-								</SectionBlock>
-							)}
-							{currentPoolOracleManagerDetails === undefined ? undefined : (
-								<label className='field'>
-									<span>Staged Operation Id</span>
-									<FormInput value={manualPendingOperationId} onInput={event => setManualPendingOperationId(event.currentTarget.value)} placeholder={selectedPendingOperationId > 0n ? selectedPendingOperationId.toString() : '0'} />
-								</label>
-							)}
-							<div className='actions'>
-								<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
-									{loadingPoolOracleManager ? <LoadingText>Refreshing oracle...</LoadingText> : currentPoolOracleManagerDetails === undefined ? 'Load Price Oracle' : 'Refresh Oracle'}
-								</button>
-								{currentPoolOracleManagerDetails === undefined ? undefined : (
-									<>
-										<TransactionActionButton
-											idleLabel='Request New Price'
-											pendingLabel='Requesting new price...'
-											onClick={() => onRequestPoolPrice(loadedSelectedPool.managerAddress)}
-											pending={poolOracleActiveAction === 'requestPrice'}
-											tone='secondary'
-											availability={{ disabled: requestPriceGuardMessage !== undefined, reason: requestPriceGuardMessage }}
-										/>
-										<TransactionActionButton
-											idleLabel='Execute Staged Operation'
-											pendingLabel='Executing staged operation...'
-											onClick={() => {
-												if (resolvedPendingOperationId === undefined) return
-												onExecutePendingPoolOperation(loadedSelectedPool.managerAddress, resolvedPendingOperationId)
-											}}
-											pending={poolOracleActiveAction === 'executeStagedOperation'}
-											tone='secondary'
-											availability={{ disabled: executePendingOperationGuardMessage !== undefined, reason: executePendingOperationGuardMessage }}
-										/>
-									</>
-								)}
+								<MetricField label='Target Vault'>
+									<AddressValue address={currentPoolOracleManagerDetails.pendingOperation.targetVault} />
+								</MetricField>
+								<MetricField label='Amount'>
+									<CurrencyValue value={currentPoolOracleManagerDetails.pendingOperation.amount} />
+								</MetricField>
 							</div>
 						</SectionBlock>
-					</>
-				)}
-			</SectionBlock>
+					)}
+					{currentPoolOracleManagerDetails === undefined ? undefined : (
+						<label className='field'>
+							<span>Staged Operation Id</span>
+							<FormInput value={manualPendingOperationId} onInput={event => setManualPendingOperationId(event.currentTarget.value)} placeholder={selectedPendingOperationId > 0n ? selectedPendingOperationId.toString() : '0'} />
+						</label>
+					)}
+					<div className='actions'>
+						<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
+							{loadingPoolOracleManager ? <LoadingText>Refreshing oracle...</LoadingText> : currentPoolOracleManagerDetails === undefined ? 'Load Price Oracle' : 'Refresh Oracle'}
+						</button>
+						{currentPoolOracleManagerDetails === undefined ? undefined : (
+							<>
+								<TransactionActionButton
+									idleLabel='Request New Price'
+									pendingLabel='Requesting new price...'
+									onClick={() => onRequestPoolPrice(loadedSelectedPool.managerAddress)}
+									pending={poolOracleActiveAction === 'requestPrice'}
+									tone='secondary'
+									availability={{ disabled: requestPriceGuardMessage !== undefined, reason: requestPriceGuardMessage }}
+								/>
+								<TransactionActionButton
+									idleLabel='Execute Staged Operation'
+									pendingLabel='Executing staged operation...'
+									onClick={() => {
+										if (resolvedPendingOperationId === undefined) return
+										onExecutePendingPoolOperation(loadedSelectedPool.managerAddress, resolvedPendingOperationId)
+									}}
+									pending={poolOracleActiveAction === 'executeStagedOperation'}
+									tone='secondary'
+									availability={{ disabled: executePendingOperationGuardMessage !== undefined, reason: executePendingOperationGuardMessage }}
+								/>
+							</>
+						)}
+					</div>
+				</SectionBlock>
+			)}
 
 			{selectedPool === undefined || !selectedPoolUniverseMismatch ? undefined : (
 				<SectionBlock title='Universe Mismatch' tone='critical'>

@@ -1,7 +1,9 @@
 const UNIVERSE_QUERY_PARAM = 'universe'
 const SECURITY_POOL_QUERY_PARAM = 'securityPool'
 const ZOLTAR_VIEW_QUERY_PARAM = 'zoltarView'
+const SECURITY_POOLS_VIEW_QUERY_PARAM = 'securityPoolsView'
 const SELECTED_POOL_VIEW_QUERY_PARAM = 'selectedPoolView'
+const OPEN_ORACLE_VIEW_QUERY_PARAM = 'openOracleView'
 const OPEN_ORACLE_REPORT_ID_QUERY_PARAM = 'openOracleReportId'
 
 function readStringQueryParam(search: string, key: string) {
@@ -61,6 +63,14 @@ export function writeZoltarViewQueryParam(search: string, view: string | undefin
 	return writeStringQueryParam(search, ZOLTAR_VIEW_QUERY_PARAM, view)
 }
 
+export function readSecurityPoolsViewQueryParam(search: string) {
+	return readStringQueryParam(search, SECURITY_POOLS_VIEW_QUERY_PARAM)
+}
+
+export function writeSecurityPoolsViewQueryParam(search: string, view: string | undefined) {
+	return writeStringQueryParam(search, SECURITY_POOLS_VIEW_QUERY_PARAM, view)
+}
+
 export function readSelectedPoolViewQueryParam(search: string) {
 	return readStringQueryParam(search, SELECTED_POOL_VIEW_QUERY_PARAM)
 }
@@ -71,6 +81,14 @@ export function writeSelectedPoolViewQueryParam(search: string, view: string | u
 
 export function readOpenOracleReportIdQueryParam(search: string) {
 	return readStringQueryParam(search, OPEN_ORACLE_REPORT_ID_QUERY_PARAM)
+}
+
+export function readOpenOracleViewQueryParam(search: string) {
+	return readStringQueryParam(search, OPEN_ORACLE_VIEW_QUERY_PARAM)
+}
+
+export function writeOpenOracleViewQueryParam(search: string, view: string | undefined) {
+	return writeStringQueryParam(search, OPEN_ORACLE_VIEW_QUERY_PARAM, view)
 }
 
 export function writeOpenOracleReportIdQueryParam(search: string, reportId: string | undefined) {

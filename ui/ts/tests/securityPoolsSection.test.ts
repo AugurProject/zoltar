@@ -309,7 +309,9 @@ function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps>
 
 function createSecurityPoolsSectionProps(overrides: Partial<SecurityPoolsSectionProps> = {}): SecurityPoolsSectionProps {
 	return {
+		activeView: 'browse',
 		createPool: createCreatePoolProps(),
+		onActiveViewChange: () => undefined,
 		overview: createOverviewProps(),
 		workflow: createWorkflowProps(),
 		...overrides,
@@ -402,14 +404,14 @@ void describe('SecurityPoolsSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	void test('renders the header switch and hides the route summary in browse mode', async () => {
+	void test('hides the route summary in browse mode without rendering local route tabs', async () => {
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('tab', { name: 'Browse' })).not.toBeNull()
-		expect(documentQueries.getByRole('tab', { name: 'Create' })).not.toBeNull()
-		expect(documentQueries.getByRole('tab', { name: 'Operate' })).not.toBeNull()
+		expect(documentQueries.queryByRole('tab', { name: 'Browse' })).toBeNull()
+		expect(documentQueries.queryByRole('tab', { name: 'Create' })).toBeNull()
+		expect(documentQueries.queryByRole('tab', { name: 'Operate' })).toBeNull()
 		expect(documentQueries.queryByText('Mode')).toBeNull()
 		expect(document.body.querySelector('.route-summary-strip')).toBeNull()
 		expect(documentQueries.queryByText('Loaded pools')).toBeNull()
@@ -501,6 +503,7 @@ void describe('SecurityPoolsSection', () => {
 			h(
 				SecurityPoolsSection,
 				createSecurityPoolsSectionProps({
+					activeView: 'operate',
 					overview: createOverviewProps({
 						securityPools: [selectedPool],
 					}),
@@ -520,6 +523,22 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('Selected pool')).toBeNull()
 		expect(documentQueries.queryByText('Pool status')).toBeNull()
 		expect(documentQueries.queryByText('Next step')).toBeNull()
+		const selectedPoolContext = document.body.querySelector('.sticky-object-context.static')
+		if (!(selectedPoolContext instanceof HTMLElement)) {
+			throw new Error('Expected operate mode to render the selected pool context card')
+		}
+		const contextQueries = within(selectedPoolContext)
+		expect(contextQueries.queryByRole('tab', { name: 'Browse' })).toBeNull()
+		expect(contextQueries.queryByRole('tab', { name: 'Create' })).toBeNull()
+		expect(contextQueries.queryByRole('tab', { name: 'Operate' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Security pools' })).toBeNull()
+		const lookupLabel = contextQueries.getByText('Security Pool Address')
+		const summaryMetric = contextQueries.getByText('Total REP Deposited')
+		const lookupPosition = selectedPoolContext.textContent?.indexOf(lookupLabel.textContent ?? '') ?? -1
+		const summaryPosition = selectedPoolContext.textContent?.indexOf(summaryMetric.textContent ?? '') ?? -1
+		expect(lookupPosition).toBeGreaterThanOrEqual(0)
+		expect(summaryPosition).toBeGreaterThanOrEqual(0)
+		expect(lookupPosition < summaryPosition).toBe(true)
 	})
 
 	void test('keeps the route summary hidden in operate mode until the selected pool resolves', async () => {
@@ -527,6 +546,7 @@ void describe('SecurityPoolsSection', () => {
 			h(
 				SecurityPoolsSection,
 				createSecurityPoolsSectionProps({
+					activeView: 'operate',
 					workflow: createWorkflowProps({
 						securityPoolAddress: '0x0000000000000000000000000000000000000001',
 					}),

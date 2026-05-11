@@ -1,7 +1,20 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { readOpenOracleReportIdQueryParam, readSecurityPoolQueryParam, readUniverseQueryParam, readZoltarViewQueryParam, writeOpenOracleReportIdQueryParam, writeSecurityPoolQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '../lib/urlParams.js'
+import {
+	readOpenOracleReportIdQueryParam,
+	readOpenOracleViewQueryParam,
+	readSecurityPoolsViewQueryParam,
+	readSecurityPoolQueryParam,
+	readUniverseQueryParam,
+	readZoltarViewQueryParam,
+	writeOpenOracleReportIdQueryParam,
+	writeOpenOracleViewQueryParam,
+	writeSecurityPoolsViewQueryParam,
+	writeSecurityPoolQueryParam,
+	writeUniverseQueryParam,
+	writeZoltarViewQueryParam,
+} from '../lib/urlParams.js'
 
 void describe('url params', () => {
 	void test('reads a universe query param', () => {
@@ -38,5 +51,21 @@ void describe('url params', () => {
 		expect(writeZoltarViewQueryParam('', 'questions')).toBe('?zoltarView=questions')
 		expect(writeZoltarViewQueryParam('?foo=bar', 'questions')).toBe('?foo=bar&zoltarView=questions')
 		expect(writeZoltarViewQueryParam('?foo=bar&zoltarView=questions', undefined)).toBe('?foo=bar')
+	})
+
+	void test('reads and writes a security pools view query param', () => {
+		expect(readSecurityPoolsViewQueryParam('?securityPoolsView=operate')).toBe('operate')
+		expect(readSecurityPoolsViewQueryParam('?securityPoolsView=')).toBe(undefined)
+		expect(writeSecurityPoolsViewQueryParam('', 'operate')).toBe('?securityPoolsView=operate')
+		expect(writeSecurityPoolsViewQueryParam('?foo=bar', 'operate')).toBe('?foo=bar&securityPoolsView=operate')
+		expect(writeSecurityPoolsViewQueryParam('?foo=bar&securityPoolsView=operate', undefined)).toBe('?foo=bar')
+	})
+
+	void test('reads and writes an open oracle view query param', () => {
+		expect(readOpenOracleViewQueryParam('?openOracleView=selected-report')).toBe('selected-report')
+		expect(readOpenOracleViewQueryParam('?openOracleView=')).toBe(undefined)
+		expect(writeOpenOracleViewQueryParam('', 'selected-report')).toBe('?openOracleView=selected-report')
+		expect(writeOpenOracleViewQueryParam('?foo=bar', 'selected-report')).toBe('?foo=bar&openOracleView=selected-report')
+		expect(writeOpenOracleViewQueryParam('?foo=bar&openOracleView=selected-report', undefined)).toBe('?foo=bar')
 	})
 })

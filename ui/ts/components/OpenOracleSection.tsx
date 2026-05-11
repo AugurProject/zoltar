@@ -19,11 +19,9 @@ import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { RequirementsChecklist } from './RequirementsChecklist.js'
 import { ResultBanner } from './ResultBanner.js'
 import { RouteHeader } from './RouteHeader.js'
-import { SectionModeTabs } from './SectionModeTabs.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StickyObjectContext } from './StickyObjectContext.js'
 import { StateHint } from './StateHint.js'
-import { TabbedSectionBlock } from './TabbedSectionBlock.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -45,10 +43,9 @@ import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
 import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
 import { loadOpenOracleReportSummaries } from '../contracts.js'
 import { getReportPresentation } from '../lib/userCopy.js'
-import { resolveFirstMatchingValue } from '../lib/viewState.js'
 import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
-import type { OpenOracleSectionProps, OpenOracleView, ReadinessBlocker, WorkflowOutcomePresentation } from '../types/components.js'
+import type { OpenOracleSectionProps, ReadinessBlocker, WorkflowOutcomePresentation } from '../types/components.js'
 
 const BROWSE_PAGE_SIZE = 10
 type SelectedReportModal = 'dispute' | 'initial-report' | 'settle' | undefined
@@ -358,7 +355,6 @@ function renderReportDetailsCard(
 	openOracleForm: OpenOracleFormState,
 	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction'],
-	modeTabs: ComponentChildren,
 	loadingOracleReport: boolean,
 	isConnected: boolean,
 	selectedReportModal: SelectedReportModal,
@@ -394,7 +390,7 @@ function renderReportDetailsCard(
 			state: loadingOracleReport ? 'loading' : openOracleForm.reportId.trim() === '' ? 'unknown' : 'missing',
 		})
 		return (
-			<SectionBlock actions={modeTabs} title='Selected Report'>
+			<SectionBlock title='Selected Report'>
 				{reportControls}
 				{reportPresentation === undefined ? undefined : <StateHint presentation={reportPresentation} />}
 			</SectionBlock>
@@ -470,7 +466,7 @@ function renderReportDetailsCard(
 					))}
 				</div>
 			</SectionBlock>
-			<SectionBlock actions={modeTabs} badge={<span className={`badge ${statusTone}`}>{status}</span>} title='Selected Report'>
+			<SectionBlock badge={<span className={`badge ${statusTone}`}>{status}</span>} title='Selected Report'>
 				{reportControls}
 				<DataGrid className='question-summary-grid'>
 					{renderReportField('Report ID', openOracleReportDetails.reportId.toString())}
@@ -766,6 +762,7 @@ function getOpenOracleOutcomePresentation(action: OpenOracleSectionProps['openOr
 }
 
 export function OpenOracleSection({
+	activeView,
 	accountState,
 	loadingOracleReport,
 	onApproveToken1,
@@ -787,17 +784,9 @@ export function OpenOracleSection({
 	openOracleInitialReportState,
 	openOracleReportDetails,
 	openOracleResult,
-	initialView,
+	onActiveViewChange,
 }: OpenOracleSectionProps) {
-	const [view, setView] = useState<OpenOracleView>(() =>
-		resolveFirstMatchingValue<OpenOracleView>(
-			[
-				[initialView !== undefined, initialView ?? 'browse'],
-				[openOracleForm.reportId !== '', 'selected-report'],
-			],
-			'browse',
-		),
-	)
+	const view = activeView
 	const [browsePage, setBrowsePage] = useState<OpenOracleReportSummaryPage | undefined>(undefined)
 	const [browseError, setBrowseError] = useState<string | undefined>(undefined)
 	const [browsePageIndex, setBrowsePageIndex] = useState(0)
@@ -807,12 +796,6 @@ export function OpenOracleSection({
 	const browseLoad = useLoadController()
 	const isConnected = accountState.address !== undefined
 	const openOracleOutcome = getOpenOracleOutcomePresentation(openOracleResult)
-
-	useEffect(() => {
-		if (initialView !== undefined) {
-			setView(initialView)
-		}
-	}, [initialView])
 
 	useEffect(() => {
 		let cancelled = false
@@ -875,22 +858,9 @@ export function OpenOracleSection({
 		{ key: 'settlement-time', label: 'Settlement time provided', resolved: openOracleCreateForm.settlementTime.trim() !== '', ...(openOracleCreateForm.settlementTime.trim() !== '' ? {} : { detail: 'Enter the settlement time.' }) },
 		{ key: 'multiplier', label: 'Multiplier provided', resolved: openOracleCreateForm.multiplier.trim() !== '', ...(openOracleCreateForm.multiplier.trim() !== '' ? {} : { detail: 'Enter the multiplier.' }) },
 	]
-	const renderModeTabs = () => (
-		<SectionModeTabs
-			ariaLabel='Open Oracle views'
-			value={view}
-			onChange={setView}
-			options={[
-				{ label: 'Browse', value: 'browse' },
-				{ label: 'Create', value: 'create' },
-				{ label: 'Selected Report', value: 'selected-report' },
-			]}
-		/>
-	)
-
 	const openBrowseReport = async (reportId: bigint) => {
 		onOpenOracleFormChange({ reportId: reportId.toString() })
-		setView('selected-report')
+		onActiveViewChange('selected-report')
 		await onLoadOracleReport(reportId.toString())
 	}
 
@@ -925,7 +895,6 @@ export function OpenOracleSection({
 					<SectionBlock
 						actions={
 							<div className='actions'>
-								{renderModeTabs()}
 								<button className='secondary' type='button' onClick={() => setBrowsePageIndex(current => Math.max(0, current - 1))} disabled={!browseHasPreviousPage || loadingBrowse}>
 									Previous Page
 								</button>
@@ -979,10 +948,10 @@ export function OpenOracleSection({
 					{openOracleResult?.action !== 'createReportInstance' ? undefined : (
 						<SectionBlock title='Create Success' description='The report instance was created successfully.'>
 							<div className='actions'>
-								<button className='primary' type='button' onClick={() => setView('browse')}>
+								<button className='primary' type='button' onClick={() => onActiveViewChange('browse')}>
 									Return to Browse
 								</button>
-								<button className='secondary' type='button' onClick={() => setView('create')}>
+								<button className='secondary' type='button' onClick={() => onActiveViewChange('create')}>
 									Create Another
 								</button>
 							</div>
@@ -992,7 +961,7 @@ export function OpenOracleSection({
 					<SectionBlock title='Requirements' description='Resolve these checks before creating a new Open Oracle game.'>
 						<RequirementsChecklist items={createRequirements} />
 					</SectionBlock>
-					<TabbedSectionBlock tabs={renderModeTabs()} title='Create Open Oracle Game' description='Create a standalone Open Oracle game directly. This does not queue an oracle-manager operation.'>
+					<SectionBlock title='Create Open Oracle Game' description='Create a standalone Open Oracle game directly. This does not queue an oracle-manager operation.'>
 						<div className='form-grid'>
 							<SectionBlock headingLevel={4} title='Token Pair' variant='embedded'>
 								<div className='field-row'>
@@ -1061,7 +1030,7 @@ export function OpenOracleSection({
 								<TransactionActionButton idleLabel='Create Open Oracle Game' pendingLabel='Creating...' onClick={onCreateOpenOracleGame} pending={loadingOpenOracleCreate} availability={{ disabled: !isConnected, reason: !isConnected ? 'Connect a wallet before creating an Open Oracle game.' : undefined }} />
 							</div>
 						</div>
-					</TabbedSectionBlock>
+					</SectionBlock>
 					<ErrorNotice message={openOracleError} />
 				</div>
 			) : undefined}
@@ -1073,7 +1042,6 @@ export function OpenOracleSection({
 						openOracleForm,
 						openOracleInitialReportState,
 						openOracleActiveAction,
-						renderModeTabs(),
 						loadingOracleReport,
 						isConnected,
 						selectedReportModal,

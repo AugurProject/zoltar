@@ -3,6 +3,7 @@ import type { Address, Hash } from 'viem'
 import { AppHeaderShell } from './components/AppHeaderShell.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
 import { AppStatusNotices } from './components/AppStatusNotices.js'
+import { RouteSubNavigation } from './components/RouteSubNavigation.js'
 import { useAppRouteEffects } from './hooks/useAppRouteEffects.js'
 import { useDeploymentFlow } from './hooks/useDeploymentFlow.js'
 import { useForkAuctionOperations } from './hooks/useForkAuctionOperations.js'
@@ -27,16 +28,21 @@ import { getUseQuestionForPoolState } from './lib/securityPoolNavigation.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
 import type { TransactionState } from './lib/transactionState.js'
 import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
+import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam, writeZoltarViewQueryParam } from './lib/urlParams.js'
 import { getUniversePresentation, getWalletPresentation } from './lib/userCopy.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
-import { resolveEnumValue } from './lib/viewState.js'
-import type { DeploymentRouteContentProps, MarketRouteContentProps, OpenOracleSectionProps, SecurityPoolsSectionProps } from './types/components.js'
+import { resolveEnumValue, resolveFirstMatchingValue } from './lib/viewState.js'
+import type { DeploymentRouteContentProps, MarketRouteContentProps, OpenOracleSectionProps, OpenOracleView, SecurityPoolsSectionProps, SecurityPoolsView, ZoltarView } from './types/components.js'
+
+function getRouteHref(routeHash: string, nextSearch: string) {
+	return `${window.location.pathname}${nextSearch}${routeHash}`
+}
 
 export function App() {
 	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
 	const deployNextMissingPending = useSignal(false)
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setSecurityPoolAddress, setSelectedPoolView, setZoltarView, zoltarView } = useUrlState()
-	const activeZoltarView = resolveEnumValue<'questions' | 'create' | 'fork' | 'migrate'>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
+	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, openOracleView, securityPoolsView, securityPoolAddress, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setOpenOracleView, setSecurityPoolsView, setSecurityPoolAddress, setSelectedPoolView, setZoltarView, zoltarView } = useUrlState()
+	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
 	const onTransaction = (hash: Hash) => {
 		transactionState.value = {
 			...transactionState.value,
@@ -281,6 +287,16 @@ export function App() {
 		onRouteChange: navigate,
 	}
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
+	const derivedSecurityPoolsView = resolveFirstMatchingValue<SecurityPoolsView>(
+		[
+			[securityPoolAddress !== '', 'operate'],
+			[securityPoolForm.marketId !== '' || marketDetails !== undefined || securityPoolResult !== undefined, 'create'],
+		],
+		'browse',
+	)
+	const activeSecurityPoolsView = resolveEnumValue<SecurityPoolsView>(securityPoolsView, derivedSecurityPoolsView, ['browse', 'create', 'operate'])
+	const derivedOpenOracleView = resolveFirstMatchingValue<OpenOracleView>([[urlOpenOracleReportId !== '' || openOracleForm.reportId !== '', 'selected-report']], 'browse')
+	const activeOpenOracleView = resolveEnumValue<OpenOracleView>(openOracleView, derivedOpenOracleView, ['browse', 'create', 'selected-report'])
 	const refreshSelectedPoolData = (requestedSecurityPoolAddress?: string) => {
 		const nextSecurityPoolAddress = requestedSecurityPoolAddress ?? securityPoolAddress
 		if (!walletBootstrapComplete) return
@@ -303,6 +319,7 @@ export function App() {
 			...current,
 			marketId,
 		}))
+		setSecurityPoolsView('create')
 		setSecurityPoolAddress(securityPoolAddress)
 		navigate('security-pools')
 	}
@@ -389,6 +406,7 @@ export function App() {
 	}
 
 	const securityPoolsRouteContentProps: SecurityPoolsSectionProps = {
+		activeView: activeSecurityPoolsView,
 		createPool: {
 			accountState,
 			checkingDuplicateOriginPool,
@@ -411,6 +429,7 @@ export function App() {
 			repPerEthSource,
 			repPerEthSourceUrl,
 		},
+		onActiveViewChange: view => setSecurityPoolsView(view),
 		overview: {
 			accountState,
 			checkedSecurityPoolAddress,
@@ -481,6 +500,7 @@ export function App() {
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
 			onSelectedPoolViewChange: setSelectedPoolView,
 			onViewPendingReport: reportId => {
+				setOpenOracleView('selected-report')
 				setOpenOracleForm(current => ({ ...current, reportId: reportId.toString() }))
 				navigate('open-oracle')
 				void loadOracleReport(reportId.toString())
@@ -560,8 +580,8 @@ export function App() {
 	}
 
 	const openOracleRouteContentProps: OpenOracleSectionProps = {
+		activeView: activeOpenOracleView,
 		accountState,
-		initialView: urlOpenOracleReportId === '' && openOracleForm.reportId === '' ? 'browse' : 'selected-report',
 		loadingOracleReport,
 		onApproveToken1: amount => void approveToken1(amount),
 		onApproveToken2: amount => void approveToken2(amount),
@@ -572,6 +592,7 @@ export function App() {
 			void loadOracleReport(reportId)
 		},
 		onRefreshPrice: refreshPrice,
+		onActiveViewChange: view => setOpenOracleView(view),
 		onOpenOracleCreateFormChange: update => setOpenOracleCreateForm(current => ({ ...current, ...update })),
 		onOpenOracleFormChange: update => setOpenOracleForm(current => ({ ...current, ...update })),
 		onSettleReport: () => void settleReport(),
@@ -587,6 +608,48 @@ export function App() {
 		openOracleResult,
 	}
 
+	const routeSubNavigation =
+		route === 'zoltar' ? (
+			<RouteSubNavigation
+				ariaLabel='Zoltar views'
+				value={activeZoltarView}
+				onChange={view => setZoltarView(view)}
+				options={[
+					{ href: getRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(window.location.search, 'questions')), label: 'Questions', value: 'questions' },
+					{ href: getRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(window.location.search, 'create')), label: 'Create Question', value: 'create' },
+					{ href: getRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(window.location.search, 'fork')), label: 'Fork Zoltar', value: 'fork' },
+					{
+						label: 'Migrate REP',
+						value: 'migrate',
+						disabled: zoltarUniverse?.hasForked !== true,
+						...(zoltarUniverse?.hasForked === true ? { href: getRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(window.location.search, 'migrate')) } : { reason: 'Fork Zoltar before migrating REP.' }),
+					},
+				]}
+			/>
+		) : route === 'security-pools' ? (
+			<RouteSubNavigation
+				ariaLabel='Security Pools views'
+				value={activeSecurityPoolsView}
+				onChange={view => setSecurityPoolsView(view)}
+				options={[
+					{ href: getRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(window.location.search, 'browse')), label: 'Browse', value: 'browse' },
+					{ href: getRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(window.location.search, 'create')), label: 'Create', value: 'create' },
+					{ href: getRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(window.location.search, 'operate')), label: 'Operate', value: 'operate' },
+				]}
+			/>
+		) : route === 'open-oracle' ? (
+			<RouteSubNavigation
+				ariaLabel='Open Oracle views'
+				value={activeOpenOracleView}
+				onChange={view => setOpenOracleView(view)}
+				options={[
+					{ href: getRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(window.location.search, 'browse')), label: 'Browse', value: 'browse' },
+					{ href: getRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(window.location.search, 'create')), label: 'Create', value: 'create' },
+					{ href: getRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(window.location.search, 'selected-report')), label: 'Selected Report', value: 'selected-report' },
+				]}
+			/>
+		) : undefined
+
 	return (
 		<main>
 			<AppStatusNotices
@@ -600,7 +663,7 @@ export function App() {
 				walletPresentation={walletPresentation}
 				zoltarUniverse={zoltarUniverse}
 			/>
-			<AppHeaderShell overview={overviewProps} simulationController={simulationController} tabNavigation={tabNavigationProps} onRefresh={refreshSimulationView} />
+			<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onRefresh={refreshSimulationView} />
 
 			<fieldset className='route-shell' disabled={isRouteContentDisabled}>
 				<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} route={route} securityPools={securityPoolsRouteContentProps} wrongNetworkMessage={wrongNetworkMessage} />
