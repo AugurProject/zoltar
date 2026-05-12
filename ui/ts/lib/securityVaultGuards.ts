@@ -1,6 +1,6 @@
 import type { Address } from 'viem'
 import { formatCurrencyBalance } from './formatters.js'
-import { MIN_SECURITY_VAULT_REP_DEPOSIT } from './securityVault.js'
+import { MIN_SECURITY_BOND_ALLOWANCE, MIN_SECURITY_VAULT_REP_DEPOSIT } from './securityVault.js'
 import { getWalletPresentation } from './userCopy.js'
 
 export function getVaultApprovalGuardMessage({ accountAddress, isMainnet, selectedVaultDetailsLoaded, selectedVaultIsOwnedByAccount }: { accountAddress: Address | undefined; isMainnet: boolean; selectedVaultDetailsLoaded: boolean; selectedVaultIsOwnedByAccount: boolean }) {
@@ -66,12 +66,14 @@ export function getVaultWithdrawGuardMessage({
 export function getVaultSetSecurityBondAllowanceGuardMessage({
 	hasValidOraclePrice,
 	isMainnet,
+	maxSecurityBondAllowanceAmount,
 	securityBondAllowanceAmount,
 	selectedVaultDetailsLoaded,
 	selectedVaultIsOwnedByAccount,
 }: {
 	hasValidOraclePrice: boolean
 	isMainnet: boolean
+	maxSecurityBondAllowanceAmount: bigint | undefined
 	securityBondAllowanceAmount: bigint | undefined
 	selectedVaultDetailsLoaded: boolean
 	selectedVaultIsOwnedByAccount: boolean
@@ -81,6 +83,10 @@ export function getVaultSetSecurityBondAllowanceGuardMessage({
 	if (!selectedVaultDetailsLoaded) return 'Refresh the vault before setting the security bond allowance.'
 	if (!hasValidOraclePrice) return 'A valid oracle price is required before setting the security bond allowance.'
 	if (securityBondAllowanceAmount === undefined || securityBondAllowanceAmount <= 0n) return 'Enter a security bond allowance greater than zero.'
+	if (securityBondAllowanceAmount < MIN_SECURITY_BOND_ALLOWANCE) return `Enter at least ${formatCurrencyBalance(MIN_SECURITY_BOND_ALLOWANCE)} ETH for a non-zero allowance.`
+	if (maxSecurityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > maxSecurityBondAllowanceAmount) {
+		return `Reduce the security bond allowance to ${formatCurrencyBalance(maxSecurityBondAllowanceAmount)} ETH or less.`
+	}
 	return undefined
 }
 

@@ -900,6 +900,64 @@ describe('SecurityPoolWorkflowSection', () => {
 		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Reduce the withdrawal to 2 500 REP or less.')
 	})
 
+	test('fills the set bond allowance input from the backed Max amount', async () => {
+		const selectedPoolAddress = zeroAddress
+		const formChanges: Array<{ securityBondAllowanceAmount?: string }> = []
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+						lastPrice: 3n * 10n ** 18n,
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [
+						createSelectedPool({
+							managerAddress: zeroAddress,
+							securityPoolAddress: selectedPoolAddress,
+							totalRepDeposit: 9n * 10n ** 18n,
+							totalSecurityBondAllowance: 2n * 10n ** 18n,
+						}),
+					],
+					securityVault: createSecurityVaultProps({
+						onSecurityVaultFormChange: update => {
+							formChanges.push(update)
+						},
+						securityVaultDetails: createSecurityVaultDetails({
+							repDepositShare: 12n * 10n ** 18n,
+							securityBondAllowance: 1n * 10n ** 18n,
+							securityPoolAddress: selectedPoolAddress,
+							totalSecurityBondAllowance: 2n * 10n ** 18n,
+						}),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set Bond Allowance' })[0] as HTMLElement)
+		})
+
+		const allowanceDialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
+		await act(() => {
+			fireEvent.click(within(allowanceDialog).getByRole('button', { name: 'Security Bond Allowance Amount' }))
+		})
+
+		expect(formChanges.at(-1)).toEqual({ securityBondAllowanceAmount: '1.999999999999999999' })
+	})
+
 	test('hides the truth auction metric when the selected pool has no truth auction address', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection

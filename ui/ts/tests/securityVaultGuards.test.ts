@@ -82,11 +82,34 @@ describe('security vault guards', () => {
 			getVaultSetSecurityBondAllowanceGuardMessage({
 				hasValidOraclePrice: true,
 				isMainnet: true,
+				maxSecurityBondAllowanceAmount: undefined,
 				securityBondAllowanceAmount: 0n,
 				selectedVaultDetailsLoaded: true,
 				selectedVaultIsOwnedByAccount: true,
 			}),
 		).toBe('Enter a security bond allowance greater than zero.')
+
+		expect(
+			getVaultSetSecurityBondAllowanceGuardMessage({
+				hasValidOraclePrice: true,
+				isMainnet: true,
+				maxSecurityBondAllowanceAmount: 5n * 10n ** 18n,
+				securityBondAllowanceAmount: 5n * 10n ** 17n,
+				selectedVaultDetailsLoaded: true,
+				selectedVaultIsOwnedByAccount: true,
+			}),
+		).toBe('Enter at least 1 ETH for a non-zero allowance.')
+
+		expect(
+			getVaultSetSecurityBondAllowanceGuardMessage({
+				hasValidOraclePrice: true,
+				isMainnet: true,
+				maxSecurityBondAllowanceAmount: 5n * 10n ** 18n,
+				securityBondAllowanceAmount: 6n * 10n ** 18n,
+				selectedVaultDetailsLoaded: true,
+				selectedVaultIsOwnedByAccount: true,
+			}),
+		).toBe('Reduce the security bond allowance to 5 ETH or less.')
 
 		expect(
 			getVaultClaimFeesGuardMessage({

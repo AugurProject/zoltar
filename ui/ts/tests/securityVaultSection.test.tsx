@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '@testing-library/dom'
+import { fireEvent, within } from '@testing-library/dom'
 import { zeroAddress } from 'viem'
 import { SecurityVaultSection } from '../components/SecurityVaultSection.js'
 import type { AccountState } from '../types/app.js'
@@ -102,5 +102,45 @@ describe('SecurityVaultSection', () => {
 		expect(documentQueries.getByText('Selected Vault')).not.toBeNull()
 		expect(documentQueries.getAllByText('Approved REP').length).toBeGreaterThan(0)
 		expect(documentQueries.getAllByText('Locked REP').length).toBeGreaterThan(0)
+	})
+
+	test('fills the security bond allowance input from the backed Max amount', async () => {
+		const formChanges: Partial<SecurityVaultSectionProps['securityVaultForm']>[] = []
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					onSecurityVaultFormChange: update => {
+						formChanges.push(update)
+					},
+					oracleManagerDetails: {
+						callbackStateHash: undefined,
+						exactToken1Report: undefined,
+						isPriceValid: true,
+						lastPrice: 3n * 10n ** 18n,
+						lastSettlementTimestamp: 1n,
+						managerAddress: zeroAddress,
+						openOracleAddress: zeroAddress,
+						pendingOperation: undefined,
+						pendingOperationSlotId: 0n,
+						pendingReportId: 0n,
+						priceValidUntilTimestamp: 10n,
+						requestPriceEthCost: 0n,
+						token1: undefined,
+						token2: undefined,
+					},
+					securityVaultDetails: createSecurityVaultDetails({
+						repDepositShare: 6n * 10n ** 18n,
+						securityBondAllowance: 0n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+
+		fireEvent.click(documentQueries.getAllByRole('button', { name: 'Security Bond Allowance Amount' })[0] as HTMLElement)
+
+		expect(formChanges.at(-1)).toEqual({ securityBondAllowanceAmount: '1.999999999999999999' })
 	})
 })

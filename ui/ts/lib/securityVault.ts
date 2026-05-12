@@ -3,6 +3,7 @@ import type { OracleManagerDetails } from '../types/contracts.js'
 import { sameAddress } from './address.js'
 
 export const MIN_SECURITY_VAULT_REP_DEPOSIT = 10n * 10n ** 18n
+export const MIN_SECURITY_BOND_ALLOWANCE = 1n * 10n ** 18n
 export const ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS = 60n * 60n
 const PRICE_PRECISION = 10n ** 18n
 
@@ -34,6 +35,14 @@ function getAllowanceBackedRepFloor(securityBondAllowance: bigint | undefined, r
 	return divideBigintRoundUp(securityBondAllowance * repPerEthPrice, PRICE_PRECISION)
 }
 
+function getBackedAllowanceCeiling(repAmount: bigint | undefined, repPerEthPrice: bigint | undefined) {
+	if (repAmount === undefined || repAmount <= 0n) return 0n
+	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return 0n
+	const repCapacity = repAmount * PRICE_PRECISION
+	if (repCapacity <= 0n) return 0n
+	return (repCapacity - 1n) / repPerEthPrice
+}
+
 export function getSecurityVaultWithdrawableRepAmount({
 	lockedRepInEscalationGame,
 	repDepositShare,
@@ -60,6 +69,31 @@ export function getSecurityVaultWithdrawableRepAmount({
 		maxWithdrawableRep = maxWithdrawableRep < maxGlobalWithdrawal ? maxWithdrawableRep : maxGlobalWithdrawal
 	}
 	return maxWithdrawableRep
+}
+
+export function getSecurityVaultMaxBondAllowanceAmount({
+	currentSecurityBondAllowance,
+	repDepositShare,
+	repPerEthPrice,
+	totalRepDeposit,
+	totalSecurityBondAllowance,
+}: {
+	currentSecurityBondAllowance?: bigint | undefined
+	repDepositShare: bigint | undefined
+	repPerEthPrice: bigint | undefined
+	totalRepDeposit?: bigint | undefined
+	totalSecurityBondAllowance?: bigint | undefined
+}) {
+	const localAllowanceCeiling = getBackedAllowanceCeiling(repDepositShare, repPerEthPrice)
+	let maxBondAllowanceAmount = localAllowanceCeiling
+	if (totalRepDeposit !== undefined && totalSecurityBondAllowance !== undefined) {
+		const currentAllowance = currentSecurityBondAllowance ?? 0n
+		const otherVaultAllowance = totalSecurityBondAllowance > currentAllowance ? totalSecurityBondAllowance - currentAllowance : 0n
+		const globalAllowanceCeiling = getBackedAllowanceCeiling(totalRepDeposit, repPerEthPrice)
+		const remainingPoolAllowance = globalAllowanceCeiling > otherVaultAllowance ? globalAllowanceCeiling - otherVaultAllowance : 0n
+		maxBondAllowanceAmount = maxBondAllowanceAmount < remainingPoolAllowance ? maxBondAllowanceAmount : remainingPoolAllowance
+	}
+	return maxBondAllowanceAmount
 }
 
 export function getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp: bigint | undefined) {

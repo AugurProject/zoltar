@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from 'viem'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
-import { getOracleManagerPriceValidUntilTimestamp, getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount, MIN_SECURITY_VAULT_REP_DEPOSIT, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
+import { getOracleManagerPriceValidUntilTimestamp, getSecurityVaultMaxBondAllowanceAmount, getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount, MIN_SECURITY_VAULT_REP_DEPOSIT, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { loadSecurityVaultDetails } from '../contracts.js'
 
@@ -65,6 +65,25 @@ void describe('security vault helpers', () => {
 		expect(getOracleManagerPriceValidUntilTimestamp(undefined)).toBe(undefined)
 		expect(getOracleManagerPriceValidUntilTimestamp(0n)).toBe(undefined)
 		expect(getOracleManagerPriceValidUntilTimestamp(15n)).toBe(15n + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS)
+	})
+
+	void test('caps max security bond allowance by both vault backing and remaining pool backing', () => {
+		expect(
+			getSecurityVaultMaxBondAllowanceAmount({
+				currentSecurityBondAllowance: 1n * 10n ** 18n,
+				repDepositShare: 12n * 10n ** 18n,
+				repPerEthPrice: 3n * 10n ** 18n,
+				totalRepDeposit: 9n * 10n ** 18n,
+				totalSecurityBondAllowance: 2n * 10n ** 18n,
+			}),
+		).toBe(1_999_999_999_999_999_999n)
+		expect(
+			getSecurityVaultMaxBondAllowanceAmount({
+				currentSecurityBondAllowance: 0n,
+				repDepositShare: 6n * 10n ** 18n,
+				repPerEthPrice: 3n * 10n ** 18n,
+			}),
+		).toBe(1_999_999_999_999_999_999n)
 	})
 
 	void test('returns undefined for a missing security pool without reading contract state', async () => {

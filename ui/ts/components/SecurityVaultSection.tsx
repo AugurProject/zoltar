@@ -22,7 +22,7 @@ import { parseRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getVaultApprovalGuardMessage, getVaultClaimFeesGuardMessage, getVaultDepositGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
-import { getSecurityVaultWithdrawableRepAmount, getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
+import { getSecurityVaultMaxBondAllowanceAmount, getSecurityVaultWithdrawableRepAmount, getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
 type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'securityVaultRepApproval' | 'selectedPoolSecurityMultiplier'> & {
@@ -136,6 +136,13 @@ export function SecurityVaultSection({
 		repPerEthPrice: hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined,
 		securityBondAllowance: securityVaultDetails?.securityBondAllowance,
 	})
+	const maxSecurityBondAllowanceAmount = getSecurityVaultMaxBondAllowanceAmount({
+		currentSecurityBondAllowance: securityVaultDetails?.securityBondAllowance,
+		repDepositShare: securityVaultDetails?.repDepositShare,
+		repPerEthPrice: hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined,
+		totalRepDeposit: securityVaultDetails?.repDepositShare,
+		totalSecurityBondAllowance: securityVaultDetails?.securityBondAllowance,
+	})
 	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(securityVaultDetails?.repDepositShare, depositAmount)
 	const hasClaimableFees = securityVaultDetails !== undefined && securityVaultDetails.unpaidEthFees > 0n
 	const canClaimFees = selectedVaultIsOwnedByAccount && isMainnet && hasClaimableFees
@@ -151,6 +158,7 @@ export function SecurityVaultSection({
 	const setSecurityBondAllowanceGuardMessage = getVaultSetSecurityBondAllowanceGuardMessage({
 		hasValidOraclePrice,
 		isMainnet,
+		maxSecurityBondAllowanceAmount,
 		securityBondAllowanceAmount,
 		selectedVaultDetailsLoaded: securityVaultDetails !== undefined,
 		selectedVaultIsOwnedByAccount,
@@ -339,7 +347,12 @@ export function SecurityVaultSection({
 						</div>
 						<label className='field'>
 							<span>Security Bond Allowance Amount</span>
-							<FormInput value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} />
+							<div className='field-inline'>
+								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} />
+								<button className='quiet field-inline-action' type='button' onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n}>
+									Max
+								</button>
+							</div>
 						</label>
 						<div className='actions'>
 							<TransactionActionButton

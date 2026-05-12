@@ -41,7 +41,16 @@ import { isMainnetChain } from '../lib/network.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getVaultApprovalGuardMessage, getVaultClaimFeesGuardMessage, getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
-import { getOracleManagerPriceValidUntilTimestamp, getSecurityVaultWithdrawableRepAmount, getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
+import {
+	getOracleManagerPriceValidUntilTimestamp,
+	getSecurityVaultMaxBondAllowanceAmount,
+	getSecurityVaultWithdrawableRepAmount,
+	getSelectedVaultAddress,
+	hasValidSecurityVaultOraclePrice,
+	isSecurityVaultDepositBelowMinimum,
+	isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper,
+	MIN_SECURITY_VAULT_REP_DEPOSIT,
+} from '../lib/securityVault.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
@@ -386,6 +395,13 @@ export function SecurityPoolWorkflowSection({
 		totalRepDeposit: selectedPool?.totalRepDeposit,
 		totalSecurityBondAllowance: selectedPool?.totalSecurityBondAllowance,
 	})
+	const maxSecurityBondAllowanceAmount = getSecurityVaultMaxBondAllowanceAmount({
+		currentSecurityBondAllowance: selectedVaultDetails?.securityBondAllowance,
+		repDepositShare: selectedVaultDetails?.repDepositShare,
+		repPerEthPrice: hasValidOraclePrice ? currentPoolOracleManagerDetails?.lastPrice : undefined,
+		totalRepDeposit: selectedPool?.totalRepDeposit,
+		totalSecurityBondAllowance: selectedPool?.totalSecurityBondAllowance,
+	})
 	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(selectedVaultDetails?.repDepositShare, depositAmount)
 	const hasClaimableFees = selectedVaultDetails !== undefined && selectedVaultDetails.unpaidEthFees > 0n
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? currentPoolOracleManagerDetails?.priceValidUntilTimestamp : undefined
@@ -415,6 +431,7 @@ export function SecurityPoolWorkflowSection({
 	const setSecurityBondAllowanceGuardMessage = getVaultSetSecurityBondAllowanceGuardMessage({
 		hasValidOraclePrice,
 		isMainnet,
+		maxSecurityBondAllowanceAmount,
 		securityBondAllowanceAmount,
 		selectedVaultDetailsLoaded: selectedVaultDetails !== undefined,
 		selectedVaultIsOwnedByAccount,
@@ -1230,7 +1247,12 @@ export function SecurityPoolWorkflowSection({
 						</div>
 						<label className='field'>
 							<span>Security Bond Allowance Amount</span>
-							<FormInput value={securityVault.securityVaultForm.securityBondAllowanceAmount} onInput={event => securityVault.onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} />
+							<div className='field-inline'>
+								<FormInput className='field-inline-input' value={securityVault.securityVaultForm.securityBondAllowanceAmount} onInput={event => securityVault.onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} />
+								<button className='quiet field-inline-action' type='button' onClick={() => securityVault.onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n}>
+									Max
+								</button>
+							</div>
 						</label>
 						<RequirementsChecklist
 							items={[
