@@ -29,7 +29,6 @@ RUN cd /source/ui && bun install --frozen-lockfile
 COPY ./ui/tsconfig.vendor.json /source/ui/tsconfig.vendor.json
 COPY ./ui/build/ /source/ui/build/
 COPY ./ui/index.html /source/ui/index.html
-COPY ./ui/build/index.production.html /source/ui/build/index.production.html
 
 # Shared TypeScript source used by both UI and simulator helpers
 COPY ./shared/tsconfig.json /source/shared/tsconfig.json
