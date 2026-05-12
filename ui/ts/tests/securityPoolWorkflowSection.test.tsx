@@ -322,7 +322,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('tablist', { name: 'Selected pool views' })).not.toBeNull()
 
-		for (const label of ['Vaults', 'Trading', 'Reporting', 'Fork', 'Staged Operations', 'Price Oracle']) {
+		for (const label of ['Vaults', 'Trading', 'Reporting', 'Fork', 'Staged Operations', 'Open Oracle']) {
 			const button = documentQueries.getByRole('tab', { name: label }) as HTMLButtonElement
 			expect(button.disabled).toBe(true)
 			expect(button.title).toBe('Load a pool to open this workflow.')
@@ -386,7 +386,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Security pools' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Pool Summary' })).toBeNull()
 		expect(documentQueries.queryByText('Action Readiness')).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Price Oracle' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Open Oracle' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Pool Summary' })).toBeNull()
 		expect(documentQueries.queryByText('Workflow')).toBeNull()
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
@@ -410,7 +410,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getByText('Selected Vault Address')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Vault Action Launchers' })).not.toBeNull()
 		expect(documentQueries.getByRole('tab', { name: 'Staged Operations' })).not.toBeNull()
-		expect(documentQueries.getByRole('tab', { name: 'Price Oracle' })).not.toBeNull()
+		expect(documentQueries.getByRole('tab', { name: 'Open Oracle' })).not.toBeNull()
 		expect(documentQueries.getAllByRole('button', { name: 'Claim Fees' }).length).toBeGreaterThan(0)
 		expect(documentQueries.getAllByText('Approved REP').length).toBeGreaterThan(0)
 		expect(documentQueries.queryByText('Enter a deposit amount greater than zero.')).toBeNull()
@@ -1121,13 +1121,13 @@ describe('SecurityPoolWorkflowSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('tab', { name: 'Price Oracle' }) as HTMLElement).getAttribute('aria-selected')).toBe('true')
-		const priceOracleSection = documentQueries.getByRole('heading', { name: 'Price Oracle' }).closest('section')
+		expect((documentQueries.getByRole('tab', { name: 'Open Oracle' }) as HTMLElement).getAttribute('aria-selected')).toBe('true')
+		const priceOracleSection = documentQueries.getByRole('heading', { name: 'Open Oracle' }).closest('section')
 		if (!(priceOracleSection instanceof HTMLElement)) {
-			throw new Error('Expected the Price Oracle section to render')
+			throw new Error('Expected the Open Oracle section to render')
 		}
 		const sectionQueries = within(priceOracleSection)
-		expect(sectionQueries.getByRole('heading', { name: 'Price Oracle' })).not.toBeNull()
+		expect(sectionQueries.getByRole('heading', { name: 'Open Oracle' })).not.toBeNull()
 		expect(sectionQueries.getByText('Price Window')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Request New Price' })).not.toBeNull()
 		expect(sectionQueries.getByText('Pending Request')).not.toBeNull()

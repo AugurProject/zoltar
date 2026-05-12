@@ -242,10 +242,10 @@ export function LiquidationModal({
 				<DataGrid className='modal-summary-grid' columns={2}>
 					<AddressInfo address={liquidationSecurityPoolAddress} label='Security Pool' />
 					<MetricField label='Target Vault'>{liquidationTargetVault.trim() === '' ? 'None selected' : liquidationTargetVault}</MetricField>
-					<MetricField label='Pool Oracle Price'>{poolOraclePrice === undefined || poolOracleSettlementTimestamp === 0n ? 'Unavailable' : <CurrencyValue value={poolOraclePrice} suffix='REP / ETH' copyable={false} />}</MetricField>
-					<MetricField label='Pool Oracle Status'>{poolOracleStatus}</MetricField>
+					<MetricField label='Open Oracle Price'>{poolOraclePrice === undefined || poolOracleSettlementTimestamp === 0n ? 'Unavailable' : <CurrencyValue value={poolOraclePrice} suffix='REP / ETH' copyable={false} />}</MetricField>
+					<MetricField label='Open Oracle Status'>{poolOracleStatus}</MetricField>
 					<MetricField label='Last Settlement'>{poolOracleSettlementTimestamp === 0n ? 'Never settled' : <TimestampValue timestamp={poolOracleSettlementTimestamp} />}</MetricField>
-					<MetricField label='Collateralization @ Pool Oracle'>{poolOracleCollateralization === undefined ? 'Unavailable' : <CurrencyValue value={poolOracleCollateralization} suffix='%' copyable={false} />}</MetricField>
+					<MetricField label='Collateralization @ Open Oracle'>{poolOracleCollateralization === undefined ? 'Unavailable' : <CurrencyValue value={poolOracleCollateralization} suffix='%' copyable={false} />}</MetricField>
 					<MetricField label='Uniswap REP / ETH'>{repPerEthPrice === undefined ? 'Unavailable' : <CurrencyValue value={repPerEthPrice} suffix='REP / ETH' copyable={false} />}</MetricField>
 					<MetricField label='Uniswap Source'>{renderPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}</MetricField>
 					<MetricField label='Collateralization @ Uniswap'>{uniswapCollateralization === undefined ? 'Unavailable' : <CurrencyValue value={uniswapCollateralization} suffix='%' copyable={false} />}</MetricField>

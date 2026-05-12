@@ -237,7 +237,7 @@ export function SecurityPoolWorkflowSection({
 					{ label: 'Reporting', value: 'reporting' },
 					{ label: 'Fork', value: 'fork' },
 					{ label: 'Staged Operations', value: 'staged-operations' },
-					{ label: 'Price Oracle', value: 'price-oracle' },
+					{ label: 'Open Oracle', value: 'price-oracle' },
 				]
 			: [
 					{ disabled: true, label: 'Vaults', reason: selectedPoolWorkflowGuardMessage, value: 'vaults' },
@@ -245,7 +245,7 @@ export function SecurityPoolWorkflowSection({
 					{ disabled: true, label: 'Reporting', reason: selectedPoolWorkflowGuardMessage, value: 'reporting' },
 					{ disabled: true, label: 'Fork', reason: selectedPoolWorkflowGuardMessage, value: 'fork' },
 					{ disabled: true, label: 'Staged Operations', reason: selectedPoolWorkflowGuardMessage, value: 'staged-operations' },
-					{ disabled: true, label: 'Price Oracle', reason: selectedPoolWorkflowGuardMessage, value: 'price-oracle' },
+					{ disabled: true, label: 'Open Oracle', reason: selectedPoolWorkflowGuardMessage, value: 'price-oracle' },
 				]
 	const selectedVaultViewOptions: ViewTabOption<SelectedVaultView>[] = [
 		{ label: 'Directory', value: 'browse-vaults' },
@@ -837,7 +837,7 @@ export function SecurityPoolWorkflowSection({
 								) : undefined}
 
 								{view === 'price-oracle' && loadedSelectedPool !== undefined ? (
-									<SectionBlock density='compact' title='Price Oracle'>
+									<SectionBlock density='compact' title='Open Oracle'>
 										<div className='workflow-metric-grid'>
 											<MetricField label='Last Settled Price'>{getOracleLastPriceDisplay(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues ?? { lastPrice: 0n, lastSettlementTimestamp: 0n })}</MetricField>
 											<MetricField label='Set At'>
@@ -868,7 +868,7 @@ export function SecurityPoolWorkflowSection({
 										{currentPoolOracleManagerDetails === undefined ? <p className='detail'>Load the price oracle to inspect the latest settlement details.</p> : undefined}
 										<div className='actions'>
 											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
-												{loadingPoolOracleManager ? <LoadingText>Refreshing oracle...</LoadingText> : currentPoolOracleManagerDetails === undefined ? 'Load Price Oracle' : 'Refresh Oracle'}
+												{loadingPoolOracleManager ? <LoadingText>Refreshing oracle...</LoadingText> : currentPoolOracleManagerDetails === undefined ? 'Load Open Oracle' : 'Refresh Oracle'}
 											</button>
 											<TransactionActionButton
 												idleLabel='Request New Price'
