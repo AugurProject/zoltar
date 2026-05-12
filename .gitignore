@@ -9,6 +9,7 @@ solidity/ts/types/contractArtifact.ts
 solidity/types/contractArtifact.ts
 .tsbuildinfo
 /ui/js
+/ui/dist
 /ui/vendor
 /ui/ts/abis.ts
 /ui/ts/contractArtifact.ts
