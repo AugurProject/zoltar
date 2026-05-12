@@ -29,6 +29,7 @@ RUN cd /source/ui && bun install --frozen-lockfile
 COPY ./ui/tsconfig.vendor.json /source/ui/tsconfig.vendor.json
 COPY ./ui/build/ /source/ui/build/
 COPY ./ui/index.html /source/ui/index.html
+COPY ./ui/build/index.production.html /source/ui/build/index.production.html
 
 # Shared TypeScript source used by both UI and simulator helpers
 COPY ./shared/tsconfig.json /source/shared/tsconfig.json
@@ -48,7 +49,7 @@ COPY ./ui/favicon.ico /source/ui/favicon.ico
 COPY ./ui/favicon.svg /source/ui/favicon.svg
 
 # Compile contracts, vendor dependencies, and build UI
-RUN bun run ui:build
+RUN bun run ui:build:prod
 
 # --------------------------------------------------------
 # Base Image: Create the base image that will host the app
@@ -70,12 +71,11 @@ RUN sed -i 's/URIs/# URIs/g' /etc/apt/sources.list.d/debian.sources && \
 COPY --from=ipfs-kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
 
 # Copy only the deployable UI artifacts (excluding node_modules, source files, build tools)
-COPY --from=builder /source/ui/index.html /export/index.html
-COPY --from=builder /source/ui/favicon.ico /export/favicon.ico
-COPY --from=builder /source/ui/favicon.svg /export/favicon.svg
-COPY --from=builder /source/ui/js/ /export/js/
-COPY --from=builder /source/ui/vendor/ /export/vendor/
-COPY --from=builder /source/ui/css/ /export/css/
+COPY --from=builder /source/ui/dist/index.html /export/index.html
+COPY --from=builder /source/ui/dist/favicon.ico /export/favicon.ico
+COPY --from=builder /source/ui/dist/favicon.svg /export/favicon.svg
+COPY --from=builder /source/ui/dist/assets/ /export/assets/
+COPY --from=builder /source/ui/dist/css/ /export/css/
 
 RUN ipfs init
 
