@@ -1,5 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useCallback, useEffect } from 'preact/hooks'
+import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../lib/routing.js'
 import {
 	readOpenOracleViewQueryParam,
 	readOpenOracleReportIdQueryParam,
@@ -49,33 +50,43 @@ function readUrlState(search: string): UrlState {
 	}
 }
 
+function getCurrentUrlStateSearch() {
+	return getRouteHashSearch()
+}
+
+function readCurrentUrlState() {
+	return readUrlState(getCurrentUrlStateSearch())
+}
+
 function pushCurrentUrl(nextSearch: string) {
-	window.history.pushState({}, '', `${window.location.pathname}${nextSearch}${window.location.hash}`)
+	window.history.pushState({}, '', buildRouteHref(getCurrentRouteHash(), nextSearch))
 }
 
 export function useUrlState(): UseUrlStateResult {
-	const urlState = useSignal<UrlState>(readUrlState(window.location.search))
+	const urlState = useSignal<UrlState>(readCurrentUrlState())
 
 	useEffect(() => {
-		const onPopState = () => {
-			urlState.value = readUrlState(window.location.search)
+		const syncUrlState = () => {
+			urlState.value = readCurrentUrlState()
 		}
 
-		window.addEventListener('popstate', onPopState)
+		window.addEventListener('hashchange', syncUrlState)
+		window.addEventListener('popstate', syncUrlState)
 		return () => {
-			window.removeEventListener('popstate', onPopState)
+			window.removeEventListener('hashchange', syncUrlState)
+			window.removeEventListener('popstate', syncUrlState)
 		}
 	}, [])
 
 	const applyUrlStateUpdate = useCallback((nextSearch: string) => {
-		if (nextSearch === window.location.search) return
+		if (nextSearch === getCurrentUrlStateSearch()) return
 		pushCurrentUrl(nextSearch)
 		urlState.value = readUrlState(nextSearch)
 	}, [])
 
 	const setActiveUniverseId = useCallback(
 		(universeId: bigint | undefined) => {
-			const nextSearch = writeUniverseQueryParam(window.location.search, universeId)
+			const nextSearch = writeUniverseQueryParam(getCurrentUrlStateSearch(), universeId)
 			applyUrlStateUpdate(nextSearch)
 		},
 		[applyUrlStateUpdate],
@@ -83,7 +94,7 @@ export function useUrlState(): UseUrlStateResult {
 
 	const setSecurityPoolAddress = useCallback(
 		(securityPoolAddress: string) => {
-			const nextSearch = writeSecurityPoolQueryParam(window.location.search, securityPoolAddress === '' ? undefined : securityPoolAddress)
+			const nextSearch = writeSecurityPoolQueryParam(getCurrentUrlStateSearch(), securityPoolAddress === '' ? undefined : securityPoolAddress)
 			applyUrlStateUpdate(nextSearch)
 		},
 		[applyUrlStateUpdate],
@@ -91,7 +102,7 @@ export function useUrlState(): UseUrlStateResult {
 
 	const setOpenOracleReport = useCallback(
 		(reportId: string | undefined) => {
-			const nextSearch = writeOpenOracleReportIdQueryParam(window.location.search, reportId === '' ? undefined : reportId)
+			const nextSearch = writeOpenOracleReportIdQueryParam(getCurrentUrlStateSearch(), reportId === '' ? undefined : reportId)
 			applyUrlStateUpdate(nextSearch)
 		},
 		[applyUrlStateUpdate],
@@ -99,7 +110,7 @@ export function useUrlState(): UseUrlStateResult {
 
 	const setOpenOracleView = useCallback(
 		(view: string | undefined) => {
-			const nextSearch = writeOpenOracleViewQueryParam(window.location.search, view === '' ? undefined : view)
+			const nextSearch = writeOpenOracleViewQueryParam(getCurrentUrlStateSearch(), view === '' ? undefined : view)
 			applyUrlStateUpdate(nextSearch)
 		},
 		[applyUrlStateUpdate],
@@ -107,7 +118,7 @@ export function useUrlState(): UseUrlStateResult {
 
 	const setSecurityPoolsView = useCallback(
 		(view: string | undefined) => {
-			const nextSearch = writeSecurityPoolsViewQueryParam(window.location.search, view === '' ? undefined : view)
+			const nextSearch = writeSecurityPoolsViewQueryParam(getCurrentUrlStateSearch(), view === '' ? undefined : view)
 			applyUrlStateUpdate(nextSearch)
 		},
 		[applyUrlStateUpdate],
@@ -115,7 +126,7 @@ export function useUrlState(): UseUrlStateResult {
 
 	const setSelectedPoolView = useCallback(
 		(view: string | undefined) => {
-			const nextSearch = writeSelectedPoolViewQueryParam(window.location.search, view === '' ? undefined : view)
+			const nextSearch = writeSelectedPoolViewQueryParam(getCurrentUrlStateSearch(), view === '' ? undefined : view)
 			applyUrlStateUpdate(nextSearch)
 		},
 		[applyUrlStateUpdate],
@@ -123,7 +134,7 @@ export function useUrlState(): UseUrlStateResult {
 
 	const setZoltarView = useCallback(
 		(view: string | undefined) => {
-			const nextSearch = writeZoltarViewQueryParam(window.location.search, view === '' ? undefined : view)
+			const nextSearch = writeZoltarViewQueryParam(getCurrentUrlStateSearch(), view === '' ? undefined : view)
 			applyUrlStateUpdate(nextSearch)
 		},
 		[applyUrlStateUpdate],

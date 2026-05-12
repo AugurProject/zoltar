@@ -27,16 +27,12 @@ import { createLoadSecurityVaultHandler } from './lib/securityVaultHandlers.js'
 import { getUseQuestionForPoolState } from './lib/securityPoolNavigation.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
 import type { TransactionState } from './lib/transactionState.js'
-import { DEPLOY_ROUTE, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
+import { buildRouteHref, DEPLOY_ROUTE, getRouteHashSearch, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
 import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam, writeZoltarViewQueryParam } from './lib/urlParams.js'
 import { getUniversePresentation, getWalletPresentation } from './lib/userCopy.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from './lib/viewState.js'
 import type { DeploymentRouteContentProps, MarketRouteContentProps, OpenOracleSectionProps, OpenOracleView, SecurityPoolsSectionProps, SecurityPoolsView, ZoltarView } from './types/components.js'
-
-function getRouteHref(routeHash: string, nextSearch: string) {
-	return `${window.location.pathname}${nextSearch}${routeHash}`
-}
 
 export function App() {
 	const transactionState = useSignal<TransactionState>(createInitialTransactionState())
@@ -621,14 +617,14 @@ export function App() {
 				value={activeZoltarView}
 				onChange={view => setZoltarView(view)}
 				options={[
-					{ href: getRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(window.location.search, 'questions')), label: 'Questions', value: 'questions' },
-					{ href: getRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(window.location.search, 'create')), label: 'Create Question', value: 'create' },
-					{ href: getRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(window.location.search, 'fork')), label: 'Fork Zoltar', value: 'fork' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: 'Questions', value: 'questions' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create Question', value: 'create' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: 'Fork Zoltar', value: 'fork' },
 					{
 						label: 'Migrate REP',
 						value: 'migrate',
 						disabled: zoltarUniverse?.hasForked !== true,
-						...(zoltarUniverse?.hasForked === true ? { href: getRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(window.location.search, 'migrate')) } : { reason: 'Fork Zoltar before migrating REP.' }),
+						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: 'Fork Zoltar before migrating REP.' }),
 					},
 				]}
 			/>
@@ -638,9 +634,9 @@ export function App() {
 				value={activeSecurityPoolsView}
 				onChange={view => setSecurityPoolsView(view)}
 				options={[
-					{ href: getRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(window.location.search, 'browse')), label: 'Browse', value: 'browse' },
-					{ href: getRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(window.location.search, 'create')), label: 'Create', value: 'create' },
-					{ href: getRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(window.location.search, 'operate')), label: 'Operate', value: 'operate' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse', value: 'browse' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create', value: 'create' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: 'Operate', value: 'operate' },
 				]}
 			/>
 		) : route === 'open-oracle' ? (
@@ -649,9 +645,9 @@ export function App() {
 				value={activeOpenOracleView}
 				onChange={view => setOpenOracleView(view)}
 				options={[
-					{ href: getRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(window.location.search, 'browse')), label: 'Browse', value: 'browse' },
-					{ href: getRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(window.location.search, 'create')), label: 'Create', value: 'create' },
-					{ href: getRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(window.location.search, 'selected-report')), label: 'Selected Report', value: 'selected-report' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse', value: 'browse' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create', value: 'create' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: 'Selected Report', value: 'selected-report' },
 				]}
 			/>
 		) : undefined

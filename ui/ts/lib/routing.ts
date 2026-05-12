@@ -18,6 +18,21 @@ const ROUTE_BY_HASH = ROUTE_NAMES.reduce<Partial<Record<string, Route>>>((routeB
 	return routeByHash
 }, {})
 
+function splitRouteHash(hash: string) {
+	const queryIndex = hash.indexOf('?')
+	if (queryIndex === -1) {
+		return {
+			routeHash: hash,
+			search: '',
+		}
+	}
+
+	return {
+		routeHash: hash.slice(0, queryIndex),
+		search: hash.slice(queryIndex),
+	}
+}
+
 export function ensureRouteHash() {
 	if (window.location.hash === '') {
 		window.location.hash = ROUTE_HASHES[DEFAULT_ROUTE]
@@ -25,9 +40,23 @@ export function ensureRouteHash() {
 }
 
 export function getCurrentRoute() {
-	return ROUTE_BY_HASH[window.location.hash] ?? (window.location.hash === '' ? DEFAULT_ROUTE : 'not-found')
+	const { routeHash } = splitRouteHash(window.location.hash)
+	return ROUTE_BY_HASH[routeHash] ?? (routeHash === '' ? DEFAULT_ROUTE : 'not-found')
 }
 
 export function getRouteHash(route: Exclude<Route, 'not-found'>) {
 	return ROUTE_HASHES[route]
+}
+
+export function getRouteHashSearch(hash = window.location.hash) {
+	return splitRouteHash(hash).search
+}
+
+export function getCurrentRouteHash() {
+	const { routeHash } = splitRouteHash(window.location.hash)
+	return routeHash === '' ? ROUTE_HASHES[DEFAULT_ROUTE] : routeHash
+}
+
+export function buildRouteHref(routeHash: string, search: string) {
+	return `${routeHash}${search}`
 }
