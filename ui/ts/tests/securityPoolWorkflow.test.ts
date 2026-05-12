@@ -5,7 +5,7 @@ import { getAddress, zeroAddress } from 'viem'
 import {
 	getCurrentPoolOracleManagerDetails,
 	getOracleLastPriceDisplay,
-	getOraclePriceExpiryDisplay,
+	getOraclePriceValidityPresentation,
 	getSelectedPoolCardTitle,
 	getSelectedPoolOracleMetricValues,
 	getSelectedPoolWorkflowGuardMessage,
@@ -244,31 +244,31 @@ void describe('selected pool oracle price display', () => {
 		).toBe('≈ 42.00 REP / ETH')
 	})
 
-	void test('derives expiry countdowns from the last settlement when manager details are not loaded', () => {
+	void test('derives validity copy from the last settlement when manager details are not loaded', () => {
 		expect(
-			getOraclePriceExpiryDisplay({
+			getOraclePriceValidityPresentation({
 				currentTimestamp: 31n,
 				lastSettlementTimestamp: 1n,
 				priceValidUntilTimestamp: undefined,
 			}),
-		).toBe('59m')
+		).toEqual({ text: '(Valid for 59m)', tone: 'success' })
 	})
 
-	void test('shows a dash before the oracle has ever settled and expired once the price window closes', () => {
+	void test('omits validity before settlement and reports expiry after the window closes', () => {
 		expect(
-			getOraclePriceExpiryDisplay({
+			getOraclePriceValidityPresentation({
 				currentTimestamp: 100n,
 				lastSettlementTimestamp: 0n,
 				priceValidUntilTimestamp: undefined,
 			}),
-		).toBe('-')
+		).toBe(undefined)
 
 		expect(
-			getOraclePriceExpiryDisplay({
+			getOraclePriceValidityPresentation({
 				currentTimestamp: 100n + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS,
 				lastSettlementTimestamp: 100n,
 				priceValidUntilTimestamp: 100n + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS,
 			}),
-		).toBe('Expired')
+		).toEqual({ text: '(expired less than a minute ago)', tone: 'danger' })
 	})
 })

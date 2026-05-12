@@ -391,7 +391,8 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByText('Workflow')).toBeNull()
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
 		expect(documentQueries.getByText('Total REP Deposited')).not.toBeNull()
-		expect(documentQueries.getByText('Oracle Expires In')).not.toBeNull()
+		expect(documentQueries.getByText('Open Oracle Price')).not.toBeNull()
+		expect(documentQueries.queryByText('Oracle Expires In')).toBeNull()
 		const selectedPoolContext = document.body.querySelector('.sticky-object-context.static')
 		if (!(selectedPoolContext instanceof HTMLElement)) {
 			throw new Error('Expected a non-sticky selected pool context card')
@@ -1128,7 +1129,9 @@ describe('SecurityPoolWorkflowSection', () => {
 		}
 		const sectionQueries = within(priceOracleSection)
 		expect(sectionQueries.getByRole('heading', { name: 'Open Oracle' })).not.toBeNull()
-		expect(sectionQueries.getByText('Price Window')).not.toBeNull()
+		expect(sectionQueries.getByText('Open Oracle Price')).not.toBeNull()
+		expect(sectionQueries.queryByText('Price Window')).toBeNull()
+		expect(sectionQueries.queryByText('Last Settlement')).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Request New Price' })).not.toBeNull()
 		expect(sectionQueries.getByText('Pending Request')).not.toBeNull()
 		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()

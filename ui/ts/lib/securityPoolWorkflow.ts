@@ -76,15 +76,19 @@ export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }
 	return `≈ ${formatRoundedCurrencyBalance(lastPrice, 18, 2)} REP / ETH`
 }
 
-export function getOraclePriceExpiryDisplay({ currentTimestamp, lastSettlementTimestamp, priceValidUntilTimestamp }: { currentTimestamp: bigint; lastSettlementTimestamp: bigint; priceValidUntilTimestamp: bigint | undefined }) {
-	if (lastSettlementTimestamp === 0n) return '-'
+export function getOraclePriceValidityPresentation({ currentTimestamp, lastSettlementTimestamp, priceValidUntilTimestamp }: { currentTimestamp: bigint; lastSettlementTimestamp: bigint; priceValidUntilTimestamp: bigint | undefined }) {
+	if (lastSettlementTimestamp === 0n) return undefined
 
 	const validUntilTimestamp = priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp)
-	if (validUntilTimestamp === undefined) return '-'
+	if (validUntilTimestamp === undefined) return undefined
 
 	const timeRemaining = getTimeRemaining(validUntilTimestamp, currentTimestamp)
-	if (timeRemaining === undefined) return '-'
-	return timeRemaining === 0n ? 'Expired' : formatDuration(timeRemaining)
+	if (timeRemaining === undefined) return undefined
+	if (timeRemaining === 0n) {
+		const expiredFor = currentTimestamp > validUntilTimestamp ? currentTimestamp - validUntilTimestamp : 0n
+		return { text: `(expired ${expiredFor === 0n ? 'less than a minute' : formatDuration(expiredFor)} ago)`, tone: 'danger' as const }
+	}
+	return { text: `(Valid for ${formatDuration(timeRemaining)})`, tone: 'success' as const }
 }
 
 export function getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails, selectedPoolManagerAddress }: { poolOracleManagerDetails: OracleManagerDetails | undefined; selectedPoolManagerAddress: string | undefined }) {

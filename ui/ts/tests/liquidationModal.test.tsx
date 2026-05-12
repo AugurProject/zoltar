@@ -5,7 +5,7 @@ import { fireEvent, within } from '@testing-library/dom'
 import { render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import { zeroAddress } from 'viem'
+import { getAddress, zeroAddress } from 'viem'
 import { LiquidationModal } from '../components/LiquidationModal.js'
 import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
@@ -120,6 +120,7 @@ describe('LiquidationModal', () => {
 				liquidationSecurityPoolAddress={zeroAddress}
 				liquidationTargetVault={zeroAddress}
 				loadingPoolOracleManager={false}
+				onLoadPoolOracleManager={() => undefined}
 				onLiquidationAmountChange={() => undefined}
 				onQueueLiquidation={() => undefined}
 				onSelectedPoolViewChange={() => undefined}
@@ -129,6 +130,7 @@ describe('LiquidationModal', () => {
 				selectedPool={createSelectedPool()}
 				securityPoolOverviewActiveAction={undefined}
 				securityPoolOverviewResult={undefined}
+				callerVaultSummary={createTargetVaultSummary({ vaultAddress: getAddress('0x0000000000000000000000000000000000000001') })}
 				targetVaultSummary={createTargetVaultSummary()}
 				{...overrides}
 			/>,
@@ -194,6 +196,7 @@ describe('LiquidationModal', () => {
 					liquidationSecurityPoolAddress={zeroAddress}
 					loadingPoolOracleManager={false}
 					liquidationTargetVault={zeroAddress}
+					onLoadPoolOracleManager={() => undefined}
 					onLiquidationAmountChange={setLiquidationAmount}
 					onQueueLiquidation={() => undefined}
 					onSelectedPoolViewChange={() => undefined}
@@ -203,6 +206,7 @@ describe('LiquidationModal', () => {
 					selectedPool={createSelectedPool()}
 					securityPoolOverviewActiveAction={undefined}
 					securityPoolOverviewResult={undefined}
+					callerVaultSummary={createTargetVaultSummary({ vaultAddress: getAddress('0x0000000000000000000000000000000000000001') })}
 					targetVaultSummary={createTargetVaultSummary()}
 				/>
 			)
@@ -295,6 +299,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Execute Vault Liquidation' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Queue Vault Liquidation' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
 	})
 
@@ -347,5 +352,108 @@ describe('LiquidationModal', () => {
 		})
 
 		expect(amountChanges).toEqual(['25'])
+	})
+
+	test('disables direct liquidation when the current Open Oracle price does not make the vault liquidatable', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 1n * 10n ** 18n,
+			}),
+			selectedPool: createSelectedPool({
+				securityMultiplier: 2n,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 10n * 10n ** 18n,
+				securityBondAllowance: 2n * 10n ** 18n,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const button = documentQueries.getByRole('button', { name: 'Execute Liquidation' }) as HTMLButtonElement
+		expect(button.disabled).toBe(true)
+		expect(documentQueries.getByText('This vault is not undercollateralized at the current Open Oracle price.')).not.toBeNull()
+		expect(documentQueries.getByText(/^Open Oracle Price$/)).not.toBeNull()
+	})
+
+	test('shows the caller vault and a post-liquidation simulation', async () => {
+		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const renderedComponent = await renderLiquidationModal({
+			accountAddress: callerVaultAddress,
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 10n * 10n ** 18n,
+			}),
+			liquidationAmount: '2',
+			selectedPool: createSelectedPool({
+				securityMultiplier: 2n,
+			}),
+			callerVaultSummary: createTargetVaultSummary({
+				repDepositShare: 100n * 10n ** 18n,
+				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAddress: callerVaultAddress,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 5n * 10n ** 18n,
+				securityBondAllowance: 2n * 10n ** 18n,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Caller Vault')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: `Copy address ${callerVaultAddress}` })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Caller Vault After Liquidation' })).not.toBeNull()
+		expect(documentQueries.getByText('Rep Moved')).not.toBeNull()
+	})
+
+	test('uses the shared collateralization success and danger classes in the modal', async () => {
+		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const renderedComponent = await renderLiquidationModal({
+			accountAddress: callerVaultAddress,
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 3n * 10n ** 18n,
+			}),
+			callerVaultSummary: createTargetVaultSummary({
+				repDepositShare: 24n * 10n ** 18n,
+				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAddress: callerVaultAddress,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 4n * 10n ** 18n,
+				securityBondAllowance: 2n * 10n ** 18n,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const targetOpenOracleValue = documentQueries.getByText(/66\.67 %/).closest('.metric-field-value')
+		const callerOpenOracleValue = documentQueries.getByText(/400\.00 %/).closest('.metric-field-value')
+
+		expect(targetOpenOracleValue?.className).toContain('metric-value-danger')
+		expect(callerOpenOracleValue?.className).toContain('metric-value-success')
+	})
+
+	test('shows refreshing status while the modal is loading Open Oracle validity', async () => {
+		const loadRequests: string[] = []
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: undefined,
+			liquidationManagerAddress: '0x00000000000000000000000000000000000000aa',
+			loadingPoolOracleManager: true,
+			selectedPool: createSelectedPool({
+				lastOracleSettlementTimestamp: 1n,
+			}),
+			onLoadPoolOracleManager: managerAddress => {
+				loadRequests.push(managerAddress)
+			},
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Refreshing Open Oracle validity before liquidation.')).not.toBeNull()
+		expect((documentQueries.getByRole('button', { name: 'Liquidate Vault' }) as HTMLButtonElement).disabled).toBe(true)
+		expect(loadRequests).toEqual([])
 	})
 })

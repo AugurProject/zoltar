@@ -12,6 +12,7 @@ import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { OperationModal } from './OperationModal.js'
+import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
 import { OpenInterestCapacityMetrics } from './OpenInterestCapacityMetrics.js'
 import { ResultBanner } from './ResultBanner.js'
 import { ReportingSection } from './ReportingSection.js'
@@ -25,16 +26,14 @@ import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TradingSection } from './TradingSection.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
+import { TimestampValue } from './TimestampValue.js'
 import { UniverseLink } from './UniverseLink.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { ViewTabs } from './ViewTabs.js'
-import { TimestampValue } from './TimestampValue.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import {
 	getCurrentPoolOracleManagerDetails,
-	getOracleLastPriceDisplay,
-	getOraclePriceExpiryDisplay,
 	getSelectedPoolCardTitle,
 	getSelectedPoolOracleMetricValues,
 	getSelectedPoolWorkflowGuardMessage,
@@ -585,13 +584,13 @@ export function SecurityPoolWorkflowSection({
 									totalRepDeposit={loadedSelectedPool.totalRepDeposit}
 									totalSecurityBondAllowance={loadedSelectedPool.totalSecurityBondAllowance}
 								/>
-								<MetricField label='Last Price'>{getOracleLastPriceDisplay(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues ?? { lastPrice: 0n, lastSettlementTimestamp: 0n })}</MetricField>
-								<MetricField label='Oracle Expires In'>
-									{getOraclePriceExpiryDisplay({
-										currentTimestamp,
-										lastSettlementTimestamp: (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp ?? 0n,
-										priceValidUntilTimestamp: currentPoolOracleManagerDetails?.priceValidUntilTimestamp,
-									})}
+								<MetricField label='Open Oracle Price' valueTagName='span'>
+									<OpenOraclePriceValue
+										currentTimestamp={currentTimestamp}
+										lastPrice={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice}
+										lastSettlementTimestamp={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp ?? 0n}
+										priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
+									/>
 								</MetricField>
 								<MetricField label='Manager'>
 									<AddressValue address={loadedSelectedPool.managerAddress} />
@@ -839,11 +838,14 @@ export function SecurityPoolWorkflowSection({
 								{view === 'price-oracle' && loadedSelectedPool !== undefined ? (
 									<SectionBlock density='compact' title='Open Oracle'>
 										<div className='workflow-metric-grid'>
-											<MetricField label='Last Settled Price'>{getOracleLastPriceDisplay(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues ?? { lastPrice: 0n, lastSettlementTimestamp: 0n })}</MetricField>
-											<MetricField label='Set At'>
-												<TimestampValue timestamp={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp ?? 0n} zeroText='Never' />
+											<MetricField label='Open Oracle Price' valueTagName='span'>
+												<OpenOraclePriceValue
+													currentTimestamp={currentTimestamp}
+													lastPrice={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice}
+													lastSettlementTimestamp={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp ?? 0n}
+													priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
+												/>
 											</MetricField>
-											<MetricField label='Price Window'>{currentPoolOracleManagerDetails?.isPriceValid === undefined ? 'Load oracle details' : currentPoolOracleManagerDetails.isPriceValid ? 'Valid' : 'Expired'}</MetricField>
 											{currentPoolOracleManagerDetails === undefined ? undefined : (
 												<MetricField label='Request Cost'>
 													<CurrencyValue value={currentPoolOracleManagerDetails.requestPriceEthCost} suffix='ETH' />
@@ -865,10 +867,9 @@ export function SecurityPoolWorkflowSection({
 												{poolPriceOracleResult.action === 'requestPrice' ? 'Requested price' : 'Executed staged operation'}: <TransactionHashLink hash={poolPriceOracleResult.hash} />
 											</p>
 										)}
-										{currentPoolOracleManagerDetails === undefined ? <p className='detail'>Load the price oracle to inspect the latest settlement details.</p> : undefined}
 										<div className='actions'>
 											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
-												{loadingPoolOracleManager ? <LoadingText>Refreshing oracle...</LoadingText> : currentPoolOracleManagerDetails === undefined ? 'Load Open Oracle' : 'Refresh Oracle'}
+												{loadingPoolOracleManager ? <LoadingText>Refreshing oracle...</LoadingText> : 'Refresh Oracle'}
 											</button>
 											<TransactionActionButton
 												idleLabel='Request New Price'
@@ -1203,6 +1204,7 @@ export function SecurityPoolWorkflowSection({
 				liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}
 				loadingPoolOracleManager={loadingPoolOracleManager}
 				liquidationTargetVault={liquidationTargetVault}
+				onLoadPoolOracleManager={onLoadPoolOracleManager}
 				onSelectedPoolViewChange={onSelectedPoolViewChange}
 				repPerEthPrice={repPerEthPrice}
 				repPerEthSource={repPerEthSource}
@@ -1210,6 +1212,7 @@ export function SecurityPoolWorkflowSection({
 				selectedPool={selectedPool}
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
 				securityPoolOverviewResult={securityPoolOverviewResult}
+				callerVaultSummary={accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))}
 				targetVaultSummary={selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))}
 				onLiquidationAmountChange={onLiquidationAmountChange}
 				onQueueLiquidation={onQueueLiquidation}

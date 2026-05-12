@@ -1517,6 +1517,34 @@ button.currency-value.copyable:hover:not(:disabled) {
 	overflow-wrap: anywhere;
 }
 
+.oracle-price-value {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.18rem;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-size: var(--font-value);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.15;
+	color: var(--value);
+}
+
+.oracle-price-validity {
+	font-family: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
+	font-size: var(--font-caption);
+	font-weight: 500;
+	letter-spacing: normal;
+}
+
+.oracle-price-validity.success {
+	color: var(--success);
+}
+
+.oracle-price-validity.danger {
+	color: var(--danger);
+}
+
 .migration-approval-row {
 	display: flex;
 	align-items: flex-end;

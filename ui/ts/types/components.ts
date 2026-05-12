@@ -349,11 +349,14 @@ type LiquidationControlsProps = {
 	liquidationManagerAddress: Address | undefined
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
+	loadingPoolOracleManager: boolean
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
 	liquidationTargetVault: string
 	onLiquidationAmountChange: (value: string) => void
+	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
+	poolOracleManagerDetails: OracleManagerDetails | undefined
 }
 
 export type SecurityPoolsOverviewRouteContentProps = {
