@@ -1,4 +1,5 @@
 import { getActiveNetworkProfile } from './activeEnvironment.js'
+import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from './routing.js'
 import { readUniverseQueryParam, writeUniverseQueryParam } from './urlParams.js'
 
 export function getGenesisReputationTokenAddress() {
@@ -10,12 +11,12 @@ export function formatUniverseLabel(universeId: bigint) {
 }
 
 export function getUniverseLinkHref(universeId: bigint) {
-	const nextSearch = writeUniverseQueryParam(window.location.search, universeId)
-	return `${window.location.pathname}${nextSearch}${window.location.hash}`
+	const nextSearch = writeUniverseQueryParam(getRouteHashSearch(), universeId)
+	return buildRouteHref(getCurrentRouteHash(), nextSearch)
 }
 
 export function navigateToUniverse(universeId: bigint) {
-	const currentUniverseId = readUniverseQueryParam(window.location.search)
+	const currentUniverseId = readUniverseQueryParam(getRouteHashSearch())
 	if (currentUniverseId === universeId) return
 
 	window.history.pushState({}, '', getUniverseLinkHref(universeId))

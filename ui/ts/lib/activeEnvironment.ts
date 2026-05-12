@@ -6,6 +6,7 @@ import { createSimulationBackend } from '../simulation/tevmBackend.js'
 import { normalizeSimulationScenario, type SimulationScenario } from '../simulation/scenarios.js'
 
 type LocationLike = {
+	hash?: string
 	hostname: string
 	search: string
 }
@@ -15,13 +16,26 @@ const injectedBackend = createInjectedBackend()
 let activeBackend: ChainBackend | undefined = undefined
 let activeSimulationController: SimulationController | undefined = undefined
 
-export function shouldUseSimulationLocation(location: LocationLike) {
+function readLocationParams(location: LocationLike) {
 	const params = new URLSearchParams(location.search)
+	const hash = location.hash ?? ''
+	const queryIndex = hash.indexOf('?')
+	if (queryIndex === -1) return params
+
+	for (const [key, value] of new URLSearchParams(hash.slice(queryIndex))) {
+		params.set(key, value)
+	}
+
+	return params
+}
+
+export function shouldUseSimulationLocation(location: LocationLike) {
+	const params = readLocationParams(location)
 	return params.get('simulate') === '1'
 }
 
-function getSimulationScenario(search: string): SimulationScenario {
-	const params = new URLSearchParams(search)
+function getSimulationScenario(location: LocationLike): SimulationScenario {
+	const params = readLocationParams(location)
 	return normalizeSimulationScenario(params.get('simScenario') ?? undefined)
 }
 
@@ -37,7 +51,7 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 	}
 
 	const simulationBackend = await createSimulationBackend({
-		scenario: getSimulationScenario(location.search),
+		scenario: getSimulationScenario(location),
 	})
 	activeBackend = simulationBackend
 	activeSimulationController = simulationBackend

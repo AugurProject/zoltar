@@ -29,8 +29,8 @@ describe('RouteSubNavigation', () => {
 				ariaLabel: 'Zoltar views',
 				onChange: () => undefined,
 				options: [
-					{ href: '/?zoltarView=questions#/zoltar', label: 'Questions', value: 'questions' },
-					{ href: '/?zoltarView=create#/zoltar', label: 'Create Question', value: 'create' },
+					{ href: '#/zoltar?zoltarView=questions', label: 'Questions', value: 'questions' },
+					{ href: '#/zoltar?zoltarView=create', label: 'Create Question', value: 'create' },
 				],
 				value: 'questions',
 			}),
@@ -44,6 +44,6 @@ describe('RouteSubNavigation', () => {
 
 		const questionsTab = documentQueries.getByRole('tab', { name: 'Questions' }) as HTMLAnchorElement
 		expect(questionsTab.tagName).toBe('A')
-		expect(questionsTab.getAttribute('href')).toBe('/?zoltarView=questions#/zoltar')
+		expect(questionsTab.getAttribute('href')).toBe('#/zoltar?zoltarView=questions')
 	})
 })
