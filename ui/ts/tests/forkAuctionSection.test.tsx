@@ -130,16 +130,16 @@ describe('ForkAuctionSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('shows lifecycle banner and collapses lower-priority detail below the action area', async () => {
+	test('omits the redundant stage banner and collapses lower-priority detail below the action area', async () => {
 		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getAllByText('Migration').length).toBeGreaterThan(0)
-		expect(documentQueries.getByText('Fork Workflow')).not.toBeNull()
+		expect(documentQueries.queryByText('This pool is operational. If it is a child universe, the fork and auction path has completed.')).toBeNull()
+		expect(documentQueries.queryByText('Fork Workflow')).toBeNull()
 
 		const summaries = Array.from(document.body.querySelectorAll('summary')).map(node => node.textContent?.trim() ?? '')
-		expect(summaries).toContain('Pool Context')
+		expect(summaries).not.toContain('Pool Context')
 		expect(summaries).toContain('Live Snapshot')
 	})
 

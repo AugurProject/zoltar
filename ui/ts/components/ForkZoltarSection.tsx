@@ -1,12 +1,10 @@
 import type { Address } from 'viem'
 import { CurrencyValue } from './CurrencyValue.js'
 import { DataGrid } from './DataGrid.js'
-import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
-import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
@@ -108,59 +106,55 @@ export function ForkZoltarSection({
 
 	return (
 		<>
-			<SectionBlock title='Fork Zoltar' description='Approve the fork threshold, select the fork question, and trigger the universe fork.'>
-				<DataGrid>
-					<MetricField label='Fork Threshold'>
-						<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThreshold} suffix='REP' />
-					</MetricField>
-				</DataGrid>
+			<DataGrid>
+				<MetricField label='Fork Threshold'>
+					<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThreshold} suffix='REP' />
+				</MetricField>
+			</DataGrid>
 
-				<div className='form-grid'>
-					{hasForked ? undefined : (
-						<TokenApprovalControl
-							actionLabel='forking Zoltar'
-							allowanceError={zoltarForkApproval.error}
-							allowanceLoading={zoltarForkApproval.loading}
-							approvedAmount={zoltarForkApproval.value}
-							guardMessage={approvalGuardMessage}
-							onApprove={amount => onApproveZoltarForkRep(amount)}
-							pending={zoltarForkActiveAction === 'approve'}
-							pendingLabel='Approving REP Threshold...'
-							requiredAmount={rootUniverse?.forkThreshold}
-							resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThreshold.toString() ?? ''}`}
-							tokenSymbol='REP'
-							tokenUnits={18}
-						/>
-					)}
+			<div className='form-grid'>
+				{hasForked ? undefined : (
+					<TokenApprovalControl
+						actionLabel='forking Zoltar'
+						allowanceError={zoltarForkApproval.error}
+						allowanceLoading={zoltarForkApproval.loading}
+						approvedAmount={zoltarForkApproval.value}
+						guardMessage={approvalGuardMessage}
+						onApprove={amount => onApproveZoltarForkRep(amount)}
+						pending={zoltarForkActiveAction === 'approve'}
+						pendingLabel='Approving REP Threshold...'
+						requiredAmount={rootUniverse?.forkThreshold}
+						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThreshold.toString() ?? ''}`}
+						tokenSymbol='REP'
+						tokenUnits={18}
+					/>
+				)}
 
-					<label className='field'>
-						<span>Fork Question ID</span>
-						<FormInput value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder='0x...' disabled={hasForked || zoltarForkPending} />
-					</label>
+				<label className='field'>
+					<span>Fork Question ID</span>
+					<FormInput value={zoltarForkQuestionId} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder='0x...' disabled={hasForked || zoltarForkPending} />
+				</label>
 
-					{selectedQuestion === undefined ? undefined : (
-						<WorkflowSubsection title='Question'>
-							<EntityCard title='Selected Question' variant='record'>
-								<Question question={selectedQuestion} />
-							</EntityCard>
-						</WorkflowSubsection>
-					)}
-					{selectedQuestionPresentation === undefined ? undefined : <StateHint presentation={selectedQuestionPresentation} />}
+				{selectedQuestion === undefined ? undefined : (
+					<WorkflowSubsection title='Question'>
+						<Question question={selectedQuestion} />
+					</WorkflowSubsection>
+				)}
+				{selectedQuestionPresentation === undefined ? undefined : <StateHint presentation={selectedQuestionPresentation} />}
 
-					<div className='actions'>
-						<TransactionActionButton
-							idleLabel='Fork Zoltar'
-							pendingLabel='Forking Zoltar...'
-							onClick={() => {
-								if (selectedQuestionId === '') return
-								onForkZoltar()
-							}}
-							pending={zoltarForkActiveAction === 'fork'}
-							availability={{ disabled: !canFork, reason: forkGuardMessage }}
-						/>
-					</div>
+				<div className='actions'>
+					<TransactionActionButton
+						idleLabel='Fork Zoltar'
+						pendingLabel='Forking Zoltar...'
+						onClick={() => {
+							if (selectedQuestionId === '') return
+							onForkZoltar()
+						}}
+						pending={zoltarForkActiveAction === 'fork'}
+						availability={{ disabled: !canFork, reason: forkGuardMessage }}
+					/>
 				</div>
-			</SectionBlock>
+			</div>
 
 			<ErrorNotice message={zoltarForkError} />
 		</>

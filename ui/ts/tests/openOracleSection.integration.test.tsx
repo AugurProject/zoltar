@@ -2,16 +2,19 @@
 
 import { afterEach, beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { fireEvent, waitFor, within } from '@testing-library/dom'
+import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import type { Address, Hash } from 'viem'
 import { zeroAddress } from 'viem'
 import { OpenOracleSection } from '../components/OpenOracleSection.js'
+import { RouteSubNavigation } from '../components/RouteSubNavigation.js'
 import { getOpenOracleAddress, loadErc20Allowance, loadErc20Balance, loadOpenOracleReportDetails } from '../contracts.js'
 import { useOpenOracleOperations } from '../hooks/useOpenOracleOperations.js'
 import type { AccountState } from '../types/app.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { getOpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
+import type { OpenOracleView } from '../types/components.js'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../../../solidity/ts/testsuite/simulator/utils/constants'
 import { addressString } from '../../../solidity/ts/testsuite/simulator/utils/bigint'
 import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../solidity/ts/testsuite/simulator/utils/utilities'
@@ -45,6 +48,7 @@ function createInjectedWalletShim(mockWindow: AnvilWindowEthereum, accountAddres
 }
 
 function OpenOracleSectionHarness({ accountAddress }: { accountAddress: Address }) {
+	const [activeView, setActiveView] = useState<OpenOracleView>('create')
 	const openOracle = useOpenOracleOperations({
 		accountAddress,
 		enabled: true,
@@ -62,30 +66,44 @@ function OpenOracleSectionHarness({ accountAddress }: { accountAddress: Address 
 	}
 
 	return (
-		<OpenOracleSection
-			accountState={accountState}
-			initialView='create'
-			loadingOpenOracleCreate={openOracle.loadingOpenOracleCreate}
-			loadingOracleReport={openOracle.loadingOracleReport}
-			onApproveToken1={amount => void openOracle.approveToken1(amount)}
-			onApproveToken2={amount => void openOracle.approveToken2(amount)}
-			onCreateOpenOracleGame={() => void openOracle.createOpenOracleGame()}
-			onDisputeReport={() => void openOracle.disputeReport()}
-			onLoadOracleReport={reportIdInput => void openOracle.loadOracleReport(reportIdInput)}
-			onOpenOracleCreateFormChange={update => openOracle.setOpenOracleCreateForm(current => ({ ...current, ...update }))}
-			onOpenOracleFormChange={update => openOracle.setOpenOracleForm(current => ({ ...current, ...update }))}
-			onRefreshPrice={openOracle.refreshPrice}
-			onSettleReport={() => void openOracle.settleReport()}
-			onSubmitInitialReport={() => void openOracle.submitInitialReport()}
-			onWrapWethForInitialReport={() => void openOracle.wrapWethForInitialReport()}
-			openOracleActiveAction={openOracle.openOracleActiveAction}
-			openOracleCreateForm={openOracle.openOracleCreateForm}
-			openOracleError={openOracle.openOracleError}
-			openOracleForm={openOracle.openOracleForm}
-			openOracleInitialReportState={openOracle.openOracleInitialReportState}
-			openOracleReportDetails={openOracle.openOracleReportDetails}
-			openOracleResult={openOracle.openOracleResult}
-		/>
+		<>
+			<RouteSubNavigation
+				ariaLabel='Open Oracle views'
+				value={activeView}
+				onChange={setActiveView}
+				options={[
+					{ label: 'Browse', value: 'browse' },
+					{ label: 'Create', value: 'create' },
+					{ label: 'Selected Report', value: 'selected-report' },
+				]}
+			/>
+			<OpenOracleSection
+				activeView={activeView}
+				accountState={accountState}
+				loadingOpenOracleCreate={openOracle.loadingOpenOracleCreate}
+				loadingOracleReport={openOracle.loadingOracleReport}
+				onActiveViewChange={setActiveView}
+				onApproveToken1={amount => void openOracle.approveToken1(amount)}
+				onApproveToken2={amount => void openOracle.approveToken2(amount)}
+				onCreateOpenOracleGame={() => void openOracle.createOpenOracleGame()}
+				onDisputeReport={() => void openOracle.disputeReport()}
+				onLoadOracleReport={reportIdInput => void openOracle.loadOracleReport(reportIdInput)}
+				onOpenOracleCreateFormChange={update => openOracle.setOpenOracleCreateForm(current => ({ ...current, ...update }))}
+				onOpenOracleFormChange={update => openOracle.setOpenOracleForm(current => ({ ...current, ...update }))}
+				onRefreshPrice={openOracle.refreshPrice}
+				onSettleReport={() => void openOracle.settleReport()}
+				onSubmitInitialReport={() => void openOracle.submitInitialReport()}
+				onWrapWethForInitialReport={() => void openOracle.wrapWethForInitialReport()}
+				openOracleActiveAction={openOracle.openOracleActiveAction}
+				openOracleCreateForm={openOracle.openOracleCreateForm}
+				openOracleError={openOracle.openOracleError}
+				openOracleForm={openOracle.openOracleForm}
+				openOracleInitialReportSubmission={openOracle.openOracleInitialReportSubmission}
+				openOracleInitialReportState={openOracle.openOracleInitialReportState}
+				openOracleReportDetails={openOracle.openOracleReportDetails}
+				openOracleResult={openOracle.openOracleResult}
+			/>
+		</>
 	)
 }
 

@@ -5,11 +5,6 @@ import { fireEvent, within } from '@testing-library/dom'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
-import { EntityCard } from '../components/EntityCard.js'
-import { EnumDropdown } from '../components/EnumDropdown.js'
-import { MetricField } from '../components/MetricField.js'
-import { SectionBlock } from '../components/SectionBlock.js'
-import { TransactionActionButton } from '../components/TransactionActionButton.js'
 import { TradingSection } from '../components/TradingSection.js'
 import { MARKET_NOT_FINALIZED_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE } from '../lib/trading.js'
 import type { AccountState, TradingFormState } from '../types/app.js'
@@ -17,143 +12,6 @@ import type { ListedSecurityPool, MarketDetails, TradingDetails, TradingShareBal
 import type { TradingSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
-
-type VNodeLike = {
-	props: Record<string, unknown>
-	type: unknown
-}
-
-type ButtonState = {
-	disabled: boolean
-	label: string
-	title: string | undefined
-}
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
-
-function isVNodeLike(value: unknown): value is VNodeLike {
-	return isObjectRecord(value) && 'type' in value && 'props' in value && isObjectRecord(value['props'])
-}
-
-function visitTree(node: unknown, visitor: (vnode: VNodeLike) => void) {
-	if (Array.isArray(node)) {
-		for (const child of node) {
-			visitTree(child, visitor)
-		}
-		return
-	}
-
-	if (!isVNodeLike(node)) return
-
-	visitor(node)
-	visitTree(node.props['children'], visitor)
-}
-
-function getTextContent(node: unknown): string {
-	if (typeof node === 'string' || typeof node === 'number') return String(node)
-	if (Array.isArray(node)) return node.map(child => getTextContent(child)).join('')
-	if (!isVNodeLike(node)) return ''
-	return getTextContent(node.props['children'])
-}
-
-function getMetricFieldLabels(node: unknown) {
-	const labels: string[] = []
-	visitTree(node, vnode => {
-		if (vnode.type !== MetricField) return
-		const label = vnode.props['label']
-		if (typeof label === 'string') labels.push(label)
-	})
-	return labels
-}
-
-function getSectionBlockTitles(node: unknown) {
-	const titles: string[] = []
-	visitTree(node, vnode => {
-		if (vnode.type !== SectionBlock) return
-		const title = vnode.props['title']
-		if (typeof title === 'string') titles.push(title)
-	})
-	return titles
-}
-
-function getEntityCardTitles(node: unknown) {
-	const titles: string[] = []
-	visitTree(node, vnode => {
-		if (vnode.type !== EntityCard) return
-		const title = vnode.props['title']
-		if (typeof title === 'string') titles.push(title)
-	})
-	return titles
-}
-
-function getDetailTexts(node: unknown) {
-	const detailTexts: string[] = []
-	visitTree(node, vnode => {
-		if (vnode.type !== 'p' || vnode.props['className'] !== 'detail') return
-		detailTexts.push(getTextContent(vnode.props['children']))
-	})
-	visitTree(node, vnode => {
-		const buttonState = getButtonState(vnode)
-		if (buttonState?.disabled !== true || buttonState.title === undefined) return
-		detailTexts.push(buttonState.title)
-	})
-	return detailTexts
-}
-
-function getButtonState(vnode: VNodeLike): ButtonState | undefined {
-	if (vnode.type === 'button') {
-		const title = vnode.props['title']
-		return {
-			disabled: vnode.props['disabled'] === true,
-			label: getTextContent(vnode.props['children']).trim(),
-			title: typeof title === 'string' ? title : undefined,
-		}
-	}
-
-	if (vnode.type !== TransactionActionButton) return undefined
-
-	const idleLabel = vnode.props['idleLabel']
-	if (typeof idleLabel !== 'string') return undefined
-
-	const availability = vnode.props['availability']
-	const disabled = vnode.props['disabled'] === true
-	const pending = vnode.props['pending'] === true
-	let disabledByAvailability = false
-	let title: string | undefined
-
-	if (isObjectRecord(availability)) {
-		disabledByAvailability = availability['disabled'] === true
-		const availabilityReason = availability['reason']
-		if (typeof availabilityReason === 'string') title = availabilityReason
-	}
-
-	return {
-		disabled: disabled || pending || disabledByAvailability,
-		label: idleLabel,
-		title,
-	}
-}
-
-function findButton(node: unknown, label: string) {
-	let matchingButton: ButtonState | undefined
-	visitTree(node, vnode => {
-		if (matchingButton !== undefined) return
-		const buttonState = getButtonState(vnode)
-		if (buttonState?.label === label) matchingButton = buttonState
-	})
-	return matchingButton
-}
-
-function findFirstNodeByType(node: unknown, type: unknown) {
-	let matchingNode: VNodeLike | undefined
-	visitTree(node, vnode => {
-		if (matchingNode !== undefined || vnode.type !== type) return
-		matchingNode = vnode
-	})
-	return matchingNode
-}
 
 function createMarketDetails(): MarketDetails {
 	return {
@@ -317,10 +175,6 @@ function TradingSectionHarness({ tradingForkUniverse }: { tradingForkUniverse: Z
 	)
 }
 
-function renderTradingSection(overrides: Partial<TradingSectionProps> = {}) {
-	return TradingSection(createTradingSectionProps(overrides))
-}
-
 void describe('TradingSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -337,117 +191,147 @@ void describe('TradingSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	void test('renames the max complete sets metric to total complete sets', () => {
-		const section = renderTradingSection()
-		const metricFieldLabels = getMetricFieldLabels(section)
+	void test('renames the max complete sets metric to total complete sets', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps()} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(metricFieldLabels).toContain('Total Complete Sets')
-		expect(metricFieldLabels).not.toContain('Max Complete Sets')
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Total Complete Sets')).not.toBeNull()
+		expect(documentQueries.queryByText('Max Complete Sets')).toBeNull()
 	})
 
-	void test('renders workflow content as section blocks instead of a generic trading actions card', () => {
-		const section = renderTradingSection({ embedInCard: false, showHeader: false })
-		const sectionTitles = getSectionBlockTitles(section)
-		const entityCardTitles = getEntityCardTitles(section)
+	void test('renders trading content without the workflow strip and launches complete-set actions from the share summary', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ embedInCard: false, showHeader: false })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(sectionTitles).not.toContain('Pool Context')
-		expect(sectionTitles).toContain('Your Shares')
-		expect(sectionTitles).toContain('Mint Complete Sets')
-		expect(sectionTitles).toContain('Redeem Complete Sets')
-		expect(sectionTitles).toContain('Migrate Forked Shares')
-		expect(sectionTitles).toContain('Redeem Resolved Shares')
-		expect(entityCardTitles).not.toContain('Trading Actions')
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Trading Workflow')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Your Shares' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Trading Action Launchers' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Mint Complete Sets' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Redeem Complete Sets' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Open Mint Flow' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Open Redeem Flow' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Migrate Forked Shares' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Redeem Resolved Shares' })).not.toBeNull()
 	})
 
-	void test('shows the minting disabled reason when the pool has no active allowance', () => {
-		const section = renderTradingSection({
-			selectedPool: createSelectedPool({
-				completeSetCollateralAmount: 0n,
-				totalRepDeposit: 20n * 10n ** 18n,
-				totalSecurityBondAllowance: 0n,
-				universeHasForked: false,
-			}),
-			tradingForm: createTradingForm({ completeSetAmount: '100' }),
+	void test('shows the minting disabled reason on the launcher when the pool has no active allowance', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({
+						completeSetCollateralAmount: 0n,
+						totalRepDeposit: 20n * 10n ** 18n,
+						totalSecurityBondAllowance: 0n,
+						universeHasForked: false,
+					}),
+					tradingForm: createTradingForm({ completeSetAmount: '100' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const mintButton = documentQueries.getByRole('button', { name: 'Open Mint Flow' }) as HTMLButtonElement
+		expect(mintButton.disabled).toBe(true)
+		expect(mintButton.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)
+	})
+
+	void test('shows the complete-set redemption disabled reason on the launcher when the wallet lacks matching shares', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ universeHasForked: false }),
+					tradingDetails: createTradingDetails({
+						maxRedeemableCompleteSets: 0n,
+						shareBalances: createShareBalances({
+							invalid: 0n,
+							no: 2n * 10n ** 18n,
+							yes: 2n * 10n ** 18n,
+						}),
+					}),
+					tradingForm: createTradingForm({ redeemAmount: '1' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const redeemButton = documentQueries.getByRole('button', { name: 'Open Redeem Flow' }) as HTMLButtonElement
+		expect(redeemButton.disabled).toBe(true)
+		expect(redeemButton.title).toBe(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)
+	})
+
+	void test('shows the share migration disabled reason before the universe forks', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ universeHasForked: false }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const migrateButton = documentQueries.getByRole('button', { name: 'Open Migration Flow' }) as HTMLButtonElement
+		expect(migrateButton.disabled).toBe(true)
+		expect(migrateButton.title).toBe(SHARE_MIGRATION_AFTER_FORK_MESSAGE)
+	})
+
+	void test('opens the migration modal with the shared outcome selector and target picker when migration is available', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ universeHasForked: true }),
+					tradingForkUniverse: createScalarForkUniverse(),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Open Migration Flow' }))
 		})
-		const mintButton = findButton(section, 'Mint Complete Sets')
-		const detailTexts = getDetailTexts(section)
 
-		expect(mintButton).toBeDefined()
-		expect(mintButton?.disabled).toBe(true)
-		expect(mintButton?.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)
-		expect(detailTexts).toContain(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)
+		const modalQueries = within(documentQueries.getByRole('dialog'))
+		const shareOutcomeDropdown = modalQueries.getByRole('button', { name: 'Share Outcome To Migrate' }) as HTMLButtonElement
+		expect(shareOutcomeDropdown.disabled).toBe(false)
+		expect(modalQueries.getByText('Target Child Universes')).not.toBeNull()
 	})
 
-	void test('shows the complete-set redemption disabled reason when the wallet lacks matching shares', () => {
-		const section = renderTradingSection({
-			selectedPool: createSelectedPool({ universeHasForked: false }),
-			tradingDetails: createTradingDetails({
-				maxRedeemableCompleteSets: 0n,
-				shareBalances: createShareBalances({
-					invalid: 0n,
-					no: 2n * 10n ** 18n,
-					yes: 2n * 10n ** 18n,
-				}),
-			}),
-			tradingForm: createTradingForm({ redeemAmount: '1' }),
-		})
-		const redeemButton = findButton(section, 'Redeem Complete Sets')
-		const detailTexts = getDetailTexts(section)
+	void test('shows the share redemption disabled reason before finalization', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ questionOutcome: 'none' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(redeemButton).toBeDefined()
-		expect(redeemButton?.disabled).toBe(true)
-		expect(redeemButton?.title).toBe(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)
-		expect(detailTexts).toContain(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)
+		const documentQueries = within(document.body)
+		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Open Redemption Flow' }) as HTMLButtonElement
+		expect(redeemSharesButton.disabled).toBe(true)
+		expect(redeemSharesButton.title).toBe(MARKET_NOT_FINALIZED_MESSAGE)
 	})
 
-	void test('shows the share migration disabled reason before the universe forks', () => {
-		const section = renderTradingSection({
-			selectedPool: createSelectedPool({ universeHasForked: false }),
-		})
-		const migrateButton = findButton(section, 'Migrate Shares')
-		const detailTexts = getDetailTexts(section)
+	void test('keeps non-suppressed trading guard messages visible in the redeem modal', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					loadingTradingDetails: true,
+					tradingDetails: undefined,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(migrateButton).toBeDefined()
-		expect(migrateButton?.disabled).toBe(true)
-		expect(migrateButton?.title).toBe(SHARE_MIGRATION_AFTER_FORK_MESSAGE)
-		expect(detailTexts).toContain(SHARE_MIGRATION_AFTER_FORK_MESSAGE)
-	})
-
-	void test('disables the share outcome dropdown before the selected pool universe forks', () => {
-		const section = renderTradingSection({
-			selectedPool: createSelectedPool({ universeHasForked: false }),
-		})
-		const shareOutcomeDropdown = findFirstNodeByType(section, EnumDropdown)
-
-		expect(shareOutcomeDropdown).toBeDefined()
-		expect(shareOutcomeDropdown?.props['disabled']).toBe(true)
-	})
-
-	void test('shows the share redemption disabled reason before finalization', () => {
-		const section = renderTradingSection({
-			selectedPool: createSelectedPool({ questionOutcome: 'none' }),
-		})
-		const redeemSharesButton = findButton(section, 'Redeem Shares')
-		const detailTexts = getDetailTexts(section)
-
-		expect(redeemSharesButton).toBeDefined()
-		expect(redeemSharesButton?.disabled).toBe(true)
-		expect(redeemSharesButton?.title).toBe(MARKET_NOT_FINALIZED_MESSAGE)
-		expect(detailTexts).toContain(MARKET_NOT_FINALIZED_MESSAGE)
-	})
-
-	void test('keeps non-suppressed trading guard messages visible', () => {
-		const section = renderTradingSection({
-			loadingTradingDetails: true,
-			tradingDetails: undefined,
-		})
-		const redeemButton = findButton(section, 'Redeem Complete Sets')
-		const detailTexts = getDetailTexts(section)
-
-		expect(redeemButton).toBeDefined()
-		expect(redeemButton?.disabled).toBe(true)
-		expect(redeemButton?.title).toBe('Loading wallet share balances.')
-		expect(detailTexts).toContain('Loading wallet share balances.')
+		const documentQueries = within(document.body)
+		const redeemButton = documentQueries.getByRole('button', { name: 'Open Redeem Flow' }) as HTMLButtonElement
+		expect(redeemButton.disabled).toBe(true)
+		expect(redeemButton.title).toBe('Loading wallet share balances.')
 	})
 
 	void test('keeps scalar share migration interactive through the shared target list and picker', async () => {
@@ -455,11 +339,16 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const slider = documentQueries.getByRole('slider') as HTMLInputElement
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Open Migration Flow' }))
+		})
 
-		expect(documentQueries.getByText('Select Scalar Target')).not.toBeNull()
-		expect(documentQueries.getByText('Select at least one scalar target universe.')).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Add Target' })).not.toBeNull()
+		const modalQueries = within(documentQueries.getByRole('dialog'))
+		const slider = modalQueries.getByRole('slider') as HTMLInputElement
+
+		expect(modalQueries.getByText('Select Scalar Target')).not.toBeNull()
+		expect(modalQueries.getByText('Select at least one scalar target universe.')).not.toBeNull()
+		expect(modalQueries.getByRole('button', { name: 'Add Target' })).not.toBeNull()
 
 		await act(() => {
 			fireEvent.input(slider, {
@@ -467,13 +356,13 @@ void describe('TradingSection', () => {
 			})
 		})
 
-		expect(documentQueries.getByText('7 / 10')).not.toBeNull()
+		expect(modalQueries.getByText('7 / 10')).not.toBeNull()
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Add Target' }))
+			fireEvent.click(modalQueries.getByRole('button', { name: 'Add Target' }))
 		})
 
-		expect(documentQueries.queryByText('Select at least one scalar target universe.')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Remove Target' })).not.toBeNull()
+		expect(modalQueries.queryByText('Select at least one scalar target universe.')).toBeNull()
+		expect(modalQueries.getByRole('button', { name: 'Remove Target' })).not.toBeNull()
 	})
 })

@@ -6,6 +6,7 @@ import { h } from 'preact'
 import { zeroAddress } from 'viem'
 import { OpenOracleSection } from '../components/OpenOracleSection.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../lib/marketForm.js'
+import { deriveOpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
 import type { AccountState } from '../types/app.js'
 import type { OpenOracleSectionProps } from '../types/components.js'
 import type { OpenOracleReportDetails } from '../types/contracts.js'
@@ -24,11 +25,63 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 }
 
 function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps> = {}): OpenOracleSectionProps {
+	const openOracleCreateForm = overrides.openOracleCreateForm ?? getDefaultOpenOracleCreateFormState()
+	const openOracleForm = overrides.openOracleForm ?? getDefaultOpenOracleFormState()
+	const openOracleInitialReportState = overrides.openOracleInitialReportState ?? {
+		defaultPrice: undefined,
+		defaultPriceError: undefined,
+		defaultPriceSource: undefined,
+		defaultPriceSourceUrl: undefined,
+		ethBalance: undefined,
+		ethBalanceError: undefined,
+		quoteAttemptedSources: undefined,
+		quoteFailureKind: undefined,
+		quoteFailureReason: undefined,
+		quoteLoading: false,
+		token1Approval: { error: undefined, loading: false, value: 0n },
+		token1Balance: undefined,
+		token1BalanceError: undefined,
+		token1Decimals: undefined,
+		token2Approval: { error: undefined, loading: false, value: 0n },
+		token2Balance: undefined,
+		token2BalanceError: undefined,
+		token2Decimals: undefined,
+		tokenAccessLoadingInitial: false,
+		tokenAccessRefreshing: false,
+	}
+	const openOracleReportDetails = overrides.openOracleReportDetails
+	const openOracleInitialReportSubmission =
+		overrides.openOracleInitialReportSubmission ??
+		(openOracleReportDetails === undefined
+			? undefined
+			: deriveOpenOracleInitialReportSubmissionDetails({
+					approvedToken1Amount: openOracleInitialReportState.token1Approval.value,
+					approvedToken2Amount: openOracleInitialReportState.token2Approval.value,
+					defaultPrice: openOracleInitialReportState.defaultPrice,
+					defaultPriceError: openOracleInitialReportState.defaultPriceError,
+					defaultPriceSource: openOracleInitialReportState.defaultPriceSource,
+					defaultPriceSourceUrl: openOracleInitialReportState.defaultPriceSourceUrl,
+					priceInput: openOracleForm.price,
+					quoteAttemptedSources: openOracleInitialReportState.quoteAttemptedSources,
+					quoteFailureReason: openOracleInitialReportState.quoteFailureReason,
+					reportDetails: openOracleReportDetails,
+					token1AllowanceError: openOracleInitialReportState.token1Approval.error,
+					token1Balance: openOracleInitialReportState.token1Balance,
+					token1BalanceError: openOracleInitialReportState.token1BalanceError,
+					token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
+					token2AllowanceError: openOracleInitialReportState.token2Approval.error,
+					token2Balance: openOracleInitialReportState.token2Balance,
+					token2BalanceError: openOracleInitialReportState.token2BalanceError,
+					token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
+					walletEthBalance: openOracleInitialReportState.ethBalance,
+				}))
+
 	return {
+		activeView: 'create',
 		accountState: createAccountState(),
-		initialView: 'create',
 		loadingOpenOracleCreate: false,
 		loadingOracleReport: false,
+		onActiveViewChange: () => undefined,
 		onApproveToken1: () => undefined,
 		onApproveToken2: () => undefined,
 		onCreateOpenOracleGame: () => undefined,
@@ -41,32 +94,12 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 		onSubmitInitialReport: () => undefined,
 		onWrapWethForInitialReport: () => undefined,
 		openOracleActiveAction: undefined,
-		openOracleCreateForm: getDefaultOpenOracleCreateFormState(),
+		openOracleCreateForm,
 		openOracleError: undefined,
-		openOracleForm: getDefaultOpenOracleFormState(),
-		openOracleInitialReportState: {
-			defaultPrice: undefined,
-			defaultPriceError: undefined,
-			defaultPriceSource: undefined,
-			defaultPriceSourceUrl: undefined,
-			ethBalance: undefined,
-			ethBalanceError: undefined,
-			quoteAttemptedSources: undefined,
-			quoteFailureKind: undefined,
-			quoteFailureReason: undefined,
-			quoteLoading: false,
-			token1Approval: { error: undefined, loading: false, value: 0n },
-			token1Balance: undefined,
-			token1BalanceError: undefined,
-			token1Decimals: undefined,
-			token2Approval: { error: undefined, loading: false, value: 0n },
-			token2Balance: undefined,
-			token2BalanceError: undefined,
-			token2Decimals: undefined,
-			tokenAccessLoadingInitial: false,
-			tokenAccessRefreshing: false,
-		},
-		openOracleReportDetails: undefined,
+		openOracleForm,
+		openOracleInitialReportSubmission,
+		openOracleInitialReportState,
+		openOracleReportDetails,
 		openOracleResult: undefined,
 		...overrides,
 	}
@@ -133,7 +166,7 @@ describe('OpenOracleSection route create view', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('renders requirements and create-success handoff actions in create view', async () => {
+	test('renders create-success handoff actions in create view', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				OpenOracleSection,
@@ -148,7 +181,6 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Resolve these checks before creating a new Open Oracle game.')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Return to Browse' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Create Another' })).not.toBeNull()
 	})
@@ -158,7 +190,7 @@ describe('OpenOracleSection route create view', () => {
 			h(
 				OpenOracleSection,
 				createOpenOracleSectionProps({
-					initialView: 'selected-report',
+					activeView: 'selected-report',
 					openOracleReportDetails: createOpenOracleReportDetails({
 						currentReporter: '0x3000000000000000000000000000000000000000',
 						currentTime: 100n,

@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from '../lib/transactionState.js'
-import { resetActiveEnvironmentForTesting, setActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 afterEach(() => {
@@ -32,7 +32,7 @@ void describe('transaction state', () => {
 	})
 
 	void test('omits explorer URLs when the active profile does not define one', () => {
-		setActiveEnvironmentForTesting(
+		const resetEnvironment = installActiveEnvironmentForTesting(
 			createFakeBackend({
 				profile: createFakeSimulationProfile(),
 			}),
@@ -42,5 +42,6 @@ void describe('transaction state', () => {
 
 		expect(submitted.lastTransactionHash).toBe('0x1234')
 		expect(submitted.transactionUrl).toBeUndefined()
+		resetEnvironment()
 	})
 })

@@ -17,6 +17,7 @@ import { UniverseLink } from './UniverseLink.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { zeroAddress } from 'viem'
+import { sameAddress } from '../lib/address.js'
 import { isMainnetChain } from '../lib/network.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
@@ -28,17 +29,20 @@ export function SecurityPoolsOverviewSection({
 	closeLiquidationModal,
 	hasLoadedSecurityPools,
 	liquidationAmount,
+	liquidationMaxAmount,
 	liquidationManagerAddress,
 	liquidationModalOpen,
 	liquidationSecurityPoolAddress,
 	liquidationTargetVault,
+	loadingPoolOracleManager,
 	loadingSecurityPools,
 	onLiquidationAmountChange,
-	onLiquidationTargetVaultChange,
+	onLoadPoolOracleManager,
 	onLoadSecurityPools,
 	onOpenLiquidationModal,
 	onQueueLiquidation,
 	onSelectSecurityPool,
+	poolOracleManagerDetails,
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
@@ -57,6 +61,10 @@ export function SecurityPoolsOverviewSection({
 		mode: 'collection',
 		poolCount: securityPools.length,
 	})
+	const selectedPool = securityPools.find(pool => sameAddress(pool.securityPoolAddress, liquidationSecurityPoolAddress))
+	const currentPoolOracleManagerDetails = selectedPool === undefined || liquidationManagerAddress === undefined || !sameAddress(poolOracleManagerDetails?.managerAddress, liquidationManagerAddress) ? undefined : poolOracleManagerDetails
+	const targetVaultSummary = selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))
+	const callerVaultSummary = accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const normalizedSearchText = searchText.trim().toLowerCase()
 	const filteredSecurityPools = securityPools.filter(pool => {
 		if (systemStateFilter !== 'all' && pool.systemState !== systemStateFilter) return false
@@ -186,7 +194,7 @@ export function SecurityPoolsOverviewSection({
 													title={<AddressValue address={vault.vaultAddress} />}
 													variant='compact'
 													actions={
-														<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
+														<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)} disabled={accountState.address === undefined || !isMainnet}>
 															Liquidate Vault
 														</button>
 													}
@@ -216,15 +224,26 @@ export function SecurityPoolsOverviewSection({
 			<LiquidationModal
 				accountAddress={accountState.address}
 				closeLiquidationModal={closeLiquidationModal}
+				currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
 				isMainnet={isMainnet}
 				liquidationAmount={liquidationAmount}
+				liquidationMaxAmount={liquidationMaxAmount}
 				liquidationManagerAddress={liquidationManagerAddress}
 				liquidationModalOpen={liquidationModalOpen}
 				liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}
+				loadingPoolOracleManager={loadingPoolOracleManager}
 				liquidationTargetVault={liquidationTargetVault}
+				onLoadPoolOracleManager={onLoadPoolOracleManager}
+				onSelectedPoolViewChange={() => undefined}
+				repPerEthPrice={repPerEthPrice}
+				repPerEthSource={repPerEthSource}
+				repPerEthSourceUrl={repPerEthSourceUrl}
+				selectedPool={selectedPool}
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
+				securityPoolOverviewResult={securityPoolOverviewResult}
+				callerVaultSummary={callerVaultSummary}
+				targetVaultSummary={targetVaultSummary}
 				onLiquidationAmountChange={onLiquidationAmountChange}
-				onLiquidationTargetVaultChange={onLiquidationTargetVaultChange}
 				onQueueLiquidation={onQueueLiquidation}
 			/>
 		</RouteWorkflowPanel>

@@ -2,9 +2,10 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from 'viem'
-import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadSecurityVaultDetails } from '../contracts.js'
+import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation } from '../contracts.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
-import { getActiveBackend, initializeActiveEnvironment, resetActiveEnvironmentForTesting, setActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
+import { getSecurityVaultWithdrawableRepAmount } from '../lib/securityVault.js'
+import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
@@ -44,7 +45,7 @@ void describe('active environment', () => {
 	void test('treats both mainnet and simulation profiles as supported app chains', () => {
 		expect(isSupportedAppChain('0x1')).toBe(true)
 
-		setActiveEnvironmentForTesting(
+		const resetEnvironment = installActiveEnvironmentForTesting(
 			createFakeBackend({
 				profile: createFakeSimulationProfile(),
 			}),
@@ -52,11 +53,12 @@ void describe('active environment', () => {
 
 		expect(isSupportedAppChain('0x539')).toBe(true)
 		expect(getWrongNetworkMessage()).toBeUndefined()
+		resetEnvironment()
 	})
 
 	void test('disposes an existing simulation controller when reinitializing into injected mode', async () => {
 		let disposeCalls = 0
-		setActiveEnvironmentForTesting(
+		const resetEnvironment = installActiveEnvironmentForTesting(
 			createFakeBackend({
 				profile: createFakeSimulationProfile(),
 			}),
@@ -71,6 +73,7 @@ void describe('active environment', () => {
 
 		expect(disposeCalls).toBe(1)
 		expect(getActiveBackend().id).toBe('injected')
+		resetEnvironment()
 	})
 })
 
@@ -344,5 +347,94 @@ void describe('simulation backend', () => {
 		expect(seededPool.totalSecurityBondAllowance).toBe(2_500n * 10n ** 18n)
 		expect(seededVault.repDepositShare).toBe(10_000n * 10n ** 18n)
 		expect(seededVault.securityBondAllowance).toBe(2_500n * 10n ** 18n)
+	}, 60_000)
+
+	void test('only allows the oracle-backed portion of the seeded REP deposit to be withdrawn in the security-pool scenario', async () => {
+		const backend = await createBootstrappedSimulationBackendWithRetry('security-pool')
+		backend.setTransactionDelayMilliseconds(0)
+
+		try {
+			const primaryAccount = backend.accounts[0]
+			if (primaryAccount === undefined) {
+				throw new Error('Expected seeded simulation QA accounts')
+			}
+
+			const readClient = backend.createReadClient()
+			const writeClient = backend.createWriteClient(primaryAccount)
+			const poolsBefore = await loadAllSecurityPools(readClient)
+			const seededPoolBefore = poolsBefore[0]
+			if (seededPoolBefore === undefined) {
+				throw new Error('Expected a seeded security pool')
+			}
+
+			const seededVaultBefore = await loadSecurityVaultDetails(readClient, seededPoolBefore.securityPoolAddress, primaryAccount)
+			if (seededVaultBefore === undefined) {
+				throw new Error('Expected a seeded security vault')
+			}
+
+			const managerBefore = await loadOracleManagerDetails(readClient, seededVaultBefore.managerAddress)
+			const walletRepBefore = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
+			const maxWithdrawableRep = getSecurityVaultWithdrawableRepAmount({
+				lockedRepInEscalationGame: seededVaultBefore.lockedRepInEscalationGame,
+				repDepositShare: seededVaultBefore.repDepositShare,
+				repPerEthPrice: managerBefore.lastPrice,
+				securityBondAllowance: seededVaultBefore.securityBondAllowance,
+				totalRepDeposit: seededPoolBefore.totalRepDeposit,
+				totalSecurityBondAllowance: seededPoolBefore.totalSecurityBondAllowance,
+			})
+
+			expect(managerBefore.isPriceValid).toBe(true)
+			expect(seededVaultBefore.repDepositShare).toBe(10_000n * 10n ** 18n)
+			expect(seededPoolBefore.totalRepDeposit).toBe(10_000n * 10n ** 18n)
+			expect(maxWithdrawableRep !== undefined && maxWithdrawableRep > 0n).toBe(true)
+			expect(maxWithdrawableRep !== undefined && maxWithdrawableRep < seededVaultBefore.repDepositShare).toBe(true)
+
+			await queueOracleManagerOperation(writeClient, seededVaultBefore.managerAddress, 'withdrawRep', primaryAccount, seededVaultBefore.repDepositShare)
+
+			const poolsAfterFailedFullWithdraw = await loadAllSecurityPools(readClient)
+			const seededPoolAfterFailedFullWithdraw = poolsAfterFailedFullWithdraw[0]
+			if (seededPoolAfterFailedFullWithdraw === undefined) {
+				throw new Error('Expected a seeded security pool after the failed full withdrawal')
+			}
+
+			const seededVaultAfterFailedFullWithdraw = await loadSecurityVaultDetails(readClient, seededPoolAfterFailedFullWithdraw.securityPoolAddress, primaryAccount)
+			if (seededVaultAfterFailedFullWithdraw === undefined) {
+				throw new Error('Expected a seeded security vault after the failed full withdrawal')
+			}
+
+			const walletRepAfterFailedFullWithdraw = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
+
+			expect(seededVaultAfterFailedFullWithdraw.repDepositShare).toBe(seededVaultBefore.repDepositShare)
+			expect(seededPoolAfterFailedFullWithdraw.totalRepDeposit).toBe(seededPoolBefore.totalRepDeposit)
+			expect(walletRepAfterFailedFullWithdraw).toBe(walletRepBefore)
+
+			if (maxWithdrawableRep === undefined || maxWithdrawableRep <= 0n) {
+				throw new Error('Expected a positive max withdrawable REP amount in the seeded scenario')
+			}
+
+			await queueOracleManagerOperation(writeClient, seededVaultBefore.managerAddress, 'withdrawRep', primaryAccount, maxWithdrawableRep)
+
+			const poolsAfter = await loadAllSecurityPools(readClient)
+			const seededPoolAfter = poolsAfter[0]
+			if (seededPoolAfter === undefined) {
+				throw new Error('Expected a seeded security pool after the withdrawal')
+			}
+
+			const seededVaultAfter = await loadSecurityVaultDetails(readClient, seededPoolAfter.securityPoolAddress, primaryAccount)
+			if (seededVaultAfter === undefined) {
+				throw new Error('Expected a seeded security vault after the withdrawal')
+			}
+
+			const managerAfter = await loadOracleManagerDetails(readClient, seededVaultAfter.managerAddress)
+			const walletRepAfter = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
+
+			expect(seededVaultAfter.repDepositShare).toBe(seededVaultBefore.repDepositShare - maxWithdrawableRep)
+			expect(seededPoolAfter.totalRepDeposit).toBe(seededPoolBefore.totalRepDeposit - maxWithdrawableRep)
+			expect(walletRepAfter - walletRepBefore).toBe(maxWithdrawableRep)
+			expect(managerAfter.pendingOperation).toBeUndefined()
+			expect(managerAfter.pendingOperationSlotId).toBe(0n)
+		} finally {
+			await backend.dispose()
+		}
 	}, 60_000)
 })

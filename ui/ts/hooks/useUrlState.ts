@@ -1,12 +1,16 @@
 import { useSignal } from '@preact/signals'
 import { useCallback, useEffect } from 'preact/hooks'
 import {
+	readOpenOracleViewQueryParam,
 	readOpenOracleReportIdQueryParam,
+	readSecurityPoolsViewQueryParam,
 	readSecurityPoolQueryParam,
 	readSelectedPoolViewQueryParam,
 	readUniverseQueryParam,
 	readZoltarViewQueryParam,
+	writeOpenOracleViewQueryParam,
 	writeOpenOracleReportIdQueryParam,
+	writeSecurityPoolsViewQueryParam,
 	writeSecurityPoolQueryParam,
 	writeSelectedPoolViewQueryParam,
 	writeUniverseQueryParam,
@@ -15,7 +19,9 @@ import {
 
 type UrlState = {
 	activeUniverseId: bigint
+	openOracleView: string
 	openOracleReportId: string
+	securityPoolsView: string
 	selectedPoolView: string
 	securityPoolAddress: string
 	zoltarView: string
@@ -24,6 +30,8 @@ type UrlState = {
 type UseUrlStateResult = UrlState & {
 	setActiveUniverseId: (universeId: bigint | undefined) => void
 	setOpenOracleReport: (reportId: string | undefined) => void
+	setOpenOracleView: (view: string | undefined) => void
+	setSecurityPoolsView: (view: string | undefined) => void
 	setSelectedPoolView: (view: string | undefined) => void
 	setSecurityPoolAddress: (securityPoolAddress: string) => void
 	setZoltarView: (view: string | undefined) => void
@@ -32,7 +40,9 @@ type UseUrlStateResult = UrlState & {
 function readUrlState(search: string): UrlState {
 	return {
 		activeUniverseId: readUniverseQueryParam(search) ?? 0n,
+		openOracleView: readOpenOracleViewQueryParam(search) ?? '',
 		openOracleReportId: readOpenOracleReportIdQueryParam(search) ?? '',
+		securityPoolsView: readSecurityPoolsViewQueryParam(search) ?? '',
 		selectedPoolView: readSelectedPoolViewQueryParam(search) ?? '',
 		securityPoolAddress: readSecurityPoolQueryParam(search) ?? '',
 		zoltarView: readZoltarViewQueryParam(search) ?? '',
@@ -87,6 +97,22 @@ export function useUrlState(): UseUrlStateResult {
 		[applyUrlStateUpdate],
 	)
 
+	const setOpenOracleView = useCallback(
+		(view: string | undefined) => {
+			const nextSearch = writeOpenOracleViewQueryParam(window.location.search, view === '' ? undefined : view)
+			applyUrlStateUpdate(nextSearch)
+		},
+		[applyUrlStateUpdate],
+	)
+
+	const setSecurityPoolsView = useCallback(
+		(view: string | undefined) => {
+			const nextSearch = writeSecurityPoolsViewQueryParam(window.location.search, view === '' ? undefined : view)
+			applyUrlStateUpdate(nextSearch)
+		},
+		[applyUrlStateUpdate],
+	)
+
 	const setSelectedPoolView = useCallback(
 		(view: string | undefined) => {
 			const nextSearch = writeSelectedPoolViewQueryParam(window.location.search, view === '' ? undefined : view)
@@ -105,12 +131,16 @@ export function useUrlState(): UseUrlStateResult {
 
 	return {
 		activeUniverseId: urlState.value.activeUniverseId,
+		openOracleView: urlState.value.openOracleView,
 		openOracleReportId: urlState.value.openOracleReportId,
+		securityPoolsView: urlState.value.securityPoolsView,
 		selectedPoolView: urlState.value.selectedPoolView,
 		securityPoolAddress: urlState.value.securityPoolAddress,
 		zoltarView: urlState.value.zoltarView,
 		setActiveUniverseId,
 		setOpenOracleReport,
+		setOpenOracleView,
+		setSecurityPoolsView,
 		setSelectedPoolView,
 		setSecurityPoolAddress,
 		setZoltarView,

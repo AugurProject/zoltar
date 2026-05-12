@@ -10,7 +10,6 @@ export function LifecycleStageBanner({ stage }: LifecycleStageBannerProps) {
 	return (
 		<section className={`lifecycle-stage-banner ${stage.tone}`}>
 			<div className='lifecycle-stage-banner-main'>
-				<p className='panel-label'>Stage</p>
 				<h3>{stage.label}</h3>
 				<p className='detail'>{stage.detail}</p>
 			</div>

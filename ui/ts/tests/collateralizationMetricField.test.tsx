@@ -42,4 +42,24 @@ describe('CollateralizationMetricField', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Awaiting REP/ETH price')).not.toBeNull()
 	})
+
+	test('colors the metric green when it is strictly above the security multiplier threshold', async () => {
+		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={201n * 10n ** 18n} repPerEthSource='mock' repPerEthSourceUrl={undefined} securityBondAllowance={1n} securityMultiplier={2n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const metricValue = within(document.body)
+			.getByText(/201\.00 %/)
+			.closest('.metric-field-value')
+		expect(metricValue?.className).toContain('metric-value-success')
+	})
+
+	test('colors the metric red when it is at or below the security multiplier threshold', async () => {
+		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={200n * 10n ** 18n} repPerEthSource='mock' repPerEthSourceUrl={undefined} securityBondAllowance={1n} securityMultiplier={2n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const metricValue = within(document.body)
+			.getByText(/200\.00 %/)
+			.closest('.metric-field-value')
+		expect(metricValue?.className).toContain('metric-value-danger')
+	})
 })

@@ -16,14 +16,10 @@ import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { OperationModal } from './OperationModal.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
-import { RequirementsChecklist } from './RequirementsChecklist.js'
 import { ResultBanner } from './ResultBanner.js'
-import { RouteHeader } from './RouteHeader.js'
-import { SectionModeTabs } from './SectionModeTabs.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StickyObjectContext } from './StickyObjectContext.js'
 import { StateHint } from './StateHint.js'
-import { TabbedSectionBlock } from './TabbedSectionBlock.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -31,7 +27,6 @@ import { TimestampValue } from './TimestampValue.js'
 import { useLoadController } from '../hooks/useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import {
-	deriveOpenOracleInitialReportSubmissionDetails,
 	formatOpenOracleFeePercentage,
 	formatOpenOracleMultiplier,
 	getOpenOracleDisputeAvailability,
@@ -39,16 +34,16 @@ import {
 	getOpenOracleReportStatusTone,
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
+	type OpenOracleInitialReportSubmissionDetails,
 	type OpenOracleSelectedReportActionMode,
 } from '../lib/openOracle.js'
 import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
 import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
 import { loadOpenOracleReportSummaries } from '../contracts.js'
 import { getReportPresentation } from '../lib/userCopy.js'
-import { resolveFirstMatchingValue } from '../lib/viewState.js'
 import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
-import type { OpenOracleSectionProps, OpenOracleView, ReadinessBlocker, WorkflowOutcomePresentation } from '../types/components.js'
+import type { OpenOracleSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
 
 const BROWSE_PAGE_SIZE = 10
 type SelectedReportModal = 'dispute' | 'initial-report' | 'settle' | undefined
@@ -132,25 +127,43 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 	)
 }
 
-export function renderSelectedReportActionSection(
-	actionMode: OpenOracleSelectedReportActionMode,
-	isConnected: boolean,
-	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction'],
-	openOracleForm: OpenOracleFormState,
-	initialReportSubmission: ReturnType<typeof deriveOpenOracleInitialReportSubmissionDetails>,
-	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
-	token1Symbol: string,
-	token2Symbol: string,
-	onApproveToken1: (amount?: bigint) => void,
-	onApproveToken2: (amount?: bigint) => void,
-	onDisputeReport: () => void,
-	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void,
-	onRefreshPrice: () => void,
-	onSettleReport: () => void,
-	onSubmitInitialReport: () => void,
-	onWrapWethForInitialReport: () => void,
-	openOracleReportDetails?: OpenOracleReportDetails,
-) {
+export function renderSelectedReportActionSection({
+	actionMode,
+	initialReportSubmission,
+	isConnected,
+	onApproveToken1,
+	onApproveToken2,
+	onDisputeReport,
+	onOpenOracleFormChange,
+	onRefreshPrice,
+	onSettleReport,
+	onSubmitInitialReport,
+	onWrapWethForInitialReport,
+	openOracleActiveAction,
+	openOracleForm,
+	openOracleInitialReportState,
+	openOracleReportDetails,
+	token1Symbol,
+	token2Symbol,
+}: {
+	actionMode: OpenOracleSelectedReportActionMode
+	initialReportSubmission: OpenOracleInitialReportSubmissionDetails
+	isConnected: boolean
+	onApproveToken1: (amount?: bigint) => void
+	onApproveToken2: (amount?: bigint) => void
+	onDisputeReport: () => void
+	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
+	onRefreshPrice: () => void
+	onSettleReport: () => void
+	onSubmitInitialReport: () => void
+	onWrapWethForInitialReport: () => void
+	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction']
+	openOracleForm: OpenOracleFormState
+	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState']
+	openOracleReportDetails?: OpenOracleReportDetails
+	token1Symbol: string
+	token2Symbol: string
+}) {
 	const disputeTokenOptions: EnumDropdownOption<OpenOracleFormState['disputeTokenToSwap']>[] = [
 		{ value: 'token1', label: token1Symbol },
 		{ value: 'token2', label: token2Symbol },
@@ -158,24 +171,6 @@ export function renderSelectedReportActionSection(
 	const showQuoteLoadingPlaceholder = openOracleInitialReportState.quoteLoading && openOracleForm.price.trim() === '' && openOracleInitialReportState.defaultPrice === undefined && openOracleInitialReportState.defaultPriceError === undefined
 	const disputeAvailability = openOracleReportDetails === undefined ? { canAct: true, message: undefined } : getOpenOracleDisputeAvailability(openOracleReportDetails)
 	const settleAvailability = openOracleReportDetails === undefined ? { canAct: true, message: undefined } : getOpenOracleSettleAvailability(openOracleReportDetails)
-	const initialReportRequirements: ReadinessBlocker[] = [
-		{ key: 'wallet', label: 'Wallet connected', resolved: isConnected, ...(isConnected ? {} : { detail: 'Connect a wallet before submitting the initial report.' }) },
-		{ key: 'price', label: 'Valid price entered', resolved: initialReportSubmission.price !== undefined && initialReportSubmission.price > 0n, ...(initialReportSubmission.price !== undefined && initialReportSubmission.price > 0n ? {} : { detail: `Enter a valid ${token1Symbol} / ${token2Symbol} price first.` }) },
-		{ key: 'token1-approval', label: `${token1Symbol} approval ready`, resolved: initialReportSubmission.token1Approval.hasSufficientApproval, ...(initialReportSubmission.token1Approval.hasSufficientApproval ? {} : { detail: `Approve enough ${token1Symbol} inside this modal.` }) },
-		{ key: 'token2-approval', label: `${token2Symbol} approval ready`, resolved: initialReportSubmission.token2Approval.hasSufficientApproval, ...(initialReportSubmission.token2Approval.hasSufficientApproval ? {} : { detail: `Approve enough ${token2Symbol} inside this modal.` }) },
-		{ key: 'submission', label: 'Submission ready', resolved: initialReportSubmission.canSubmit, ...(initialReportSubmission.canSubmit ? {} : { detail: initialReportSubmission.blockMessage?.message ?? 'Resolve the remaining report requirements before submitting.' }) },
-	]
-	const disputeRequirements: ReadinessBlocker[] = [
-		{ key: 'wallet', label: 'Wallet connected', resolved: isConnected, ...(isConnected ? {} : { detail: 'Connect a wallet before disputing this report.' }) },
-		{ key: 'window', label: 'Report is in dispute window', resolved: disputeAvailability.canAct, ...(disputeAvailability.canAct ? {} : { detail: disputeAvailability.message ?? 'This report cannot be disputed right now.' }) },
-		{ key: 'amount1', label: `New ${token1Symbol} amount entered`, resolved: openOracleForm.disputeNewAmount1.trim() !== '', ...(openOracleForm.disputeNewAmount1.trim() !== '' ? {} : { detail: `Enter the replacement ${token1Symbol} amount.` }) },
-		{ key: 'amount2', label: `New ${token2Symbol} amount entered`, resolved: openOracleForm.disputeNewAmount2.trim() !== '', ...(openOracleForm.disputeNewAmount2.trim() !== '' ? {} : { detail: `Enter the replacement ${token2Symbol} amount.` }) },
-	]
-	const settleRequirements: ReadinessBlocker[] = [
-		{ key: 'wallet', label: 'Wallet connected', resolved: isConnected, ...(isConnected ? {} : { detail: 'Connect a wallet before settling this report.' }) },
-		{ key: 'window', label: 'Report is settleable', resolved: settleAvailability.canAct, ...(settleAvailability.canAct ? {} : { detail: settleAvailability.message ?? 'This report is not ready to settle yet.' }) },
-	]
-
 	switch (actionMode) {
 		case 'initial-report':
 			return (
@@ -240,7 +235,6 @@ export function renderSelectedReportActionSection(
 						)}
 						{initialReportSubmission.wrapRequiredWethMessage?.kind !== 'visible' ? undefined : <p className='detail'>{initialReportSubmission.wrapRequiredWethMessage.message}</p>}
 						{initialReportSubmission.blockMessage?.kind !== 'visible' ? undefined : <p className='detail'>{initialReportSubmission.blockMessage.message}</p>}
-						<RequirementsChecklist items={initialReportRequirements} />
 						<div className='actions'>
 							{!initialReportSubmission.hasWethWrapAction ? undefined : (
 								<TransactionActionButton
@@ -295,7 +289,6 @@ export function renderSelectedReportActionSection(
 								<FormInput value={openOracleForm.disputeNewAmount2} onInput={event => onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })} />
 							</label>
 						</div>
-						<RequirementsChecklist items={disputeRequirements} />
 						<div className='actions'>
 							<TransactionActionButton
 								idleLabel='Dispute & Swap'
@@ -326,7 +319,6 @@ export function renderSelectedReportActionSection(
 									{ label: 'Settlement Timestamp', value: <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.settlementTimestamp} zeroText='Not settled' /> },
 								])}
 						<p className='detail'>Settlement is confirmation-first. Review the current report state and confirm only when the dispute window is closed.</p>
-						<RequirementsChecklist items={settleRequirements} />
 						<div className='actions'>
 							<TransactionActionButton
 								idleLabel='Settle Report'
@@ -357,8 +349,8 @@ function renderReportDetailsCard(
 	openOracleReportDetails: OpenOracleReportDetails | undefined,
 	openOracleForm: OpenOracleFormState,
 	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
+	openOracleInitialReportSubmission: OpenOracleSectionProps['openOracleInitialReportSubmission'],
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction'],
-	modeTabs: ComponentChildren,
 	loadingOracleReport: boolean,
 	isConnected: boolean,
 	selectedReportModal: SelectedReportModal,
@@ -394,7 +386,7 @@ function renderReportDetailsCard(
 			state: loadingOracleReport ? 'loading' : openOracleForm.reportId.trim() === '' ? 'unknown' : 'missing',
 		})
 		return (
-			<SectionBlock actions={modeTabs} title='Selected Report'>
+			<SectionBlock title='Selected Report'>
 				{reportControls}
 				{reportPresentation === undefined ? undefined : <StateHint presentation={reportPresentation} />}
 			</SectionBlock>
@@ -428,28 +420,9 @@ function renderReportDetailsCard(
 					? { ...action, onAction: () => onSelectedReportModalChange('settle') }
 					: action,
 	)
-	const initialReportSubmission = deriveOpenOracleInitialReportSubmissionDetails({
-		approvedToken1Amount: openOracleInitialReportState.token1Approval.value,
-		approvedToken2Amount: openOracleInitialReportState.token2Approval.value,
-		defaultPrice: openOracleInitialReportState.defaultPrice,
-		defaultPriceError: openOracleInitialReportState.defaultPriceError,
-		defaultPriceSource: openOracleInitialReportState.defaultPriceSource,
-		defaultPriceSourceUrl: openOracleInitialReportState.defaultPriceSourceUrl,
-		priceInput: openOracleForm.price,
-		quoteAttemptedSources: openOracleInitialReportState.quoteAttemptedSources,
-		quoteFailureReason: openOracleInitialReportState.quoteFailureReason,
-		reportDetails: openOracleReportDetails,
-		token1Balance: openOracleInitialReportState.token1Balance,
-		token1BalanceError: openOracleInitialReportState.token1BalanceError,
-		token1AllowanceError: openOracleInitialReportState.token1Approval.error,
-		token2Balance: openOracleInitialReportState.token2Balance,
-		token2BalanceError: openOracleInitialReportState.token2BalanceError,
-		token2AllowanceError: openOracleInitialReportState.token2Approval.error,
-		token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
-		token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
-		walletEthBalance: openOracleInitialReportState.ethBalance,
-	})
-
+	if (openOracleInitialReportSubmission === undefined) {
+		return undefined
+	}
 	return (
 		<>
 			<StickyObjectContext
@@ -470,7 +443,7 @@ function renderReportDetailsCard(
 					))}
 				</div>
 			</SectionBlock>
-			<SectionBlock actions={modeTabs} badge={<span className={`badge ${statusTone}`}>{status}</span>} title='Selected Report'>
+			<SectionBlock badge={<span className={`badge ${statusTone}`}>{status}</span>} title='Selected Report'>
 				{reportControls}
 				<DataGrid className='question-summary-grid'>
 					{renderReportField('Report ID', openOracleReportDetails.reportId.toString())}
@@ -632,15 +605,10 @@ function renderReportDetailsCard(
 			</div>
 
 			<OperationModal isOpen={selectedReportModal === 'initial-report'} onClose={() => onSelectedReportModalChange(undefined)} title='Submit Initial Report' description='Review price source, approvals, and token balances before submitting the initial report.'>
-				{renderSelectedReportActionSection(
-					'initial-report',
+				{renderSelectedReportActionSection({
+					actionMode: 'initial-report',
+					initialReportSubmission: openOracleInitialReportSubmission,
 					isConnected,
-					openOracleActiveAction,
-					openOracleForm,
-					initialReportSubmission,
-					openOracleInitialReportState,
-					openOracleReportDetails.token1Symbol,
-					openOracleReportDetails.token2Symbol,
 					onApproveToken1,
 					onApproveToken2,
 					onDisputeReport,
@@ -649,20 +617,20 @@ function renderReportDetailsCard(
 					onSettleReport,
 					onSubmitInitialReport,
 					onWrapWethForInitialReport,
+					openOracleActiveAction,
+					openOracleForm,
+					openOracleInitialReportState,
 					openOracleReportDetails,
-				)}
+					token1Symbol: openOracleReportDetails.token1Symbol,
+					token2Symbol: openOracleReportDetails.token2Symbol,
+				})}
 			</OperationModal>
 
 			<OperationModal isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title='Dispute & Swap' description='Provide the replacement swap amounts for the selected report.'>
-				{renderSelectedReportActionSection(
-					'dispute',
+				{renderSelectedReportActionSection({
+					actionMode: 'dispute',
+					initialReportSubmission: openOracleInitialReportSubmission,
 					isConnected,
-					openOracleActiveAction,
-					openOracleForm,
-					initialReportSubmission,
-					openOracleInitialReportState,
-					openOracleReportDetails.token1Symbol,
-					openOracleReportDetails.token2Symbol,
 					onApproveToken1,
 					onApproveToken2,
 					onDisputeReport,
@@ -671,20 +639,20 @@ function renderReportDetailsCard(
 					onSettleReport,
 					onSubmitInitialReport,
 					onWrapWethForInitialReport,
+					openOracleActiveAction,
+					openOracleForm,
+					openOracleInitialReportState,
 					openOracleReportDetails,
-				)}
+					token1Symbol: openOracleReportDetails.token1Symbol,
+					token2Symbol: openOracleReportDetails.token2Symbol,
+				})}
 			</OperationModal>
 
 			<OperationModal isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title='Settle Report' description='Confirm settlement once the selected report is ready.'>
-				{renderSelectedReportActionSection(
-					'settle',
+				{renderSelectedReportActionSection({
+					actionMode: 'settle',
+					initialReportSubmission: openOracleInitialReportSubmission,
 					isConnected,
-					openOracleActiveAction,
-					openOracleForm,
-					initialReportSubmission,
-					openOracleInitialReportState,
-					openOracleReportDetails.token1Symbol,
-					openOracleReportDetails.token2Symbol,
 					onApproveToken1,
 					onApproveToken2,
 					onDisputeReport,
@@ -693,8 +661,13 @@ function renderReportDetailsCard(
 					onSettleReport,
 					onSubmitInitialReport,
 					onWrapWethForInitialReport,
+					openOracleActiveAction,
+					openOracleForm,
+					openOracleInitialReportState,
 					openOracleReportDetails,
-				)}
+					token1Symbol: openOracleReportDetails.token1Symbol,
+					token2Symbol: openOracleReportDetails.token2Symbol,
+				})}
 			</OperationModal>
 		</>
 	)
@@ -766,6 +739,7 @@ function getOpenOracleOutcomePresentation(action: OpenOracleSectionProps['openOr
 }
 
 export function OpenOracleSection({
+	activeView,
 	accountState,
 	loadingOracleReport,
 	onApproveToken1,
@@ -785,19 +759,12 @@ export function OpenOracleSection({
 	openOracleError,
 	openOracleForm,
 	openOracleInitialReportState,
+	openOracleInitialReportSubmission,
 	openOracleReportDetails,
 	openOracleResult,
-	initialView,
+	onActiveViewChange,
 }: OpenOracleSectionProps) {
-	const [view, setView] = useState<OpenOracleView>(() =>
-		resolveFirstMatchingValue<OpenOracleView>(
-			[
-				[initialView !== undefined, initialView ?? 'browse'],
-				[openOracleForm.reportId !== '', 'selected-report'],
-			],
-			'browse',
-		),
-	)
+	const view = activeView
 	const [browsePage, setBrowsePage] = useState<OpenOracleReportSummaryPage | undefined>(undefined)
 	const [browseError, setBrowseError] = useState<string | undefined>(undefined)
 	const [browsePageIndex, setBrowsePageIndex] = useState(0)
@@ -807,12 +774,6 @@ export function OpenOracleSection({
 	const browseLoad = useLoadController()
 	const isConnected = accountState.address !== undefined
 	const openOracleOutcome = getOpenOracleOutcomePresentation(openOracleResult)
-
-	useEffect(() => {
-		if (initialView !== undefined) {
-			setView(initialView)
-		}
-	}, [initialView])
 
 	useEffect(() => {
 		let cancelled = false
@@ -867,65 +828,20 @@ export function OpenOracleSection({
 				report.token2.toLowerCase().includes(normalizedBrowseSearchText)
 			)
 		}) ?? []
-	const showRouteHeader = view !== 'selected-report'
-	const createRequirements: ReadinessBlocker[] = [
-		{ key: 'wallet', label: 'Wallet connected', resolved: isConnected, ...(isConnected ? {} : { detail: 'Connect a wallet before creating an Open Oracle game.' }) },
-		{ key: 'token1', label: 'Token1 address provided', resolved: openOracleCreateForm.token1Address.trim() !== '', ...(openOracleCreateForm.token1Address.trim() !== '' ? {} : { detail: 'Enter the Token1 address.' }) },
-		{ key: 'token2', label: 'Token2 address provided', resolved: openOracleCreateForm.token2Address.trim() !== '', ...(openOracleCreateForm.token2Address.trim() !== '' ? {} : { detail: 'Enter the Token2 address.' }) },
-		{ key: 'settlement-time', label: 'Settlement time provided', resolved: openOracleCreateForm.settlementTime.trim() !== '', ...(openOracleCreateForm.settlementTime.trim() !== '' ? {} : { detail: 'Enter the settlement time.' }) },
-		{ key: 'multiplier', label: 'Multiplier provided', resolved: openOracleCreateForm.multiplier.trim() !== '', ...(openOracleCreateForm.multiplier.trim() !== '' ? {} : { detail: 'Enter the multiplier.' }) },
-	]
-	const renderModeTabs = () => (
-		<SectionModeTabs
-			ariaLabel='Open Oracle views'
-			value={view}
-			onChange={setView}
-			options={[
-				{ label: 'Browse', value: 'browse' },
-				{ label: 'Create', value: 'create' },
-				{ label: 'Selected Report', value: 'selected-report' },
-			]}
-		/>
-	)
-
 	const openBrowseReport = async (reportId: bigint) => {
 		onOpenOracleFormChange({ reportId: reportId.toString() })
-		setView('selected-report')
+		onActiveViewChange('selected-report')
 		await onLoadOracleReport(reportId.toString())
 	}
 
 	return (
 		<div className='route-view-flow'>
-			{!showRouteHeader ? undefined : (
-				<RouteHeader
-					eyebrow='Open Oracle'
-					title='Open Oracle'
-					description='Browse direct reports, create new report instances, and manage selected report lifecycle actions.'
-					summary={
-						<DataGrid columns='auto'>
-							<div>
-								<p className='detail'>Browse count</p>
-								<strong>{browseReportCount.toString()}</strong>
-							</div>
-							<div>
-								<p className='detail'>Page</p>
-								<strong>{browsePageCount === 0 ? '0 / 0' : `${browsePageIndex + 1} / ${browsePageCount}`}</strong>
-							</div>
-							<div>
-								<p className='detail'>Selected report</p>
-								<strong>{openOracleReportDetails?.reportId.toString() ?? (openOracleForm.reportId === '' ? 'None' : openOracleForm.reportId)}</strong>
-							</div>
-						</DataGrid>
-					}
-				/>
-			)}
 			<ResultBanner outcome={openOracleOutcome} />
 			{view === 'browse' ? (
 				<div className='workflow-stack route-workflow-stack'>
 					<SectionBlock
 						actions={
 							<div className='actions'>
-								{renderModeTabs()}
 								<button className='secondary' type='button' onClick={() => setBrowsePageIndex(current => Math.max(0, current - 1))} disabled={!browseHasPreviousPage || loadingBrowse}>
 									Previous Page
 								</button>
@@ -979,20 +895,17 @@ export function OpenOracleSection({
 					{openOracleResult?.action !== 'createReportInstance' ? undefined : (
 						<SectionBlock title='Create Success' description='The report instance was created successfully.'>
 							<div className='actions'>
-								<button className='primary' type='button' onClick={() => setView('browse')}>
+								<button className='primary' type='button' onClick={() => onActiveViewChange('browse')}>
 									Return to Browse
 								</button>
-								<button className='secondary' type='button' onClick={() => setView('create')}>
+								<button className='secondary' type='button' onClick={() => onActiveViewChange('create')}>
 									Create Another
 								</button>
 							</div>
 						</SectionBlock>
 					)}
 					{renderLatestActionCard(openOracleResult)}
-					<SectionBlock title='Requirements' description='Resolve these checks before creating a new Open Oracle game.'>
-						<RequirementsChecklist items={createRequirements} />
-					</SectionBlock>
-					<TabbedSectionBlock tabs={renderModeTabs()} title='Create Open Oracle Game' description='Create a standalone Open Oracle game directly. This does not queue an oracle-manager operation.'>
+					<SectionBlock title='Create Open Oracle Game' description='Create a standalone Open Oracle game directly. This does not queue an oracle-manager operation.'>
 						<div className='form-grid'>
 							<SectionBlock headingLevel={4} title='Token Pair' variant='embedded'>
 								<div className='field-row'>
@@ -1061,7 +974,7 @@ export function OpenOracleSection({
 								<TransactionActionButton idleLabel='Create Open Oracle Game' pendingLabel='Creating...' onClick={onCreateOpenOracleGame} pending={loadingOpenOracleCreate} availability={{ disabled: !isConnected, reason: !isConnected ? 'Connect a wallet before creating an Open Oracle game.' : undefined }} />
 							</div>
 						</div>
-					</TabbedSectionBlock>
+					</SectionBlock>
 					<ErrorNotice message={openOracleError} />
 				</div>
 			) : undefined}
@@ -1072,8 +985,8 @@ export function OpenOracleSection({
 						openOracleReportDetails,
 						openOracleForm,
 						openOracleInitialReportState,
+						openOracleInitialReportSubmission,
 						openOracleActiveAction,
-						renderModeTabs(),
 						loadingOracleReport,
 						isConnected,
 						selectedReportModal,

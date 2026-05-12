@@ -59,9 +59,16 @@ export function getActiveSimulationController() {
 	return activeSimulationController
 }
 
-export function setActiveEnvironmentForTesting(backend: ChainBackend, simulationController?: SimulationController) {
+function setActiveEnvironmentForTesting(backend: ChainBackend, simulationController?: SimulationController) {
 	activeBackend = backend
 	activeSimulationController = simulationController
+}
+
+export function installActiveEnvironmentForTesting(backend: ChainBackend, simulationController?: SimulationController) {
+	setActiveEnvironmentForTesting(backend, simulationController)
+	return () => {
+		resetActiveEnvironmentForTesting()
+	}
 }
 
 export function resetActiveEnvironmentForTesting() {

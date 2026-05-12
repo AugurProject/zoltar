@@ -24,7 +24,7 @@ import type {
 	ZoltarMigrationActionResult,
 	ZoltarUniverseSummary,
 } from './contracts.js'
-import type { OpenOracleInitialReportPriceSource } from '../lib/openOracle.js'
+import type { OpenOracleInitialReportPriceSource, OpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
@@ -107,15 +107,6 @@ export type SectionBlockProps = {
 	title?: ComponentChildren
 	tone?: 'critical' | 'default' | 'muted'
 	variant?: 'default' | 'embedded'
-}
-
-export type TabbedSectionBlockProps = {
-	children: ComponentChildren
-	className?: string
-	description?: ComponentChildren
-	density?: 'balanced' | 'compact'
-	tabs: ComponentChildren
-	title: ComponentChildren
 }
 
 export type RouteWorkflowPanelProps = {
@@ -257,6 +248,10 @@ export type TabNavigationProps = {
 	onRouteChange: (route: Exclude<Route, 'not-found'>) => void
 }
 
+export type ZoltarView = 'create' | 'fork' | 'migrate' | 'questions'
+
+export type SecurityPoolsView = 'browse' | 'create' | 'operate'
+
 export type MainnetGateSectionProps = {
 	message: string
 }
@@ -275,7 +270,7 @@ export type DeploymentRouteContentProps = {
 
 export type MarketRouteContentProps = {
 	accountState: AccountState
-	activeView: 'create' | 'fork' | 'migrate' | 'questions'
+	activeView: ZoltarView
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	onCreateMarket: () => void
@@ -286,7 +281,7 @@ export type MarketRouteContentProps = {
 	marketError: string | undefined
 	marketForm: MarketFormState
 	marketResult: MarketCreationResult | undefined
-	onActiveViewChange: (view: 'create' | 'fork' | 'migrate' | 'questions') => void
+	onActiveViewChange: (view: ZoltarView) => void
 	onResetMarket: () => void
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestions: boolean
@@ -350,15 +345,18 @@ export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
 type LiquidationControlsProps = {
 	closeLiquidationModal: () => void
 	liquidationAmount: string
+	liquidationMaxAmount: bigint | undefined
 	liquidationManagerAddress: Address | undefined
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
+	loadingPoolOracleManager: boolean
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
 	liquidationTargetVault: string
 	onLiquidationAmountChange: (value: string) => void
-	onLiquidationTargetVaultChange: (value: string) => void
-	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => void
+	onLoadPoolOracleManager: (managerAddress: Address) => void
+	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
+	poolOracleManagerDetails: OracleManagerDetails | undefined
 }
 
 export type SecurityPoolsOverviewRouteContentProps = {
@@ -383,6 +381,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	closeLiquidationModal: () => void
 	forkAuction: ForkAuctionRouteContentProps
 	liquidationAmount: string
+	liquidationMaxAmount: bigint | undefined
 	liquidationManagerAddress: Address | undefined
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
@@ -390,9 +389,8 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	loadingPoolOracleManager: boolean
 	loadingSecurityPools: boolean
 	onLiquidationAmountChange: (value: string) => void
-	onLiquidationTargetVaultChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
-	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => void
+	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint) => void
 	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void
@@ -400,6 +398,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
+	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	poolOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	poolOracleManagerDetails: OracleManagerDetails | undefined
 	poolOracleManagerError: string | undefined
@@ -417,7 +416,9 @@ export type SecurityPoolWorkflowRouteContentProps = {
 }
 
 export type SecurityPoolsSectionProps = {
+	activeView: SecurityPoolsView
 	createPool: SecurityPoolRouteContentProps
+	onActiveViewChange: (view: SecurityPoolsView) => void
 	overview: SecurityPoolsOverviewRouteContentProps
 	workflow: SecurityPoolWorkflowRouteContentProps
 }
@@ -496,6 +497,7 @@ export type OpenOracleRouteContentProps = {
 		tokenAccessLoadingInitial: boolean
 		tokenAccessRefreshing: boolean
 	}
+	openOracleInitialReportSubmission: OpenOracleInitialReportSubmissionDetails | undefined
 	openOracleCreateForm: OpenOracleCreateFormState
 	openOracleForm: OpenOracleFormState
 	openOracleReportDetails: OpenOracleReportDetails | undefined
@@ -504,7 +506,10 @@ export type OpenOracleRouteContentProps = {
 
 export type OpenOracleView = 'browse' | 'create' | 'selected-report'
 
-export type OpenOracleSectionProps = OpenOracleRouteContentProps & { initialView: OpenOracleView | undefined }
+export type OpenOracleSectionProps = OpenOracleRouteContentProps & {
+	activeView: OpenOracleView
+	onActiveViewChange: (view: OpenOracleView) => void
+}
 
 export type ReportingRouteContentProps = {
 	accountState: AccountState

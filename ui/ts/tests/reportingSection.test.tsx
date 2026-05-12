@@ -119,7 +119,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getAllByText('Active').length).toBeGreaterThan(0)
 		expect(documentQueries.queryByText('Available')).toBeNull()
 		expect(documentQueries.queryByText('Blocked')).toBeNull()
-		expect(documentQueries.getByText('Reporting Workflow')).not.toBeNull()
+		expect(documentQueries.queryByText('Reporting Workflow')).toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(true)
 		expect(document.body.textContent?.includes('Selected side has')).toBe(true)
 	})

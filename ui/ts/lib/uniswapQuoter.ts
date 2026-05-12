@@ -127,6 +127,10 @@ export function getWethAddress() {
 	return getActiveNetworkProfile().wethAddress
 }
 
+export function getRepAddress() {
+	return getActiveNetworkProfile().genesisRepTokenAddress
+}
+
 export function isRepPricingEnabled() {
 	return getActiveNetworkProfile().repPricingMode === 'uniswap' || getActiveNetworkProfile().repPricingMode === 'mock'
 }
@@ -337,12 +341,12 @@ export async function quoteEthForToken(client: ReadClient, token: Address, amoun
 
 // Convenience: REP → ETH using the default pool config
 export async function quoteRepForEth(client: ReadClient, repAmount: bigint): Promise<bigint> {
-	return quoteBestExactInput(client, REP_ADDRESS, ETH_ADDRESS, repAmount)
+	return quoteBestExactInput(client, getRepAddress(), ETH_ADDRESS, repAmount)
 }
 
 // Convenience: ETH → REP using the default pool config
 export async function quoteEthForRep(client: ReadClient, ethAmount: bigint): Promise<bigint> {
-	return quoteBestExactInput(client, ETH_ADDRESS, REP_ADDRESS, ethAmount)
+	return quoteBestExactInput(client, ETH_ADDRESS, getRepAddress(), ethAmount)
 }
 
 // ─── Uniswap V3 ───────────────────────────────────────────────────────────────
@@ -456,7 +460,7 @@ export async function quoteBestV3ExactInput(client: ReadClient, tokenIn: Address
 
 // Returns how much WETH (= ETH) you receive for `repAmount` REP via Uniswap V3 (1% pool).
 export async function quoteRepForEthV3(client: ReadClient, repAmount: bigint): Promise<bigint> {
-	return quoteBestV3ExactInput(client, REP_ADDRESS, ETH_ADDRESS, repAmount)
+	return quoteBestV3ExactInput(client, getRepAddress(), ETH_ADDRESS, repAmount)
 }
 
 // ─── Known V4 REP pools ───────────────────────────────────────────────────────
@@ -465,5 +469,5 @@ export async function quoteRepForEthV3(client: ReadClient, repAmount: bigint): P
 const REP_USDC_V4_POOL: PoolConfig = { fee: 10001, tickSpacing: 200 }
 
 export async function quoteRepForUsdcV4WithSource(client: ReadClient, repAmount: bigint) {
-	return await quoteBestExactInputWithSource(client, REP_ADDRESS, USDC_ADDRESS, repAmount, [REP_USDC_V4_POOL])
+	return await quoteBestExactInputWithSource(client, getRepAddress(), USDC_ADDRESS, repAmount, [REP_USDC_V4_POOL])
 }

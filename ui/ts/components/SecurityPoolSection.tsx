@@ -1,25 +1,20 @@
 import type { ComponentChildren } from 'preact'
 import { AddressValue } from './AddressValue.js'
-import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
-import { MetricField } from './MetricField.js'
-import { OpenInterestCapacityMetrics } from './OpenInterestCapacityMetrics.js'
 import { Question } from './Question.js'
-import { RequirementsChecklist } from './RequirementsChecklist.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { ResultBanner } from './ResultBanner.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
-import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { isMainnetChain } from '../lib/network.js'
-import { formatOpenInterestFeePerYearPercent, openInterestFeePerYearBigint } from '../lib/retentionRate.js'
+import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import { getSecurityPoolCreateDisabledReason } from '../lib/securityPoolCreationGuards.js'
-import type { ReadinessBlocker, SecurityPoolSectionProps } from '../types/components.js'
+import type { SecurityPoolSectionProps } from '../types/components.js'
 
 export function SecurityPoolSection({
 	accountState,
@@ -32,10 +27,6 @@ export function SecurityPoolSection({
 	onReturnToBrowse,
 	onSecurityPoolFormChange,
 	onResetSecurityPoolCreation,
-	repPerEthPrice,
-	repPerEthSource,
-	repPerEthSourceUrl,
-	securityPools,
 	securityPoolCreating,
 	securityPoolError,
 	securityPoolForm,
@@ -56,8 +47,6 @@ export function SecurityPoolSection({
 		zoltarUniverseHasForked,
 	})
 	const isCreateDisabled = createDisabledReason !== undefined
-	const matchingPools = marketDetails === undefined ? [] : securityPools.filter(pool => sameCaseInsensitiveText(pool.questionId, marketDetails.questionId))
-	const hasMatchingSecurityMultiplier = matchingPools.some(pool => pool.securityMultiplier.toString() === securityPoolForm.securityMultiplier.trim())
 	let createdQuestionDetails = undefined
 	if (securityPoolResult !== undefined) {
 		if (marketDetails?.questionId === securityPoolResult.questionId) {
@@ -66,23 +55,6 @@ export function SecurityPoolSection({
 			createdQuestionDetails = carriedPoolCreationMarketDetails
 		}
 	}
-	const createRequirements: ReadinessBlocker[] = [
-		{ key: 'wallet', label: 'Wallet connected', resolved: accountState.address !== undefined, ...(accountState.address === undefined ? { detail: 'Connect a wallet before creating a pool.' } : {}) },
-		{ key: 'mainnet', label: 'Ethereum mainnet selected', resolved: isMainnet, ...(isMainnet ? {} : { detail: 'Switch to Ethereum mainnet before creating a security pool.' }) },
-		{
-			key: 'market',
-			label: 'Binary market loaded',
-			resolved: marketDetails !== undefined && marketDetails.marketType === 'binary',
-			...(marketDetails === undefined ? { detail: 'Load a binary market before creating a pool.' } : marketDetails.marketType !== 'binary' ? { detail: 'Security pools can only be created for binary markets.' } : {}),
-		},
-		{
-			key: 'duplicate',
-			label: 'No duplicate origin pool',
-			resolved: !checkingDuplicateOriginPool && !duplicateOriginPoolExists,
-			...(checkingDuplicateOriginPool ? { detail: 'Checking whether a pool already exists for this question and security multiplier.' } : duplicateOriginPoolExists ? { detail: 'A pool for this question and security multiplier already exists.' } : {}),
-		},
-		{ key: 'forked', label: 'Zoltar universe unforked', resolved: !zoltarUniverseHasForked, ...(zoltarUniverseHasForked ? { detail: 'Security pools cannot be created after Zoltar has forked.' } : {}) },
-	]
 
 	let createButtonLabel: ComponentChildren = 'Create Pool'
 	if (securityPoolCreating) {
@@ -93,8 +65,6 @@ export function SecurityPoolSection({
 		createButtonLabel = 'Pool Already Exists'
 	} else if (zoltarUniverseHasForked) {
 		createButtonLabel = 'Pool Creation Locked'
-	} else if (matchingPools.length > 0) {
-		createButtonLabel = 'Create Another Pool'
 	}
 
 	const createdPoolResult =
@@ -166,40 +136,6 @@ export function SecurityPoolSection({
 				</>
 			) : (
 				<>
-					<SectionBlock title='Question Context' description='Load a binary market question before configuring pool parameters.'>
-						{marketDetails === undefined && !loadingMarketDetails ? <p className='detail'>Enter a question ID in the create form to inspect the market context.</p> : <Question question={marketDetails} loading={loadingMarketDetails && marketDetails === undefined} />}
-					</SectionBlock>
-					<SectionBlock title='Requirements' description='Resolve these checks before deploying the pool.'>
-						<RequirementsChecklist items={createRequirements} />
-					</SectionBlock>
-					<SectionBlock title='Existing Pools' description='Existing pools for this question remain record surfaces.'>
-						{matchingPools.length === 0 ? (
-							<p className='detail'>No pools have been created for this question yet.</p>
-						) : (
-							<div className='entity-card-list'>
-								{matchingPools.map(pool => (
-									<EntityCard key={pool.securityPoolAddress} className='compact' title={<AddressValue address={pool.securityPoolAddress} />} badge={<span className='badge ok'>{pool.systemState}</span>}>
-										<div className='workflow-vault-grid'>
-											<MetricField label='Security Multiplier'>{pool.securityMultiplier.toString()}</MetricField>
-											<MetricField label='Open Interest Fee / Year'>
-												<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
-											</MetricField>
-											<OpenInterestCapacityMetrics
-												completeSetCollateralAmount={pool.completeSetCollateralAmount}
-												repPerEthPrice={repPerEthPrice}
-												repPerEthSource={repPerEthSource}
-												repPerEthSourceUrl={repPerEthSourceUrl}
-												securityMultiplier={pool.securityMultiplier}
-												totalRepDeposit={pool.totalRepDeposit}
-												totalSecurityBondAllowance={pool.totalSecurityBondAllowance}
-											/>
-										</div>
-									</EntityCard>
-								))}
-							</div>
-						)}
-					</SectionBlock>
-
 					<SectionBlock title='Create Pool' description='Configure the binary question, security multiplier, and retention rate before deploying the pool.'>
 						<div className='form-grid'>
 							<label className='field'>
@@ -226,7 +162,7 @@ export function SecurityPoolSection({
 								<TransactionActionButton idleLabel={createButtonLabel} pendingLabel='Creating Pool...' onClick={onCreateSecurityPool} pending={securityPoolCreating} availability={{ disabled: isCreateDisabled, reason: createDisabledReason }} />
 							</div>
 						</div>
-						{!duplicateOriginPoolExists && !hasMatchingSecurityMultiplier ? undefined : <p className='detail'>A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.</p>}
+						{!duplicateOriginPoolExists ? undefined : <p className='detail'>A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.</p>}
 						{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>Security pools can only be created for binary markets. Load a binary market to proceed.</p> : undefined}
 						{zoltarUniverseHasForked ? <p className='notice error'>Security pools cannot be created after Zoltar has forked.</p> : undefined}
 					</SectionBlock>

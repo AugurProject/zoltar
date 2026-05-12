@@ -18,7 +18,6 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
-import { WorkflowSummaryStrip } from './WorkflowSummaryStrip.js'
 import { formatDuration } from '../lib/formatters.js'
 import { parseOptionalBigIntInput } from '../lib/inputs.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -124,7 +123,6 @@ export function ReportingSection({
 		<>
 			<ResultBanner outcome={reportingOutcome} />
 			{reportingStage === undefined ? undefined : <LifecycleStageBanner stage={reportingStage} />}
-			<WorkflowSummaryStrip currentStep={reportingStage?.label ?? 'Reporting'} steps={['Reporting Open', 'Escalation', 'Withdrawal']} title='Reporting Workflow' />
 			<SectionBlock title='Reporting Context'>
 				{showSecurityPoolAddressInput ? (
 					<LookupFieldRow

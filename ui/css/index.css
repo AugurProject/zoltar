@@ -189,6 +189,18 @@ main {
 	margin: 0 1.1rem;
 }
 
+.app-nav-stack {
+	display: grid;
+	gap: 0.2rem;
+	padding: 0.85rem 1rem 0.8rem;
+	border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.route-subnav-shell {
+	display: flex;
+	padding: 0 0 0 0.35rem;
+}
+
 h1 {
 	margin: 0;
 	font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
@@ -656,7 +668,20 @@ button.destructive:hover:not(:disabled) {
 }
 
 .loading-value {
+	display: inline-flex;
+	align-items: center;
+	font: inherit;
+	font-weight: inherit;
+	letter-spacing: inherit;
+	line-height: inherit;
+	text-transform: inherit;
+	color: inherit;
+	white-space: inherit;
 	opacity: 0.72;
+}
+
+button .loading-value {
+	opacity: 1;
 }
 
 .currency-value {
@@ -1122,7 +1147,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	justify-content: flex-start;
 	align-items: center;
 	gap: 0.5rem;
-	padding: 0 1rem;
+	padding: 0;
 	margin-top: 0;
 	border-top: 0;
 	background: transparent;
@@ -1490,6 +1515,34 @@ button.currency-value.copyable:hover:not(:disabled) {
 	font-variant-numeric: tabular-nums;
 	color: var(--value);
 	overflow-wrap: anywhere;
+}
+
+.oracle-price-value {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.18rem;
+	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-size: var(--font-value);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.15;
+	color: var(--value);
+}
+
+.oracle-price-validity {
+	font-family: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
+	font-size: var(--font-caption);
+	font-weight: 500;
+	letter-spacing: normal;
+}
+
+.oracle-price-validity.success {
+	color: var(--success);
+}
+
+.oracle-price-validity.danger {
+	color: var(--danger);
 }
 
 .migration-approval-row {
@@ -2301,10 +2354,23 @@ strong.metric-value-danger {
 	z-index: auto;
 }
 
+.sticky-object-context-header {
+	display: flex;
+	align-items: start;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
 .sticky-object-context-copy,
 .lifecycle-stage-banner-main {
 	display: grid;
 	gap: 0.3rem;
+}
+
+.sticky-object-context-badge {
+	display: flex;
+	align-items: start;
+	justify-content: flex-end;
 }
 
 .sticky-object-context h3,
@@ -2345,6 +2411,7 @@ strong.metric-value-danger {
 .sticky-object-context-item {
 	display: grid;
 	gap: 0.25rem;
+	min-width: 0;
 }
 
 .sticky-object-context-item span,
@@ -2357,6 +2424,15 @@ strong.metric-value-danger {
 
 .sticky-object-context-item strong {
 	font-size: var(--font-body);
+	display: block;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.sticky-object-context-item .address-value {
+	display: block;
+	width: 100%;
+	text-align: left;
 }
 
 .lifecycle-stage-banner {
@@ -2928,6 +3004,12 @@ button:focus-visible {
 	align-items: flex-start;
 }
 
+.compact-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+
 .route-summary-strip {
 	padding-top: var(--space-5);
 	border-top: 1px solid var(--divider-subtle);
@@ -3025,11 +3107,13 @@ button:focus-visible {
 }
 
 .view-tabs.route {
-	padding: var(--space-2);
-	border: 1px solid var(--divider-subtle);
-	border-radius: calc(var(--radius-shell) - 0.35rem);
-	background: rgba(6, 14, 24, 0.52);
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	align-items: center;
+	gap: 0.45rem;
 }
 
 .view-tab {
@@ -3043,24 +3127,30 @@ button:focus-visible {
 }
 
 .view-tabs.route .view-tab {
-	padding: 0.58rem 0.86rem;
-	border-color: transparent;
-	background: transparent;
-	color: var(--muted);
+	padding: 0.68rem 0.92rem;
+	border-color: rgba(255, 255, 255, 0.04);
+	background: rgba(7, 15, 27, 0.22);
+	color: rgba(194, 210, 231, 0.82);
 	font-size: var(--font-tab);
+	font-weight: 700;
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.015);
 }
 
 .view-tabs.route .view-tab:hover:not(:disabled) {
-	background: rgba(56, 213, 255, 0.08);
-	border-color: var(--interactive-border);
+	background: rgba(13, 27, 44, 0.5);
+	border-color: rgba(56, 213, 255, 0.1);
+	color: var(--text);
 }
 
 .view-tabs.route .view-tab.active {
-	background: rgba(56, 213, 255, 0.1);
-	border-color: var(--interactive-border);
-	box-shadow: 0 1px 0 0 rgba(56, 213, 255, 0.28);
+	background: linear-gradient(180deg, rgba(28, 63, 98, 0.96) 0%, rgba(22, 49, 77, 0.96) 100%);
+	border-color: rgba(56, 213, 255, 0.22);
+	color: var(--text);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.04),
+		0 6px 14px rgba(0, 0, 0, 0.08);
 }
 
 .view-tabs.subroute {
@@ -3232,6 +3322,15 @@ button:focus-visible {
 	gap: 0.85rem;
 }
 
+.selected-pool-context-controls {
+	display: grid;
+	gap: 0.85rem;
+}
+
+.selected-pool-context-lookup {
+	display: grid;
+}
+
 .selected-pool-context-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
@@ -3241,10 +3340,33 @@ button:focus-visible {
 .selected-pool-context-grid > div {
 	display: grid;
 	gap: 0.35rem;
+	min-width: 0;
 	padding: 0.8rem 0.9rem;
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--radius-control);
 	background: rgba(255, 255, 255, 0.03);
+}
+
+.selected-pool-context-grid .metric-field-value {
+	display: block;
+	min-width: 0;
+	margin-top: 0.15rem;
+	overflow-wrap: anywhere;
+}
+
+.selected-pool-context-grid strong.metric-field-value {
+	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-size: var(--font-value);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.15;
+	color: var(--value);
+}
+
+.selected-pool-context-grid .address-value {
+	display: block;
+	width: 100%;
+	text-align: left;
 }
 
 .selected-pool-summary-question {
@@ -3351,15 +3473,74 @@ button:focus-visible {
 
 .route-subtab-nav {
 	margin-top: 0;
-	padding: 0;
+	display: inline-flex;
+	flex-wrap: nowrap;
+	gap: 0.9rem;
+	max-width: 100%;
+	padding: 0.12rem 0 0;
 	border: 0;
+	border-radius: 0;
 	background: transparent;
+	box-shadow: none;
+	overflow-x: auto;
+}
+
+.route-subtab-nav .view-tab,
+.market-subtab-nav .view-tab {
+	flex: 0 0 auto;
+	justify-content: center;
+}
+
+.route-subtab-nav.view-tabs.subroute .view-tab {
+	position: relative;
+	padding: 0.2rem 0 0.32rem;
+	border-color: transparent;
+	background: transparent;
+	border-radius: 0;
+	color: rgba(194, 210, 231, 0.68);
+	font-size: calc(var(--font-detail) - 0.07rem);
+	font-weight: 600;
+	letter-spacing: 0;
+	white-space: nowrap;
+	text-decoration: none;
 	box-shadow: none;
 }
 
-.market-subtab-nav .view-tab {
-	flex: 1 1 10rem;
-	justify-content: center;
+.route-subtab-nav.view-tabs.subroute .view-tab:hover:not(:disabled) {
+	color: var(--text);
+}
+
+.route-subtab-nav.view-tabs.subroute .view-tab.active {
+	color: var(--text);
+	background: transparent;
+	border-color: transparent;
+	box-shadow: none;
+}
+
+.route-subtab-nav.view-tabs.subroute .view-tab::after {
+	content: "";
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	height: 2px;
+	border-radius: 999px;
+	background: rgba(56, 213, 255, 0);
+	transform: scaleX(0.35);
+	transform-origin: center;
+	transition:
+		background-color 160ms ease,
+		transform 160ms ease;
+}
+
+.route-subtab-nav.view-tabs.subroute .view-tab:hover:not(:disabled)::after {
+	background: rgba(56, 213, 255, 0.32);
+	transform: scaleX(0.72);
+}
+
+.route-subtab-nav.view-tabs.subroute .view-tab.active::after {
+	background: rgba(56, 213, 255, 0.92);
+	transform: scaleX(1);
 }
 
 .route-subtab-nav + .workflow-stack,
@@ -3378,6 +3559,10 @@ button:focus-visible {
 		padding: var(--space-4);
 	}
 
+	.route-subnav-shell {
+		padding: 0 0 0 0.3rem;
+	}
+
 	.data-grid[data-columns="2"],
 	.data-grid[data-columns="3"],
 	.data-grid[data-columns="4"] {
@@ -3389,15 +3574,16 @@ button:focus-visible {
 		flex-direction: column;
 	}
 
-	.section-mode-switch,
-	.security-pools-header-switch {
+	.route-subtab-nav {
 		justify-content: flex-start;
 		flex-wrap: nowrap;
+		width: 100%;
 	}
 
-	.section-mode-switch.view-tabs.subroute .view-tab,
-	.security-pools-header-switch.view-tabs.subroute .view-tab {
+	.route-subtab-nav.view-tabs.subroute .view-tab {
 		flex: 0 0 auto;
+		padding-right: 0;
+		padding-left: 0;
 	}
 
 	.selected-pool-workspace-grid {

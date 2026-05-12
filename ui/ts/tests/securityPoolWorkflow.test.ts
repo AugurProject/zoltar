@@ -5,77 +5,24 @@ import { getAddress, zeroAddress } from 'viem'
 import {
 	getCurrentPoolOracleManagerDetails,
 	getOracleLastPriceDisplay,
-	getOraclePriceExpiryDisplay,
+	getOraclePriceValidityPresentation,
 	getSelectedPoolCardTitle,
-	getSelectedPoolLookupDisplay,
 	getSelectedPoolOracleMetricValues,
 	getSelectedPoolWorkflowGuardMessage,
 	getSelectedPoolWorkflowLockedPresentation,
 	isForkWorkflowDisabled,
 	resolveSelectedPoolView,
 	shouldShowSelectedPoolWorkflowDetails,
-} from '../components/SecurityPoolWorkflowSection.js'
+} from '../lib/securityPoolWorkflow.js'
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 
 void describe('selected pool workflow lookup state', () => {
-	void test('uses a stable card title until a pool resolves', () => {
-		expect(
-			getSelectedPoolCardTitle({
-				hasSelectedPoolAddress: false,
-				resolvedPoolTitle: undefined,
-			}),
-		).toBe('Select a security pool')
+	void test('uses a single stable operate header title', () => {
+		expect(getSelectedPoolCardTitle()).toBe('Operate Security Pool')
 
-		expect(
-			getSelectedPoolCardTitle({
-				hasSelectedPoolAddress: true,
-				resolvedPoolTitle: undefined,
-			}),
-		).toBe('Selected Pool')
+		expect(getSelectedPoolCardTitle()).toBe('Operate Security Pool')
 
-		expect(
-			getSelectedPoolCardTitle({
-				hasSelectedPoolAddress: true,
-				resolvedPoolTitle: 'Will REP exceed threshold?',
-			}),
-		).toBe('Will REP exceed threshold?')
-	})
-
-	void test('adds only the empty selected-pool state on top of loadable lookup states', () => {
-		expect(
-			getSelectedPoolLookupDisplay({
-				hasSelectedPoolAddress: false,
-				selectedPoolLookupState: 'unknown',
-			}),
-		).toBe('empty')
-
-		expect(
-			getSelectedPoolLookupDisplay({
-				hasSelectedPoolAddress: true,
-				selectedPoolLookupState: 'unknown',
-			}),
-		).toBe('unknown')
-
-		expect(
-			getSelectedPoolLookupDisplay({
-				hasSelectedPoolAddress: true,
-				selectedPoolLookupState: 'loading',
-			}),
-		).toBe('loading')
-
-		expect(
-			getSelectedPoolLookupDisplay({
-				hasSelectedPoolAddress: true,
-				selectedPoolLookupState: 'missing',
-			}),
-		).toBe('missing')
-
-		expect(
-			getSelectedPoolLookupDisplay({
-				hasSelectedPoolAddress: true,
-				selectedPoolLookupState: 'ready',
-			}),
-		).toBe('ready')
+		expect(getSelectedPoolCardTitle()).toBe('Operate Security Pool')
 	})
 
 	void test('maps the legacy resolution view alias to the reporting tab', () => {
@@ -83,6 +30,8 @@ void describe('selected pool workflow lookup state', () => {
 		expect(resolveSelectedPoolView('resolution')).toBe('reporting')
 		expect(resolveSelectedPoolView('reporting')).toBe('reporting')
 		expect(resolveSelectedPoolView('fork')).toBe('fork')
+		expect(resolveSelectedPoolView('oracle')).toBe('staged-operations')
+		expect(resolveSelectedPoolView('price-oracle')).toBe('price-oracle')
 	})
 })
 
@@ -295,31 +244,31 @@ void describe('selected pool oracle price display', () => {
 		).toBe('≈ 42.00 REP / ETH')
 	})
 
-	void test('derives expiry countdowns from the last settlement when manager details are not loaded', () => {
+	void test('derives validity copy from the last settlement when manager details are not loaded', () => {
 		expect(
-			getOraclePriceExpiryDisplay({
+			getOraclePriceValidityPresentation({
 				currentTimestamp: 31n,
 				lastSettlementTimestamp: 1n,
 				priceValidUntilTimestamp: undefined,
 			}),
-		).toBe('59m')
+		).toEqual({ text: '(Valid for 59m)', tone: 'success' })
 	})
 
-	void test('shows a dash before the oracle has ever settled and expired once the price window closes', () => {
+	void test('omits validity before settlement and reports expiry after the window closes', () => {
 		expect(
-			getOraclePriceExpiryDisplay({
+			getOraclePriceValidityPresentation({
 				currentTimestamp: 100n,
 				lastSettlementTimestamp: 0n,
 				priceValidUntilTimestamp: undefined,
 			}),
-		).toBe('-')
+		).toBe(undefined)
 
 		expect(
-			getOraclePriceExpiryDisplay({
+			getOraclePriceValidityPresentation({
 				currentTimestamp: 100n + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS,
 				lastSettlementTimestamp: 100n,
 				priceValidUntilTimestamp: 100n + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS,
 			}),
-		).toBe('Expired')
+		).toEqual({ text: '(expired less than a minute ago)', tone: 'danger' })
 	})
 })

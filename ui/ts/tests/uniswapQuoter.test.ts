@@ -22,7 +22,7 @@ import {
 	quoteRepForEth,
 	quoteTokenForEth,
 } from '../lib/uniswapQuoter.js'
-import { resetActiveEnvironmentForTesting, setActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createConnectedReadClient, type ReadClient } from '../lib/clients.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
@@ -120,7 +120,7 @@ function createV3FeeAwareClient(amountsByFee: Partial<Record<number, bigint>>): 
 
 void describe('quoteExactInput', () => {
 	void test('rejects unsupported simulation pairs when only the REP / ETH mock is available', async () => {
-		setActiveEnvironmentForTesting(
+		const resetEnvironment = installActiveEnvironmentForTesting(
 			createFakeBackend({
 				profile: createFakeSimulationProfile(),
 			}),
@@ -128,11 +128,12 @@ void describe('quoteExactInput', () => {
 
 		const { client } = createCapturingClient(1n)
 		await expect(quoteRepForEth(client, 1n)).rejects.toThrow('Simulation mock pricing only supports REP / ETH, REP / WETH, and REP / USDC pairs.')
+		resetEnvironment()
 	})
 
 	void test('returns simulation mock REP/ETH quotes when simulation mode is active', async () => {
 		const profile = createFakeSimulationProfile()
-		setActiveEnvironmentForTesting(
+		const resetEnvironment = installActiveEnvironmentForTesting(
 			createFakeBackend({
 				profile,
 			}),
@@ -174,6 +175,7 @@ void describe('quoteExactInput', () => {
 		await expect(quoteTokenForEth(client, profile.genesisRepTokenAddress, 6n * 10n ** 18n)).resolves.toBe(3n * 10n ** 18n)
 		await expect(quoteExactInput(client, profile.genesisRepTokenAddress, USDC_ADDRESS, 2n * 10n ** 18n)).resolves.toBe(10n * 10n ** 6n)
 		await expect(quoteExactInput(client, USDC_ADDRESS, profile.genesisRepTokenAddress, 10n * 10n ** 6n)).resolves.toBe(2n * 10n ** 18n)
+		resetEnvironment()
 	})
 
 	void test('returns amountOut from the quoter result', async () => {
@@ -410,7 +412,7 @@ void describe('quoteRepForEth', () => {
 	void test('uses REP_ADDRESS as the input token', async () => {
 		const { client, captured } = createCapturingClient(1n)
 		await quoteRepForEth(client, 1n)
-		expect(captured.currency1).toBe(REP_ADDRESS)
+		expect(captured.currency1.toLowerCase()).toBe(REP_ADDRESS.toLowerCase())
 		expect(captured.zeroForOne).toBe(false)
 	})
 })
@@ -425,7 +427,7 @@ void describe('quoteEthForRep', () => {
 	void test('uses REP_ADDRESS as the output token', async () => {
 		const { client, captured } = createCapturingClient(1n)
 		await quoteEthForRep(client, 1n)
-		expect(captured.currency1).toBe(REP_ADDRESS)
+		expect(captured.currency1.toLowerCase()).toBe(REP_ADDRESS.toLowerCase())
 		expect(captured.zeroForOne).toBe(true)
 	})
 })

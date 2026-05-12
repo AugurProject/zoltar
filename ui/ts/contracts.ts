@@ -1,4 +1,4 @@
-import { parseAbiItem, zeroAddress, type Address, type ContractFunctionParameters, type Hash, type Hex } from 'viem'
+import { decodeEventLog, parseAbiItem, zeroAddress, type Address, type ContractFunctionParameters, type Hash, type Hex, type TransactionReceipt } from 'viem'
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from './shared/bigInt.js'
 import { assertNever } from './lib/assert.js'
@@ -34,6 +34,7 @@ import type {
 	ReportingDetails,
 	ReportingOutcomeKey,
 	SecurityPoolVaultSummary,
+	StagedOracleExecutionResult,
 	SecurityVaultActionResult,
 	TradingActionResult,
 	TradingDetails,
@@ -63,7 +64,7 @@ import {
 	requireSecurityVaultTupleArray,
 	toUint8Array,
 } from './contracts/helpers.js'
-import { type ContractRevertReasonParams, readRequiredMulticall, writeContractAndWait } from './contracts/core.js'
+import { type ContractRevertReasonParams, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './contracts/core.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from './contracts/deploymentHelpers.js'
 export { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from './contracts/deployment.js'
 import { getDeploymentSteps } from './contracts/deployment.js'
@@ -95,6 +96,44 @@ type SecurityPoolDeploymentQueryResult = {
 	shareToken: Address
 	truthAuction: Address
 	universeId: bigint
+}
+
+function getOracleQueueOperationFromEventOperation(operation: bigint) {
+	switch (operation) {
+		case 0n:
+			return 'liquidation'
+		case 1n:
+			return 'withdrawRep'
+		case 2n:
+			return 'setSecurityBondsAllowance'
+		default:
+			throw new Error(`Unexpected staged oracle operation: ${operation.toString()}`)
+	}
+}
+
+function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOperation: OracleQueueOperation): StagedOracleExecutionResult | undefined {
+	for (const log of receipt.logs) {
+		try {
+			const decodedLog = decodeEventLog({
+				abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
+				data: log.data,
+				topics: log.topics,
+			})
+			if (decodedLog.eventName !== 'ExecutedStagedOperation') continue
+			const operation = getOracleQueueOperationFromEventOperation(BigInt(decodedLog.args.operation))
+			if (operation !== expectedOperation) continue
+			const errorMessage = decodedLog.args.errorMessage.trim() === '' ? undefined : decodedLog.args.errorMessage
+			return {
+				errorMessage,
+				operation,
+				operationId: decodedLog.args.operationId,
+				success: decodedLog.args.success,
+			} satisfies StagedOracleExecutionResult
+		} catch {
+			continue
+		}
+	}
+	return undefined
 }
 async function readSecurityPoolUniverseId(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address) {
 	return await client.readContract({
@@ -797,15 +836,17 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 }
 
 export async function executeOracleManagerStagedOperation(client: WriteClient, managerAddress: Address, operationId: bigint) {
-	const hash = await writeContractAndWait(client, () => ({
+	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => ({
 		address: managerAddress,
 		abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
 		functionName: 'executeStagedOperation',
 		args: [operationId],
 	}))
+	const stagedExecution = getStagedOracleExecutionResult(receipt, 'liquidation') ?? getStagedOracleExecutionResult(receipt, 'withdrawRep') ?? getStagedOracleExecutionResult(receipt, 'setSecurityBondsAllowance')
 	return {
 		action: 'executeStagedOperation',
 		hash,
+		...(stagedExecution === undefined ? {} : { stagedExecution }),
 	} satisfies OpenOracleActionResult
 }
 
@@ -1448,8 +1489,12 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 		args: [LIQUIDATION_OPERATION_TYPE, targetVault, amount],
 		value: await loadBufferedOracleRequestEthCost(client, managerAddress),
 	}
-	const hash = await writeContractAndWait(client, () => callParams)
-	return hash
+	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
+	const stagedExecution = getStagedOracleExecutionResult(receipt, 'liquidation')
+	return {
+		hash,
+		...(stagedExecution === undefined ? {} : { stagedExecution }),
+	}
 }
 
 function getOracleOperationType(operation: OracleQueueOperation) {
@@ -1491,10 +1536,12 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 		args: [getOracleOperationType(operation), targetVault, amount],
 		value: await loadBufferedOracleRequestEthCost(client, managerAddress),
 	}
-	const hash = await writeContractAndWait(client, () => callParams)
+	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
+	const stagedExecution = getStagedOracleExecutionResult(receipt, operation)
 	return {
 		action: 'queueOperation',
 		hash,
+		...(stagedExecution === undefined ? {} : { stagedExecution }),
 	} satisfies OpenOracleActionResult
 }
 
