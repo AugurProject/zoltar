@@ -13,7 +13,7 @@ import {
 	isForkWorkflowDisabled,
 	resolveSelectedPoolView,
 	shouldShowSelectedPoolWorkflowDetails,
-} from '../components/SecurityPoolWorkflowSection.js'
+} from '../lib/securityPoolWorkflow.js'
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
 
 void describe('selected pool workflow lookup state', () => {

@@ -7,9 +7,28 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 import { LiquidationModal } from '../components/LiquidationModal.js'
-import type { OracleManagerDetails } from '../types/contracts.js'
+import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+
+function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
+	return {
+		answerUnit: '',
+		createdAt: 1n,
+		description: 'Question description',
+		displayValueMax: 100n,
+		displayValueMin: 0n,
+		endTime: 2n,
+		exists: true,
+		marketType: 'binary',
+		numTicks: 2n,
+		outcomeLabels: ['Yes', 'No'],
+		questionId: '0x01',
+		startTime: 1n,
+		title: 'Will this resolve?',
+		...overrides,
+	}
+}
 
 function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
 	return {
@@ -31,6 +50,46 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 	}
 }
 
+function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
+	return {
+		lockedRepInEscalationGame: 0n,
+		repDepositShare: 5n * 10n ** 18n,
+		securityBondAllowance: 2n * 10n ** 18n,
+		unpaidEthFees: 0n,
+		vaultAddress: zeroAddress,
+		...overrides,
+	}
+}
+
+function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
+	return {
+		completeSetCollateralAmount: 0n,
+		currentRetentionRate: 10n,
+		forkOutcome: 'none',
+		forkOwnSecurityPool: false,
+		lastOraclePrice: 3n * 10n ** 18n,
+		lastOracleSettlementTimestamp: 1n,
+		managerAddress: zeroAddress,
+		marketDetails: createMarketDetails(),
+		migratedRep: 0n,
+		parent: zeroAddress,
+		questionOutcome: 'yes',
+		questionId: '0x01',
+		securityMultiplier: 2n,
+		securityPoolAddress: zeroAddress,
+		systemState: 'operational',
+		totalRepDeposit: 5n * 10n ** 18n,
+		totalSecurityBondAllowance: 2n * 10n ** 18n,
+		truthAuctionAddress: zeroAddress,
+		truthAuctionStartedAt: 0n,
+		universeHasForked: false,
+		universeId: 1n,
+		vaultCount: 1n,
+		vaults: [createTargetVaultSummary()],
+		...overrides,
+	}
+}
+
 describe('LiquidationModal', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -47,6 +106,35 @@ describe('LiquidationModal', () => {
 		restoreDomEnvironment = undefined
 	})
 
+	function renderLiquidationModal(overrides: Partial<Parameters<typeof LiquidationModal>[0]> = {}) {
+		return renderIntoDocument(
+			<LiquidationModal
+				accountAddress={zeroAddress}
+				closeLiquidationModal={() => undefined}
+				currentPoolOracleManagerDetails={undefined}
+				isMainnet
+				liquidationAmount='1'
+				liquidationMaxAmount={5n * 10n ** 18n}
+				liquidationManagerAddress={zeroAddress}
+				liquidationModalOpen
+				liquidationSecurityPoolAddress={zeroAddress}
+				liquidationTargetVault={zeroAddress}
+				loadingPoolOracleManager={false}
+				onLiquidationAmountChange={() => undefined}
+				onQueueLiquidation={() => undefined}
+				onSelectedPoolViewChange={() => undefined}
+				repPerEthPrice={1n * 10n ** 18n}
+				repPerEthSource='mock'
+				repPerEthSourceUrl={undefined}
+				selectedPool={createSelectedPool()}
+				securityPoolOverviewActiveAction={undefined}
+				securityPoolOverviewResult={undefined}
+				targetVaultSummary={createTargetVaultSummary()}
+				{...overrides}
+			/>,
+		)
+	}
+
 	test('traps focus while open and restores it when closed', async () => {
 		let open = true
 		const opener = document.createElement('button')
@@ -55,29 +143,15 @@ describe('LiquidationModal', () => {
 		opener.focus()
 
 		const renderModal = async () =>
-			await renderIntoDocument(
-				<LiquidationModal
-					accountAddress={zeroAddress}
-					closeLiquidationModal={() => {
-						open = false
-					}}
-					currentPoolOracleManagerDetails={undefined}
-					isMainnet
-					liquidationAmount='1'
-					liquidationMaxAmount={undefined}
-					liquidationManagerAddress={zeroAddress}
-					liquidationModalOpen={open}
-					liquidationSecurityPoolAddress={zeroAddress}
-					loadingPoolOracleManager={false}
-					liquidationTargetVault={zeroAddress}
-					onSelectedPoolViewChange={() => undefined}
-					onLiquidationAmountChange={() => undefined}
-					onLiquidationTargetVaultChange={() => undefined}
-					onQueueLiquidation={() => undefined}
-					securityPoolOverviewActiveAction={undefined}
-					securityPoolOverviewResult={undefined}
-				/>,
-			)
+			await renderLiquidationModal({
+				closeLiquidationModal: () => {
+					open = false
+				},
+				currentPoolOracleManagerDetails: undefined,
+				liquidationModalOpen: open,
+				selectedPool: createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n }),
+				targetVaultSummary: createTargetVaultSummary(),
+			})
 
 		let renderedComponent = await renderModal()
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -120,12 +194,16 @@ describe('LiquidationModal', () => {
 					liquidationSecurityPoolAddress={zeroAddress}
 					loadingPoolOracleManager={false}
 					liquidationTargetVault={zeroAddress}
-					onSelectedPoolViewChange={() => undefined}
 					onLiquidationAmountChange={setLiquidationAmount}
-					onLiquidationTargetVaultChange={() => undefined}
 					onQueueLiquidation={() => undefined}
+					onSelectedPoolViewChange={() => undefined}
+					repPerEthPrice={1n * 10n ** 18n}
+					repPerEthSource='mock'
+					repPerEthSourceUrl={undefined}
+					selectedPool={createSelectedPool()}
 					securityPoolOverviewActiveAction={undefined}
 					securityPoolOverviewResult={undefined}
+					targetVaultSummary={createTargetVaultSummary()}
 				/>
 			)
 		}
@@ -137,7 +215,7 @@ describe('LiquidationModal', () => {
 			render(<LiquidationHarness />, container)
 		})
 
-		const amountInput = within(container).getAllByLabelText('Liquidation Amount')[0] as HTMLInputElement
+		const amountInput = container.querySelector("input[placeholder='0.0']") as HTMLInputElement
 		amountInput.focus()
 		expect(document.activeElement).toBe(amountInput)
 
@@ -145,7 +223,7 @@ describe('LiquidationModal', () => {
 			fireEvent.input(amountInput, { target: { value: '12' } })
 		})
 
-		const rerenderedAmountInput = within(container).getAllByLabelText('Liquidation Amount')[0] as HTMLInputElement
+		const rerenderedAmountInput = container.querySelector("input[placeholder='0.0']") as HTMLInputElement
 		expect(rerenderedAmountInput.value).toBe('12')
 		expect(document.activeElement).toBe(rerenderedAmountInput)
 
@@ -155,42 +233,29 @@ describe('LiquidationModal', () => {
 
 	test('shows queued liquidation details and links to staged operations', async () => {
 		const selectedViews: string[] = []
-		const renderedComponent = await renderIntoDocument(
-			<LiquidationModal
-				accountAddress={zeroAddress}
-				closeLiquidationModal={() => undefined}
-				currentPoolOracleManagerDetails={createOracleManagerDetails({
-					pendingOperation: {
-						amount: 5n,
-						initiatorVault: zeroAddress,
-						operation: 'liquidation',
-						operationId: 9n,
-						targetVault: zeroAddress,
-					},
-					pendingOperationSlotId: 9n,
-				})}
-				isMainnet
-				liquidationAmount='5'
-				liquidationMaxAmount={5n}
-				liquidationManagerAddress={zeroAddress}
-				liquidationModalOpen
-				liquidationSecurityPoolAddress={zeroAddress}
-				loadingPoolOracleManager={false}
-				liquidationTargetVault={zeroAddress}
-				onSelectedPoolViewChange={view => {
-					selectedViews.push(view ?? '')
-				}}
-				onLiquidationAmountChange={() => undefined}
-				onLiquidationTargetVaultChange={() => undefined}
-				onQueueLiquidation={() => undefined}
-				securityPoolOverviewActiveAction={undefined}
-				securityPoolOverviewResult={{
-					action: 'queueLiquidation',
-					hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
-					securityPoolAddress: zeroAddress,
-				}}
-			/>,
-		)
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				pendingOperation: {
+					amount: 5n,
+					initiatorVault: zeroAddress,
+					operation: 'liquidation',
+					operationId: 9n,
+					targetVault: zeroAddress,
+				},
+				pendingOperationSlotId: 9n,
+			}),
+			liquidationAmount: '5',
+			liquidationMaxAmount: 5n * 10n ** 18n,
+			liquidationTargetVault: zeroAddress,
+			onSelectedPoolViewChange: view => {
+				selectedViews.push(view ?? '')
+			},
+			securityPoolOverviewResult: {
+				action: 'queueLiquidation',
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
+				securityPoolAddress: zeroAddress,
+			},
+		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -205,84 +270,55 @@ describe('LiquidationModal', () => {
 	})
 
 	test('shows immediate execution when liquidation uses an already valid oracle price', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<LiquidationModal
-				accountAddress={zeroAddress}
-				closeLiquidationModal={() => undefined}
-				currentPoolOracleManagerDetails={createOracleManagerDetails({
-					isPriceValid: true,
-					pendingOperation: undefined,
-					pendingOperationSlotId: 0n,
-				})}
-				isMainnet
-				liquidationAmount='5'
-				liquidationMaxAmount={5n}
-				liquidationManagerAddress={zeroAddress}
-				liquidationModalOpen
-				liquidationSecurityPoolAddress={zeroAddress}
-				loadingPoolOracleManager={false}
-				liquidationTargetVault={zeroAddress}
-				onSelectedPoolViewChange={() => undefined}
-				onLiquidationAmountChange={() => undefined}
-				onLiquidationTargetVaultChange={() => undefined}
-				onQueueLiquidation={() => undefined}
-				securityPoolOverviewActiveAction={undefined}
-				securityPoolOverviewResult={{
-					action: 'queueLiquidation',
-					hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
-					securityPoolAddress: zeroAddress,
-					stagedExecution: {
-						errorMessage: undefined,
-						operation: 'liquidation',
-						operationId: 3n,
-						success: true,
-					},
-				}}
-			/>,
-		)
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				pendingOperation: undefined,
+				pendingOperationSlotId: 0n,
+			}),
+			liquidationAmount: '5',
+			liquidationMaxAmount: 5n * 10n ** 18n,
+			securityPoolOverviewResult: {
+				action: 'queueLiquidation',
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
+				securityPoolAddress: zeroAddress,
+				stagedExecution: {
+					errorMessage: undefined,
+					operation: 'liquidation',
+					operationId: 3n,
+					success: true,
+				},
+			},
+		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Execute Vault Liquidation' })).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
 	})
 
 	test('shows liquidation failure details when the staged execution event reports a rejection', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<LiquidationModal
-				accountAddress={zeroAddress}
-				closeLiquidationModal={() => undefined}
-				currentPoolOracleManagerDetails={createOracleManagerDetails({
-					isPriceValid: true,
-					pendingOperation: undefined,
-					pendingOperationSlotId: 0n,
-				})}
-				isMainnet
-				liquidationAmount='5'
-				liquidationMaxAmount={5n}
-				liquidationManagerAddress={zeroAddress}
-				liquidationModalOpen
-				liquidationSecurityPoolAddress={zeroAddress}
-				loadingPoolOracleManager={false}
-				liquidationTargetVault={zeroAddress}
-				onSelectedPoolViewChange={() => undefined}
-				onLiquidationAmountChange={() => undefined}
-				onLiquidationTargetVaultChange={() => undefined}
-				onQueueLiquidation={() => undefined}
-				securityPoolOverviewActiveAction={undefined}
-				securityPoolOverviewResult={{
-					action: 'queueLiquidation',
-					hash: '0x00000000000000000000000000000000000000000000000000000000000000ab',
-					securityPoolAddress: zeroAddress,
-					stagedExecution: {
-						errorMessage: 'Local Security Bond Allowance broken',
-						operation: 'liquidation',
-						operationId: 4n,
-						success: false,
-					},
-				}}
-			/>,
-		)
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				pendingOperation: undefined,
+				pendingOperationSlotId: 0n,
+			}),
+			liquidationAmount: '5',
+			liquidationMaxAmount: 5n * 10n ** 18n,
+			securityPoolOverviewResult: {
+				action: 'queueLiquidation',
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000ab',
+				securityPoolAddress: zeroAddress,
+				stagedExecution: {
+					errorMessage: 'Local Security Bond Allowance broken',
+					operation: 'liquidation',
+					operationId: 4n,
+					success: false,
+				},
+			},
+		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -293,33 +329,21 @@ describe('LiquidationModal', () => {
 
 	test('fills the liquidation amount from the provided Max value', async () => {
 		const amountChanges: string[] = []
-		const renderedComponent = await renderIntoDocument(
-			<LiquidationModal
-				accountAddress={zeroAddress}
-				closeLiquidationModal={() => undefined}
-				currentPoolOracleManagerDetails={undefined}
-				isMainnet
-				liquidationAmount='1'
-				liquidationMaxAmount={25n}
-				liquidationManagerAddress={zeroAddress}
-				liquidationModalOpen
-				liquidationSecurityPoolAddress={zeroAddress}
-				loadingPoolOracleManager={false}
-				liquidationTargetVault={zeroAddress}
-				onSelectedPoolViewChange={() => undefined}
-				onLiquidationAmountChange={value => {
-					amountChanges.push(value)
-				}}
-				onLiquidationTargetVaultChange={() => undefined}
-				onQueueLiquidation={() => undefined}
-				securityPoolOverviewActiveAction={undefined}
-				securityPoolOverviewResult={undefined}
-			/>,
-		)
+		const renderedComponent = await renderLiquidationModal({
+			liquidationAmount: '1',
+			liquidationMaxAmount: 25n * 10n ** 18n,
+			onLiquidationAmountChange: value => {
+				amountChanges.push(value)
+			},
+		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getAllByRole('button', { name: /Liquidation Amount/ })[0] as HTMLElement)
+			const maxButton = document.body.querySelector('.field-inline-action')
+			if (!(maxButton instanceof HTMLElement)) {
+				throw new Error('Expected liquidation Max button')
+			}
+			fireEvent.click(maxButton)
 		})
 
 		expect(amountChanges).toEqual(['25'])

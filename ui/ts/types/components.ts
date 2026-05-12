@@ -24,7 +24,7 @@ import type {
 	ZoltarMigrationActionResult,
 	ZoltarUniverseSummary,
 } from './contracts.js'
-import type { OpenOracleInitialReportPriceSource } from '../lib/openOracle.js'
+import type { OpenOracleInitialReportPriceSource, OpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
@@ -352,7 +352,6 @@ type LiquidationControlsProps = {
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
 	liquidationTargetVault: string
 	onLiquidationAmountChange: (value: string) => void
-	onLiquidationTargetVaultChange: (value: string) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 }
@@ -387,7 +386,6 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	loadingPoolOracleManager: boolean
 	loadingSecurityPools: boolean
 	onLiquidationAmountChange: (value: string) => void
-	onLiquidationTargetVaultChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
@@ -496,6 +494,7 @@ export type OpenOracleRouteContentProps = {
 		tokenAccessLoadingInitial: boolean
 		tokenAccessRefreshing: boolean
 	}
+	openOracleInitialReportSubmission: OpenOracleInitialReportSubmissionDetails | undefined
 	openOracleCreateForm: OpenOracleCreateFormState
 	openOracleForm: OpenOracleFormState
 	openOracleReportDetails: OpenOracleReportDetails | undefined

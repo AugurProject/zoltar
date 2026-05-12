@@ -5,7 +5,7 @@ import { waitFor, within } from '@testing-library/dom'
 import type { Address } from 'viem'
 import type { SimulationController } from '../simulation/controller.js'
 import { useRepPrices } from '../hooks/useRepPrices.js'
-import { resetActiveEnvironmentForTesting, setActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ChainBackend, ReadClient } from '../lib/chainBackend.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
@@ -86,7 +86,7 @@ describe('useRepPrices', () => {
 			createReadClient: () => readClient,
 		}
 
-		setActiveEnvironmentForTesting(backend, createSimulationController())
+		const resetEnvironment = installActiveEnvironmentForTesting(backend, createSimulationController())
 
 		const renderedComponent = await renderIntoDocument(<PriceProbe />)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -96,5 +96,6 @@ describe('useRepPrices', () => {
 			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
 			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
 		})
+		resetEnvironment()
 	})
 })

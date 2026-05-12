@@ -31,113 +31,36 @@ import { ViewTabs } from './ViewTabs.js'
 import { TimestampValue } from './TimestampValue.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
+import {
+	getCurrentPoolOracleManagerDetails,
+	getOracleLastPriceDisplay,
+	getOraclePriceExpiryDisplay,
+	getSelectedPoolCardTitle,
+	getSelectedPoolOracleMetricValues,
+	getSelectedPoolWorkflowGuardMessage,
+	getSelectedPoolWorkflowLockedPresentation,
+	isForkWorkflowDisabled,
+	resolveSelectedPoolView,
+	shouldShowSelectedPoolWorkflowDetails,
+	type SelectedPoolView,
+} from '../lib/securityPoolWorkflow.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { balanceShortage } from '../lib/inputs.js'
 import { hasForkActivity } from '../lib/forkAuction.js'
-import { resolveRequestedLoadableValueState, type LoadableValueState } from '../lib/loadState.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '../lib/formatters.js'
+import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getVaultApprovalGuardMessage, getVaultClaimFeesGuardMessage, getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
-import {
-	getOracleManagerPriceValidUntilTimestamp,
-	getSecurityVaultMaxBondAllowanceAmount,
-	getSecurityVaultWithdrawableRepAmount,
-	getSelectedVaultAddress,
-	hasValidSecurityVaultOraclePrice,
-	isSecurityVaultDepositBelowMinimum,
-	isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper,
-	MIN_SECURITY_VAULT_REP_DEPOSIT,
-} from '../lib/securityVault.js'
+import { getSecurityVaultMaxBondAllowanceAmount, getSecurityVaultWithdrawableRepAmount, getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
-import type { UserMessagePresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
-import { resolveEnumValue } from '../lib/viewState.js'
-import { getTimeRemaining } from '../lib/time.js'
-import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolSystemState } from '../types/contracts.js'
+import type { OracleManagerDetails, SecurityPoolSystemState } from '../types/contracts.js'
 import type { ReadinessAction, SecurityPoolWorkflowRouteContentProps, ViewTabOption, WorkflowOutcomePresentation } from '../types/components.js'
 
-type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'fork' | 'staged-operations' | 'price-oracle'
 type SelectedVaultView = 'browse-vaults' | 'selected-vault'
-export function resolveSelectedPoolView(value: string | undefined): SelectedPoolView {
-	const normalizedValue = value === 'resolution' ? 'reporting' : value === 'oracle' ? 'staged-operations' : value
-	return resolveEnumValue<SelectedPoolView>(normalizedValue, 'vaults', ['vaults', 'trading', 'reporting', 'fork', 'staged-operations', 'price-oracle'])
-}
-
-export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolUniverseMismatch: boolean }) {
-	return hasSelectedPoolAddress && selectedPoolExists && !selectedPoolUniverseMismatch
-}
-
-export function getSelectedPoolCardTitle() {
-	return 'Operate Security Pool'
-}
-
-export function getSelectedPoolWorkflowGuardMessage({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }) {
-	if (selectedPoolUniverseMismatch) return 'Switch to the same universe before using this pool workflow.'
-	if (selectedPoolLookupState === 'loading') return 'Wait for this pool to finish loading.'
-	if (selectedPoolLookupState === 'missing') return 'Load a valid pool to open this workflow.'
-	if (!hasSelectedPoolAddress || selectedPoolLookupState === 'unknown') return 'Load a pool to open this workflow.'
-	return undefined
-}
-
-export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }): UserMessagePresentation {
-	if (selectedPoolUniverseMismatch) {
-		return {
-			actionHint: 'Switch to the matching universe first.',
-			badgeLabel: 'Unavailable',
-			badgeTone: 'blocked',
-			detail: 'Switch to the same universe before using vault, trading, reporting, and fork workflows.',
-			key: 'unavailable',
-		}
-	}
-
-	if (selectedPoolLookupState === 'loading') {
-		return {
-			detail: 'Loading...',
-			detailIsLoading: true,
-			key: 'loading',
-		}
-	}
-
-	if (selectedPoolLookupState === 'missing') {
-		return {
-			badgeLabel: 'Not found',
-			badgeTone: 'blocked',
-			detail: 'This security pool address was not found.',
-			key: 'not_found',
-		}
-	}
-
-	return {
-		badgeLabel: hasSelectedPoolAddress ? 'Waiting for pool' : 'No pool selected',
-		badgeTone: 'muted',
-		detail: hasSelectedPoolAddress ? 'Pool not available yet.' : 'No pool selected.',
-		...(hasSelectedPoolAddress ? { actionHint: 'Refresh this address after the pool is deployed.' } : {}),
-		key: 'action_needed',
-	}
-}
-
-export function isForkWorkflowDisabled(selectedPoolState: SecurityPoolSystemState | undefined, selectedPoolHasForkActivity = false) {
-	return selectedPoolState === undefined || (selectedPoolState === 'operational' && !selectedPoolHasForkActivity)
-}
-
-export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }: { lastPrice: bigint; lastSettlementTimestamp: bigint }) {
-	if (lastSettlementTimestamp === 0n) return '-'
-	return `≈ ${formatRoundedCurrencyBalance(lastPrice, 18, 2)} REP / ETH`
-}
-
-export function getOraclePriceExpiryDisplay({ currentTimestamp, lastSettlementTimestamp, priceValidUntilTimestamp }: { currentTimestamp: bigint; lastSettlementTimestamp: bigint; priceValidUntilTimestamp: bigint | undefined }) {
-	if (lastSettlementTimestamp === 0n) return '-'
-
-	const validUntilTimestamp = priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp)
-	if (validUntilTimestamp === undefined) return '-'
-
-	const timeRemaining = getTimeRemaining(validUntilTimestamp, currentTimestamp)
-	if (timeRemaining === undefined) return '-'
-	return timeRemaining === 0n ? 'Expired' : formatDuration(timeRemaining)
-}
 
 function getPendingOperationLabel(operation: 'liquidation' | 'setSecurityBondsAllowance' | 'withdrawRep') {
 	switch (operation) {
@@ -179,18 +102,6 @@ function getVaultQueuedOperationStatus({
 	if (queuedVaultOperation !== undefined) return 'queued'
 	if (currentPoolOracleManagerDetails.isPriceValid) return 'executed'
 	return 'missing'
-}
-
-export function getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails, selectedPoolManagerAddress }: { poolOracleManagerDetails: OracleManagerDetails | undefined; selectedPoolManagerAddress: string | undefined }) {
-	if (!sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return undefined
-	return poolOracleManagerDetails
-}
-
-export function getSelectedPoolOracleMetricValues({ lastOraclePrice, lastOracleSettlementTimestamp }: Pick<ListedSecurityPool, 'lastOraclePrice' | 'lastOracleSettlementTimestamp'>) {
-	return {
-		lastPrice: lastOraclePrice ?? 0n,
-		lastSettlementTimestamp: lastOracleSettlementTimestamp,
-	}
 }
 
 type VaultActionModal = 'claim-fees' | 'deposit-rep' | 'set-bond-allowance' | 'withdraw-rep' | undefined
@@ -253,7 +164,6 @@ export function SecurityPoolWorkflowSection({
 	loadingPoolOracleManager,
 	loadingSecurityPools,
 	onLiquidationAmountChange,
-	onLiquidationTargetVaultChange,
 	onLoadPoolOracleManager,
 	onOpenLiquidationModal,
 	onQueueLiquidation,
@@ -1294,10 +1204,14 @@ export function SecurityPoolWorkflowSection({
 				loadingPoolOracleManager={loadingPoolOracleManager}
 				liquidationTargetVault={liquidationTargetVault}
 				onSelectedPoolViewChange={onSelectedPoolViewChange}
+				repPerEthPrice={repPerEthPrice}
+				repPerEthSource={repPerEthSource}
+				repPerEthSourceUrl={repPerEthSourceUrl}
+				selectedPool={selectedPool}
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
 				securityPoolOverviewResult={securityPoolOverviewResult}
+				targetVaultSummary={selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))}
 				onLiquidationAmountChange={onLiquidationAmountChange}
-				onLiquidationTargetVaultChange={onLiquidationTargetVaultChange}
 				onQueueLiquidation={onQueueLiquidation}
 			/>
 		</RouteWorkflowPanel>

@@ -27,7 +27,6 @@ import { TimestampValue } from './TimestampValue.js'
 import { useLoadController } from '../hooks/useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import {
-	deriveOpenOracleInitialReportSubmissionDetails,
 	formatOpenOracleFeePercentage,
 	formatOpenOracleMultiplier,
 	getOpenOracleDisputeAvailability,
@@ -35,6 +34,7 @@ import {
 	getOpenOracleReportStatusTone,
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
+	type OpenOracleInitialReportSubmissionDetails,
 	type OpenOracleSelectedReportActionMode,
 } from '../lib/openOracle.js'
 import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
@@ -127,25 +127,43 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 	)
 }
 
-export function renderSelectedReportActionSection(
-	actionMode: OpenOracleSelectedReportActionMode,
-	isConnected: boolean,
-	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction'],
-	openOracleForm: OpenOracleFormState,
-	initialReportSubmission: ReturnType<typeof deriveOpenOracleInitialReportSubmissionDetails>,
-	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
-	token1Symbol: string,
-	token2Symbol: string,
-	onApproveToken1: (amount?: bigint) => void,
-	onApproveToken2: (amount?: bigint) => void,
-	onDisputeReport: () => void,
-	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void,
-	onRefreshPrice: () => void,
-	onSettleReport: () => void,
-	onSubmitInitialReport: () => void,
-	onWrapWethForInitialReport: () => void,
-	openOracleReportDetails?: OpenOracleReportDetails,
-) {
+export function renderSelectedReportActionSection({
+	actionMode,
+	initialReportSubmission,
+	isConnected,
+	onApproveToken1,
+	onApproveToken2,
+	onDisputeReport,
+	onOpenOracleFormChange,
+	onRefreshPrice,
+	onSettleReport,
+	onSubmitInitialReport,
+	onWrapWethForInitialReport,
+	openOracleActiveAction,
+	openOracleForm,
+	openOracleInitialReportState,
+	openOracleReportDetails,
+	token1Symbol,
+	token2Symbol,
+}: {
+	actionMode: OpenOracleSelectedReportActionMode
+	initialReportSubmission: OpenOracleInitialReportSubmissionDetails
+	isConnected: boolean
+	onApproveToken1: (amount?: bigint) => void
+	onApproveToken2: (amount?: bigint) => void
+	onDisputeReport: () => void
+	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
+	onRefreshPrice: () => void
+	onSettleReport: () => void
+	onSubmitInitialReport: () => void
+	onWrapWethForInitialReport: () => void
+	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction']
+	openOracleForm: OpenOracleFormState
+	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState']
+	openOracleReportDetails?: OpenOracleReportDetails
+	token1Symbol: string
+	token2Symbol: string
+}) {
 	const disputeTokenOptions: EnumDropdownOption<OpenOracleFormState['disputeTokenToSwap']>[] = [
 		{ value: 'token1', label: token1Symbol },
 		{ value: 'token2', label: token2Symbol },
@@ -331,6 +349,7 @@ function renderReportDetailsCard(
 	openOracleReportDetails: OpenOracleReportDetails | undefined,
 	openOracleForm: OpenOracleFormState,
 	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
+	openOracleInitialReportSubmission: OpenOracleSectionProps['openOracleInitialReportSubmission'],
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction'],
 	loadingOracleReport: boolean,
 	isConnected: boolean,
@@ -401,28 +420,9 @@ function renderReportDetailsCard(
 					? { ...action, onAction: () => onSelectedReportModalChange('settle') }
 					: action,
 	)
-	const initialReportSubmission = deriveOpenOracleInitialReportSubmissionDetails({
-		approvedToken1Amount: openOracleInitialReportState.token1Approval.value,
-		approvedToken2Amount: openOracleInitialReportState.token2Approval.value,
-		defaultPrice: openOracleInitialReportState.defaultPrice,
-		defaultPriceError: openOracleInitialReportState.defaultPriceError,
-		defaultPriceSource: openOracleInitialReportState.defaultPriceSource,
-		defaultPriceSourceUrl: openOracleInitialReportState.defaultPriceSourceUrl,
-		priceInput: openOracleForm.price,
-		quoteAttemptedSources: openOracleInitialReportState.quoteAttemptedSources,
-		quoteFailureReason: openOracleInitialReportState.quoteFailureReason,
-		reportDetails: openOracleReportDetails,
-		token1Balance: openOracleInitialReportState.token1Balance,
-		token1BalanceError: openOracleInitialReportState.token1BalanceError,
-		token1AllowanceError: openOracleInitialReportState.token1Approval.error,
-		token2Balance: openOracleInitialReportState.token2Balance,
-		token2BalanceError: openOracleInitialReportState.token2BalanceError,
-		token2AllowanceError: openOracleInitialReportState.token2Approval.error,
-		token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
-		token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
-		walletEthBalance: openOracleInitialReportState.ethBalance,
-	})
-
+	if (openOracleInitialReportSubmission === undefined) {
+		return undefined
+	}
 	return (
 		<>
 			<StickyObjectContext
@@ -605,15 +605,10 @@ function renderReportDetailsCard(
 			</div>
 
 			<OperationModal isOpen={selectedReportModal === 'initial-report'} onClose={() => onSelectedReportModalChange(undefined)} title='Submit Initial Report' description='Review price source, approvals, and token balances before submitting the initial report.'>
-				{renderSelectedReportActionSection(
-					'initial-report',
+				{renderSelectedReportActionSection({
+					actionMode: 'initial-report',
+					initialReportSubmission: openOracleInitialReportSubmission,
 					isConnected,
-					openOracleActiveAction,
-					openOracleForm,
-					initialReportSubmission,
-					openOracleInitialReportState,
-					openOracleReportDetails.token1Symbol,
-					openOracleReportDetails.token2Symbol,
 					onApproveToken1,
 					onApproveToken2,
 					onDisputeReport,
@@ -622,20 +617,20 @@ function renderReportDetailsCard(
 					onSettleReport,
 					onSubmitInitialReport,
 					onWrapWethForInitialReport,
+					openOracleActiveAction,
+					openOracleForm,
+					openOracleInitialReportState,
 					openOracleReportDetails,
-				)}
+					token1Symbol: openOracleReportDetails.token1Symbol,
+					token2Symbol: openOracleReportDetails.token2Symbol,
+				})}
 			</OperationModal>
 
 			<OperationModal isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title='Dispute & Swap' description='Provide the replacement swap amounts for the selected report.'>
-				{renderSelectedReportActionSection(
-					'dispute',
+				{renderSelectedReportActionSection({
+					actionMode: 'dispute',
+					initialReportSubmission: openOracleInitialReportSubmission,
 					isConnected,
-					openOracleActiveAction,
-					openOracleForm,
-					initialReportSubmission,
-					openOracleInitialReportState,
-					openOracleReportDetails.token1Symbol,
-					openOracleReportDetails.token2Symbol,
 					onApproveToken1,
 					onApproveToken2,
 					onDisputeReport,
@@ -644,20 +639,20 @@ function renderReportDetailsCard(
 					onSettleReport,
 					onSubmitInitialReport,
 					onWrapWethForInitialReport,
+					openOracleActiveAction,
+					openOracleForm,
+					openOracleInitialReportState,
 					openOracleReportDetails,
-				)}
+					token1Symbol: openOracleReportDetails.token1Symbol,
+					token2Symbol: openOracleReportDetails.token2Symbol,
+				})}
 			</OperationModal>
 
 			<OperationModal isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title='Settle Report' description='Confirm settlement once the selected report is ready.'>
-				{renderSelectedReportActionSection(
-					'settle',
+				{renderSelectedReportActionSection({
+					actionMode: 'settle',
+					initialReportSubmission: openOracleInitialReportSubmission,
 					isConnected,
-					openOracleActiveAction,
-					openOracleForm,
-					initialReportSubmission,
-					openOracleInitialReportState,
-					openOracleReportDetails.token1Symbol,
-					openOracleReportDetails.token2Symbol,
 					onApproveToken1,
 					onApproveToken2,
 					onDisputeReport,
@@ -666,8 +661,13 @@ function renderReportDetailsCard(
 					onSettleReport,
 					onSubmitInitialReport,
 					onWrapWethForInitialReport,
+					openOracleActiveAction,
+					openOracleForm,
+					openOracleInitialReportState,
 					openOracleReportDetails,
-				)}
+					token1Symbol: openOracleReportDetails.token1Symbol,
+					token2Symbol: openOracleReportDetails.token2Symbol,
+				})}
 			</OperationModal>
 		</>
 	)
@@ -759,6 +759,7 @@ export function OpenOracleSection({
 	openOracleError,
 	openOracleForm,
 	openOracleInitialReportState,
+	openOracleInitialReportSubmission,
 	openOracleReportDetails,
 	openOracleResult,
 	onActiveViewChange,
@@ -984,6 +985,7 @@ export function OpenOracleSection({
 						openOracleReportDetails,
 						openOracleForm,
 						openOracleInitialReportState,
+						openOracleInitialReportSubmission,
 						openOracleActiveAction,
 						loadingOracleReport,
 						isConnected,

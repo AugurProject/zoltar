@@ -98,6 +98,7 @@ function OpenOracleSectionHarness({ accountAddress }: { accountAddress: Address 
 				openOracleCreateForm={openOracle.openOracleCreateForm}
 				openOracleError={openOracle.openOracleError}
 				openOracleForm={openOracle.openOracleForm}
+				openOracleInitialReportSubmission={openOracle.openOracleInitialReportSubmission}
 				openOracleInitialReportState={openOracle.openOracleInitialReportState}
 				openOracleReportDetails={openOracle.openOracleReportDetails}
 				openOracleResult={openOracle.openOracleResult}

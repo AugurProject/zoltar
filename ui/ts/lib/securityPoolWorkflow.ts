@@ -1,0 +1,100 @@
+import { sameAddress } from './address.js'
+import { formatDuration, formatRoundedCurrencyBalance } from './formatters.js'
+import type { LoadableValueState } from './loadState.js'
+import { getOracleManagerPriceValidUntilTimestamp } from './securityVault.js'
+import { getTimeRemaining } from './time.js'
+import type { UserMessagePresentation } from './userCopy.js'
+import { resolveEnumValue } from './viewState.js'
+import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolSystemState } from '../types/contracts.js'
+
+export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'fork' | 'staged-operations' | 'price-oracle'
+
+export function resolveSelectedPoolView(value: string | undefined): SelectedPoolView {
+	const normalizedValue = value === 'resolution' ? 'reporting' : value === 'oracle' ? 'staged-operations' : value
+	return resolveEnumValue<SelectedPoolView>(normalizedValue, 'vaults', ['vaults', 'trading', 'reporting', 'fork', 'staged-operations', 'price-oracle'])
+}
+
+export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolUniverseMismatch: boolean }) {
+	return hasSelectedPoolAddress && selectedPoolExists && !selectedPoolUniverseMismatch
+}
+
+export function getSelectedPoolCardTitle() {
+	return 'Operate Security Pool'
+}
+
+export function getSelectedPoolWorkflowGuardMessage({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }) {
+	if (selectedPoolUniverseMismatch) return 'Switch to the same universe before using this pool workflow.'
+	if (selectedPoolLookupState === 'loading') return 'Wait for this pool to finish loading.'
+	if (selectedPoolLookupState === 'missing') return 'Load a valid pool to open this workflow.'
+	if (!hasSelectedPoolAddress || selectedPoolLookupState === 'unknown') return 'Load a pool to open this workflow.'
+	return undefined
+}
+
+export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }): UserMessagePresentation {
+	if (selectedPoolUniverseMismatch) {
+		return {
+			actionHint: 'Switch to the matching universe first.',
+			badgeLabel: 'Unavailable',
+			badgeTone: 'blocked',
+			detail: 'Switch to the same universe before using vault, trading, reporting, and fork workflows.',
+			key: 'unavailable',
+		}
+	}
+
+	if (selectedPoolLookupState === 'loading') {
+		return {
+			detail: 'Loading...',
+			detailIsLoading: true,
+			key: 'loading',
+		}
+	}
+
+	if (selectedPoolLookupState === 'missing') {
+		return {
+			badgeLabel: 'Not found',
+			badgeTone: 'blocked',
+			detail: 'This security pool address was not found.',
+			key: 'not_found',
+		}
+	}
+
+	return {
+		badgeLabel: hasSelectedPoolAddress ? 'Waiting for pool' : 'No pool selected',
+		badgeTone: 'muted',
+		detail: hasSelectedPoolAddress ? 'Pool not available yet.' : 'No pool selected.',
+		...(hasSelectedPoolAddress ? { actionHint: 'Refresh this address after the pool is deployed.' } : {}),
+		key: 'action_needed',
+	}
+}
+
+export function isForkWorkflowDisabled(selectedPoolState: SecurityPoolSystemState | undefined, selectedPoolHasForkActivity = false) {
+	return selectedPoolState === undefined || (selectedPoolState === 'operational' && !selectedPoolHasForkActivity)
+}
+
+export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }: { lastPrice: bigint; lastSettlementTimestamp: bigint }) {
+	if (lastSettlementTimestamp === 0n) return '-'
+	return `≈ ${formatRoundedCurrencyBalance(lastPrice, 18, 2)} REP / ETH`
+}
+
+export function getOraclePriceExpiryDisplay({ currentTimestamp, lastSettlementTimestamp, priceValidUntilTimestamp }: { currentTimestamp: bigint; lastSettlementTimestamp: bigint; priceValidUntilTimestamp: bigint | undefined }) {
+	if (lastSettlementTimestamp === 0n) return '-'
+
+	const validUntilTimestamp = priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp)
+	if (validUntilTimestamp === undefined) return '-'
+
+	const timeRemaining = getTimeRemaining(validUntilTimestamp, currentTimestamp)
+	if (timeRemaining === undefined) return '-'
+	return timeRemaining === 0n ? 'Expired' : formatDuration(timeRemaining)
+}
+
+export function getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails, selectedPoolManagerAddress }: { poolOracleManagerDetails: OracleManagerDetails | undefined; selectedPoolManagerAddress: string | undefined }) {
+	if (!sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return undefined
+	return poolOracleManagerDetails
+}
+
+export function getSelectedPoolOracleMetricValues({ lastOraclePrice, lastOracleSettlementTimestamp }: Pick<ListedSecurityPool, 'lastOraclePrice' | 'lastOracleSettlementTimestamp'>) {
+	return {
+		lastPrice: lastOraclePrice ?? 0n,
+		lastSettlementTimestamp: lastOracleSettlementTimestamp,
+	}
+}

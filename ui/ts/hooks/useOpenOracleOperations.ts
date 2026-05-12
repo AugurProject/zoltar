@@ -649,6 +649,8 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 		}
 	}, [enabled, openOracleReportDetails.value?.reportId])
 
+	const openOracleInitialReportSubmission = openOracleReportDetails.value === undefined ? undefined : getInitialReportSubmission(openOracleReportDetails.value)
+
 	return {
 		approveToken1,
 		approveToken2,
@@ -684,6 +686,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 			tokenAccessLoadingInitial: openOracleInitialReportTokenAccessLoadingInitial.value && openOracleInitialReportTokenAccessLoad.isLoading.value,
 			tokenAccessRefreshing: openOracleInitialReportTokenAccessRefreshing.value && openOracleInitialReportTokenAccessLoad.isLoading.value,
 		},
+		openOracleInitialReportSubmission,
 		openOracleReportDetails: openOracleReportDetails.value,
 		openOracleResult: openOracleResult.value,
 		resetOpenOracleCreateForm: () => {

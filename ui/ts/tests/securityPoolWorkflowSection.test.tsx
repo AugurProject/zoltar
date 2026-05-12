@@ -271,7 +271,6 @@ function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolWorkflow
 		loadingPoolOracleManager: false,
 		loadingSecurityPools: false,
 		onLiquidationAmountChange: () => undefined,
-		onLiquidationTargetVaultChange: () => undefined,
 		onLoadPoolOracleManager: () => undefined,
 		onOpenLiquidationModal: () => undefined,
 		onQueueLiquidation: () => undefined,

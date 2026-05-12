@@ -40,7 +40,7 @@ type OpenOracleInitialReportPriceLoadResult =
 			status: 'failure'
 	  }
 
-type OpenOracleInitialReportSubmissionDetails = {
+export type OpenOracleInitialReportSubmissionDetails = {
 	amount1: bigint | undefined
 	amount2: bigint | undefined
 	blockMessage: OpenOracleGateMessage | undefined

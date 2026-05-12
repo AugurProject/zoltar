@@ -8,7 +8,7 @@ import { MetricField } from '../components/MetricField.js'
 import { renderSelectedReportActionSection } from '../components/OpenOracleSection.js'
 import { SectionBlock } from '../components/SectionBlock.js'
 import { TransactionActionButton } from '../components/TransactionActionButton.js'
-import { deriveOpenOracleInitialReportSubmissionDetails, getOpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
+import { deriveOpenOracleInitialReportSubmissionDetails, getOpenOracleSelectedReportActionMode, type OpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
 import { getDefaultOpenOracleFormState } from '../lib/marketForm.js'
 import type { AccountState, OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleSectionProps } from '../types/components.js'
@@ -231,7 +231,7 @@ function renderInitialReportActionSection({
 	openOracleInitialReportState?: OpenOracleSectionProps['openOracleInitialReportState']
 	openOracleReportDetails?: OpenOracleReportDetails
 } = {}) {
-	const initialReportSubmission = deriveOpenOracleInitialReportSubmissionDetails({
+	const initialReportSubmission: OpenOracleInitialReportSubmissionDetails = deriveOpenOracleInitialReportSubmissionDetails({
 		approvedToken1Amount: openOracleInitialReportState.token1Approval.value,
 		approvedToken2Amount: openOracleInitialReportState.token2Approval.value,
 		defaultPrice: openOracleInitialReportState.defaultPrice,
@@ -253,24 +253,25 @@ function renderInitialReportActionSection({
 		walletEthBalance: openOracleInitialReportState.ethBalance,
 	})
 
-	return renderSelectedReportActionSection(
-		'initial-report',
-		accountState.address !== undefined,
-		undefined,
-		openOracleForm,
+	return renderSelectedReportActionSection({
+		actionMode: 'initial-report',
 		initialReportSubmission,
+		isConnected: accountState.address !== undefined,
+		onApproveToken1: () => undefined,
+		onApproveToken2: () => undefined,
+		onDisputeReport: () => undefined,
+		onOpenOracleFormChange: () => undefined,
+		onRefreshPrice: () => undefined,
+		onSettleReport: () => undefined,
+		onSubmitInitialReport: () => undefined,
+		onWrapWethForInitialReport: () => undefined,
+		openOracleActiveAction: undefined,
+		openOracleForm,
 		openOracleInitialReportState,
-		openOracleReportDetails.token1Symbol,
-		openOracleReportDetails.token2Symbol,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-	)
+		openOracleReportDetails,
+		token1Symbol: openOracleReportDetails.token1Symbol,
+		token2Symbol: openOracleReportDetails.token2Symbol,
+	})
 }
 
 function renderDisputeActionSection({
@@ -285,12 +286,9 @@ function renderDisputeActionSection({
 	openOracleForm?: OpenOracleFormState
 	openOracleReportDetails?: OpenOracleReportDetails
 } = {}) {
-	return renderSelectedReportActionSection(
-		getOpenOracleSelectedReportActionMode(openOracleReportDetails),
-		accountState.address !== undefined,
-		undefined,
-		openOracleForm,
-		deriveOpenOracleInitialReportSubmissionDetails({
+	return renderSelectedReportActionSection({
+		actionMode: getOpenOracleSelectedReportActionMode(openOracleReportDetails),
+		initialReportSubmission: deriveOpenOracleInitialReportSubmissionDetails({
 			approvedToken1Amount: 0n,
 			approvedToken2Amount: 0n,
 			defaultPrice: undefined,
@@ -311,19 +309,22 @@ function renderDisputeActionSection({
 			token2Decimals: openOracleReportDetails.token2Decimals,
 			walletEthBalance: undefined,
 		}),
-		createOpenOracleInitialReportState(),
-		openOracleReportDetails.token1Symbol,
-		openOracleReportDetails.token2Symbol,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
+		isConnected: accountState.address !== undefined,
+		onApproveToken1: () => undefined,
+		onApproveToken2: () => undefined,
+		onDisputeReport: () => undefined,
+		onOpenOracleFormChange: () => undefined,
+		onRefreshPrice: () => undefined,
+		onSettleReport: () => undefined,
+		onSubmitInitialReport: () => undefined,
+		onWrapWethForInitialReport: () => undefined,
+		openOracleActiveAction: undefined,
+		openOracleForm,
+		openOracleInitialReportState: createOpenOracleInitialReportState(),
 		openOracleReportDetails,
-	)
+		token1Symbol: openOracleReportDetails.token1Symbol,
+		token2Symbol: openOracleReportDetails.token2Symbol,
+	})
 }
 
 function renderSettleActionSection({
@@ -341,12 +342,9 @@ function renderSettleActionSection({
 	openOracleForm?: OpenOracleFormState
 	openOracleReportDetails?: OpenOracleReportDetails
 } = {}) {
-	return renderSelectedReportActionSection(
-		'settle',
-		accountState.address !== undefined,
-		undefined,
-		openOracleForm,
-		deriveOpenOracleInitialReportSubmissionDetails({
+	return renderSelectedReportActionSection({
+		actionMode: 'settle',
+		initialReportSubmission: deriveOpenOracleInitialReportSubmissionDetails({
 			approvedToken1Amount: 0n,
 			approvedToken2Amount: 0n,
 			defaultPrice: undefined,
@@ -367,19 +365,22 @@ function renderSettleActionSection({
 			token2Decimals: openOracleReportDetails.token2Decimals,
 			walletEthBalance: undefined,
 		}),
-		createOpenOracleInitialReportState(),
-		openOracleReportDetails.token1Symbol,
-		openOracleReportDetails.token2Symbol,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
-		() => undefined,
+		isConnected: accountState.address !== undefined,
+		onApproveToken1: () => undefined,
+		onApproveToken2: () => undefined,
+		onDisputeReport: () => undefined,
+		onOpenOracleFormChange: () => undefined,
+		onRefreshPrice: () => undefined,
+		onSettleReport: () => undefined,
+		onSubmitInitialReport: () => undefined,
+		onWrapWethForInitialReport: () => undefined,
+		openOracleActiveAction: undefined,
+		openOracleForm,
+		openOracleInitialReportState: createOpenOracleInitialReportState(),
 		openOracleReportDetails,
-	)
+		token1Symbol: openOracleReportDetails.token1Symbol,
+		token2Symbol: openOracleReportDetails.token2Symbol,
+	})
 }
 
 void describe('OpenOracleSection', () => {

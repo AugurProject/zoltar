@@ -7,7 +7,7 @@ import { createConnectedReadClient, createWalletWriteClient } from '../lib/clien
 import { getErrorMessage } from '../lib/errors.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput } from '../lib/inputs.js'
-import { parseBigIntInput } from '../lib/marketForm.js'
+import { parseRepAmountInput } from '../lib/marketForm.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { ListedSecurityPool, SecurityPoolOverviewActionResult } from '../types/contracts.js'
 
@@ -78,7 +78,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 				buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, securityPoolOverviewError, 'Connect a wallet before queueing liquidation'),
 				async walletAddress => {
 					const targetVault = parseAddressInput(liquidationTargetVault.value, 'Target vault')
-					const amount = parseBigIntInput(liquidationAmount.value, 'Liquidation amount')
+					const amount = parseRepAmountInput(liquidationAmount.value, 'Liquidation amount')
 					return await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount)
 				},
 				'Failed to queue liquidation',

@@ -5,7 +5,7 @@ import { getAddress } from 'viem'
 import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation } from '../contracts.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
 import { getSecurityVaultWithdrawableRepAmount } from '../lib/securityVault.js'
-import { getActiveBackend, initializeActiveEnvironment, resetActiveEnvironmentForTesting, setActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
+import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
@@ -45,7 +45,7 @@ void describe('active environment', () => {
 	void test('treats both mainnet and simulation profiles as supported app chains', () => {
 		expect(isSupportedAppChain('0x1')).toBe(true)
 
-		setActiveEnvironmentForTesting(
+		const resetEnvironment = installActiveEnvironmentForTesting(
 			createFakeBackend({
 				profile: createFakeSimulationProfile(),
 			}),
@@ -53,11 +53,12 @@ void describe('active environment', () => {
 
 		expect(isSupportedAppChain('0x539')).toBe(true)
 		expect(getWrongNetworkMessage()).toBeUndefined()
+		resetEnvironment()
 	})
 
 	void test('disposes an existing simulation controller when reinitializing into injected mode', async () => {
 		let disposeCalls = 0
-		setActiveEnvironmentForTesting(
+		const resetEnvironment = installActiveEnvironmentForTesting(
 			createFakeBackend({
 				profile: createFakeSimulationProfile(),
 			}),
@@ -72,6 +73,7 @@ void describe('active environment', () => {
 
 		expect(disposeCalls).toBe(1)
 		expect(getActiveBackend().id).toBe('injected')
+		resetEnvironment()
 	})
 })
 
