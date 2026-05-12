@@ -28,6 +28,7 @@ export function SecurityPoolsOverviewSection({
 	closeLiquidationModal,
 	hasLoadedSecurityPools,
 	liquidationAmount,
+	liquidationMaxAmount,
 	liquidationManagerAddress,
 	liquidationModalOpen,
 	liquidationSecurityPoolAddress,
@@ -186,7 +187,7 @@ export function SecurityPoolsOverviewSection({
 													title={<AddressValue address={vault.vaultAddress} />}
 													variant='compact'
 													actions={
-														<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet}>
+														<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)} disabled={accountState.address === undefined || !isMainnet}>
 															Liquidate Vault
 														</button>
 													}
@@ -219,6 +220,7 @@ export function SecurityPoolsOverviewSection({
 				currentPoolOracleManagerDetails={undefined}
 				isMainnet={isMainnet}
 				liquidationAmount={liquidationAmount}
+				liquidationMaxAmount={liquidationMaxAmount}
 				liquidationManagerAddress={liquidationManagerAddress}
 				liquidationModalOpen={liquidationModalOpen}
 				liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}

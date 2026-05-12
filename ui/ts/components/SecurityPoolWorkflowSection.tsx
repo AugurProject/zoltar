@@ -61,8 +61,6 @@ import type { ReadinessAction, SecurityPoolWorkflowRouteContentProps, ViewTabOpt
 
 type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'fork' | 'staged-operations' | 'price-oracle'
 type SelectedVaultView = 'browse-vaults' | 'selected-vault'
-type SelectedPoolLookupDisplay = 'empty' | LoadableValueState
-
 export function resolveSelectedPoolView(value: string | undefined): SelectedPoolView {
 	const normalizedValue = value === 'resolution' ? 'reporting' : value === 'oracle' ? 'staged-operations' : value
 	return resolveEnumValue<SelectedPoolView>(normalizedValue, 'vaults', ['vaults', 'trading', 'reporting', 'fork', 'staged-operations', 'price-oracle'])
@@ -74,11 +72,6 @@ export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, 
 
 export function getSelectedPoolCardTitle() {
 	return 'Operate Security Pool'
-}
-
-export function getSelectedPoolLookupDisplay({ hasSelectedPoolAddress, selectedPoolLookupState }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState }): SelectedPoolLookupDisplay {
-	if (!hasSelectedPoolAddress) return 'empty'
-	return selectedPoolLookupState
 }
 
 export function getSelectedPoolWorkflowGuardMessage({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }) {
@@ -252,6 +245,7 @@ export function SecurityPoolWorkflowSection({
 	closeLiquidationModal,
 	forkAuction,
 	liquidationAmount,
+	liquidationMaxAmount,
 	liquidationManagerAddress,
 	liquidationModalOpen,
 	liquidationSecurityPoolAddress,
@@ -485,7 +479,7 @@ export function SecurityPoolWorkflowSection({
 			readiness: currentPoolOracleManagerDetails?.isPriceValid === false ? 'blocked' : 'warning',
 			title: 'Liquidate Vault',
 			...(selectedPool === undefined || selectedVaultAddress === '' ? { blocker: 'Select a pool and vault first.' } : {}),
-			...(selectedPool === undefined || selectedVaultAddress === '' ? {} : { onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultAddress as `0x${string}`) }),
+			...(selectedPool === undefined || selectedVaultAddress === '' ? {} : { onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultAddress as `0x${string}`, selectedVaultDetails?.securityBondAllowance) }),
 		},
 	] satisfies ReadinessAction[])
 	const vaultWorkflowOutcome = getVaultWorkflowOutcomePresentation(securityVault.securityVaultResult)
@@ -501,10 +495,6 @@ export function SecurityPoolWorkflowSection({
 		securityVaultResult: securityVault.securityVaultResult,
 	})
 	const selectedPoolQuestionDescription = marketDetails === undefined ? undefined : marketDetails.description.trim() === '' ? undefined : marketDetails.description
-	const selectedPoolLookupDisplay = getSelectedPoolLookupDisplay({
-		hasSelectedPoolAddress,
-		selectedPoolLookupState,
-	})
 	const loadedSelectedPool = selectedPool
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({
@@ -532,15 +522,6 @@ export function SecurityPoolWorkflowSection({
 		isPriceValid: currentPoolOracleManagerDetails?.isPriceValid,
 		resolvedPendingOperationId,
 	})
-	const selectedPoolLookupPresentation =
-		selectedPoolLookupDisplay === 'empty'
-			? {
-					key: 'not_checked' as const,
-					badgeLabel: 'No pool selected',
-					badgeTone: 'muted' as const,
-					detail: 'Paste a security pool address or browse pools.',
-				}
-			: getPoolRegistryPresentation({ mode: 'selection', state: selectedPoolLookupState })
 	const selectedPoolBrowsePresentation = selectedPool === undefined ? getPoolRegistryPresentation({ mode: 'selection', state: selectedPoolLookupState }) : undefined
 	const selectedVaultLoadNotice = securityVault.loadingSecurityVault ? (
 		<p className='detail'>
@@ -668,7 +649,6 @@ export function SecurityPoolWorkflowSection({
 							}
 						/>
 					</div>
-					{selectedPoolLookupPresentation === undefined ? undefined : <StateHint presentation={selectedPoolLookupPresentation} />}
 				</div>
 				{loadedSelectedPool === undefined ? undefined : (
 					<div className='selected-pool-context-summary'>
@@ -820,7 +800,11 @@ export function SecurityPoolWorkflowSection({
 																		>
 																			Select Vault
 																		</button>
-																		<button className='destructive' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)} disabled={accountState.address === undefined || !isMainnet || currentPoolOracleManagerDetails?.isPriceValid === false}>
+																		<button
+																			className='destructive'
+																			onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
+																			disabled={accountState.address === undefined || !isMainnet || currentPoolOracleManagerDetails?.isPriceValid === false}
+																		>
 																			Liquidate Vault
 																		</button>
 																	</div>
@@ -1303,6 +1287,7 @@ export function SecurityPoolWorkflowSection({
 				currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
 				isMainnet={isMainnet}
 				liquidationAmount={liquidationAmount}
+				liquidationMaxAmount={liquidationMaxAmount}
 				liquidationManagerAddress={liquidationManagerAddress}
 				liquidationModalOpen={liquidationModalOpen}
 				liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}

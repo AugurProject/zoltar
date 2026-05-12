@@ -345,6 +345,7 @@ export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
 type LiquidationControlsProps = {
 	closeLiquidationModal: () => void
 	liquidationAmount: string
+	liquidationMaxAmount: bigint | undefined
 	liquidationManagerAddress: Address | undefined
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
@@ -352,7 +353,7 @@ type LiquidationControlsProps = {
 	liquidationTargetVault: string
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTargetVaultChange: (value: string) => void
-	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => void
+	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 }
 
@@ -378,6 +379,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	closeLiquidationModal: () => void
 	forkAuction: ForkAuctionRouteContentProps
 	liquidationAmount: string
+	liquidationMaxAmount: bigint | undefined
 	liquidationManagerAddress: Address | undefined
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
@@ -387,7 +389,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTargetVaultChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
-	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => void
+	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint) => void
 	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void

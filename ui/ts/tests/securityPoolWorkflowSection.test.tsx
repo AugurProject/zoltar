@@ -263,6 +263,7 @@ function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolWorkflow
 		closeLiquidationModal: () => undefined,
 		forkAuction: createForkAuctionProps(),
 		liquidationAmount: '',
+		liquidationMaxAmount: undefined,
 		liquidationManagerAddress: undefined,
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,
@@ -330,6 +331,7 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		expect(documentQueries.getByRole('heading', { name: 'Pool Workflows' })).not.toBeNull()
 		expect(documentQueries.getByText('No pool selected.')).not.toBeNull()
+		expect(documentQueries.queryByText('Paste a security pool address or browse pools.')).toBeNull()
 		expect(documentQueries.queryByText('Locked')).toBeNull()
 	})
 

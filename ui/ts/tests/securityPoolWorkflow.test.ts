@@ -7,7 +7,6 @@ import {
 	getOracleLastPriceDisplay,
 	getOraclePriceExpiryDisplay,
 	getSelectedPoolCardTitle,
-	getSelectedPoolLookupDisplay,
 	getSelectedPoolOracleMetricValues,
 	getSelectedPoolWorkflowGuardMessage,
 	getSelectedPoolWorkflowLockedPresentation,
@@ -24,43 +23,6 @@ void describe('selected pool workflow lookup state', () => {
 		expect(getSelectedPoolCardTitle()).toBe('Operate Security Pool')
 
 		expect(getSelectedPoolCardTitle()).toBe('Operate Security Pool')
-	})
-
-	void test('adds only the empty selected-pool state on top of loadable lookup states', () => {
-		expect(
-			getSelectedPoolLookupDisplay({
-				hasSelectedPoolAddress: false,
-				selectedPoolLookupState: 'unknown',
-			}),
-		).toBe('empty')
-
-		expect(
-			getSelectedPoolLookupDisplay({
-				hasSelectedPoolAddress: true,
-				selectedPoolLookupState: 'unknown',
-			}),
-		).toBe('unknown')
-
-		expect(
-			getSelectedPoolLookupDisplay({
-				hasSelectedPoolAddress: true,
-				selectedPoolLookupState: 'loading',
-			}),
-		).toBe('loading')
-
-		expect(
-			getSelectedPoolLookupDisplay({
-				hasSelectedPoolAddress: true,
-				selectedPoolLookupState: 'missing',
-			}),
-		).toBe('missing')
-
-		expect(
-			getSelectedPoolLookupDisplay({
-				hasSelectedPoolAddress: true,
-				selectedPoolLookupState: 'ready',
-			}),
-		).toBe('ready')
 	})
 
 	void test('maps the legacy resolution view alias to the reporting tab', () => {

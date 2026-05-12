@@ -64,6 +64,7 @@ describe('LiquidationModal', () => {
 					currentPoolOracleManagerDetails={undefined}
 					isMainnet
 					liquidationAmount='1'
+					liquidationMaxAmount={undefined}
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen={open}
 					liquidationSecurityPoolAddress={zeroAddress}
@@ -113,6 +114,7 @@ describe('LiquidationModal', () => {
 					currentPoolOracleManagerDetails={undefined}
 					isMainnet
 					liquidationAmount={liquidationAmount}
+					liquidationMaxAmount={5n}
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
@@ -135,7 +137,7 @@ describe('LiquidationModal', () => {
 			render(<LiquidationHarness />, container)
 		})
 
-		const amountInput = within(container).getByLabelText('Liquidation Amount') as HTMLInputElement
+		const amountInput = within(container).getAllByLabelText('Liquidation Amount')[0] as HTMLInputElement
 		amountInput.focus()
 		expect(document.activeElement).toBe(amountInput)
 
@@ -143,7 +145,7 @@ describe('LiquidationModal', () => {
 			fireEvent.input(amountInput, { target: { value: '12' } })
 		})
 
-		const rerenderedAmountInput = within(container).getByLabelText('Liquidation Amount') as HTMLInputElement
+		const rerenderedAmountInput = within(container).getAllByLabelText('Liquidation Amount')[0] as HTMLInputElement
 		expect(rerenderedAmountInput.value).toBe('12')
 		expect(document.activeElement).toBe(rerenderedAmountInput)
 
@@ -169,6 +171,7 @@ describe('LiquidationModal', () => {
 				})}
 				isMainnet
 				liquidationAmount='5'
+				liquidationMaxAmount={5n}
 				liquidationManagerAddress={zeroAddress}
 				liquidationModalOpen
 				liquidationSecurityPoolAddress={zeroAddress}
@@ -213,6 +216,7 @@ describe('LiquidationModal', () => {
 				})}
 				isMainnet
 				liquidationAmount='5'
+				liquidationMaxAmount={5n}
 				liquidationManagerAddress={zeroAddress}
 				liquidationModalOpen
 				liquidationSecurityPoolAddress={zeroAddress}
@@ -255,6 +259,7 @@ describe('LiquidationModal', () => {
 				})}
 				isMainnet
 				liquidationAmount='5'
+				liquidationMaxAmount={5n}
 				liquidationManagerAddress={zeroAddress}
 				liquidationModalOpen
 				liquidationSecurityPoolAddress={zeroAddress}
@@ -284,5 +289,39 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
 		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
+	})
+
+	test('fills the liquidation amount from the provided Max value', async () => {
+		const amountChanges: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			<LiquidationModal
+				accountAddress={zeroAddress}
+				closeLiquidationModal={() => undefined}
+				currentPoolOracleManagerDetails={undefined}
+				isMainnet
+				liquidationAmount='1'
+				liquidationMaxAmount={25n}
+				liquidationManagerAddress={zeroAddress}
+				liquidationModalOpen
+				liquidationSecurityPoolAddress={zeroAddress}
+				loadingPoolOracleManager={false}
+				liquidationTargetVault={zeroAddress}
+				onSelectedPoolViewChange={() => undefined}
+				onLiquidationAmountChange={value => {
+					amountChanges.push(value)
+				}}
+				onLiquidationTargetVaultChange={() => undefined}
+				onQueueLiquidation={() => undefined}
+				securityPoolOverviewActiveAction={undefined}
+				securityPoolOverviewResult={undefined}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getAllByRole('button', { name: /Liquidation Amount/ })[0] as HTMLElement)
+		})
+
+		expect(amountChanges).toEqual(['25'])
 	})
 })

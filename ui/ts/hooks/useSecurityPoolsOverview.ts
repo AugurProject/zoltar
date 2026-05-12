@@ -22,6 +22,7 @@ type UseSecurityPoolsOverviewParameters = {
 
 export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters) {
 	const liquidationAmount = useSignal('0')
+	const liquidationMaxAmount = useSignal<bigint | undefined>(undefined)
 	const liquidationTargetVault = useSignal('')
 	const liquidationManagerAddress = useSignal<Address | undefined>(undefined)
 	const liquidationSecurityPoolAddress = useSignal<Address | undefined>(undefined)
@@ -57,8 +58,9 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 		})
 	}
 
-	const openLiquidationModal = (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => {
+	const openLiquidationModal = (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => {
 		liquidationManagerAddress.value = managerAddress
+		liquidationMaxAmount.value = maxAmount
 		liquidationSecurityPoolAddress.value = securityPoolAddress
 		liquidationTargetVault.value = vaultAddress
 		liquidationModalOpen.value = true
@@ -96,6 +98,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 
 	return {
 		liquidationAmount: liquidationAmount.value,
+		liquidationMaxAmount: liquidationMaxAmount.value,
 		liquidationManagerAddress: liquidationManagerAddress.value,
 		liquidationModalOpen: liquidationModalOpen.value,
 		liquidationTargetVault: liquidationTargetVault.value,

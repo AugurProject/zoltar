@@ -14,6 +14,7 @@ type LiquidationModalProps = {
 	currentPoolOracleManagerDetails: OracleManagerDetails | undefined
 	isMainnet: boolean
 	liquidationAmount: string
+	liquidationMaxAmount: bigint | undefined
 	liquidationManagerAddress: Address | undefined
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
@@ -33,6 +34,7 @@ export function LiquidationModal({
 	currentPoolOracleManagerDetails,
 	isMainnet,
 	liquidationAmount,
+	liquidationMaxAmount,
 	liquidationManagerAddress,
 	liquidationModalOpen,
 	liquidationSecurityPoolAddress,
@@ -200,7 +202,12 @@ export function LiquidationModal({
 						</label>
 						<label className='field'>
 							<span>Liquidation Amount</span>
-							<FormInput value={liquidationAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} />
+							<div className='field-inline'>
+								<FormInput className='field-inline-input' value={liquidationAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} />
+								<button className='quiet field-inline-action' type='button' onClick={() => onLiquidationAmountChange(liquidationMaxAmount?.toString() ?? '')} disabled={liquidationMaxAmount === undefined || liquidationMaxAmount <= 0n}>
+									Max
+								</button>
+							</div>
 						</label>
 					</div>
 				</div>
