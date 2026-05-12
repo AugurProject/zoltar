@@ -44,6 +44,7 @@
 		"ui:setup": "bun install --frozen-lockfile && cd ui && bun install --frozen-lockfile && cd ../solidity && bun install --frozen-lockfile && bun run setup && cd .. && bun run generate && cd ui && bun run build && bun run build:tests",
 		"app:build": "bun run generate && cd ui && bun run build && bun run build:tests",
 		"ui:build": "bun run app:build",
+		"ui:build:prod": "bun run generate && cd ui && bun run build:prod",
 		"ui:workers": "cd ui && bun ./build/workers.mts",
 		"ui:shared": "bun ./ui/build/shared.mts",
 		"app:watch": "bun run app:build && bun ./ui/build/watch.mts",
@@ -65,7 +66,10 @@
 	},
 	"knip": {
 		"ignore": [
-			"ui/build/workers.mts"
+			"ui/build/workers.mts",
+			"ui/build/production.mts",
+			"ui/ts/index.dev.ts",
+			"ui/ts/liveReload.ts"
 		]
 	}
 }
