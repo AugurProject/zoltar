@@ -45,7 +45,6 @@ COPY ./ui/tsconfig.json /source/ui/tsconfig.json
 COPY ./ui/css/ /source/ui/css/
 COPY ./ui/ts/ /source/ui/ts/
 COPY ./ui/favicon.ico /source/ui/favicon.ico
-COPY ./ui/favicon.svg /source/ui/favicon.svg
 
 # Compile contracts, vendor dependencies, and build UI
 RUN bun run ui:build
@@ -72,7 +71,6 @@ COPY --from=ipfs-kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
 # Copy only the deployable UI artifacts (excluding node_modules, source files, build tools)
 COPY --from=builder /source/ui/index.html /export/index.html
 COPY --from=builder /source/ui/favicon.ico /export/favicon.ico
-COPY --from=builder /source/ui/favicon.svg /export/favicon.svg
 COPY --from=builder /source/ui/js/ /export/js/
 COPY --from=builder /source/ui/vendor/ /export/vendor/
 COPY --from=builder /source/ui/css/ /export/css/
