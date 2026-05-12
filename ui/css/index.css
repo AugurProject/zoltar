@@ -668,7 +668,20 @@ button.destructive:hover:not(:disabled) {
 }
 
 .loading-value {
+	display: inline-flex;
+	align-items: center;
+	font: inherit;
+	font-weight: inherit;
+	letter-spacing: inherit;
+	line-height: inherit;
+	text-transform: inherit;
+	color: inherit;
+	white-space: inherit;
 	opacity: 0.72;
+}
+
+button .loading-value {
+	opacity: 1;
 }
 
 .currency-value {
