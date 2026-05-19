@@ -28,12 +28,47 @@ type RpcBlock = {
 	readonly timestamp?: string
 }
 
+type RpcTransactionReceipt = {
+	readonly status?: string
+}
+
+type RpcTransaction = {
+	readonly blockNumber?: string
+}
+
+type RpcTransactionRequest = {
+	readonly gasPrice?: string
+	readonly maxFeePerGas?: string
+	readonly maxPriorityFeePerGas?: string
+	readonly type?: string
+}
+
 function hasJsonRpcBaseFields(value: unknown): value is { jsonrpc: string; id: number | string } {
 	return typeof value === 'object' && value !== null && 'jsonrpc' in value && 'id' in value && typeof value.jsonrpc === 'string' && (typeof value.id === 'number' || typeof value.id === 'string')
 }
 
 function isJsonRpcError(value: unknown): value is { code: number; message: string; data?: unknown } {
 	return typeof value === 'object' && value !== null && 'message' in value && typeof value.message === 'string'
+}
+
+function isRpcTransactionRequest(value: unknown): value is RpcTransactionRequest {
+	return typeof value === 'object' && value !== null
+}
+
+export function normalizeAnvilTransactionParams(params: unknown[]) {
+	const [firstParam, ...remainingParams] = params
+	if (!isRpcTransactionRequest(firstParam)) return params
+
+	const normalizedTransactionRequest: Record<string, unknown> = {
+		...firstParam,
+		gasPrice: '0x0',
+	}
+
+	delete normalizedTransactionRequest['maxFeePerGas']
+	delete normalizedTransactionRequest['maxPriorityFeePerGas']
+	delete normalizedTransactionRequest['type']
+
+	return [normalizedTransactionRequest, ...remainingParams]
 }
 
 function parseJsonRpcResponse(raw: unknown): JsonRpcSuccess {
@@ -69,6 +104,25 @@ function parseBlockTimestamp(value: unknown): bigint | undefined {
 		return undefined
 	}
 	return BigInt(timestamp)
+}
+
+function parseTransactionReceiptStatus(value: unknown): string | undefined {
+	if (typeof value !== 'object' || value === null || !('status' in value)) {
+		return undefined
+	}
+	const { status } = value as RpcTransactionReceipt
+	return typeof status === 'string' ? status : undefined
+}
+
+function parseTransactionBlockNumber(value: unknown): bigint | undefined {
+	if (typeof value !== 'object' || value === null || !('blockNumber' in value)) {
+		return undefined
+	}
+	const { blockNumber } = value as RpcTransaction
+	if (typeof blockNumber !== 'string') {
+		return undefined
+	}
+	return BigInt(blockNumber)
 }
 
 export interface AnvilWindowEthereum {
@@ -116,18 +170,12 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 	// Make JSON-RPC request to Anvil
 	let requestId = 0
 	const request = async (args: { method: string; params?: unknown[] | unknown | undefined }): Promise<unknown> => {
+		const params = args.method === 'eth_sendTransaction' ? normalizeAnvilTransactionParams(ensureArray(args.params)) : ensureArray(args.params)
 		let nextBlockTimestamp: bigint | undefined
-		// For eth_sendTransaction, simulate first to catch reverts early
-		const params = ensureArray(args.params)
+		// Avoid preflight eth_call here. Recent Anvil versions can leak state when a
+		// mutating call reverts after intermediate writes, which corrupts subsequent
+		// eth_sendTransaction behavior inside the same test.
 		if (args.method === 'eth_sendTransaction' && params[0]) {
-			try {
-				// Simulate the transaction with eth_call (readonly) to see if it would revert
-				await request({ method: 'eth_call', params: [params[0], 'latest'] })
-			} catch (simulationError: unknown) {
-				// Simulation failed, so the transaction would revert - throw the same error
-				throw simulationError
-			}
-
 			const latestBlockTimestamp = parseBlockTimestamp(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
 			if (latestBlockTimestamp !== undefined) {
 				currentTimestamp = latestBlockTimestamp
@@ -146,7 +194,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				jsonrpc: '2.0',
 				id: requestId++,
 				method: args.method,
-				params: args.params || [],
+				params,
 			}),
 		})
 		if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
@@ -167,9 +215,46 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		if (json.error !== undefined) {
 			throw new Error(json.error.message || 'RPC error')
 		}
+
+		const waitForReceiptStatus = async (hash: string) => {
+			let transactionBlockNumber: bigint | undefined
+			for (let attempt = 0; attempt < 20; attempt++) {
+				const receipt = await request({
+					method: 'eth_getTransactionReceipt',
+					params: [hash],
+				})
+				const status = parseTransactionReceiptStatus(receipt)
+				if (status !== undefined) return { receipt, status }
+
+				if (transactionBlockNumber === undefined) {
+					const transaction = await request({
+						method: 'eth_getTransactionByHash',
+						params: [hash],
+					})
+					transactionBlockNumber = parseTransactionBlockNumber(transaction)
+				}
+			}
+
+			if (transactionBlockNumber !== undefined) {
+				throw new Error(`Receipt not available for mined transaction ${hash}`)
+			}
+			return undefined
+		}
+
 		// For eth_getTransactionReceipt, return the receipt even if status === '0x0' (reverted)
 		// Callers can check the status field themselves
 		ensureDefined(json.result, 'json.result is undefined')
+		if (args.method === 'eth_sendTransaction' && params[0] !== undefined && typeof json.result === 'string') {
+			const receiptResult = await waitForReceiptStatus(json.result)
+			if (receiptResult?.status === '0x0') {
+				try {
+					await request({ method: 'eth_call', params: [params[0], 'latest'] })
+				} catch (error) {
+					throw error
+				}
+				throw new Error('Transaction reverted')
+			}
+		}
 		if (nextBlockTimestamp !== undefined) {
 			currentTimestamp = nextBlockTimestamp
 		}
