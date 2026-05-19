@@ -3,7 +3,6 @@ import { createCommon } from 'tevm/common'
 import { createPublicClient, createWalletClient, custom, encodeFunctionData, parseTransaction, publicActions, recoverTransactionAddress, type Address, type Hash, type Hex } from 'viem'
 import { getAddress } from 'viem'
 import type { InjectedEthereum } from '../injectedEthereum.js'
-import { assertNever } from '../lib/assert.js'
 import type { ChainBackend, CreateWriteClientCallbacks, ReadClient, WriteClient } from '../lib/chainBackend.js'
 import { createSimulationProfile } from '../lib/networkProfile.js'
 import { bootstrapSimulationChain, predictSimulationTokenAddresses, updateZoltarGenesisRepToken } from './bootstrap.js'
@@ -32,8 +31,7 @@ type SimulationSendTransactionRequest = {
 	value?: bigint | undefined
 }
 
-const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 10n ** 18n
-const SEEDED_SECURITY_SCENARIO_REP_PER_ETH_PRICE = 3n * 10n ** 18n
+const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const DEFAULT_SIMULATION_REP_PER_USDC_PRICE = 10n ** 6n
 
 function normalizeRpcBigInt(value: unknown) {
@@ -126,19 +124,6 @@ function createTevmTransactionRequest({
 function clampDelayMilliseconds(value: number) {
 	if (!Number.isFinite(value) || value <= 0) return 0
 	return Math.min(Math.trunc(value), 30_000)
-}
-
-function getDefaultSimulationRepPerEthPrice(scenario: SimulationScenario) {
-	switch (scenario) {
-		case 'baseline':
-		case 'deployed':
-			return DEFAULT_SIMULATION_REP_PER_ETH_PRICE
-		case 'security-pool':
-		case 'securitypoolx2':
-			return SEEDED_SECURITY_SCENARIO_REP_PER_ETH_PRICE
-		default:
-			return assertNever(scenario)
-	}
 }
 
 async function delayMilliseconds(milliseconds: number) {
@@ -273,7 +258,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 	let bootstrapping = false
 	let currentTimestamp = 0n
 	let queryDelayMilliseconds = 0
-	let repPerEthPrice = getDefaultSimulationRepPerEthPrice(scenario)
+	let repPerEthPrice = DEFAULT_SIMULATION_REP_PER_ETH_PRICE
 	let repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
 	let selectedAccount = primaryAccount
 	let transactionCountSinceReset = 0n
@@ -607,7 +592,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			}
 			selectedAccount = primaryAccount
 			transactionCountSinceReset = baselineTransactionCount
-			repPerEthPrice = getDefaultSimulationRepPerEthPrice(scenario)
+			repPerEthPrice = DEFAULT_SIMULATION_REP_PER_ETH_PRICE
 			repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
 			await refreshSimulationState()
 			emitState()

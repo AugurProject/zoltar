@@ -10,6 +10,7 @@ import { createSimulationBackend } from '../simulation/tevmBackend.js'
 import type { SimulationScenario } from '../simulation/scenarios.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
+const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const SEEDED_REP_DEPOSIT = 10_000n * 10n ** 18n
 const SEEDED_SECURITY_BOND_ALLOWANCE = SEEDED_REP_DEPOSIT / 4n
 const SEEDED_SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
@@ -143,7 +144,7 @@ void describe('simulation backend', () => {
 		expect(backend.currentScenario).toBe('baseline')
 		expect(backend.isBootstrapped).toBe(false)
 		expect(backend.isBootstrapping).toBe(false)
-		expect(backend.repPerEthPrice).toBe(10n ** 18n)
+		expect(backend.repPerEthPrice).toBe(DEFAULT_SIMULATION_REP_PER_ETH_PRICE)
 		expect(backend.repPerUsdcPrice).toBe(10n ** 6n)
 	})
 
@@ -306,32 +307,32 @@ void describe('simulation backend', () => {
 		}
 	}, 30_000)
 
-	void test('tracks the configured simulation REP/ETH mock price and resets it with the scenario', async () => {
+	void test('tracks the configured simulation REP/ETH mock price and resets it to the shared default', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
 
-		backend.setRepPerEthPrice(3n * 10n ** 18n)
-		expect(backend.repPerEthPrice).toBe(3n * 10n ** 18n)
+		backend.setRepPerEthPrice(2n * 10n ** 18n)
+		expect(backend.repPerEthPrice).toBe(2n * 10n ** 18n)
 		backend.setRepPerUsdcPrice(7n * 10n ** 6n)
 		expect(backend.repPerUsdcPrice).toBe(7n * 10n ** 6n)
 
 		await backend.reset()
-		expect(backend.repPerEthPrice).toBe(10n ** 18n)
+		expect(backend.repPerEthPrice).toBe(DEFAULT_SIMULATION_REP_PER_ETH_PRICE)
 		expect(backend.repPerUsdcPrice).toBe(10n ** 6n)
 	}, 30_000)
 
-	void test('restores the seeded security scenario REP/ETH mock price on reset', async () => {
+	void test('restores the shared simulation REP/ETH mock price on reset for security scenarios', async () => {
 		const backend = await createSimulationBackend({ scenario: 'securitypoolx2' })
 		await backend.bootstrap()
 
 		try {
-			expect(backend.repPerEthPrice).toBe(3n * 10n ** 18n)
+			expect(backend.repPerEthPrice).toBe(DEFAULT_SIMULATION_REP_PER_ETH_PRICE)
 
 			backend.setRepPerEthPrice(2n * 10n ** 18n)
 			expect(backend.repPerEthPrice).toBe(2n * 10n ** 18n)
 
 			await backend.reset()
-			expect(backend.repPerEthPrice).toBe(3n * 10n ** 18n)
+			expect(backend.repPerEthPrice).toBe(DEFAULT_SIMULATION_REP_PER_ETH_PRICE)
 		} finally {
 			await backend.dispose()
 		}
