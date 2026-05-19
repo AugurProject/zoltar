@@ -183,7 +183,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 			async (vaultAddress, securityPoolAddress) => {
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist')
 				if (details === undefined) return undefined
-				const approvalAmount = amount ?? parseRepAmountInput(securityVaultForm.value.depositAmount, 'REP deposit amount')
+				const approvalAmount = amount ?? parseRepAmountInput(securityVaultForm.value.depositAmount, 'REP collateral amount')
 				return await approveErc20(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.repToken, securityPoolAddress, approvalAmount, 'approveRep')
 			},
 			'Failed to approve REP',
@@ -199,7 +199,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 		await runVaultAction(
 			'depositRep',
 			async (vaultAddress, securityPoolAddress) => {
-				const depositAmount = parseRepAmountInput(securityVaultForm.value.depositAmount, 'REP deposit amount')
+				const depositAmount = parseRepAmountInput(securityVaultForm.value.depositAmount, 'REP collateral amount')
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist')
 				if (details === undefined) return undefined
 				const currentRepBalance = await loadErc20Balance(createConnectedReadClient(), details.repToken, vaultAddress)

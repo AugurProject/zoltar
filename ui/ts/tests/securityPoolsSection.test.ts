@@ -537,7 +537,7 @@ void describe('SecurityPoolsSection', () => {
 		expect(contextQueries.queryByRole('tab', { name: 'Operate' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Security pools' })).toBeNull()
 		const lookupLabel = contextQueries.getByText('Security Pool Address')
-		const summaryMetric = contextQueries.getByText('Total REP Deposited')
+		const summaryMetric = contextQueries.getByText('Total REP Collateral')
 		const lookupPosition = selectedPoolContext.textContent?.indexOf(lookupLabel.textContent ?? '') ?? -1
 		const summaryPosition = selectedPoolContext.textContent?.indexOf(summaryMetric.textContent ?? '') ?? -1
 		expect(lookupPosition).toBeGreaterThanOrEqual(0)

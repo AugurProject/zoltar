@@ -12,7 +12,7 @@ export function VaultMetricGrid({ approvedRep, className = '', lockedRepInEscala
 
 	return (
 		<div className={[gridClassName, className].filter(Boolean).join(' ')}>
-			<MetricField className={metricClassName} label='Rep Deposit'>
+			<MetricField className={metricClassName} label='REP Collateral'>
 				<CurrencyValue value={repDepositShare} suffix='REP' />
 			</MetricField>
 			{approvedRep === undefined ? undefined : (

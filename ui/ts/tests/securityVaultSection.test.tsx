@@ -100,6 +100,7 @@ describe('SecurityVaultSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Selected Vault')).not.toBeNull()
+		expect(documentQueries.getAllByText('REP Collateral').length).toBeGreaterThan(0)
 		expect(documentQueries.getAllByText('Approved REP').length).toBeGreaterThan(0)
 		expect(documentQueries.getAllByText('Locked REP').length).toBeGreaterThan(0)
 	})
