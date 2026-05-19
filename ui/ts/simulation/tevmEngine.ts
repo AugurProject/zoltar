@@ -31,6 +31,10 @@ type SimulationSendTransactionRequest = {
 	value?: bigint | undefined
 }
 
+const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 10n ** 18n
+const SEEDED_SECURITY_SCENARIO_REP_PER_ETH_PRICE = 3n * 10n ** 18n
+const DEFAULT_SIMULATION_REP_PER_USDC_PRICE = 10n ** 6n
+
 function normalizeRpcBigInt(value: unknown) {
 	if (typeof value === 'bigint') return value
 	if (typeof value === 'number') return BigInt(value)
@@ -121,6 +125,17 @@ function createTevmTransactionRequest({
 function clampDelayMilliseconds(value: number) {
 	if (!Number.isFinite(value) || value <= 0) return 0
 	return Math.min(Math.trunc(value), 30_000)
+}
+
+function getDefaultSimulationRepPerEthPrice(scenario: SimulationScenario) {
+	switch (scenario) {
+		case 'baseline':
+		case 'deployed':
+			return DEFAULT_SIMULATION_REP_PER_ETH_PRICE
+		case 'security-pool':
+		case 'securitypoolx2':
+			return SEEDED_SECURITY_SCENARIO_REP_PER_ETH_PRICE
+	}
 }
 
 async function delayMilliseconds(milliseconds: number) {
@@ -255,8 +270,8 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 	let bootstrapping = false
 	let currentTimestamp = 0n
 	let queryDelayMilliseconds = 0
-	let repPerEthPrice = 10n ** 18n
-	let repPerUsdcPrice = 10n ** 6n
+	let repPerEthPrice = getDefaultSimulationRepPerEthPrice(scenario)
+	let repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
 	let selectedAccount = primaryAccount
 	let transactionCountSinceReset = 0n
 	let transactionDelayMilliseconds = 1_000
@@ -589,8 +604,8 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			}
 			selectedAccount = primaryAccount
 			transactionCountSinceReset = baselineTransactionCount
-			repPerEthPrice = 10n ** 18n
-			repPerUsdcPrice = 10n ** 6n
+			repPerEthPrice = getDefaultSimulationRepPerEthPrice(scenario)
+			repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
 			await refreshSimulationState()
 			emitState()
 		},

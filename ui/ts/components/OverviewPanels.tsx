@@ -5,6 +5,7 @@ import { DataGrid } from './DataGrid.js'
 import { MetricField } from './MetricField.js'
 import { StateHint } from './StateHint.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
+import { renderRepPriceSourceLabel } from '../lib/repPriceSource.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 
 export function OverviewPanels({
@@ -30,15 +31,6 @@ export function OverviewPanels({
 	const isWalletBootstrapLoading = !walletBootstrapComplete && accountState.address === undefined
 	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
-	const renderSourceLink = (source: 'v3' | 'v4' | 'mock', sourceUrl: string | undefined) => {
-		const label = source === 'mock' ? 'MOCK' : `u${source === 'v4' ? '4' : '3'}`
-		if (sourceUrl === undefined) return `(${label})`
-		return (
-			<a href={sourceUrl} title={source === 'v4' ? 'Price from Uniswap V4' : 'Price from Uniswap V3'} target='_blank' rel='noreferrer'>
-				{`(${label})`}
-			</a>
-		)
-	}
 
 	return (
 		<section className='overview-shell'>
@@ -73,8 +65,8 @@ export function OverviewPanels({
 					<MetricField
 						label={
 							<span className='metric-label-with-action'>
-								<span>REP/ETH {repPerEthSource === undefined ? undefined : renderSourceLink(repPerEthSource, repPerEthSourceUrl)}</span>
-								<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isLoadingRepPrices} aria-label='Refresh Uniswap prices' title={isLoadingRepPrices ? 'Refreshing Uniswap prices...' : 'Refresh Uniswap prices'}>
+								<span>REP/ETH {repPerEthSource === undefined ? undefined : renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}</span>
+								<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isLoadingRepPrices} aria-label='Refresh REP prices' title={isLoadingRepPrices ? 'Refreshing REP prices...' : 'Refresh REP prices'}>
 									↻
 								</button>
 							</span>
@@ -82,7 +74,7 @@ export function OverviewPanels({
 					>
 						<CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />
 					</MetricField>
-					<MetricField label={<>REP/USDC {repUsdcSource === undefined ? undefined : renderSourceLink(repUsdcSource, repUsdcSourceUrl)}</>}>
+					<MetricField label={<>REP/USDC {repUsdcSource === undefined ? undefined : renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl, 'Price from the simulation REP/USDC mock')}</>}>
 						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />
 					</MetricField>
 					<MetricField label='Universe'>{universeLabel}</MetricField>
