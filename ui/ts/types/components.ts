@@ -82,7 +82,7 @@ export type ReadinessAction = {
 }
 
 export type WorkflowOutcomePresentation = {
-	detail: string
+	detail: ComponentChildren
 	nextStep?: string
 	title: string
 }

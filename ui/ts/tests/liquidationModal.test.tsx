@@ -93,6 +93,8 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 describe('LiquidationModal', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+	const defaultCallerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
+	const defaultTargetVaultAddress = getAddress('0x00000000000000000000000000000000000000a1')
 
 	beforeEach(() => {
 		const domEnvironment = installDomEnvironment()
@@ -109,7 +111,7 @@ describe('LiquidationModal', () => {
 	function renderLiquidationModal(overrides: Partial<Parameters<typeof LiquidationModal>[0]> = {}) {
 		return renderIntoDocument(
 			<LiquidationModal
-				accountAddress={zeroAddress}
+				accountAddress={defaultCallerVaultAddress}
 				closeLiquidationModal={() => undefined}
 				currentPoolOracleManagerDetails={undefined}
 				isMainnet
@@ -118,7 +120,7 @@ describe('LiquidationModal', () => {
 				liquidationManagerAddress={zeroAddress}
 				liquidationModalOpen
 				liquidationSecurityPoolAddress={zeroAddress}
-				liquidationTargetVault={zeroAddress}
+				liquidationTargetVault={defaultTargetVaultAddress}
 				loadingPoolOracleManager={false}
 				onLoadPoolOracleManager={() => undefined}
 				onLiquidationAmountChange={() => undefined}
@@ -130,8 +132,8 @@ describe('LiquidationModal', () => {
 				selectedPool={createSelectedPool()}
 				securityPoolOverviewActiveAction={undefined}
 				securityPoolOverviewResult={undefined}
-				callerVaultSummary={createTargetVaultSummary({ vaultAddress: getAddress('0x0000000000000000000000000000000000000001') })}
-				targetVaultSummary={createTargetVaultSummary()}
+				callerVaultSummary={createTargetVaultSummary({ vaultAddress: defaultCallerVaultAddress })}
+				targetVaultSummary={createTargetVaultSummary({ vaultAddress: defaultTargetVaultAddress })}
 				{...overrides}
 			/>,
 		)
@@ -375,6 +377,95 @@ describe('LiquidationModal', () => {
 		expect(button.disabled).toBe(true)
 		expect(documentQueries.getByText('This vault is not undercollateralized at the current Open Oracle price.')).not.toBeNull()
 		expect(documentQueries.getByText(/^Open Oracle Price$/)).not.toBeNull()
+	})
+
+	test('uses a dedicated top-aligned action row when execute liquidation shows a disabled reason', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 10n * 10n ** 18n,
+			}),
+			liquidationAmount: '2',
+			selectedPool: createSelectedPool({
+				securityMultiplier: 2n,
+			}),
+			callerVaultSummary: createTargetVaultSummary({
+				repDepositShare: 29n * 10n ** 18n,
+				securityBondAllowance: 1n * 10n ** 18n,
+				vaultAddress: getAddress('0x0000000000000000000000000000000000000001'),
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 30n * 10n ** 18n,
+				securityBondAllowance: 2n * 10n ** 18n,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const executeButton = documentQueries.getByRole('button', { name: 'Execute Liquidation' }) as HTMLButtonElement
+		const cancelButton = documentQueries.getByRole('button', { name: 'Cancel' })
+		const actionContainer = cancelButton.closest('.liquidation-modal-actions')
+
+		expect(executeButton.disabled).toBe(true)
+		expect(documentQueries.getByText('The caller vault would become liquidatable after this liquidation.')).not.toBeNull()
+		expect(actionContainer).not.toBeNull()
+		expect(actionContainer?.className).toContain('actions')
+		expect(actionContainer?.className).toContain('liquidation-modal-actions')
+	})
+
+	test('renders the target vault with the shared address value component', async () => {
+		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const targetVaultAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		const renderedComponent = await renderLiquidationModal({
+			accountAddress: callerVaultAddress,
+			liquidationTargetVault: targetVaultAddress,
+			callerVaultSummary: createTargetVaultSummary({
+				vaultAddress: callerVaultAddress,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				vaultAddress: targetVaultAddress,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('button', { name: `Copy address ${callerVaultAddress}` })).not.toBeNull()
+		const targetVaultButton = documentQueries.getByRole('button', { name: `Copy address ${targetVaultAddress}` })
+		expect(targetVaultButton).not.toBeNull()
+		expect(targetVaultButton.textContent).toContain(targetVaultAddress)
+	})
+
+	test('shows a warning and disables liquidation when caller and target vaults are the same', async () => {
+		const vaultAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		const renderedComponent = await renderLiquidationModal({
+			accountAddress: vaultAddress,
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 10n * 10n ** 18n,
+			}),
+			liquidationAmount: '1',
+			liquidationTargetVault: vaultAddress,
+			selectedPool: createSelectedPool({
+				securityMultiplier: 2n,
+			}),
+			callerVaultSummary: createTargetVaultSummary({
+				repDepositShare: 100n * 10n ** 18n,
+				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAddress,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 5n * 10n ** 18n,
+				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAddress,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const executeButton = documentQueries.getByRole('button', { name: 'Execute Liquidation' }) as HTMLButtonElement
+		expect(executeButton.disabled).toBe(true)
+		expect(documentQueries.getByRole('heading', { name: 'Invalid Liquidation Pair' })).not.toBeNull()
+		expect(documentQueries.getAllByText('Select a target vault that is different from the caller vault.')).toHaveLength(2)
 	})
 
 	test('shows the caller vault and a post-liquidation simulation', async () => {

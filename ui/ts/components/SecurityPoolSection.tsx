@@ -124,7 +124,11 @@ export function SecurityPoolSection({
 						? undefined
 						: {
 								title: 'Security pool created',
-								detail: `Created pool ${securityPoolResult.securityPoolAddress}.`,
+								detail: (
+									<>
+										Created pool <AddressValue address={securityPoolResult.securityPoolAddress} />.
+									</>
+								),
 								nextStep: 'Open the pool to begin operating vault, trading, reporting, and fork workflows.',
 							}
 				}

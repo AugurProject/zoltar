@@ -8,6 +8,7 @@ import { FormInput } from './FormInput.js'
 import { MetricField } from './MetricField.js'
 import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
+import { sameAddress } from '../lib/address.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { getLiquidationFailureReason, simulateLiquidation } from '../lib/liquidation.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
@@ -167,6 +168,8 @@ export function LiquidationModal({
 	const callerPoolOracleCollateralization = callerVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(callerVaultSummary.repDepositShare, callerVaultSummary.securityBondAllowance, poolOraclePrice)
 	const liquidationExecutionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
 	const buttonLabels = getLiquidationButtonLabels(currentPoolOracleManagerDetails)
+	const trimmedLiquidationTargetVault = liquidationTargetVault.trim()
+	const sameVaultWarning = accountAddress === undefined || trimmedLiquidationTargetVault === '' || !sameAddress(accountAddress, trimmedLiquidationTargetVault) ? undefined : 'Select a target vault that is different from the caller vault.'
 	const liquidationSimulation =
 		targetVaultSummary === undefined || poolOraclePrice === undefined || selectedPool?.securityMultiplier === undefined || liquidationAmountValue === undefined
 			? undefined
@@ -197,11 +200,13 @@ export function LiquidationModal({
 					? 'Refreshing Open Oracle validity before liquidation.'
 					: liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined
 						? 'Reload the selected pool before liquidating.'
-						: liquidationTargetVault.trim() === ''
+						: trimmedLiquidationTargetVault === ''
 							? 'Select a target vault first.'
-							: liquidationAmount.trim() === ''
-								? 'Enter a liquidation amount.'
-								: directLiquidationReason
+							: sameVaultWarning !== undefined
+								? sameVaultWarning
+								: liquidationAmount.trim() === ''
+									? 'Enter a liquidation amount.'
+									: directLiquidationReason
 
 	const queuedLiquidationOperation =
 		securityPoolOverviewResult?.action !== 'queueLiquidation' || currentPoolOracleManagerDetails?.pendingOperation?.operation !== 'liquidation' || currentPoolOracleManagerDetails.pendingOperation.targetVault !== liquidationTargetVault ? undefined : currentPoolOracleManagerDetails.pendingOperation
@@ -298,7 +303,7 @@ export function LiquidationModal({
 					<AddressInfo address={liquidationSecurityPoolAddress} label='Security Pool' />
 					<MetricField label='Security Multiplier'>{selectedPool?.securityMultiplier === undefined ? 'Unavailable' : `${selectedPool.securityMultiplier.toString()}x`}</MetricField>
 					<MetricField label='Caller Vault'>{accountAddress === undefined ? 'Connect wallet' : <AddressValue address={accountAddress} />}</MetricField>
-					<MetricField label='Target Vault'>{liquidationTargetVault.trim() === '' ? 'None selected' : liquidationTargetVault}</MetricField>
+					<MetricField label='Target Vault'>{trimmedLiquidationTargetVault === '' ? 'None selected' : <AddressValue address={trimmedLiquidationTargetVault} />}</MetricField>
 					<MetricField label='Open Oracle Price' valueTagName='span'>
 						<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={poolOraclePrice} lastSettlementTimestamp={poolOracleSettlementTimestamp} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
 					</MetricField>
@@ -313,6 +318,17 @@ export function LiquidationModal({
 						{callerPoolOracleCollateralization === undefined ? 'Unavailable' : <CurrencyValue value={callerPoolOracleCollateralization} suffix='%' copyable={false} />}
 					</MetricField>
 				</DataGrid>
+				{sameVaultWarning === undefined ? null : (
+					<section className='entity-card compact'>
+						<div className='entity-card-header'>
+							<div>
+								<h4>Invalid Liquidation Pair</h4>
+							</div>
+							<span className='badge warn'>Warning</span>
+						</div>
+						<p className='detail'>{sameVaultWarning}</p>
+					</section>
+				)}
 				<div className='form-grid'>
 					<label className='field'>
 						<span>Liquidation Amount (ETH)</span>
@@ -347,7 +363,7 @@ export function LiquidationModal({
 						</div>
 					</section>
 				)}
-				<div className='actions'>
+				<div className='actions liquidation-modal-actions'>
 					<button className='secondary' onClick={closeLiquidationModal}>
 						Cancel
 					</button>

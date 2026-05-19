@@ -2262,6 +2262,18 @@ strong.metric-value-danger {
 	overflow-wrap: anywhere;
 }
 
+.liquidation-modal-actions {
+	align-items: flex-start;
+}
+
+.liquidation-modal-actions > .tx-action {
+	align-self: flex-start;
+}
+
+.liquidation-modal-actions > button {
+	align-self: flex-start;
+}
+
 .form-grid {
 	display: grid;
 	gap: 1.1rem;
