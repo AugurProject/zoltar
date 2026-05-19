@@ -11,7 +11,7 @@ import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityP
 import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
-import { expectTransactionButtonDisabled } from './testUtils/transactionActionButton.js'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from './testUtils/transactionActionButton.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -1005,6 +1005,57 @@ describe('SecurityPoolWorkflowSection', () => {
 		})
 
 		expect(formChanges.at(-1)).toEqual({ securityBondAllowanceAmount: '1.999999999999999999' })
+	})
+
+	test('allows clearing the bond allowance back to zero in the workflow modal', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+						lastPrice: 3n * 10n ** 18n,
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [
+						createSelectedPool({
+							managerAddress: zeroAddress,
+							securityPoolAddress: selectedPoolAddress,
+							totalRepDeposit: 9n * 10n ** 18n,
+							totalSecurityBondAllowance: 2n * 10n ** 18n,
+						}),
+					],
+					securityVault: createSecurityVaultProps({
+						securityVaultDetails: createSecurityVaultDetails({
+							repDepositShare: 12n * 10n ** 18n,
+							securityBondAllowance: 1n * 10n ** 18n,
+							securityPoolAddress: selectedPoolAddress,
+							totalSecurityBondAllowance: 2n * 10n ** 18n,
+						}),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '',
+							securityBondAllowanceAmount: '0',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set Bond Allowance' })[0] as HTMLElement)
+		})
+
+		const allowanceDialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
+		expect(within(allowanceDialog).queryByText(/^Blocked:/)).toBeNull()
+		expectTransactionButtonEnabled(allowanceDialog as HTMLElement, 'Set Security Bond Allowance')
 	})
 
 	test('hides the truth auction metric when the selected pool has no truth auction address', async () => {

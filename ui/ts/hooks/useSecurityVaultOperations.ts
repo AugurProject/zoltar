@@ -12,7 +12,7 @@ import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { getDefaultSecurityVaultFormState, parseRepAmountInput } from '../lib/marketForm.js'
 import { requireDefined } from '../lib/required.js'
-import { getSelectedVaultAddress } from '../lib/securityVault.js'
+import { getSelectedVaultAddress, MIN_SECURITY_BOND_ALLOWANCE } from '../lib/securityVault.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { SecurityVaultFormState, WriteOperationsParameters } from '../types/app.js'
@@ -224,7 +224,8 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 			'queueSetSecurityBondAllowance',
 			async (vaultAddress, securityPoolAddress) => {
 				const amount = parseRepAmountInput(securityVaultForm.value.securityBondAllowanceAmount, 'Security bond allowance')
-				if (amount <= 0n) throw new Error('Security bond allowance must be greater than zero')
+				if (amount < 0n) throw new Error('Security bond allowance must be zero or a positive amount')
+				if (amount !== 0n && amount < MIN_SECURITY_BOND_ALLOWANCE) throw new Error(`Security bond allowance must be zero or at least ${formatCurrencyBalance(MIN_SECURITY_BOND_ALLOWANCE)} ETH`)
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist')
 				if (details === undefined) return undefined
 				const managerDetails = await loadOracleManagerDetails(createConnectedReadClient(), details.managerAddress)
