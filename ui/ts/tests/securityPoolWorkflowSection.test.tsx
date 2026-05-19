@@ -419,6 +419,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByText(/^Blocked:/)).toBeNull()
 		expect(documentQueries.queryByText('Oracle Status')).toBeNull()
 		expect(documentQueries.queryByText('After market end')).toBeNull()
+		expect(documentQueries.queryByText('Manager')).toBeNull()
 		expect(documentQueries.queryByText('Truth Auction')).toBeNull()
 		expect(documentQueries.getByText('Security Multiplier')).not.toBeNull()
 		const directoryButton = documentQueries.getByRole('tab', { name: 'Directory' })

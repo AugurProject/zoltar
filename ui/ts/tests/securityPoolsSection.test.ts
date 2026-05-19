@@ -577,6 +577,7 @@ void describe('SecurityPoolsSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const metricLabels = Array.from(document.body.querySelectorAll('.metric-label')).map(element => element.textContent?.trim() ?? '')
+		expect(metricLabels.includes('Manager')).toBe(false)
 		expect(metricLabels.includes('Truth Auction')).toBe(false)
 	})
 
