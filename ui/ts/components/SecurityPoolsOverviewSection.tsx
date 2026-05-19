@@ -171,9 +171,6 @@ export function SecurityPoolsOverviewSection({
 											totalRepDeposit={pool.totalRepDeposit}
 											totalSecurityBondAllowance={pool.totalSecurityBondAllowance}
 										/>
-										<MetricField label='Manager'>
-											<AddressValue address={pool.managerAddress} />
-										</MetricField>
 										{pool.truthAuctionAddress === zeroAddress ? undefined : (
 											<MetricField label='Truth Auction'>
 												<AddressValue address={pool.truthAuctionAddress} />

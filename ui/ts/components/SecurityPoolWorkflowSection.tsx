@@ -592,9 +592,6 @@ export function SecurityPoolWorkflowSection({
 										priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
 									/>
 								</MetricField>
-								<MetricField label='Manager'>
-									<AddressValue address={loadedSelectedPool.managerAddress} />
-								</MetricField>
 								{loadedSelectedPool.systemState === 'operational' ? undefined : (
 									<>
 										<MetricField label='Fork Mode'>{loadedSelectedPool.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent / Zoltar fork'}</MetricField>
