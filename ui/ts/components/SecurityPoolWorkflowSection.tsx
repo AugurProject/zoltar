@@ -269,7 +269,7 @@ export function SecurityPoolWorkflowSection({
 	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(selectedVaultDetails?.managerAddress, currentPoolOracleManagerDetails)
 	const depositAmount = (() => {
 		try {
-			return parseRepAmountInput(securityVault.securityVaultForm.depositAmount ?? '', 'REP deposit amount')
+			return parseRepAmountInput(securityVault.securityVaultForm.depositAmount ?? '', 'REP collateral amount')
 		} catch {
 			return undefined
 		}
@@ -347,7 +347,7 @@ export function SecurityPoolWorkflowSection({
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
 		{
 			actionLabel: 'Deposit REP',
-			description: 'Add REP to the selected vault, including approval from inside the operation.',
+			description: 'Add REP to the selected vault.',
 			key: 'deposit-rep',
 			onAction: () => setVaultActionModal('deposit-rep'),
 			readiness: depositGuardMessage === undefined ? 'ready' : 'warning',
@@ -569,7 +569,7 @@ export function SecurityPoolWorkflowSection({
 								<MetricField label='Open Interest Fee / Year'>
 									<CurrencyValue value={openInterestFeePerYearBigint(loadedSelectedPool.currentRetentionRate)} suffix='%' />
 								</MetricField>
-								<MetricField label='Total REP Deposited'>
+								<MetricField label='Total REP Collateral'>
 									<CurrencyValue value={loadedSelectedPool.totalRepDeposit} suffix='REP' />
 								</MetricField>
 								<MetricField label='Total Security Bond Allowance'>
@@ -885,7 +885,7 @@ export function SecurityPoolWorkflowSection({
 				</div>
 			</section>
 
-			<OperationModal isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title='Deposit REP' description='Review the selected vault, complete REP approval if needed, then deposit REP.'>
+			<OperationModal isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title='Deposit REP' description='Review the selected vault, then deposit REP.'>
 				{selectedVaultDetails === undefined ? <p className='detail'>Refresh the selected vault before depositing REP.</p> : null}
 				{selectedVaultDetails === undefined ? null : (
 					<>
@@ -901,7 +901,7 @@ export function SecurityPoolWorkflowSection({
 							variant='embedded'
 						/>
 						<label className='field'>
-							<span>REP Deposit Amount</span>
+							<span>REP Collateral Amount</span>
 							<div className='field-inline'>
 								<FormInput className='field-inline-input' value={securityVault.securityVaultForm.depositAmount} onInput={event => securityVault.onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} />
 								<button
@@ -917,6 +917,11 @@ export function SecurityPoolWorkflowSection({
 								</button>
 							</div>
 						</label>
+						<div className='workflow-metric-grid'>
+							<MetricField label='Wallet REP'>
+								<CurrencyValue value={securityVault.securityVaultRepBalance} suffix='REP' />
+							</MetricField>
+						</div>
 						<TokenApprovalControl
 							actionLabel='depositing REP'
 							allowanceError={securityVault.securityVaultRepApproval.error}
@@ -934,7 +939,6 @@ export function SecurityPoolWorkflowSection({
 						<RequirementsChecklist
 							items={[
 								{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
-								{ key: 'approval', label: 'REP approval is sufficient for the deposit amount', resolved: approvalRequirement.hasSufficientApproval, ...(approvalRequirement.hasSufficientApproval ? {} : { detail: 'Approve REP inside this modal before depositing.' }) },
 								{ key: 'balance', label: 'Wallet REP balance covers the deposit amount', resolved: repBalanceGap === undefined || repBalanceGap <= 0n, ...(repBalanceGap !== undefined && repBalanceGap > 0n ? { detail: `Need ${formatCurrencyBalance(repBalanceGap)} more REP.` } : {}) },
 								{ key: 'minimum', label: 'First deposit meets the vault minimum', resolved: !isDepositBelowMinimum, ...(isDepositBelowMinimum ? { detail: `First deposits must be at least ${formatCurrencyBalance(MIN_SECURITY_VAULT_REP_DEPOSIT)} REP.` } : {}) },
 							]}

@@ -332,7 +332,7 @@ export function LiquidationModal({
 							</div>
 						</div>
 						<div className='workflow-metric-grid'>
-							<MetricField label='REP Deposit'>
+							<MetricField label='REP Collateral'>
 								<CurrencyValue value={liquidationSimulation.callerAfter.repDepositShare} suffix='REP' />
 							</MetricField>
 							<MetricField label='Security Bond Allowance'>

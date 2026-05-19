@@ -106,7 +106,7 @@ export function SecurityVaultSection({
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddress, accountState.address)
 	const depositAmount = (() => {
 		try {
-			return parseRepAmountInput(normalizedSecurityVaultForm.depositAmount, 'REP deposit amount')
+			return parseRepAmountInput(normalizedSecurityVaultForm.depositAmount, 'REP collateral amount')
 		} catch {
 			return undefined
 		}
@@ -287,7 +287,7 @@ export function SecurityVaultSection({
 
 			<SectionBlock title='Deposit REP'>
 				<label className='field'>
-					<span>REP Deposit Amount</span>
+					<span>REP Collateral Amount</span>
 					<div className='field-inline'>
 						<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} />
 						<button

@@ -390,7 +390,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Pool Summary' })).toBeNull()
 		expect(documentQueries.queryByText('Workflow')).toBeNull()
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
-		expect(documentQueries.getByText('Total REP Deposited')).not.toBeNull()
+		expect(documentQueries.getByText('Total REP Collateral')).not.toBeNull()
 		expect(documentQueries.getByText('Open Oracle Price')).not.toBeNull()
 		expect(documentQueries.queryByText('Oracle Expires In')).toBeNull()
 		const selectedPoolContext = document.body.querySelector('.sticky-object-context.static')
@@ -398,7 +398,7 @@ describe('SecurityPoolWorkflowSection', () => {
 			throw new Error('Expected a non-sticky selected pool context card')
 		}
 		const lookupLabel = within(selectedPoolContext).getByText('Security Pool Address')
-		const firstSummaryMetric = within(selectedPoolContext).getByText('Total REP Deposited')
+		const firstSummaryMetric = within(selectedPoolContext).getByText('Total REP Collateral')
 		const lookupPosition = selectedPoolContext.textContent?.indexOf(lookupLabel.textContent ?? '') ?? -1
 		const summaryPosition = selectedPoolContext.textContent?.indexOf(firstSummaryMetric.textContent ?? '') ?? -1
 		expect(lookupPosition).toBeGreaterThanOrEqual(0)
@@ -852,6 +852,52 @@ describe('SecurityPoolWorkflowSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Refresh the selected vault first.')
 		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance', 'Refresh the selected vault first.')
 		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'Refresh the selected vault first.')
+	})
+
+	test('keeps REP approval guidance inside the approval control in the deposit modal', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
+						securityVaultForm: {
+							depositAmount: '10',
+							repWithdrawAmount: '',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+						securityVaultRepBalance: 25n * 10n ** 18n,
+						securityVaultRepApproval: {
+							error: undefined,
+							loading: false,
+							value: 0n,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Deposit REP' })[0] as HTMLElement)
+		})
+
+		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
+		const modalQueries = within(depositDialog)
+		expect(modalQueries.queryByText('Review the selected vault, complete REP approval if needed, then deposit REP.')).toBeNull()
+		expect(modalQueries.queryByText('REP approval is sufficient for the deposit amount')).toBeNull()
+		expect(modalQueries.queryByText('Approve REP inside this modal before depositing.')).toBeNull()
+		expect(modalQueries.getByText('Wallet REP')).not.toBeNull()
+		expect(modalQueries.getByText('Required REP')).not.toBeNull()
+		expect(modalQueries.getByText('REP Approval Amount')).not.toBeNull()
 	})
 
 	test('caps REP withdrawals to the oracle-backed amount in the seeded security-pool shape', async () => {
