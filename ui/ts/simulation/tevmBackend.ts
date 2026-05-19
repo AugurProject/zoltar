@@ -65,7 +65,8 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 	}
 	const profile = createSimulationProfile(predictSimulationTokenAddresses(primaryAccount))
 	const listeners = createListenerMap()
-	const worker = new Worker(resolveWorkerPath(), { type: 'module' })
+	const workerPath = resolveWorkerPath()
+	const worker = new Worker(workerPath, { type: 'module' })
 	const pendingRequests = new Map<number, PendingRequest>()
 	let nextRequestId = 1
 	let currentState: SimulationWorkerState | undefined = undefined
@@ -168,7 +169,11 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 			}
 		}
 		worker.onerror = event => {
-			reject(new Error(event.message || 'Simulation worker failed'))
+			const locationSuffix = event.filename === undefined || event.filename === '' ? '' : ` at ${event.filename}${event.lineno === 0 ? '' : `:${event.lineno}${event.colno === 0 ? '' : `:${event.colno}`}`}`
+			reject(new Error(`${event.message || 'Simulation worker failed'}${locationSuffix} (worker: ${workerPath.toString()})`))
+		}
+		worker.onmessageerror = () => {
+			reject(new Error(`Simulation worker message deserialization failed (worker: ${workerPath.toString()})`))
 		}
 		worker.postMessage({
 			scenario,

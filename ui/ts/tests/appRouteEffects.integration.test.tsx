@@ -165,21 +165,21 @@ describe('app route effects integration', () => {
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Set Report' }))
 		})
-		expect(window.location.search).toContain('openOracleReportId=42')
+		expect(window.location.hash).toContain('openOracleReportId=42')
 		expect(document.getElementById('report-id')?.textContent).toBe('42')
 
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Set Pool' }))
 		})
-		expect(window.location.search).toContain('securityPool=0x84834d4Dccea071b363e53952BD300F7bf56a009')
+		expect(window.location.hash).toContain('securityPool=0x84834d4Dccea071b363e53952BD300F7bf56a009')
 
 		await act(() => {
 			window.history.back()
 			window.dispatchEvent(new Event('popstate'))
 		})
 
-		expect(window.location.search).toContain('openOracleReportId=42')
-		expect(window.location.search).not.toContain('securityPool=')
+		expect(window.location.hash).toContain('openOracleReportId=42')
+		expect(window.location.hash).not.toContain('securityPool=')
 		expect(document.getElementById('report-id')?.textContent).toBe('42')
 		expect(document.getElementById('security-pool')?.textContent).toBe('')
 
