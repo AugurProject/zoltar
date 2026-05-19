@@ -45,11 +45,11 @@ export function OperationModal({ children, description, isOpen, onClose, title }
 		<div className='modal-backdrop' role='presentation' onClick={onClose}>
 			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' aria-modal='true' aria-labelledby='operation-modal-title' onClick={event => event.stopPropagation()}>
 				<div className='modal-header'>
-					<div>
+					<div className='modal-header-title'>
 						<h3 id='operation-modal-title'>{title}</h3>
 					</div>
-					<button ref={closeButtonRef} className='quiet' type='button' onClick={onClose}>
-						Close
+					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label='Close' title='Close' onClick={onClose}>
+						×
 					</button>
 				</div>
 				{description === undefined ? undefined : <p className='detail'>{description}</p>}
