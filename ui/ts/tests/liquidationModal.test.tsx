@@ -160,7 +160,7 @@ describe('LiquidationModal', () => {
 		let renderedComponent = await renderModal()
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const closeButton = within(document.body).getByText('Close') as HTMLButtonElement
+		const closeButton = within(document.body).getByRole('button', { name: 'Close' }) as HTMLButtonElement
 		const cancelButton = within(document.body).getByText('Cancel') as HTMLButtonElement
 		expect(document.activeElement).toBe(closeButton)
 

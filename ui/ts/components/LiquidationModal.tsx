@@ -229,11 +229,11 @@ export function LiquidationModal({
 		<div className='modal-backdrop' role='presentation' onClick={closeLiquidationModal}>
 			<section ref={dialogRef} className='modal-panel' role='dialog' aria-modal='true' aria-labelledby='liquidation-modal-title' onClick={event => event.stopPropagation()}>
 				<div className='modal-header'>
-					<div>
+					<div className='modal-header-title'>
 						<h3 id='liquidation-modal-title'>{getLiquidationModalTitle(currentPoolOracleManagerDetails)}</h3>
 					</div>
-					<button ref={closeButtonRef} className='quiet' onClick={closeLiquidationModal}>
-						Close
+					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label='Close' title='Close' onClick={closeLiquidationModal}>
+						×
 					</button>
 				</div>
 				{queuedLiquidationStatus === undefined ? null : queuedLiquidationStatus === 'queued' ? (
