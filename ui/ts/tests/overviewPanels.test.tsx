@@ -164,12 +164,12 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.queryByText(/0\.00041/)).toBeNull()
 	})
 
-	test('renders a refresh button for Uniswap prices and wires it to the provided handler', async () => {
+	test('renders a refresh button for REP prices and wires it to the provided handler', async () => {
 		const onRefreshRepPrices = mock(() => undefined)
 		const documentQueries = await renderOverviewPanels({
 			onRefreshRepPrices,
 		})
-		const refreshButton = documentQueries.getByRole('button', { name: 'Refresh Uniswap prices' })
+		const refreshButton = documentQueries.getByRole('button', { name: 'Refresh REP prices' })
 		fireEvent.click(refreshButton)
 
 		expect(onRefreshRepPrices).toHaveBeenCalledTimes(1)

@@ -413,6 +413,35 @@ describe('LiquidationModal', () => {
 		expect(actionContainer?.className).toContain('liquidation-modal-actions')
 	})
 
+	test('distinguishes caller vaults that remain liquidatable after the simulated liquidation', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 10n * 10n ** 18n,
+			}),
+			liquidationAmount: '1',
+			selectedPool: createSelectedPool({
+				securityMultiplier: 2n,
+			}),
+			callerVaultSummary: createTargetVaultSummary({
+				repDepositShare: 20n * 10n ** 18n,
+				securityBondAllowance: 2n * 10n ** 18n,
+				vaultAddress: getAddress('0x0000000000000000000000000000000000000001'),
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 30n * 10n ** 18n,
+				securityBondAllowance: 2n * 10n ** 18n,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const executeButton = documentQueries.getByRole('button', { name: 'Execute Liquidation' }) as HTMLButtonElement
+
+		expect(executeButton.disabled).toBe(true)
+		expect(documentQueries.getByText('The caller vault would remain liquidatable after this liquidation.')).not.toBeNull()
+	})
+
 	test('renders the target vault with the shared address value component', async () => {
 		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
 		const targetVaultAddress = getAddress('0x00000000000000000000000000000000000000a1')
@@ -497,6 +526,108 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByRole('button', { name: `Copy address ${callerVaultAddress}` })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Caller Vault After Liquidation' })).not.toBeNull()
 		expect(documentQueries.getByText('Rep Moved')).not.toBeNull()
+	})
+
+	test('uses simulation labels for mock prices and updates the caller collateralization as the liquidation amount changes', async () => {
+		function LiquidationSimulationHarness() {
+			const [liquidationAmount, setLiquidationAmount] = useState('1000')
+
+			return (
+				<LiquidationModal
+					accountAddress={defaultCallerVaultAddress}
+					closeLiquidationModal={() => undefined}
+					currentPoolOracleManagerDetails={createOracleManagerDetails({
+						isPriceValid: true,
+						lastPrice: 3n * 10n ** 18n,
+					})}
+					isMainnet
+					liquidationAmount={liquidationAmount}
+					liquidationMaxAmount={2_500n * 10n ** 18n}
+					liquidationManagerAddress={zeroAddress}
+					liquidationModalOpen
+					liquidationSecurityPoolAddress={zeroAddress}
+					liquidationTargetVault={defaultTargetVaultAddress}
+					loadingPoolOracleManager={false}
+					onLoadPoolOracleManager={() => undefined}
+					onLiquidationAmountChange={setLiquidationAmount}
+					onQueueLiquidation={() => undefined}
+					onSelectedPoolViewChange={() => undefined}
+					repPerEthPrice={3n * 10n ** 18n}
+					repPerEthSource='mock'
+					repPerEthSourceUrl={undefined}
+					selectedPool={createSelectedPool({
+						lastOraclePrice: 3n * 10n ** 18n,
+						securityMultiplier: 2n,
+					})}
+					securityPoolOverviewActiveAction={undefined}
+					securityPoolOverviewResult={undefined}
+					callerVaultSummary={createTargetVaultSummary({
+						repDepositShare: 12_000n * 10n ** 18n,
+						securityBondAllowance: 1_000n * 10n ** 18n,
+						vaultAddress: defaultCallerVaultAddress,
+					})}
+					targetVaultSummary={createTargetVaultSummary({
+						repDepositShare: 10_000n * 10n ** 18n,
+						securityBondAllowance: 2_500n * 10n ** 18n,
+						vaultAddress: defaultTargetVaultAddress,
+					})}
+				/>
+			)
+		}
+
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		await act(() => {
+			render(<LiquidationSimulationHarness />, container)
+		})
+
+		const documentQueries = within(document.body)
+		const amountInput = container.querySelector("input[placeholder='0.0']")
+		if (!(amountInput instanceof HTMLInputElement)) {
+			throw new Error('Expected liquidation amount input')
+		}
+
+		const executeButton = documentQueries.getByRole('button', { name: 'Execute Liquidation' }) as HTMLButtonElement
+		expect(executeButton.disabled).toBe(false)
+		expect(documentQueries.getByText(/Simulation REP \/ ETH/)).not.toBeNull()
+		expect(documentQueries.getByText(/Target Collateralization @ Simulation Price/)).not.toBeNull()
+		expect(documentQueries.getByText(/266\.67 %/)).not.toBeNull()
+
+		await act(() => {
+			fireEvent.input(amountInput, { target: { value: '2500' } })
+		})
+
+		expect(documentQueries.getByText(/209\.52 %/)).not.toBeNull()
+		expect(documentQueries.queryByText(/266\.67 %/)).toBeNull()
+
+		render(null, container)
+		container.remove()
+	})
+
+	test('labels quoted liquidation prices with the specific Uniswap version', async () => {
+		const renderedV4Component = await renderLiquidationModal({
+			repPerEthSource: 'v4',
+			repPerEthSourceUrl: 'https://example.com/uniswap-v4',
+		})
+		cleanupRenderedComponent = renderedV4Component.cleanup
+
+		let documentQueries = within(document.body)
+		expect(documentQueries.getByText(/Uniswap V4 REP \/ ETH/)).not.toBeNull()
+		expect(documentQueries.getByText(/Target Collateralization @ Uniswap V4 Price/)).not.toBeNull()
+
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+
+		const renderedV3Component = await renderLiquidationModal({
+			repPerEthSource: 'v3',
+			repPerEthSourceUrl: 'https://example.com/uniswap-v3',
+		})
+		cleanupRenderedComponent = renderedV3Component.cleanup
+
+		documentQueries = within(document.body)
+		expect(documentQueries.getByText(/Uniswap V3 REP \/ ETH/)).not.toBeNull()
+		expect(documentQueries.getByText(/Target Collateralization @ Uniswap V3 Price/)).not.toBeNull()
 	})
 
 	test('uses the shared collateralization success and danger classes in the modal', async () => {

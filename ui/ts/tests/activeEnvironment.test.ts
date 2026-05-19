@@ -10,8 +10,13 @@ import { createSimulationBackend } from '../simulation/tevmBackend.js'
 import type { SimulationScenario } from '../simulation/scenarios.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
+const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const SEEDED_REP_DEPOSIT = 10_000n * 10n ** 18n
 const SEEDED_SECURITY_BOND_ALLOWANCE = SEEDED_REP_DEPOSIT / 4n
+const SEEDED_SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
+const SEEDED_SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE = 1_000n * 10n ** 18n
+const SEEDED_SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT = SEEDED_REP_DEPOSIT
+const SEEDED_SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE = SEEDED_SECURITY_BOND_ALLOWANCE
 
 afterEach(() => {
 	resetActiveEnvironmentForTesting()
@@ -139,7 +144,7 @@ void describe('simulation backend', () => {
 		expect(backend.currentScenario).toBe('baseline')
 		expect(backend.isBootstrapped).toBe(false)
 		expect(backend.isBootstrapping).toBe(false)
-		expect(backend.repPerEthPrice).toBe(10n ** 18n)
+		expect(backend.repPerEthPrice).toBe(DEFAULT_SIMULATION_REP_PER_ETH_PRICE)
 		expect(backend.repPerUsdcPrice).toBe(10n ** 6n)
 	})
 
@@ -302,19 +307,36 @@ void describe('simulation backend', () => {
 		}
 	}, 30_000)
 
-	void test('tracks the configured simulation REP/ETH mock price and resets it with the scenario', async () => {
+	void test('tracks the configured simulation REP/ETH mock price and resets it to the shared default', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
 
-		backend.setRepPerEthPrice(3n * 10n ** 18n)
-		expect(backend.repPerEthPrice).toBe(3n * 10n ** 18n)
+		backend.setRepPerEthPrice(2n * 10n ** 18n)
+		expect(backend.repPerEthPrice).toBe(2n * 10n ** 18n)
 		backend.setRepPerUsdcPrice(7n * 10n ** 6n)
 		expect(backend.repPerUsdcPrice).toBe(7n * 10n ** 6n)
 
 		await backend.reset()
-		expect(backend.repPerEthPrice).toBe(10n ** 18n)
+		expect(backend.repPerEthPrice).toBe(DEFAULT_SIMULATION_REP_PER_ETH_PRICE)
 		expect(backend.repPerUsdcPrice).toBe(10n ** 6n)
 	}, 30_000)
+
+	void test('restores the shared simulation REP/ETH mock price on reset for security scenarios', async () => {
+		const backend = await createSimulationBackend({ scenario: 'securitypoolx2' })
+		await backend.bootstrap()
+
+		try {
+			expect(backend.repPerEthPrice).toBe(DEFAULT_SIMULATION_REP_PER_ETH_PRICE)
+
+			backend.setRepPerEthPrice(2n * 10n ** 18n)
+			expect(backend.repPerEthPrice).toBe(2n * 10n ** 18n)
+
+			await backend.reset()
+			expect(backend.repPerEthPrice).toBe(DEFAULT_SIMULATION_REP_PER_ETH_PRICE)
+		} finally {
+			await backend.dispose()
+		}
+	}, 90_000)
 
 	void test('bootstraps the deployed scenario with app contracts already deployed', async () => {
 		const backend = deployedBackend
@@ -369,6 +391,7 @@ void describe('simulation backend', () => {
 			const pools = await loadAllSecurityPools(readClient)
 
 			expect(backend.currentScenario).toBe('securitypoolx2')
+			expect(backend.repPerEthPrice).toBe(3n * 10n ** 18n)
 			expect(pools).toHaveLength(2)
 			expect(pools.map(pool => pool.marketDetails.title)).toEqual(['Will this resolve? (securitypoolx2 #1)', 'Will this resolve? (securitypoolx2 #2)'])
 
@@ -382,12 +405,12 @@ void describe('simulation backend', () => {
 				const managerDetails = await loadOracleManagerDetails(readClient, pool.managerAddress)
 
 				expect(pool.vaultCount).toBe(2n)
-				expect(pool.totalRepDeposit).toBe(2n * SEEDED_REP_DEPOSIT)
-				expect(pool.totalSecurityBondAllowance).toBe(2n * SEEDED_SECURITY_BOND_ALLOWANCE)
-				expect(primaryVault.repDepositShare).toBe(SEEDED_REP_DEPOSIT)
-				expect(primaryVault.securityBondAllowance).toBe(SEEDED_SECURITY_BOND_ALLOWANCE)
-				expect(secondaryVault.repDepositShare).toBe(SEEDED_REP_DEPOSIT)
-				expect(secondaryVault.securityBondAllowance).toBe(SEEDED_SECURITY_BOND_ALLOWANCE)
+				expect(pool.totalRepDeposit).toBe(SEEDED_SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT + SEEDED_SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT)
+				expect(pool.totalSecurityBondAllowance).toBe(SEEDED_SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE + SEEDED_SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE)
+				expect(primaryVault.repDepositShare).toBe(SEEDED_SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT)
+				expect(primaryVault.securityBondAllowance).toBe(SEEDED_SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE)
+				expect(secondaryVault.repDepositShare).toBe(SEEDED_SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT)
+				expect(secondaryVault.securityBondAllowance).toBe(SEEDED_SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE)
 				expect(managerDetails.isPriceValid).toBe(true)
 			}
 		} finally {

@@ -12,6 +12,7 @@ import { sameAddress } from '../lib/address.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { getLiquidationFailureReason, simulateLiquidation } from '../lib/liquidation.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
+import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
 import { getCollateralizationTone, getVaultCollateralizationPercent } from '../lib/trading.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 
@@ -29,7 +30,7 @@ type LiquidationModalProps = {
 	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
+	repPerEthSource: RepPriceSource | undefined
 	repPerEthSourceUrl: string | undefined
 	selectedPool: ListedSecurityPool | undefined
 	securityPoolOverviewActiveAction: 'queueLiquidation' | undefined
@@ -66,17 +67,6 @@ function getLiquidationButtonLabels(currentPoolOracleManagerDetails: OracleManag
 		case 'refreshing':
 			return { idle: 'Liquidate Vault', pending: 'Submitting liquidation...' }
 	}
-}
-
-function renderPriceSourceLabel(source: 'v4' | 'v3' | 'mock' | undefined, sourceUrl: string | undefined) {
-	if (source === undefined) return undefined
-	const label = source === 'mock' ? 'MOCK' : `u${source === 'v4' ? '4' : '3'}`
-	if (sourceUrl === undefined) return `(${label})`
-	return (
-		<a href={sourceUrl} title={source === 'v4' ? 'Price from Uniswap V4' : 'Price from Uniswap V3'} target='_blank' rel='noreferrer'>
-			{`(${label})`}
-		</a>
-	)
 }
 
 function getCollateralizationValueClassName(collateralizationPercent: bigint | undefined, securityMultiplier: bigint | undefined) {
@@ -164,8 +154,9 @@ export function LiquidationModal({
 	const poolOraclePrice = currentPoolOracleManagerDetails?.lastPrice ?? selectedPool?.lastOraclePrice
 	const poolOracleSettlementTimestamp = currentPoolOracleManagerDetails?.lastSettlementTimestamp ?? selectedPool?.lastOracleSettlementTimestamp ?? 0n
 	const poolOracleCollateralization = targetVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(targetVaultSummary.repDepositShare, targetVaultSummary.securityBondAllowance, poolOraclePrice)
-	const uniswapCollateralization = targetVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(targetVaultSummary.repDepositShare, targetVaultSummary.securityBondAllowance, repPerEthPrice)
+	const quotedPriceCollateralization = targetVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(targetVaultSummary.repDepositShare, targetVaultSummary.securityBondAllowance, repPerEthPrice)
 	const callerPoolOracleCollateralization = callerVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(callerVaultSummary.repDepositShare, callerVaultSummary.securityBondAllowance, poolOraclePrice)
+	const repPriceSourceCopy = getRepPriceSourceCopy(repPerEthSource)
 	const liquidationExecutionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
 	const buttonLabels = getLiquidationButtonLabels(currentPoolOracleManagerDetails)
 	const trimmedLiquidationTargetVault = liquidationTargetVault.trim()
@@ -310,9 +301,24 @@ export function LiquidationModal({
 					<MetricField label='Target Collateralization @ Open Oracle' valueClassName={getCollateralizationValueClassName(poolOracleCollateralization, selectedPool?.securityMultiplier)}>
 						{poolOracleCollateralization === undefined ? 'Unavailable' : <CurrencyValue value={poolOracleCollateralization} suffix='%' copyable={false} />}
 					</MetricField>
-					<MetricField label={<span>Uniswap REP / ETH {renderPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}</span>}>{repPerEthPrice === undefined ? 'Unavailable' : <CurrencyValue value={repPerEthPrice} suffix='REP / ETH' copyable={false} />}</MetricField>
-					<MetricField label={<span>Target Collateralization @ Uniswap {renderPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}</span>} valueClassName={getCollateralizationValueClassName(uniswapCollateralization, selectedPool?.securityMultiplier)}>
-						{uniswapCollateralization === undefined ? 'Unavailable' : <CurrencyValue value={uniswapCollateralization} suffix='%' copyable={false} />}
+					<MetricField
+						label={
+							<span>
+								{repPriceSourceCopy.quotedRepPerEthLabel} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
+							</span>
+						}
+					>
+						{repPerEthPrice === undefined ? 'Unavailable' : <CurrencyValue value={repPerEthPrice} suffix='REP / ETH' copyable={false} />}
+					</MetricField>
+					<MetricField
+						label={
+							<span>
+								{repPriceSourceCopy.quotedCollateralizationLabel} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
+							</span>
+						}
+						valueClassName={getCollateralizationValueClassName(quotedPriceCollateralization, selectedPool?.securityMultiplier)}
+					>
+						{quotedPriceCollateralization === undefined ? 'Unavailable' : <CurrencyValue value={quotedPriceCollateralization} suffix='%' copyable={false} />}
 					</MetricField>
 					<MetricField label='Caller Collateralization @ Open Oracle' valueClassName={getCollateralizationValueClassName(callerPoolOracleCollateralization, selectedPool?.securityMultiplier)}>
 						{callerPoolOracleCollateralization === undefined ? 'Unavailable' : <CurrencyValue value={callerPoolOracleCollateralization} suffix='%' copyable={false} />}
