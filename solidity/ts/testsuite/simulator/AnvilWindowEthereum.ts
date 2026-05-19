@@ -32,14 +32,16 @@ type RpcTransactionReceipt = {
 	readonly status?: string
 }
 
+type RpcTransaction = {
+	readonly blockNumber?: string
+}
+
 type RpcTransactionRequest = {
 	readonly gasPrice?: string
 	readonly maxFeePerGas?: string
 	readonly maxPriorityFeePerGas?: string
 	readonly type?: string
 }
-
-const wait = async (milliseconds: number) => await new Promise(resolve => setTimeout(resolve, milliseconds))
 
 function hasJsonRpcBaseFields(value: unknown): value is { jsonrpc: string; id: number | string } {
 	return typeof value === 'object' && value !== null && 'jsonrpc' in value && 'id' in value && typeof value.jsonrpc === 'string' && (typeof value.id === 'number' || typeof value.id === 'string')
@@ -110,6 +112,17 @@ function parseTransactionReceiptStatus(value: unknown): string | undefined {
 	}
 	const { status } = value as RpcTransactionReceipt
 	return typeof status === 'string' ? status : undefined
+}
+
+function parseTransactionBlockNumber(value: unknown): bigint | undefined {
+	if (typeof value !== 'object' || value === null || !('blockNumber' in value)) {
+		return undefined
+	}
+	const { blockNumber } = value as RpcTransaction
+	if (typeof blockNumber !== 'string') {
+		return undefined
+	}
+	return BigInt(blockNumber)
 }
 
 export interface AnvilWindowEthereum {
@@ -204,6 +217,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		}
 
 		const waitForReceiptStatus = async (hash: string) => {
+			let transactionBlockNumber: bigint | undefined
 			for (let attempt = 0; attempt < 20; attempt++) {
 				const receipt = await request({
 					method: 'eth_getTransactionReceipt',
@@ -211,7 +225,18 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				})
 				const status = parseTransactionReceiptStatus(receipt)
 				if (status !== undefined) return { receipt, status }
-				await wait(5)
+
+				if (transactionBlockNumber === undefined) {
+					const transaction = await request({
+						method: 'eth_getTransactionByHash',
+						params: [hash],
+					})
+					transactionBlockNumber = parseTransactionBlockNumber(transaction)
+				}
+			}
+
+			if (transactionBlockNumber !== undefined) {
+				throw new Error(`Receipt not available for mined transaction ${hash}`)
 			}
 			return undefined
 		}
