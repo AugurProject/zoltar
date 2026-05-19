@@ -9,6 +9,7 @@ import type { SecurityVaultDetails } from '../types/contracts.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from './testUtils/transactionActionButton.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -78,6 +79,25 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 	}
 }
 
+function createOracleManagerDetails(): NonNullable<SecurityVaultSectionProps['oracleManagerDetails']> {
+	return {
+		callbackStateHash: undefined,
+		exactToken1Report: undefined,
+		isPriceValid: true,
+		lastPrice: 3n * 10n ** 18n,
+		lastSettlementTimestamp: 1n,
+		managerAddress: zeroAddress,
+		openOracleAddress: zeroAddress,
+		pendingOperation: undefined,
+		pendingOperationSlotId: 0n,
+		pendingReportId: 0n,
+		priceValidUntilTimestamp: 10n,
+		requestPriceEthCost: 0n,
+		token1: undefined,
+		token2: undefined,
+	}
+}
+
 describe('SecurityVaultSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -112,22 +132,7 @@ describe('SecurityVaultSection', () => {
 					onSecurityVaultFormChange: update => {
 						formChanges.push(update)
 					},
-					oracleManagerDetails: {
-						callbackStateHash: undefined,
-						exactToken1Report: undefined,
-						isPriceValid: true,
-						lastPrice: 3n * 10n ** 18n,
-						lastSettlementTimestamp: 1n,
-						managerAddress: zeroAddress,
-						openOracleAddress: zeroAddress,
-						pendingOperation: undefined,
-						pendingOperationSlotId: 0n,
-						pendingReportId: 0n,
-						priceValidUntilTimestamp: 10n,
-						requestPriceEthCost: 0n,
-						token1: undefined,
-						token2: undefined,
-					},
+					oracleManagerDetails: createOracleManagerDetails(),
 					securityVaultDetails: createSecurityVaultDetails({
 						repDepositShare: 6n * 10n ** 18n,
 						securityBondAllowance: 0n,
@@ -142,5 +147,45 @@ describe('SecurityVaultSection', () => {
 		fireEvent.click(documentQueries.getAllByRole('button', { name: 'Security Bond Allowance Amount' })[0] as HTMLElement)
 
 		expect(formChanges.at(-1)).toEqual({ securityBondAllowanceAmount: '1.999999999999999999' })
+	})
+
+	test('allows setting the security bond allowance to zero', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					oracleManagerDetails: createOracleManagerDetails(),
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '',
+						securityBondAllowanceAmount: '0',
+						securityPoolAddress: zeroAddress,
+						selectedVaultAddress: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonEnabled(document.body, 'Set Security Bond Allowance')
+	})
+
+	test('blocks non-zero security bond allowances below the minimum', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					oracleManagerDetails: createOracleManagerDetails(),
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '',
+						securityBondAllowanceAmount: '0.5',
+						securityPoolAddress: zeroAddress,
+						selectedVaultAddress: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Set Security Bond Allowance', 'Enter at least 1 ETH for a non-zero allowance.')
 	})
 })

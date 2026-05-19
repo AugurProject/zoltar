@@ -83,11 +83,22 @@ describe('security vault guards', () => {
 				hasValidOraclePrice: true,
 				isMainnet: true,
 				maxSecurityBondAllowanceAmount: undefined,
+				securityBondAllowanceAmount: undefined,
+				selectedVaultDetailsLoaded: true,
+				selectedVaultIsOwnedByAccount: true,
+			}),
+		).toBe('Enter a valid security bond allowance.')
+
+		expect(
+			getVaultSetSecurityBondAllowanceGuardMessage({
+				hasValidOraclePrice: true,
+				isMainnet: true,
+				maxSecurityBondAllowanceAmount: undefined,
 				securityBondAllowanceAmount: 0n,
 				selectedVaultDetailsLoaded: true,
 				selectedVaultIsOwnedByAccount: true,
 			}),
-		).toBe('Enter a security bond allowance greater than zero.')
+		).toBeUndefined()
 
 		expect(
 			getVaultSetSecurityBondAllowanceGuardMessage({

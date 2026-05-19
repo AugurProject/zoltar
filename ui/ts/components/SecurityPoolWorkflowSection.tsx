@@ -53,7 +53,16 @@ import { isMainnetChain } from '../lib/network.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getVaultApprovalGuardMessage, getVaultClaimFeesGuardMessage, getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
-import { getSecurityVaultMaxBondAllowanceAmount, getSecurityVaultWithdrawableRepAmount, getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
+import {
+	getSecurityVaultMaxBondAllowanceAmount,
+	getSecurityVaultWithdrawableRepAmount,
+	getSelectedVaultAddress,
+	hasValidSecurityVaultOraclePrice,
+	isSecurityVaultDepositBelowMinimum,
+	isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper,
+	MIN_SECURITY_BOND_ALLOWANCE,
+	MIN_SECURITY_VAULT_REP_DEPOSIT,
+} from '../lib/securityVault.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import type { OracleManagerDetails, SecurityPoolSystemState } from '../types/contracts.js'
@@ -339,6 +348,7 @@ export function SecurityPoolWorkflowSection({
 		selectedVaultDetailsLoaded: selectedVaultDetails !== undefined,
 		selectedVaultIsOwnedByAccount,
 	})
+	const hasValidSecurityBondAllowanceAmount = securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount >= 0n && (securityBondAllowanceAmount === 0n || securityBondAllowanceAmount >= MIN_SECURITY_BOND_ALLOWANCE)
 	const claimFeesGuardMessage = getVaultClaimFeesGuardMessage({
 		hasClaimableFees,
 		isMainnet,
@@ -1150,7 +1160,7 @@ export function SecurityPoolWorkflowSection({
 							items={[
 								{ key: 'owned', label: 'Selected vault is owned by the connected account', resolved: selectedVaultIsOwnedByAccount },
 								{ key: 'oracle', label: 'A valid oracle price is available', resolved: hasValidOraclePrice },
-								{ key: 'allowance', label: 'Allowance amount is greater than zero', resolved: securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > 0n },
+								{ key: 'allowance', label: `Allowance amount is zero or at least ${formatCurrencyBalance(MIN_SECURITY_BOND_ALLOWANCE)} ETH`, resolved: hasValidSecurityBondAllowanceAmount },
 							]}
 						/>
 						<div className='actions'>
