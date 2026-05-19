@@ -1,4 +1,4 @@
-export const SIMULATION_SCENARIOS = ['baseline', 'deployed', 'security-pool'] as const
+export const SIMULATION_SCENARIOS = ['baseline', 'deployed', 'security-pool', 'securitypoolx2'] as const
 
 export type SimulationScenario = (typeof SIMULATION_SCENARIOS)[number]
 
@@ -18,5 +18,7 @@ export function getSimulationScenarioLabel(scenario: SimulationScenario) {
 			return 'Deployed'
 		case 'security-pool':
 			return 'Security pool'
+		case 'securitypoolx2':
+			return 'Security pool x2'
 	}
 }

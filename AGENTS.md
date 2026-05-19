@@ -93,7 +93,7 @@ This test-driven approach ensures:
 
 - - The UI supports a browser-local simulation harness behind the `?simulate=1` URL flag. Use `bun run ui:serve` and open `http://localhost:12345/?simulate=1` for walletless manual QA.
 - - Simulation mode is Tevm-backed, seeds QA accounts with ETH/WETH/REP, leaves the app contracts undeployed so the Deploy flow can be tested, and exposes developer-only controls in the yellow simulation banner.
-- - Supported simulation scenarios are `simScenario=baseline`, `simScenario=deployed`, and `simScenario=security-pool`.
+- - Supported simulation scenarios are `simScenario=baseline`, `simScenario=deployed`, `simScenario=security-pool`, and `simScenario=securitypoolx2`.
 - - Uniswap-backed REP pricing is intentionally disabled in simulation mode. Quote-dependent features should degrade gracefully rather than assuming mainnet liquidity exists.
 - - This is a TypeScript project. Do not inspect or work from `js/` files anywhere in the repository when there is a corresponding TypeScript source file.
 - - The project type-checks TypeScript before testing (`bun run tsc`). Generated JS or shared asset refreshes come from the setup/build scripts, not from `bun run tsc`.

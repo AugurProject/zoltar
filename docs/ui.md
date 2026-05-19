@@ -87,6 +87,8 @@ The simulation banner exposes:
 
 Simulation mode is intended for walletless or repeatable manual QA. It seeds known accounts and lets the operator move blockchain time forward without leaving the browser. Per the repo guidance, Uniswap-backed REP pricing is intentionally disabled in simulation mode, so quote-dependent features are expected to degrade gracefully rather than assume mainnet liquidity.
 
+Known simulation scenarios are `baseline`, `deployed`, `security-pool`, and `securitypoolx2`.
+
 ### Simulation Controls
 
 | Control | Purpose | Validation | Disabled when |

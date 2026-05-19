@@ -7,13 +7,17 @@ import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
 import { getSecurityVaultWithdrawableRepAmount } from '../lib/securityVault.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
+import type { SimulationScenario } from '../simulation/scenarios.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
+
+const SEEDED_REP_DEPOSIT = 10_000n * 10n ** 18n
+const SEEDED_SECURITY_BOND_ALLOWANCE = SEEDED_REP_DEPOSIT / 4n
 
 afterEach(() => {
 	resetActiveEnvironmentForTesting()
 })
 
-async function createBootstrappedSimulationBackendWithRetry(scenario: 'baseline' | 'deployed' | 'security-pool', maxAttempts = 2) {
+async function createBootstrappedSimulationBackendWithRetry(scenario: SimulationScenario, maxAttempts = 2) {
 	let lastError: unknown = undefined
 	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
 		const backend = await createSimulationBackend({ scenario })
@@ -344,11 +348,52 @@ void describe('simulation backend', () => {
 		expect(backend.currentScenario).toBe('security-pool')
 		expect(pools).toHaveLength(1)
 		expect(seededPool.vaultCount).toBe(1n)
-		expect(seededPool.totalRepDeposit).toBe(10_000n * 10n ** 18n)
-		expect(seededPool.totalSecurityBondAllowance).toBe(2_500n * 10n ** 18n)
-		expect(seededVault.repDepositShare).toBe(10_000n * 10n ** 18n)
-		expect(seededVault.securityBondAllowance).toBe(2_500n * 10n ** 18n)
+		expect(seededPool.totalRepDeposit).toBe(SEEDED_REP_DEPOSIT)
+		expect(seededPool.totalSecurityBondAllowance).toBe(SEEDED_SECURITY_BOND_ALLOWANCE)
+		expect(seededVault.repDepositShare).toBe(SEEDED_REP_DEPOSIT)
+		expect(seededVault.securityBondAllowance).toBe(SEEDED_SECURITY_BOND_ALLOWANCE)
 	}, 60_000)
+
+	void test('bootstraps the securitypoolx2 scenario with two seeded pools and two vaults in each pool', async () => {
+		const backend = await createBootstrappedSimulationBackendWithRetry('securitypoolx2')
+		backend.setTransactionDelayMilliseconds(0)
+
+		try {
+			const primaryAccount = backend.accounts[0]
+			const secondaryAccount = backend.accounts[1]
+			if (primaryAccount === undefined || secondaryAccount === undefined) {
+				throw new Error('Expected seeded simulation QA accounts A1 and B2')
+			}
+
+			const readClient = backend.createReadClient()
+			const pools = await loadAllSecurityPools(readClient)
+
+			expect(backend.currentScenario).toBe('securitypoolx2')
+			expect(pools).toHaveLength(2)
+			expect(pools.map(pool => pool.marketDetails.title)).toEqual(['Will this resolve? (securitypoolx2 #1)', 'Will this resolve? (securitypoolx2 #2)'])
+
+			for (const pool of pools) {
+				const primaryVault = await loadSecurityVaultDetails(readClient, pool.securityPoolAddress, primaryAccount)
+				const secondaryVault = await loadSecurityVaultDetails(readClient, pool.securityPoolAddress, secondaryAccount)
+				if (primaryVault === undefined || secondaryVault === undefined) {
+					throw new Error(`Expected seeded vaults for both A1 and B2 in pool ${pool.securityPoolAddress}`)
+				}
+
+				const managerDetails = await loadOracleManagerDetails(readClient, pool.managerAddress)
+
+				expect(pool.vaultCount).toBe(2n)
+				expect(pool.totalRepDeposit).toBe(2n * SEEDED_REP_DEPOSIT)
+				expect(pool.totalSecurityBondAllowance).toBe(2n * SEEDED_SECURITY_BOND_ALLOWANCE)
+				expect(primaryVault.repDepositShare).toBe(SEEDED_REP_DEPOSIT)
+				expect(primaryVault.securityBondAllowance).toBe(SEEDED_SECURITY_BOND_ALLOWANCE)
+				expect(secondaryVault.repDepositShare).toBe(SEEDED_REP_DEPOSIT)
+				expect(secondaryVault.securityBondAllowance).toBe(SEEDED_SECURITY_BOND_ALLOWANCE)
+				expect(managerDetails.isPriceValid).toBe(true)
+			}
+		} finally {
+			await backend.dispose()
+		}
+	}, 90_000)
 
 	void test('only allows the oracle-backed portion of the seeded REP deposit to be withdrawn in the security-pool scenario', async () => {
 		const backend = await createBootstrappedSimulationBackendWithRetry('security-pool')
@@ -385,8 +430,8 @@ void describe('simulation backend', () => {
 			})
 
 			expect(managerBefore.isPriceValid).toBe(true)
-			expect(seededVaultBefore.repDepositShare).toBe(10_000n * 10n ** 18n)
-			expect(seededPoolBefore.totalRepDeposit).toBe(10_000n * 10n ** 18n)
+			expect(seededVaultBefore.repDepositShare).toBe(SEEDED_REP_DEPOSIT)
+			expect(seededPoolBefore.totalRepDeposit).toBe(SEEDED_REP_DEPOSIT)
 			expect(maxWithdrawableRep !== undefined && maxWithdrawableRep > 0n).toBe(true)
 			expect(maxWithdrawableRep !== undefined && maxWithdrawableRep < seededVaultBefore.repDepositShare).toBe(true)
 
