@@ -12,7 +12,7 @@ import { sameAddress } from '../lib/address.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { getLiquidationFailureReason, simulateLiquidation } from '../lib/liquidation.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
-import { renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
+import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
 import { getCollateralizationTone, getVaultCollateralizationPercent } from '../lib/trading.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 
@@ -72,18 +72,6 @@ function getLiquidationButtonLabels(currentPoolOracleManagerDetails: OracleManag
 function getCollateralizationValueClassName(collateralizationPercent: bigint | undefined, securityMultiplier: bigint | undefined) {
 	const tone = getCollateralizationTone(collateralizationPercent, securityMultiplier)
 	return tone === 'success' ? 'metric-value-success' : tone === 'danger' ? 'metric-value-danger' : undefined
-}
-
-function getQuotedRepPerEthLabel(source: RepPriceSource | undefined) {
-	if (source === 'mock') return 'Simulation REP / ETH'
-	if (source === undefined) return 'REP / ETH'
-	return 'Uniswap REP / ETH'
-}
-
-function getQuotedCollateralizationLabel(source: RepPriceSource | undefined) {
-	if (source === 'mock') return 'Target Collateralization @ Simulation Price'
-	if (source === undefined) return 'Target Collateralization'
-	return 'Target Collateralization @ Uniswap'
 }
 
 export function LiquidationModal({
@@ -168,6 +156,7 @@ export function LiquidationModal({
 	const poolOracleCollateralization = targetVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(targetVaultSummary.repDepositShare, targetVaultSummary.securityBondAllowance, poolOraclePrice)
 	const quotedPriceCollateralization = targetVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(targetVaultSummary.repDepositShare, targetVaultSummary.securityBondAllowance, repPerEthPrice)
 	const callerPoolOracleCollateralization = callerVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(callerVaultSummary.repDepositShare, callerVaultSummary.securityBondAllowance, poolOraclePrice)
+	const repPriceSourceCopy = getRepPriceSourceCopy(repPerEthSource)
 	const liquidationExecutionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
 	const buttonLabels = getLiquidationButtonLabels(currentPoolOracleManagerDetails)
 	const trimmedLiquidationTargetVault = liquidationTargetVault.trim()
@@ -315,7 +304,7 @@ export function LiquidationModal({
 					<MetricField
 						label={
 							<span>
-								{getQuotedRepPerEthLabel(repPerEthSource)} {repPerEthSource === undefined ? undefined : renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
+								{repPriceSourceCopy.quotedRepPerEthLabel} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
 							</span>
 						}
 					>
@@ -324,7 +313,7 @@ export function LiquidationModal({
 					<MetricField
 						label={
 							<span>
-								{getQuotedCollateralizationLabel(repPerEthSource)} {repPerEthSource === undefined ? undefined : renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
+								{repPriceSourceCopy.quotedCollateralizationLabel} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
 							</span>
 						}
 						valueClassName={getCollateralizationValueClassName(quotedPriceCollateralization, selectedPool?.securityMultiplier)}

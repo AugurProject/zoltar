@@ -65,7 +65,7 @@ export function OverviewPanels({
 					<MetricField
 						label={
 							<span className='metric-label-with-action'>
-								<span>REP/ETH {repPerEthSource === undefined ? undefined : renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}</span>
+								<span>REP/ETH {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}</span>
 								<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isLoadingRepPrices} aria-label='Refresh REP prices' title={isLoadingRepPrices ? 'Refreshing REP prices...' : 'Refresh REP prices'}>
 									↻
 								</button>
@@ -74,7 +74,7 @@ export function OverviewPanels({
 					>
 						<CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />
 					</MetricField>
-					<MetricField label={<>REP/USDC {repUsdcSource === undefined ? undefined : renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl, 'Price from the simulation REP/USDC mock')}</>}>
+					<MetricField label={<>REP/USDC {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}</>}>
 						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix='USDC' units={6} />
 					</MetricField>
 					<MetricField label='Universe'>{universeLabel}</MetricField>

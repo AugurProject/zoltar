@@ -2,53 +2,60 @@ import { assertNever } from './assert.js'
 
 export type RepPriceSource = 'v4' | 'v3' | 'mock'
 
-function getRepPriceSourceBadgeLabel(source: RepPriceSource) {
-	switch (source) {
-		case 'mock':
-			return 'MOCK'
-		case 'v4':
-			return 'u4'
-		case 'v3':
-			return 'u3'
-		default:
-			return assertNever(source)
-	}
+type RepPriceSourceCopy = {
+	badgeLabel: string | undefined
+	linkTitle: string | undefined
+	quotedCollateralizationLabel: string
+	quotedRepPerEthLabel: string
+	tooltip: string
 }
 
-function getRepPriceSourceLinkTitle(source: RepPriceSource, mockSourceTitle: string) {
+export function getRepPriceSourceCopy(source: RepPriceSource | undefined): RepPriceSourceCopy {
 	switch (source) {
 		case 'mock':
-			return mockSourceTitle
+			return {
+				badgeLabel: 'MOCK',
+				linkTitle: 'Price from the simulation mock',
+				quotedCollateralizationLabel: 'Target Collateralization @ Simulation Price',
+				quotedRepPerEthLabel: 'Simulation REP / ETH',
+				tooltip: 'Uses the simulation REP/ETH mock price.',
+			}
 		case 'v4':
-			return 'Price from Uniswap V4'
+			return {
+				badgeLabel: 'u4',
+				linkTitle: 'Price from Uniswap V4',
+				quotedCollateralizationLabel: 'Target Collateralization @ Uniswap V4 Price',
+				quotedRepPerEthLabel: 'Uniswap V4 REP / ETH',
+				tooltip: 'Uses the live Uniswap V4 REP/ETH quote.',
+			}
 		case 'v3':
-			return 'Price from Uniswap V3'
-		default:
-			return assertNever(source)
-	}
-}
-
-export function getRepPriceTooltip(source: RepPriceSource | undefined) {
-	switch (source) {
-		case 'mock':
-			return 'Uses the simulation REP/ETH mock price.'
-		case 'v4':
-			return 'Uses the live Uniswap V4 REP/ETH quote.'
-		case 'v3':
-			return 'Uses the live Uniswap V3 REP/ETH quote.'
+			return {
+				badgeLabel: 'u3',
+				linkTitle: 'Price from Uniswap V3',
+				quotedCollateralizationLabel: 'Target Collateralization @ Uniswap V3 Price',
+				quotedRepPerEthLabel: 'Uniswap V3 REP / ETH',
+				tooltip: 'Uses the live Uniswap V3 REP/ETH quote.',
+			}
 		case undefined:
-			return 'REP/ETH price source is unavailable until a quote loads.'
+			return {
+				badgeLabel: undefined,
+				linkTitle: undefined,
+				quotedCollateralizationLabel: 'Target Collateralization',
+				quotedRepPerEthLabel: 'REP / ETH',
+				tooltip: 'REP/ETH price source is unavailable until a quote loads.',
+			}
 		default:
 			return assertNever(source)
 	}
 }
 
-export function renderRepPriceSourceLabel(source: RepPriceSource, sourceUrl: string | undefined, mockSourceTitle = 'Price from the simulation REP/ETH mock') {
-	const label = getRepPriceSourceBadgeLabel(source)
-	if (sourceUrl === undefined) return `(${label})`
+export function renderRepPriceSourceLabel(source: RepPriceSource | undefined, sourceUrl: string | undefined) {
+	const copy = getRepPriceSourceCopy(source)
+	if (copy.badgeLabel === undefined) return undefined
+	if (sourceUrl === undefined || copy.linkTitle === undefined) return `(${copy.badgeLabel})`
 	return (
-		<a href={sourceUrl} title={getRepPriceSourceLinkTitle(source, mockSourceTitle)} target='_blank' rel='noreferrer'>
-			{`(${label})`}
+		<a href={sourceUrl} title={copy.linkTitle} target='_blank' rel='noreferrer'>
+			{`(${copy.badgeLabel})`}
 		</a>
 	)
 }

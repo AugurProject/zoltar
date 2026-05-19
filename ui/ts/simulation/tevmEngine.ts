@@ -3,6 +3,7 @@ import { createCommon } from 'tevm/common'
 import { createPublicClient, createWalletClient, custom, encodeFunctionData, parseTransaction, publicActions, recoverTransactionAddress, type Address, type Hash, type Hex } from 'viem'
 import { getAddress } from 'viem'
 import type { InjectedEthereum } from '../injectedEthereum.js'
+import { assertNever } from '../lib/assert.js'
 import type { ChainBackend, CreateWriteClientCallbacks, ReadClient, WriteClient } from '../lib/chainBackend.js'
 import { createSimulationProfile } from '../lib/networkProfile.js'
 import { bootstrapSimulationChain, predictSimulationTokenAddresses, updateZoltarGenesisRepToken } from './bootstrap.js'
@@ -135,6 +136,8 @@ function getDefaultSimulationRepPerEthPrice(scenario: SimulationScenario) {
 		case 'security-pool':
 		case 'securitypoolx2':
 			return SEEDED_SECURITY_SCENARIO_REP_PER_ETH_PRICE
+		default:
+			return assertNever(scenario)
 	}
 }
 

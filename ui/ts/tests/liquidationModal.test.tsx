@@ -605,6 +605,31 @@ describe('LiquidationModal', () => {
 		container.remove()
 	})
 
+	test('labels quoted liquidation prices with the specific Uniswap version', async () => {
+		const renderedV4Component = await renderLiquidationModal({
+			repPerEthSource: 'v4',
+			repPerEthSourceUrl: 'https://example.com/uniswap-v4',
+		})
+		cleanupRenderedComponent = renderedV4Component.cleanup
+
+		let documentQueries = within(document.body)
+		expect(documentQueries.getByText(/Uniswap V4 REP \/ ETH/)).not.toBeNull()
+		expect(documentQueries.getByText(/Target Collateralization @ Uniswap V4 Price/)).not.toBeNull()
+
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+
+		const renderedV3Component = await renderLiquidationModal({
+			repPerEthSource: 'v3',
+			repPerEthSourceUrl: 'https://example.com/uniswap-v3',
+		})
+		cleanupRenderedComponent = renderedV3Component.cleanup
+
+		documentQueries = within(document.body)
+		expect(documentQueries.getByText(/Uniswap V3 REP \/ ETH/)).not.toBeNull()
+		expect(documentQueries.getByText(/Target Collateralization @ Uniswap V3 Price/)).not.toBeNull()
+	})
+
 	test('uses the shared collateralization success and danger classes in the modal', async () => {
 		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
 		const renderedComponent = await renderLiquidationModal({
