@@ -20,8 +20,28 @@ export const createWriteClient = (ethereum: EIP1193Provider | undefined | AnvilW
 export type WriteClient = ReturnType<typeof createWriteClient>
 export type ReadClient = ReturnType<typeof createReadClient> | ReturnType<typeof createWriteClient>
 
+const replayRevertedTransaction = async (client: WriteClient, hash: Hash) => {
+	const transaction = await client.getTransaction({ hash })
+	await client.call({
+		account: transaction.from,
+		data: transaction.input,
+		gas: transaction.gas,
+		gasPrice: transaction.gasPrice,
+		to: transaction.to ?? undefined,
+		value: transaction.value,
+	})
+}
+
 export const writeContractAndWait = async (client: WriteClient, execute: () => Promise<Hash>) => {
 	const hash = await execute()
-	await client.waitForTransactionReceipt({ hash })
+	const receipt = await client.waitForTransactionReceipt({ hash })
+	if (receipt.status === 'reverted') {
+		try {
+			await replayRevertedTransaction(client, hash)
+		} catch (error) {
+			throw error
+		}
+		throw new Error(`Transaction reverted: ${hash}`)
+	}
 	return hash
 }

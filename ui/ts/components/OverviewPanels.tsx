@@ -4,6 +4,7 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { DataGrid } from './DataGrid.js'
 import { MetricField } from './MetricField.js'
 import { StateHint } from './StateHint.js'
+import { TransactionActionButton } from './TransactionActionButton.js'
 import type { OverviewPanelsProps } from '../types/components.js'
 
 export function OverviewPanels({
@@ -26,7 +27,8 @@ export function OverviewPanels({
 	isRefreshing,
 	walletBootstrapComplete,
 }: OverviewPanelsProps) {
-	const isWalletLoading = isConnectingWallet || (!walletBootstrapComplete && accountState.address === undefined)
+	const isWalletBootstrapLoading = !walletBootstrapComplete && accountState.address === undefined
+	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
 	const renderSourceLink = (source: 'v3' | 'v4' | 'mock', sourceUrl: string | undefined) => {
 		const label = source === 'mock' ? 'MOCK' : `u${source === 'v4' ? '4' : '3'}`
@@ -41,20 +43,10 @@ export function OverviewPanels({
 	return (
 		<section className='overview-shell'>
 			<article className='overview-panel overview-wallet-panel'>
-				<RouteHeader
-					eyebrow='Operations'
-					title='Augur PLACEHOLDER'
-					actions={
-						accountState.address === undefined ? (
-							<button className='primary' onClick={onConnect} disabled={isConnectingWallet}>
-								{isWalletLoading ? 'Connecting...' : 'Connect wallet'}
-							</button>
-						) : undefined
-					}
-				/>
+				<RouteHeader eyebrow='Operations' title='Augur PLACEHOLDER' actions={accountState.address === undefined ? <TransactionActionButton idleLabel='Connect wallet' pendingLabel='Connecting...' onClick={onConnect} pending={isConnectingWallet} /> : undefined} />
 				<DataGrid className='overview-inline-metrics' columns='auto'>
 					<MetricField className='overview-address-metric' label='Address'>
-						{isWalletLoading ? (
+						{isWalletAddressLoading ? (
 							<span className='loading-value'>
 								<span className='spinner' aria-hidden='true' />
 								Connecting...
