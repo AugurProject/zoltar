@@ -1173,7 +1173,7 @@ export function SecurityPoolWorkflowSection({
 			<OperationModal isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title='Claim Fees' description='Confirm the claimable fee balance before submitting the fee redemption for this vault.'>
 				<div className='workflow-metric-grid'>
 					<MetricField label='Claimable Fees'>{selectedVaultDetails === undefined ? '—' : <CurrencyValue value={selectedVaultDetails.unpaidEthFees} suffix='ETH' />}</MetricField>
-					<MetricField label='Vault'>{selectedVaultAddress === '' ? 'None selected' : selectedVaultAddress}</MetricField>
+					<MetricField label='Vault'>{selectedVaultAddress === '' ? 'None selected' : <AddressValue address={selectedVaultAddress} />}</MetricField>
 				</div>
 				<RequirementsChecklist
 					items={[

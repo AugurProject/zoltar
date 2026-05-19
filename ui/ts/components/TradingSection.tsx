@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { ActionLauncherCard } from './ActionLauncherCard.js'
+import { AddressValue } from './AddressValue.js'
 import { ResultBanner } from './ResultBanner.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
@@ -221,7 +222,7 @@ export function TradingSection({
 					{ label: 'Action', value: tradingResult.action },
 					...(tradingResult.action !== 'migrateShares' || tradingResult.shareOutcome === undefined ? [] : [{ label: 'Share Outcome', value: tradingResult.shareOutcome }]),
 					...(tradingResult.action !== 'migrateShares' || tradingResult.targetOutcomeIndexes === undefined ? [] : [{ label: 'Target Outcome Indexes', value: tradingResult.targetOutcomeIndexes.join(', ') }]),
-					{ label: 'Pool', value: tradingResult.securityPoolAddress },
+					{ label: 'Pool', value: <AddressValue address={tradingResult.securityPoolAddress} /> },
 					{ label: 'Universe', value: <UniverseLink universeId={tradingResult.universeId} /> },
 					{ label: 'Transaction', value: <TransactionHashLink hash={tradingResult.hash} /> },
 				]}

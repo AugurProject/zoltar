@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '@testing-library/dom'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { zeroAddress } from 'viem'
+import { getAddress, zeroAddress } from 'viem'
 import { SecurityPoolWorkflowSection } from '../components/SecurityPoolWorkflowSection.js'
 import type { AccountState } from '../types/app.js'
 import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '../types/contracts.js'
@@ -431,6 +431,51 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		expect(documentQueries.getByRole('heading', { name: 'Vault Directory' })).not.toBeNull()
 		expect(documentQueries.getAllByText('Locked REP').length).toBeGreaterThan(0)
+	})
+
+	test('renders the claim-fees modal vault with the shared address value component', async () => {
+		const vaultAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		const poolVault = createSecurityPoolVaultSummary({ vaultAddress })
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					securityPoolAddress: zeroAddress,
+					securityPools: [
+						createSelectedPool({
+							vaultCount: 1n,
+							vaults: [poolVault],
+						}),
+					],
+					securityVault: createSecurityVaultProps({
+						selectedPoolSecurityMultiplier: 2n,
+						securityVaultDetails: createSecurityVaultDetails({ vaultAddress }),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: zeroAddress,
+							selectedVaultAddress: vaultAddress,
+						},
+					}),
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const claimFeesButton = documentQueries.getAllByRole('button', { name: 'Claim Fees' })[0]
+		if (!(claimFeesButton instanceof HTMLElement)) {
+			throw new Error('Expected claim fees launcher button')
+		}
+
+		await act(() => {
+			fireEvent.click(claimFeesButton)
+		})
+
+		const dialog = documentQueries.getByRole('dialog')
+		expect(within(dialog).getByRole('button', { name: `Copy address ${vaultAddress}` })).not.toBeNull()
 	})
 
 	test('auto-loads the selected vault when a routed pool opens in the vault view', async () => {

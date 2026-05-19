@@ -1,8 +1,9 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { within } from '@testing-library/dom'
 import { h } from 'preact'
-import { zeroAddress } from 'viem'
+import { getAddress, zeroAddress, zeroHash } from 'viem'
 import { SecurityPoolSection } from '../components/SecurityPoolSection.js'
 import type { AccountState } from '../types/app.js'
 import type { MarketDetails } from '../types/contracts.js'
@@ -132,5 +133,28 @@ describe('SecurityPoolSection', () => {
 		expect(headings).not.toContain('Question Context')
 		expect(headings).not.toContain('Requirements')
 		expect(headings).not.toContain('Existing Pools')
+	})
+
+	test('renders the created pool banner detail with the shared address value component', async () => {
+		const poolAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					securityPoolResult: {
+						deployPoolHash: zeroHash,
+						questionId: '0x01',
+						securityPoolAddress: poolAddress,
+						securityMultiplier: 2n,
+						universeId: 1n,
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Security pool created' })).not.toBeNull()
+		expect(documentQueries.getAllByRole('button', { name: `Copy address ${poolAddress}` }).length).toBeGreaterThanOrEqual(2)
 	})
 })

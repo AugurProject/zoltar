@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '@testing-library/dom'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import { zeroAddress } from 'viem'
+import { getAddress, zeroAddress, zeroHash } from 'viem'
 import { TradingSection } from '../components/TradingSection.js'
 import { MARKET_NOT_FINALIZED_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE } from '../lib/trading.js'
 import type { AccountState, TradingFormState } from '../types/app.js'
@@ -214,6 +214,27 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByRole('button', { name: 'Open Redeem Flow' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Migrate Forked Shares' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Redeem Resolved Shares' })).not.toBeNull()
+	})
+
+	void test('renders the latest trading action pool with the shared address value component', async () => {
+		const poolAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					tradingResult: {
+						action: 'createCompleteSet',
+						hash: zeroHash,
+						securityPoolAddress: poolAddress,
+						universeId: 1n,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Latest Trading Action' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: `Copy address ${poolAddress}` })).not.toBeNull()
 	})
 
 	void test('shows the minting disabled reason on the launcher when the pool has no active allowance', async () => {
