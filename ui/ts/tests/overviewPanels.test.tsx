@@ -5,10 +5,23 @@ import { fireEvent, within } from '@testing-library/dom'
 import { OverviewPanels } from '../components/OverviewPanels.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { act } from 'preact/test-utils'
 
 describe('OverviewPanels', () => {
+	type MetricElement = {
+		classList: {
+			contains: (token: string) => boolean
+		}
+		firstElementChild: MetricElement | null
+		getAttribute: (name: string) => string | null
+		parentElement: MetricElement | null
+	}
+
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+	let setClientWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
+	let setMeasureWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
+	let triggerResizeObservers = () => undefined
 
 	async function renderOverviewPanels(overrides: Partial<Parameters<typeof OverviewPanels>[0]> = {}) {
 		const baseProps: Parameters<typeof OverviewPanels>[0] = {
@@ -54,11 +67,62 @@ describe('OverviewPanels', () => {
 	beforeEach(() => {
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
+		let resolveClientWidth = (_element: MetricElement) => 0
+		let resolveMeasureWidth = (_element: MetricElement) => 0
+		const resizeObservers: MockResizeObserver[] = []
+		const originalGetBoundingClientRect = domEnvironment.window.HTMLElement.prototype.getBoundingClientRect
+
+		Object.defineProperty(domEnvironment.window.HTMLElement.prototype, 'clientWidth', {
+			configurable: true,
+			get() {
+				return resolveClientWidth(this)
+			},
+		})
+
+		domEnvironment.window.HTMLElement.prototype.getBoundingClientRect = function () {
+			if (this.classList.contains('currency-value-measure')) {
+				return new domEnvironment.window.DOMRect(0, 0, resolveMeasureWidth(this), 0)
+			}
+			return originalGetBoundingClientRect.call(this)
+		}
+
+		class MockResizeObserver implements ResizeObserver {
+			callback: ResizeObserverCallback
+
+			constructor(callback: ResizeObserverCallback) {
+				this.callback = callback
+				resizeObservers.push(this)
+			}
+
+			disconnect() {}
+
+			observe(_target: Element, _options?: ResizeObserverOptions) {}
+
+			unobserve(_target: Element) {}
+		}
+
+		Reflect.set(globalThis, 'ResizeObserver', MockResizeObserver)
+		setClientWidthResolver = nextResolver => {
+			resolveClientWidth = nextResolver
+		}
+		setMeasureWidthResolver = nextResolver => {
+			resolveMeasureWidth = nextResolver
+		}
+
+		triggerResizeObservers = () => {
+			for (const observer of resizeObservers) {
+				observer.callback([], observer)
+			}
+		}
 	})
 
 	afterEach(async () => {
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
+		Reflect.deleteProperty(globalThis, 'ResizeObserver')
+		setClientWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
+		setMeasureWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
+		triggerResizeObservers = () => undefined
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
 	})
@@ -96,7 +160,7 @@ describe('OverviewPanels', () => {
 		const documentQueries = await renderOverviewPanels({
 			repPerEthPrice: 2439024390243902439024n,
 		})
-		expect(documentQueries.getByText('≈ 2 439.02')).toBeDefined()
+		expect(documentQueries.getByTitle('2 439.024390243902439024')).toBeDefined()
 		expect(documentQueries.queryByText(/0\.00041/)).toBeNull()
 	})
 
@@ -109,5 +173,41 @@ describe('OverviewPanels', () => {
 		fireEvent.click(refreshButton)
 
 		expect(onRefreshRepPrices).toHaveBeenCalledTimes(1)
+	})
+
+	test('compacts a large ETH balance without affecting the adjacent WETH metric', async () => {
+		setClientWidthResolver(element => {
+			if (!element.classList.contains('currency-value')) return 0
+			if (element.getAttribute('title') === '999 999 990 000 ETH') return 80
+			if (element.getAttribute('title') === '10 000 WETH') return 160
+			return 160
+		})
+
+		setMeasureWidthResolver(element => {
+			const parentTitle = element.parentElement?.firstElementChild?.getAttribute('title')
+			if (parentTitle === '999 999 990 000 ETH') return 180
+			if (parentTitle === '10 000 WETH') return 110
+			return 80
+		})
+
+		const documentQueries = await renderOverviewPanels({
+			accountState: {
+				address: '0x1234567890123456789012345678901234567890',
+				chainId: '0x1',
+				ethBalance: 999999990000n * 10n ** 18n,
+				wethBalance: 10000n * 10n ** 18n,
+			},
+			universeRepBalance: 5n * 10n ** 18n,
+		})
+
+		await act(() => {
+			triggerResizeObservers()
+		})
+
+		const ethButton = documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000' })
+		const wethButton = documentQueries.getByRole('button', { name: 'Copy exact value 10 000' })
+
+		expect(ethButton.textContent).toBe('≈ 1T ETH')
+		expect(wethButton.textContent).toBe('≈ 10 000.00 WETH')
 	})
 })
