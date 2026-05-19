@@ -69,6 +69,7 @@ Simulation mode details:
 
 - The activation flag is `?simulate=1`
 - The default seeded scenario is `?simulate=1&simScenario=baseline`
+- Supported seeded scenarios are `simScenario=baseline`, `simScenario=deployed`, `simScenario=security-pool`, and `simScenario=securitypoolx2`
 - The yellow simulation banner exposes developer-only controls for account switching, reset, block mining, time travel, blockchain time, block count, transaction count, and artificial transaction receipt delay
 - Uniswap-backed REP pricing is intentionally disabled in simulation mode, so quote-dependent UI paths degrade instead of using mainnet liquidity
 - The simulation chain is ephemeral and exists only in the current browser tab session

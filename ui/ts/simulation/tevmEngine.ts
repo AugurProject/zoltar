@@ -401,7 +401,11 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		}
 
 		const sendTransaction: typeof baseClient.sendTransaction = async parameters => {
-			const hash = await sendTransactionInternal(parameters)
+			const senderAddress = normalizeRequestedAccount(parameters.account, accountAddress)
+			const hash = await sendTransactionInternal({
+				...parameters,
+				account: senderAddress,
+			})
 			callbacks.onTransactionSubmitted?.(hash)
 			return hash
 		}
