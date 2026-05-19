@@ -357,6 +357,7 @@ export function App() {
 
 	const marketRouteContentProps: MarketRouteContentProps = {
 		accountState,
+		activeUniverseId,
 		activeView: activeZoltarView,
 		hasLoadedZoltarQuestions,
 		loadingZoltarForkAccess,
@@ -374,7 +375,7 @@ export function App() {
 		onApproveZoltarForkRep: amount => void approveZoltarForkRep(amount),
 		onCreateMarket: () => void createMarket(),
 		onForkZoltar: () => void forkZoltar(),
-		onLoadZoltarQuestions: () => void loadZoltarQuestions(),
+		onLoadZoltarQuestions: loadZoltarQuestions,
 		onMigrateInternalRep: () => void migrateInternalRep(),
 		onMarketFormChange: update => setMarketForm(current => ({ ...current, ...update })),
 		onPrepareRepForMigration: () => void prepareRepForMigration(),

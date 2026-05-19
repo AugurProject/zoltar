@@ -12,6 +12,7 @@ import type { MarketSectionProps } from '../types/components.js'
 
 export function MarketSection({
 	accountState,
+	activeUniverseId,
 	activeView,
 	hasLoadedZoltarQuestions,
 	loadingZoltarForkAccess,
@@ -77,16 +78,17 @@ export function MarketSection({
 
 	useEffect(() => {
 		if (view !== 'questions') return
+		if (loadingZoltarQuestionCount) return
+		if (zoltarQuestionCount === undefined) return
+		if (zoltarQuestionCount === 0n) return
 		if (loadingZoltarQuestions) return
 		if (hasLoadedZoltarQuestions) return
-		if (zoltarQuestionCount === 0n) return
-		const currentUniverseId = zoltarUniverse?.universeId
-		if (currentUniverseId !== undefined && lastAutoLoadedQuestionsUniverseId.current === currentUniverseId) return
-		lastAutoLoadedQuestionsUniverseId.current = currentUniverseId
+		if (lastAutoLoadedQuestionsUniverseId.current === activeUniverseId) return
+		lastAutoLoadedQuestionsUniverseId.current = activeUniverseId
 		void Promise.resolve(onLoadZoltarQuestions()).catch(() => {
 			lastAutoLoadedQuestionsUniverseId.current = undefined
 		})
-	}, [hasLoadedZoltarQuestions, loadingZoltarQuestions, onLoadZoltarQuestions, view, zoltarQuestionCount, zoltarUniverse?.universeId])
+	}, [activeUniverseId, hasLoadedZoltarQuestions, loadingZoltarQuestionCount, loadingZoltarQuestions, onLoadZoltarQuestions, view, zoltarQuestionCount])
 
 	return (
 		<div className='route-view-flow'>

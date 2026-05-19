@@ -115,11 +115,12 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		})
 	}
 
-	const loadQuestions = async () => {
+	const loadQuestions = async (): Promise<void> => {
 		if (!isMounted.current) return
 		const isCountCurrent = nextQuestionCountLoad()
 		const isQuestionsCurrent = nextQuestionsLoad()
 		const readClient = createConnectedReadClient()
+		let loadError: unknown
 
 		const countTask = questionCountLoad.run({
 			isCurrent: isCountCurrent,
@@ -128,7 +129,9 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 				if (!isMounted.current) return
 				zoltarQuestionCount.value = questionCount
 			},
-			onError: () => undefined,
+			onError: error => {
+				loadError = loadError ?? error
+			},
 		})
 
 		const questionsTask = questionsLoad.run({
@@ -139,10 +142,15 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 				zoltarQuestions.value = questions
 				hasLoadedZoltarQuestions.value = true
 			},
-			onError: () => undefined,
+			onError: error => {
+				loadError = loadError ?? error
+			},
 		})
 
 		await Promise.allSettled([countTask, questionsTask])
+		if (loadError !== undefined) {
+			throw loadError
+		}
 	}
 
 	const createChildUniverse = async (outcomeIndex: bigint) => {
