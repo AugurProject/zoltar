@@ -156,7 +156,6 @@ export type OutcomeSelectionListProps = {
 }
 
 export type VaultMetricGridProps = {
-	approvedRep?: TokenApprovalState | undefined
 	className?: string
 	lockedRepInEscalationGame?: bigint | undefined
 	priceValidUntilTimestamp?: bigint | undefined
