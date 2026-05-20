@@ -658,6 +658,43 @@ describe('LiquidationModal', () => {
 		expect(callerOpenOracleValue?.className).toContain('metric-value-success')
 	})
 
+	test('renders exact-threshold collateralization as green in the modal', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 1n * 10n ** 18n,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 4n * 10n ** 18n,
+				securityBondAllowance: 2n * 10n ** 18n,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const thresholdMetric = within(document.body).getByText('Target Collateralization @ Open Oracle').parentElement
+		const thresholdValue = thresholdMetric?.querySelector('.metric-field-value')
+
+		expect(thresholdValue?.className).toContain('metric-value-success')
+	})
+
+	test('shows no active allowance for zero-allowance collateralization rows in the modal', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+				lastPrice: 1n * 10n ** 18n,
+			}),
+			targetVaultSummary: createTargetVaultSummary({
+				repDepositShare: 4n * 10n ** 18n,
+				securityBondAllowance: 0n,
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Unavailable')).toBeNull()
+		expect(documentQueries.getAllByText('No active allowance')).toHaveLength(2)
+	})
+
 	test('shows refreshing status while the modal is loading Open Oracle validity', async () => {
 		const loadRequests: string[] = []
 		const renderedComponent = await renderLiquidationModal({
