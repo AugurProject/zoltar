@@ -1,21 +1,17 @@
 import { useEffect, useState } from 'preact/hooks'
 import { ActionLauncherCard } from './ActionLauncherCard.js'
-import { AddressValue } from './AddressValue.js'
-import { ResultBanner } from './ResultBanner.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
-import { LatestActionSection } from './LatestActionSection.js'
 import { MetricField } from './MetricField.js'
 import { OperationModal } from './OperationModal.js'
+import { ResultBanner } from './ResultBanner.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { ShareMigrationTargetsSection } from './ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
-import { UniverseLink } from './UniverseLink.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
+import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
 import {
@@ -208,26 +204,7 @@ export function TradingSection({
 			targetOutcomeIndexes: [...selectedTargetOutcomeIndexes, outcomeIndex].map(index => index.toString()).join(', '),
 		})
 	}
-	const renderShareMetricValue = (value: bigint | undefined) => {
-		if (loadingTradingDetails) return 'Loading...'
-		if (value === undefined) return '—'
-		return formatCurrencyBalance(value)
-	}
-	const latestTradingAction =
-		tradingResult === undefined ? undefined : (
-			<LatestActionSection
-				title='Latest Trading Action'
-				embedInCard={embedInCard}
-				rows={[
-					{ label: 'Action', value: tradingResult.action },
-					...(tradingResult.action !== 'migrateShares' || tradingResult.shareOutcome === undefined ? [] : [{ label: 'Share Outcome', value: tradingResult.shareOutcome }]),
-					...(tradingResult.action !== 'migrateShares' || tradingResult.targetOutcomeIndexes === undefined ? [] : [{ label: 'Target Outcome Indexes', value: tradingResult.targetOutcomeIndexes.join(', ') }]),
-					{ label: 'Pool', value: <AddressValue address={tradingResult.securityPoolAddress} /> },
-					{ label: 'Universe', value: <UniverseLink universeId={tradingResult.universeId} /> },
-					{ label: 'Transaction', value: <TransactionHashLink hash={tradingResult.hash} /> },
-				]}
-			/>
-		)
+	const renderShareMetricValue = (value: bigint | undefined) => <CurrencyValue loading={loadingTradingDetails} value={value} />
 	const tradingOutcome = getTradingOutcomePresentation(tradingResult)
 	const tradingLaunchers: ReadinessAction[] = [
 		{
@@ -282,8 +259,6 @@ export function TradingSection({
 					</label>
 				</SectionBlock>
 			)}
-
-			{latestTradingAction}
 
 			{selectedPool === undefined ? undefined : (
 				<SectionBlock title='Your Shares'>

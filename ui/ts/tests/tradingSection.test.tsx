@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '@testing-library/dom'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, zeroHash } from 'viem'
+import { zeroAddress, zeroHash } from 'viem'
 import { TradingSection } from '../components/TradingSection.js'
 import { MARKET_NOT_FINALIZED_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE } from '../lib/trading.js'
 import type { AccountState, TradingFormState } from '../types/app.js'
@@ -216,15 +216,14 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Redeem Resolved Shares' })).not.toBeNull()
 	})
 
-	void test('renders the latest trading action pool with the shared address value component', async () => {
-		const poolAddress = getAddress('0x00000000000000000000000000000000000000a1')
+	void test('renders the trading result banner without the latest trading action card', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
 					tradingResult: {
 						action: 'createCompleteSet',
 						hash: zeroHash,
-						securityPoolAddress: poolAddress,
+						securityPoolAddress: zeroAddress,
 						universeId: 1n,
 					},
 				})}
@@ -233,8 +232,35 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Latest Trading Action' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: `Copy address ${poolAddress}` })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Complete sets minted' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Latest Trading Action' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: /Copy address/i })).toBeNull()
+	})
+
+	void test('renders your share metrics using rounded values with exact copy affordances', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					tradingDetails: createTradingDetails({
+						maxRedeemableCompleteSets: 410000000000000n,
+						shareBalances: createShareBalances({
+							invalid: 410000000000000n,
+							no: 23000000000000000n,
+							yes: 1234000000000000000n,
+						}),
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('≈ 1.23')).not.toBeNull()
+		expect(documentQueries.getByText('≈ 0.023')).not.toBeNull()
+		expect(documentQueries.getAllByText('≈ 0.00041')).toHaveLength(2)
+		expect(documentQueries.getByRole('button', { name: 'Copy exact value 1.234' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Copy exact value 0.023' })).not.toBeNull()
+		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 0.00041' })).toHaveLength(2)
 	})
 
 	void test('shows the minting disabled reason on the launcher when the pool has no active allowance', async () => {
