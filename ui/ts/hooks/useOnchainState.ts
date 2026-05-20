@@ -105,6 +105,7 @@ export function useOnchainState() {
 		const isCurrent = nextRefresh()
 		hasInjectedWallet.value = backend.hasWallet()
 		errorMessage.value = undefined
+		backend.setReadTransportMode?.('rpc')
 
 		if (backend.isBootstrapped === false) {
 			deploymentStatusesLoaded.value = false
@@ -181,7 +182,7 @@ export function useOnchainState() {
 	const connectWallet = async () => {
 		const backend = getActiveBackend()
 		if (!backend.hasWallet()) {
-			errorMessage.value = 'Connect wallet to continue.'
+			errorMessage.value = 'No wallet detected. Read-only mode is available until a wallet is installed.'
 			return
 		}
 		if (isConnectingWallet.value) return
