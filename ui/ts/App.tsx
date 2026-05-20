@@ -657,6 +657,7 @@ export function App() {
 			<AppStatusNotices
 				errorMessage={errorMessage}
 				hasInjectedWallet={hasInjectedWallet}
+				wrongNetworkMessage={wrongNetworkMessage}
 				simulationBootstrapError={environmentBootstrapError}
 				showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
 				showTransactionSuccessNotice={showTransactionSuccessNotice}

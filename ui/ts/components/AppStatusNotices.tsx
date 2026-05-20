@@ -10,6 +10,7 @@ import type { NoticeItem } from '../types/components.js'
 type AppStatusNoticesProps = {
 	errorMessage: string | undefined
 	hasInjectedWallet: boolean
+	wrongNetworkMessage: string | undefined
 	simulationBootstrapError: string | undefined
 	showAugurPlaceHolderDeploymentWarning: boolean
 	showTransactionSuccessNotice: boolean
@@ -19,7 +20,7 @@ type AppStatusNoticesProps = {
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
-export function AppStatusNotices({ errorMessage, hasInjectedWallet, showTransactionSuccessNotice, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, transactionState, walletPresentation, zoltarUniverse }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, hasInjectedWallet, wrongNetworkMessage, showTransactionSuccessNotice, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, transactionState, walletPresentation, zoltarUniverse }: AppStatusNoticesProps) {
 	const items: NoticeItem[] = []
 	if (simulationBootstrapError !== undefined) {
 		items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: 'Simulation bootstrap failed' })
@@ -38,6 +39,14 @@ export function AppStatusNotices({ errorMessage, hasInjectedWallet, showTransact
 	}
 	if (showAugurPlaceHolderDeploymentWarning) {
 		items.push({ detail: 'Finish setup in Deploy before using the app.', id: 'setup-incomplete', tone: 'blocking', title: 'Setup incomplete' })
+	}
+	if (wrongNetworkMessage !== undefined) {
+		items.push({
+			detail: `This interface only enables contract interactions on Ethereum mainnet. ${wrongNetworkMessage === 'Switch to Ethereum mainnet.' ? 'Switch the connected wallet network to Ethereum mainnet to continue.' : wrongNetworkMessage}`,
+			id: 'wrong-network',
+			tone: 'blocking',
+			title: 'Wrong network',
+		})
 	}
 	if (walletPresentation !== undefined && !hasInjectedWallet) {
 		items.push({ detail: walletPresentation.detail, id: 'wallet-guidance', tone: 'warning', title: 'Wallet guidance' })

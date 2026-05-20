@@ -29,6 +29,7 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				hasInjectedWallet: true,
+				wrongNetworkMessage: undefined,
 				showTransactionSuccessNotice: false,
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
@@ -52,6 +53,7 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				hasInjectedWallet: true,
+				wrongNetworkMessage: undefined,
 				showTransactionSuccessNotice: true,
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
@@ -68,5 +70,27 @@ describe('AppStatusNotices', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Transaction complete')).not.toBeNull()
+	})
+
+	test('shows the wrong network notice in the page-level notice stack', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				errorMessage: undefined,
+				hasInjectedWallet: true,
+				wrongNetworkMessage: 'Switch to Ethereum mainnet.',
+				showTransactionSuccessNotice: false,
+				showAugurPlaceHolderDeploymentWarning: false,
+				showZoltarUniverseForkedWarning: false,
+				simulationBootstrapError: undefined,
+				transactionState: createInitialTransactionState(),
+				walletPresentation: undefined,
+				zoltarUniverse: undefined,
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Wrong network')).not.toBeNull()
+		expect(documentQueries.getByText('This interface only enables contract interactions on Ethereum mainnet. Switch the connected wallet network to Ethereum mainnet to continue.')).not.toBeNull()
 	})
 })
