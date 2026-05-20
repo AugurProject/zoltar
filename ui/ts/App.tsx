@@ -655,6 +655,7 @@ export function App() {
 		<main>
 			<AppStatusNotices
 				errorMessage={errorMessage}
+				wrongNetworkMessage={wrongNetworkMessage}
 				simulationBootstrapError={environmentBootstrapError}
 				showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
 				showTransactionSuccessNotice={showTransactionSuccessNotice}

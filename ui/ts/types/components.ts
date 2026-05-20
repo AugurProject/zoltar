@@ -251,10 +251,6 @@ export type ZoltarView = 'create' | 'fork' | 'migrate' | 'questions'
 
 export type SecurityPoolsView = 'browse' | 'create' | 'operate'
 
-export type MainnetGateSectionProps = {
-	message: string
-}
-
 export type DeploymentRouteContentProps = {
 	accountAddress: Address | undefined
 	busyStepId: DeploymentStepId | undefined
