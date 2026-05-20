@@ -182,7 +182,7 @@ export function useOnchainState() {
 	const connectWallet = async () => {
 		const backend = getActiveBackend()
 		if (!backend.hasWallet()) {
-			errorMessage.value = 'No wallet detected. Read-only mode is available until a wallet is installed.'
+			errorMessage.value = 'No wallet detected. Install or enable a wallet to continue.'
 			return
 		}
 		if (isConnectingWallet.value) return
