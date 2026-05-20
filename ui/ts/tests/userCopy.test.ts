@@ -34,4 +34,9 @@ void describe('user copy helpers', () => {
 		expect(getWalletPresentation({ accountAddress: '0x0000000000000000000000000000000000000001', hasInjectedWallet: true, isMainnet: false })?.key).toBe('wrong_network')
 		expect(getMetricPlaceholderPresentation(undefined)?.placeholder).toBe('—')
 	})
+
+	void test('keeps disconnected wallet guidance concise', () => {
+		expect(getWalletPresentation({ accountAddress: undefined, hasWallet: false, isMainnet: true })?.detail).toBe('Install or enable a wallet to continue.')
+		expect(getWalletPresentation({ accountAddress: undefined, hasInjectedWallet: true, isMainnet: true })?.detail).toBe('Connect wallet to continue.')
+	})
 })

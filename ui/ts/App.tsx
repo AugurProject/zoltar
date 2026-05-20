@@ -29,7 +29,7 @@ import { createInitialTransactionState, markTransactionFinished, markTransaction
 import type { TransactionState } from './lib/transactionState.js'
 import { buildRouteHref, DEPLOY_ROUTE, getRouteHashSearch, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
 import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam, writeZoltarViewQueryParam } from './lib/urlParams.js'
-import { getUniversePresentation, getWalletPresentation } from './lib/userCopy.js'
+import { getUniversePresentation } from './lib/userCopy.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from './lib/viewState.js'
 import type { DeploymentRouteContentProps, MarketRouteContentProps, OpenOracleSectionProps, OpenOracleView, SecurityPoolsSectionProps, SecurityPoolsView, ZoltarView } from './types/components.js'
@@ -63,7 +63,6 @@ export function App() {
 		environmentBootstrapError,
 		environmentReady,
 		errorMessage: walletErrorMessage,
-		hasInjectedWallet,
 		hasLoadedDeploymentStatuses,
 		isConnectingWallet,
 		isLoadingDeploymentStatuses,
@@ -244,7 +243,6 @@ export function App() {
 	const isRouteContentDisabled = transactionState.value.transactionInFlightCount > 0 || disableRouteContent
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
-	const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, hasWallet: hasInjectedWallet, isSupportedChain: isMainnet })
 	const showTransactionSuccessNotice =
 		route === 'deploy'
 			? true
@@ -657,13 +655,11 @@ export function App() {
 		<main>
 			<AppStatusNotices
 				errorMessage={errorMessage}
-				hasInjectedWallet={hasInjectedWallet}
 				simulationBootstrapError={environmentBootstrapError}
 				showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
 				showTransactionSuccessNotice={showTransactionSuccessNotice}
 				showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
 				transactionState={transactionState.value}
-				walletPresentation={walletPresentation}
 				zoltarUniverse={zoltarUniverse}
 			/>
 			<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onRefresh={refreshSimulationView} />

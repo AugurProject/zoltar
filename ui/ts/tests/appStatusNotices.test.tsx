@@ -28,7 +28,6 @@ describe('AppStatusNotices', () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: undefined,
-				hasInjectedWallet: true,
 				showTransactionSuccessNotice: false,
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
@@ -37,7 +36,6 @@ describe('AppStatusNotices', () => {
 					...createInitialTransactionState(),
 					lastTransactionHash: '0x1234000000000000000000000000000000000000000000000000000000000000',
 				},
-				walletPresentation: undefined,
 				zoltarUniverse: undefined,
 			}),
 		)
@@ -51,7 +49,6 @@ describe('AppStatusNotices', () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: undefined,
-				hasInjectedWallet: true,
 				showTransactionSuccessNotice: true,
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
@@ -60,7 +57,6 @@ describe('AppStatusNotices', () => {
 					...createInitialTransactionState(),
 					lastTransactionHash: '0x1234000000000000000000000000000000000000000000000000000000000000',
 				},
-				walletPresentation: undefined,
 				zoltarUniverse: undefined,
 			}),
 		)

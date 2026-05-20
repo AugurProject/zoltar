@@ -130,14 +130,14 @@ export function getWalletPresentation({ accountAddress, hasInjectedWallet, hasWa
 		return createPresentation('wallet_disconnected', {
 			badgeLabel: 'Connect wallet',
 			badgeTone: 'blocked',
-			detail: 'Install or enable a wallet to send transactions. Read-only data stays available.',
+			detail: 'Install or enable a wallet to continue.',
 		})
 	}
 	if (accountAddress === undefined) {
 		return createPresentation('wallet_disconnected', {
 			badgeLabel: 'Connect wallet',
 			badgeTone: 'blocked',
-			detail: 'Connect a wallet to send transactions. Read-only data stays available.',
+			detail: 'Connect wallet to continue.',
 		})
 	}
 	if (!supportedChain) {
