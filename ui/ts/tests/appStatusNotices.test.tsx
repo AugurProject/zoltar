@@ -28,7 +28,6 @@ describe('AppStatusNotices', () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: undefined,
-				hasInjectedWallet: true,
 				wrongNetworkMessage: undefined,
 				showTransactionSuccessNotice: false,
 				showAugurPlaceHolderDeploymentWarning: false,
@@ -38,7 +37,6 @@ describe('AppStatusNotices', () => {
 					...createInitialTransactionState(),
 					lastTransactionHash: '0x1234000000000000000000000000000000000000000000000000000000000000',
 				},
-				walletPresentation: undefined,
 				zoltarUniverse: undefined,
 			}),
 		)
@@ -52,7 +50,6 @@ describe('AppStatusNotices', () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: undefined,
-				hasInjectedWallet: true,
 				wrongNetworkMessage: undefined,
 				showTransactionSuccessNotice: true,
 				showAugurPlaceHolderDeploymentWarning: false,
@@ -62,7 +59,6 @@ describe('AppStatusNotices', () => {
 					...createInitialTransactionState(),
 					lastTransactionHash: '0x1234000000000000000000000000000000000000000000000000000000000000',
 				},
-				walletPresentation: undefined,
 				zoltarUniverse: undefined,
 			}),
 		)
@@ -76,14 +72,12 @@ describe('AppStatusNotices', () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: undefined,
-				hasInjectedWallet: true,
 				wrongNetworkMessage: 'Switch to Ethereum mainnet.',
 				showTransactionSuccessNotice: false,
 				showAugurPlaceHolderDeploymentWarning: false,
 				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
 				transactionState: createInitialTransactionState(),
-				walletPresentation: undefined,
 				zoltarUniverse: undefined,
 			}),
 		)

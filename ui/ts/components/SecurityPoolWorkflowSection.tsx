@@ -679,7 +679,6 @@ export function SecurityPoolWorkflowSection({
 													repPerEthSourceUrl={repPerEthSourceUrl}
 													securityBondAllowance={securityVault.securityVaultDetails.securityBondAllowance}
 													securityVaultDetails={securityVault.securityVaultDetails}
-													securityVaultRepApproval={securityVault.securityVaultRepApproval}
 													selectedPoolSecurityMultiplier={securityVault.selectedPoolSecurityMultiplier}
 													selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 													variant='embedded'
@@ -905,7 +904,6 @@ export function SecurityPoolWorkflowSection({
 							repPerEthSourceUrl={repPerEthSourceUrl}
 							securityBondAllowance={selectedVaultDetails.securityBondAllowance}
 							securityVaultDetails={selectedVaultDetails}
-							securityVaultRepApproval={securityVault.securityVaultRepApproval}
 							selectedPoolSecurityMultiplier={securityVault.selectedPoolSecurityMultiplier}
 							selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 							variant='embedded'
@@ -1032,7 +1030,6 @@ export function SecurityPoolWorkflowSection({
 							repPerEthSourceUrl={repPerEthSourceUrl}
 							securityBondAllowance={selectedVaultDetails.securityBondAllowance}
 							securityVaultDetails={selectedVaultDetails}
-							securityVaultRepApproval={securityVault.securityVaultRepApproval}
 							selectedPoolSecurityMultiplier={securityVault.selectedPoolSecurityMultiplier}
 							selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 							variant='embedded'

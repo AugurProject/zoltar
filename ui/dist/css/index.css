@@ -684,14 +684,23 @@ button .loading-value {
 	opacity: 1;
 }
 
-.currency-value {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.35rem;
+.currency-value-wrap {
+	display: inline-block;
+	position: relative;
 	max-width: 100%;
 	min-width: 0;
+	vertical-align: bottom;
+}
+
+.currency-value {
+	display: inline-block;
+	max-width: 100%;
+	min-width: 0;
+	overflow: hidden;
 	font: inherit;
 	color: inherit;
+	text-overflow: ellipsis;
+	vertical-align: bottom;
 	white-space: nowrap;
 }
 
@@ -726,6 +735,18 @@ button.currency-value.copyable:hover:not(:disabled) {
 
 .currency-value.approval-insufficient {
 	color: var(--danger);
+}
+
+.currency-value-measure {
+	position: absolute;
+	top: 0;
+	left: 0;
+	max-width: none;
+	overflow: visible;
+	text-overflow: clip;
+	visibility: hidden;
+	white-space: nowrap;
+	pointer-events: none;
 }
 
 .timestamp-value {
@@ -2233,10 +2254,38 @@ strong.metric-value-danger {
 	justify-content: space-between;
 	align-items: flex-start;
 	gap: 1rem;
+	position: sticky;
+	top: -1.25rem;
+	z-index: 1;
+	margin: -1.25rem -1.25rem 0;
+	padding: 0.9rem 1.25rem 0.85rem;
+	border-bottom: 1px solid var(--border-default);
+	background: linear-gradient(180deg, rgba(11, 23, 39, 0.985) 0%, rgba(7, 17, 31, 0.96) 100%);
+	box-shadow: 0 0.75rem 1rem rgba(0, 0, 0, 0.12);
+}
+
+.modal-header-title {
+	flex: 1 1 auto;
+	min-width: 0;
 }
 
 .modal-header h3 {
-	margin-top: 0.15rem;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.modal-close-button {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.25rem;
+	min-width: 2.25rem;
+	min-height: 2.25rem;
+	padding: 0;
+	border-radius: 0.7rem;
+	font-size: 1.35rem;
+	line-height: 1;
 }
 
 .modal-summary-grid {

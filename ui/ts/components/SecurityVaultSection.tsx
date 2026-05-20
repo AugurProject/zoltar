@@ -25,17 +25,16 @@ import { deriveTokenApprovalRequirement } from '../lib/tokenApproval.js'
 import { getSecurityVaultMaxBondAllowanceAmount, getSecurityVaultWithdrawableRepAmount, getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper, MIN_SECURITY_VAULT_REP_DEPOSIT } from '../lib/securityVault.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
 
-type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'securityVaultRepApproval' | 'selectedPoolSecurityMultiplier'> & {
+type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'selectedPoolSecurityMultiplier'> & {
 	securityBondAllowance: bigint
 	securityVaultDetails: NonNullable<SecurityVaultSectionProps['securityVaultDetails']>
 	selectedVaultIsOwnedByAccount: boolean
 	variant?: 'embedded' | 'record'
 }
 
-export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityVaultDetails, securityVaultRepApproval, selectedPoolSecurityMultiplier, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
+export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityVaultDetails, selectedPoolSecurityMultiplier, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
 	const content = (
 		<VaultMetricGrid
-			approvedRep={securityVaultRepApproval}
 			lockedRepInEscalationGame={securityVaultDetails.lockedRepInEscalationGame}
 			repDepositShare={securityVaultDetails.repDepositShare}
 			repPerEthPrice={repPerEthPrice}
@@ -261,7 +260,6 @@ export function SecurityVaultSection({
 					repPerEthSourceUrl={repPerEthSourceUrl}
 					securityBondAllowance={securityBondAllowance}
 					securityVaultDetails={securityVaultDetails}
-					securityVaultRepApproval={securityVaultRepApproval}
 					selectedPoolSecurityMultiplier={selectedPoolSecurityMultiplier}
 					selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 				/>

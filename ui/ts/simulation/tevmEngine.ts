@@ -31,6 +31,9 @@ type SimulationSendTransactionRequest = {
 	value?: bigint | undefined
 }
 
+const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
+const DEFAULT_SIMULATION_REP_PER_USDC_PRICE = 10n ** 6n
+
 function normalizeRpcBigInt(value: unknown) {
 	if (typeof value === 'bigint') return value
 	if (typeof value === 'number') return BigInt(value)
@@ -255,8 +258,8 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 	let bootstrapping = false
 	let currentTimestamp = 0n
 	let queryDelayMilliseconds = 0
-	let repPerEthPrice = 10n ** 18n
-	let repPerUsdcPrice = 10n ** 6n
+	let repPerEthPrice = DEFAULT_SIMULATION_REP_PER_ETH_PRICE
+	let repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
 	let selectedAccount = primaryAccount
 	let transactionCountSinceReset = 0n
 	let transactionDelayMilliseconds = 1_000
@@ -589,8 +592,8 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			}
 			selectedAccount = primaryAccount
 			transactionCountSinceReset = baselineTransactionCount
-			repPerEthPrice = 10n ** 18n
-			repPerUsdcPrice = 10n ** 6n
+			repPerEthPrice = DEFAULT_SIMULATION_REP_PER_ETH_PRICE
+			repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
 			await refreshSimulationState()
 			emitState()
 		},
