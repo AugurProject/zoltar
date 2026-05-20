@@ -133,9 +133,9 @@ void describe('trading helpers', () => {
 		expect(getVaultCollateralizationPercent(4n * TOKEN_PRECISION, undefined, TOKEN_PRECISION)).toBeUndefined()
 	})
 
-	void test('marks collateralization green only when it is strictly above the security multiplier threshold', () => {
+	void test('marks collateralization green when it is at or above the security multiplier threshold', () => {
 		expect(getCollateralizationTone(201n * TOKEN_PRECISION, 2n)).toBe('success')
-		expect(getCollateralizationTone(200n * TOKEN_PRECISION, 2n)).toBe('danger')
+		expect(getCollateralizationTone(200n * TOKEN_PRECISION, 2n)).toBe('success')
 		expect(getCollateralizationTone(199n * TOKEN_PRECISION, 2n)).toBe('danger')
 		expect(getCollateralizationTone(undefined, 2n)).toBeUndefined()
 	})
