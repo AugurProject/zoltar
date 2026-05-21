@@ -208,7 +208,7 @@ export function TradingSection({
 	const tradingOutcome = getTradingOutcomePresentation(tradingResult)
 	const tradingLaunchers: ReadinessAction[] = [
 		{
-			actionLabel: 'Open Mint Flow',
+			actionLabel: 'Mint complete sets',
 			description: 'Review mint capacity, available backing, and the collateral amount before minting complete sets.',
 			key: 'mint-complete-sets',
 			readiness: mintLauncherBlocker === undefined ? 'ready' : 'blocked',
@@ -216,7 +216,7 @@ export function TradingSection({
 			...(mintLauncherBlocker === undefined ? { onAction: () => setActiveModal('mint') } : { blocker: mintLauncherBlocker }),
 		},
 		{
-			actionLabel: 'Open Redeem Flow',
+			actionLabel: 'Redeem complete sets',
 			description: 'Redeem matching yes, no, and invalid shares back into collateral using the available complete-set balance.',
 			key: 'redeem-complete-sets',
 			readiness: redeemCompleteSetsLauncherBlocker === undefined ? 'ready' : 'blocked',
@@ -224,7 +224,7 @@ export function TradingSection({
 			...(redeemCompleteSetsLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-complete-sets') } : { blocker: redeemCompleteSetsLauncherBlocker }),
 		},
 		{
-			actionLabel: 'Open Migration Flow',
+			actionLabel: 'Migrate forked shares',
 			description: 'Select the source outcome and target child universes before migrating forked shares.',
 			key: 'migrate-shares',
 			readiness: migrateSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
@@ -232,7 +232,7 @@ export function TradingSection({
 			...(migrateSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('migrate-shares') } : { blocker: migrateSharesLauncherBlocker }),
 		},
 		{
-			actionLabel: 'Open Redemption Flow',
+			actionLabel: 'Redeem resolved shares',
 			description: 'Redeem finalized winning shares once the selected pool has resolved.',
 			key: 'redeem-shares',
 			readiness: redeemSharesGuardMessage === undefined ? 'ready' : 'blocked',

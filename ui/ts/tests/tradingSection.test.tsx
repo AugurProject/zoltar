@@ -210,8 +210,8 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Trading Action Launchers' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Mint Complete Sets' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Redeem Complete Sets' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Open Mint Flow' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Open Redeem Flow' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Redeem complete sets' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Migrate Forked Shares' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Redeem Resolved Shares' })).not.toBeNull()
 	})
@@ -280,7 +280,7 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const mintButton = documentQueries.getByRole('button', { name: 'Open Mint Flow' }) as HTMLButtonElement
+		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
 		expect(mintButton.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)
 	})
@@ -305,7 +305,7 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const redeemButton = documentQueries.getByRole('button', { name: 'Open Redeem Flow' }) as HTMLButtonElement
+		const redeemButton = documentQueries.getByRole('button', { name: 'Redeem complete sets' }) as HTMLButtonElement
 		expect(redeemButton.disabled).toBe(true)
 		expect(redeemButton.title).toBe(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)
 	})
@@ -321,7 +321,7 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const migrateButton = documentQueries.getByRole('button', { name: 'Open Migration Flow' }) as HTMLButtonElement
+		const migrateButton = documentQueries.getByRole('button', { name: 'Migrate forked shares' }) as HTMLButtonElement
 		expect(migrateButton.disabled).toBe(true)
 		expect(migrateButton.title).toBe(SHARE_MIGRATION_AFTER_FORK_MESSAGE)
 	})
@@ -339,7 +339,7 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Open Migration Flow' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
 		})
 
 		const modalQueries = within(documentQueries.getByRole('dialog'))
@@ -359,7 +359,7 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Open Redemption Flow' }) as HTMLButtonElement
+		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Redeem resolved shares' }) as HTMLButtonElement
 		expect(redeemSharesButton.disabled).toBe(true)
 		expect(redeemSharesButton.title).toBe(MARKET_NOT_FINALIZED_MESSAGE)
 	})
@@ -376,7 +376,7 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const redeemButton = documentQueries.getByRole('button', { name: 'Open Redeem Flow' }) as HTMLButtonElement
+		const redeemButton = documentQueries.getByRole('button', { name: 'Redeem complete sets' }) as HTMLButtonElement
 		expect(redeemButton.disabled).toBe(true)
 		expect(redeemButton.title).toBe('Loading wallet share balances.')
 	})
@@ -387,7 +387,7 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Open Migration Flow' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
 		})
 
 		const modalQueries = within(documentQueries.getByRole('dialog'))

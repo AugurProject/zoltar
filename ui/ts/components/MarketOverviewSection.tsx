@@ -117,7 +117,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 									reason:
 										accountAddress === undefined ? 'Connect a wallet before deploying a child universe.' : !isMainnet ? 'Switch to Ethereum mainnet before deploying a child universe.' : !hasForked ? 'Fork Zoltar before deploying child universes.' : child.exists ? 'This child universe is already deployed.' : undefined,
 								},
-								label: child.exists ? 'Deployed' : 'Open Universe Flow',
+								label: child.exists ? 'Deployed' : 'Create child universe',
 								onClick: () => setSelectedChildOutcomeIndex(child.outcomeIndex),
 								pending: zoltarChildUniversePendingOutcomeIndex === child.outcomeIndex,
 								pendingLabel: 'Opening...',

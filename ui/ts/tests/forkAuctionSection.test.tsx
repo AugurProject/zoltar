@@ -158,7 +158,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Open Child Universe Flow' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Create child universe' }))
 		await Promise.resolve()
 
 		const modal = documentQueries.getByRole('dialog')
