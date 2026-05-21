@@ -46,6 +46,7 @@ import {
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { balanceShortage } from '../lib/inputs.js'
 import { hasForkActivity } from '../lib/forkAuction.js'
+import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
@@ -274,6 +275,7 @@ export function SecurityPoolWorkflowSection({
 	const lastSelectedVaultAutoLoadKey = useRef<string | undefined>(undefined)
 	const lastQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastImmediateQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
+	const lastLiquidationOutcomeRefreshKey = useRef<string | undefined>(undefined)
 	const lastExecutedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(selectedVaultDetails?.managerAddress, currentPoolOracleManagerDetails)
 	const depositAmount = (() => {
@@ -413,6 +415,12 @@ export function SecurityPoolWorkflowSection({
 		queuedVaultOperation,
 		securityVaultResult: securityVault.securityVaultResult,
 	})
+	const liquidationNoticeState = getLiquidationNoticeState({
+		currentPoolOracleManagerDetails,
+		liquidationTargetVault,
+		loadingPoolOracleManager,
+		securityPoolOverviewResult,
+	})
 	const selectedPoolQuestionDescription = marketDetails === undefined ? undefined : marketDetails.description.trim() === '' ? undefined : marketDetails.description
 	const loadedSelectedPool = selectedPool
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
@@ -535,6 +543,20 @@ export function SecurityPoolWorkflowSection({
 	}, [currentPoolOracleManagerDetails, hasLoadedCurrentVault, loadingPoolOracleManager, onRefreshSelectedPoolData, queuedVaultOperation, securityVault.onLoadSecurityVault, securityVault.securityVaultResult, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
 
 	useEffect(() => {
+		const liquidationRefreshKey = securityPoolOverviewResult?.action !== 'queueLiquidation' || liquidationNoticeState === undefined || liquidationNoticeState === 'submitted' ? undefined : `${securityPoolOverviewResult.hash}:${liquidationNoticeState}`
+		if (liquidationRefreshKey === undefined) {
+			lastLiquidationOutcomeRefreshKey.current = undefined
+			return
+		}
+		if (lastLiquidationOutcomeRefreshKey.current === liquidationRefreshKey) return
+		lastLiquidationOutcomeRefreshKey.current = liquidationRefreshKey
+		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
+		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) {
+			void securityVault.onLoadSecurityVault()
+		}
+	}, [hasLoadedCurrentVault, liquidationNoticeState, onRefreshSelectedPoolData, securityPoolOverviewResult, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
+
+	useEffect(() => {
 		if (poolPriceOracleResult?.action !== 'executeStagedOperation') {
 			lastExecutedOperationRefreshHash.current = undefined
 			return
@@ -553,6 +575,19 @@ export function SecurityPoolWorkflowSection({
 
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Selected Pool'>
+			{securityPoolOverviewResult === undefined || liquidationNoticeState === undefined ? undefined : liquidationNoticeState === 'failed' ? (
+				<div className='notice error'>
+					<strong>Liquidation failed</strong>
+					<p>
+						Pool <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
+					</p>
+					{securityPoolOverviewResult.stagedExecution?.errorMessage === undefined ? undefined : <p>{securityPoolOverviewResult.stagedExecution.errorMessage}</p>}
+				</div>
+			) : (
+				<p className='notice success'>
+					{liquidationNoticeState === 'successful' ? 'Liquidation successful' : liquidationNoticeState === 'queued' ? 'Liquidation queued' : 'Liquidation submitted'} for <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
+				</p>
+			)}
 			<StickyObjectContext {...(loadedSelectedPool === undefined ? {} : { badge: <span className={`badge ${getSecurityPoolStatusBadgeTone(loadedSelectedPool.systemState)}`}>{loadedSelectedPool.systemState}</span> })} sticky={false} title={getSelectedPoolCardTitle()} items={[]}>
 				<div className='selected-pool-context-controls'>
 					<div className='selected-pool-context-lookup'>

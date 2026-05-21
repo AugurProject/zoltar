@@ -8,7 +8,7 @@ import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 import { SecurityPoolsSection, shouldRefreshSelectedPoolDataOnViewOpen } from '../components/SecurityPoolsSection.js'
 import type { AccountState } from '../types/app.js'
-import type { ListedSecurityPool, MarketDetails } from '../types/contracts.js'
+import type { ListedSecurityPool, MarketDetails, OracleManagerDetails } from '../types/contracts.js'
 import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -202,6 +202,26 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		universeId: 1n,
 		vaultCount: 3n,
 		vaults: [],
+		...overrides,
+	}
+}
+
+function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
+	return {
+		callbackStateHash: undefined,
+		exactToken1Report: undefined,
+		isPriceValid: true,
+		lastPrice: 1n,
+		lastSettlementTimestamp: 1n,
+		managerAddress: zeroAddress,
+		openOracleAddress: zeroAddress,
+		pendingOperation: undefined,
+		pendingOperationSlotId: 0n,
+		pendingReportId: 0n,
+		priceValidUntilTimestamp: 1000n,
+		requestPriceEthCost: 1n,
+		token1: zeroAddress,
+		token2: zeroAddress,
 		...overrides,
 	}
 }
@@ -543,6 +563,106 @@ void describe('SecurityPoolsSection', () => {
 		expect(lookupPosition).toBeGreaterThanOrEqual(0)
 		expect(summaryPosition).toBeGreaterThanOrEqual(0)
 		expect(lookupPosition < summaryPosition).toBe(true)
+	})
+
+	void test('shows liquidation successful in browse mode after an immediate execution', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolsSection,
+				createSecurityPoolsSectionProps({
+					overview: createOverviewProps({
+						liquidationManagerAddress: zeroAddress,
+						liquidationSecurityPoolAddress: zeroAddress,
+						liquidationTargetVault: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: true,
+							managerAddress: zeroAddress,
+						}),
+						securityPoolOverviewResult: {
+							action: 'queueLiquidation',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
+							securityPoolAddress: zeroAddress,
+						},
+						securityPools: [createSelectedPool()],
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByText(/Liquidation successful/)).not.toBeNull()
+	})
+
+	void test('shows liquidation queued in browse mode when the refreshed manager reports a pending liquidation', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolsSection,
+				createSecurityPoolsSectionProps({
+					overview: createOverviewProps({
+						liquidationManagerAddress: zeroAddress,
+						liquidationSecurityPoolAddress: zeroAddress,
+						liquidationTargetVault: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: false,
+							managerAddress: zeroAddress,
+							pendingOperation: {
+								amount: 1n,
+								initiatorVault: zeroAddress,
+								operation: 'liquidation',
+								operationId: 4n,
+								targetVault: zeroAddress,
+							},
+							pendingOperationSlotId: 4n,
+						}),
+						securityPoolOverviewResult: {
+							action: 'queueLiquidation',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000ab',
+							securityPoolAddress: zeroAddress,
+						},
+						securityPools: [createSelectedPool()],
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByText(/Liquidation queued/)).not.toBeNull()
+	})
+
+	void test('shows liquidation failed in browse mode with the revert detail', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolsSection,
+				createSecurityPoolsSectionProps({
+					overview: createOverviewProps({
+						liquidationManagerAddress: zeroAddress,
+						liquidationSecurityPoolAddress: zeroAddress,
+						liquidationTargetVault: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: true,
+							managerAddress: zeroAddress,
+						}),
+						securityPoolOverviewResult: {
+							action: 'queueLiquidation',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000ac',
+							securityPoolAddress: zeroAddress,
+							stagedExecution: {
+								errorMessage: 'Local Security Bond Allowance broken',
+								operation: 'liquidation',
+								operationId: 9n,
+								success: false,
+							},
+						},
+						securityPools: [createSelectedPool()],
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Liquidation failed')).not.toBeNull()
+		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
 	})
 
 	void test('keeps the route summary hidden in operate mode until the selected pool resolves', async () => {
