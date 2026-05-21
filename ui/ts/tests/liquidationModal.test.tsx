@@ -653,9 +653,12 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const targetOpenOracleValue = documentQueries.getByText(/66\.67 %/).closest('.metric-field-value')
 		const callerOpenOracleValue = documentQueries.getByText(/400\.00 %/).closest('.metric-field-value')
+		const callerAfterLiquidationLabel = documentQueries.getByText(/^Collateralization @ Open Oracle$/)
+		const callerAfterLiquidationValue = callerAfterLiquidationLabel.parentElement?.querySelector('.metric-field-value')
 
-		expect(targetOpenOracleValue?.className).toContain('metric-value-danger')
-		expect(callerOpenOracleValue?.className).toContain('metric-value-success')
+		expect(targetOpenOracleValue?.className.split(' ')).toEqual(expect.arrayContaining(['metric-field-value', 'metric-value-danger']))
+		expect(callerOpenOracleValue?.className.split(' ')).toEqual(expect.arrayContaining(['metric-field-value', 'metric-value-success']))
+		expect(callerAfterLiquidationValue?.className.split(' ')).toEqual(expect.arrayContaining(['metric-field-value', 'metric-value-success']))
 	})
 
 	test('renders exact-threshold collateralization as green in the modal', async () => {
