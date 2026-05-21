@@ -3,6 +3,7 @@ import { useEffect } from 'preact/hooks'
 import type { Address } from 'viem'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../contracts.js'
 import { createConnectedReadClient, normalizeAccount } from '../lib/clients.js'
+import type { ChainBackend } from '../lib/chainBackend.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { getActiveBackend } from '../lib/activeEnvironment.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
@@ -66,6 +67,18 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 	})
 }
 
+async function loadBackendCurrentTimestamp(backend: ChainBackend) {
+	if (backend.currentTimestamp !== undefined) return backend.currentTimestamp
+	if (backend.isBootstrapped === false) return undefined
+
+	try {
+		const block = await backend.createReadClient().getBlock()
+		return typeof block.timestamp === 'bigint' ? block.timestamp : undefined
+	} catch {
+		return undefined
+	}
+}
+
 export function useOnchainState() {
 	const accountState = useSignal<AccountState>({
 		address: undefined,
@@ -84,6 +97,7 @@ export function useOnchainState() {
 	const deploymentStatusLoad = useLoadController()
 	const deploymentStatusesLoaded = useSignal(false)
 	const augurPlaceHolderDeployed = useSignal<boolean | undefined>(undefined)
+	const currentTimestamp = useSignal<bigint | undefined>(getActiveBackend().currentTimestamp)
 	const environmentBootstrapError = useSignal<string | undefined>(undefined)
 	const environmentBootstrapLabel = useSignal(getActiveBackend().bootstrapLabel)
 	const environmentBootstrapProgress = useSignal(getActiveBackend().bootstrapProgress)
@@ -92,11 +106,23 @@ export function useOnchainState() {
 	const walletBootstrapComplete = useSignal(false)
 	const isConnectingWallet = useSignal(false)
 	const nextRefresh = useRequestGuard()
+	const nextTimestampRefresh = useRequestGuard()
 	const errorMessage = useSignal<string | undefined>(undefined)
 	const setDeploymentStatuses = (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => {
 		const updated = update(deploymentStatuses.value)
 		deploymentStatuses.value = updated
 		if (updated.every(step => step.deployed)) augurPlaceHolderDeployed.value = true
+	}
+	const refreshCurrentTimestamp = async (backend: ChainBackend) => {
+		if (backend.currentTimestamp !== undefined) {
+			currentTimestamp.value = backend.currentTimestamp
+			return
+		}
+
+		const isCurrent = nextTimestampRefresh()
+		const nextCurrentTimestamp = await loadBackendCurrentTimestamp(backend)
+		if (!isCurrent() || nextCurrentTimestamp === undefined) return
+		currentTimestamp.value = nextCurrentTimestamp
 	}
 
 	const refreshState = async (options: RefreshStateOptions = {}) => {
@@ -106,6 +132,7 @@ export function useOnchainState() {
 		hasInjectedWallet.value = backend.hasWallet()
 		errorMessage.value = undefined
 		backend.setReadTransportMode?.('rpc')
+		void refreshCurrentTimestamp(backend)
 
 		if (backend.isBootstrapped === false) {
 			deploymentStatusesLoaded.value = false
@@ -245,6 +272,11 @@ export function useOnchainState() {
 			environmentBootstrapLabel.value = backend.bootstrapLabel
 			environmentBootstrapProgress.value = backend.bootstrapProgress
 			environmentReady.value = backend.isBootstrapped ?? true
+			if (backend.currentTimestamp !== undefined) {
+				currentTimestamp.value = backend.currentTimestamp
+				return
+			}
+			void refreshCurrentTimestamp(backend)
 		})
 		const handleWalletChange = () => {
 			void refreshState()
@@ -259,9 +291,29 @@ export function useOnchainState() {
 		}
 	}, [])
 
+	useEffect(() => {
+		const backend = getActiveBackend()
+		if (backend.currentTimestamp !== undefined || backend.isBootstrapped === false) {
+			if (backend.currentTimestamp !== undefined) {
+				currentTimestamp.value = backend.currentTimestamp
+			}
+			return
+		}
+
+		void refreshCurrentTimestamp(backend)
+		const intervalId = window.setInterval(() => {
+			void refreshCurrentTimestamp(backend)
+		}, 1000)
+
+		return () => {
+			window.clearInterval(intervalId)
+		}
+	}, [environmentReady.value])
+
 	return {
 		accountState: accountState.value,
 		connectWallet,
+		currentTimestamp: currentTimestamp.value,
 		deploymentStatuses: deploymentStatuses.value,
 		errorMessage: errorMessage.value,
 		environmentBootstrapError: environmentBootstrapError.value,

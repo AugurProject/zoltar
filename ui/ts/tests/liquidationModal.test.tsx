@@ -7,6 +7,7 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from 'viem'
 import { LiquidationModal } from '../components/LiquidationModal.js'
+import { ChainTimestampContext } from '../lib/chainTimestamp.js'
 import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -377,6 +378,51 @@ describe('LiquidationModal', () => {
 		expect(button.disabled).toBe(true)
 		expect(documentQueries.getByText('This vault is not undercollateralized at the current Open Oracle price.')).not.toBeNull()
 		expect(documentQueries.getByText(/^Open Oracle Price$/)).not.toBeNull()
+	})
+
+	test('uses the shared chain timestamp context for oracle expiry text', async () => {
+		const originalDateNow = Date.now
+		Date.now = () => 0
+
+		try {
+			const renderedComponent = await renderIntoDocument(
+				<ChainTimestampContext.Provider value={1n + 60n * 60n + 60n}>
+					<LiquidationModal
+						accountAddress={defaultCallerVaultAddress}
+						closeLiquidationModal={() => undefined}
+						currentPoolOracleManagerDetails={undefined}
+						isMainnet
+						liquidationAmount='1'
+						liquidationMaxAmount={5n * 10n ** 18n}
+						liquidationManagerAddress={zeroAddress}
+						liquidationModalOpen
+						liquidationSecurityPoolAddress={zeroAddress}
+						liquidationTargetVault={defaultTargetVaultAddress}
+						loadingPoolOracleManager={false}
+						onLoadPoolOracleManager={() => undefined}
+						onLiquidationAmountChange={() => undefined}
+						onQueueLiquidation={() => undefined}
+						onSelectedPoolViewChange={() => undefined}
+						repPerEthPrice={1n * 10n ** 18n}
+						repPerEthSource='mock'
+						repPerEthSourceUrl={undefined}
+						selectedPool={createSelectedPool({
+							lastOraclePrice: 3n * 10n ** 18n,
+							lastOracleSettlementTimestamp: 1n,
+						})}
+						securityPoolOverviewActiveAction={undefined}
+						securityPoolOverviewResult={undefined}
+						callerVaultSummary={createTargetVaultSummary({ vaultAddress: defaultCallerVaultAddress })}
+						targetVaultSummary={createTargetVaultSummary({ vaultAddress: defaultTargetVaultAddress })}
+					/>
+				</ChainTimestampContext.Provider>,
+			)
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			expect(document.body.textContent?.includes('(expired 1m ago)')).toBe(true)
+		} finally {
+			Date.now = originalDateNow
+		}
 	})
 
 	test('uses a dedicated top-aligned action row when execute liquidation shows a disabled reason', async () => {

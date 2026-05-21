@@ -31,6 +31,7 @@ import { UniverseLink } from './UniverseLink.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { ViewTabs } from './ViewTabs.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
+import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import {
 	getCurrentPoolOracleManagerDetails,
@@ -64,6 +65,7 @@ import {
 	MIN_SECURITY_BOND_ALLOWANCE,
 	MIN_SECURITY_VAULT_REP_DEPOSIT,
 } from '../lib/securityVault.js'
+import { getCurrentTimestamp as getLocalCurrentTimestamp } from '../lib/time.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import type { OracleManagerDetails, SecurityPoolSystemState } from '../types/contracts.js'
@@ -200,6 +202,7 @@ export function SecurityPoolWorkflowSection({
 	trading,
 }: SecurityPoolWorkflowRouteContentProps & { showHeader?: boolean }) {
 	const view = resolveSelectedPoolView(selectedPoolView)
+	const chainCurrentTimestamp = useChainTimestamp()
 	const [manualPendingOperationId, setManualPendingOperationId] = useState('')
 	const [vaultView, setVaultView] = useState<SelectedVaultView>('selected-vault')
 	const [vaultActionModal, setVaultActionModal] = useState<VaultActionModal>(undefined)
@@ -216,7 +219,7 @@ export function SecurityPoolWorkflowSection({
 	const marketDetails = selectedPool?.marketDetails ?? currentReportingDetails?.marketDetails ?? currentForkAuctionDetails?.marketDetails
 	const selectedPoolState = selectedPool?.systemState ?? currentForkAuctionDetails?.systemState
 	const selectedPoolHasForkActivity = selectedPool !== undefined ? hasForkActivity(selectedPool) : currentForkAuctionDetails !== undefined ? hasForkActivity(currentForkAuctionDetails) : false
-	const currentTimestamp = currentReportingDetails?.currentTime ?? BigInt(Math.floor(Date.now() / 1000))
+	const currentTimestamp = currentReportingDetails?.currentTime ?? chainCurrentTimestamp ?? getLocalCurrentTimestamp()
 	const reportingReady = marketDetails !== undefined && marketDetails.endTime <= currentTimestamp
 	const forkWorkflowDisabled = isForkWorkflowDisabled(selectedPoolState, selectedPoolHasForkActivity)
 	const selectedPoolUniverseMismatch = selectedPool !== undefined && selectedPool.universeId !== activeUniverseId
