@@ -1,4 +1,4 @@
-import { createMemoryClient, type DumpStateResult } from 'tevm'
+import { createMemoryClient } from 'tevm'
 import { encodeAbiParameters, encodeDeployData, getCreateAddress, keccak256, toHex, type Address, type Hex } from 'viem'
 import {
 	approveErc20,
@@ -19,6 +19,7 @@ import { ReputationToken_ReputationToken, peripherals_SecurityPoolOracleCoordina
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
 import { MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
 import type { QuestionData } from '../types/contracts.js'
+import { advanceSimulationTime, getSimulationChainTimestamp, initializeSimulationClock } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 
 type TevmLikeClient = ReturnType<typeof createMemoryClient>
@@ -144,31 +145,6 @@ async function seedGenesisRepTokenState(memoryClient: TevmLikeClient, repAddress
 		value: storageValue(totalSupply),
 	})
 	await reportBootstrapProgress(onProgress, 'Finalizing REP token state', 0.23)
-}
-
-async function getSimulationChainTimestamp(memoryClient: TevmLikeClient) {
-	const block = await memoryClient.getBlock()
-	if (block.timestamp === undefined) {
-		throw new Error('Simulation block timestamp was unavailable')
-	}
-	return block.timestamp
-}
-
-async function mineSimulationBlockAtTimestamp(memoryClient: TevmLikeClient, timestamp: bigint) {
-	const vm = await memoryClient.transport.tevm.getVm()
-	const parentBlock = await vm.blockchain.getCanonicalHeadBlock()
-	const builder = await vm.buildBlock({
-		headerData: {
-			timestamp,
-		},
-		parentBlock,
-	})
-	await builder.build()
-}
-
-async function advanceSimulationTime(memoryClient: TevmLikeClient, seconds: bigint) {
-	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
-	await mineSimulationBlockAtTimestamp(memoryClient, currentTimestamp + seconds)
 }
 
 export async function updateZoltarGenesisRepToken(memoryClient: TevmLikeClient, zoltarAddress: Address, repAddress: Address) {
@@ -839,7 +815,6 @@ export async function bootstrapSimulationChain({
 	createReadClient,
 	createWriteClient,
 	memoryClient,
-	onBaselineState,
 	onProgress,
 	primaryAccount,
 	profile,
@@ -849,7 +824,6 @@ export async function bootstrapSimulationChain({
 	createReadClient: () => ReadClient
 	createWriteClient: (accountAddress: Address) => WriteClient
 	memoryClient: TevmLikeClient
-	onBaselineState: (state: DumpStateResult) => void
 	onProgress: BootstrapProgressHandler | undefined
 	primaryAccount: Address
 	profile: NetworkProfile
@@ -858,6 +832,7 @@ export async function bootstrapSimulationChain({
 	await reportBootstrapProgress(onProgress, 'Initializing simulation engine', 0.01)
 	await withTimeout(memoryClient.tevmReady(), 20_000, 'Simulation engine initialization timed out. Firefox may be struggling with main-thread simulation startup.')
 	await reportBootstrapProgress(onProgress, 'Preparing simulation chain', 0.03)
+	await initializeSimulationClock(memoryClient)
 	await seedAccountBalances(memoryClient, accounts, onProgress)
 	const zoltarStep = getDeploymentSteps().find(step => step.id === 'zoltar')
 	if (zoltarStep === undefined) {
@@ -884,6 +859,5 @@ export async function bootstrapSimulationChain({
 		scenario,
 	})
 	await reportBootstrapProgress(onProgress, 'Saving simulation snapshot', 0.99)
-	onBaselineState(await memoryClient.tevmDumpState())
 	await reportBootstrapProgress(onProgress, 'Simulation scenario ready', 1)
 }
