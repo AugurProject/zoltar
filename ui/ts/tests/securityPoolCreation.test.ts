@@ -76,9 +76,10 @@ describe('security pool creation helper', () => {
 		const deploySecurityPoolInputs = deploySecurityPoolEvent.inputs.map(input => ({ name: input.name, type: input.type }))
 
 		const expectedSecurityPoolAddress = addressString(TEST_ADDRESSES[6]) as Address
-		const fakeClient = {
+		const fakeClientBase: Pick<WriteClient, 'account' | 'sendTransaction' | 'waitForTransactionReceipt'> = {
 			account: {
 				address: addressString(TEST_ADDRESSES[0]) as Address,
+				type: 'json-rpc',
 			},
 			sendTransaction: async () => '0x1234',
 			waitForTransactionReceipt: async () =>
@@ -95,7 +96,8 @@ describe('security pool creation helper', () => {
 						},
 					],
 				}) as never,
-		} as unknown as WriteClient
+		}
+		const fakeClient = fakeClientBase as WriteClient
 
 		const result = await createSecurityPool(fakeClient, {
 			currentRetentionRate: 999_999_996_848_000_000n,

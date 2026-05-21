@@ -15,12 +15,15 @@ export type CreateWriteClientCallbacks = {
 	onTransactionSubmitted?: (hash: Hash) => void
 }
 
+type ReadTransportMode = 'provider' | 'rpc'
+
 export type ChainBackend = {
 	bootstrapError: string | undefined
 	bootstrapLabel: string | undefined
 	bootstrapProgress: number | undefined
 	createReadClient(): ReadClient
 	createWriteClient(accountAddress: Address, callbacks?: CreateWriteClientCallbacks): WriteClient
+	currentTimestamp?: bigint
 	getAccounts(): Promise<readonly Address[]>
 	getChainId(): Promise<string>
 	getProvider(): InjectedEthereum | undefined
@@ -30,16 +33,17 @@ export type ChainBackend = {
 	isBootstrapping?: boolean
 	profile: NetworkProfile
 	requestAccounts(): Promise<readonly Address[]>
+	setReadTransportMode?: (mode: ReadTransportMode) => void
 	subscribe: ((handler: () => void) => () => void) | undefined
 	subscribeAccountsChanged(handler: () => void): () => void
 	subscribeChainChanged(handler: () => void): () => void
 	waitUntilReady?(): Promise<void>
 }
 
-function createReadClientForProfile(profile: NetworkProfile, ethereum?: InjectedEthereum): ReadClient {
+function createReadClientForProfile(profile: NetworkProfile, transportMode: ReadTransportMode, ethereum?: InjectedEthereum): ReadClient {
 	return createPublicClient({
 		chain: profile.chain,
-		transport: ethereum !== undefined ? custom(ethereum) : http(DEFAULT_RPC_URL, { batch: { wait: 100 } }),
+		transport: transportMode === 'provider' && ethereum !== undefined ? custom(ethereum) : http(DEFAULT_RPC_URL, { batch: { wait: 100 } }),
 	})
 }
 
@@ -77,12 +81,13 @@ export function normalizeAccount(value: unknown): Address | undefined {
 
 export function createInjectedBackend(): ChainBackend {
 	const getProvider = () => getInjectedEthereum()
+	let readTransportMode: ReadTransportMode = 'provider'
 
 	return {
 		bootstrapError: undefined,
 		bootstrapLabel: undefined,
 		bootstrapProgress: undefined,
-		createReadClient: () => createReadClientForProfile(MAINNET_NETWORK_PROFILE, getProvider()),
+		createReadClient: () => createReadClientForProfile(MAINNET_NETWORK_PROFILE, readTransportMode, getProvider()),
 		createWriteClient: (accountAddress, callbacks = {}) => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) throw new Error('No injected wallet found')
@@ -118,6 +123,9 @@ export function createInjectedBackend(): ChainBackend {
 			const result = await ethereum.request({ method: 'eth_requestAccounts' })
 			if (!Array.isArray(result)) return []
 			return result.map(normalizeAccount).filter((address): address is Address => address !== undefined)
+		},
+		setReadTransportMode: mode => {
+			readTransportMode = mode
 		},
 		subscribe: undefined,
 		subscribeAccountsChanged: handler => {

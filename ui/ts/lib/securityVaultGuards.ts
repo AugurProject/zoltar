@@ -1,11 +1,10 @@
 import type { Address } from 'viem'
 import { formatCurrencyBalance } from './formatters.js'
 import { MIN_SECURITY_BOND_ALLOWANCE, MIN_SECURITY_VAULT_REP_DEPOSIT } from './securityVault.js'
-import { getWalletPresentation } from './userCopy.js'
 
 export function getVaultApprovalGuardMessage({ accountAddress, isMainnet, selectedVaultDetailsLoaded, selectedVaultIsOwnedByAccount }: { accountAddress: Address | undefined; isMainnet: boolean; selectedVaultDetailsLoaded: boolean; selectedVaultIsOwnedByAccount: boolean }) {
-	const walletPresentation = getWalletPresentation({ accountAddress, isMainnet })
-	if (walletPresentation !== undefined) return walletPresentation.detail
+	if (accountAddress === undefined) return 'Connect wallet to continue.'
+	if (!isMainnet) return 'Switch to Ethereum mainnet.'
 	if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to approve REP.'
 	if (!selectedVaultDetailsLoaded) return 'Refresh the vault first.'
 	return undefined

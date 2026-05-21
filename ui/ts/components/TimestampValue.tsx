@@ -1,6 +1,8 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
+import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatRelativeTimestamp, formatTimestamp } from '../lib/formatters.js'
+import { getCurrentTimestamp } from '../lib/time.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 
 type TimestampValueProps = {
@@ -12,26 +14,23 @@ type TimestampValueProps = {
 	zeroText?: ComponentChildren
 }
 
-function getCurrentTimestamp() {
-	return BigInt(Math.floor(Date.now() / 1000))
-}
-
 export function TimestampValue({ className = '', currentTimestamp, loading = false, timestamp, undefinedText = getMetricPlaceholderPresentation(undefined)?.placeholder, zeroText }: TimestampValueProps) {
-	const [now, setNow] = useState(() => currentTimestamp ?? getCurrentTimestamp())
+	const chainCurrentTimestamp = useChainTimestamp()
+	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp
+	const [fallbackNow, setFallbackNow] = useState(() => getCurrentTimestamp())
+	const now = resolvedCurrentTimestamp ?? fallbackNow
 
 	useEffect(() => {
-		if (loading) return
-		const updateNow = () => {
-			setNow(currentTimestamp ?? getCurrentTimestamp())
-		}
-
-		updateNow()
-		const intervalId = window.setInterval(updateNow, 1000)
+		if (loading || resolvedCurrentTimestamp !== undefined) return
+		setFallbackNow(getCurrentTimestamp())
+		const intervalId = window.setInterval(() => {
+			setFallbackNow(getCurrentTimestamp())
+		}, 1000)
 
 		return () => {
 			window.clearInterval(intervalId)
 		}
-	}, [currentTimestamp, loading])
+	}, [loading, resolvedCurrentTimestamp])
 
 	if (loading) {
 		return <span className={`timestamp-value loading ${className}`}>Loading...</span>

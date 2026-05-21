@@ -75,12 +75,13 @@ describe('useRepPrices', () => {
 
 	test('loads simulation mock REP prices using the active profile REP token', async () => {
 		const profile = createFakeSimulationProfile()
-		const readClient = {
+		const readClientBase: Pick<ReadClient, 'readContract' | 'simulateContract'> = {
 			readContract: async () => 'REP' as never,
 			simulateContract: async () => {
 				throw new Error('Simulation mock pricing should not hit the onchain quoter')
 			},
-		} as unknown as ReadClient
+		}
+		const readClient = readClientBase as ReadClient
 		const backend: ChainBackend = {
 			...createFakeBackend({ profile }),
 			createReadClient: () => readClient,

@@ -3,7 +3,18 @@
 import { createSimulationEngine } from './tevmEngine.js'
 import type { SimulationWorkerCallMessage, SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerRpcMessage } from './tevmWorkerProtocol.js'
 
-const scope = globalThis as unknown as DedicatedWorkerGlobalScope
+function isDedicatedWorkerGlobalScope(value: typeof globalThis): value is typeof globalThis & DedicatedWorkerGlobalScope {
+	return typeof value.postMessage === 'function' && 'onmessage' in value
+}
+
+function getWorkerScope() {
+	if (!isDedicatedWorkerGlobalScope(globalThis)) {
+		throw new Error('Simulation worker was initialized outside a dedicated worker scope')
+	}
+	return globalThis
+}
+
+const scope = getWorkerScope()
 
 let enginePromise: ReturnType<typeof createSimulationEngine> | undefined = undefined
 

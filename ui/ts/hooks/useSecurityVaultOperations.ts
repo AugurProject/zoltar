@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { useErc20AllowanceLoader, useErc20BalanceLoader } from './useErc20Loader.js'
 import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
@@ -7,12 +7,12 @@ import type { Address } from 'viem'
 import { approveErc20, depositRepToSecurityPool, loadErc20Balance, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation, redeemSecurityVaultFees, updateSecurityVaultFees } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
-import { sameAddress } from '../lib/address.js'
+import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { getDefaultSecurityVaultFormState, parseRepAmountInput } from '../lib/marketForm.js'
 import { requireDefined } from '../lib/required.js'
-import { getSelectedVaultAddress, MIN_SECURITY_BOND_ALLOWANCE } from '../lib/securityVault.js'
+import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, MIN_SECURITY_BOND_ALLOWANCE } from '../lib/securityVault.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { SecurityVaultFormState, WriteOperationsParameters } from '../types/app.js'
@@ -33,11 +33,42 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	const securityVaultActiveAction = useSignal<SecurityVaultActionResult['action'] | undefined>(undefined)
 	const securityVaultResult = useSignal<SecurityVaultActionResult | undefined>(undefined)
 	const nextSecurityVaultLoad = useRequestGuard()
+	const lastEffectiveVaultSelectionKey = useRef<string | undefined>(undefined)
+	const effectiveSelectedVaultAddress = getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress)
+	const effectiveVaultSelectionKey = `${normalizeAddress(securityVaultForm.value.securityPoolAddress) ?? ''}:${normalizeAddress(effectiveSelectedVaultAddress) ?? ''}`
+	const clearRepLoaders = () => {
+		repBalanceLoader.invalidate()
+		repBalanceLoader.signal.value = undefined
+		repAllowanceLoader.invalidate()
+		repAllowanceLoader.signal.value = {
+			error: undefined,
+			loading: false,
+			value: undefined,
+		}
+	}
+	const clearSelectedVaultState = () => {
+		securityVaultDetails.value = undefined
+		securityVaultMissing.value = false
+		securityVaultError.value = undefined
+		securityVaultResult.value = undefined
+		clearRepLoaders()
+	}
 
 	const resolveSelectedVaultAddress = () => {
-		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress), 'Connect a wallet before loading a security vault')
+		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress), 'Enter a vault address or connect a wallet before loading a security vault')
 		return parseAddressInput(selectedVaultAddress, 'Selected vault address')
 	}
+
+	useEffect(() => {
+		if (!enabled) {
+			lastEffectiveVaultSelectionKey.current = undefined
+			return
+		}
+		if (lastEffectiveVaultSelectionKey.current === effectiveVaultSelectionKey) return
+		void nextSecurityVaultLoad()
+		clearSelectedVaultState()
+		lastEffectiveVaultSelectionKey.current = effectiveVaultSelectionKey
+	}, [effectiveVaultSelectionKey, enabled])
 
 	useEffect(() => {
 		if (accountAddress === undefined) return
@@ -71,12 +102,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 
 		securityVaultDetails.value = undefined
 		securityVaultMissing.value = true
-		repBalanceLoader.signal.value = undefined
-		repAllowanceLoader.signal.value = {
-			error: undefined,
-			loading: false,
-			value: undefined,
-		}
+		clearRepLoaders()
 		securityVaultError.value = missingPoolMessage
 		return undefined
 	}
@@ -102,24 +128,14 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				securityVaultDetails.value = details
 				securityVaultMissing.value = details === undefined
 				if (details === undefined) {
-					repBalanceLoader.signal.value = undefined
-					repAllowanceLoader.signal.value = {
-						error: undefined,
-						loading: false,
-						value: undefined,
-					}
+					clearRepLoaders()
 					return undefined
 				}
 				if (sameAddress(vaultAddress, accountAddress)) {
 					await reloadSecurityVaultRepBalance(details.repToken, vaultAddress)
 					await reloadSecurityVaultRepAllowance(details.repToken, vaultAddress, securityPoolAddress)
 				} else {
-					repBalanceLoader.signal.value = undefined
-					repAllowanceLoader.signal.value = {
-						error: undefined,
-						loading: false,
-						value: undefined,
-					}
+					clearRepLoaders()
 				}
 				return details
 			},
@@ -128,12 +144,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				if (!isCurrent()) return
 				securityVaultDetails.value = undefined
 				securityVaultMissing.value = false
-				repBalanceLoader.signal.value = undefined
-				repAllowanceLoader.signal.value = {
-					error: undefined,
-					loading: false,
-					value: undefined,
-				}
+				clearRepLoaders()
 				securityVaultError.value = getErrorMessage(error, 'Failed to load security vault')
 			},
 		})
@@ -286,29 +297,33 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	useEffect(() => {
 		if (!enabled) return
 		const selectedVaultAddress = securityVaultForm.value.selectedVaultAddress.trim()
-		if (accountAddress === undefined || securityVaultDetails.value === undefined || selectedVaultAddress === '') {
-			repBalanceLoader.signal.value = undefined
-			repAllowanceLoader.signal.value = {
-				error: undefined,
-				loading: false,
-				value: undefined,
-			}
+		if (accountAddress === undefined || selectedVaultAddress === '') {
+			clearRepLoaders()
 			return
 		}
 
-		if (!sameAddress(securityVaultDetails.value.vaultAddress, selectedVaultAddress) || !sameAddress(selectedVaultAddress, accountAddress)) {
-			repBalanceLoader.signal.value = undefined
-			repAllowanceLoader.signal.value = {
-				error: undefined,
-				loading: false,
-				value: undefined,
-			}
+		if (
+			!doesLoadedSecurityVaultMatchSelection({
+				accountAddress,
+				securityPoolAddress: securityVaultForm.value.securityPoolAddress,
+				securityVaultDetails: securityVaultDetails.value,
+				selectedVaultAddress,
+			}) ||
+			!sameAddress(selectedVaultAddress, accountAddress)
+		) {
+			clearRepLoaders()
 			return
 		}
 
-		void reloadSecurityVaultRepBalance(securityVaultDetails.value.repToken, accountAddress).catch(() => undefined)
-		void reloadSecurityVaultRepAllowance(securityVaultDetails.value.repToken, accountAddress, securityVaultDetails.value.securityPoolAddress).catch(() => undefined)
-	}, [accountAddress, enabled, securityVaultDetails.value?.repToken, securityVaultDetails.value?.securityPoolAddress, securityVaultForm.value.selectedVaultAddress])
+		const currentSecurityVaultDetails = securityVaultDetails.value
+		if (currentSecurityVaultDetails === undefined) {
+			clearRepLoaders()
+			return
+		}
+
+		void reloadSecurityVaultRepBalance(currentSecurityVaultDetails.repToken, accountAddress).catch(() => undefined)
+		void reloadSecurityVaultRepAllowance(currentSecurityVaultDetails.repToken, accountAddress, currentSecurityVaultDetails.securityPoolAddress).catch(() => undefined)
+	}, [accountAddress, enabled, securityVaultDetails.value?.repToken, securityVaultDetails.value?.securityPoolAddress, securityVaultForm.value.securityPoolAddress, securityVaultForm.value.selectedVaultAddress])
 
 	return {
 		approveRep,

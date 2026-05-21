@@ -1,4 +1,4 @@
-import { createMemoryClient, type DumpStateResult } from 'tevm'
+import { createMemoryClient } from 'tevm'
 import { encodeAbiParameters, encodeDeployData, getCreateAddress, keccak256, toHex, type Address, type Hex } from 'viem'
 import {
 	approveErc20,
@@ -19,6 +19,7 @@ import { ReputationToken_ReputationToken, peripherals_SecurityPoolOracleCoordina
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
 import { MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
 import type { QuestionData } from '../types/contracts.js'
+import { advanceSimulationTime, getSimulationChainTimestamp, initializeSimulationClock } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 
 type TevmLikeClient = ReturnType<typeof createMemoryClient>
@@ -35,6 +36,10 @@ const REP_TOKEN_MINT_AMOUNT = 100_000_000n * 10n ** 18n
 const SECURITY_MULTIPLIER = 2n
 const SECURITY_POOL_REP_DEPOSIT = 10_000n * 10n ** 18n
 const SECURITY_BOND_ALLOWANCE = SECURITY_POOL_REP_DEPOSIT / 4n
+const SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
+const SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE = 1_000n * 10n ** 18n
+const SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT = SECURITY_POOL_REP_DEPOSIT
+const SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE = SECURITY_BOND_ALLOWANCE
 const WETH_TOKEN_MINT_AMOUNT = 10_000n * 10n ** 18n
 const ZOLTAR_GENESIS_REPUTATION_TOKEN_OFFSET = 3n
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
@@ -142,31 +147,6 @@ async function seedGenesisRepTokenState(memoryClient: TevmLikeClient, repAddress
 	await reportBootstrapProgress(onProgress, 'Finalizing REP token state', 0.23)
 }
 
-async function getSimulationChainTimestamp(memoryClient: TevmLikeClient) {
-	const block = await memoryClient.getBlock()
-	if (block.timestamp === undefined) {
-		throw new Error('Simulation block timestamp was unavailable')
-	}
-	return block.timestamp
-}
-
-async function mineSimulationBlockAtTimestamp(memoryClient: TevmLikeClient, timestamp: bigint) {
-	const vm = await memoryClient.transport.tevm.getVm()
-	const parentBlock = await vm.blockchain.getCanonicalHeadBlock()
-	const builder = await vm.buildBlock({
-		headerData: {
-			timestamp,
-		},
-		parentBlock,
-	})
-	await builder.build()
-}
-
-async function advanceSimulationTime(memoryClient: TevmLikeClient, seconds: bigint) {
-	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
-	await mineSimulationBlockAtTimestamp(memoryClient, currentTimestamp + seconds)
-}
-
 export async function updateZoltarGenesisRepToken(memoryClient: TevmLikeClient, zoltarAddress: Address, repAddress: Address) {
 	const universeBaseSlot = getZoltarUniverseBaseSlot(GENESIS_UNIVERSE_ID)
 	const genesisTheoreticalSupplyHex = await memoryClient.getStorageAt({
@@ -258,12 +238,18 @@ type ProgressRange = {
 	start: number
 }
 
+type SeededVaultSpec = {
+	accountAddress: Address
+	repDeposit: bigint
+	securityBondAllowance: bigint
+}
+
 type SeededSecurityPoolSpec = {
 	poolLabel: string
 	progressRange: ProgressRange
 	questionTitle: string
 	readyLabel: string
-	vaultAccounts: readonly Address[]
+	vaults: readonly SeededVaultSpec[]
 }
 
 function createRangeProgressReporter(onProgress: BootstrapProgressHandler | undefined, range: ProgressRange, stepCount: number) {
@@ -349,11 +335,16 @@ async function createSeededSecurityPool({ createWriteClient, currentTimestamp, d
 	}
 }
 
-async function validateSeededSecurityPool({ expectedVaultAccounts, poolLabel, readClient, securityPoolAddress }: { expectedVaultAccounts: readonly Address[]; poolLabel: string; readClient: ReadClient; securityPoolAddress: Address }) {
+async function validateSeededSecurityPool({ expectedVaults, poolLabel, readClient, securityPoolAddress }: { expectedVaults: readonly SeededVaultSpec[]; poolLabel: string; readClient: ReadClient; securityPoolAddress: Address }) {
 	const seededPool = await loadRequiredSeededPool(readClient, securityPoolAddress, poolLabel)
-	const expectedVaultCount = BigInt(expectedVaultAccounts.length)
-	const expectedRepDeposit = SECURITY_POOL_REP_DEPOSIT * expectedVaultCount
-	const expectedSecurityBondAllowance = SECURITY_BOND_ALLOWANCE * expectedVaultCount
+	const expectedVaultCount = BigInt(expectedVaults.length)
+	let expectedRepDeposit = 0n
+	let expectedSecurityBondAllowance = 0n
+
+	for (const expectedVault of expectedVaults) {
+		expectedRepDeposit += expectedVault.repDeposit
+		expectedSecurityBondAllowance += expectedVault.securityBondAllowance
+	}
 
 	if (seededPool.vaultCount !== expectedVaultCount) {
 		throw new Error(`Expected ${poolLabel} to have ${expectedVaultCount.toString()} seeded vaults`)
@@ -365,16 +356,16 @@ async function validateSeededSecurityPool({ expectedVaultAccounts, poolLabel, re
 		throw new Error(`Expected ${poolLabel} to have ${expectedSecurityBondAllowance.toString()} seeded security bond allowance`)
 	}
 
-	for (const vaultAddress of expectedVaultAccounts) {
-		const vault = seededPool.vaults.find(candidate => candidate.vaultAddress === vaultAddress)
+	for (const expectedVault of expectedVaults) {
+		const vault = seededPool.vaults.find(candidate => candidate.vaultAddress === expectedVault.accountAddress)
 		if (vault === undefined) {
-			throw new Error(`Expected ${poolLabel} to include seeded vault ${vaultAddress}`)
+			throw new Error(`Expected ${poolLabel} to include seeded vault ${expectedVault.accountAddress}`)
 		}
-		if (vault.repDepositShare !== SECURITY_POOL_REP_DEPOSIT) {
-			throw new Error(`Expected ${poolLabel} vault ${vaultAddress} to hold the seeded REP deposit`)
+		if (vault.repDepositShare !== expectedVault.repDeposit) {
+			throw new Error(`Expected ${poolLabel} vault ${expectedVault.accountAddress} to hold ${expectedVault.repDeposit.toString()} seeded REP`)
 		}
-		if (vault.securityBondAllowance !== SECURITY_BOND_ALLOWANCE) {
-			throw new Error(`Expected ${poolLabel} vault ${vaultAddress} to hold the seeded security bond allowance`)
+		if (vault.securityBondAllowance !== expectedVault.securityBondAllowance) {
+			throw new Error(`Expected ${poolLabel} vault ${expectedVault.accountAddress} to hold ${expectedVault.securityBondAllowance.toString()} seeded security bond allowance`)
 		}
 	}
 }
@@ -386,6 +377,7 @@ async function configureSecurityBondAllowance({
 	memoryClient,
 	readClient,
 	securityPoolAddress,
+	securityBondAllowance,
 	profile,
 }: {
 	accountAddress: Address
@@ -395,14 +387,15 @@ async function configureSecurityBondAllowance({
 	profile: NetworkProfile
 	readClient: ReadClient
 	securityPoolAddress: Address
+	securityBondAllowance: bigint
 }) {
 	const writeClient = createWriteClient(accountAddress)
-	const queueResult = await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, SECURITY_BOND_ALLOWANCE)
+	const queueResult = await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance)
 	if (queueResult.stagedExecution?.success === false) {
 		throw new Error(queueResult.stagedExecution.errorMessage ?? `Failed to seed security bond allowance for ${accountAddress}`)
 	}
 	let updatedVault = await loadRequiredSecurityVault(readClient, securityPoolAddress, accountAddress, accountAddress)
-	if (updatedVault.securityBondAllowance !== SECURITY_BOND_ALLOWANCE) {
+	if (updatedVault.securityBondAllowance !== securityBondAllowance) {
 		const managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
 		if (managerDetails.pendingReportId > 0n) {
 			if (managerDetails.callbackStateHash === undefined || managerDetails.exactToken1Report === undefined || managerDetails.token1 === undefined || managerDetails.token2 === undefined) {
@@ -432,10 +425,10 @@ async function configureSecurityBondAllowance({
 
 		updatedVault = await loadRequiredSecurityVault(readClient, securityPoolAddress, accountAddress, accountAddress)
 	}
-	if (updatedVault.securityBondAllowance !== SECURITY_BOND_ALLOWANCE) {
+	if (updatedVault.securityBondAllowance !== securityBondAllowance) {
 		const finalManagerDetails = await loadOracleManagerDetails(readClient, managerAddress)
 		throw new Error(
-			`Expected seeded security bond allowance for ${accountAddress} (allowance=${updatedVault.securityBondAllowance.toString()}, pendingReportId=${finalManagerDetails.pendingReportId.toString()}, pendingOperation=${finalManagerDetails.pendingOperation?.operation ?? 'none'}, pendingTarget=${finalManagerDetails.pendingOperation?.targetVault ?? 'none'}, isPriceValid=${finalManagerDetails.isPriceValid ? 'true' : 'false'})`,
+			`Expected seeded security bond allowance ${securityBondAllowance.toString()} for ${accountAddress} (allowance=${updatedVault.securityBondAllowance.toString()}, pendingReportId=${finalManagerDetails.pendingReportId.toString()}, pendingOperation=${finalManagerDetails.pendingOperation?.operation ?? 'none'}, pendingTarget=${finalManagerDetails.pendingOperation?.targetVault ?? 'none'}, isPriceValid=${finalManagerDetails.isPriceValid ? 'true' : 'false'})`,
 		)
 	}
 }
@@ -448,6 +441,7 @@ async function settleSeededOracleReport({
 	poolLabel,
 	profile,
 	readClient,
+	securityBondAllowance,
 }: {
 	accountAddress: Address
 	createWriteClient: (accountAddress: Address) => WriteClient
@@ -456,9 +450,10 @@ async function settleSeededOracleReport({
 	poolLabel: string
 	profile: NetworkProfile
 	readClient: ReadClient
+	securityBondAllowance: bigint
 }) {
 	const writeClient = createWriteClient(accountAddress)
-	await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, SECURITY_BOND_ALLOWANCE)
+	await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance)
 	await onProgressStep(`Configuring oracle manager for ${poolLabel}`)
 
 	const oracleManagerDetails = await loadOracleManagerDetails(readClient, managerAddress)
@@ -498,9 +493,13 @@ async function seedSecurityPool({
 	seedTimestamp: bigint
 }) {
 	const readClient = createReadClient()
-	const primaryVaultAccount = requireQaAccount(poolSpec.vaultAccounts[0], `Missing primary seeded vault account for ${poolSpec.poolLabel}`)
-	const additionalVaultAccounts = poolSpec.vaultAccounts.slice(1)
-	const stepCount = 2 + poolSpec.vaultAccounts.length + 3 + additionalVaultAccounts.length + 1
+	const primaryVaultSpec = poolSpec.vaults[0]
+	if (primaryVaultSpec === undefined) {
+		throw new Error(`Missing primary seeded vault account for ${poolSpec.poolLabel}`)
+	}
+	const primaryVaultAccount = primaryVaultSpec.accountAddress
+	const additionalVaults = poolSpec.vaults.slice(1)
+	const stepCount = 2 + poolSpec.vaults.length + 3 + additionalVaults.length + 1
 	const reportStep = createRangeProgressReporter(onProgress, poolSpec.progressRange, stepCount)
 
 	const poolResult = await createSeededSecurityPool({
@@ -512,15 +511,15 @@ async function seedSecurityPool({
 	await reportStep(`Creating seeded market for ${poolSpec.poolLabel}`)
 	await reportStep(`Deploying seeded security pool for ${poolSpec.poolLabel}`)
 
-	for (const [index, vaultAccount] of poolSpec.vaultAccounts.entries()) {
-		const writeClient = createWriteClient(vaultAccount)
-		await approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, SECURITY_POOL_REP_DEPOSIT, 'approveRep')
-		await depositRepToSecurityPool(writeClient, poolResult.securityPoolAddress, SECURITY_POOL_REP_DEPOSIT)
-		const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultAccount, vaultAccount)
-		if (seededVault.repDepositShare !== SECURITY_POOL_REP_DEPOSIT) {
-			throw new Error(`Expected seeded REP deposit for ${vaultAccount} in ${poolSpec.poolLabel}, got ${seededVault.repDepositShare.toString()}`)
+	for (const [index, vaultSpec] of poolSpec.vaults.entries()) {
+		const writeClient = createWriteClient(vaultSpec.accountAddress)
+		await approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, vaultSpec.repDeposit, 'approveRep')
+		await depositRepToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.repDeposit)
+		const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultSpec.accountAddress, vaultSpec.accountAddress)
+		if (seededVault.repDepositShare !== vaultSpec.repDeposit) {
+			throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${poolSpec.poolLabel}, got ${seededVault.repDepositShare.toString()}`)
 		}
-		await reportStep(`Funding seeded security vault ${index + 1} of ${poolSpec.vaultAccounts.length} for ${poolSpec.poolLabel}`)
+		await reportStep(`Funding seeded security vault ${index + 1} of ${poolSpec.vaults.length} for ${poolSpec.poolLabel}`)
 	}
 
 	const primaryVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, primaryVaultAccount, primaryVaultAccount)
@@ -532,6 +531,7 @@ async function seedSecurityPool({
 		poolLabel: poolSpec.poolLabel,
 		profile,
 		readClient,
+		securityBondAllowance: primaryVaultSpec.securityBondAllowance,
 	})
 	await advanceSimulationTime(memoryClient, DAY_IN_SECONDS)
 	await settleOracleReport(createWriteClient(primaryVaultAccount), seededOracleReport.openOracleAddress, seededOracleReport.pendingReportId)
@@ -543,25 +543,26 @@ async function seedSecurityPool({
 	}
 
 	const primaryVaultAfterSettlement = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, primaryVaultAccount, primaryVaultAccount)
-	if (primaryVaultAfterSettlement.securityBondAllowance !== SECURITY_BOND_ALLOWANCE) {
+	if (primaryVaultAfterSettlement.securityBondAllowance !== primaryVaultSpec.securityBondAllowance) {
 		throw new Error(`Expected seeded security bond allowance for ${primaryVaultAccount}`)
 	}
 
-	for (const [index, vaultAccount] of additionalVaultAccounts.entries()) {
+	for (const [index, vaultSpec] of additionalVaults.entries()) {
 		await configureSecurityBondAllowance({
-			accountAddress: vaultAccount,
+			accountAddress: vaultSpec.accountAddress,
 			createWriteClient,
 			managerAddress: primaryVault.managerAddress,
 			memoryClient,
 			profile,
 			readClient,
 			securityPoolAddress: poolResult.securityPoolAddress,
+			securityBondAllowance: vaultSpec.securityBondAllowance,
 		})
-		await reportStep(`Configuring seeded security vault ${index + 2} of ${poolSpec.vaultAccounts.length} for ${poolSpec.poolLabel}`)
+		await reportStep(`Configuring seeded security vault ${index + 2} of ${poolSpec.vaults.length} for ${poolSpec.poolLabel}`)
 	}
 
 	await validateSeededSecurityPool({
-		expectedVaultAccounts: poolSpec.vaultAccounts,
+		expectedVaults: poolSpec.vaults,
 		poolLabel: poolSpec.poolLabel,
 		readClient,
 		securityPoolAddress: poolResult.securityPoolAddress,
@@ -597,7 +598,13 @@ async function seedSecurityPoolScenario({
 			progressRange: { start: 0.78, end: 0.98 },
 			questionTitle: 'Will this resolve?',
 			readyLabel: 'Seeded security-pool scenario is ready',
-			vaultAccounts: [primaryAccount],
+			vaults: [
+				{
+					accountAddress: primaryAccount,
+					repDeposit: SECURITY_POOL_REP_DEPOSIT,
+					securityBondAllowance: SECURITY_BOND_ALLOWANCE,
+				},
+			],
 		},
 		profile,
 		seedTimestamp: currentTimestamp,
@@ -624,20 +631,40 @@ async function seedSecurityPoolX2Scenario({
 	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
 	const readClient = createReadClient()
 	const reportStep = createRangeProgressReporter(onProgress, { start: 0.72, end: 0.98 }, 17)
+	const seededVaults = [
+		{
+			accountAddress: primaryAccount,
+			repDeposit: SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT,
+			securityBondAllowance: SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE,
+		},
+		{
+			accountAddress: secondaryAccount,
+			repDeposit: SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT,
+			securityBondAllowance: SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE,
+		},
+	] as const
 	const seededPools = [
 		{
 			poolLabel: 'securitypoolx2 pool 1',
 			questionTitle: 'Will this resolve? (securitypoolx2 #1)',
-			vaultAccounts: [primaryAccount, secondaryAccount],
+			vaults: seededVaults,
 		},
 		{
 			poolLabel: 'securitypoolx2 pool 2',
 			questionTitle: 'Will this resolve? (securitypoolx2 #2)',
-			vaultAccounts: [primaryAccount, secondaryAccount],
+			vaults: seededVaults,
 		},
 	] as const
 
-	const preparedPools = []
+	const preparedPools: Array<{
+		managerAddress: Address
+		openOracleAddress: Address
+		poolLabel: string
+		pendingReportId: bigint
+		primaryVault: SeededVaultSpec
+		securityPoolAddress: Address
+		vaults: readonly SeededVaultSpec[]
+	}> = []
 
 	for (const seededPool of seededPools) {
 		const poolResult = await createSeededSecurityPool({
@@ -649,18 +676,22 @@ async function seedSecurityPoolX2Scenario({
 		await reportStep(`Creating seeded market for ${seededPool.poolLabel}`)
 		await reportStep(`Deploying seeded security pool for ${seededPool.poolLabel}`)
 
-		for (const [index, vaultAccount] of seededPool.vaultAccounts.entries()) {
-			const writeClient = createWriteClient(vaultAccount)
-			await approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, SECURITY_POOL_REP_DEPOSIT, 'approveRep')
-			await depositRepToSecurityPool(writeClient, poolResult.securityPoolAddress, SECURITY_POOL_REP_DEPOSIT)
-			const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultAccount, vaultAccount)
-			if (seededVault.repDepositShare !== SECURITY_POOL_REP_DEPOSIT) {
-				throw new Error(`Expected seeded REP deposit for ${vaultAccount} in ${seededPool.poolLabel}, got ${seededVault.repDepositShare.toString()}`)
+		for (const [index, vaultSpec] of seededPool.vaults.entries()) {
+			const writeClient = createWriteClient(vaultSpec.accountAddress)
+			await approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, vaultSpec.repDeposit, 'approveRep')
+			await depositRepToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.repDeposit)
+			const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultSpec.accountAddress, vaultSpec.accountAddress)
+			if (seededVault.repDepositShare !== vaultSpec.repDeposit) {
+				throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${seededPool.poolLabel}, got ${seededVault.repDepositShare.toString()}`)
 			}
-			await reportStep(`Funding seeded security vault ${index + 1} of ${seededPool.vaultAccounts.length} for ${seededPool.poolLabel}`)
+			await reportStep(`Funding seeded security vault ${index + 1} of ${seededPool.vaults.length} for ${seededPool.poolLabel}`)
 		}
 
 		const primaryVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, primaryAccount, primaryAccount)
+		const primaryVaultSpec = seededPool.vaults[0]
+		if (primaryVaultSpec === undefined) {
+			throw new Error(`Expected a primary seeded vault for ${seededPool.poolLabel}`)
+		}
 		const seededOracleReport = await settleSeededOracleReport({
 			accountAddress: primaryAccount,
 			createWriteClient,
@@ -669,6 +700,7 @@ async function seedSecurityPoolX2Scenario({
 			poolLabel: seededPool.poolLabel,
 			profile,
 			readClient,
+			securityBondAllowance: primaryVaultSpec.securityBondAllowance,
 		})
 
 		preparedPools.push({
@@ -676,8 +708,9 @@ async function seedSecurityPoolX2Scenario({
 			openOracleAddress: seededOracleReport.openOracleAddress,
 			poolLabel: seededPool.poolLabel,
 			pendingReportId: seededOracleReport.pendingReportId,
+			primaryVault: primaryVaultSpec,
 			securityPoolAddress: poolResult.securityPoolAddress,
-			vaultAccounts: seededPool.vaultAccounts,
+			vaults: seededPool.vaults,
 		})
 	}
 
@@ -693,25 +726,30 @@ async function seedSecurityPoolX2Scenario({
 		}
 
 		const primaryVaultAfterSettlement = await loadRequiredSecurityVault(readClient, preparedPool.securityPoolAddress, primaryAccount, primaryAccount)
-		if (primaryVaultAfterSettlement.securityBondAllowance !== SECURITY_BOND_ALLOWANCE) {
+		if (primaryVaultAfterSettlement.securityBondAllowance !== preparedPool.primaryVault.securityBondAllowance) {
 			throw new Error(`Expected seeded security bond allowance for ${primaryAccount}`)
 		}
 	}
 
 	for (const preparedPool of preparedPools) {
+		const secondaryVault = preparedPool.vaults[1]
+		if (secondaryVault === undefined) {
+			throw new Error(`Expected a secondary seeded vault for ${preparedPool.poolLabel}`)
+		}
 		await configureSecurityBondAllowance({
-			accountAddress: secondaryAccount,
+			accountAddress: secondaryVault.accountAddress,
 			createWriteClient,
 			managerAddress: preparedPool.managerAddress,
 			memoryClient,
 			profile,
 			readClient,
 			securityPoolAddress: preparedPool.securityPoolAddress,
+			securityBondAllowance: secondaryVault.securityBondAllowance,
 		})
 		await reportStep(`Configuring seeded security vault 2 of 2 for ${preparedPool.poolLabel}`)
 
 		await validateSeededSecurityPool({
-			expectedVaultAccounts: preparedPool.vaultAccounts,
+			expectedVaults: preparedPool.vaults,
 			poolLabel: preparedPool.poolLabel,
 			readClient,
 			securityPoolAddress: preparedPool.securityPoolAddress,
@@ -777,7 +815,6 @@ export async function bootstrapSimulationChain({
 	createReadClient,
 	createWriteClient,
 	memoryClient,
-	onBaselineState,
 	onProgress,
 	primaryAccount,
 	profile,
@@ -787,7 +824,6 @@ export async function bootstrapSimulationChain({
 	createReadClient: () => ReadClient
 	createWriteClient: (accountAddress: Address) => WriteClient
 	memoryClient: TevmLikeClient
-	onBaselineState: (state: DumpStateResult) => void
 	onProgress: BootstrapProgressHandler | undefined
 	primaryAccount: Address
 	profile: NetworkProfile
@@ -796,6 +832,7 @@ export async function bootstrapSimulationChain({
 	await reportBootstrapProgress(onProgress, 'Initializing simulation engine', 0.01)
 	await withTimeout(memoryClient.tevmReady(), 20_000, 'Simulation engine initialization timed out. Firefox may be struggling with main-thread simulation startup.')
 	await reportBootstrapProgress(onProgress, 'Preparing simulation chain', 0.03)
+	await initializeSimulationClock(memoryClient)
 	await seedAccountBalances(memoryClient, accounts, onProgress)
 	const zoltarStep = getDeploymentSteps().find(step => step.id === 'zoltar')
 	if (zoltarStep === undefined) {
@@ -822,6 +859,5 @@ export async function bootstrapSimulationChain({
 		scenario,
 	})
 	await reportBootstrapProgress(onProgress, 'Saving simulation snapshot', 0.99)
-	onBaselineState(await memoryClient.tevmDumpState())
 	await reportBootstrapProgress(onProgress, 'Simulation scenario ready', 1)
 }
