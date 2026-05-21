@@ -18,6 +18,7 @@ import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { zeroAddress } from 'viem'
 import { sameAddress } from '../lib/address.js'
+import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { isMainnetChain } from '../lib/network.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
@@ -65,6 +66,12 @@ export function SecurityPoolsOverviewSection({
 	const currentPoolOracleManagerDetails = selectedPool === undefined || liquidationManagerAddress === undefined || !sameAddress(poolOracleManagerDetails?.managerAddress, liquidationManagerAddress) ? undefined : poolOracleManagerDetails
 	const targetVaultSummary = selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))
 	const callerVaultSummary = accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
+	const liquidationNoticeState = getLiquidationNoticeState({
+		currentPoolOracleManagerDetails,
+		liquidationTargetVault,
+		loadingPoolOracleManager,
+		securityPoolOverviewResult,
+	})
 	const normalizedSearchText = searchText.trim().toLowerCase()
 	const filteredSecurityPools = securityPools.filter(pool => {
 		if (systemStateFilter !== 'all' && pool.systemState !== systemStateFilter) return false
@@ -87,9 +94,17 @@ export function SecurityPoolsOverviewSection({
 					</button>
 				}
 			>
-				{securityPoolOverviewResult === undefined ? undefined : (
+				{securityPoolOverviewResult === undefined || liquidationNoticeState === undefined ? undefined : liquidationNoticeState === 'failed' ? (
+					<div className='notice error'>
+						<strong>Liquidation failed</strong>
+						<p>
+							Pool <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
+						</p>
+						{securityPoolOverviewResult.stagedExecution?.errorMessage === undefined ? undefined : <p>{securityPoolOverviewResult.stagedExecution.errorMessage}</p>}
+					</div>
+				) : (
 					<p className='notice success'>
-						Queued liquidation for <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
+						{liquidationNoticeState === 'successful' ? 'Liquidation successful' : liquidationNoticeState === 'queued' ? 'Liquidation queued' : 'Liquidation submitted'} for <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
 					</p>
 				)}
 				<ErrorNotice message={securityPoolOverviewError} />
