@@ -1088,6 +1088,33 @@ button.currency-value.copyable:hover:not(:disabled) {
 	justify-content: flex-end;
 }
 
+.simulation-control-groups {
+	display: grid;
+	gap: 0.85rem;
+	justify-items: stretch;
+}
+
+.simulation-control-group {
+	display: grid;
+	gap: 0.45rem;
+	padding: 0.85rem;
+	border: 1px solid rgba(255, 227, 145, 0.24);
+	border-radius: 0.85rem;
+	background: rgba(56, 40, 7, 0.24);
+}
+
+.simulation-control-group-label {
+	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-size: var(--font-label);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: rgba(255, 242, 213, 0.76);
+}
+
+.simulation-button-row {
+	justify-content: flex-end;
+}
+
 .simulation-delay-field {
 	display: grid;
 	gap: 0.45rem;
