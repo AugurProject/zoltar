@@ -77,8 +77,17 @@ type SimulationNode = {
 	getVm(): Promise<SimulationVm>
 }
 
+function isSimulationNode(value: unknown): value is SimulationNode {
+	if (typeof value !== 'object' || value === null) return false
+	return 'getReceiptsManager' in value && typeof value.getReceiptsManager === 'function' && 'getTxPool' in value && typeof value.getTxPool === 'function' && 'getVm' in value && typeof value.getVm === 'function'
+}
+
 function getSimulationNode(memoryClient: TevmLikeClient): SimulationNode {
-	return memoryClient.transport.tevm as unknown as SimulationNode
+	const tevmNode = memoryClient.transport.tevm
+	if (!isSimulationNode(tevmNode)) {
+		throw new Error('Simulation transport did not expose a compatible Tevm node')
+	}
+	return tevmNode
 }
 
 function requireSimulationTimestamp(timestamp: bigint | undefined) {
@@ -104,7 +113,7 @@ async function syncSimulationVmState({ block, memoryClient, receiptsManager, vm 
 	}
 	originalVm.stateManager.saveStateRoot(block.header.stateRoot, stateRootValue)
 	originalVm.blockchain = vm.blockchain
-	;(originalVm.evm as { blockchain: unknown }).blockchain = vm.evm.blockchain
+	originalVm.evm.blockchain = vm.evm.blockchain
 	receiptsManager.chain = vm.evm.blockchain
 	await originalVm.stateManager.setStateRoot(hexToBytes(vm.stateManager._baseState.getCurrentStateRoot()))
 }

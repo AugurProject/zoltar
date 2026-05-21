@@ -26,6 +26,12 @@ function createMockInjectedEthereum(requestHandler: (parameters: RequestParamete
 	}
 }
 
+function createMockFetch(handler: (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => Promise<Response>): typeof fetch {
+	const mockFetch: typeof fetch = async (input, init) => await handler(input, init)
+	mockFetch.preconnect = globalThis.fetch.preconnect
+	return mockFetch
+}
+
 function getRpcId(value: unknown) {
 	if (typeof value !== 'object' || value === null || !('id' in value)) return undefined
 	return value.id
@@ -53,10 +59,10 @@ describe('injected backend read transport', () => {
 		})
 
 		let fetchCalled = false
-		globalThis.fetch = (async () => {
+		globalThis.fetch = createMockFetch(async () => {
 			fetchCalled = true
 			throw new Error('fetch should not be called while provider reads are enabled')
-		}) as unknown as typeof fetch
+		})
 
 		const backend = createInjectedBackend()
 		const code = await backend.createReadClient().getCode({ address: zeroAddress })
@@ -74,7 +80,7 @@ describe('injected backend read transport', () => {
 		})
 
 		const fetchCalls: string[] = []
-		globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+		globalThis.fetch = createMockFetch(async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
 			const url = input instanceof Request ? input.url : String(input)
 			fetchCalls.push(url)
 			const rawBody = input instanceof Request ? await input.clone().text() : typeof init?.body === 'string' ? init.body : undefined
@@ -85,7 +91,7 @@ describe('injected backend read transport', () => {
 					'content-type': 'application/json',
 				},
 			})
-		}) as unknown as typeof fetch
+		})
 
 		const backend = createInjectedBackend()
 		backend.setReadTransportMode?.('rpc')
