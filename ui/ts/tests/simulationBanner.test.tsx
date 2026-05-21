@@ -138,16 +138,13 @@ describe('SimulationBanner', () => {
 				expect(documentQueries.getByRole('button', { name: preset.label })).toBeTruthy()
 			}
 
-			for (const preset of expectedPresets.slice(2)) {
+			for (const [index, preset] of expectedPresets.slice(2).entries()) {
 				fireEvent.click(documentQueries.getByRole('button', { name: preset.label }))
 				await waitFor(() => {
-					expect(advanceTime).toHaveBeenCalledWith(preset.seconds)
+					expect(advanceTime).toHaveBeenNthCalledWith(index + 1, preset.seconds)
+					expect(onRefresh).toHaveBeenCalledTimes(index + 1)
 				})
 			}
-
-			await waitFor(() => {
-				expect(onRefresh).toHaveBeenCalledTimes(3)
-			})
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
