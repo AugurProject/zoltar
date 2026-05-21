@@ -44,6 +44,42 @@ function createSimulationController(overrides: Partial<SimulationController> = {
 }
 
 describe('SimulationBanner', () => {
+	test('shows the selected scenario description', async () => {
+		const domEnvironment = installDomEnvironment()
+		const onRefresh = mock(async () => undefined)
+		const controller = createSimulationController({ currentScenario: 'security-pool' })
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			expect(documentQueries.getByText('One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool workflows and liquidation paths.')).not.toBeNull()
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('shows scenario description and bootstrap label while bootstrapping', async () => {
+		const domEnvironment = installDomEnvironment()
+		const onRefresh = mock(async () => undefined)
+		const controller = createSimulationController({
+			bootstrapLabel: 'Deploying seeded security pool',
+			currentScenario: 'security-pool',
+			isBootstrapped: false,
+			isBootstrapping: true,
+		})
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			expect(documentQueries.getByText('One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool workflows and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('Deploying seeded security pool')).not.toBeNull()
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
 	test('refreshes the app after updating the REP/ETH mock price', async () => {
 		const domEnvironment = installDomEnvironment()
 		const onRefresh = mock(async () => undefined)

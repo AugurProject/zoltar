@@ -3,7 +3,7 @@ import { useEffect } from 'preact/hooks'
 import type { SimulationController } from '../simulation/controller.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { parseDecimalInput } from '../lib/decimal.js'
-import { getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
+import { getSimulationScenarioDescription, getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
 import { TimestampValue } from './TimestampValue.js'
 
 type SimulationBannerProps = {
@@ -75,10 +75,13 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 							<span className={`badge ${bootstrapError.value === undefined ? (isBootstrapped.value ? 'ok' : 'pending') : 'error'}`}>{bootstrapError.value === undefined ? (isBootstrapped.value ? 'Ready' : 'Bootstrapping') : 'Error'}</span>
 							<h3>Scenario</h3>
 						</div>
-						<p className='detail'>
-							{bootstrapError.value === undefined && isBootstrapping.value ? <span className='spinner' aria-hidden='true' /> : undefined}
-							{bootstrapError.value ?? (isBootstrapping.value ? (bootstrapLabel.value ?? 'Preparing the selected simulation scenario in the background.') : 'Switch scenarios to reload the browser simulation into a different seeded state.')}
-						</p>
+						<p className='detail'>{bootstrapError.value ?? getSimulationScenarioDescription(currentScenario.value)}</p>
+						{bootstrapError.value === undefined && isBootstrapping.value ? (
+							<p className='detail'>
+								<span className='spinner' aria-hidden='true' />
+								{bootstrapLabel.value ?? 'Preparing the selected simulation scenario in the background.'}
+							</p>
+						) : undefined}
 						{isBootstrapping.value ? (
 							<div className='notice-progress-track simulation-progress-track' aria-hidden='true'>
 								<div className='notice-progress-fill simulation-progress-fill' style={{ width: `${Math.round((bootstrapProgress.value ?? 0.08) * 100)}%` }} />
