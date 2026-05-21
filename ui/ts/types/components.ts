@@ -446,7 +446,12 @@ export type SecurityVaultRouteContentProps = {
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	compactLayout?: boolean
+	extraReadinessActions?: ReadinessAction[]
+	modalFirst?: boolean
+	onViewStagedOperations?: () => void
 	oracleManagerDetails?: OracleManagerDetails | undefined
+	selectedPoolTotalRepDeposit?: bigint | undefined
+	selectedPoolTotalSecurityBondAllowance?: bigint | undefined
 	autoLoadVault?: boolean
 	showLookupSection?: boolean
 	showSummarySection?: boolean
