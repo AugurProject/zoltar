@@ -4,11 +4,12 @@ import { MAINNET_NETWORK_PROFILE, createSimulationProfile, type NetworkProfile }
 
 type FakeBackendOptions = {
 	accountAddress?: Address
+	currentTimestamp?: bigint
 	hasWallet?: boolean
 	profile?: NetworkProfile
 }
 
-export function createFakeBackend({ accountAddress, hasWallet = true, profile = MAINNET_NETWORK_PROFILE }: FakeBackendOptions = {}): ChainBackend {
+export function createFakeBackend({ accountAddress, currentTimestamp, hasWallet = true, profile = MAINNET_NETWORK_PROFILE }: FakeBackendOptions = {}): ChainBackend {
 	const accounts = accountAddress === undefined ? [] : [accountAddress]
 
 	return {
@@ -21,6 +22,7 @@ export function createFakeBackend({ accountAddress, hasWallet = true, profile = 
 		createWriteClient: () => {
 			throw new Error('Fake backend write client should not be used in this test')
 		},
+		...(currentTimestamp === undefined ? {} : { currentTimestamp }),
 		getAccounts: async () => accounts,
 		getChainId: async () => profile.chainIdHex,
 		getProvider: () => undefined,

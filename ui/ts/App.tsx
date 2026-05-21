@@ -20,6 +20,7 @@ import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.j
 import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { useUrlState } from './hooks/useUrlState.js'
 import { getActiveSimulationController } from './lib/activeEnvironment.js'
+import { ChainTimestampContext } from './lib/chainTimestamp.js'
 import { getDeploymentSections } from './lib/deployment.js'
 import { resolveLoadableValueState } from './lib/loadState.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from './lib/network.js'
@@ -59,6 +60,7 @@ export function App() {
 		accountState,
 		augurPlaceHolderDeployed,
 		connectWallet,
+		currentTimestamp,
 		deploymentStatuses,
 		environmentBootstrapError,
 		environmentReady,
@@ -652,22 +654,24 @@ export function App() {
 		) : undefined
 
 	return (
-		<main>
-			<AppStatusNotices
-				errorMessage={errorMessage}
-				wrongNetworkMessage={wrongNetworkMessage}
-				simulationBootstrapError={environmentBootstrapError}
-				showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
-				showTransactionSuccessNotice={showTransactionSuccessNotice}
-				showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
-				transactionState={transactionState.value}
-				zoltarUniverse={zoltarUniverse}
-			/>
-			<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onRefresh={refreshSimulationView} />
+		<ChainTimestampContext.Provider value={currentTimestamp}>
+			<main>
+				<AppStatusNotices
+					errorMessage={errorMessage}
+					simulationBootstrapError={environmentBootstrapError}
+					showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
+					showTransactionSuccessNotice={showTransactionSuccessNotice}
+					showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
+					transactionState={transactionState.value}
+					wrongNetworkMessage={wrongNetworkMessage}
+					zoltarUniverse={zoltarUniverse}
+				/>
+				<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onRefresh={refreshSimulationView} />
 
-			<fieldset className='route-shell' disabled={isRouteContentDisabled}>
-				<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} route={route} securityPools={securityPoolsRouteContentProps} wrongNetworkMessage={wrongNetworkMessage} />
-			</fieldset>
-		</main>
+				<fieldset className='route-shell' disabled={isRouteContentDisabled}>
+					<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} route={route} securityPools={securityPoolsRouteContentProps} wrongNetworkMessage={wrongNetworkMessage} />
+				</fieldset>
+			</main>
+		</ChainTimestampContext.Provider>
 	)
 }

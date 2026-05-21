@@ -6,6 +6,7 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from 'viem'
 import { SecurityPoolWorkflowSection } from '../components/SecurityPoolWorkflowSection.js'
+import { ChainTimestampContext } from '../lib/chainTimestamp.js'
 import type { AccountState } from '../types/app.js'
 import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '../types/contracts.js'
 import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../types/components.js'
@@ -1414,6 +1415,66 @@ describe('SecurityPoolWorkflowSection', () => {
 		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)
 		expect(reportButton.title).toBe('Reporting opens after market end.')
+	})
+
+	test('uses the shared chain timestamp context for oracle expiry text', async () => {
+		const originalDateNow = Date.now
+		Date.now = () => 0
+
+		try {
+			const renderedComponent = await renderIntoDocument(
+				<ChainTimestampContext.Provider value={1n + 60n * 60n + 60n}>
+					<SecurityPoolWorkflowSection
+						{...createSecurityPoolWorkflowProps({
+							checkedSecurityPoolAddress: zeroAddress,
+							securityPoolAddress: zeroAddress,
+							securityPools: [
+								createSelectedPool({
+									lastOraclePrice: 3n * 10n ** 18n,
+									lastOracleSettlementTimestamp: 1n,
+								}),
+							],
+							selectedPoolView: 'price-oracle',
+						})}
+						showHeader={false}
+					/>
+				</ChainTimestampContext.Provider>,
+			)
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			expect(document.body.textContent?.includes('(expired 1m ago)')).toBe(true)
+		} finally {
+			Date.now = originalDateNow
+		}
+	})
+
+	test('uses the shared chain timestamp context to unlock reporting after market end', async () => {
+		const originalDateNow = Date.now
+		Date.now = () => 0
+
+		try {
+			const renderedComponent = await renderIntoDocument(
+				<ChainTimestampContext.Provider value={150n}>
+					<SecurityPoolWorkflowSection
+						{...createSecurityPoolWorkflowProps({
+							checkedSecurityPoolAddress: zeroAddress,
+							securityPoolAddress: zeroAddress,
+							securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 100n }) })],
+							selectedPoolView: 'reporting',
+						})}
+						showHeader={false}
+					/>
+				</ChainTimestampContext.Provider>,
+			)
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			const documentQueries = within(document.body)
+			const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
+			expect(reportButton.disabled).toBe(true)
+			expect(reportButton.title).toBe('Load reporting details before reporting on an outcome.')
+		} finally {
+			Date.now = originalDateNow
+		}
 	})
 
 	test('renders staged operations management inside the staged operations tab instead of a standalone section', async () => {

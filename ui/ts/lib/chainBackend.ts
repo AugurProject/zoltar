@@ -23,6 +23,7 @@ export type ChainBackend = {
 	bootstrapProgress: number | undefined
 	createReadClient(): ReadClient
 	createWriteClient(accountAddress: Address, callbacks?: CreateWriteClientCallbacks): WriteClient
+	currentTimestamp?: bigint
 	getAccounts(): Promise<readonly Address[]>
 	getChainId(): Promise<string>
 	getProvider(): InjectedEthereum | undefined

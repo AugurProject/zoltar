@@ -10,11 +10,13 @@ import { MetricField } from './MetricField.js'
 import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { sameAddress } from '../lib/address.js'
+import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { getLiquidationFailureReason, simulateLiquidation } from '../lib/liquidation.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
+import { getCurrentTimestamp as getLocalCurrentTimestamp } from '../lib/time.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 
 type LiquidationModalProps = {
@@ -95,6 +97,7 @@ export function LiquidationModal({
 	onLiquidationAmountChange,
 	onQueueLiquidation,
 }: LiquidationModalProps) {
+	const chainCurrentTimestamp = useChainTimestamp()
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const onCloseRef = useRef(closeLiquidationModal)
@@ -139,7 +142,7 @@ export function LiquidationModal({
 	}, [liquidationModalOpen])
 
 	if (!liquidationModalOpen) return undefined
-	const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
+	const currentTimestamp = chainCurrentTimestamp ?? getLocalCurrentTimestamp()
 	const liquidationAmountValue = (() => {
 		try {
 			return parseRepAmountInput(liquidationAmount, 'Liquidation amount')
