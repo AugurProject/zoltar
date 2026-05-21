@@ -94,7 +94,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 			<ScalarOutcomePicker
 				action={
 					<TransactionActionButton
-						idleLabel={selectedScalarChildExists ? 'Deployed' : scalarOutcomeInvalid ? 'Open Invalid Universe Flow' : 'Open Universe Flow'}
+						idleLabel={selectedScalarChildExists ? 'Deployed' : scalarOutcomeInvalid ? 'Create invalid universe' : 'Create child universe'}
 						pendingLabel='Opening...'
 						onClick={() => {
 							try {

@@ -243,7 +243,7 @@ export function ForkAuctionSection({
 		{ key: 'mainnet', label: 'Ethereum mainnet selected', resolved: isMainnet, ...(isMainnet ? {} : { detail: 'Switch to Ethereum mainnet before creating a child universe.' }) },
 	]
 	const createChildUniverseLauncherAction: ReadinessAction = {
-		actionLabel: 'Open Child Universe Flow',
+		actionLabel: 'Create child universe',
 		description: 'Review the selected outcome and confirm the child-universe creation in a bounded execution modal.',
 		key: 'create-child-universe',
 		...(hasLoadedPoolContext ? { onAction: () => setChildUniverseModalOpen(true) } : {}),
