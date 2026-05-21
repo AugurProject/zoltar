@@ -1538,6 +1538,18 @@ button.currency-value.copyable:hover:not(:disabled) {
 	overflow-wrap: anywhere;
 }
 
+.workflow-metric-grid strong.metric-value-success,
+.workflow-question-grid strong.metric-value-success,
+.workflow-vault-grid strong.metric-value-success {
+	color: var(--success);
+}
+
+.workflow-metric-grid strong.metric-value-danger,
+.workflow-question-grid strong.metric-value-danger,
+.workflow-vault-grid strong.metric-value-danger {
+	color: var(--danger);
+}
+
 .oracle-price-value {
 	display: inline-flex;
 	flex-direction: column;
@@ -2085,6 +2097,14 @@ button.currency-value.copyable:hover:not(:disabled) {
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 	color: var(--value);
+}
+
+.entity-metric strong.metric-value-success {
+	color: var(--success);
+}
+
+.entity-metric strong.metric-value-danger {
+	color: var(--danger);
 }
 
 strong.metric-value-success {
@@ -3422,6 +3442,14 @@ button:focus-visible {
 	font-variant-numeric: tabular-nums;
 	line-height: 1.15;
 	color: var(--value);
+}
+
+.selected-pool-context-grid strong.metric-value-success {
+	color: var(--success);
+}
+
+.selected-pool-context-grid strong.metric-value-danger {
+	color: var(--danger);
 }
 
 .selected-pool-context-grid .address-value {

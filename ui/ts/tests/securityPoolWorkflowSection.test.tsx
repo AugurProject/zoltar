@@ -438,6 +438,33 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getAllByText('Locked REP').length).toBeGreaterThan(0)
 	})
 
+	test('marks selected-pool collateralization as success when it is above the multiplier threshold', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					repPerEthPrice: 10n ** 18n,
+					repPerEthSource: 'mock',
+					securityPoolAddress: zeroAddress,
+					securityPools: [
+						createSelectedPool({
+							securityMultiplier: 2n,
+							totalRepDeposit: 10_000n * 10n ** 18n,
+							totalSecurityBondAllowance: 2_500n * 10n ** 18n,
+						}),
+					],
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const collateralizationValue = within(document.body)
+			.getByText(/400\.00 %/)
+			.closest('.metric-field-value')
+		expect(collateralizationValue?.className).toContain('metric-value-success')
+	})
+
 	test('renders the claim-fees modal vault with the shared address value component', async () => {
 		const vaultAddress = getAddress('0x00000000000000000000000000000000000000a1')
 		const poolVault = createSecurityPoolVaultSummary({ vaultAddress })

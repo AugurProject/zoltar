@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from '@testing-library/dom'
+import { readFileSync } from 'node:fs'
 import { CollateralizationMetricField } from '../components/CollateralizationMetricField.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -97,5 +98,17 @@ describe('CollateralizationMetricField', () => {
 
 		documentQueries = within(document.body)
 		expect(documentQueries.getByTitle('Uses the live Uniswap V3 REP/ETH quote.')).not.toBeNull()
+	})
+
+	test('keeps success and danger color rules specific enough for every collateralization container', () => {
+		const cssSource = readFileSync('ui/css/index.css', 'utf8')
+
+		for (const selector of ['.workflow-metric-grid strong.metric-value-success', '.workflow-question-grid strong.metric-value-success', '.workflow-vault-grid strong.metric-value-success', '.entity-metric strong.metric-value-success', '.selected-pool-context-grid strong.metric-value-success']) {
+			expect(cssSource).toContain(selector)
+		}
+
+		for (const selector of ['.workflow-metric-grid strong.metric-value-danger', '.workflow-question-grid strong.metric-value-danger', '.workflow-vault-grid strong.metric-value-danger', '.entity-metric strong.metric-value-danger', '.selected-pool-context-grid strong.metric-value-danger']) {
+			expect(cssSource).toContain(selector)
+		}
 	})
 })
