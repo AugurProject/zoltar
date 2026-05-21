@@ -10,7 +10,7 @@ type MarketQuestionsSectionProps = {
 	hasLoadedZoltarQuestions: boolean
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestions: boolean
-	onLoadZoltarQuestions: () => void
+	onLoadZoltarQuestions: () => Promise<void>
 	onOpenForkTab: () => void
 	onUseQuestionForFork: (questionId: string) => void
 	onUseQuestionForPool: (questionId: string) => void
@@ -26,7 +26,13 @@ export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, lo
 			density='compact'
 			title='Questions'
 			actions={
-				<button className='secondary' onClick={onLoadZoltarQuestions} disabled={loadingZoltarQuestions || noQuestionsAvailable}>
+				<button
+					className='secondary'
+					onClick={() => {
+						void onLoadZoltarQuestions()
+					}}
+					disabled={loadingZoltarQuestions || noQuestionsAvailable}
+				>
 					{loadingZoltarQuestions ? <LoadingText>Loading Questions...</LoadingText> : noQuestionsAvailable ? 'No Questions' : hasLoadedZoltarQuestions ? 'Refresh Questions' : 'Fetch Questions'}
 				</button>
 			}

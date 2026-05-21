@@ -35,7 +35,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	const nextSecurityVaultLoad = useRequestGuard()
 
 	const resolveSelectedVaultAddress = () => {
-		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress), 'Connect a wallet before loading a security vault')
+		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress), 'Enter a vault address or connect a wallet before loading a security vault')
 		return parseAddressInput(selectedVaultAddress, 'Selected vault address')
 	}
 

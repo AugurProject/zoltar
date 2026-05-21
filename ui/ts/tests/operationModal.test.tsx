@@ -36,6 +36,24 @@ describe('OperationModal', () => {
 		restoreDomEnvironment = undefined
 	})
 
+	test('exposes the dialog title and close control accessibly', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		await act(() => {
+			render(<OperationModalHarness />, container)
+		})
+
+		const dialog = within(container).getByRole('dialog', { name: 'Edit amount' })
+		const closeButton = within(dialog).getByRole('button', { name: 'Close' })
+
+		expect(dialog).not.toBeNull()
+		expect(closeButton.textContent).toBe('×')
+
+		render(null, container)
+		container.remove()
+	})
+
 	test('keeps focus on the edited input while the modal rerenders', async () => {
 		const container = document.createElement('div')
 		document.body.appendChild(container)

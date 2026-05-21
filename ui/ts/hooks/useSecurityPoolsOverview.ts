@@ -82,13 +82,15 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 					return await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount)
 				},
 				'Failed to queue liquidation',
-				result => {
+				async result => {
 					securityPoolOverviewResult.value = {
 						action: 'queueLiquidation',
 						hash: result.hash,
 						securityPoolAddress,
 						...(result.stagedExecution === undefined ? {} : { stagedExecution: result.stagedExecution }),
 					}
+					liquidationModalOpen.value = false
+					await loadSecurityPools(securityPoolAddress)
 				},
 			)
 		} finally {

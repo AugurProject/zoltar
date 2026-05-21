@@ -25,6 +25,7 @@ import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { ViewTabs } from './ViewTabs.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
+import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import {
 	getCurrentPoolOracleManagerDetails,
 	getSelectedPoolCardTitle,
@@ -38,10 +39,12 @@ import {
 } from '../lib/securityPoolWorkflow.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 import { hasForkActivity } from '../lib/forkAuction.js'
+import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
 import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
+import { getCurrentTimestamp as getLocalCurrentTimestamp } from '../lib/time.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import type { SecurityPoolSystemState } from '../types/contracts.js'
@@ -106,6 +109,7 @@ export function SecurityPoolWorkflowSection({
 	trading,
 }: SecurityPoolWorkflowRouteContentProps & { showHeader?: boolean }) {
 	const view = resolveSelectedPoolView(selectedPoolView)
+	const chainCurrentTimestamp = useChainTimestamp()
 	const [manualPendingOperationId, setManualPendingOperationId] = useState('')
 	const [vaultView, setVaultView] = useState<SelectedVaultView>('selected-vault')
 	const isMainnet = isMainnetChain(accountState.chainId)
@@ -121,7 +125,7 @@ export function SecurityPoolWorkflowSection({
 	const marketDetails = selectedPool?.marketDetails ?? currentReportingDetails?.marketDetails ?? currentForkAuctionDetails?.marketDetails
 	const selectedPoolState = selectedPool?.systemState ?? currentForkAuctionDetails?.systemState
 	const selectedPoolHasForkActivity = selectedPool !== undefined ? hasForkActivity(selectedPool) : currentForkAuctionDetails !== undefined ? hasForkActivity(currentForkAuctionDetails) : false
-	const currentTimestamp = currentReportingDetails?.currentTime ?? BigInt(Math.floor(Date.now() / 1000))
+	const currentTimestamp = currentReportingDetails?.currentTime ?? chainCurrentTimestamp ?? getLocalCurrentTimestamp()
 	const reportingReady = marketDetails !== undefined && marketDetails.endTime <= currentTimestamp
 	const forkWorkflowDisabled = isForkWorkflowDisabled(selectedPoolState, selectedPoolHasForkActivity)
 	const selectedPoolUniverseMismatch = selectedPool !== undefined && selectedPool.universeId !== activeUniverseId
@@ -180,12 +184,19 @@ export function SecurityPoolWorkflowSection({
 	const lastSelectedVaultAutoLoadKey = useRef<string | undefined>(undefined)
 	const lastQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastImmediateQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
+	const lastLiquidationOutcomeRefreshKey = useRef<string | undefined>(undefined)
 	const lastExecutedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const vaultWorkflowOutcome = getVaultWorkflowOutcomePresentation(securityVault.securityVaultResult)
 	const queuedVaultOperation = getQueuedVaultOperation({
 		pendingOperation: currentPoolOracleManagerDetails?.pendingOperation,
 		selectedVaultAddress,
 		securityVaultResult: securityVault.securityVaultResult,
+	})
+	const liquidationNoticeState = getLiquidationNoticeState({
+		currentPoolOracleManagerDetails,
+		liquidationTargetVault,
+		loadingPoolOracleManager,
+		securityPoolOverviewResult,
 	})
 	const selectedPoolQuestionDescription = marketDetails === undefined ? undefined : marketDetails.description.trim() === '' ? undefined : marketDetails.description
 	const loadedSelectedPool = selectedPool
@@ -301,6 +312,20 @@ export function SecurityPoolWorkflowSection({
 	}, [currentPoolOracleManagerDetails, hasLoadedCurrentVault, loadingPoolOracleManager, onRefreshSelectedPoolData, queuedVaultOperation, securityVault.onLoadSecurityVault, securityVault.securityVaultResult, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
 
 	useEffect(() => {
+		const liquidationRefreshKey = securityPoolOverviewResult?.action !== 'queueLiquidation' || liquidationNoticeState === undefined || liquidationNoticeState === 'submitted' ? undefined : `${securityPoolOverviewResult.hash}:${liquidationNoticeState}`
+		if (liquidationRefreshKey === undefined) {
+			lastLiquidationOutcomeRefreshKey.current = undefined
+			return
+		}
+		if (lastLiquidationOutcomeRefreshKey.current === liquidationRefreshKey) return
+		lastLiquidationOutcomeRefreshKey.current = liquidationRefreshKey
+		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
+		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) {
+			void securityVault.onLoadSecurityVault()
+		}
+	}, [hasLoadedCurrentVault, liquidationNoticeState, onRefreshSelectedPoolData, securityPoolOverviewResult, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
+
+	useEffect(() => {
 		if (poolPriceOracleResult?.action !== 'executeStagedOperation') {
 			lastExecutedOperationRefreshHash.current = undefined
 			return
@@ -319,6 +344,19 @@ export function SecurityPoolWorkflowSection({
 
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Selected Pool'>
+			{securityPoolOverviewResult === undefined || liquidationNoticeState === undefined ? undefined : liquidationNoticeState === 'failed' ? (
+				<div className='notice error'>
+					<strong>Liquidation failed</strong>
+					<p>
+						Pool <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
+					</p>
+					{securityPoolOverviewResult.stagedExecution?.errorMessage === undefined ? undefined : <p>{securityPoolOverviewResult.stagedExecution.errorMessage}</p>}
+				</div>
+			) : (
+				<p className='notice success'>
+					{liquidationNoticeState === 'successful' ? 'Liquidation successful' : liquidationNoticeState === 'queued' ? 'Liquidation queued' : 'Liquidation submitted'} for <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
+				</p>
+			)}
 			<StickyObjectContext {...(loadedSelectedPool === undefined ? {} : { badge: <span className={`badge ${getSecurityPoolStatusBadgeTone(loadedSelectedPool.systemState)}`}>{loadedSelectedPool.systemState}</span> })} sticky={false} title={getSelectedPoolCardTitle()} items={[]}>
 				<div className='selected-pool-context-controls'>
 					<div className='selected-pool-context-lookup'>
@@ -420,7 +458,6 @@ export function SecurityPoolWorkflowSection({
 													repPerEthSourceUrl={repPerEthSourceUrl}
 													securityBondAllowance={securityVault.securityVaultDetails.securityBondAllowance}
 													securityVaultDetails={securityVault.securityVaultDetails}
-													securityVaultRepApproval={securityVault.securityVaultRepApproval}
 													selectedPoolSecurityMultiplier={securityVault.selectedPoolSecurityMultiplier}
 													selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 													variant='embedded'
@@ -632,7 +669,6 @@ export function SecurityPoolWorkflowSection({
 					</div>
 				</div>
 			</section>
-
 			<LiquidationModal
 				accountAddress={accountState.address}
 				closeLiquidationModal={closeLiquidationModal}

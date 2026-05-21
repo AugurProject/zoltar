@@ -156,7 +156,6 @@ export type OutcomeSelectionListProps = {
 }
 
 export type VaultMetricGridProps = {
-	approvedRep?: TokenApprovalState | undefined
 	className?: string
 	lockedRepInEscalationGame?: bigint | undefined
 	priceValidUntilTimestamp?: bigint | undefined
@@ -252,10 +251,6 @@ export type ZoltarView = 'create' | 'fork' | 'migrate' | 'questions'
 
 export type SecurityPoolsView = 'browse' | 'create' | 'operate'
 
-export type MainnetGateSectionProps = {
-	message: string
-}
-
 export type DeploymentRouteContentProps = {
 	accountAddress: Address | undefined
 	busyStepId: DeploymentStepId | undefined
@@ -270,6 +265,7 @@ export type DeploymentRouteContentProps = {
 
 export type MarketRouteContentProps = {
 	accountState: AccountState
+	activeUniverseId: bigint
 	activeView: ZoltarView
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
@@ -289,7 +285,7 @@ export type MarketRouteContentProps = {
 	zoltarForkActiveAction: 'approve' | 'fork' | undefined
 	loadingZoltarUniverse: boolean
 	zoltarUniverseState: LoadableValueState
-	onLoadZoltarQuestions: () => void
+	onLoadZoltarQuestions: () => Promise<void>
 	onMarketFormChange: (update: Partial<MarketFormState>) => void
 	onUseQuestionForFork: (questionId: string) => void
 	onUseQuestionForPool: (questionId: string) => void

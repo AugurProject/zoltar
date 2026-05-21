@@ -119,10 +119,15 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Selected Vault')).not.toBeNull()
-		expect(documentQueries.getAllByText('REP Collateral').length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByText('Approved REP').length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByText('Locked REP').length).toBeGreaterThan(0)
+		const selectedVaultHeading = documentQueries.getByRole('heading', { name: 'Selected Vault' })
+		const selectedVaultCard = selectedVaultHeading.closest('.entity-card')
+		if (!(selectedVaultCard instanceof HTMLElement)) {
+			throw new Error('Expected a selected vault summary card')
+		}
+		const selectedVaultQueries = within(selectedVaultCard)
+		expect(selectedVaultQueries.getByText('REP Collateral')).not.toBeNull()
+		expect(selectedVaultQueries.queryByText('Approved REP')).toBeNull()
+		expect(selectedVaultQueries.getByText('Locked REP')).not.toBeNull()
 	})
 
 	test('fills the security bond allowance input from the backed Max amount', async () => {

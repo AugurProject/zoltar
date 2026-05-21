@@ -40,7 +40,7 @@ import {
 import type { SecurityVaultActionResult, StagedOracleOperation } from '../types/contracts.js'
 import type { ReadinessAction, SecurityVaultSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
 
-type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'securityVaultRepApproval' | 'selectedPoolSecurityMultiplier'> & {
+type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'selectedPoolSecurityMultiplier'> & {
 	securityBondAllowance: bigint
 	securityVaultDetails: NonNullable<SecurityVaultSectionProps['securityVaultDetails']>
 	selectedVaultIsOwnedByAccount: boolean
@@ -50,10 +50,9 @@ type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerE
 type VaultActionModal = 'claim-fees' | 'deposit-rep' | 'set-bond-allowance' | 'withdraw-rep' | undefined
 type QueuedVaultOperationStatus = 'executed' | 'failed' | 'missing' | 'queued' | 'refreshing' | undefined
 
-export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityVaultDetails, securityVaultRepApproval, selectedPoolSecurityMultiplier, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
+export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityVaultDetails, selectedPoolSecurityMultiplier, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
 	const content = (
 		<VaultMetricGrid
-			approvedRep={securityVaultRepApproval}
 			lockedRepInEscalationGame={securityVaultDetails.lockedRepInEscalationGame}
 			repDepositShare={securityVaultDetails.repDepositShare}
 			repPerEthPrice={repPerEthPrice}
@@ -515,7 +514,6 @@ export function SecurityVaultSection({
 							repPerEthSourceUrl={repPerEthSourceUrl}
 							securityBondAllowance={securityVaultDetails.securityBondAllowance}
 							securityVaultDetails={securityVaultDetails}
-							securityVaultRepApproval={securityVaultRepApproval}
 							selectedPoolSecurityMultiplier={selectedPoolSecurityMultiplier}
 							selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 							variant='embedded'
@@ -597,7 +595,6 @@ export function SecurityVaultSection({
 							repPerEthSourceUrl={repPerEthSourceUrl}
 							securityBondAllowance={securityVaultDetails.securityBondAllowance}
 							securityVaultDetails={securityVaultDetails}
-							securityVaultRepApproval={securityVaultRepApproval}
 							selectedPoolSecurityMultiplier={selectedPoolSecurityMultiplier}
 							selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 							variant='embedded'
@@ -889,7 +886,6 @@ export function SecurityVaultSection({
 					repPerEthSourceUrl={repPerEthSourceUrl}
 					securityBondAllowance={securityBondAllowance}
 					securityVaultDetails={securityVaultDetails}
-					securityVaultRepApproval={securityVaultRepApproval}
 					selectedPoolSecurityMultiplier={selectedPoolSecurityMultiplier}
 					selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 				/>

@@ -62,6 +62,7 @@ function createBinaryForkQuestion() {
 function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): MarketSectionProps {
 	return {
 		accountState: createAccountState(),
+		activeUniverseId: 1n,
 		activeView: 'questions',
 		hasLoadedZoltarQuestions: false,
 		loadingZoltarForkAccess: false,
@@ -78,7 +79,7 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		onCreateChildUniverseForOutcomeIndex: () => undefined,
 		onCreateMarket: () => undefined,
 		onForkZoltar: () => undefined,
-		onLoadZoltarQuestions: () => undefined,
+		onLoadZoltarQuestions: async () => undefined,
 		onMarketFormChange: () => undefined,
 		onMigrateInternalRep: () => undefined,
 		onPrepareRepForMigration: () => undefined,
@@ -146,9 +147,10 @@ describe('MarketSection', () => {
 	test('auto-loads questions once when opening the questions view without loaded data', async () => {
 		const calls: string[] = []
 		const initialProps = createMarketSectionProps({
+			activeUniverseId: 7n,
 			hasLoadedZoltarQuestions: false,
 			loadingZoltarQuestions: false,
-			onLoadZoltarQuestions: () => {
+			onLoadZoltarQuestions: async () => {
 				calls.push('load')
 			},
 			zoltarQuestionCount: 3n,
@@ -163,7 +165,7 @@ describe('MarketSection', () => {
 			render(
 				h(MarketSection, {
 					...initialProps,
-					onLoadZoltarQuestions: () => {
+					onLoadZoltarQuestions: async () => {
 						calls.push('rerender')
 					},
 				}),
@@ -174,6 +176,42 @@ describe('MarketSection', () => {
 		expect(calls).toEqual(['load'])
 	})
 
+	test('does not auto-load questions while the question count is unresolved', async () => {
+		const calls: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					onLoadZoltarQuestions: async () => {
+						calls.push('load')
+					},
+					zoltarQuestionCount: undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(calls).toEqual([])
+	})
+
+	test('does not auto-load questions when the resolved count is zero', async () => {
+		const calls: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					onLoadZoltarQuestions: async () => {
+						calls.push('load')
+					},
+					zoltarQuestionCount: 0n,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(calls).toEqual([])
+	})
+
 	test('does not auto-load questions when they are already loaded', async () => {
 		const calls: string[] = []
 		const renderedComponent = await renderIntoDocument(
@@ -181,7 +219,7 @@ describe('MarketSection', () => {
 				MarketSection,
 				createMarketSectionProps({
 					hasLoadedZoltarQuestions: true,
-					onLoadZoltarQuestions: () => {
+					onLoadZoltarQuestions: async () => {
 						calls.push('load')
 					},
 					zoltarQuestionCount: 3n,
@@ -193,20 +231,90 @@ describe('MarketSection', () => {
 		expect(calls).toEqual([])
 	})
 
+	test('auto-loads questions once after the count resolves above zero even when the universe is unresolved', async () => {
+		const calls: string[] = []
+		const initialProps = createMarketSectionProps({
+			activeUniverseId: 12n,
+			loadingZoltarQuestionCount: true,
+			onLoadZoltarQuestions: async () => {
+				calls.push('load')
+			},
+			zoltarQuestionCount: undefined,
+			zoltarUniverse: undefined,
+			zoltarUniverseState: 'unknown',
+		})
+
+		const renderedComponent = await renderIntoDocument(h(MarketSection, initialProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(calls).toEqual([])
+
+		await act(() => {
+			render(
+				h(
+					MarketSection,
+					createMarketSectionProps({
+						...initialProps,
+						loadingZoltarQuestionCount: false,
+						zoltarQuestionCount: 3n,
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		expect(calls).toEqual(['load'])
+	})
+
+	test('does not auto-load questions again on rerender when the active universe id is unchanged', async () => {
+		const calls: string[] = []
+		const initialProps = createMarketSectionProps({
+			activeUniverseId: 13n,
+			onLoadZoltarQuestions: async () => {
+				calls.push('load')
+			},
+			zoltarQuestionCount: 3n,
+			zoltarUniverse: undefined,
+			zoltarUniverseState: 'unknown',
+		})
+
+		const renderedComponent = await renderIntoDocument(h(MarketSection, initialProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(calls).toEqual(['load'])
+
+		await act(() => {
+			render(
+				h(
+					MarketSection,
+					createMarketSectionProps({
+						...initialProps,
+						onLoadZoltarQuestions: async () => {
+							calls.push('rerender')
+						},
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		expect(calls).toEqual(['load'])
+	})
+
 	test('retries question auto-load when the previous automatic load fails', async () => {
 		const calls: string[] = []
 		const renderedComponent = await renderIntoDocument(
 			h(
 				MarketSection,
 				createMarketSectionProps({
+					activeUniverseId: 9n,
 					hasLoadedZoltarQuestions: false,
 					loadingZoltarQuestions: false,
-					onLoadZoltarQuestions: () => {
+					onLoadZoltarQuestions: async () => {
 						calls.push('load')
 						return Promise.reject(new Error('temporary failure'))
 					},
 					zoltarQuestionCount: 3n,
-					zoltarUniverse: createZoltarUniverse({ universeId: 9n }),
+					zoltarUniverse: undefined,
+					zoltarUniverseState: 'unknown',
 				}),
 			),
 		)
@@ -219,13 +327,15 @@ describe('MarketSection', () => {
 				h(
 					MarketSection,
 					createMarketSectionProps({
+						activeUniverseId: 9n,
 						hasLoadedZoltarQuestions: false,
 						loadingZoltarQuestions: false,
-						onLoadZoltarQuestions: () => {
+						onLoadZoltarQuestions: async () => {
 							calls.push('retry')
 						},
 						zoltarQuestionCount: 3n,
-						zoltarUniverse: createZoltarUniverse({ universeId: 9n }),
+						zoltarUniverse: undefined,
+						zoltarUniverseState: 'unknown',
 					}),
 				),
 				renderedComponent.container,
@@ -268,13 +378,14 @@ describe('MarketSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('dialog')).toBeNull()
-		const openForkButton = documentQueries.getByRole('button', { name: 'Open Fork Flow' })
+		const openForkButton = documentQueries.getByRole('button', { name: 'Fork Zoltar' })
 		await act(() => {
 			openForkButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 		})
-		expect(documentQueries.getByRole('dialog')).not.toBeNull()
+		const modal = documentQueries.getByRole('dialog')
+		expect(modal).not.toBeNull()
 		expect(documentQueries.getAllByText('Fork Zoltar').length > 0).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Fork Zoltar', 'Select a valid fork question before forking Zoltar.')
+		expectTransactionButtonDisabled(modal as HTMLElement, 'Fork Zoltar', 'Select a valid fork question before forking Zoltar.')
 	})
 
 	test('opens root-universe child-universe deployment in a modal', async () => {
@@ -308,7 +419,7 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Open Universe Flow' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Create child universe' }))
 		await Promise.resolve()
 
 		const modal = documentQueries.getByRole('dialog')
