@@ -77,4 +77,44 @@ describe('SimulationBanner', () => {
 			domEnvironment.cleanup()
 		}
 	})
+
+	test('renders grouped time presets and advances time for the new durations', async () => {
+		const domEnvironment = installDomEnvironment()
+		const onRefresh = mock(async () => undefined)
+		const advanceTime = mock(async () => undefined)
+		const controller = createSimulationController({ advanceTime })
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			expect(documentQueries.getByText('Actions')).toBeTruthy()
+			expect(documentQueries.getByText('Time travel')).toBeTruthy()
+
+			const expectedPresets = [
+				{ label: '+1 hour', seconds: 60n * 60n },
+				{ label: '+1 day', seconds: 24n * 60n * 60n },
+				{ label: '+1 week', seconds: 7n * 24n * 60n * 60n },
+				{ label: '+1 month', seconds: 30n * 24n * 60n * 60n },
+				{ label: '+1 year', seconds: 365n * 24n * 60n * 60n },
+			] as const
+
+			for (const preset of expectedPresets) {
+				expect(documentQueries.getByRole('button', { name: preset.label })).toBeTruthy()
+			}
+
+			for (const preset of expectedPresets.slice(2)) {
+				fireEvent.click(documentQueries.getByRole('button', { name: preset.label }))
+				await waitFor(() => {
+					expect(advanceTime).toHaveBeenCalledWith(preset.seconds)
+				})
+			}
+
+			await waitFor(() => {
+				expect(onRefresh).toHaveBeenCalledTimes(3)
+			})
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
 })
