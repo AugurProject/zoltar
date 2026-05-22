@@ -54,8 +54,10 @@ export function ReportingSection({
 	const showWithdrawOnly = mode === 'withdraw-only'
 	const totalBalance = activeReportingDetails === undefined ? 0n : activeReportingDetails.sides.reduce((sum, side) => sum + side.balance, 0n)
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
+	const leadingSide = activeReportingDetails?.sides.find(side => side.key === leadingOutcome)
 	const selectedSide = activeReportingDetails?.sides.find(side => side.key === reportingForm.selectedOutcome)
 	const selectedEstimate = selectedSide === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(selectedSide.balance, totalBalance, selectedAmount)
+	const escalationTimeRemaining = activeReportingDetails === undefined ? undefined : formatDuration(getEscalationTimeRemaining(activeReportingDetails))
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 	const reportGuardMessage = getReportingReportGuardMessage({
 		accountAddress: accountState.address,
@@ -148,11 +150,12 @@ export function ReportingSection({
 						<MetricField label='Threshold'>
 							<CurrencyValue value={activeReportingDetails.nonDecisionThreshold} suffix='REP' />
 						</MetricField>
-						<MetricField label='Time Left'>{formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
 					</div>
-					<p className='detail'>
-						Game starts at <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails.startingTime} /> and currently uses a start bond of <CurrencyValue value={activeReportingDetails.startBond} suffix='REP' />.
-					</p>
+					{escalationTimeRemaining === undefined ? undefined : (
+						<p className='detail'>
+							The market resolves as {leadingSide?.label ?? getReportingOutcomeLabel(activeReportingDetails.resolution)} in {escalationTimeRemaining} unless disputed.
+						</p>
+					)}
 				</SectionBlock>
 			) : undefined}
 

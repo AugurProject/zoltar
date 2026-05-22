@@ -237,7 +237,7 @@ describe('ReportingSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Withdraw Escalation Deposits')
 	})
 
-	test('renders time left from escalation end time and current chain time', async () => {
+	test('shows the projected resolution outcome with remaining time', async () => {
 		const reportingDetails = createReportingDetails()
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -253,7 +253,9 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes(formatDuration(300n - 150n))).toBe(true)
+		expect(document.body.textContent?.includes(`The market resolves as Yes in ${formatDuration(300n - 150n)} unless disputed.`)).toBe(true)
+		expect(document.body.textContent?.includes('Game starts at')).toBe(false)
+		expect(document.body.textContent?.includes('start bond')).toBe(false)
 	})
 
 	test('shows awaiting resolution with zero time left once the escalation end time has passed', async () => {
