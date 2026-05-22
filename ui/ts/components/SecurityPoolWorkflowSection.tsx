@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
-import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { ForkAuctionSection } from './ForkAuctionSection.js'
@@ -24,6 +23,7 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { ViewTabs } from './ViewTabs.js'
+import { WarningSurface } from './WarningSurface.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import {
@@ -573,8 +573,13 @@ export function SecurityPoolWorkflowSection({
 										)}
 										<SectionBlock density='compact' headingLevel={4} title='Staged Operations List' variant='embedded'>
 											{currentPoolOracleManagerDetails?.pendingOperation === undefined ? null : (
-												<EntityCard className='compact' title={getPendingOperationLabel(currentPoolOracleManagerDetails.pendingOperation.operation)} variant='compact' badge={<span className='badge warn'>Queued</span>}>
-													<div className='workflow-metric-grid'>
+												<WarningSurface as='article' className='warning-entity-card' variant='compact'>
+													<div className='entity-card-header'>
+														<div className='entity-card-copy'>
+															<h3>{getPendingOperationLabel(currentPoolOracleManagerDetails.pendingOperation.operation)}</h3>
+														</div>
+													</div>
+													<div className='entity-card-body workflow-metric-grid'>
 														<MetricField label='Operation Id'>{currentPoolOracleManagerDetails.pendingOperation.operationId.toString()}</MetricField>
 														<MetricField label='Initiator'>
 															<AddressValue address={currentPoolOracleManagerDetails.pendingOperation.initiatorVault} />
@@ -586,7 +591,7 @@ export function SecurityPoolWorkflowSection({
 															<CurrencyValue value={currentPoolOracleManagerDetails.pendingOperation.amount} />
 														</MetricField>
 													</div>
-												</EntityCard>
+												</WarningSurface>
 											)}
 											{currentPoolOracleManagerDetails === undefined || currentPoolOracleManagerDetails.pendingOperation !== undefined ? null : <StateHint presentation={{ key: 'empty', badgeLabel: 'None queued', badgeTone: 'muted', detail: 'No staged operations are currently queued for this pool.' }} />}
 										</SectionBlock>

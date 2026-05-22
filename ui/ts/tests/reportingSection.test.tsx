@@ -124,6 +124,23 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Selected side has')).toBe(true)
 	})
 
+	test('renders the pre-reporting stage inside the shared warning surface', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 50n,
+					reportingDetails: undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Pre-Reporting' })).not.toBeNull()
+		expect(document.body.querySelector('.warning-surface.lifecycle-stage-banner')).not.toBeNull()
+	})
+
 	test('disables reporting buttons when deterministic prerequisites are missing', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
