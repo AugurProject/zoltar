@@ -1,8 +1,10 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '@testing-library/dom'
+import { fireEvent, within } from '@testing-library/dom'
 import { h } from 'preact'
+import { useState } from 'preact/hooks'
+import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 import { ReportingSection } from '../components/ReportingSection.js'
 import { formatDuration } from '../lib/formatters.js'
@@ -12,6 +14,10 @@ import type { ReportingSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from './testUtils/transactionActionButton.js'
+
+function rep(value: bigint) {
+	return value * 10n ** 18n
+}
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -44,25 +50,25 @@ function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDeta
 
 function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
 	return {
-		bindingCapital: 10n,
+		bindingCapital: rep(10n),
 		completeSetCollateralAmount: 1n,
-		currentRequiredBond: 2n,
+		currentRequiredBond: rep(20n),
 		currentTime: 150n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
-		nonDecisionThreshold: 20n,
+		nonDecisionThreshold: rep(20n),
 		resolution: 'none',
 		securityPoolAddress: zeroAddress,
 		sides: [
-			{ balance: 5n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
-			{ balance: 2n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
-			{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: rep(1n), cumulativeAmount: rep(1n), depositIndex: 0n, depositor: zeroAddress }] },
+			{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+			{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 		],
-		startBond: 1n,
-		status: 'active',
+		startBond: rep(3n),
 		startingTime: 120n,
-		totalCost: 0n,
+		status: 'active',
+		totalCost: rep(20n),
 		universeId: 1n,
 		...overrides,
 	}
@@ -122,6 +128,23 @@ function createProps(overrides: Partial<ReportingSectionProps> = {}): ReportingS
 	}
 }
 
+function ReportingSectionHarness({ initialProps }: { initialProps?: Partial<ReportingSectionProps> }) {
+	const [reportingForm, setReportingForm] = useState<ReportingFormState>(createReportingForm())
+
+	return (
+		<ReportingSection
+			{...createProps(initialProps)}
+			reportingForm={reportingForm}
+			onReportingFormChange={changes => {
+				setReportingForm(currentForm => ({
+					...currentForm,
+					...changes,
+				}))
+			}}
+		/>
+	)
+}
+
 describe('ReportingSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -158,6 +181,8 @@ describe('ReportingSection', () => {
 
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(true)
 		expect(document.body.textContent?.includes('Selected side has')).toBe(false)
+		expect(documentQueries.getByRole('button', { name: 'Min to change proposed outcome' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Max profit' })).not.toBeNull()
 	})
 
 	test('does not render the pre-reporting warning banner before market end', async () => {
@@ -214,7 +239,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Connect a wallet before reporting on a market.')
-		expect(document.body.querySelector('button[title=\"Connect a wallet before withdrawing escalation deposits.\"]')).toBeNull()
+		expect(document.body.querySelector('button[title="Connect a wallet before withdrawing escalation deposits."]')).toBeNull()
 		expect(document.body.querySelector('.disabled-reason')).toBeNull()
 	})
 
@@ -238,13 +263,12 @@ describe('ReportingSection', () => {
 	})
 
 	test('renders time left from escalation end time and current chain time', async () => {
-		const reportingDetails = createReportingDetails()
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
 					reportingDetails: {
-						...reportingDetails,
+						...createReportingDetails(),
 						currentTime: 150n,
 						escalationEndTime: 300n,
 					},
@@ -292,7 +316,6 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByText('Outcome Sides')).toBeNull()
 		expect(document.body.textContent?.includes('Reporting is open, but the escalation game has not started yet.')).toBe(true)
 		expect(document.body.textContent?.includes('The first report or contribution will deploy and initialize the escalation game for this pool.')).toBe(true)
-
 		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
 		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
 	})
@@ -313,5 +336,94 @@ describe('ReportingSection', () => {
 
 		expect(document.body.textContent?.includes('projects roughly')).toBe(true)
 		expect(document.body.textContent?.includes('Enter a valid report amount to preview profit.')).toBe(false)
+	})
+
+	test('autofills the report amount for the minimum outcome change preset', async () => {
+		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Min to change proposed outcome' }))
+		})
+
+		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount' })
+		expect((amountInput as HTMLInputElement).value).toBe('4')
+	})
+
+	test('autofills the report amount for the max profit preset and updates the preview', async () => {
+		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const previewBefore = Array.from(document.body.querySelectorAll('p.detail'))
+			.map(element => element.textContent ?? '')
+			.find(text => text.includes('If Yes wins'))
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Max profit' }))
+		})
+
+		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount' })
+		const previewAfter = Array.from(document.body.querySelectorAll('p.detail'))
+			.map(element => element.textContent ?? '')
+			.find(text => text.includes('If Yes wins'))
+		expect((amountInput as HTMLInputElement).value).toBe('7')
+		expect(document.body.textContent?.includes('projects roughly')).toBe(true)
+		expect(previewBefore).not.toBe(previewAfter)
+	})
+
+	test('disables preset buttons when reporting details are missing', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const minButton = documentQueries.getByRole('button', { name: 'Min to change proposed outcome' })
+		const maxButton = documentQueries.getByRole('button', { name: 'Max profit' })
+		expect((minButton as HTMLButtonElement).disabled).toBe(true)
+		expect((maxButton as HTMLButtonElement).disabled).toBe(true)
+		expect(document.body.textContent?.includes('Load reporting details before using presets.')).toBe(true)
+	})
+
+	test('disables preset buttons when reporting is locked', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					lockedReason: 'Reporting is locked.',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect((documentQueries.getByRole('button', { name: 'Min to change proposed outcome' }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('button', { name: 'Max profit' }) as HTMLButtonElement).disabled).toBe(true)
+	})
+
+	test('shows unavailable preset reasons for impossible states', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: {
+						...createReportingDetails(),
+						sides: [
+							{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: rep(20n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+						],
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('Min preset unavailable because another side is already over the current bond.')).toBe(true)
 	})
 })

@@ -15,12 +15,12 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
-import { formatDuration } from '../lib/formatters.js'
+import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
-import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome } from '../lib/reportingDomain.js'
+import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getMaxProfitContribution, getMinimumOutcomeChangeContribution } from '../lib/reportingDomain.js'
 import type { ReportingSectionProps } from '../types/components.js'
 
 export function ReportingSection({
@@ -52,10 +52,12 @@ export function ReportingSection({
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const showFullReporting = mode === 'full-reporting'
 	const showWithdrawOnly = mode === 'withdraw-only'
-	const totalBalance = activeReportingDetails === undefined ? 0n : activeReportingDetails.sides.reduce((sum, side) => sum + side.balance, 0n)
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
 	const selectedSide = activeReportingDetails?.sides.find(side => side.key === reportingForm.selectedOutcome)
-	const selectedEstimate = selectedSide === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(selectedSide.balance, totalBalance, selectedAmount)
+	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
+	const minimumOutcomeChangeContribution =
+		activeReportingDetails === undefined ? { amount: undefined, reason: reportingStatus === 'not-started' ? 'Escalation game has not started yet.' : 'Load reporting details before using presets.' } : getMinimumOutcomeChangeContribution(activeReportingDetails, reportingForm.selectedOutcome)
+	const maxProfitContribution = activeReportingDetails === undefined ? { amount: undefined, reason: reportingStatus === 'not-started' ? 'Escalation game has not started yet.' : 'Load reporting details before using presets.' } : getMaxProfitContribution(activeReportingDetails, reportingForm.selectedOutcome)
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 	const reportGuardMessage = getReportingReportGuardMessage({
 		accountAddress: accountState.address,
@@ -160,7 +162,7 @@ export function ReportingSection({
 				<SectionBlock title='Outcome Sides'>
 					<div className='escalation-sides'>
 						{activeReportingDetails.sides.map(side => {
-							const estimate = selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(side.balance, totalBalance, selectedAmount)
+							const estimate = selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, side.key, selectedAmount)
 							const userStake = side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n)
 							return <EscalationSide key={side.key} estimate={estimate} isLeading={leadingOutcome === side.key} isSelected={reportingForm.selectedOutcome === side.key} side={side} userStake={userStake} />
 						})}
@@ -187,6 +189,35 @@ export function ReportingSection({
 						<FormInput value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportingLocked} />
 					</label>
 
+					<div className='actions'>
+						<button
+							className='secondary'
+							type='button'
+							onClick={() => {
+								if (minimumOutcomeChangeContribution.amount === undefined) return
+								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(minimumOutcomeChangeContribution.amount) })
+							}}
+							disabled={reportingLocked || minimumOutcomeChangeContribution.amount === undefined}
+							title={reportingLocked ? lockedReason : minimumOutcomeChangeContribution.reason}
+						>
+							Min to change proposed outcome
+						</button>
+						<button
+							className='secondary'
+							type='button'
+							onClick={() => {
+								if (maxProfitContribution.amount === undefined) return
+								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxProfitContribution.amount) })
+							}}
+							disabled={reportingLocked || maxProfitContribution.amount === undefined}
+							title={reportingLocked ? lockedReason : maxProfitContribution.reason}
+						>
+							Max profit
+						</button>
+					</div>
+
+					{minimumOutcomeChangeContribution.reason === undefined ? undefined : <p className='detail'>{minimumOutcomeChangeContribution.reason}</p>}
+					{maxProfitContribution.reason === undefined ? undefined : <p className='detail'>{maxProfitContribution.reason}</p>}
 					{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
 
 					{selectedEstimate === undefined ? undefined : (
