@@ -1459,7 +1459,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState(),
+					accountState: createAccountState({ ethBalance: 2n * 10n ** 18n }),
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
 						lastPrice: 3n * 10n ** 18n,
@@ -1474,6 +1474,7 @@ describe('SecurityPoolWorkflowSection', () => {
 						}),
 					],
 					securityVault: createSecurityVaultProps({
+						accountState: createAccountState({ ethBalance: 2n * 10n ** 18n }),
 						securityVaultDetails: createSecurityVaultDetails({
 							repDepositShare: 12n * 10n ** 18n,
 							securityBondAllowance: 1n * 10n ** 18n,
@@ -1503,6 +1504,110 @@ describe('SecurityPoolWorkflowSection', () => {
 		const allowanceDialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
 		expect(within(allowanceDialog).queryByText(/^Blocked:/)).toBeNull()
 		expectTransactionButtonEnabled(allowanceDialog as HTMLElement, 'Set Security Bond Allowance')
+	})
+
+	test('blocks the workflow bond-allowance modal when the wallet lacks the buffered oracle bounty ETH', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+						lastPrice: 3n * 10n ** 18n,
+						requestPriceEthCost: 10n * 10n ** 18n,
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [
+						createSelectedPool({
+							managerAddress: zeroAddress,
+							securityPoolAddress: selectedPoolAddress,
+							totalRepDeposit: 9n * 10n ** 18n,
+							totalSecurityBondAllowance: 2n * 10n ** 18n,
+						}),
+					],
+					securityVault: createSecurityVaultProps({
+						accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+						securityVaultDetails: createSecurityVaultDetails({
+							repDepositShare: 12n * 10n ** 18n,
+							securityBondAllowance: 1n * 10n ** 18n,
+							securityPoolAddress: selectedPoolAddress,
+							totalSecurityBondAllowance: 2n * 10n ** 18n,
+						}),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '',
+							securityBondAllowanceAmount: '0',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set Bond Allowance' })[0] as HTMLElement)
+		})
+
+		const allowanceDialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
+		expectTransactionButtonDisabled(allowanceDialog as HTMLElement, 'Set Security Bond Allowance', 'Need 7 more ETH in this wallet to queue this bond allowance update.')
+	})
+
+	test('blocks withdraw REP in the workflow modal when the wallet lacks the buffered oracle bounty ETH', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+						lastPrice: 3n * 10n ** 18n,
+						requestPriceEthCost: 10n * 10n ** 18n,
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [
+						createSelectedPool({
+							managerAddress: zeroAddress,
+							securityPoolAddress: selectedPoolAddress,
+							totalRepDeposit: 9n * 10n ** 18n,
+							totalSecurityBondAllowance: 2n * 10n ** 18n,
+						}),
+					],
+					securityVault: createSecurityVaultProps({
+						accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+						securityVaultDetails: createSecurityVaultDetails({
+							repDepositShare: 12n * 10n ** 18n,
+							securityBondAllowance: 1n * 10n ** 18n,
+							securityPoolAddress: selectedPoolAddress,
+							totalSecurityBondAllowance: 2n * 10n ** 18n,
+						}),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '1',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Withdraw REP' })[0] as HTMLElement)
+		})
+
+		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
+		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Need 7 more ETH in this wallet to queue this REP withdrawal.')
 	})
 
 	test('hides the truth auction metric when the selected pool has no truth auction address', async () => {
@@ -1745,6 +1850,28 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getByRole('button', { name: 'Request New Price' })).not.toBeNull()
 		expect(sectionQueries.getByText('Pending Request')).not.toBeNull()
 		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()
+	})
+
+	test('disables Request New Price when the wallet lacks the buffered oracle bounty ETH', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+					checkedSecurityPoolAddress: zeroAddress,
+					poolOracleManagerDetails: createOracleManagerDetails({
+						pendingReportId: 0n,
+						requestPriceEthCost: 10n * 10n ** 18n,
+					}),
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					selectedPoolView: 'price-oracle',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Request New Price', 'Need 7 more ETH in this wallet to request a new price.')
 	})
 
 	test('uses the lifted selected pool view state and reports tab changes through the shared setter', async () => {

@@ -1,4 +1,5 @@
-import type { ActiveReportingDetails, EscalationSide, ReportingOutcomeKey } from '../types/contracts.js'
+import type { ActiveReportingDetails, EscalationSide, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
+import { formatCurrencyBalance } from './formatters.js'
 import { requireDefined } from './required.js'
 import { getTimeRemaining } from './time.js'
 
@@ -163,4 +164,83 @@ export function calculateEstimatedEscalationReturn(details: ActiveReportingDetai
 		payout: effectiveAmount + bonusShare,
 		profit: bonusShare,
 	}
+}
+
+type EscalationContributionPreview =
+	| {
+			actualDepositAmount: bigint
+			reason: undefined
+	  }
+	| {
+			actualDepositAmount: undefined
+			reason: string
+	  }
+
+type ReportingContributionPreview = EscalationContributionPreview
+
+function getEscalationSide(details: ActiveReportingDetails, outcome: ReportingOutcomeKey) {
+	return details.sides.find(side => side.key === outcome)
+}
+
+function previewEscalationContribution(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, amount: bigint): EscalationContributionPreview {
+	if (details.resolution !== 'none') {
+		return {
+			actualDepositAmount: undefined,
+			reason: 'Escalation is already resolved.',
+		}
+	}
+
+	const selectedSide = getEscalationSide(details, outcome)
+	if (selectedSide === undefined) {
+		return {
+			actualDepositAmount: undefined,
+			reason: 'Select a valid reporting outcome.',
+		}
+	}
+
+	if (selectedSide.balance >= details.nonDecisionThreshold) {
+		return {
+			actualDepositAmount: undefined,
+			reason: `Selected side is already full at ${formatCurrencyBalance(details.nonDecisionThreshold)} REP.`,
+		}
+	}
+
+	if (amount < details.startBond) {
+		return {
+			actualDepositAmount: undefined,
+			reason: `Enter at least ${formatCurrencyBalance(details.startBond)} REP to meet the current start bond.`,
+		}
+	}
+
+	const room = details.nonDecisionThreshold - selectedSide.balance
+	let effectiveDeposit = amount > room ? room : amount
+	const balances = details.sides.map(side => side.balance)
+	const maxBalance = balances.reduce((currentMax, sideBalance) => (sideBalance > currentMax ? sideBalance : currentMax), 0n)
+	const newBalance = selectedSide.balance + effectiveDeposit
+	const otherSideHasMax = details.sides.some(side => side.key !== outcome && side.balance === maxBalance)
+	if (newBalance === maxBalance && otherSideHasMax && maxBalance < details.nonDecisionThreshold) {
+		effectiveDeposit -= 1n
+		if (effectiveDeposit < details.startBond) {
+			return {
+				actualDepositAmount: undefined,
+				reason: 'Increase the report amount slightly to avoid a tie at the minimum bond.',
+			}
+		}
+	}
+
+	return {
+		actualDepositAmount: effectiveDeposit,
+		reason: undefined,
+	}
+}
+
+export function previewReportingContribution(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint): ReportingContributionPreview {
+	if (details.status === 'not-started') {
+		return {
+			actualDepositAmount: amount,
+			reason: undefined,
+		}
+	}
+
+	return previewEscalationContribution(details, outcome, amount)
 }

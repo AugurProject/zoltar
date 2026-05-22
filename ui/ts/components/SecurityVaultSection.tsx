@@ -326,9 +326,11 @@ export function SecurityVaultSection({
 		hasValidOraclePrice,
 		isMainnet,
 		maxSecurityBondAllowanceAmount,
+		requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
 		securityBondAllowanceAmount,
 		selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
 		selectedVaultIsOwnedByAccount,
+		walletEthBalance: accountState.ethBalance,
 	})
 	const depositGuardMessage = getVaultDepositGuardMessage({
 		accountAddress: accountState.address,
@@ -343,9 +345,11 @@ export function SecurityVaultSection({
 		accountAddress: accountState.address,
 		hasValidOraclePrice,
 		isMainnet,
+		requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
 		selectedVaultIsOwnedByAccount,
 		withdrawAmount: hasWithdrawAmount ? withdrawAmount : undefined,
 		withdrawableRepAmount,
+		walletEthBalance: accountState.ethBalance,
 	})
 	const approvalGuardMessage = getVaultApprovalGuardMessage({
 		accountAddress: accountState.address,

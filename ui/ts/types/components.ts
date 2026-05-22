@@ -26,7 +26,7 @@ import type {
 	ZoltarMigrationActionResult,
 	ZoltarUniverseSummary,
 } from './contracts.js'
-import type { OpenOracleInitialReportPriceSource, OpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
+import type { OpenOracleDisputeSubmissionDetails, OpenOracleInitialReportPriceSource, OpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
@@ -523,6 +523,7 @@ export type OpenOracleRouteContentProps = {
 		tokenAccessLoadingInitial: boolean
 		tokenAccessRefreshing: boolean
 	}
+	openOracleDisputeSubmission: OpenOracleDisputeSubmissionDetails | undefined
 	openOracleInitialReportSubmission: OpenOracleInitialReportSubmissionDetails | undefined
 	openOracleCreateForm: OpenOracleCreateFormState
 	openOracleForm: OpenOracleFormState

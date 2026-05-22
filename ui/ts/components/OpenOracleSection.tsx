@@ -24,6 +24,7 @@ import { TimestampValue } from './TimestampValue.js'
 import { useLoadController } from '../hooks/useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import {
+	getOpenOracleCreateGuardMessage,
 	formatOpenOracleFeePercentage,
 	formatOpenOracleMultiplier,
 	getOpenOracleDisputeAvailability,
@@ -31,12 +32,14 @@ import {
 	getOpenOracleReportStatusTone,
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
+	type OpenOracleDisputeSubmissionDetails,
 	type OpenOracleInitialReportSubmissionDetails,
 	type OpenOracleSelectedReportActionMode,
 } from '../lib/openOracle.js'
 import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
 import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
 import { loadOpenOracleReportSummaries } from '../contracts.js'
+import { isMainnetChain } from '../lib/network.js'
 import { getReportPresentation } from '../lib/userCopy.js'
 import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
@@ -126,6 +129,7 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 
 export function renderSelectedReportActionSection({
 	actionMode,
+	disputeSubmission,
 	initialReportSubmission,
 	isConnected,
 	onApproveToken1,
@@ -145,6 +149,7 @@ export function renderSelectedReportActionSection({
 	token2Symbol,
 }: {
 	actionMode: OpenOracleSelectedReportActionMode
+	disputeSubmission: OpenOracleDisputeSubmissionDetails | undefined
 	initialReportSubmission: OpenOracleInitialReportSubmissionDetails
 	isConnected: boolean
 	onApproveToken1: (amount?: bigint) => void
@@ -268,6 +273,8 @@ export function renderSelectedReportActionSection({
 			)
 		case 'dispute': {
 			const disputeDisabledMessage = !isConnected ? 'Connect a wallet before disputing reports.' : openOracleForm.reportId.trim() === '' ? 'Load a report first.' : disputeAvailability.message
+			const token1ApprovalGuardMessage = !isConnected ? 'Connect a wallet before approving tokens.' : openOracleReportDetails === undefined ? 'Load a report first.' : disputeSubmission?.token1ContributionAmount === undefined ? `Enter valid dispute amounts before approving ${token1Symbol}.` : undefined
+			const token2ApprovalGuardMessage = !isConnected ? 'Connect a wallet before approving tokens.' : openOracleReportDetails === undefined ? 'Load a report first.' : disputeSubmission?.token2ContributionAmount === undefined ? `Enter valid dispute amounts before approving ${token2Symbol}.` : undefined
 			return (
 				<SectionBlock headingLevel={4} title='Dispute Report' variant='embedded'>
 					<div className='form-grid'>
@@ -292,6 +299,40 @@ export function renderSelectedReportActionSection({
 								<FormInput value={openOracleForm.disputeNewAmount2} onInput={event => onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })} />
 							</label>
 						</div>
+						{disputeSubmission?.expectedNewAmount1 === undefined ? undefined : <p className='detail'>{`New ${token1Symbol} amount must be exactly ${disputeSubmission.expectedNewAmount1.toString()} for this dispute.`}</p>}
+						<SectionBlock headingLevel={4} title={`${token1Symbol} Approval`} variant='embedded'>
+							<TokenApprovalControl
+								actionLabel='disputing the report'
+								allowanceError={openOracleInitialReportState.token1Approval.error}
+								allowanceLoading={openOracleInitialReportState.token1Approval.loading}
+								approvedAmount={openOracleInitialReportState.token1Approval.value}
+								guardMessage={token1ApprovalGuardMessage}
+								onApprove={amount => onApproveToken1(amount)}
+								pending={openOracleActiveAction === 'approveToken1'}
+								pendingLabel={`Approving ${token1Symbol}...`}
+								requiredAmount={disputeSubmission?.token1ContributionAmount}
+								resetKey={`dispute:token1:${token1Symbol}:${disputeSubmission?.token1ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
+								tokenSymbol={token1Symbol}
+								tokenUnits={disputeSubmission?.token1Decimals ?? 18}
+							/>
+						</SectionBlock>
+						<SectionBlock headingLevel={4} title={`${token2Symbol} Approval`} variant='embedded'>
+							<TokenApprovalControl
+								actionLabel='disputing the report'
+								allowanceError={openOracleInitialReportState.token2Approval.error}
+								allowanceLoading={openOracleInitialReportState.token2Approval.loading}
+								approvedAmount={openOracleInitialReportState.token2Approval.value}
+								guardMessage={token2ApprovalGuardMessage}
+								onApprove={amount => onApproveToken2(amount)}
+								pending={openOracleActiveAction === 'approveToken2'}
+								pendingLabel={`Approving ${token2Symbol}...`}
+								requiredAmount={disputeSubmission?.token2ContributionAmount}
+								resetKey={`dispute:token2:${token2Symbol}:${disputeSubmission?.token2ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
+								tokenSymbol={token2Symbol}
+								tokenUnits={disputeSubmission?.token2Decimals ?? 18}
+							/>
+						</SectionBlock>
+						{disputeSubmission?.blockMessage?.kind !== 'visible' ? undefined : <p className='detail'>{disputeSubmission.blockMessage.message}</p>}
 						<div className='actions'>
 							<TransactionActionButton
 								idleLabel='Dispute & Swap'
@@ -301,8 +342,8 @@ export function renderSelectedReportActionSection({
 								status={openOracleFeedback?.action === 'dispute' ? openOracleFeedback.status : undefined}
 								tone='secondary'
 								availability={{
-									disabled: !isConnected || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct,
-									reason: disputeDisabledMessage,
+									disabled: !isConnected || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false,
+									reason: disputeDisabledMessage ?? (disputeSubmission?.blockMessage?.kind === 'visible' ? disputeSubmission.blockMessage.message : undefined),
 								}}
 							/>
 						</div>
@@ -354,6 +395,7 @@ function renderReportDetailsCard(
 	openOracleReportDetails: OpenOracleReportDetails | undefined,
 	openOracleForm: OpenOracleFormState,
 	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
+	openOracleDisputeSubmission: OpenOracleSectionProps['openOracleDisputeSubmission'],
 	openOracleInitialReportSubmission: OpenOracleSectionProps['openOracleInitialReportSubmission'],
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction'],
 	openOracleFeedback: OpenOracleSectionProps['openOracleFeedback'],
@@ -612,6 +654,7 @@ function renderReportDetailsCard(
 			<OperationModal isOpen={selectedReportModal === 'initial-report'} onClose={() => onSelectedReportModalChange(undefined)} title='Submit Initial Report' description='Review price source, approvals, and token balances before submitting the initial report.'>
 				{renderSelectedReportActionSection({
 					actionMode: 'initial-report',
+					disputeSubmission: openOracleDisputeSubmission,
 					initialReportSubmission: openOracleInitialReportSubmission,
 					isConnected,
 					onApproveToken1,
@@ -635,6 +678,7 @@ function renderReportDetailsCard(
 			<OperationModal isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title='Dispute & Swap' description='Provide the replacement swap amounts for the selected report.'>
 				{renderSelectedReportActionSection({
 					actionMode: 'dispute',
+					disputeSubmission: openOracleDisputeSubmission,
 					initialReportSubmission: openOracleInitialReportSubmission,
 					isConnected,
 					onApproveToken1,
@@ -658,6 +702,7 @@ function renderReportDetailsCard(
 			<OperationModal isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title='Settle Report' description='Confirm settlement once the selected report is ready.'>
 				{renderSelectedReportActionSection({
 					actionMode: 'settle',
+					disputeSubmission: openOracleDisputeSubmission,
 					initialReportSubmission: openOracleInitialReportSubmission,
 					isConnected,
 					onApproveToken1,
@@ -699,6 +744,7 @@ export function OpenOracleSection({
 	loadingOpenOracleCreate,
 	openOracleActiveAction,
 	openOracleCreateForm,
+	openOracleDisputeSubmission,
 	openOracleError,
 	openOracleFeedback,
 	openOracleForm,
@@ -717,6 +763,14 @@ export function OpenOracleSection({
 	const [selectedReportModal, setSelectedReportModal] = useState<SelectedReportModal>(undefined)
 	const browseLoad = useLoadController()
 	const isConnected = accountState.address !== undefined
+	const isMainnet = isMainnetChain(accountState.chainId)
+	const createGuardMessage = getOpenOracleCreateGuardMessage({
+		ethValueInput: openOracleCreateForm.ethValue,
+		isMainnet,
+		settlerRewardInput: openOracleCreateForm.settlerReward,
+		walletConnected: isConnected,
+		walletEthBalance: accountState.ethBalance,
+	})
 
 	useEffect(() => {
 		let cancelled = false
@@ -911,7 +965,7 @@ export function OpenOracleSection({
 									onClick={onCreateOpenOracleGame}
 									pending={loadingOpenOracleCreate}
 									status={openOracleFeedback?.action === 'createReportInstance' ? openOracleFeedback.status : undefined}
-									availability={{ disabled: !isConnected, reason: !isConnected ? 'Connect a wallet before creating an Open Oracle game.' : undefined }}
+									availability={{ disabled: createGuardMessage !== undefined, reason: createGuardMessage }}
 								/>
 							</div>
 						</div>
@@ -926,6 +980,7 @@ export function OpenOracleSection({
 						openOracleReportDetails,
 						openOracleForm,
 						openOracleInitialReportState,
+						openOracleDisputeSubmission,
 						openOracleInitialReportSubmission,
 						openOracleActiveAction,
 						openOracleFeedback,

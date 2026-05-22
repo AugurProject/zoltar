@@ -1,22 +1,31 @@
 import type { Address } from 'viem'
 import type { ReportingDetails } from '../types/contracts.js'
+import { formatCurrencyBalance } from './formatters.js'
 
 type ReportingStatus = 'missing' | 'not-started' | 'active'
 
 export function getReportingReportGuardMessage({
+	actualDepositAmount,
 	accountAddress,
+	contributionPreviewReason,
 	isMainnet,
 	lockedReason,
 	reportAmount,
 	reportingStatus,
 	selectedAmount,
+	viewerVaultAvailableEscalationRep,
+	viewerVaultExists,
 }: {
+	actualDepositAmount: bigint | undefined
 	accountAddress: Address | undefined
+	contributionPreviewReason: string | undefined
 	isMainnet: boolean
 	lockedReason: string | undefined
 	reportAmount: string
 	reportingStatus: ReportingStatus
 	selectedAmount: bigint | undefined
+	viewerVaultAvailableEscalationRep: bigint | undefined
+	viewerVaultExists: boolean
 }) {
 	if (lockedReason !== undefined) return lockedReason
 	if (accountAddress === undefined) return 'Connect a wallet before reporting on a market.'
@@ -24,6 +33,13 @@ export function getReportingReportGuardMessage({
 	if (reportingStatus === 'missing') return 'Load reporting details before reporting on an outcome.'
 	if (reportAmount.trim() === '') return 'Enter a report amount greater than zero.'
 	if (selectedAmount === undefined || selectedAmount <= 0n) return 'Enter a valid report amount greater than zero.'
+	if (contributionPreviewReason !== undefined) return contributionPreviewReason
+	if (!viewerVaultExists) return 'Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.'
+	if (actualDepositAmount === undefined) return 'Unable to preview the REP that would be locked for this report.'
+	if (viewerVaultAvailableEscalationRep === undefined) return 'Loading available vault REP.'
+	if (actualDepositAmount > viewerVaultAvailableEscalationRep) {
+		return `Need ${formatCurrencyBalance(actualDepositAmount - viewerVaultAvailableEscalationRep)} more unlocked REP in your vault before reporting.`
+	}
 	return undefined
 }
 

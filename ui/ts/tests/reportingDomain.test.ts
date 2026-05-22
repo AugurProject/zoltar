@@ -54,6 +54,10 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		universeId: 1n,
 		withdrawalEnabled: false,
 		withdrawalState: 'not-finalized',
+		viewerVaultAvailableEscalationRep: 10n * REP,
+		viewerVaultExists: true,
+		viewerVaultLockedRepInEscalationGame: 1n * REP,
+		viewerVaultRepDepositShare: 11n * REP,
 		...overrides,
 	}
 }

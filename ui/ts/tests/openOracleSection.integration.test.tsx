@@ -61,7 +61,7 @@ function OpenOracleSectionHarness({ accountAddress }: { accountAddress: Address 
 	const accountState: AccountState = {
 		address: accountAddress,
 		chainId: '0x1',
-		ethBalance: undefined,
+		ethBalance: 10n ** 30n,
 		wethBalance: undefined,
 	}
 
@@ -96,6 +96,7 @@ function OpenOracleSectionHarness({ accountAddress }: { accountAddress: Address 
 				onWrapWethForInitialReport={() => void openOracle.wrapWethForInitialReport()}
 				openOracleActiveAction={openOracle.openOracleActiveAction}
 				openOracleCreateForm={openOracle.openOracleCreateForm}
+				openOracleDisputeSubmission={openOracle.openOracleDisputeSubmission}
 				openOracleError={openOracle.openOracleError}
 				openOracleForm={openOracle.openOracleForm}
 				openOracleInitialReportSubmission={openOracle.openOracleInitialReportSubmission}

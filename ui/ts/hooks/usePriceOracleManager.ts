@@ -6,6 +6,7 @@ import { createConnectedReadClient, createWalletWriteClient } from '../lib/clien
 import { sameAddress } from '../lib/address.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
+import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import type { ActionFeedback } from '../types/components.js'
@@ -78,6 +79,16 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 					const currentManagerDetails = poolOracleManagerDetails.value
 					if (currentManagerDetails === undefined || !sameAddress(currentManagerDetails.managerAddress, managerAddress)) {
 						poolOracleManagerDetails.value = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
+					}
+					const refreshedManagerDetails = poolOracleManagerDetails.value
+					const walletEthBalance = await createConnectedReadClient().getBalance({ address: walletAddress })
+					const requestPriceGuardMessage = getOracleRequestEthGuardMessage({
+						actionLabel: 'request a new price',
+						requestPriceEthCost: refreshedManagerDetails?.requestPriceEthCost,
+						walletEthBalance,
+					})
+					if (requestPriceGuardMessage !== undefined) {
+						throw new Error(requestPriceGuardMessage)
 					}
 					return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress)
 				},

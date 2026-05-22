@@ -92,6 +92,10 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		universeId: 1n,
 		withdrawalEnabled: false,
 		withdrawalState: 'not-finalized',
+		viewerVaultAvailableEscalationRep: 10n * REP,
+		viewerVaultExists: true,
+		viewerVaultLockedRepInEscalationGame: 1n * REP,
+		viewerVaultRepDepositShare: 11n * REP,
 		...overrides,
 	}
 }
@@ -111,7 +115,7 @@ function createReportingFeedback(overrides: Partial<NonNullable<ReportingSection
 
 function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDetails, { status: 'not-started' }>> = {}): ReportingDetails {
 	return {
-		completeSetCollateralAmount: 1n,
+		completeSetCollateralAmount: 1n * REP,
 		currentTime: 150n,
 		marketDetails: createMarketDetails(),
 		questionOutcome: 'none',
@@ -121,6 +125,10 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 		universeId: 1n,
 		withdrawalEnabled: false,
 		withdrawalState: 'not-finalized',
+		viewerVaultAvailableEscalationRep: 10n * REP,
+		viewerVaultExists: true,
+		viewerVaultLockedRepInEscalationGame: 0n,
+		viewerVaultRepDepositShare: 10n * REP,
 		...overrides,
 	}
 }
@@ -344,11 +352,42 @@ describe('ReportingSection', () => {
 	})
 
 	test('enables reporting action when the selected side can accept reports', async () => {
-		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingForm: createReportingForm({
+						reportAmount: '4',
+					}),
+				}),
+			),
+		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
 		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
+	})
+
+	test('shows vault-collateral copy and blocks reporting when unlocked vault REP is insufficient', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createReportingDetails({
+						viewerVaultAvailableEscalationRep: 2n * REP,
+					}),
+					reportingForm: {
+						...createReportingForm(),
+						reportAmount: '5',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('It does not spend wallet REP directly or require a wallet approval.')).toBe(true)
+		expect(document.body.textContent?.includes('Available unlocked vault REP for reporting:')).toBe(true)
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Need 3 more unlocked REP in your vault before reporting.')
 	})
 
 	test('renders a withdraw-only mode without reporting context or report form', async () => {

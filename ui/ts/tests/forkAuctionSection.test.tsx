@@ -10,6 +10,9 @@ import type { ForkAuctionDetails, MarketDetails } from '../types/contracts.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled } from './testUtils/transactionActionButton.js'
+
+const ETH = 10n ** 18n
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -59,6 +62,26 @@ function createForkAuctionDetails(): ForkAuctionDetails {
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeId: 1n,
+	}
+}
+
+function createTruthAuctionMetrics() {
+	return {
+		accumulatedEth: 0n,
+		auctionEndsAt: 200n,
+		clearingPrice: undefined,
+		clearingTick: undefined,
+		ethAtClearingTick: 0n,
+		ethRaiseCap: 100n * ETH,
+		ethRaised: 0n,
+		finalized: false,
+		hitCap: false,
+		maxRepBeingSold: 100n * ETH,
+		minBidSize: 2n * ETH,
+		repPurchasableAtBid: undefined,
+		timeRemaining: 100n,
+		totalRepPurchased: 0n,
+		underfunded: false,
 	}
 }
 
@@ -169,5 +192,55 @@ describe('ForkAuctionSection', () => {
 		fireEvent.click(modalQueries.getByRole('button', { name: 'Create Yes Child Universe' }))
 
 		expect(createChildUniverseCallCount).toBe(1)
+	})
+
+	test('blocks truth auction bids below the minimum bid size', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ ethBalance: 10n * ETH }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkTruthAuction',
+						truthAuction: createTruthAuctionMetrics(),
+						truthAuctionStartedAt: 1n,
+					},
+					forkAuctionForm: {
+						...createForkAuctionForm(),
+						submitBidAmount: (1n * ETH).toString(),
+						submitBidTick: '1',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Submit Bid', 'Bid must be at least 2 ETH.')
+	})
+
+	test('blocks truth auction bids when the wallet lacks enough ETH for the selected amount', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ ethBalance: 2n * ETH }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkTruthAuction',
+						truthAuction: createTruthAuctionMetrics(),
+						truthAuctionStartedAt: 1n,
+					},
+					forkAuctionForm: {
+						...createForkAuctionForm(),
+						submitBidAmount: (3n * ETH).toString(),
+						submitBidTick: '1',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Submit Bid', 'Need 1 more ETH in this wallet to bid the selected amount.')
 	})
 })

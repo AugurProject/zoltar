@@ -18,7 +18,20 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { UniverseLink } from './UniverseLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { ViewTabs } from './ViewTabs.js'
-import { AUCTION_TIME_SECONDS, type ForkAuctionStageView, estimateRepPurchased, getForkAuctionStageView, getForkStageDescription, getForkStageDescriptionForState, getOutcomeActionLabel, getSystemStateLabel, getTimeRemaining, hasForkActivity, MIGRATION_TIME_SECONDS } from '../lib/forkAuction.js'
+import {
+	AUCTION_TIME_SECONDS,
+	type ForkAuctionStageView,
+	estimateRepPurchased,
+	getForkAuctionStageView,
+	getForkStageDescription,
+	getForkStageDescriptionForState,
+	getOutcomeActionLabel,
+	getSystemStateLabel,
+	getTimeRemaining,
+	getTruthAuctionBidGuardMessage,
+	hasForkActivity,
+	MIGRATION_TIME_SECONDS,
+} from '../lib/forkAuction.js'
 import { formatDuration } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
@@ -229,6 +242,13 @@ export function ForkAuctionSection({
 	const underfundedDisplay = forkAuctionDetails?.truthAuction === undefined ? forkOnlyFallbackText : forkAuctionDetails.truthAuction.underfunded ? 'Yes' : 'No'
 	const claimingAvailableDisplay = forkAuctionDetails === undefined ? (hasPreviewForkActivity ? UNKNOWN_VALUE : UNAVAILABLE_UNTIL_FORK) : forkAuctionDetails.claimingAvailable ? 'Yes' : 'No'
 	const baseDisabledReason = disabledMessage ?? (accountState.address === undefined ? 'Connect a wallet before using fork and auction actions.' : !isMainnet ? 'Switch to Ethereum mainnet before using fork and auction actions.' : undefined)
+	const truthAuctionBidGuardMessage = getTruthAuctionBidGuardMessage({
+		accountAddress: accountState.address,
+		isMainnet,
+		submitBidAmountInput: forkAuctionForm.submitBidAmount,
+		truthAuction: forkAuctionDetails?.truthAuction,
+		walletEthBalance: accountState.ethBalance,
+	})
 	const childUniverseRequirements = [
 		{ key: 'pool', label: 'Forked pool loaded', resolved: hasLoadedPoolContext, ...(hasLoadedPoolContext ? {} : { detail: 'Load a forked pool before creating a child universe.' }) },
 		{ key: 'outcome', label: 'Outcome selected', resolved: forkAuctionForm.selectedOutcome !== undefined, ...(forkAuctionForm.selectedOutcome === undefined ? { detail: 'Select the outcome whose child universe you want to create.' } : {}) },
@@ -245,17 +265,37 @@ export function ForkAuctionSection({
 		...(hasLoadedPoolContext ? {} : { blocker: 'Load fork details for this pool first.' }),
 	}
 
-	const renderStageActionButton = ({ action, idleLabel, onClick, pendingLabel, tone = 'secondary' }: { action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>; idleLabel: string; onClick: () => void; pendingLabel: string; tone?: 'primary' | 'secondary' }) => (
-		<TransactionActionButton
-			idleLabel={idleLabel}
-			pendingLabel={pendingLabel}
-			onClick={onClick}
-			pending={forkAuctionActiveAction === action}
-			status={forkAuctionFeedback?.action === action ? forkAuctionFeedback.status : undefined}
-			tone={tone}
-			availability={{ disabled: disabled || accountState.address === undefined || !isMainnet, reason: baseDisabledReason }}
-		/>
-	)
+	const renderStageActionButton = ({
+		action,
+		availability,
+		idleLabel,
+		onClick,
+		pendingLabel,
+		tone = 'secondary',
+	}: {
+		action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>
+		availability?: { disabled: boolean; reason: string | undefined }
+		idleLabel: string
+		onClick: () => void
+		pendingLabel: string
+		tone?: 'primary' | 'secondary'
+	}) => {
+		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
+		return (
+			<TransactionActionButton
+				idleLabel={idleLabel}
+				pendingLabel={pendingLabel}
+				onClick={onClick}
+				pending={forkAuctionActiveAction === action}
+				status={forkAuctionFeedback?.action === action ? forkAuctionFeedback.status : undefined}
+				tone={tone}
+				availability={{
+					disabled: disabled || accountState.address === undefined || !isMainnet || resolvedAvailability.disabled,
+					reason: baseDisabledReason ?? resolvedAvailability.reason,
+				}}
+			/>
+		)
+	}
 
 	useEffect(() => {
 		if (lastPoolKeyRef.current === securityPoolAddress) return
@@ -445,7 +485,18 @@ export function ForkAuctionSection({
 							<FormInput value={forkAuctionForm.submitBidAmount} onInput={event => onForkAuctionFormChange({ submitBidAmount: event.currentTarget.value })} />
 						</label>
 						{selectedAuctionPrice === undefined ? undefined : <p className='detail'>At the current clearing price, this bid would buy roughly {estimatedRep === undefined ? UNKNOWN_VALUE : <CurrencyValue value={estimatedRep} suffix='REP' />} if it clears.</p>}
-						<div className='actions'>{renderStageActionButton({ action: 'submitBid', idleLabel: 'Submit Bid', onClick: onSubmitBid, pendingLabel: 'Submitting bid...' })}</div>
+						<div className='actions'>
+							{renderStageActionButton({
+								action: 'submitBid',
+								availability: {
+									disabled: truthAuctionBidGuardMessage !== undefined,
+									reason: truthAuctionBidGuardMessage,
+								},
+								idleLabel: 'Submit Bid',
+								onClick: onSubmitBid,
+								pendingLabel: 'Submitting bid...',
+							})}
+						</div>
 					</div>
 				</SectionBlock>
 			</fieldset>

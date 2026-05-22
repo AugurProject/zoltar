@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
-import { loadAllSecurityPools, queueSecurityPoolLiquidation } from '../contracts.js'
+import { loadAllSecurityPools, loadOracleManagerDetails, queueSecurityPoolLiquidation } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
 import { normalizeAddress } from '../lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
@@ -9,6 +9,7 @@ import { createErrorActionFeedback, createPendingActionFeedback, createSuccessAc
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
+import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { ActionFeedback } from '../types/components.js'
 import type { ListedSecurityPool, SecurityPoolOverviewActionResult } from '../types/contracts.js'
@@ -110,6 +111,16 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 					},
 				},
 				async walletAddress => {
+					const managerDetails = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
+					const walletEthBalance = await createConnectedReadClient().getBalance({ address: walletAddress })
+					const liquidationGuardMessage = getOracleRequestEthGuardMessage({
+						actionLabel: 'queue this liquidation',
+						requestPriceEthCost: managerDetails.requestPriceEthCost,
+						walletEthBalance,
+					})
+					if (liquidationGuardMessage !== undefined) {
+						throw new Error(liquidationGuardMessage)
+					}
 					const targetVault = parseAddressInput(liquidationTargetVault.value, 'Target vault')
 					const amount = parseRepAmountInput(liquidationAmount.value, 'Liquidation amount')
 					return await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount)

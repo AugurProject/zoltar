@@ -4,9 +4,11 @@ import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
 import { loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
+import { formatCurrencyBalance } from '../lib/formatters.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { getDefaultReportingFormState, parseRepAmountInput } from '../lib/marketForm.js'
+import { previewReportingContribution } from '../lib/reportingDomain.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
@@ -102,7 +104,23 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 	const reportOutcome = async () =>
 		await runReportingAction(
 			'reportOutcome',
-			async (walletAddress, securityPoolAddress, currentForm) => await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, parseRepAmountInput(currentForm.reportAmount, 'Report amount')),
+			async (walletAddress, securityPoolAddress, currentForm) => {
+				const reportAmount = parseRepAmountInput(currentForm.reportAmount, 'Report amount')
+				const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
+				const contributionPreview = previewReportingContribution(latestDetails, currentForm.selectedOutcome, reportAmount)
+				if (contributionPreview.actualDepositAmount === undefined) {
+					throw new Error(contributionPreview.reason ?? 'Unable to preview the REP that would be locked for this report.')
+				}
+				if (!latestDetails.viewerVaultExists) {
+					throw new Error('Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.')
+				}
+				const availableVaultRep = latestDetails.viewerVaultAvailableEscalationRep ?? 0n
+				if (contributionPreview.actualDepositAmount > availableVaultRep) {
+					throw new Error(`Insufficient unlocked REP in your vault. Need ${formatCurrencyBalance(contributionPreview.actualDepositAmount - availableVaultRep)} more REP deposited and unlocked before reporting.`)
+				}
+
+				return await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, reportAmount)
+			},
 			'Failed to report on outcome',
 		)
 

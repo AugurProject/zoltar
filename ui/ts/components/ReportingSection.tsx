@@ -18,7 +18,7 @@ import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
-import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getMaxProfitContribution, getMinimumOutcomeChangeContribution } from '../lib/reportingDomain.js'
+import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getMaxProfitContribution, getMinimumOutcomeChangeContribution, previewReportingContribution } from '../lib/reportingDomain.js'
 import type { ReportingSectionProps } from '../types/components.js'
 import type { ActiveReportingDetails, EscalationDeposit, ReportingOutcomeKey } from '../types/contracts.js'
 
@@ -125,6 +125,8 @@ export function ReportingSection({
 	const selectedWithdrawDepositIndexes = reportingForm.selectedWithdrawDepositIndexes
 	const chartScaleMax = activeReportingDetails === undefined ? 1n : activeReportingDetails.sides.reduce((maxBalance, side) => (side.balance > maxBalance ? side.balance : maxBalance), activeReportingDetails.bindingCapital > 1n ? activeReportingDetails.bindingCapital : 1n)
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
+	const reportContributionPreview = reportingDetails === undefined || selectedAmount === undefined ? undefined : previewReportingContribution(reportingDetails, reportingForm.selectedOutcome, selectedAmount)
+	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
 	const outcomeSides = getOutcomeSides({
 		activeReportingDetails,
@@ -137,12 +139,16 @@ export function ReportingSection({
 	const escalationTimeRemaining = activeReportingDetails === undefined ? formatDuration(ZERO_REP) : formatDuration(getEscalationTimeRemaining(activeReportingDetails))
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 	const reportGuardMessage = getReportingReportGuardMessage({
+		actualDepositAmount: actualReportDepositAmount,
 		accountAddress: accountState.address,
+		contributionPreviewReason: reportContributionPreview?.reason,
 		isMainnet,
 		lockedReason,
 		reportAmount: reportingForm.reportAmount,
 		reportingStatus,
 		selectedAmount,
+		viewerVaultAvailableEscalationRep: reportingDetails?.viewerVaultAvailableEscalationRep,
+		viewerVaultExists: reportingDetails?.viewerVaultExists ?? false,
 	})
 	const withdrawGuardMessage = getReportingWithdrawGuardMessage({
 		accountAddress: accountState.address,
@@ -241,6 +247,12 @@ export function ReportingSection({
 							Selected side currently has <CurrencyValue value={selectedSide.balance} suffix='REP' /> deposited.
 						</p>
 					)}
+					<p className='detail'>Reporting locks REP already deposited in your security vault. It does not spend wallet REP directly or require a wallet approval.</p>
+					{reportingDetails?.viewerVaultAvailableEscalationRep === undefined ? undefined : (
+						<p className='detail'>
+							Available unlocked vault REP for reporting: <CurrencyValue value={reportingDetails.viewerVaultAvailableEscalationRep} suffix='REP' />.
+						</p>
+					)}
 					<label className='field'>
 						<span>Outcome Side</span>
 						<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={reportingForm.selectedOutcome} onChange={selectedOutcome => onReportingFormChange({ selectedOutcome, selectedWithdrawDepositIndexes: [] })} disabled={reportingLocked} />
@@ -290,6 +302,11 @@ export function ReportingSection({
 					{selectedEstimate === undefined ? undefined : (
 						<p className='detail'>
 							If {getReportingOutcomeLabel(reportingForm.selectedOutcome)} wins and no one else contributes afterward, the current amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit.
+						</p>
+					)}
+					{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
+						<p className='detail'>
+							Based on the current escalation state, this action would lock <CurrencyValue value={actualReportDepositAmount} suffix='REP' /> instead of the full entered amount.
 						</p>
 					)}
 

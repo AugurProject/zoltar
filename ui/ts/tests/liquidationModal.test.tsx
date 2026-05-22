@@ -11,6 +11,9 @@ import { ChainTimestampContext } from '../lib/chainTimestamp.js'
 import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled } from './testUtils/transactionActionButton.js'
+
+const ETH = 10n ** 18n
 
 function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
 	return {
@@ -318,6 +321,19 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Execute Vault Liquidation' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Queue Vault Liquidation' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
+	})
+
+	test('disables queued liquidation when the wallet lacks the buffered oracle bounty ETH', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: false,
+				requestPriceEthCost: 10n * ETH,
+			}),
+			walletEthBalance: 5n * ETH,
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Queue Liquidation', 'Need 7 more ETH in this wallet to queue this liquidation.')
 	})
 
 	test('shows liquidation failure details when the staged execution event reports a rejection', async () => {

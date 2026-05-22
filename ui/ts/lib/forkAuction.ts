@@ -1,5 +1,8 @@
+import type { Address } from 'viem'
 import type { ForkAuctionDetails, ListedSecurityPool, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '../types/contracts.js'
 import { assertNever } from './assert.js'
+import { formatCurrencyBalance } from './formatters.js'
+import { parseBigIntInput } from './marketForm.js'
 import { getTimeRemaining as getSharedTimeRemaining } from './time.js'
 import { getReportingOutcomeLabel } from './reporting.js'
 
@@ -82,4 +85,26 @@ export function getTimeRemaining(targetTime: bigint | undefined, currentTime: bi
 export function estimateRepPurchased(ethAmount: bigint, price: bigint) {
 	if (ethAmount <= 0n || price <= 0n) return 0n
 	return (ethAmount * PRICE_PRECISION) / price
+}
+
+export function getTruthAuctionBidGuardMessage({ accountAddress, isMainnet, submitBidAmountInput, truthAuction, walletEthBalance }: { accountAddress: Address | undefined; isMainnet: boolean; submitBidAmountInput: string; truthAuction: TruthAuctionMetrics | undefined; walletEthBalance: bigint | undefined }) {
+	if (accountAddress === undefined) return 'Connect a wallet before submitting a truth auction bid.'
+	if (!isMainnet) return 'Switch to Ethereum mainnet before submitting a truth auction bid.'
+	if (truthAuction === undefined) return 'Load the truth auction before bidding.'
+
+	const trimmedAmount = submitBidAmountInput.trim()
+	if (trimmedAmount === '') return 'Enter a bid amount greater than zero.'
+
+	let bidAmount: bigint
+	try {
+		bidAmount = parseBigIntInput(trimmedAmount, 'Bid amount')
+	} catch {
+		return 'Enter a valid bid amount.'
+	}
+
+	if (bidAmount <= 0n) return 'Enter a bid amount greater than zero.'
+	if (bidAmount < truthAuction.minBidSize) return `Bid must be at least ${formatCurrencyBalance(truthAuction.minBidSize)} ETH.`
+	if (walletEthBalance === undefined) return 'Loading wallet ETH balance.'
+	if (bidAmount > walletEthBalance) return `Need ${formatCurrencyBalance(bidAmount - walletEthBalance)} more ETH in this wallet to bid the selected amount.`
+	return undefined
 }

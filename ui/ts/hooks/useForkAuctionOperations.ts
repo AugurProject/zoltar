@@ -20,6 +20,7 @@ import {
 } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { getTruthAuctionBidGuardMessage } from '../lib/forkAuction.js'
 import { getReportingOutcomeKey, parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, resolveOptionalAddressInput } from '../lib/inputs.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { requireDefined } from '../lib/required.js'
@@ -134,6 +135,17 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 		await runForkAuctionAction(
 			'submitBid',
 			async (walletAddress, details) => {
+				const walletEthBalance = await createConnectedReadClient().getBalance({ address: walletAddress })
+				const bidGuardMessage = getTruthAuctionBidGuardMessage({
+					accountAddress: walletAddress,
+					isMainnet: true,
+					submitBidAmountInput: forkAuctionForm.value.submitBidAmount,
+					truthAuction: details.truthAuction,
+					walletEthBalance,
+				})
+				if (bidGuardMessage !== undefined) {
+					throw new Error(bidGuardMessage)
+				}
 				const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
 				return await submitTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, parseBigIntInput(forkAuctionForm.value.submitBidTick, 'Bid tick'), parseBigIntInput(forkAuctionForm.value.submitBidAmount, 'Bid amount'))
 			},

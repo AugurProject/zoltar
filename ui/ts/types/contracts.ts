@@ -327,6 +327,10 @@ type ReportingDetailsBase = {
 	universeId: bigint
 	withdrawalEnabled: boolean
 	withdrawalState: 'not-finalized' | 'resolved' | 'canceled-by-external-fork'
+	viewerVaultAvailableEscalationRep: bigint | undefined
+	viewerVaultExists: boolean
+	viewerVaultLockedRepInEscalationGame: bigint | undefined
+	viewerVaultRepDepositShare: bigint | undefined
 }
 
 export type ActiveReportingDetails = ReportingDetailsBase & {

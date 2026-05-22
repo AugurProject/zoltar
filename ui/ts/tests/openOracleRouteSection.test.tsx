@@ -6,13 +6,15 @@ import { h } from 'preact'
 import { zeroAddress } from 'viem'
 import { OpenOracleSection } from '../components/OpenOracleSection.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../lib/marketForm.js'
-import { deriveOpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
+import { deriveOpenOracleDisputeSubmissionDetails, deriveOpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
 import type { AccountState } from '../types/app.js'
 import type { OpenOracleSectionProps } from '../types/components.js'
 import type { OpenOracleReportDetails } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled } from './testUtils/transactionActionButton.js'
+
+const ETH = 10n ** 18n
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -75,6 +77,26 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 					token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
 					walletEthBalance: openOracleInitialReportState.ethBalance,
 				}))
+	const openOracleDisputeSubmission =
+		overrides.openOracleDisputeSubmission ??
+		(openOracleReportDetails === undefined
+			? undefined
+			: deriveOpenOracleDisputeSubmissionDetails({
+					approvedToken1Amount: openOracleInitialReportState.token1Approval.value,
+					approvedToken2Amount: openOracleInitialReportState.token2Approval.value,
+					disputeNewAmount1Input: openOracleForm.disputeNewAmount1,
+					disputeNewAmount2Input: openOracleForm.disputeNewAmount2,
+					disputeTokenToSwap: openOracleForm.disputeTokenToSwap,
+					reportDetails: openOracleReportDetails,
+					token1AllowanceError: openOracleInitialReportState.token1Approval.error,
+					token1Balance: openOracleInitialReportState.token1Balance,
+					token1BalanceError: openOracleInitialReportState.token1BalanceError,
+					token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
+					token2AllowanceError: openOracleInitialReportState.token2Approval.error,
+					token2Balance: openOracleInitialReportState.token2Balance,
+					token2BalanceError: openOracleInitialReportState.token2BalanceError,
+					token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
+				}))
 
 	return {
 		activeView: 'create',
@@ -97,6 +119,7 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 		openOracleCreateForm,
 		openOracleError: undefined,
 		openOracleForm,
+		openOracleDisputeSubmission,
 		openOracleInitialReportSubmission,
 		openOracleInitialReportState,
 		openOracleReportDetails,
@@ -210,5 +233,24 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Selected Report Actions' })).not.toBeNull()
 		expect(documentQueries.queryByText(/^Blocked:/)).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Dispute & Swap', 'This report is not ready to dispute yet.')
+	})
+
+	test('disables create when the wallet lacks enough ETH for the attached value', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					accountState: createAccountState({ ethBalance: 1_000n * ETH }),
+					openOracleCreateForm: {
+						...getDefaultOpenOracleCreateFormState(),
+						ethValue: (1_100n * ETH).toString(),
+						settlerReward: (1_000n * ETH).toString(),
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Create Open Oracle Game', 'Need 100 more ETH in this wallet to create the selected Open Oracle game.')
 	})
 })

@@ -12,6 +12,7 @@ import { getErrorMessage } from '../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { getDefaultSecurityVaultFormState, parseRepAmountInput } from '../lib/marketForm.js'
+import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { requireDefined } from '../lib/required.js'
 import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, MIN_SECURITY_BOND_ALLOWANCE } from '../lib/securityVault.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
@@ -301,6 +302,15 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				if (details === undefined) return undefined
 				const managerDetails = await loadOracleManagerDetails(createConnectedReadClient(), details.managerAddress)
 				if (!managerDetails.isPriceValid) throw new Error('A valid oracle price is required before setting the security bond allowance')
+				const walletEthBalance = await createConnectedReadClient().getBalance({ address: vaultAddress })
+				const setBondAllowanceGuardMessage = getOracleRequestEthGuardMessage({
+					actionLabel: 'queue this bond allowance update',
+					requestPriceEthCost: managerDetails.requestPriceEthCost,
+					walletEthBalance,
+				})
+				if (setBondAllowanceGuardMessage !== undefined) {
+					throw new Error(setBondAllowanceGuardMessage)
+				}
 				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'setSecurityBondsAllowance', vaultAddress, amount)
 				return {
 					action: 'queueSetSecurityBondAllowance',
@@ -338,6 +348,15 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				if (details === undefined) return undefined
 				const managerDetails = await loadOracleManagerDetails(createConnectedReadClient(), details.managerAddress)
 				if (!managerDetails.isPriceValid) throw new Error('A valid oracle price is required before withdrawing REP')
+				const walletEthBalance = await createConnectedReadClient().getBalance({ address: vaultAddress })
+				const withdrawRepGuardMessage = getOracleRequestEthGuardMessage({
+					actionLabel: 'queue this REP withdrawal',
+					requestPriceEthCost: managerDetails.requestPriceEthCost,
+					walletEthBalance,
+				})
+				if (withdrawRepGuardMessage !== undefined) {
+					throw new Error(withdrawRepGuardMessage)
+				}
 				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'withdrawRep', vaultAddress, amount)
 				return {
 					action: 'queueWithdrawRep',

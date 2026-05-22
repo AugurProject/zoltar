@@ -3,12 +3,15 @@ import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../types/
 import { parseDecimalInput } from './decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from './errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from './formatters.js'
+import { parseBigIntInput } from './marketForm.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from './tokenApproval.js'
 import { getWethAddress, isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput } from './uniswapQuoter.js'
 
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 18n
 const OPEN_ORACLE_BOUNTY_BUFFER_NUMERATOR = 12n
 const OPEN_ORACLE_BOUNTY_BUFFER_DENOMINATOR = 10n
+const OPEN_ORACLE_PERCENTAGE_PRECISION = 10n ** 7n
+const OPEN_ORACLE_MULTIPLIER_PRECISION = 10n ** 4n
 
 type OpenOracleReportStatus = 'Awaiting Initial Report' | 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'initial-report' | 'dispute' | 'settle' | 'read-only'
@@ -57,6 +60,18 @@ export type OpenOracleInitialReportSubmissionDetails = {
 	token2Approval: TokenApprovalRequirement
 	token2Decimals: number | undefined
 	wrapRequiredWethMessage: OpenOracleGateMessage | undefined
+}
+
+export type OpenOracleDisputeSubmissionDetails = {
+	blockMessage: OpenOracleGateMessage | undefined
+	canSubmit: boolean
+	expectedNewAmount1: bigint | undefined
+	token1Approval: TokenApprovalRequirement
+	token1ContributionAmount: bigint | undefined
+	token1Decimals: number | undefined
+	token2Approval: TokenApprovalRequirement
+	token2ContributionAmount: bigint | undefined
+	token2Decimals: number | undefined
 }
 
 function formatOpenOracleInitialReportLifecycleMessage(status: OpenOracleReportStatus) {
@@ -180,6 +195,31 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 	}
 
 	return `Transaction failed while disputing the report. Reason: ${detail}`
+}
+
+export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, settlerRewardInput, walletConnected, walletEthBalance }: { ethValueInput: string; isMainnet: boolean; settlerRewardInput: string; walletConnected: boolean; walletEthBalance: bigint | undefined }) {
+	if (!walletConnected) return 'Connect a wallet before creating an Open Oracle game.'
+	if (!isMainnet) return 'Switch to Ethereum mainnet before creating an Open Oracle game.'
+
+	let ethValue: bigint
+	try {
+		ethValue = parseBigIntInput(ethValueInput, 'ETH value')
+	} catch {
+		return 'Enter a valid ETH value to send.'
+	}
+
+	let settlerReward: bigint
+	try {
+		settlerReward = parseBigIntInput(settlerRewardInput, 'Settler reward')
+	} catch {
+		return 'Enter a valid settler reward.'
+	}
+
+	if (ethValue <= 100n) return 'ETH value to send must be greater than 100 wei.'
+	if (ethValue <= settlerReward) return 'ETH value to send must exceed the settler reward.'
+	if (walletEthBalance === undefined) return 'Loading wallet ETH balance.'
+	if (ethValue > walletEthBalance) return `Need ${formatCurrencyBalance(ethValue - walletEthBalance)} more ETH in this wallet to create the selected Open Oracle game.`
+	return undefined
 }
 
 function createHiddenLoadingGateMessage(message: string): OpenOracleGateMessage {
@@ -435,6 +475,73 @@ function formatOpenOracleInitialReportInsufficientBalanceMessage({ available, re
 	}
 
 	return segments.join(' ')
+}
+
+function formatOpenOracleDisputeApprovalStatusUnavailableMessage({ reason, tokenLabel }: { reason: string | undefined; tokenLabel: string | undefined }) {
+	return formatTokenApprovalUnavailableMessage({
+		actionLabel: 'disputing the report',
+		reason,
+		tokenLabel,
+	})
+}
+
+function formatOpenOracleDisputeBalanceStatusUnavailableMessage({ reason, tokenLabel }: { reason: string | undefined; tokenLabel: string | undefined }) {
+	const resolvedTokenLabel = tokenLabel?.trim() || 'token'
+	const segments = [`Unable to verify ${resolvedTokenLabel} balance for this dispute.`]
+	const sanitizedReason = sanitizeErrorDetail(reason)
+
+	if (sanitizedReason !== undefined) {
+		segments.push(`Reason: ${sanitizedReason}.`)
+	}
+	segments.push('Retry loading the report or balance status before disputing this report.')
+
+	return segments.join(' ')
+}
+
+function formatOpenOracleDisputeInsufficientBalanceMessage({ available, required, tokenDecimals, tokenLabel }: { available: bigint; required: bigint; tokenDecimals: number | undefined; tokenLabel: string }) {
+	return `Insufficient ${tokenLabel} balance for this dispute. Need ${formatCurrencyBalance(required, tokenDecimals ?? 18)}, wallet has ${formatCurrencyBalance(available, tokenDecimals ?? 18)}.`
+}
+
+function resolveOpenOracleDisputeToken1Contribution({ feeToken, feePercentage, oldAmount1, protocolFee, requiredToken1Contribution, tokenToSwap }: { feePercentage: bigint; feeToken: boolean; oldAmount1: bigint; protocolFee: bigint; requiredToken1Contribution: bigint; tokenToSwap: 'token1' | 'token2' }) {
+	if (tokenToSwap === 'token1') {
+		if (feeToken) {
+			const fee = (oldAmount1 * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION
+			const protocolFeeAmount = (oldAmount1 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
+			return requiredToken1Contribution + oldAmount1 + fee + protocolFeeAmount
+		}
+
+		return requiredToken1Contribution + oldAmount1
+	}
+
+	if (feeToken) {
+		return requiredToken1Contribution > oldAmount1 ? requiredToken1Contribution - oldAmount1 : 0n
+	}
+
+	const fee = (oldAmount1 * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION
+	const protocolFeeAmount = (oldAmount1 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
+	const totalContribution = requiredToken1Contribution + fee + protocolFeeAmount
+	return totalContribution > oldAmount1 ? totalContribution - oldAmount1 : 0n
+}
+
+function resolveOpenOracleDisputeToken2Contribution({ feeToken, feePercentage, newAmount2, oldAmount2, protocolFee, tokenToSwap }: { feePercentage: bigint; feeToken: boolean; newAmount2: bigint; oldAmount2: bigint; protocolFee: bigint; tokenToSwap: 'token1' | 'token2' }) {
+	if (tokenToSwap === 'token1') {
+		if (feeToken) {
+			return newAmount2 >= oldAmount2 ? newAmount2 - oldAmount2 : 0n
+		}
+
+		const fee = (oldAmount2 * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION
+		const protocolFeeAmount = (oldAmount2 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
+		const totalContribution = newAmount2 + fee + protocolFeeAmount
+		return totalContribution >= oldAmount2 ? totalContribution - oldAmount2 : 0n
+	}
+
+	if (feeToken) {
+		const fee = (oldAmount2 * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION
+		const protocolFeeAmount = (oldAmount2 * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION
+		return newAmount2 + oldAmount2 + fee + protocolFeeAmount
+	}
+
+	return newAmount2 + oldAmount2
 }
 
 export async function loadOpenOracleInitialReportPriceResult(client: Parameters<typeof quoteExactInput>[0], token1: Parameters<typeof quoteExactInput>[1], token2: Parameters<typeof quoteExactInput>[2], token1Amount: bigint): Promise<OpenOracleInitialReportPriceLoadResult> {
@@ -707,5 +814,205 @@ export function deriveOpenOracleInitialReportSubmissionDetails({
 		token2Approval,
 		token2Decimals,
 		wrapRequiredWethMessage,
+	}
+}
+
+export function deriveOpenOracleDisputeSubmissionDetails({
+	approvedToken1Amount,
+	approvedToken2Amount,
+	disputeNewAmount1Input,
+	disputeNewAmount2Input,
+	disputeTokenToSwap,
+	reportDetails,
+	token1AllowanceError,
+	token1Balance,
+	token1BalanceError,
+	token1Decimals,
+	token2AllowanceError,
+	token2Balance,
+	token2BalanceError,
+	token2Decimals,
+}: {
+	approvedToken1Amount: bigint | undefined
+	approvedToken2Amount: bigint | undefined
+	disputeNewAmount1Input: string
+	disputeNewAmount2Input: string
+	disputeTokenToSwap: 'token1' | 'token2'
+	reportDetails:
+		| Pick<
+				OpenOracleReportDetails,
+				| 'currentAmount1'
+				| 'currentAmount2'
+				| 'currentBlockNumber'
+				| 'currentReporter'
+				| 'currentTime'
+				| 'disputeDelay'
+				| 'escalationHalt'
+				| 'feePercentage'
+				| 'feeToken'
+				| 'isDistributed'
+				| 'multiplier'
+				| 'protocolFee'
+				| 'reportTimestamp'
+				| 'settlementTime'
+				| 'timeType'
+				| 'token1'
+				| 'token1Symbol'
+				| 'token2'
+				| 'token2Symbol'
+		  >
+		| undefined
+	token1AllowanceError: string | undefined
+	token1Balance: bigint | undefined
+	token1BalanceError: string | undefined
+	token1Decimals: number | undefined
+	token2AllowanceError: string | undefined
+	token2Balance: bigint | undefined
+	token2BalanceError: string | undefined
+	token2Decimals: number | undefined
+}): OpenOracleDisputeSubmissionDetails {
+	const token1Label = resolveOpenOracleTokenLabel({
+		fallbackLabel: 'Token1',
+		tokenAddress: reportDetails?.token1,
+		tokenSymbol: reportDetails?.token1Symbol,
+	})
+	const token2Label = resolveOpenOracleTokenLabel({
+		fallbackLabel: 'Token2',
+		tokenAddress: reportDetails?.token2,
+		tokenSymbol: reportDetails?.token2Symbol,
+	})
+
+	let expectedNewAmount1: bigint | undefined
+	let newAmount1: bigint | undefined
+	let newAmount2: bigint | undefined
+
+	if (reportDetails !== undefined) {
+		expectedNewAmount1 = reportDetails.escalationHalt > reportDetails.currentAmount1 ? (reportDetails.currentAmount1 * reportDetails.multiplier) / OPEN_ORACLE_MULTIPLIER_PRECISION : reportDetails.currentAmount1 + 1n
+	}
+
+	try {
+		newAmount1 = parseBigIntInput(disputeNewAmount1Input, 'New token1 amount')
+	} catch {
+		newAmount1 = undefined
+	}
+
+	try {
+		newAmount2 = parseBigIntInput(disputeNewAmount2Input, 'New token2 amount')
+	} catch {
+		newAmount2 = undefined
+	}
+
+	const token1ContributionAmount =
+		reportDetails === undefined || newAmount2 === undefined || expectedNewAmount1 === undefined
+			? undefined
+			: resolveOpenOracleDisputeToken1Contribution({
+					feePercentage: reportDetails.feePercentage,
+					feeToken: reportDetails.feeToken,
+					oldAmount1: reportDetails.currentAmount1,
+					protocolFee: reportDetails.protocolFee,
+					requiredToken1Contribution: expectedNewAmount1,
+					tokenToSwap: disputeTokenToSwap,
+				})
+	const token2ContributionAmount =
+		reportDetails === undefined || newAmount2 === undefined
+			? undefined
+			: resolveOpenOracleDisputeToken2Contribution({
+					feePercentage: reportDetails.feePercentage,
+					feeToken: reportDetails.feeToken,
+					newAmount2,
+					oldAmount2: reportDetails.currentAmount2,
+					protocolFee: reportDetails.protocolFee,
+					tokenToSwap: disputeTokenToSwap,
+				})
+
+	const token1Approval = deriveTokenApprovalRequirement(token1ContributionAmount, approvedToken1Amount)
+	const token2Approval = deriveTokenApprovalRequirement(token2ContributionAmount, approvedToken2Amount)
+
+	let blockMessage: OpenOracleGateMessage | undefined
+	if (reportDetails === undefined) {
+		blockMessage = createVisibleGateMessage('Load a report first')
+	} else {
+		const disputeAvailability = getOpenOracleDisputeAvailability(reportDetails)
+		if (!disputeAvailability.canAct) {
+			blockMessage = createVisibleGateMessage(disputeAvailability.message ?? 'This report is not ready to dispute yet.')
+		} else if (newAmount1 === undefined) {
+			blockMessage = createVisibleGateMessage('Enter a valid new token1 amount.')
+		} else if (newAmount2 === undefined || newAmount2 <= 0n) {
+			blockMessage = createVisibleGateMessage('Enter a valid new token2 amount greater than zero.')
+		} else if (expectedNewAmount1 === undefined) {
+			blockMessage = createVisibleGateMessage('Unable to determine the required new token1 amount.')
+		} else if (newAmount1 !== expectedNewAmount1) {
+			blockMessage = createVisibleGateMessage(`New token1 amount must be exactly ${expectedNewAmount1.toString()} for this dispute.`)
+		} else if (approvedToken1Amount === undefined && token1AllowanceError !== undefined) {
+			blockMessage = createVisibleGateMessage(
+				formatOpenOracleDisputeApprovalStatusUnavailableMessage({
+					reason: token1AllowanceError,
+					tokenLabel: token1Label,
+				}),
+			)
+		} else if (approvedToken2Amount === undefined && token2AllowanceError !== undefined) {
+			blockMessage = createVisibleGateMessage(
+				formatOpenOracleDisputeApprovalStatusUnavailableMessage({
+					reason: token2AllowanceError,
+					tokenLabel: token2Label,
+				}),
+			)
+		} else if (token1Balance === undefined && token1BalanceError !== undefined) {
+			blockMessage = createVisibleGateMessage(
+				formatOpenOracleDisputeBalanceStatusUnavailableMessage({
+					reason: token1BalanceError,
+					tokenLabel: token1Label,
+				}),
+			)
+		} else if (token2Balance === undefined && token2BalanceError !== undefined) {
+			blockMessage = createVisibleGateMessage(
+				formatOpenOracleDisputeBalanceStatusUnavailableMessage({
+					reason: token2BalanceError,
+					tokenLabel: token2Label,
+				}),
+			)
+		} else if (token1Balance === undefined) {
+			blockMessage = createHiddenLoadingGateMessage(`Loading current ${token1Label} balance.`)
+		} else if (token2Balance === undefined) {
+			blockMessage = createHiddenLoadingGateMessage(`Loading current ${token2Label} balance.`)
+		} else if (token1ContributionAmount !== undefined && token1Balance < token1ContributionAmount) {
+			blockMessage = createVisibleGateMessage(
+				formatOpenOracleDisputeInsufficientBalanceMessage({
+					available: token1Balance,
+					required: token1ContributionAmount,
+					tokenDecimals: token1Decimals,
+					tokenLabel: token1Label,
+				}),
+			)
+		} else if (token2ContributionAmount !== undefined && token2Balance < token2ContributionAmount) {
+			blockMessage = createVisibleGateMessage(
+				formatOpenOracleDisputeInsufficientBalanceMessage({
+					available: token2Balance,
+					required: token2ContributionAmount,
+					tokenDecimals: token2Decimals,
+					tokenLabel: token2Label,
+				}),
+			)
+		} else if (approvedToken1Amount === undefined) {
+			blockMessage = createHiddenLoadingGateMessage(`Loading current ${token1Label} approval.`)
+		} else if (approvedToken2Amount === undefined) {
+			blockMessage = createHiddenLoadingGateMessage(`Loading current ${token2Label} approval.`)
+		} else if (!token1Approval.hasSufficientApproval) {
+			blockMessage = createVisibleGateMessage(`${token1Label} approval required`)
+		} else if (!token2Approval.hasSufficientApproval) {
+			blockMessage = createVisibleGateMessage(`${token2Label} approval required`)
+		}
+	}
+
+	return {
+		blockMessage,
+		canSubmit: blockMessage === undefined,
+		expectedNewAmount1,
+		token1Approval,
+		token1ContributionAmount,
+		token1Decimals,
+		token2Approval,
+		token2ContributionAmount,
+		token2Decimals,
 	}
 }

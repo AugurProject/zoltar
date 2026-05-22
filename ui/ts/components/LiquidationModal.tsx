@@ -16,6 +16,7 @@ import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { getLiquidationFailureReason, simulateLiquidation } from '../lib/liquidation.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
+import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import { getCurrentTimestamp as getLocalCurrentTimestamp } from '../lib/time.js'
@@ -48,6 +49,7 @@ type LiquidationModalProps = {
 	liquidationTargetVault: string
 	onLiquidationAmountChange: (value: string) => void
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
+	walletEthBalance?: bigint | undefined
 }
 
 function getLiquidationExecutionMode(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
@@ -103,6 +105,7 @@ export function LiquidationModal({
 	targetVaultSummary,
 	onLiquidationAmountChange,
 	onQueueLiquidation,
+	walletEthBalance,
 }: LiquidationModalProps) {
 	const chainCurrentTimestamp = useChainTimestamp()
 	const dialogRef = useRef<HTMLElement | null>(null)
@@ -189,6 +192,14 @@ export function LiquidationModal({
 						securityMultiplier: selectedPool.securityMultiplier,
 						targetVaultSummary,
 					})
+	const queueLiquidationEthGuardMessage =
+		liquidationExecutionMode !== 'queue'
+			? undefined
+			: getOracleRequestEthGuardMessage({
+					actionLabel: 'queue this liquidation',
+					requestPriceEthCost: currentPoolOracleManagerDetails?.requestPriceEthCost,
+					walletEthBalance,
+				})
 	const liquidationActionReason =
 		accountAddress === undefined
 			? 'Connect a wallet before liquidating.'
@@ -204,7 +215,7 @@ export function LiquidationModal({
 								? sameVaultWarning
 								: liquidationAmount.trim() === ''
 									? 'Enter a liquidation amount.'
-									: directLiquidationReason
+									: (directLiquidationReason ?? queueLiquidationEthGuardMessage)
 
 	const queuedLiquidationOperation =
 		securityPoolOverviewResult?.action !== 'queueLiquidation' || currentPoolOracleManagerDetails?.pendingOperation?.operation !== 'liquidation' || currentPoolOracleManagerDetails.pendingOperation.targetVault !== liquidationTargetVault ? undefined : currentPoolOracleManagerDetails.pendingOperation
