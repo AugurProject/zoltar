@@ -304,7 +304,7 @@ The `Security Pools` route has three high-level modes: `Browse`, `Create`, and `
 #### Operate Read-Only Surfaces
 
 - The selected-pool header can show a lookup-state hint before a pool resolves.
-- The `Pool Summary` surface shows status, vault count, security multiplier, open interest fee, total security bond allowance, manager address, last price, settlement timestamp, expiry, and, when relevant, fork and truth-auction data.
+- The `Pool Summary` surface shows status, vault count, security multiplier, open interest fee, open interest minted / max, manager address, last price, settlement timestamp, expiry, and, when relevant, fork and truth-auction data.
 - A success notice can appear after requesting a new price.
 - If the selected pool belongs to a different universe than the app's active universe, a dedicated `Universe Mismatch` warning appears.
 - If the selected pool has not reached a usable state for the chosen workflow, the UI can replace that workflow with a locked-state hint instead of the action panel.
