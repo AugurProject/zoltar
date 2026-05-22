@@ -574,6 +574,96 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(loadSecurityVaultCalls).toEqual([])
 	})
 
+	test('treats stale loaded vault details from a different pool as unloaded', async () => {
+		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
+		const stalePoolAddress = getAddress('0x00000000000000000000000000000000000000b2')
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						securityVaultDetails: createSecurityVaultDetails({
+							securityPoolAddress: stalePoolAddress,
+							vaultAddress: zeroAddress,
+						}),
+						securityVaultForm: {
+							depositAmount: '10',
+							repWithdrawAmount: '1',
+							securityBondAllowanceAmount: '1',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Deposit REP', 'Refresh the selected vault first.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Refresh the selected vault first.')
+		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance', 'Refresh the selected vault first.')
+		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'Refresh the selected vault first.')
+	})
+
+	test('allows selecting a vault from the directory within the current pool', async () => {
+		const formChanges: Array<{ selectedVaultAddress?: string }> = []
+		const loadSecurityVaultCalls: Array<string | undefined> = []
+		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
+		const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [
+						createSelectedPool({
+							securityPoolAddress: selectedPoolAddress,
+							vaultCount: 1n,
+							vaults: [createSecurityPoolVaultSummary({ vaultAddress })],
+						}),
+					],
+					securityVault: createSecurityVaultProps({
+						onLoadSecurityVault: nextVaultAddress => {
+							loadSecurityVaultCalls.push(nextVaultAddress)
+						},
+						onSecurityVaultFormChange: update => {
+							formChanges.push(update)
+						},
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Directory' }))
+		})
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Select Vault' }))
+		})
+
+		expect(formChanges).toContainEqual({ selectedVaultAddress: vaultAddress })
+		expect(loadSecurityVaultCalls.at(-1)).toBe(vaultAddress)
+	})
+
 	test('refreshes staged operations after queueing a vault withdrawal', async () => {
 		const loadPoolOracleManagerCalls: string[] = []
 		const selectedPoolAddress = zeroAddress

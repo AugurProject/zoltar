@@ -43,7 +43,7 @@ import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
-import { getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
+import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { getCurrentTimestamp as getLocalCurrentTimestamp } from '../lib/time.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
@@ -179,7 +179,15 @@ export function SecurityPoolWorkflowSection({
 	const selectedVaultAddress = getSelectedVaultAddress(selectedVaultAddressInput, accountState.address) ?? ''
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddressInput, accountState.address)
 	const selectedVaultSecurityPoolAddress = securityVault.securityVaultForm.securityPoolAddress.trim()
-	const selectedVaultDetails = securityVault.securityVaultDetails
+	const selectedVaultDetails = doesLoadedSecurityVaultMatchSelection({
+		accountAddress: accountState.address,
+		securityPoolAddress: selectedPool?.securityPoolAddress,
+		securityVaultDetails: securityVault.securityVaultDetails,
+		selectedVaultAddress: selectedVaultAddressInput,
+	})
+		? securityVault.securityVaultDetails
+		: undefined
+	const currentSecurityVaultResult = selectedVaultDetails === undefined ? undefined : securityVault.securityVaultResult
 	const selectedVaultAutoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(selectedPool?.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = selectedVaultDetails !== undefined && sameAddress(selectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(selectedVaultDetails.securityPoolAddress, selectedPool?.securityPoolAddress)
 	const lastSelectedVaultAutoLoadKey = useRef<string | undefined>(undefined)
@@ -187,11 +195,11 @@ export function SecurityPoolWorkflowSection({
 	const lastImmediateQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastLiquidationOutcomeRefreshKey = useRef<string | undefined>(undefined)
 	const lastExecutedOperationRefreshHash = useRef<string | undefined>(undefined)
-	const vaultWorkflowOutcome = getVaultWorkflowOutcomePresentation(securityVault.securityVaultResult)
+	const vaultWorkflowOutcome = getVaultWorkflowOutcomePresentation(currentSecurityVaultResult)
 	const queuedVaultOperation = getQueuedVaultOperation({
 		pendingOperation: currentPoolOracleManagerDetails?.pendingOperation,
 		selectedVaultAddress,
-		securityVaultResult: securityVault.securityVaultResult,
+		securityVaultResult: currentSecurityVaultResult,
 	})
 	const liquidationNoticeState = getLiquidationNoticeState({
 		currentPoolOracleManagerDetails,
@@ -452,13 +460,13 @@ export function SecurityPoolWorkflowSection({
 												}
 											/>
 											{selectedVaultIsOwnedByAccount ? undefined : <p className='detail'>Select your own vault to unlock actions.</p>}
-											{vaultView === 'selected-vault' && securityVault.securityVaultDetails !== undefined ? (
+											{vaultView === 'selected-vault' && selectedVaultDetails !== undefined ? (
 												<SelectedVaultSummarySection
 													repPerEthPrice={repPerEthPrice}
 													repPerEthSource={repPerEthSource}
 													repPerEthSourceUrl={repPerEthSourceUrl}
-													securityBondAllowance={securityVault.securityVaultDetails.securityBondAllowance}
-													securityVaultDetails={securityVault.securityVaultDetails}
+													securityBondAllowance={selectedVaultDetails.securityBondAllowance}
+													securityVaultDetails={selectedVaultDetails}
 													selectedPoolSecurityMultiplier={securityVault.selectedPoolSecurityMultiplier}
 													selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 													variant='embedded'

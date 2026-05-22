@@ -130,6 +130,31 @@ describe('SecurityVaultSection', () => {
 		expect(selectedVaultQueries.getByText('Locked REP')).not.toBeNull()
 	})
 
+	test('hides stale vault details when the current pool selection no longer matches the loaded vault', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					securityVaultDetails: createSecurityVaultDetails({
+						securityPoolAddress: '0x00000000000000000000000000000000000000a1',
+					}),
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '',
+						securityBondAllowanceAmount: '',
+						securityPoolAddress: '0x00000000000000000000000000000000000000a2',
+						selectedVaultAddress: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Selected Vault')).toBeNull()
+		expect(documentQueries.getByText('Refresh the vault to inspect claimable fees.')).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'No claimable fees are available for this vault.')
+	})
+
 	test('fills the security bond allowance input from the backed Max amount', async () => {
 		const formChanges: Partial<SecurityVaultSectionProps['securityVaultForm']>[] = []
 		const renderedComponent = await renderIntoDocument(
