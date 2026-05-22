@@ -22,10 +22,9 @@ describe('ActionLauncherCard', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('renders warning readiness as the standard card shell', async () => {
+	test('renders ready and blocked readiness using the standard card shell classes', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<div>
-				<ActionLauncherCard action={{ actionLabel: 'Warning Action', description: 'Warning details.', key: 'warning', onAction: () => undefined, readiness: 'warning', title: 'Warning Action' }} />
 				<ActionLauncherCard action={{ actionLabel: 'Ready Action', description: 'Ready details.', key: 'ready', onAction: () => undefined, readiness: 'ready', title: 'Ready Action' }} />
 				<ActionLauncherCard action={{ actionLabel: 'Blocked Action', blocker: 'Blocked.', description: 'Blocked details.', key: 'blocked', readiness: 'blocked', title: 'Blocked Action' }} />
 			</div>,
@@ -33,10 +32,10 @@ describe('ActionLauncherCard', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('heading', { name: 'Warning Action' }) as HTMLElement).closest('.warning-surface')).toBeNull()
-		expect((documentQueries.getByRole('heading', { name: 'Warning Action' }) as HTMLElement).closest('.action-launcher-card.default')).not.toBeNull()
 		expect((documentQueries.getByRole('heading', { name: 'Ready Action' }) as HTMLElement).closest('.warning-surface')).toBeNull()
+		expect((documentQueries.getByRole('heading', { name: 'Ready Action' }) as HTMLElement).closest('.action-launcher-card.ready')).not.toBeNull()
 		expect((documentQueries.getByRole('heading', { name: 'Blocked Action' }) as HTMLElement).closest('.warning-surface')).toBeNull()
+		expect((documentQueries.getByRole('heading', { name: 'Blocked Action' }) as HTMLElement).closest('.action-launcher-card.blocked')).not.toBeNull()
 		expect(document.body.querySelectorAll('.warning-surface.action-launcher-card')).toHaveLength(0)
 	})
 })
