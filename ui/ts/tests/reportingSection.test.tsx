@@ -687,6 +687,29 @@ describe('ReportingSection', () => {
 		const minButton = within(document.body).getByRole('button', { name: 'Min to change proposed outcome' }) as HTMLButtonElement
 		expect(minButton.disabled).toBe(true)
 		expect(minButton.title).toBe('Selected side already leads.')
-		expect(document.body.textContent?.includes('Selected side already leads.')).toBe(true)
+		expect(document.body.textContent?.includes('Selected side already leads.')).toBe(false)
+	})
+
+	test('disables max profit when the reward window is already filled without rendering the inline reason', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createReportingDetails({
+						sides: [
+							{ balance: rep(15n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+						],
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const maxProfitButton = within(document.body).getByRole('button', { name: 'Max profit' }) as HTMLButtonElement
+		expect(maxProfitButton.disabled).toBe(true)
+		expect(maxProfitButton.title).toBe('Max profit preset unavailable because the reward window is already filled on the selected side.')
+		expect(document.body.textContent?.includes('Max profit preset unavailable because the reward window is already filled on the selected side.')).toBe(false)
 	})
 })

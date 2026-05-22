@@ -32,6 +32,8 @@ type EscalationSideDisplay = {
 
 const MAX_PROFIT_NOT_STARTED_REASON = 'Max profit becomes available after the escalation game starts.'
 const LOAD_REPORTING_PRESETS_REASON = 'Load reporting details before using presets.'
+const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
+const MAX_PROFIT_WINDOW_FILLED_REASON = 'Max profit preset unavailable because the reward window is already filled on the selected side.'
 
 function getOutcomeSides(activeReportingDetails: ActiveReportingDetails | undefined) {
 	if (activeReportingDetails !== undefined) {
@@ -58,7 +60,7 @@ function getDepositEntryCountLabel(count: number) {
 }
 
 function isHiddenPresetReason(reason: string | undefined) {
-	return reason === LOAD_REPORTING_PRESETS_REASON || reason === MAX_PROFIT_NOT_STARTED_REASON
+	return reason === LOAD_REPORTING_PRESETS_REASON || reason === MAX_PROFIT_NOT_STARTED_REASON || reason === SELECTED_SIDE_ALREADY_LEADS_REASON || reason === MAX_PROFIT_WINDOW_FILLED_REASON
 }
 
 function getReportingStagePresentation({
@@ -350,7 +352,6 @@ export function ReportingSection({
 							Based on the current escalation state, this action would lock <CurrencyValue value={actualReportDepositAmount} suffix='REP' /> instead of the full entered amount.
 						</p>
 					)}
-
 					<div className='actions'>
 						<TransactionActionButton
 							idleLabel='Report / Contribute On Selected Side'
