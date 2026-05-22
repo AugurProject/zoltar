@@ -122,6 +122,17 @@ export function parseRepAmountInput(value: string, label: string) {
 	return parseDecimalInput(value, label, 18)
 }
 
+export function parseOptionalRepAmountInput(value: string) {
+	const trimmed = value.trim()
+	if (trimmed === '') return undefined
+
+	try {
+		return parseRepAmountInput(trimmed, 'REP amount')
+	} catch {
+		return undefined
+	}
+}
+
 export function parseBigIntInput(value: string, label: string) {
 	const trimmed = validateAndTrim(value, label)
 	try {

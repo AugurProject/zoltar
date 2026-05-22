@@ -5,7 +5,6 @@ import { AddressValue } from './AddressValue.js'
 import { ActionLauncherCard } from './ActionLauncherCard.js'
 import { ChildUniverseDeploymentModal } from './ChildUniverseDeploymentModal.js'
 import { CurrencyValue } from './CurrencyValue.js'
-import { EntityCard } from './EntityCard.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
@@ -13,7 +12,6 @@ import { LatestActionSection } from './LatestActionSection.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
-import { Question } from './Question.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
@@ -181,8 +179,6 @@ export function ForkAuctionSection({
 	const migrationTimeRemaining = forkAuctionDetails === undefined ? undefined : getTimeRemaining(forkAuctionDetails.migrationEndsAt, forkAuctionDetails.currentTime)
 	const previewAuctionWindow = getTruthAuctionWindow(previewPool?.truthAuctionStartedAt)
 	const auctionWindow = forkAuctionDetails === undefined ? previewAuctionWindow : getTruthAuctionWindow(forkAuctionDetails.truthAuctionStartedAt)
-	const previewQuestion = previewPool?.marketDetails
-	const question = forkAuctionDetails?.marketDetails ?? previewQuestion
 	const securityPoolAddress = forkAuctionDetails?.securityPoolAddress ?? previewPool?.securityPoolAddress
 	const universeId = forkAuctionDetails?.universeId ?? previewPool?.universeId
 	const parentSecurityPoolAddress = forkAuctionDetails?.parentSecurityPoolAddress ?? previewPool?.parent
@@ -539,12 +535,6 @@ export function ForkAuctionSection({
 					</div>
 				</ReadOnlyDetailAccordion>
 			) : undefined}
-
-			{question === undefined ? undefined : (
-				<EntityCard title='Question' variant='record'>
-					<Question question={question} />
-				</EntityCard>
-			)}
 
 			{hasLoadedPoolContext ? <ReadOnlyDetailAccordion title='Live Snapshot'>{renderSummaryMetricGrid(liveSnapshotMetrics)}</ReadOnlyDetailAccordion> : undefined}
 
