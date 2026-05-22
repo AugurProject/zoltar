@@ -114,6 +114,10 @@ contract SecurityPool is ISecurityPool {
 		return vaults.length;
 	}
 
+	function initialEscalationGameDeposit() external pure returns (uint256) {
+		return TODO_INITIAL_ESCALATION_GAME_DEPOSIT;
+	}
+
 	function getVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaultRange) {
 		if (startIndex >= vaults.length || count == 0) return new address[](0);
 

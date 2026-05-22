@@ -130,7 +130,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 			async (walletAddress, securityPoolAddress, currentForm) => {
 				const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
 				if (latestDetails.status !== 'active') {
-					throw new Error('Escalation game has not started yet')
+					throw new Error('Withdrawals are unavailable until the first report or contribution deploys the escalation game.')
 				}
 				const selectedSide = latestDetails.sides.find(side => side.key === currentForm.selectedOutcome)
 				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []

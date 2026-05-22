@@ -157,7 +157,7 @@ describe('reporting guards', () => {
 				withdrawalEnabled: false,
 				withdrawalState: 'not-finalized',
 			}),
-		).toBe('Escalation game has not started yet.')
+		).toBe('Withdrawals are unavailable until the first report or contribution deploys the escalation game.')
 
 		expect(
 			getReportingWithdrawGuardMessage({

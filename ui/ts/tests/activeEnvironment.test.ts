@@ -505,6 +505,8 @@ void describe('simulation backend', () => {
 
 			expect(reportingDetails.status).toBe('not-started')
 			expect(reportingDetails.marketDetails.endTime < reportingDetails.currentTime).toBe(true)
+			expect(reportingDetails.startBond > 0n).toBe(true)
+			expect(reportingDetails.nonDecisionThreshold > 0n).toBe(true)
 		} finally {
 			await backend.dispose()
 		}

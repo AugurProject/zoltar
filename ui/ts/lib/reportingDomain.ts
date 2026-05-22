@@ -9,6 +9,10 @@ type ReportingAmountSuggestion = {
 }
 
 const REP_UNIT = 10n ** 18n
+const LOAD_REPORTING_PRESETS_REASON = 'Load reporting details before using presets.'
+const MAX_PROFIT_NOT_STARTED_REASON = 'Max profit becomes available after the escalation game starts.'
+const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
+const ESCALATION_RESOLVED_REASON = 'Escalation is already resolved.'
 
 function roundUpToRepUnit(value: bigint) {
 	if (value <= 0n) return 0n
@@ -79,6 +83,39 @@ export function getMinimumOutcomeChangeContribution(details: ActiveReportingDeta
 	return { amount, reason: undefined }
 }
 
+export function getReportingMinimumOutcomeChangeContribution(details: ReportingDetails | undefined, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
+	if (details === undefined) {
+		return {
+			amount: undefined,
+			reason: LOAD_REPORTING_PRESETS_REASON,
+		}
+	}
+
+	if (details.status === 'not-started') {
+		return {
+			amount: details.startBond,
+			reason: undefined,
+		}
+	}
+
+	if (details.resolution !== 'none') {
+		return {
+			amount: undefined,
+			reason: ESCALATION_RESOLVED_REASON,
+		}
+	}
+
+	const minContribution = getMinimumOutcomeChangeContribution(details, selectedOutcome)
+	if (minContribution.amount === 0n && minContribution.reason === undefined) {
+		return {
+			amount: undefined,
+			reason: SELECTED_SIDE_ALREADY_LEADS_REASON,
+		}
+	}
+
+	return minContribution
+}
+
 export function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	const minContribution = getMinimumOutcomeChangeContribution(details, selectedOutcome)
 	if (minContribution.amount === undefined) {
@@ -115,6 +152,31 @@ export function getMaxProfitContribution(details: ActiveReportingDetails, select
 	}
 
 	return { amount, reason: undefined }
+}
+
+export function getReportingMaxProfitContribution(details: ReportingDetails | undefined, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
+	if (details === undefined) {
+		return {
+			amount: undefined,
+			reason: LOAD_REPORTING_PRESETS_REASON,
+		}
+	}
+
+	if (details.status === 'not-started') {
+		return {
+			amount: undefined,
+			reason: MAX_PROFIT_NOT_STARTED_REASON,
+		}
+	}
+
+	if (details.resolution !== 'none') {
+		return {
+			amount: undefined,
+			reason: ESCALATION_RESOLVED_REASON,
+		}
+	}
+
+	return getMaxProfitContribution(details, selectedOutcome)
 }
 
 export function calculateEstimatedEscalationReturn(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey, amount: bigint) {
@@ -236,6 +298,13 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 
 export function previewReportingContribution(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint): ReportingContributionPreview {
 	if (details.status === 'not-started') {
+		if (amount < details.startBond) {
+			return {
+				actualDepositAmount: undefined,
+				reason: `Enter at least ${formatCurrencyBalance(details.startBond)} REP to start the escalation game.`,
+			}
+		}
+
 		return {
 			actualDepositAmount: amount,
 			reason: undefined,
