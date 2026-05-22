@@ -26,7 +26,7 @@ export function EscalationSide({ estimate, isLeading, isSelected, side, userStak
 			<p className='detail'>
 				Your stake: <CurrencyValue value={userStake} suffix='REP' />
 			</p>
-			<p className='detail'>Your deposits: {side.userDeposits.map(deposit => deposit.depositIndex.toString()).join(', ') || 'None'}</p>
+			<p className='detail'>Your unsettled deposits: {side.userDeposits.map(deposit => deposit.depositIndex.toString()).join(', ') || 'None'}</p>
 			<p className='detail'>
 				Projected payout for current amount: <CurrencyValue value={estimate?.payout} suffix='REP' />
 			</p>
