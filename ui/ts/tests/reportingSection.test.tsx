@@ -5,8 +5,9 @@ import { within } from '@testing-library/dom'
 import { h } from 'preact'
 import { zeroAddress } from 'viem'
 import { ReportingSection } from '../components/ReportingSection.js'
+import { formatDuration } from '../lib/formatters.js'
 import type { AccountState, ReportingFormState } from '../types/app.js'
-import type { MarketDetails, ReportingActionResult, ReportingDetails } from '../types/contracts.js'
+import type { ActiveReportingDetails, MarketDetails, ReportingActionResult, ReportingDetails } from '../types/contracts.js'
 import type { ReportingSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -41,7 +42,7 @@ function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDeta
 	}
 }
 
-function createReportingDetails(overrides: Partial<ReportingDetails> = {}): ReportingDetails {
+function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
 	return {
 		bindingCapital: 10n,
 		completeSetCollateralAmount: 1n,
@@ -234,6 +235,45 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
 		expectTransactionButtonEnabled(document.body, 'Withdraw Escalation Deposits')
+	})
+
+	test('renders time left from escalation end time and current chain time', async () => {
+		const reportingDetails = createReportingDetails()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: {
+						...reportingDetails,
+						currentTime: 150n,
+						escalationEndTime: 300n,
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes(formatDuration(300n - 150n))).toBe(true)
+	})
+
+	test('shows awaiting resolution with zero time left once the escalation end time has passed', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: {
+						...createReportingDetails(),
+						currentTime: 300n,
+						escalationEndTime: 300n,
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getAllByText('Awaiting Resolution').length).toBeGreaterThan(0)
+		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
 	})
 
 	test('shows first-report guidance before the escalation game starts', async () => {

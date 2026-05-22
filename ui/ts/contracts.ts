@@ -75,7 +75,6 @@ export { readOptionalMulticall } from './contracts/core.js'
 
 export { getMulticall3Address, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
 const LIQUIDATION_OPERATION_TYPE = 0
-const ESCALATION_TIME_LENGTH = 4_233_600n
 const MIGRATION_TIME_LENGTH = 4_838_400n
 const TRUTH_AUCTION_TIME_LENGTH = 604_800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
@@ -221,7 +220,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}
 	}
 
-	const [startBond, nonDecisionThreshold, startingTime, totalCost, bindingCapital, balances, resolution] = await readRequiredMulticall(client, [
+	const [startBond, nonDecisionThreshold, startingTime, totalCost, bindingCapital, balances, resolution, escalationEndTime] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'startBond',
@@ -264,6 +263,12 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			address: escalationGameAddress,
 			args: [],
 		},
+		{
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getEscalationGameEndDate',
+			address: escalationGameAddress,
+			args: [],
+		},
 	])
 	if (!isBigintTriple(balances)) throw new Error('Unexpected escalation balances response')
 	const [invalidDeposits, yesDeposits, noDeposits] = await Promise.all([loadEscalationDeposits(client, escalationGameAddress, 'invalid'), loadEscalationDeposits(client, escalationGameAddress, 'yes'), loadEscalationDeposits(client, escalationGameAddress, 'no')])
@@ -279,7 +284,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		completeSetCollateralAmount,
 		currentRequiredBond: totalCost === 0n ? startBond : totalCost,
 		currentTime: block.timestamp,
-		escalationEndTime: startingTime + ESCALATION_TIME_LENGTH,
+		escalationEndTime,
 		escalationGameAddress,
 		marketDetails,
 		nonDecisionThreshold,
