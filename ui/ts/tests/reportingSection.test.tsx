@@ -9,7 +9,7 @@ import { zeroAddress } from 'viem'
 import { ReportingSection } from '../components/ReportingSection.js'
 import { formatDuration } from '../lib/formatters.js'
 import type { AccountState, ReportingFormState } from '../types/app.js'
-import type { ActiveReportingDetails, MarketDetails, ReportingDetails } from '../types/contracts.js'
+import type { ActiveReportingDetails, MarketDetails, ReportingActionResult, ReportingDetails } from '../types/contracts.js'
 import type { ReportingSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -29,7 +29,7 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	}
 }
 
-function createMarketDetails(): MarketDetails {
+function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
 	return {
 		answerUnit: '',
 		createdAt: 1n,
@@ -44,10 +44,11 @@ function createMarketDetails(): MarketDetails {
 		questionId: '0x01',
 		startTime: 1n,
 		title: 'Will this resolve?',
+		...overrides,
 	}
 }
 
-function createReportingDetails(): ActiveReportingDetails {
+function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
 	return {
 		bindingCapital: rep(10n),
 		completeSetCollateralAmount: 1n,
@@ -69,6 +70,18 @@ function createReportingDetails(): ActiveReportingDetails {
 		status: 'active',
 		totalCost: rep(20n),
 		universeId: 1n,
+		...overrides,
+	}
+}
+
+function createReportingResult(overrides: Partial<ReportingActionResult> = {}): ReportingActionResult {
+	return {
+		action: 'reportOutcome',
+		hash: '0x01',
+		outcome: 'yes',
+		securityPoolAddress: zeroAddress,
+		universeId: 1n,
+		...overrides,
 	}
 }
 
@@ -148,24 +161,31 @@ describe('ReportingSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('shows a reporting stage banner and workflow summary strip', async () => {
+	test('renders the reporting workflow without banners or duplicate loaded-market metadata', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getAllByText('Active').length).toBeGreaterThan(0)
-		expect(documentQueries.queryByText('Available')).toBeNull()
-		expect(documentQueries.queryByText('Blocked')).toBeNull()
-		expect(documentQueries.queryByText('Reporting Workflow')).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Question' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Pending Start' })).toBeNull()
+		expect(documentQueries.queryByText('The current escalation lifecycle phase is')).toBeNull()
+		expect(documentQueries.queryByText('Reporting contribution submitted')).toBeNull()
+
+		const reportingContextCard = documentQueries.getByRole('heading', { name: 'Reporting Context' }).closest('.entity-card')
+		if (reportingContextCard === null) throw new Error('Expected reporting context entity card')
+		const reportingContextQueries = within(reportingContextCard as HTMLElement)
+		expect(reportingContextQueries.getByText('Escalation Game')).not.toBeNull()
+		expect(reportingContextQueries.queryByText('Security Pool')).toBeNull()
+		expect(reportingContextQueries.queryByText('Universe')).toBeNull()
+		expect(reportingContextQueries.queryByText('Resolution')).toBeNull()
+
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(true)
 		expect(document.body.textContent?.includes('Selected side has')).toBe(false)
 		expect(documentQueries.getByRole('button', { name: 'Min to change proposed outcome' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Max profit' })).not.toBeNull()
 	})
 
-	test('renders the pre-reporting stage inside the shared warning surface', async () => {
+	test('does not render the pre-reporting warning banner before market end', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -178,8 +198,28 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Pre-Reporting' })).not.toBeNull()
-		expect(document.body.querySelector('.warning-surface.lifecycle-stage-banner')).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Pre-Reporting' })).toBeNull()
+		expect(document.body.querySelector('.warning-surface.lifecycle-stage-banner')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
+	})
+
+	test('does not render the reporting success banner after a contribution result', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createReportingDetails({ currentTime: 110n, startingTime: 120n }),
+					reportingResult: createReportingResult(),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Reporting contribution submitted')).toBeNull()
+		expect(documentQueries.queryByText('Contributed on the Yes side.')).toBeNull()
+		expect(documentQueries.queryByText('Next: Review the leading side and updated bond before contributing again.')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' })).not.toBeNull()
 	})
 
 	test('disables reporting buttons when deterministic prerequisites are missing', async () => {
@@ -272,7 +312,6 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Loaded Escalation Game')).toBeNull()
 		expect(documentQueries.queryByText('Escalation Metrics')).toBeNull()
 		expect(documentQueries.queryByText('Outcome Sides')).toBeNull()
 		expect(document.body.textContent?.includes('Reporting is open, but the escalation game has not started yet.')).toBe(true)
