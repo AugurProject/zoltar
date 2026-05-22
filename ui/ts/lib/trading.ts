@@ -39,7 +39,7 @@ export function getVaultCollateralizationPercent(repDepositShare: bigint | undef
 
 export function getCollateralizationTone(collateralizationPercent: bigint | undefined, securityMultiplier: bigint | undefined): CollateralizationTone | undefined {
 	if (collateralizationPercent === undefined || securityMultiplier === undefined) return undefined
-	return collateralizationPercent > securityMultiplier * PERCENT_MULTIPLIER * PRICE_PRECISION ? 'success' : 'danger'
+	return collateralizationPercent < securityMultiplier * PERCENT_MULTIPLIER * PRICE_PRECISION ? 'danger' : 'success'
 }
 
 export function getCollateralizationDisplayState(securityBondAllowance: bigint | undefined, collateralizationPercent: bigint | undefined): CollateralizationDisplayState {

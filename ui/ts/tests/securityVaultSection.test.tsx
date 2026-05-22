@@ -119,10 +119,40 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Selected Vault')).not.toBeNull()
-		expect(documentQueries.getAllByText('REP Collateral').length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByText('Approved REP').length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByText('Locked REP').length).toBeGreaterThan(0)
+		const selectedVaultHeading = documentQueries.getByRole('heading', { name: 'Selected Vault' })
+		const selectedVaultCard = selectedVaultHeading.closest('.entity-card')
+		if (!(selectedVaultCard instanceof HTMLElement)) {
+			throw new Error('Expected a selected vault summary card')
+		}
+		const selectedVaultQueries = within(selectedVaultCard)
+		expect(selectedVaultQueries.getByText('REP Collateral')).not.toBeNull()
+		expect(selectedVaultQueries.queryByText('Approved REP')).toBeNull()
+		expect(selectedVaultQueries.getByText('Locked REP')).not.toBeNull()
+	})
+
+	test('hides stale vault details when the current pool selection no longer matches the loaded vault', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					securityVaultDetails: createSecurityVaultDetails({
+						securityPoolAddress: '0x00000000000000000000000000000000000000a1',
+					}),
+					securityVaultForm: {
+						depositAmount: '',
+						repWithdrawAmount: '',
+						securityBondAllowanceAmount: '',
+						securityPoolAddress: '0x00000000000000000000000000000000000000a2',
+						selectedVaultAddress: zeroAddress,
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Selected Vault')).toBeNull()
+		expect(documentQueries.getByText('Refresh the vault to inspect claimable fees.')).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'No claimable fees are available for this vault.')
 	})
 
 	test('fills the security bond allowance input from the backed Max amount', async () => {

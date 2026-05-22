@@ -1,7 +1,9 @@
+import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { getOracleLastPriceDisplay, getOraclePriceValidityPresentation } from '../lib/securityPoolWorkflow.js'
+import { getCurrentTimestamp } from '../lib/time.js'
 
 type OpenOraclePriceValueProps = {
-	currentTimestamp: bigint
+	currentTimestamp?: bigint
 	lastPrice: bigint | undefined
 	lastSettlementTimestamp: bigint
 	priceValidUntilTimestamp: bigint | undefined
@@ -9,9 +11,11 @@ type OpenOraclePriceValueProps = {
 
 export function OpenOraclePriceValue({ currentTimestamp, lastPrice, lastSettlementTimestamp, priceValidUntilTimestamp }: OpenOraclePriceValueProps) {
 	if (lastPrice === undefined || lastSettlementTimestamp === 0n) return 'Unavailable'
+	const chainCurrentTimestamp = useChainTimestamp()
+	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp ?? getCurrentTimestamp()
 
 	const validityPresentation = getOraclePriceValidityPresentation({
-		currentTimestamp,
+		currentTimestamp: resolvedCurrentTimestamp,
 		lastSettlementTimestamp,
 		priceValidUntilTimestamp,
 	})

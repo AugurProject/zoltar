@@ -59,6 +59,7 @@ function createReportingDetails(overrides: Partial<ReportingDetails> = {}): Repo
 			{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 		],
 		startBond: 1n,
+		status: 'active',
 		startingTime: 120n,
 		totalCost: 0n,
 		universeId: 1n,
@@ -74,6 +75,18 @@ function createReportingResult(overrides: Partial<ReportingActionResult> = {}): 
 		securityPoolAddress: zeroAddress,
 		universeId: 1n,
 		...overrides,
+	}
+}
+
+function createNotStartedReportingDetails(): ReportingDetails {
+	return {
+		completeSetCollateralAmount: 1n,
+		currentTime: 150n,
+		marketDetails: createMarketDetails(),
+		resolution: 'none',
+		securityPoolAddress: zeroAddress,
+		status: 'not-started',
+		universeId: 1n,
 	}
 }
 
@@ -129,22 +142,39 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getAllByText('Active').length).toBeGreaterThan(0)
+		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Pending Start' })).toBeNull()
 		expect(documentQueries.queryByText('The current escalation lifecycle phase is')).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Loaded Escalation Game' })).not.toBeNull()
+		expect(documentQueries.queryByText('Reporting contribution submitted')).toBeNull()
 
-		const loadedEscalationCard = documentQueries.getByRole('heading', { name: 'Loaded Escalation Game' }).closest('.entity-card')
-		if (loadedEscalationCard === null) throw new Error('Expected loaded escalation entity card')
-		const loadedEscalationQueries = within(loadedEscalationCard as HTMLElement)
-		expect(loadedEscalationQueries.getByText('Escalation Game')).not.toBeNull()
-		expect(loadedEscalationQueries.queryByText('Security Pool')).toBeNull()
-		expect(loadedEscalationQueries.queryByText('Universe')).toBeNull()
-		expect(loadedEscalationQueries.queryByText('Resolution')).toBeNull()
-		expect(loadedEscalationQueries.queryByText('Market End')).toBeNull()
+		const reportingContextCard = documentQueries.getByRole('heading', { name: 'Reporting Context' }).closest('.entity-card')
+		if (reportingContextCard === null) throw new Error('Expected reporting context entity card')
+		const reportingContextQueries = within(reportingContextCard as HTMLElement)
+		expect(reportingContextQueries.getByText('Escalation Game')).not.toBeNull()
+		expect(reportingContextQueries.queryByText('Security Pool')).toBeNull()
+		expect(reportingContextQueries.queryByText('Universe')).toBeNull()
+		expect(reportingContextQueries.queryByText('Resolution')).toBeNull()
 
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(true)
-		expect(document.body.textContent?.includes('Selected side has')).toBe(true)
+		expect(document.body.textContent?.includes('Selected side has')).toBe(false)
+	})
+
+	test('does not render the pre-reporting warning banner before market end', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 50n,
+					reportingDetails: undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('heading', { name: 'Pre-Reporting' })).toBeNull()
+		expect(document.body.querySelector('.warning-surface.lifecycle-stage-banner')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
 	})
 
 	test('does not render the reporting success banner after a contribution result', async () => {
@@ -183,15 +213,65 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Connect a wallet before reporting on a market.')
-		expectTransactionButtonDisabled(document.body, 'Withdraw Escalation Deposits', 'Connect a wallet before withdrawing escalation deposits.')
+		expect(document.body.querySelector('button[title=\"Connect a wallet before withdrawing escalation deposits.\"]')).toBeNull()
 		expect(document.body.querySelector('.disabled-reason')).toBeNull()
 	})
 
-	test('enables reporting actions when the selected side can accept reports and has deposits to withdraw', async () => {
+	test('enables reporting action when the selected side can accept reports', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
+		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
+	})
+
+	test('renders a withdraw-only mode without reporting context or report form', async () => {
+		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ mode: 'withdraw-only' })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
 		expectTransactionButtonEnabled(document.body, 'Withdraw Escalation Deposits')
+	})
+
+	test('shows first-report guidance before the escalation game starts', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createNotStartedReportingDetails(),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Escalation Metrics')).toBeNull()
+		expect(documentQueries.queryByText('Outcome Sides')).toBeNull()
+		expect(document.body.textContent?.includes('Reporting is open, but the escalation game has not started yet.')).toBe(true)
+		expect(document.body.textContent?.includes('The first report or contribution will deploy and initialize the escalation game for this pool.')).toBe(true)
+
+		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
+		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
+	})
+
+	test('accepts decimal report amounts for profit preview', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingForm: {
+						...createReportingForm(),
+						reportAmount: '1.5',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('projects roughly')).toBe(true)
+		expect(document.body.textContent?.includes('Enter a valid report amount to preview profit.')).toBe(false)
 	})
 })

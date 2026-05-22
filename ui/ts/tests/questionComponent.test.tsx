@@ -1,0 +1,59 @@
+/// <reference types="bun-types" />
+
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { Question } from '../components/Question.js'
+import { ChainTimestampContext } from '../lib/chainTimestamp.js'
+import type { MarketDetails } from '../types/contracts.js'
+import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+
+function createQuestion(overrides: Partial<MarketDetails> = {}): MarketDetails {
+	return {
+		answerUnit: '',
+		createdAt: 120n,
+		description: 'Description',
+		displayValueMax: 1n,
+		displayValueMin: 0n,
+		endTime: 180n,
+		exists: true,
+		marketType: 'binary',
+		numTicks: 1n,
+		outcomeLabels: ['Yes', 'No'],
+		questionId: '0x0000000000000000000000000000000000000000000000000000000000000001',
+		startTime: 0n,
+		title: 'Question title',
+		...overrides,
+	}
+}
+
+describe('Question component', () => {
+	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+	let restoreDomEnvironment: (() => void) | undefined
+	const originalDateNow = Date.now
+
+	beforeEach(() => {
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+	})
+
+	afterEach(async () => {
+		Date.now = originalDateNow
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+		restoreDomEnvironment?.()
+		restoreDomEnvironment = undefined
+	})
+
+	test('inherits the shared chain timestamp for route-level relative time rendering', async () => {
+		Date.now = () => 0
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={240n}>
+				<Question question={createQuestion()} showTitle={false} />
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('(2m ago)')).toBe(true)
+		expect(document.body.textContent?.includes('(1m ago)')).toBe(true)
+	})
+})

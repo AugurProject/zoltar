@@ -1,4 +1,4 @@
-import { createMemoryClient, type DumpStateResult } from 'tevm'
+import { createMemoryClient } from 'tevm'
 import { createCommon } from 'tevm/common'
 import { createPublicClient, createWalletClient, custom, encodeFunctionData, parseTransaction, publicActions, recoverTransactionAddress, type Address, type Hash, type Hex } from 'viem'
 import { getAddress } from 'viem'
@@ -6,6 +6,7 @@ import type { InjectedEthereum } from '../injectedEthereum.js'
 import type { ChainBackend, CreateWriteClientCallbacks, ReadClient, WriteClient } from '../lib/chainBackend.js'
 import { createSimulationProfile } from '../lib/networkProfile.js'
 import { bootstrapSimulationChain, predictSimulationTokenAddresses, updateZoltarGenesisRepToken } from './bootstrap.js'
+import { advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, mineNextSimulationBlock, minePendingSimulationTransactionAtTimestamp } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 import type { SimulationWorkerState } from './tevmWorkerProtocol.js'
 
@@ -30,6 +31,9 @@ type SimulationSendTransactionRequest = {
 	to?: Address | null | undefined
 	value?: bigint | undefined
 }
+
+const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
+const DEFAULT_SIMULATION_REP_PER_USDC_PRICE = 10n ** 6n
 
 function normalizeRpcBigInt(value: unknown) {
 	if (typeof value === 'bigint') return value
@@ -105,7 +109,7 @@ function createTevmTransactionRequest({
 	value?: bigint | undefined
 }) {
 	return {
-		addToBlockchain: true,
+		addToMempool: true,
 		data,
 		from,
 		...(gas === undefined ? {} : { gas }),
@@ -121,6 +125,17 @@ function createTevmTransactionRequest({
 function clampDelayMilliseconds(value: number) {
 	if (!Number.isFinite(value) || value <= 0) return 0
 	return Math.min(Math.trunc(value), 30_000)
+}
+
+function createSimulationMemoryClient(profile: ReturnType<typeof createSimulationProfile>) {
+	return createMemoryClient({
+		common: createCommon({
+			...profile.chain,
+		}),
+		miningConfig: {
+			type: 'manual',
+		},
+	})
 }
 
 async function delayMilliseconds(milliseconds: number) {
@@ -143,18 +158,6 @@ async function getSimulationChainState(memoryClient: MemoryClientLike) {
 		blockNumber: getRequiredBlockNumber(block),
 		currentTimestamp: block.timestamp,
 	}
-}
-
-async function mineSimulationBlockAtTimestamp(memoryClient: MemoryClientLike, timestamp: bigint) {
-	const vm = await memoryClient.transport.tevm.getVm()
-	const parentBlock = await vm.blockchain.getCanonicalHeadBlock()
-	const builder = await vm.buildBlock({
-		headerData: {
-			timestamp,
-		},
-		parentBlock,
-	})
-	await builder.build()
 }
 
 function createSimulationProvider({ getChainId, getQueryDelayMilliseconds, getSelectedAccount, requestRpc }: { getChainId: () => string; getQueryDelayMilliseconds: () => number; getSelectedAccount: () => Address; requestRpc: (parameters: RequestArguments) => Promise<unknown> }): InjectedEthereum {
@@ -233,18 +236,9 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 	}
 	const predictedTokenAddresses = predictSimulationTokenAddresses(primaryAccount)
 	const profile = createSimulationProfile(predictedTokenAddresses)
-	const memoryClient = createMemoryClient({
-		common: createCommon({
-			...profile.chain,
-		}),
-		miningConfig: {
-			type: 'auto',
-		},
-	})
-	const passthroughRequest = memoryClient.request as (parameters: RequestArguments) => Promise<unknown>
+	let memoryClient = createSimulationMemoryClient(profile)
 	const stateListeners = new Set<() => void>()
 	const impersonatedAccounts = new Set<string>()
-	let baselineState: DumpStateResult | undefined = undefined
 	let baselineTransactionCount = 0n
 	let bootstrapError: string | undefined = undefined
 	let bootstrapLabel: string | undefined = undefined
@@ -255,8 +249,8 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 	let bootstrapping = false
 	let currentTimestamp = 0n
 	let queryDelayMilliseconds = 0
-	let repPerEthPrice = 10n ** 18n
-	let repPerUsdcPrice = 10n ** 6n
+	let repPerEthPrice = DEFAULT_SIMULATION_REP_PER_ETH_PRICE
+	let repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
 	let selectedAccount = primaryAccount
 	let transactionCountSinceReset = 0n
 	let transactionDelayMilliseconds = 1_000
@@ -272,6 +266,17 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		if (impersonatedAccounts.has(normalizedAddress)) return
 		await memoryClient.impersonateAccount({ address })
 		impersonatedAccounts.add(normalizedAddress)
+	}
+
+	const initializeSimulationAccounts = async () => {
+		for (const account of QA_ACCOUNTS) {
+			await ensureImpersonated(account)
+		}
+	}
+
+	const mineSubmittedTransaction = async (hash: Hash) => {
+		const chainTimestamp = await getSimulationChainTimestamp(memoryClient)
+		await minePendingSimulationTransactionAtTimestamp(memoryClient, hash, getNextSimulationTimestamp(chainTimestamp))
 	}
 
 	const refreshSimulationState = async () => {
@@ -300,6 +305,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			}),
 		)
 		const hash = requireTransactionHash(result.txHash, 'raw transaction')
+		await mineSubmittedTransaction(hash)
 		transactionCountSinceReset += 1n
 		await refreshSimulationState()
 		emitState()
@@ -343,6 +349,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			}),
 		)
 		const hash = requireTransactionHash(result.txHash, 'transaction')
+		await mineSubmittedTransaction(hash)
 		transactionCountSinceReset += 1n
 		await refreshSimulationState()
 		emitState()
@@ -366,7 +373,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			}
 			return await sendTransactionInternal(normalizeRpcTransactionRequest(request as Record<string, unknown>))
 		}
-		return await passthroughRequest(parameters)
+		return await (memoryClient.request as (parameters: RequestArguments) => Promise<unknown>)(parameters)
 	}
 
 	const provider = createSimulationProvider({
@@ -437,7 +444,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 					if (!isMissingTransactionReceiptError(error)) {
 						throw error
 					}
-					await memoryClient.tevmMine()
+					await mineNextSimulationBlock(memoryClient)
 				}
 			}
 			const receipt = await receiptClient.getTransactionReceipt({
@@ -468,9 +475,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		)
 	}
 
-	for (const account of QA_ACCOUNTS) {
-		await ensureImpersonated(account)
-	}
+	await initializeSimulationAccounts()
 
 	const createBootstrapReadClient = () =>
 		createPublicClient({
@@ -501,9 +506,6 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 					createReadClient: createBootstrapReadClient,
 					createWriteClient: createBootstrapWriteClient,
 					memoryClient,
-					onBaselineState: state => {
-						baselineState = state
-					},
 					onProgress: progress => {
 						bootstrapLabel = progress.label
 						bootstrapProgress = progress.value
@@ -553,8 +555,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 	return {
 		accounts: QA_ACCOUNTS,
 		advanceTime: async seconds => {
-			const chainState = await getSimulationChainState(memoryClient)
-			await mineSimulationBlockAtTimestamp(memoryClient, chainState.currentTimestamp + seconds)
+			await advanceSimulationTime(memoryClient, seconds)
 			await refreshSimulationState()
 			emitState()
 		},
@@ -570,7 +571,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			})
 		},
 		mineBlock: async () => {
-			await memoryClient.tevmMine()
+			await mineNextSimulationBlock(memoryClient)
 			await refreshSimulationState()
 			emitState()
 		},
@@ -579,19 +580,33 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		},
 		request: async parameters => await requestRpc(parameters),
 		reset: async () => {
-			if (baselineState === undefined) {
-				throw new Error('Simulation baseline state has not been captured yet')
-			}
-			await memoryClient.tevmLoadState({ state: baselineState.state })
+			bootstrapError = undefined
+			bootstrapLabel = 'Resetting simulation scenario'
+			bootstrapProgress = 0
+			memoryClient = createSimulationMemoryClient(profile)
 			impersonatedAccounts.clear()
-			for (const account of QA_ACCOUNTS) {
-				await ensureImpersonated(account)
-			}
+			await initializeSimulationAccounts()
+			await bootstrapSimulationChain({
+				accounts: QA_ACCOUNTS,
+				createReadClient: createBootstrapReadClient,
+				createWriteClient: createBootstrapWriteClient,
+				memoryClient,
+				onProgress: progress => {
+					bootstrapLabel = progress.label
+					bootstrapProgress = progress.value
+					emitState()
+				},
+				primaryAccount,
+				profile,
+				scenario,
+			})
 			selectedAccount = primaryAccount
 			transactionCountSinceReset = baselineTransactionCount
-			repPerEthPrice = 10n ** 18n
-			repPerUsdcPrice = 10n ** 6n
+			repPerEthPrice = DEFAULT_SIMULATION_REP_PER_ETH_PRICE
+			repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
 			await refreshSimulationState()
+			bootstrapLabel = undefined
+			bootstrapProgress = undefined
 			emitState()
 		},
 		selectAccount: async address => {

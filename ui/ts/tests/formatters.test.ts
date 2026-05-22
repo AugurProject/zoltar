@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { formatCurrencyInputBalance, formatDuration, formatRelativeTimestamp, formatRoundedCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
+import { formatCompactCurrencyBalance, formatCurrencyInputBalance, formatDuration, formatRelativeTimestamp, formatRoundedCurrencyBalance, formatTimestamp } from '../lib/formatters.js'
 
 void describe('formatting helpers', () => {
 	void test('formatRoundedCurrencyBalance rounds positive balances without a decimal part when decimals are zero', () => {
@@ -19,6 +19,32 @@ void describe('formatting helpers', () => {
 
 	void test('formatCurrencyInputBalance returns a compact decimal string without grouped separators', () => {
 		expect(formatCurrencyInputBalance(1234567890000000000000n)).toBe('1234.56789')
+	})
+
+	void describe('formatCompactCurrencyBalance', () => {
+		void test('formats thousands with SI suffixes', () => {
+			expect(formatCompactCurrencyBalance(10000n * 10n ** 18n)).toBe('10k')
+		})
+
+		void test('formats millions with a single decimal place', () => {
+			expect(formatCompactCurrencyBalance(1234000n * 10n ** 18n)).toBe('1.2M')
+		})
+
+		void test('carries rounded values into the next suffix', () => {
+			expect(formatCompactCurrencyBalance(999999990000n * 10n ** 18n)).toBe('1T')
+		})
+
+		void test('preserves the sign for negative values', () => {
+			expect(formatCompactCurrencyBalance(-1250n * 10n ** 18n)).toBe('-1.3k')
+		})
+
+		void test('supports non-18-decimal token units', () => {
+			expect(formatCompactCurrencyBalance(1234567890000n, 6)).toBe('1.2M')
+		})
+
+		void test('falls back to scientific notation beyond yotta', () => {
+			expect(formatCompactCurrencyBalance(1234000000000000000000000000n, 0)).toBe('1.2E27')
+		})
 	})
 
 	void describe('timestamp formatting', () => {

@@ -7,7 +7,8 @@ import { createConnectedReadClient, createWalletWriteClient } from '../lib/clien
 import { getErrorMessage } from '../lib/errors.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput, resolveOptionalBigIntListInput } from '../lib/inputs.js'
-import { getDefaultReportingFormState, parseBigIntInput } from '../lib/marketForm.js'
+import { getDefaultReportingFormState, parseRepAmountInput } from '../lib/marketForm.js'
+import { useRequestGuard } from '../lib/requestGuard.js'
 import type { ReportingFormState, WriteOperationsParameters } from '../types/app.js'
 import type { ReportingActionResult, ReportingDetails } from '../types/contracts.js'
 
@@ -20,9 +21,12 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 	const { state: reportingForm, setState: setReportingForm } = useFormState<ReportingFormState>(getDefaultReportingFormState())
 	const reportingActiveAction = useSignal<ReportingActionResult['action'] | undefined>(undefined)
 	const reportingResult = useSignal<ReportingActionResult | undefined>(undefined)
+	const nextReportingLoad = useRequestGuard()
 
 	const loadReporting = async () => {
+		const isCurrent = nextReportingLoad()
 		await reportingLoad.run({
+			isCurrent,
 			onStart: () => {
 				reportingError.value = undefined
 			},
@@ -70,7 +74,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 	const reportOutcome = async () =>
 		await runReportingAction(
 			'reportOutcome',
-			async (walletAddress, securityPoolAddress, currentForm) => await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, parseBigIntInput(currentForm.reportAmount, 'Report amount')),
+			async (walletAddress, securityPoolAddress, currentForm) => await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, parseRepAmountInput(currentForm.reportAmount, 'Report amount')),
 			'Failed to report on outcome',
 		)
 
@@ -79,6 +83,9 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 			'withdrawEscalation',
 			async (walletAddress, securityPoolAddress, currentForm) => {
 				const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
+				if (latestDetails.status !== 'active') {
+					throw new Error('Escalation game has not started yet')
+				}
 				const selectedSide = latestDetails.sides.find(side => side.key === currentForm.selectedOutcome)
 				const depositIndexes = resolveOptionalBigIntListInput(currentForm.withdrawDepositIndexes, selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? [], 'Deposit indexes')
 
