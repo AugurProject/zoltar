@@ -120,6 +120,7 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 		tradingActiveAction: undefined,
 		tradingDetails: createTradingDetails(),
 		tradingError: undefined,
+		tradingFeedback: undefined,
 		tradingForkUniverse: undefined,
 		tradingForm: createTradingForm(),
 		tradingResult: undefined,
@@ -216,25 +217,31 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Redeem Resolved Shares' })).not.toBeNull()
 	})
 
-	void test('renders the trading result banner without the latest trading action card', async () => {
+	void test('renders button-local trading feedback without a latest action card', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
-					tradingResult: {
+					tradingFeedback: {
 						action: 'createCompleteSet',
-						hash: zeroHash,
-						securityPoolAddress: zeroAddress,
-						universeId: 1n,
+						status: {
+							detail: 'Complete sets are now available in the selected pool.',
+							hash: zeroHash,
+							title: 'Complete sets minted',
+							tone: 'success',
+						},
 					},
 				})}
 			/>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		})
+
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Complete sets minted' })).not.toBeNull()
+		expect(documentQueries.getByText('Complete sets minted')).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Latest Trading Action' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: /Copy address/i })).toBeNull()
 	})
 
 	void test('renders your share metrics using rounded values with exact copy affordances', async () => {

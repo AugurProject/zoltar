@@ -5,9 +5,11 @@ import { createZoltarChildUniverse, loadAllZoltarQuestions, loadZoltarQuestionCo
 import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../lib/errors.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { hasDeployedStep } from '../lib/marketCreation.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { requireWallet } from '../lib/walletGuard.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { DeploymentStatus, MarketDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type UseZoltarUniverseParameters = {
@@ -33,6 +35,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 	const zoltarQuestions = useSignal<MarketDetails[]>([])
 	const zoltarUniverse = useSignal<ZoltarUniverseSummary | undefined>(undefined)
 	const zoltarChildUniverseError = useSignal<string | undefined>(undefined)
+	const zoltarChildUniverseFeedback = useSignal<ActionFeedback<'createChildUniverse'> | undefined>(undefined)
 	const zoltarChildUniversePendingOutcomeIndex = useSignal<bigint | undefined>(undefined)
 	const isMounted = useRef(true)
 	const nextUniverseLoad = useRequestGuard()
@@ -167,9 +170,11 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		}
 
 		zoltarChildUniverseError.value = undefined
+		zoltarChildUniverseFeedback.value = createPendingActionFeedback('createChildUniverse', 'Deploying child universe')
 		zoltarChildUniversePendingOutcomeIndex.value = outcomeIndex
 		try {
 			let refreshRequired = false
+			let resultHash: Hash | undefined
 			try {
 				onTransactionRequested()
 				const universe = await ensureZoltarUniverse()
@@ -177,10 +182,14 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 					throw new Error('Zoltar needs to fork before child universes can be deployed')
 				}
 				const result = await createZoltarChildUniverse(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), universe.universeId, outcomeIndex)
+				resultHash = result.hash
+				zoltarChildUniverseFeedback.value = createSuccessActionFeedback('createChildUniverse', 'Child universe deployed', result.hash)
 				onTransaction(result.hash)
 				refreshRequired = true
 			} catch (error) {
-				zoltarChildUniverseError.value = formatWriteErrorMessage(error, 'Failed to deploy child universe')
+				const message = formatWriteErrorMessage(error, 'Failed to deploy child universe')
+				zoltarChildUniverseError.value = message
+				zoltarChildUniverseFeedback.value = createErrorActionFeedback('createChildUniverse', 'Child universe deployment failed', message)
 				return
 			}
 
@@ -189,7 +198,9 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 			try {
 				await refreshZoltarUniverse()
 			} catch (error) {
-				zoltarChildUniverseError.value = formatRefreshErrorMessage(error, 'Child universe transaction succeeded, but refreshing the UI failed')
+				const message = formatRefreshErrorMessage(error, 'Child universe transaction succeeded, but refreshing the UI failed')
+				zoltarChildUniverseError.value = message
+				zoltarChildUniverseFeedback.value = createWarningActionFeedback('createChildUniverse', 'Child universe deployed', message, resultHash)
 			}
 		} finally {
 			zoltarChildUniversePendingOutcomeIndex.value = undefined
@@ -219,6 +230,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		loadZoltarQuestionCount: loadZoltarQuestionCountData,
 		loadZoltarQuestions: loadQuestions,
 		loadZoltarUniverse,
+		zoltarChildUniverseFeedback: zoltarChildUniverseFeedback.value,
 		refreshZoltarUniverse,
 		zoltarChildUniverseError: zoltarChildUniverseError.value,
 		zoltarChildUniversePendingOutcomeIndex: zoltarChildUniversePendingOutcomeIndex.value,

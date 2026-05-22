@@ -9,7 +9,7 @@ import { zeroAddress } from 'viem'
 import { ReportingSection } from '../components/ReportingSection.js'
 import { formatDuration } from '../lib/formatters.js'
 import type { AccountState, ReportingFormState } from '../types/app.js'
-import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingActionResult, ReportingDetails } from '../types/contracts.js'
+import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingDetails } from '../types/contracts.js'
 import type { ReportingSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -96,13 +96,15 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 	}
 }
 
-function createReportingResult(overrides: Partial<ReportingActionResult> = {}): ReportingActionResult {
+function createReportingFeedback(overrides: Partial<NonNullable<ReportingSectionProps['reportingFeedback']>> = {}): NonNullable<ReportingSectionProps['reportingFeedback']> {
 	return {
 		action: 'reportOutcome',
-		hash: '0x01',
-		outcome: 'yes',
-		securityPoolAddress: zeroAddress,
-		universeId: 1n,
+		status: {
+			detail: 'Report recorded on-chain.',
+			hash: '0x01',
+			title: 'Reporting submitted',
+			tone: 'success',
+		},
 		...overrides,
 	}
 }
@@ -147,6 +149,7 @@ function createProps(overrides: Partial<ReportingSectionProps> = {}): ReportingS
 		reportingActiveAction: undefined,
 		reportingDetails: createReportingDetails(),
 		reportingError: undefined,
+		reportingFeedback: undefined,
 		reportingForm: createReportingForm(),
 		reportingResult: undefined,
 		showHeader: false,
@@ -226,21 +229,20 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
 	})
 
-	test('does not render the reporting success banner after a contribution result', async () => {
+	test('renders button-local reporting feedback instead of the latest action card', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
-					reportingDetails: createReportingDetails({ currentTime: 110n, startingTime: 120n }),
-					reportingResult: createReportingResult(),
+					reportingFeedback: createReportingFeedback(),
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Reporting contribution submitted')).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' })).not.toBeNull()
+		expect(documentQueries.getByText('Reporting submitted')).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Latest Reporting Action' })).toBeNull()
 	})
 
 	test('renders escalation metrics inside outcome sides instead of a standalone card', async () => {
@@ -272,13 +274,12 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Reporting is not enabled at the moment.')).not.toBeNull()
-		expect(documentQueries.getByText('Reporting opens in less than a minute.')).not.toBeNull()
+		expect(documentQueries.getByText('Reporting is not enabled. Opens in less than a minute.')).not.toBeNull()
 		expect(documentQueries.queryByText('Locked')).toBeNull()
 		expect(documentQueries.queryByText('Opens In')).toBeNull()
 	})
 
-	test('does not show an escalation status banner when reporting is open but escalation details are not loaded yet', async () => {
+	test('shows a single reporting-open status line when escalation details are not loaded yet', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -291,7 +292,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Reporting Open')).toBeNull()
+		expect(document.body.textContent?.includes('Reporting is open. Market ended at')).toBe(true)
 		expect(documentQueries.queryByText(/current escalation lifecycle phase/i)).toBeNull()
 	})
 
@@ -430,7 +431,7 @@ describe('ReportingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Min to change proposed outcome' }))
 		})
 
-		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount' })
+		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount (REP)' })
 		expect((amountInput as HTMLInputElement).value).toBe('4')
 	})
 
@@ -444,7 +445,7 @@ describe('ReportingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Max profit' }))
 		})
 
-		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount' })
+		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount (REP)' })
 		const previewAfter = findProfitPreview()
 		expect((amountInput as HTMLInputElement).value).toBe('7')
 		expect(previewBefore).not.toBe(previewAfter)
@@ -457,7 +458,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect((documentQueries.getByRole('button', { name: 'Min to change proposed outcome' }) as HTMLButtonElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('button', { name: 'Max profit' }) as HTMLButtonElement).disabled).toBe(true)
-		expect(document.body.textContent?.includes('Load reporting details before using presets.')).toBe(true)
+		expect(document.body.textContent?.includes('Load reporting details before using presets.')).toBe(false)
 	})
 
 	test('shows unavailable preset reasons for impossible states', async () => {
@@ -619,7 +620,7 @@ describe('ReportingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Min to change proposed outcome' }))
 		})
 
-		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount' })
+		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount (REP)' })
 		expect((amountInput as HTMLInputElement).value).toBe('1001')
 	})
 
@@ -649,7 +650,7 @@ describe('ReportingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Max profit' }))
 		})
 
-		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount' })
+		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount (REP)' })
 		expect((amountInput as HTMLInputElement).value).toBe('1500')
 		expect(document.body.textContent?.includes('projects roughly')).toBe(true)
 	})

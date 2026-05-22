@@ -8,7 +8,6 @@ import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
-import { LatestActionSection } from './LatestActionSection.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
@@ -16,7 +15,6 @@ import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { ViewTabs } from './ViewTabs.js'
@@ -151,8 +149,8 @@ export function ForkAuctionSection({
 	forkAuctionDetails,
 	forkAuctionActiveAction,
 	forkAuctionError,
+	forkAuctionFeedback,
 	forkAuctionForm,
-	forkAuctionResult,
 	loadingForkAuctionDetails,
 	onClaimAuctionProceeds,
 	onCreateChildUniverse,
@@ -248,7 +246,15 @@ export function ForkAuctionSection({
 	}
 
 	const renderStageActionButton = ({ action, idleLabel, onClick, pendingLabel, tone = 'secondary' }: { action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>; idleLabel: string; onClick: () => void; pendingLabel: string; tone?: 'primary' | 'secondary' }) => (
-		<TransactionActionButton idleLabel={idleLabel} pendingLabel={pendingLabel} onClick={onClick} pending={forkAuctionActiveAction === action} tone={tone} availability={{ disabled: disabled || accountState.address === undefined || !isMainnet, reason: baseDisabledReason }} />
+		<TransactionActionButton
+			idleLabel={idleLabel}
+			pendingLabel={pendingLabel}
+			onClick={onClick}
+			pending={forkAuctionActiveAction === action}
+			status={forkAuctionFeedback?.action === action ? forkAuctionFeedback.status : undefined}
+			tone={tone}
+			availability={{ disabled: disabled || accountState.address === undefined || !isMainnet, reason: baseDisabledReason }}
+		/>
 	)
 
 	useEffect(() => {
@@ -256,11 +262,6 @@ export function ForkAuctionSection({
 		lastPoolKeyRef.current = securityPoolAddress
 		setSelectedStage(currentStage)
 	}, [currentStage, securityPoolAddress])
-
-	useEffect(() => {
-		if (forkAuctionResult?.action !== 'createChildUniverse') return
-		setChildUniverseModalOpen(false)
-	}, [forkAuctionResult])
 
 	const poolSummaryMetrics: DisplayMetric[] = [
 		{ label: 'Security Pool', value: renderAddress(securityPoolAddress) },
@@ -538,19 +539,6 @@ export function ForkAuctionSection({
 
 			{hasLoadedPoolContext ? <ReadOnlyDetailAccordion title='Live Snapshot'>{renderSummaryMetricGrid(liveSnapshotMetrics)}</ReadOnlyDetailAccordion> : undefined}
 
-			{forkAuctionResult === undefined ? undefined : (
-				<LatestActionSection
-					title='Latest Fork / Auction Action'
-					embedInCard={embedInCard}
-					rows={[
-						{ label: 'Action', value: forkAuctionResult.action },
-						{ label: 'Pool', value: <AddressValue address={forkAuctionResult.securityPoolAddress} /> },
-						{ label: 'Universe', value: <UniverseLink universeId={forkAuctionResult.universeId} /> },
-						{ label: 'Transaction', value: <TransactionHashLink hash={forkAuctionResult.hash} /> },
-					]}
-				/>
-			)}
-
 			{hasLoadedPoolContext ? (
 				<SectionBlock title='Lifecycle'>
 					<ViewTabs
@@ -578,6 +566,7 @@ export function ForkAuctionSection({
 				pending={forkAuctionActiveAction === 'createChildUniverse'}
 				pendingLabel='Creating child universe...'
 				requirements={childUniverseRequirements}
+				status={forkAuctionFeedback?.action === 'createChildUniverse' ? forkAuctionFeedback.status : undefined}
 				title='Create Child Universe'
 				tone='primary'
 			>

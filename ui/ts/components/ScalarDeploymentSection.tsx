@@ -1,15 +1,15 @@
-import { useRef, useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import type { Address } from 'viem'
 import { ChildUniversesSection } from './ChildUniversesSection.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
 import { ChildUniverseDeploymentModal } from './ChildUniverseDeploymentModal.js'
 import { ErrorNotice } from './ErrorNotice.js'
-import { useEffect } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
 import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../types/contracts.js'
 
 type ScalarDeploymentSectionProps = {
@@ -19,16 +19,16 @@ type ScalarDeploymentSectionProps = {
 	isMainnet: boolean
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	questionDetails: MarketDetails | undefined
+	zoltarChildUniverseFeedback: ActionFeedback<'createChildUniverse'> | undefined
 	zoltarChildUniverseError: string | undefined
 	zoltarChildUniversePendingOutcomeIndex: bigint | undefined
 }
 
-export function ScalarDeploymentSection({ accountAddress, childUniverses, hasForked, isMainnet, onCreateChildUniverseForOutcomeIndex, questionDetails, zoltarChildUniverseError, zoltarChildUniversePendingOutcomeIndex }: ScalarDeploymentSectionProps) {
+export function ScalarDeploymentSection({ accountAddress, childUniverses, hasForked, isMainnet, onCreateChildUniverseForOutcomeIndex, questionDetails, zoltarChildUniverseError, zoltarChildUniverseFeedback, zoltarChildUniversePendingOutcomeIndex }: ScalarDeploymentSectionProps) {
 	const [scalarOutcomeTick, setScalarOutcomeTick] = useState('0')
 	const [scalarOutcomeInvalid, setScalarOutcomeInvalid] = useState(false)
 	const [scalarDeployError, setScalarDeployError] = useState<string | undefined>(undefined)
 	const [deployModalOpen, setDeployModalOpen] = useState(false)
-	const previousPendingOutcomeIndexRef = useRef<bigint | undefined>(undefined)
 
 	if (questionDetails === undefined) {
 		return (
@@ -71,15 +71,6 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 		if (nextTick === scalarOutcomeTick) return
 		setScalarOutcomeTick(nextTick)
 	}, [questionDetails.numTicks, scalarOutcomeTick, selectedScalarTick])
-
-	useEffect(() => {
-		if (previousPendingOutcomeIndexRef.current === undefined || scalarDeployPending) {
-			previousPendingOutcomeIndexRef.current = zoltarChildUniversePendingOutcomeIndex
-			return
-		}
-		setDeployModalOpen(false)
-		previousPendingOutcomeIndexRef.current = zoltarChildUniversePendingOutcomeIndex
-	}, [scalarDeployPending, zoltarChildUniversePendingOutcomeIndex])
 
 	return (
 		<WorkflowSubsection badge={<span className='detail'>Scalar forks can deploy one outcome universe at a time.</span>} title='Child Universes'>
@@ -137,6 +128,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				pending={scalarDeployPending}
 				pendingLabel='Deploying universe...'
 				requirements={scalarDeployRequirements}
+				status={zoltarChildUniverseFeedback?.action === 'createChildUniverse' ? zoltarChildUniverseFeedback.status : undefined}
 				title='Create Child Universe'
 			>
 				{selectedScalarChild === undefined ? undefined : (

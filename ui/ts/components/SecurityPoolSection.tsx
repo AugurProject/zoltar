@@ -6,7 +6,6 @@ import { FormInput } from './FormInput.js'
 import { LoadingText } from './LoadingText.js'
 import { Question } from './Question.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
-import { ResultBanner } from './ResultBanner.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -27,6 +26,7 @@ export function SecurityPoolSection({
 	onReturnToBrowse,
 	onSecurityPoolFormChange,
 	onResetSecurityPoolCreation,
+	securityPoolCreationFeedback,
 	securityPoolCreating,
 	securityPoolError,
 	securityPoolForm,
@@ -118,21 +118,6 @@ export function SecurityPoolSection({
 
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Create Pool'>
-			<ResultBanner
-				outcome={
-					securityPoolResult === undefined
-						? undefined
-						: {
-								title: 'Security pool created',
-								detail: (
-									<>
-										Created pool <AddressValue address={securityPoolResult.securityPoolAddress} />.
-									</>
-								),
-								nextStep: 'Open the pool to begin operating vault, trading, reporting, and fork workflows.',
-							}
-				}
-			/>
 			{hasSecurityPoolResult ? (
 				<>
 					{createdPoolResult}
@@ -163,7 +148,7 @@ export function SecurityPoolSection({
 							</label>
 
 							<div className='actions'>
-								<TransactionActionButton idleLabel={createButtonLabel} pendingLabel='Creating Pool...' onClick={onCreateSecurityPool} pending={securityPoolCreating} availability={{ disabled: isCreateDisabled, reason: createDisabledReason }} />
+								<TransactionActionButton idleLabel={createButtonLabel} pendingLabel='Creating Pool...' onClick={onCreateSecurityPool} pending={securityPoolCreating} status={securityPoolCreationFeedback?.status} availability={{ disabled: isCreateDisabled, reason: createDisabledReason }} />
 							</div>
 						</div>
 						{!duplicateOriginPoolExists ? undefined : <p className='detail'>A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.</p>}

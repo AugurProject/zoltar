@@ -5,10 +5,12 @@ import type { Address, Hash } from 'viem'
 import { migrateInternalRepInZoltar, prepareRepForMigrationInZoltar } from '../contracts.js'
 import { createWalletWriteClient } from '../lib/clients.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../lib/errors.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { requireWallet } from '../lib/walletGuard.js'
 import { parseBigIntListInput } from '../lib/inputs.js'
 import { getDefaultZoltarMigrationFormState, parseRepAmountInput } from '../lib/marketForm.js'
 import type { ZoltarMigrationFormState } from '../types/app.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type UseZoltarMigrationParameters = {
@@ -50,9 +52,14 @@ function resolvePrepareMigrationAmount(amount: bigint, preparedRepBalance: bigin
 export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState, refreshZoltarForkAccess, refreshZoltarUniverse, zoltarForkRepBalance, zoltarMigrationPreparedRepBalance }: UseZoltarMigrationParameters) {
 	const zoltarMigrationError = useSignal<string | undefined>(undefined)
 	const zoltarMigrationPending = useSignal(false)
+	const zoltarMigrationFeedback = useSignal<ActionFeedback<ZoltarMigrationActionResult['action']> | undefined>(undefined)
 	const zoltarMigrationResult = useSignal<ZoltarMigrationActionResult | undefined>(undefined)
 	const zoltarMigrationActiveAction = useSignal<'prepare' | 'split' | undefined>(undefined)
 	const { state: zoltarMigrationForm, setState: setZoltarMigrationForm } = useFormState<ZoltarMigrationFormState>(getDefaultZoltarMigrationFormState())
+	const resolveActionResultName = (actionName: 'prepare' | 'split') => (actionName === 'prepare' ? 'addRepToMigrationBalance' : 'splitMigrationRep')
+	const getPendingTitle = (actionName: 'prepare' | 'split') => (actionName === 'prepare' ? 'Preparing REP for migration' : 'Migrating REP')
+	const getSuccessTitle = (actionName: 'prepare' | 'split') => (actionName === 'prepare' ? 'REP prepared for migration' : 'REP migrated')
+	const getFailureTitle = (actionName: 'prepare' | 'split') => (actionName === 'prepare' ? 'REP preparation failed' : 'REP migration failed')
 
 	const runZoltarMigrationAction = useCallback(
 		async ({ actionName, action, errorFallback, refreshAfter, requiresOutcomeIndexes, resolveAmount = amount => amount }: RunZoltarMigrationActionParameters) => {
@@ -70,6 +77,7 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 			zoltarMigrationPending.value = true
 			zoltarMigrationActiveAction.value = actionName
 			zoltarMigrationError.value = undefined
+			zoltarMigrationFeedback.value = createPendingActionFeedback(resolveActionResultName(actionName), getPendingTitle(actionName))
 			zoltarMigrationResult.value = undefined
 
 			try {
@@ -86,9 +94,12 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 				const outcomeIndexes = requiresOutcomeIndexes ? parseBigIntListInput(zoltarMigrationForm.value.outcomeIndexes, 'Outcome indexes') : []
 				const result = await action(accountAddress, universe, resolvedAmount, outcomeIndexes)
 				zoltarMigrationResult.value = result
+				zoltarMigrationFeedback.value = createSuccessActionFeedback(result.action, getSuccessTitle(actionName), result.hash)
 				onTransaction(result.hash)
 			} catch (error) {
-				zoltarMigrationError.value = formatWriteErrorMessage(error, errorFallback)
+				const message = formatWriteErrorMessage(error, errorFallback)
+				zoltarMigrationError.value = message
+				zoltarMigrationFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), message)
 			} finally {
 				zoltarMigrationPending.value = false
 				zoltarMigrationActiveAction.value = undefined
@@ -103,9 +114,10 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 				}
 				await refreshZoltarForkAccess()
 			} catch (error) {
-				console.error('[useZoltarMigration] Refresh after transaction failed')
-				console.error(error)
-				zoltarMigrationError.value = formatRefreshErrorMessage(error, 'Migration succeeded, but refreshing the UI failed')
+				const message = formatRefreshErrorMessage(error, 'Migration succeeded, but refreshing the UI failed')
+				zoltarMigrationError.value = message
+				const latestResult = zoltarMigrationResult.value
+				zoltarMigrationFeedback.value = createWarningActionFeedback(latestResult?.action ?? resolveActionResultName(actionName), getSuccessTitle(actionName), message, latestResult?.hash)
 			}
 		},
 		[
@@ -154,6 +166,7 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 		setZoltarMigrationForm,
 		zoltarMigrationActiveAction: zoltarMigrationActiveAction.value,
 		zoltarMigrationError: zoltarMigrationError.value,
+		zoltarMigrationFeedback: zoltarMigrationFeedback.value,
 		zoltarMigrationForm: zoltarMigrationForm.value,
 		zoltarMigrationPending: zoltarMigrationPending.value,
 		zoltarMigrationResult: zoltarMigrationResult.value,

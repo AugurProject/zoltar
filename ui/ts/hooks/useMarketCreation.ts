@@ -3,10 +3,12 @@ import { useFormState } from './useFormState.js'
 import type { Address, Hash } from 'viem'
 import { createMarket as createMarketTransaction } from '../contracts.js'
 import { createWalletWriteClient } from '../lib/clients.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { createMarketParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultMarketFormState } from '../lib/marketForm.js'
 import type { MarketFormState } from '../types/app.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { DeploymentStatus, MarketCreationResult } from '../types/contracts.js'
 import { useZoltarOperations } from './useZoltarOperations.js'
 
@@ -29,13 +31,18 @@ export function useMarketCreation({ accountAddress, activeUniverseId, activeZolt
 	const marketCreating = useSignal(false)
 	const marketResult = useSignal<MarketCreationResult | undefined>(undefined)
 	const marketError = useSignal<string | undefined>(undefined)
+	const marketFeedback = useSignal<ActionFeedback<'createMarket'> | undefined>(undefined)
 
 	const createMarket = async () => {
 		marketResult.value = undefined
+		marketFeedback.value = createPendingActionFeedback('createMarket', 'Creating question')
 		await runWriteAction(
 			{
 				accountAddress,
 				missingWalletMessage: 'Connect a wallet before creating a question',
+				onRefreshError: (message, hash) => {
+					marketFeedback.value = createWarningActionFeedback('createMarket', 'Question created', message, hash)
+				},
 				onTransaction,
 				onTransactionRequested: () => {
 					marketCreating.value = true
@@ -44,6 +51,9 @@ export function useMarketCreation({ accountAddress, activeUniverseId, activeZolt
 				onTransactionFinished: () => {
 					marketCreating.value = false
 					onTransactionFinished()
+				},
+				onWriteError: message => {
+					marketFeedback.value = createErrorActionFeedback('createMarket', 'Question creation failed', message)
 				},
 				refreshState: async () => {
 					await refreshState()
@@ -61,6 +71,7 @@ export function useMarketCreation({ accountAddress, activeUniverseId, activeZolt
 			'Failed to create question',
 			result => {
 				marketResult.value = result
+				marketFeedback.value = createSuccessActionFeedback('createMarket', 'Question created', result.hash)
 				zoltar.setZoltarForkQuestionId(result.questionId)
 			},
 		)
@@ -75,6 +86,7 @@ export function useMarketCreation({ accountAddress, activeUniverseId, activeZolt
 	return {
 		...zoltar,
 		createMarket,
+		marketFeedback: marketFeedback.value,
 		marketCreating: marketCreating.value,
 		marketError: marketError.value,
 		marketForm: marketForm.value,

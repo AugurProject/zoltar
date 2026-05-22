@@ -21,10 +21,12 @@ import {
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { getReportingOutcomeKey, parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, resolveOptionalAddressInput } from '../lib/inputs.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { requireDefined } from '../lib/required.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { getDefaultForkAuctionFormState, parseBigIntInput } from '../lib/marketForm.js'
 import type { ForkAuctionFormState, WriteOperationsParameters } from '../types/app.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
 type UseForkAuctionOperationsParameters = WriteOperationsParameters
@@ -32,10 +34,14 @@ type UseForkAuctionOperationsParameters = WriteOperationsParameters
 export function useForkAuctionOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseForkAuctionOperationsParameters) {
 	const forkAuctionDetails = useSignal<ForkAuctionDetails | undefined>(undefined)
 	const forkAuctionActiveAction = useSignal<ForkAuctionActionResult['action'] | undefined>(undefined)
+	const forkAuctionFeedback = useSignal<ActionFeedback<ForkAuctionActionResult['action']> | undefined>(undefined)
 	const forkAuctionError = useSignal<string | undefined>(undefined)
 	const { state: forkAuctionForm, setState: setForkAuctionForm } = useFormState<ForkAuctionFormState>(getDefaultForkAuctionFormState())
 	const forkAuctionResult = useSignal<ForkAuctionActionResult | undefined>(undefined)
 	const forkAuctionLoad = useLoadController()
+	const getPendingTitle = (actionName: ForkAuctionActionResult['action']) => actionName.replace(/([A-Z])/g, ' $1').replace(/^./, value => value.toUpperCase())
+	const getSuccessTitle = (actionName: ForkAuctionActionResult['action']) => `${getPendingTitle(actionName)} submitted`
+	const getFailureTitle = (actionName: ForkAuctionActionResult['action']) => `${getPendingTitle(actionName)} failed`
 
 	const loadForkAuction = async () => {
 		await forkAuctionLoad.run({
@@ -59,8 +65,17 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 	const runForkAuctionAction = async (actionName: ForkAuctionActionResult['action'], action: (walletAddress: Address, details: ForkAuctionDetails) => Promise<ForkAuctionActionResult>, errorFallback: string) => {
 		try {
 			forkAuctionActiveAction.value = actionName
+			forkAuctionFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
-				buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, forkAuctionError, 'Connect a wallet before using fork or truth auction actions'),
+				{
+					...buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, forkAuctionError, 'Connect a wallet before using fork or truth auction actions'),
+					onRefreshError: (message, hash) => {
+						forkAuctionFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
+					},
+					onWriteError: message => {
+						forkAuctionFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
+					},
+				},
 				async walletAddress => {
 					forkAuctionResult.value = undefined
 					const details = forkAuctionDetails.value ?? (await loadForkAuctionDetails(createConnectedReadClient(), parseAddressInput(forkAuctionForm.value.securityPoolAddress, 'Security pool address')))
@@ -69,6 +84,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 				errorFallback,
 				async result => {
 					forkAuctionResult.value = result
+					forkAuctionFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					forkAuctionDetails.value = await loadForkAuctionDetails(createConnectedReadClient(), result.securityPoolAddress)
 				},
 			)
@@ -186,6 +202,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 		forkAuctionActiveAction: forkAuctionActiveAction.value,
 		forkAuctionDetails: forkAuctionDetails.value,
 		forkAuctionError: forkAuctionError.value,
+		forkAuctionFeedback: forkAuctionFeedback.value,
 		forkAuctionForm: forkAuctionForm.value,
 		forkAuctionResult: forkAuctionResult.value,
 		forkUniverse,

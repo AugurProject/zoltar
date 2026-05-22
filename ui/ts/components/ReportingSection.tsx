@@ -5,24 +5,20 @@ import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { EscalationSide } from './EscalationSide.js'
-import { LatestActionSection } from './LatestActionSection.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
-import { StateHint } from './StateHint.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
-import { UniverseLink } from './UniverseLink.js'
+import { WarningSurface } from './WarningSurface.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getMaxProfitContribution, getMinimumOutcomeChangeContribution } from '../lib/reportingDomain.js'
-import type { UserMessagePresentation } from '../lib/userCopy.js'
 import type { ReportingSectionProps } from '../types/components.js'
 import type { ActiveReportingDetails, EscalationDeposit, ReportingOutcomeKey } from '../types/contracts.js'
 
@@ -73,13 +69,27 @@ function getDepositEntryCountLabel(count: number) {
 	return count === 1 ? 'entry' : 'entries'
 }
 
-function getReportingLockedPresentation({ effectiveCurrentTimestamp, marketDetails }: { effectiveCurrentTimestamp: bigint | undefined; marketDetails: ReportingSectionProps['previewMarketDetails'] }): UserMessagePresentation | undefined {
-	if (effectiveCurrentTimestamp === undefined || marketDetails === undefined || marketDetails.endTime <= effectiveCurrentTimestamp) return undefined
-	return {
-		actionHint: `Reporting opens in ${formatDuration(marketDetails.endTime - effectiveCurrentTimestamp)}.`,
-		detail: 'Reporting is not enabled at the moment.',
-		key: 'action_needed',
+function isPresetLoadReason(reason: string | undefined) {
+	return reason === 'Load reporting details before using presets.'
+}
+
+function renderReportingContextStatus(effectiveCurrentTimestamp: bigint | undefined, marketDetails: ReportingSectionProps['previewMarketDetails']) {
+	if (effectiveCurrentTimestamp === undefined || marketDetails === undefined) return undefined
+	if (marketDetails.endTime > effectiveCurrentTimestamp) {
+		return (
+			<WarningSurface as='div' className='transaction-action-status warning' role='status' variant='compact'>
+				<p className='detail transaction-action-status-detail'>Reporting is not enabled. Opens in {formatDuration(marketDetails.endTime - effectiveCurrentTimestamp)}.</p>
+			</WarningSurface>
+		)
 	}
+
+	return (
+		<div className='transaction-action-status success' role='status'>
+			<p className='detail transaction-action-status-detail'>
+				Reporting is open. Market ended at <TimestampValue currentTimestamp={effectiveCurrentTimestamp} timestamp={marketDetails.endTime} /> ({formatDuration(effectiveCurrentTimestamp - marketDetails.endTime)} ago).
+			</p>
+		</div>
+	)
 }
 
 export function ReportingSection({
@@ -96,8 +106,8 @@ export function ReportingSection({
 	reportingActiveAction,
 	reportingDetails,
 	reportingError,
+	reportingFeedback,
 	reportingForm,
-	reportingResult,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 	mode = 'full-reporting',
@@ -143,22 +153,7 @@ export function ReportingSection({
 		withdrawalEnabled: activeReportingDetails?.withdrawalEnabled ?? false,
 		withdrawalState: reportingDetails?.withdrawalState,
 	})
-	const latestReportingAction =
-		reportingResult === undefined ? undefined : (
-			<LatestActionSection
-				title='Latest Reporting Action'
-				embedInCard={embedInCard}
-				rows={[
-					{ label: 'Action', value: reportingResult.action },
-					{ label: 'Outcome', value: getReportingOutcomeLabel(reportingResult.outcome) },
-					{ label: 'Pool', value: <AddressValue address={reportingResult.securityPoolAddress} /> },
-					{ label: 'Universe', value: <UniverseLink universeId={reportingResult.universeId} /> },
-					{ label: 'Transaction', value: <TransactionHashLink hash={reportingResult.hash} /> },
-				]}
-			/>
-		)
-	const reportingLockedPresentation = getReportingLockedPresentation({ effectiveCurrentTimestamp, marketDetails })
-	const visibleLatestReportingAction = reportingResult === undefined ? undefined : showFullReporting ? (reportingResult.action === 'reportOutcome' ? latestReportingAction : undefined) : reportingResult.action === 'withdrawEscalation' ? latestReportingAction : undefined
+	const reportingContextStatus = renderReportingContextStatus(effectiveCurrentTimestamp, marketDetails)
 
 	const sections = (
 		<>
@@ -177,16 +172,7 @@ export function ReportingSection({
 							}
 						/>
 					) : undefined}
-
-					{marketDetails === undefined ? undefined : (
-						<div className='workflow-metric-grid'>
-							<MetricField label='Market End'>
-								<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={marketDetails.endTime} />
-							</MetricField>
-							{effectiveCurrentTimestamp !== undefined && marketDetails.endTime <= effectiveCurrentTimestamp ? <MetricField label='Reporting'>Open</MetricField> : undefined}
-						</div>
-					)}
-					{reportingLockedPresentation === undefined ? undefined : <StateHint presentation={reportingLockedPresentation} />}
+					{reportingContextStatus}
 
 					{activeReportingDetails === undefined ? undefined : (
 						<ul className='status-list hashes'>
@@ -248,8 +234,6 @@ export function ReportingSection({
 				</SectionBlock>
 			) : undefined}
 
-			{visibleLatestReportingAction}
-
 			{showFullReporting ? (
 				<SectionBlock title='Report Outcome'>
 					{selectedSide === undefined ? undefined : (
@@ -263,7 +247,7 @@ export function ReportingSection({
 					</label>
 
 					<label className='field'>
-						<span>Report / Contribution Amount</span>
+						<span>Report / Contribution Amount (REP)</span>
 						<FormInput value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportingLocked} />
 					</label>
 
@@ -294,11 +278,13 @@ export function ReportingSection({
 						</button>
 					</div>
 
-					{presetReasons.map(reason => (
-						<p key={reason} className='detail'>
-							{reason}
-						</p>
-					))}
+					{presetReasons
+						.filter(reason => !isPresetLoadReason(reason))
+						.map(reason => (
+							<p key={reason} className='detail'>
+								{reason}
+							</p>
+						))}
 					{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
 
 					{selectedEstimate === undefined ? undefined : (
@@ -308,7 +294,14 @@ export function ReportingSection({
 					)}
 
 					<div className='actions'>
-						<TransactionActionButton idleLabel='Report / Contribute On Selected Side' pendingLabel='Submitting report...' onClick={onReportOutcome} pending={reportingActiveAction === 'reportOutcome'} availability={{ disabled: reportGuardMessage !== undefined, reason: reportGuardMessage }} />
+						<TransactionActionButton
+							idleLabel='Report / Contribute On Selected Side'
+							pendingLabel='Submitting report...'
+							onClick={onReportOutcome}
+							pending={reportingActiveAction === 'reportOutcome'}
+							status={reportingFeedback?.action === 'reportOutcome' ? reportingFeedback.status : undefined}
+							availability={{ disabled: reportGuardMessage !== undefined, reason: reportGuardMessage }}
+						/>
 					</div>
 				</SectionBlock>
 			) : undefined}
@@ -353,7 +346,15 @@ export function ReportingSection({
 					)}
 
 					<div className='actions'>
-						<TransactionActionButton idleLabel='Withdraw Escalation Deposits' pendingLabel='Withdrawing deposits...' onClick={onWithdrawEscalation} pending={reportingActiveAction === 'withdrawEscalation'} tone='secondary' availability={{ disabled: withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }} />
+						<TransactionActionButton
+							idleLabel='Withdraw Escalation Deposits'
+							pendingLabel='Withdrawing deposits...'
+							onClick={onWithdrawEscalation}
+							pending={reportingActiveAction === 'withdrawEscalation'}
+							status={reportingFeedback?.action === 'withdrawEscalation' ? reportingFeedback.status : undefined}
+							tone='secondary'
+							availability={{ disabled: withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
+						/>
 					</div>
 				</SectionBlock>
 			) : undefined}

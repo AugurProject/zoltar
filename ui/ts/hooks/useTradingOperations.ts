@@ -9,8 +9,10 @@ import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput } f
 import { getDefaultTradingFormState, parseTradingAmountInput } from '../lib/marketForm.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { getDefaultShareMigrationTargetOutcomeIndexes, isTradingSystemDeployed } from '../lib/trading.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import type { TradingFormState, WriteOperationsParameters } from '../types/app.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { DeploymentStatus, TradingActionResult, TradingDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type UseTradingOperationsParameters = WriteOperationsParameters & {
@@ -26,9 +28,46 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 	const tradingError = useSignal<string | undefined>(undefined)
 	const tradingForm = useSignal<TradingFormState>(getDefaultTradingFormState())
 	const tradingActiveAction = useSignal<TradingActionResult['action'] | undefined>(undefined)
+	const tradingFeedback = useSignal<ActionFeedback<TradingActionResult['action']> | undefined>(undefined)
 	const tradingResult = useSignal<TradingActionResult | undefined>(undefined)
 	const targetOutcomeDefaultsKey = useRef<string | undefined>(undefined)
 	const tradingSystemDeployed = isTradingSystemDeployed(deploymentStatuses)
+	const getPendingTitle = (actionName: TradingActionResult['action']) => {
+		switch (actionName) {
+			case 'createCompleteSet':
+				return 'Minting complete sets'
+			case 'redeemCompleteSet':
+				return 'Redeeming complete sets'
+			case 'migrateShares':
+				return 'Migrating shares'
+			case 'redeemShares':
+				return 'Redeeming shares'
+		}
+	}
+	const getSuccessTitle = (actionName: TradingActionResult['action']) => {
+		switch (actionName) {
+			case 'createCompleteSet':
+				return 'Complete sets minted'
+			case 'redeemCompleteSet':
+				return 'Complete sets redeemed'
+			case 'migrateShares':
+				return 'Shares migrated'
+			case 'redeemShares':
+				return 'Shares redeemed'
+		}
+	}
+	const getFailureTitle = (actionName: TradingActionResult['action']) => {
+		switch (actionName) {
+			case 'createCompleteSet':
+				return 'Mint failed'
+			case 'redeemCompleteSet':
+				return 'Complete-set redemption failed'
+			case 'migrateShares':
+				return 'Share migration failed'
+			case 'redeemShares':
+				return 'Share redemption failed'
+		}
+	}
 
 	const resolveTradingPoolAddressInput = (value: string) => {
 		const trimmed = value.trim()
@@ -84,9 +123,16 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 		const currentForm = tradingForm.value
 		try {
 			tradingActiveAction.value = actionName
+			tradingFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
 				{
 					...buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, tradingError, 'Connect a wallet before trading'),
+					onRefreshError: (message, hash) => {
+						tradingFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
+					},
+					onWriteError: message => {
+						tradingFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
+					},
 					refreshErrorFallback: 'Trading transaction succeeded, but refreshing trading details failed',
 				},
 				async walletAddress => {
@@ -97,6 +143,7 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 				errorFallback,
 				async (result, walletAddress) => {
 					tradingResult.value = result
+					tradingFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					const isCurrent = nextTradingDetailsLoad()
 					await refreshTradingDetails(currentForm.securityPoolAddress, walletAddress, isCurrent)
 				},
@@ -189,6 +236,7 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 		tradingDetails: tradingDetails.value,
 		tradingActiveAction: tradingActiveAction.value,
 		tradingError: tradingError.value,
+		tradingFeedback: tradingFeedback.value,
 		tradingForm: tradingForm.value,
 		tradingForkUniverse: tradingForkUniverse.value,
 		tradingResult: tradingResult.value,

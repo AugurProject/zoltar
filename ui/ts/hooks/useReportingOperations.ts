@@ -8,8 +8,10 @@ import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { getDefaultReportingFormState, parseRepAmountInput } from '../lib/marketForm.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import type { ReportingFormState, WriteOperationsParameters } from '../types/app.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { ReportingActionResult, ReportingDetails } from '../types/contracts.js'
 
 type UseReportingOperationsParameters = WriteOperationsParameters
@@ -20,8 +22,13 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 	const reportingError = useSignal<string | undefined>(undefined)
 	const { state: reportingForm, setState: setReportingForm } = useFormState<ReportingFormState>(getDefaultReportingFormState())
 	const reportingActiveAction = useSignal<ReportingActionResult['action'] | undefined>(undefined)
+	const reportingFeedback = useSignal<ActionFeedback<ReportingActionResult['action']> | undefined>(undefined)
 	const reportingResult = useSignal<ReportingActionResult | undefined>(undefined)
 	const nextReportingLoad = useRequestGuard()
+
+	const getPendingTitle = (actionName: ReportingActionResult['action']) => (actionName === 'reportOutcome' ? 'Submitting report' : 'Withdrawing escalation deposits')
+	const getSuccessTitle = (actionName: ReportingActionResult['action']) => (actionName === 'reportOutcome' ? 'Report submitted' : 'Escalation deposits withdrawn')
+	const getFailureTitle = (actionName: ReportingActionResult['action']) => (actionName === 'reportOutcome' ? 'Report failed' : 'Withdrawal failed')
 
 	const loadReporting = async () => {
 		const isCurrent = nextReportingLoad()
@@ -48,9 +55,16 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		const currentForm = reportingForm.value
 		try {
 			reportingActiveAction.value = actionName
+			reportingFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
 				{
 					...buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, reportingError, 'Connect a wallet before reporting on a market'),
+					onRefreshError: (message, hash) => {
+						reportingFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
+					},
+					onWriteError: message => {
+						reportingFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
+					},
 					refreshErrorFallback: 'Reporting transaction succeeded, but refreshing reporting details failed',
 				},
 				async walletAddress => {
@@ -61,6 +75,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 				errorFallback,
 				async result => {
 					reportingResult.value = result
+					reportingFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					const securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
 					const details = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
 					reportingDetails.value = details
@@ -128,6 +143,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		reportingActiveAction: reportingActiveAction.value,
 		reportingDetails: reportingDetails.value,
 		reportingError: reportingError.value,
+		reportingFeedback: reportingFeedback.value,
 		reportingForm: reportingForm.value,
 		reportingResult: reportingResult.value,
 		setReportingForm,

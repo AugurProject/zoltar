@@ -19,6 +19,7 @@ import { parseRepAmountInput } from '../lib/marketForm.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import { getCurrentTimestamp as getLocalCurrentTimestamp } from '../lib/time.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 
 type LiquidationModalProps = {
@@ -40,6 +41,7 @@ type LiquidationModalProps = {
 	selectedPool: ListedSecurityPool | undefined
 	securityPoolOverviewActiveAction: 'queueLiquidation' | undefined
 	securityPoolOverviewError: string | undefined
+	securityPoolOverviewFeedback?: ActionFeedback<SecurityPoolOverviewActionResult['action']> | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	callerVaultSummary: SecurityPoolVaultSummary | undefined
 	targetVaultSummary: SecurityPoolVaultSummary | undefined
@@ -95,6 +97,7 @@ export function LiquidationModal({
 	selectedPool,
 	securityPoolOverviewActiveAction,
 	securityPoolOverviewError,
+	securityPoolOverviewFeedback,
 	securityPoolOverviewResult,
 	callerVaultSummary,
 	targetVaultSummary,
@@ -105,7 +108,7 @@ export function LiquidationModal({
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const onCloseRef = useRef(closeLiquidationModal)
-	const showLiquidationModal = liquidationModalOpen || securityPoolOverviewActiveAction === 'queueLiquidation' || securityPoolOverviewResult?.action === 'queueLiquidation' || securityPoolOverviewError !== undefined
+	const showLiquidationModal = liquidationModalOpen || securityPoolOverviewActiveAction === 'queueLiquidation' || securityPoolOverviewFeedback !== undefined || securityPoolOverviewResult?.action === 'queueLiquidation' || securityPoolOverviewError !== undefined
 
 	useEffect(() => {
 		onCloseRef.current = closeLiquidationModal
@@ -231,7 +234,7 @@ export function LiquidationModal({
 						×
 					</button>
 				</div>
-				{queuedLiquidationStatus === undefined ? null : queuedLiquidationStatus === 'queued' ? (
+				{queuedLiquidationStatus === 'queued' ? (
 					queuedLiquidationOperation === undefined ? null : (
 						<WarningSurface as='section' variant='compact'>
 							<div className='entity-card-header'>
@@ -252,46 +255,7 @@ export function LiquidationModal({
 							</div>
 						</WarningSurface>
 					)
-				) : queuedLiquidationStatus === 'failed' ? (
-					<section className='entity-card compact'>
-						<div className='entity-card-header'>
-							<div>
-								<h4>Liquidation Failed</h4>
-							</div>
-							<span className='badge blocked'>Failed</span>
-						</div>
-						<p className='detail'>{securityPoolOverviewResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the liquidation immediately, but the security pool rejected it.'}</p>
-					</section>
-				) : queuedLiquidationStatus === 'executed' ? (
-					<section className='entity-card compact'>
-						<div className='entity-card-header'>
-							<div>
-								<h4>Liquidation Executed</h4>
-							</div>
-							<span className='badge ok'>Executed</span>
-						</div>
-						<p className='detail'>A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.</p>
-					</section>
-				) : queuedLiquidationStatus === 'missing' ? (
-					<WarningSurface as='section' variant='compact'>
-						<div className='entity-card-header'>
-							<div>
-								<h4>Liquidation Submitted</h4>
-							</div>
-						</div>
-						<p className='detail'>The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.</p>
-					</WarningSurface>
-				) : (
-					<section className='entity-card compact'>
-						<div className='entity-card-header'>
-							<div>
-								<h4>Refreshing Liquidation State</h4>
-							</div>
-							<span className='badge muted'>Refreshing</span>
-						</div>
-						<p className='detail'>Refreshing the oracle manager to determine whether the liquidation was queued or executed immediately.</p>
-					</section>
-				)}
+				) : null}
 				<ErrorNotice message={securityPoolOverviewError} />
 				<DataGrid className='modal-summary-grid' columns={2}>
 					<AddressInfo address={liquidationSecurityPoolAddress} label='Security Pool' />
@@ -404,6 +368,7 @@ export function LiquidationModal({
 							onQueueLiquidation(liquidationManagerAddress, liquidationSecurityPoolAddress)
 						}}
 						pending={securityPoolOverviewActiveAction === 'queueLiquidation'}
+						status={securityPoolOverviewFeedback?.action === 'queueLiquidation' ? securityPoolOverviewFeedback.status : undefined}
 						availability={{ disabled: liquidationActionReason !== undefined, reason: liquidationActionReason }}
 						showDisabledReason={liquidationExecutionMode !== 'queue'}
 					/>
