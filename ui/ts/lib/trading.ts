@@ -4,6 +4,7 @@ import { parseBigIntListInput } from './inputs.js'
 import { parseTradingAmountInput } from './marketForm.js'
 import { getReportingOutcomeLabel } from './reporting.js'
 import { isValidScalarOutcomeIndex } from './scalarOutcome.js'
+import type { DeploymentStatus } from '../types/contracts.js'
 import type { ReportingOutcomeKey, SecurityPoolSystemState, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
 
 const PRICE_PRECISION = 10n ** 18n
@@ -97,6 +98,10 @@ export function getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse
 	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return ''
 	if (tradingForkUniverse.forkQuestionDetails?.marketType === 'scalar') return ''
 	return tradingForkUniverse.childUniverses.map(child => child.outcomeIndex.toString()).join(', ')
+}
+
+export function isTradingSystemDeployed(deploymentStatuses: DeploymentStatus[]) {
+	return deploymentStatuses.length > 0 && deploymentStatuses.every(step => step.deployed)
 }
 
 export function getTradingMintGuardMessage({

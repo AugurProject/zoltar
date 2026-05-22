@@ -8,16 +8,17 @@ import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput } from '../lib/inputs.js'
 import { getDefaultTradingFormState, parseTradingAmountInput } from '../lib/marketForm.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
-import { getDefaultShareMigrationTargetOutcomeIndexes } from '../lib/trading.js'
+import { getDefaultShareMigrationTargetOutcomeIndexes, isTradingSystemDeployed } from '../lib/trading.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import type { TradingFormState, WriteOperationsParameters } from '../types/app.js'
-import type { TradingActionResult, TradingDetails, ZoltarUniverseSummary } from '../types/contracts.js'
+import type { DeploymentStatus, TradingActionResult, TradingDetails, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type UseTradingOperationsParameters = WriteOperationsParameters & {
+	deploymentStatuses: DeploymentStatus[]
 	enabled: boolean
 }
 
-export function useTradingOperations({ accountAddress, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseTradingOperationsParameters) {
+export function useTradingOperations({ accountAddress, deploymentStatuses, enabled, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseTradingOperationsParameters) {
 	const tradingDetailsLoad = useLoadController()
 	const nextTradingDetailsLoad = useRequestGuard()
 	const tradingDetails = useSignal<TradingDetails | undefined>(undefined)
@@ -27,6 +28,7 @@ export function useTradingOperations({ accountAddress, enabled, onTransaction, o
 	const tradingActiveAction = useSignal<TradingActionResult['action'] | undefined>(undefined)
 	const tradingResult = useSignal<TradingActionResult | undefined>(undefined)
 	const targetOutcomeDefaultsKey = useRef<string | undefined>(undefined)
+	const tradingSystemDeployed = isTradingSystemDeployed(deploymentStatuses)
 
 	const resolveTradingPoolAddressInput = (value: string) => {
 		const trimmed = value.trim()
@@ -40,6 +42,13 @@ export function useTradingOperations({ accountAddress, enabled, onTransaction, o
 	}
 
 	const refreshTradingDetails = async (securityPoolAddressInput: string, walletAddress: Address | undefined, isCurrent?: () => boolean) => {
+		if (!tradingSystemDeployed) {
+			tradingDetails.value = undefined
+			tradingForkUniverse.value = undefined
+			tradingError.value = undefined
+			return
+		}
+
 		const securityPoolAddress = resolveTradingPoolAddressInput(securityPoolAddressInput)
 		if (securityPoolAddress === undefined) {
 			tradingDetails.value = undefined
@@ -137,14 +146,20 @@ export function useTradingOperations({ accountAddress, enabled, onTransaction, o
 			tradingError.value = undefined
 			return
 		}
-	}, [enabled, tradingForm.value.securityPoolAddress])
+		if (!tradingSystemDeployed) {
+			tradingDetails.value = undefined
+			tradingForkUniverse.value = undefined
+			tradingError.value = undefined
+		}
+	}, [enabled, tradingForm.value.securityPoolAddress, tradingSystemDeployed])
 
 	useEffect(() => {
 		if (!enabled) return
 		const isCurrent = nextTradingDetailsLoad()
+		if (!tradingSystemDeployed) return
 		if (resolveTradingPoolAddressInput(tradingForm.value.securityPoolAddress) === undefined) return
 		void refreshTradingDetails(tradingForm.value.securityPoolAddress, accountAddress, isCurrent)
-	}, [accountAddress, enabled, tradingForm.value.securityPoolAddress])
+	}, [accountAddress, enabled, tradingForm.value.securityPoolAddress, tradingSystemDeployed])
 
 	useEffect(() => {
 		if (!enabled) return

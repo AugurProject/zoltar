@@ -21,13 +21,25 @@ import {
 	getTradingRedeemSharesGuardMessage,
 	getVaultCollateralizationPercent,
 	hasRepBackedPoolWithNoActiveAllowance,
+	isTradingSystemDeployed,
 } from '../lib/trading.js'
 import { getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
-import type { ZoltarUniverseSummary } from '../types/contracts.js'
+import type { DeploymentStatus, ZoltarUniverseSummary } from '../types/contracts.js'
 
 const TOKEN_PRECISION = 10n ** 18n
 
 void describe('trading helpers', () => {
+	const createDeploymentStep = (id: DeploymentStatus['id'], deployed: boolean): DeploymentStatus => ({
+		address: zeroAddress,
+		dependencies: [],
+		deploy: async () => {
+			throw new Error('Not implemented in test helper')
+		},
+		deployed,
+		id,
+		label: id,
+	})
+
 	const shareBalances = {
 		invalid: 2n * 10n ** 18n,
 		no: 4n * 10n ** 18n,
@@ -119,6 +131,12 @@ void describe('trading helpers', () => {
 		expect(getRemainingMintCapacity(10n, 10n)).toBe(0n)
 		expect(getRemainingMintCapacity(10n, 12n)).toBe(0n)
 		expect(getRemainingMintCapacity(undefined, 12n)).toBeUndefined()
+	})
+
+	void test('treats the trading system as deployed only when every deterministic deployment step is deployed', () => {
+		expect(isTradingSystemDeployed([])).toBe(false)
+		expect(isTradingSystemDeployed([createDeploymentStep('proxyDeployer', true), createDeploymentStep('zoltar', true), createDeploymentStep('securityPoolFactory', true)])).toBe(true)
+		expect(isTradingSystemDeployed([createDeploymentStep('proxyDeployer', true), createDeploymentStep('zoltar', true), createDeploymentStep('securityPoolFactory', false)])).toBe(false)
 	})
 
 	void test('computes pool collateralization as a percentage using the canonical REP/ETH price', () => {
