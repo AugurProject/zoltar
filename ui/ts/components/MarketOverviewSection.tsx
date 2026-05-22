@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from 'viem'
 import { AddressValue } from './AddressValue.js'
-import { OperationModal } from './OperationModal.js'
-import { RequirementsChecklist } from './RequirementsChecklist.js'
+import { ChildUniverseDeploymentModal } from './ChildUniverseDeploymentModal.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
 import { DataGrid } from './DataGrid.js'
@@ -13,7 +12,6 @@ import { MetricField } from './MetricField.js'
 import { ScalarDeploymentSection } from './ScalarDeploymentSection.js'
 import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
-import { TransactionActionButton } from './TransactionActionButton.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import { getUniversePresentation } from '../lib/userCopy.js'
@@ -117,7 +115,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 									reason:
 										accountAddress === undefined ? 'Connect a wallet before deploying a child universe.' : !isMainnet ? 'Switch to Ethereum mainnet before deploying a child universe.' : !hasForked ? 'Fork Zoltar before deploying child universes.' : child.exists ? 'This child universe is already deployed.' : undefined,
 								},
-								label: child.exists ? 'Deployed' : 'Open Universe Flow',
+								label: child.exists ? 'Deployed' : 'Create child universe',
 								onClick: () => setSelectedChildOutcomeIndex(child.outcomeIndex),
 								pending: zoltarChildUniversePendingOutcomeIndex === child.outcomeIndex,
 								pendingLabel: 'Opening...',
@@ -126,38 +124,41 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 							renderBody={child => <ChildUniverseDetails child={child} />}
 						/>
 					)}
-					<OperationModal isOpen={selectedChildUniverse !== undefined} onClose={() => setSelectedChildOutcomeIndex(undefined)} title='Create Child Universe' description='Confirm the selected fork outcome and deploy its child universe in one bounded execution flow.'>
+					<ChildUniverseDeploymentModal
+						actionAvailability={{
+							disabled: selectedChildUniverse === undefined || accountAddress === undefined || !isMainnet || !hasForked || selectedChildUniverse.exists,
+							reason:
+								selectedChildUniverse === undefined
+									? 'Select a child universe to deploy.'
+									: accountAddress === undefined
+										? 'Connect a wallet before deploying a child universe.'
+										: !isMainnet
+											? 'Switch to Ethereum mainnet before deploying a child universe.'
+											: !hasForked
+												? 'Fork Zoltar before deploying child universes.'
+												: selectedChildUniverse.exists
+													? 'This child universe is already deployed.'
+													: undefined,
+						}}
+						description='Confirm the selected fork outcome and deploy its child universe in one bounded execution flow.'
+						idleLabel='Deploy Universe'
+						isOpen={selectedChildUniverse !== undefined}
+						onClose={() => setSelectedChildOutcomeIndex(undefined)}
+						onConfirm={() => {
+							if (selectedChildUniverse === undefined) return
+							onCreateChildUniverseForOutcomeIndex(selectedChildUniverse.outcomeIndex)
+						}}
+						pending={selectedChildUniverse !== undefined && zoltarChildUniversePendingOutcomeIndex === selectedChildUniverse.outcomeIndex}
+						pendingLabel='Deploying universe...'
+						requirements={childUniverseRequirements}
+						title='Create Child Universe'
+					>
 						{selectedChildUniverse === undefined ? undefined : (
-							<>
-								<EntityCard className='compact' title='Selected Child Universe' variant='compact'>
-									<ChildUniverseDetails child={selectedChildUniverse} />
-								</EntityCard>
-								<RequirementsChecklist items={childUniverseRequirements} />
-								<div className='actions'>
-									<TransactionActionButton
-										idleLabel='Deploy Universe'
-										pendingLabel='Deploying universe...'
-										onClick={() => onCreateChildUniverseForOutcomeIndex(selectedChildUniverse.outcomeIndex)}
-										pending={zoltarChildUniversePendingOutcomeIndex === selectedChildUniverse.outcomeIndex}
-										tone='secondary'
-										availability={{
-											disabled: accountAddress === undefined || !isMainnet || !hasForked || selectedChildUniverse.exists,
-											reason:
-												accountAddress === undefined
-													? 'Connect a wallet before deploying a child universe.'
-													: !isMainnet
-														? 'Switch to Ethereum mainnet before deploying a child universe.'
-														: !hasForked
-															? 'Fork Zoltar before deploying child universes.'
-															: selectedChildUniverse.exists
-																? 'This child universe is already deployed.'
-																: undefined,
-										}}
-									/>
-								</div>
-							</>
+							<EntityCard className='compact' title='Selected Child Universe' variant='compact'>
+								<ChildUniverseDetails child={selectedChildUniverse} />
+							</EntityCard>
 						)}
-					</OperationModal>
+					</ChildUniverseDeploymentModal>
 				</>
 			)}
 		</>

@@ -1,12 +1,12 @@
-import type { EscalationSide, ReportingDetails } from '../types/contracts.js'
+import type { ActiveReportingDetails, EscalationSide } from '../types/contracts.js'
 import { getTimeRemaining } from './time.js'
 import { requireDefined } from './required.js'
 
-export function getEscalationTimeRemaining(details: ReportingDetails) {
+export function getEscalationTimeRemaining(details: ActiveReportingDetails) {
 	return requireDefined(getTimeRemaining(details.escalationEndTime, details.currentTime), 'Escalation end time is required')
 }
 
-export function getEscalationPhase(details: ReportingDetails) {
+export function getEscalationPhase(details: ActiveReportingDetails) {
 	if (details.resolution !== 'none') return 'Resolved'
 	if (details.currentTime < details.startingTime) return 'Pending Start'
 	if (details.currentTime >= details.escalationEndTime) return 'Awaiting Resolution'

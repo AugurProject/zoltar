@@ -3,8 +3,16 @@ import { useEffect } from 'preact/hooks'
 import type { SimulationController } from '../simulation/controller.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { parseDecimalInput } from '../lib/decimal.js'
-import { getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
+import { getSimulationScenarioDescription, getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
 import { TimestampValue } from './TimestampValue.js'
+
+const SIMULATION_TIME_PRESETS = [
+	{ label: '+1 hour', seconds: 60n * 60n },
+	{ label: '+1 day', seconds: 24n * 60n * 60n },
+	{ label: '+1 week', seconds: 7n * 24n * 60n * 60n },
+	{ label: '+1 month', seconds: 30n * 24n * 60n * 60n },
+	{ label: '+1 year', seconds: 365n * 24n * 60n * 60n },
+] as const
 
 type SimulationBannerProps = {
 	controller: SimulationController
@@ -75,10 +83,13 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 							<span className={`badge ${bootstrapError.value === undefined ? (isBootstrapped.value ? 'ok' : 'pending') : 'error'}`}>{bootstrapError.value === undefined ? (isBootstrapped.value ? 'Ready' : 'Bootstrapping') : 'Error'}</span>
 							<h3>Scenario</h3>
 						</div>
-						<p className='detail'>
-							{bootstrapError.value === undefined && isBootstrapping.value ? <span className='spinner' aria-hidden='true' /> : undefined}
-							{bootstrapError.value ?? (isBootstrapping.value ? (bootstrapLabel.value ?? 'Preparing the selected simulation scenario in the background.') : 'Switch scenarios to reload the browser simulation into a different seeded state.')}
-						</p>
+						<p className='detail'>{bootstrapError.value ?? getSimulationScenarioDescription(currentScenario.value)}</p>
+						{bootstrapError.value === undefined && isBootstrapping.value ? (
+							<p className='detail'>
+								<span className='spinner' aria-hidden='true' />
+								{bootstrapLabel.value ?? 'Preparing the selected simulation scenario in the background.'}
+							</p>
+						) : undefined}
 						{isBootstrapping.value ? (
 							<div className='notice-progress-track simulation-progress-track' aria-hidden='true'>
 								<div className='notice-progress-fill simulation-progress-fill' style={{ width: `${Math.round((bootstrapProgress.value ?? 0.08) * 100)}%` }} />
@@ -234,19 +245,28 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 						</div>
 						<p className='detail'>Query delay slows simulation reads. The REP / ETH and REP / USDC mocks apply to every REP token in simulation mode. Transaction delay slows receipt confirmation so loading states stay visible.</p>
 					</div>
-					<div className='button-row'>
-						<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value || !isBootstrapped.value}>
-							Reset scenario
-						</button>
-						<button className='secondary' onClick={() => void runControl(async () => await controller.mineBlock())} disabled={busy.value || !isBootstrapped.value}>
-							Mine block
-						</button>
-						<button className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(60n * 60n))} disabled={busy.value || !isBootstrapped.value}>
-							+1 hour
-						</button>
-						<button className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(24n * 60n * 60n))} disabled={busy.value || !isBootstrapped.value}>
-							+1 day
-						</button>
+					<div className='simulation-control-groups'>
+						<div className='simulation-control-group'>
+							<span className='simulation-control-group-label'>Actions</span>
+							<div className='button-row simulation-button-row'>
+								<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value || !isBootstrapped.value}>
+									Reset scenario
+								</button>
+								<button className='secondary' onClick={() => void runControl(async () => await controller.mineBlock())} disabled={busy.value || !isBootstrapped.value}>
+									Mine block
+								</button>
+							</div>
+						</div>
+						<div className='simulation-control-group'>
+							<span className='simulation-control-group-label'>Time travel</span>
+							<div className='button-row simulation-button-row'>
+								{SIMULATION_TIME_PRESETS.map(preset => (
+									<button key={preset.label} className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(preset.seconds))} disabled={busy.value || !isBootstrapped.value}>
+										{preset.label}
+									</button>
+								))}
+							</div>
+						</div>
 					</div>
 				</div>
 			</div>

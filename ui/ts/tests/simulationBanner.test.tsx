@@ -44,6 +44,42 @@ function createSimulationController(overrides: Partial<SimulationController> = {
 }
 
 describe('SimulationBanner', () => {
+	test('shows the selected scenario description', async () => {
+		const domEnvironment = installDomEnvironment()
+		const onRefresh = mock(async () => undefined)
+		const controller = createSimulationController({ currentScenario: 'security-pool' })
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			expect(documentQueries.getByText('One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool workflows and liquidation paths.')).not.toBeNull()
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('shows scenario description and bootstrap label while bootstrapping', async () => {
+		const domEnvironment = installDomEnvironment()
+		const onRefresh = mock(async () => undefined)
+		const controller = createSimulationController({
+			bootstrapLabel: 'Deploying seeded security pool',
+			currentScenario: 'security-pool',
+			isBootstrapped: false,
+			isBootstrapping: true,
+		})
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			expect(documentQueries.getByText('One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool workflows and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('Deploying seeded security pool')).not.toBeNull()
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
 	test('refreshes the app after updating the REP/ETH mock price', async () => {
 		const domEnvironment = installDomEnvironment()
 		const onRefresh = mock(async () => undefined)
@@ -72,6 +108,43 @@ describe('SimulationBanner', () => {
 				expect(setRepPerEthPrice).toHaveBeenCalledWith(2n * 10n ** 18n)
 				expect(onRefresh).toHaveBeenCalledTimes(1)
 			})
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('renders grouped time presets and advances time for the new durations', async () => {
+		const domEnvironment = installDomEnvironment()
+		const onRefresh = mock(async () => undefined)
+		const advanceTime = mock(async () => undefined)
+		const controller = createSimulationController({ advanceTime })
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			expect(documentQueries.getByText('Actions')).toBeTruthy()
+			expect(documentQueries.getByText('Time travel')).toBeTruthy()
+
+			const expectedPresets = [
+				{ label: '+1 hour', seconds: 60n * 60n },
+				{ label: '+1 day', seconds: 24n * 60n * 60n },
+				{ label: '+1 week', seconds: 7n * 24n * 60n * 60n },
+				{ label: '+1 month', seconds: 30n * 24n * 60n * 60n },
+				{ label: '+1 year', seconds: 365n * 24n * 60n * 60n },
+			] as const
+
+			for (const preset of expectedPresets) {
+				expect(documentQueries.getByRole('button', { name: preset.label })).toBeTruthy()
+			}
+
+			for (const [index, preset] of expectedPresets.slice(2).entries()) {
+				fireEvent.click(documentQueries.getByRole('button', { name: preset.label }))
+				await waitFor(() => {
+					expect(advanceTime).toHaveBeenNthCalledWith(index + 1, preset.seconds)
+					expect(onRefresh).toHaveBeenCalledTimes(index + 1)
+				})
+			}
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()

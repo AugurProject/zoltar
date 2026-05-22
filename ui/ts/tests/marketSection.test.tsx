@@ -378,13 +378,14 @@ describe('MarketSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('dialog')).toBeNull()
-		const openForkButton = documentQueries.getByRole('button', { name: 'Open Fork Flow' })
+		const openForkButton = documentQueries.getByRole('button', { name: 'Fork Zoltar' })
 		await act(() => {
 			openForkButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 		})
-		expect(documentQueries.getByRole('dialog')).not.toBeNull()
+		const modal = documentQueries.getByRole('dialog')
+		expect(modal).not.toBeNull()
 		expect(documentQueries.getAllByText('Fork Zoltar').length > 0).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Fork Zoltar', 'Select a valid fork question before forking Zoltar.')
+		expectTransactionButtonDisabled(modal as HTMLElement, 'Fork Zoltar', 'Select a valid fork question before forking Zoltar.')
 	})
 
 	test('opens root-universe child-universe deployment in a modal', async () => {
@@ -418,7 +419,7 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Open Universe Flow' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Create child universe' }))
 		await Promise.resolve()
 
 		const modal = documentQueries.getByRole('dialog')
