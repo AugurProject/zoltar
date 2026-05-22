@@ -1,8 +1,6 @@
 import { NoticeStack } from './NoticeStack.js'
 import { TimestampValue } from './TimestampValue.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
 import { formatUniverseLabel } from '../lib/universe.js'
-import type { TransactionState } from '../lib/transactionState.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
 import type { NoticeItem } from '../types/components.js'
 
@@ -11,13 +9,11 @@ type AppStatusNoticesProps = {
 	wrongNetworkMessage: string | undefined
 	simulationBootstrapError: string | undefined
 	showAugurPlaceHolderDeploymentWarning: boolean
-	showTransactionSuccessNotice: boolean
 	showZoltarUniverseForkedWarning: boolean
-	transactionState: TransactionState
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
-export function AppStatusNotices({ errorMessage, wrongNetworkMessage, showTransactionSuccessNotice, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, transactionState, zoltarUniverse }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, wrongNetworkMessage, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, zoltarUniverse }: AppStatusNoticesProps) {
 	const items: NoticeItem[] = []
 	if (simulationBootstrapError !== undefined) {
 		items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: 'Simulation bootstrap failed' })
@@ -47,25 +43,6 @@ export function AppStatusNotices({ errorMessage, wrongNetworkMessage, showTransa
 	}
 	if (errorMessage !== undefined) {
 		items.push({ detail: errorMessage, id: 'app-error', tone: 'blocking', title: 'Error' })
-	}
-	if (transactionState.transactionInFlightCount > 0) {
-		items.push({
-			detail: transactionState.transactionSubmitted ? <>Transaction submitted, waiting for confirmation. {transactionState.lastTransactionHash === undefined ? <span>Pending wallet signature</span> : <TransactionHashLink hash={transactionState.lastTransactionHash} />}</> : 'Awaiting wallet confirmation.',
-			id: 'transaction-pending',
-			tone: 'pending',
-			title: 'Transaction pending',
-		})
-	} else if (showTransactionSuccessNotice && transactionState.lastTransactionHash !== undefined) {
-		items.push({
-			detail: (
-				<>
-					Last transaction: <TransactionHashLink hash={transactionState.lastTransactionHash} />
-				</>
-			),
-			id: 'transaction-success',
-			tone: 'success',
-			title: 'Transaction complete',
-		})
 	}
 
 	return <NoticeStack items={items} />

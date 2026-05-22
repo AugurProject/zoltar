@@ -10,23 +10,21 @@ import { EnumDropdown, type EnumDropdownOption } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { LifecycleStageBanner } from './LifecycleStageBanner.js'
-import { LatestActionSection } from './LatestActionSection.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { OperationModal } from './OperationModal.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
-import { ResultBanner } from './ResultBanner.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StickyObjectContext } from './StickyObjectContext.js'
 import { StateHint } from './StateHint.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { useLoadController } from '../hooks/useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import {
+	getOpenOracleCreateGuardMessage,
 	formatOpenOracleFeePercentage,
 	formatOpenOracleMultiplier,
 	getOpenOracleDisputeAvailability,
@@ -34,16 +32,18 @@ import {
 	getOpenOracleReportStatusTone,
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
+	type OpenOracleDisputeSubmissionDetails,
 	type OpenOracleInitialReportSubmissionDetails,
 	type OpenOracleSelectedReportActionMode,
 } from '../lib/openOracle.js'
 import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
 import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
 import { loadOpenOracleReportSummaries } from '../contracts.js'
+import { isMainnetChain } from '../lib/network.js'
 import { getReportPresentation } from '../lib/userCopy.js'
 import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
-import type { OpenOracleSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
+import type { OpenOracleSectionProps } from '../types/components.js'
 
 const BROWSE_PAGE_SIZE = 10
 type SelectedReportModal = 'dispute' | 'initial-report' | 'settle' | undefined
@@ -129,6 +129,7 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 
 export function renderSelectedReportActionSection({
 	actionMode,
+	disputeSubmission,
 	initialReportSubmission,
 	isConnected,
 	onApproveToken1,
@@ -140,6 +141,7 @@ export function renderSelectedReportActionSection({
 	onSubmitInitialReport,
 	onWrapWethForInitialReport,
 	openOracleActiveAction,
+	openOracleFeedback,
 	openOracleForm,
 	openOracleInitialReportState,
 	openOracleReportDetails,
@@ -147,6 +149,7 @@ export function renderSelectedReportActionSection({
 	token2Symbol,
 }: {
 	actionMode: OpenOracleSelectedReportActionMode
+	disputeSubmission: OpenOracleDisputeSubmissionDetails | undefined
 	initialReportSubmission: OpenOracleInitialReportSubmissionDetails
 	isConnected: boolean
 	onApproveToken1: (amount?: bigint) => void
@@ -158,6 +161,7 @@ export function renderSelectedReportActionSection({
 	onSubmitInitialReport: () => void
 	onWrapWethForInitialReport: () => void
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction']
+	openOracleFeedback?: OpenOracleSectionProps['openOracleFeedback']
 	openOracleForm: OpenOracleFormState
 	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState']
 	openOracleReportDetails?: OpenOracleReportDetails
@@ -207,6 +211,7 @@ export function renderSelectedReportActionSection({
 								pendingLabel={`Approving ${token1Symbol}...`}
 								requiredAmount={initialReportSubmission.amount1}
 								resetKey={`token1:${token1Symbol}:${initialReportSubmission.amount1?.toString() ?? ''}:${openOracleForm.reportId}`}
+								status={openOracleFeedback?.action === 'approveToken1' ? openOracleFeedback.status : undefined}
 								tokenSymbol={token1Symbol}
 								tokenUnits={initialReportSubmission.token1Decimals ?? 18}
 							/>
@@ -224,6 +229,7 @@ export function renderSelectedReportActionSection({
 								pendingLabel={`Approving ${token2Symbol}...`}
 								requiredAmount={initialReportSubmission.amount2}
 								resetKey={`token2:${token2Symbol}:${initialReportSubmission.amount2?.toString() ?? ''}:${openOracleForm.reportId}`}
+								status={openOracleFeedback?.action === 'approveToken2' ? openOracleFeedback.status : undefined}
 								tokenSymbol={token2Symbol}
 								tokenUnits={initialReportSubmission.token2Decimals ?? 18}
 							/>
@@ -242,6 +248,7 @@ export function renderSelectedReportActionSection({
 									pendingLabel='Wrapping ETH...'
 									onClick={onWrapWethForInitialReport}
 									pending={openOracleActiveAction === 'wrapWeth'}
+									status={openOracleFeedback?.action === 'wrapWeth' ? openOracleFeedback.status : undefined}
 									tone='secondary'
 									availability={{
 										disabled: !isConnected || !initialReportSubmission.canWrapRequiredWeth,
@@ -254,6 +261,7 @@ export function renderSelectedReportActionSection({
 								pendingLabel='Submitting...'
 								onClick={onSubmitInitialReport}
 								pending={openOracleActiveAction === 'submitInitialReport'}
+								status={openOracleFeedback?.action === 'submitInitialReport' ? openOracleFeedback.status : undefined}
 								availability={{
 									disabled: !isConnected || !initialReportSubmission.canSubmit,
 									reason: !isConnected ? 'Connect a wallet before submitting the initial report.' : initialReportSubmission.blockMessage?.kind === 'visible' ? initialReportSubmission.blockMessage.message : undefined,
@@ -265,6 +273,8 @@ export function renderSelectedReportActionSection({
 			)
 		case 'dispute': {
 			const disputeDisabledMessage = !isConnected ? 'Connect a wallet before disputing reports.' : openOracleForm.reportId.trim() === '' ? 'Load a report first.' : disputeAvailability.message
+			const token1ApprovalGuardMessage = !isConnected ? 'Connect a wallet before approving tokens.' : openOracleReportDetails === undefined ? 'Load a report first.' : disputeSubmission?.token1ContributionAmount === undefined ? `Enter valid dispute amounts before approving ${token1Symbol}.` : undefined
+			const token2ApprovalGuardMessage = !isConnected ? 'Connect a wallet before approving tokens.' : openOracleReportDetails === undefined ? 'Load a report first.' : disputeSubmission?.token2ContributionAmount === undefined ? `Enter valid dispute amounts before approving ${token2Symbol}.` : undefined
 			return (
 				<SectionBlock headingLevel={4} title='Dispute Report' variant='embedded'>
 					<div className='form-grid'>
@@ -289,16 +299,51 @@ export function renderSelectedReportActionSection({
 								<FormInput value={openOracleForm.disputeNewAmount2} onInput={event => onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })} />
 							</label>
 						</div>
+						{disputeSubmission?.expectedNewAmount1 === undefined ? undefined : <p className='detail'>{`New ${token1Symbol} amount must be exactly ${disputeSubmission.expectedNewAmount1.toString()} for this dispute.`}</p>}
+						<SectionBlock headingLevel={4} title={`${token1Symbol} Approval`} variant='embedded'>
+							<TokenApprovalControl
+								actionLabel='disputing the report'
+								allowanceError={openOracleInitialReportState.token1Approval.error}
+								allowanceLoading={openOracleInitialReportState.token1Approval.loading}
+								approvedAmount={openOracleInitialReportState.token1Approval.value}
+								guardMessage={token1ApprovalGuardMessage}
+								onApprove={amount => onApproveToken1(amount)}
+								pending={openOracleActiveAction === 'approveToken1'}
+								pendingLabel={`Approving ${token1Symbol}...`}
+								requiredAmount={disputeSubmission?.token1ContributionAmount}
+								resetKey={`dispute:token1:${token1Symbol}:${disputeSubmission?.token1ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
+								tokenSymbol={token1Symbol}
+								tokenUnits={disputeSubmission?.token1Decimals ?? 18}
+							/>
+						</SectionBlock>
+						<SectionBlock headingLevel={4} title={`${token2Symbol} Approval`} variant='embedded'>
+							<TokenApprovalControl
+								actionLabel='disputing the report'
+								allowanceError={openOracleInitialReportState.token2Approval.error}
+								allowanceLoading={openOracleInitialReportState.token2Approval.loading}
+								approvedAmount={openOracleInitialReportState.token2Approval.value}
+								guardMessage={token2ApprovalGuardMessage}
+								onApprove={amount => onApproveToken2(amount)}
+								pending={openOracleActiveAction === 'approveToken2'}
+								pendingLabel={`Approving ${token2Symbol}...`}
+								requiredAmount={disputeSubmission?.token2ContributionAmount}
+								resetKey={`dispute:token2:${token2Symbol}:${disputeSubmission?.token2ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
+								tokenSymbol={token2Symbol}
+								tokenUnits={disputeSubmission?.token2Decimals ?? 18}
+							/>
+						</SectionBlock>
+						{disputeSubmission?.blockMessage?.kind !== 'visible' ? undefined : <p className='detail'>{disputeSubmission.blockMessage.message}</p>}
 						<div className='actions'>
 							<TransactionActionButton
 								idleLabel='Dispute & Swap'
 								pendingLabel='Submitting dispute...'
 								onClick={onDisputeReport}
 								pending={openOracleActiveAction === 'dispute'}
+								status={openOracleFeedback?.action === 'dispute' ? openOracleFeedback.status : undefined}
 								tone='secondary'
 								availability={{
-									disabled: !isConnected || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct,
-									reason: disputeDisabledMessage,
+									disabled: !isConnected || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false,
+									reason: disputeDisabledMessage ?? (disputeSubmission?.blockMessage?.kind === 'visible' ? disputeSubmission.blockMessage.message : undefined),
 								}}
 							/>
 						</div>
@@ -325,6 +370,7 @@ export function renderSelectedReportActionSection({
 								pendingLabel='Settling report...'
 								onClick={onSettleReport}
 								pending={openOracleActiveAction === 'settle'}
+								status={openOracleFeedback?.action === 'settle' ? openOracleFeedback.status : undefined}
 								tone='secondary'
 								availability={{
 									disabled: !isConnected || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct,
@@ -349,8 +395,10 @@ function renderReportDetailsCard(
 	openOracleReportDetails: OpenOracleReportDetails | undefined,
 	openOracleForm: OpenOracleFormState,
 	openOracleInitialReportState: OpenOracleSectionProps['openOracleInitialReportState'],
+	openOracleDisputeSubmission: OpenOracleSectionProps['openOracleDisputeSubmission'],
 	openOracleInitialReportSubmission: OpenOracleSectionProps['openOracleInitialReportSubmission'],
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction'],
+	openOracleFeedback: OpenOracleSectionProps['openOracleFeedback'],
 	loadingOracleReport: boolean,
 	isConnected: boolean,
 	selectedReportModal: SelectedReportModal,
@@ -606,6 +654,7 @@ function renderReportDetailsCard(
 			<OperationModal isOpen={selectedReportModal === 'initial-report'} onClose={() => onSelectedReportModalChange(undefined)} title='Submit Initial Report' description='Review price source, approvals, and token balances before submitting the initial report.'>
 				{renderSelectedReportActionSection({
 					actionMode: 'initial-report',
+					disputeSubmission: openOracleDisputeSubmission,
 					initialReportSubmission: openOracleInitialReportSubmission,
 					isConnected,
 					onApproveToken1,
@@ -617,6 +666,7 @@ function renderReportDetailsCard(
 					onSubmitInitialReport,
 					onWrapWethForInitialReport,
 					openOracleActiveAction,
+					openOracleFeedback,
 					openOracleForm,
 					openOracleInitialReportState,
 					openOracleReportDetails,
@@ -628,6 +678,7 @@ function renderReportDetailsCard(
 			<OperationModal isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title='Dispute & Swap' description='Provide the replacement swap amounts for the selected report.'>
 				{renderSelectedReportActionSection({
 					actionMode: 'dispute',
+					disputeSubmission: openOracleDisputeSubmission,
 					initialReportSubmission: openOracleInitialReportSubmission,
 					isConnected,
 					onApproveToken1,
@@ -639,6 +690,7 @@ function renderReportDetailsCard(
 					onSubmitInitialReport,
 					onWrapWethForInitialReport,
 					openOracleActiveAction,
+					openOracleFeedback,
 					openOracleForm,
 					openOracleInitialReportState,
 					openOracleReportDetails,
@@ -650,6 +702,7 @@ function renderReportDetailsCard(
 			<OperationModal isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title='Settle Report' description='Confirm settlement once the selected report is ready.'>
 				{renderSelectedReportActionSection({
 					actionMode: 'settle',
+					disputeSubmission: openOracleDisputeSubmission,
 					initialReportSubmission: openOracleInitialReportSubmission,
 					isConnected,
 					onApproveToken1,
@@ -661,6 +714,7 @@ function renderReportDetailsCard(
 					onSubmitInitialReport,
 					onWrapWethForInitialReport,
 					openOracleActiveAction,
+					openOracleFeedback,
 					openOracleForm,
 					openOracleInitialReportState,
 					openOracleReportDetails,
@@ -670,71 +724,6 @@ function renderReportDetailsCard(
 			</OperationModal>
 		</>
 	)
-}
-
-function renderLatestActionCard(action: OpenOracleSectionProps['openOracleResult']) {
-	if (action === undefined) return undefined
-
-	return (
-		<LatestActionSection
-			title='Latest Oracle Action'
-			rows={[
-				{ label: 'Action', value: action.action },
-				{ label: 'Transaction', value: <TransactionHashLink hash={action.hash} /> },
-			]}
-		/>
-	)
-}
-
-function getOpenOracleOutcomePresentation(action: OpenOracleSectionProps['openOracleResult']): WorkflowOutcomePresentation | undefined {
-	if (action === undefined) return undefined
-
-	switch (action.action) {
-		case 'approveToken1':
-			return {
-				detail: 'Token1 approval was updated for the selected report workflow.',
-				nextStep: 'Return to the report modal and complete the report submission.',
-				title: 'Token1 Approved',
-			}
-		case 'approveToken2':
-			return {
-				detail: 'Token2 approval was updated for the selected report workflow.',
-				nextStep: 'Return to the report modal and complete the report submission.',
-				title: 'Token2 Approved',
-			}
-		case 'wrapWeth':
-			return {
-				detail: 'ETH was wrapped to WETH for the selected report flow.',
-				nextStep: 'Submit the initial report once all requirements are ready.',
-				title: 'WETH Wrapped',
-			}
-		case 'submitInitialReport':
-			return {
-				detail: 'The selected report now has an initial report on-chain.',
-				nextStep: 'Monitor the dispute window and settle once the report is ready.',
-				title: 'Initial Report Submitted',
-			}
-		case 'dispute':
-			return {
-				detail: 'The selected report was disputed with the replacement swap amounts.',
-				nextStep: 'Monitor the updated report state and settle when the dispute window closes.',
-				title: 'Report Disputed',
-			}
-		case 'settle':
-			return {
-				detail: 'The selected report was settled on-chain.',
-				nextStep: 'No further write actions are expected for this report.',
-				title: 'Report Settled',
-			}
-		case 'createReportInstance':
-			return {
-				detail: 'A new Open Oracle game was created.',
-				nextStep: 'Open the new report to continue its lifecycle.',
-				title: 'Open Oracle Game Created',
-			}
-	}
-
-	return undefined
 }
 
 export function OpenOracleSection({
@@ -755,7 +744,9 @@ export function OpenOracleSection({
 	loadingOpenOracleCreate,
 	openOracleActiveAction,
 	openOracleCreateForm,
+	openOracleDisputeSubmission,
 	openOracleError,
+	openOracleFeedback,
 	openOracleForm,
 	openOracleInitialReportState,
 	openOracleInitialReportSubmission,
@@ -772,7 +763,14 @@ export function OpenOracleSection({
 	const [selectedReportModal, setSelectedReportModal] = useState<SelectedReportModal>(undefined)
 	const browseLoad = useLoadController()
 	const isConnected = accountState.address !== undefined
-	const openOracleOutcome = getOpenOracleOutcomePresentation(openOracleResult)
+	const isMainnet = isMainnetChain(accountState.chainId)
+	const createGuardMessage = getOpenOracleCreateGuardMessage({
+		ethValueInput: openOracleCreateForm.ethValue,
+		isMainnet,
+		settlerRewardInput: openOracleCreateForm.settlerReward,
+		walletConnected: isConnected,
+		walletEthBalance: accountState.ethBalance,
+	})
 
 	useEffect(() => {
 		let cancelled = false
@@ -802,12 +800,6 @@ export function OpenOracleSection({
 		}
 	}, [browsePageIndex, openOracleResult?.action, openOracleResult?.hash, view])
 
-	useEffect(() => {
-		if (openOracleResult === undefined) return
-		if (openOracleResult.action === 'approveToken1' || openOracleResult.action === 'approveToken2' || openOracleResult.action === 'wrapWeth') return
-		setSelectedReportModal(undefined)
-	}, [openOracleResult])
-
 	const loadingBrowse = browseLoad.isLoading.value
 	const normalizedBrowseSearchText = browseSearchText.trim().toLowerCase()
 	const browseReportCount = browsePage?.reportCount ?? 0n
@@ -835,7 +827,6 @@ export function OpenOracleSection({
 
 	return (
 		<div className='route-view-flow'>
-			<ResultBanner outcome={openOracleOutcome} />
 			{view === 'browse' ? (
 				<div className='workflow-stack route-workflow-stack'>
 					<SectionBlock
@@ -885,7 +876,6 @@ export function OpenOracleSection({
 							<div className='entity-card-list'>{filteredBrowseReports.map(report => renderReportSummaryCard(report, reportId => void openBrowseReport(reportId)))}</div>
 						)}
 					</SectionBlock>
-					{renderLatestActionCard(openOracleResult)}
 				</div>
 			) : undefined}
 
@@ -903,7 +893,6 @@ export function OpenOracleSection({
 							</div>
 						</SectionBlock>
 					)}
-					{renderLatestActionCard(openOracleResult)}
 					<SectionBlock title='Create Open Oracle Game' description='Create a standalone Open Oracle game directly. This does not queue an oracle-manager operation.'>
 						<div className='form-grid'>
 							<SectionBlock headingLevel={4} title='Token Pair' variant='embedded'>
@@ -970,7 +959,14 @@ export function OpenOracleSection({
 							</SectionBlock>
 
 							<div className='actions'>
-								<TransactionActionButton idleLabel='Create Open Oracle Game' pendingLabel='Creating...' onClick={onCreateOpenOracleGame} pending={loadingOpenOracleCreate} availability={{ disabled: !isConnected, reason: !isConnected ? 'Connect a wallet before creating an Open Oracle game.' : undefined }} />
+								<TransactionActionButton
+									idleLabel='Create Open Oracle Game'
+									pendingLabel='Creating...'
+									onClick={onCreateOpenOracleGame}
+									pending={loadingOpenOracleCreate}
+									status={openOracleFeedback?.action === 'createReportInstance' ? openOracleFeedback.status : undefined}
+									availability={{ disabled: createGuardMessage !== undefined, reason: createGuardMessage }}
+								/>
 							</div>
 						</div>
 					</SectionBlock>
@@ -984,8 +980,10 @@ export function OpenOracleSection({
 						openOracleReportDetails,
 						openOracleForm,
 						openOracleInitialReportState,
+						openOracleDisputeSubmission,
 						openOracleInitialReportSubmission,
 						openOracleActiveAction,
+						openOracleFeedback,
 						loadingOracleReport,
 						isConnected,
 						selectedReportModal,
@@ -1000,7 +998,6 @@ export function OpenOracleSection({
 						onSubmitInitialReport,
 						onWrapWethForInitialReport,
 					)}
-					{renderLatestActionCard(openOracleResult)}
 				</div>
 			) : undefined}
 

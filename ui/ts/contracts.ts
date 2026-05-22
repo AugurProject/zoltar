@@ -179,6 +179,48 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 	return deposits
 }
 
+async function loadViewerReportingVaultState(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined) {
+	if (accountAddress === undefined) {
+		return {
+			viewerVaultAvailableEscalationRep: undefined,
+			viewerVaultExists: false,
+			viewerVaultLockedRepInEscalationGame: undefined,
+			viewerVaultRepDepositShare: undefined,
+		}
+	}
+
+	const viewerVaultTuple = await client.readContract({
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'securityVaults',
+		address: securityPoolAddress,
+		args: [accountAddress],
+	})
+	const viewerVaultTuples = requireSecurityVaultTupleArray([viewerVaultTuple], 'viewer security vault tuple')
+	const [viewerPoolOwnership, viewerSecurityBondAllowance, viewerUnpaidEthFees, viewerFeeIndex, viewerLockedRepInEscalationGame] = viewerVaultTuples[0] ?? []
+	if (typeof viewerPoolOwnership !== 'bigint' || typeof viewerSecurityBondAllowance !== 'bigint' || typeof viewerUnpaidEthFees !== 'bigint' || typeof viewerFeeIndex !== 'bigint' || typeof viewerLockedRepInEscalationGame !== 'bigint') {
+		throw new Error('Unexpected viewer security vault tuple response')
+	}
+
+	const viewerVaultRepDepositShare =
+		viewerPoolOwnership === 0n
+			? 0n
+			: await client.readContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					functionName: 'poolOwnershipToRep',
+					address: securityPoolAddress,
+					args: [viewerPoolOwnership],
+				})
+	const viewerVaultExists = viewerPoolOwnership !== 0n || viewerSecurityBondAllowance !== 0n || viewerUnpaidEthFees !== 0n || viewerFeeIndex !== 0n || viewerLockedRepInEscalationGame !== 0n
+	const viewerVaultAvailableEscalationRep = viewerVaultRepDepositShare > viewerLockedRepInEscalationGame ? viewerVaultRepDepositShare - viewerLockedRepInEscalationGame : 0n
+
+	return {
+		viewerVaultAvailableEscalationRep,
+		viewerVaultExists,
+		viewerVaultLockedRepInEscalationGame: viewerLockedRepInEscalationGame,
+		viewerVaultRepDepositShare,
+	}
+}
+
 export async function loadReportingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
 	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId] = await readRequiredMulticall(client, [
 		{
@@ -206,21 +248,30 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			args: [],
 		},
 	])
-	const [marketDetails, block, escalationGameCode] = await Promise.all([loadMarketDetails(client, questionId), client.getBlock(), escalationGameAddress === zeroAddress ? Promise.resolve('0x' as const) : client.getCode({ address: escalationGameAddress })])
+	const [marketDetails, block, escalationGameCode, viewerVaultState] = await Promise.all([
+		loadMarketDetails(client, questionId),
+		client.getBlock(),
+		escalationGameAddress === zeroAddress ? Promise.resolve('0x' as const) : client.getCode({ address: escalationGameAddress }),
+		loadViewerReportingVaultState(client, securityPoolAddress, accountAddress),
+	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x') {
 		return {
 			completeSetCollateralAmount,
 			currentTime: block.timestamp,
 			marketDetails,
+			questionOutcome: 'none',
 			resolution: 'none',
 			securityPoolAddress,
 			status: 'not-started',
 			universeId,
+			withdrawalEnabled: false,
+			withdrawalState: 'not-finalized',
+			...viewerVaultState,
 		}
 	}
 
-	const [startBond, nonDecisionThreshold, startingTime, totalCost, bindingCapital, balances, resolution, escalationEndTime] = await readRequiredMulticall(client, [
+	const [startBond, nonDecisionThreshold, startingTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'startBond',
@@ -269,6 +320,24 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			address: escalationGameAddress,
 			args: [],
 		},
+		{
+			abi: QUESTION_OUTCOME_ABI,
+			functionName: 'getQuestionOutcome',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		},
+		{
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'getForkTime',
+			address: getInfraContractAddresses().zoltar,
+			args: [universeId],
+		},
+		{
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'hasReachedNonDecision',
+			address: escalationGameAddress,
+			args: [],
+		},
 	])
 	if (!isBigintTriple(balances)) throw new Error('Unexpected escalation balances response')
 	const [invalidDeposits, yesDeposits, noDeposits] = await Promise.all([loadEscalationDeposits(client, escalationGameAddress, 'invalid'), loadEscalationDeposits(client, escalationGameAddress, 'yes'), loadEscalationDeposits(client, escalationGameAddress, 'no')])
@@ -278,6 +347,8 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		{ balance: balances[1] ?? 0n, deposits: yesDeposits, key: 'yes', label: getEscalationSideLabel('yes'), userDeposits: accountAddress === undefined ? [] : yesDeposits.filter(deposit => deposit.depositor === accountAddress) },
 		{ balance: balances[2] ?? 0n, deposits: noDeposits, key: 'no', label: getEscalationSideLabel('no'), userDeposits: accountAddress === undefined ? [] : noDeposits.filter(deposit => deposit.depositor === accountAddress) },
 	]
+	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcome)
+	const withdrawalState = normalizedQuestionOutcome !== 'none' ? 'resolved' : universeForkTime > 0n && hasReachedNonDecision === false ? 'canceled-by-external-fork' : 'not-finalized'
 
 	return {
 		bindingCapital,
@@ -288,6 +359,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		escalationGameAddress,
 		marketDetails,
 		nonDecisionThreshold,
+		questionOutcome: normalizedQuestionOutcome,
 		resolution: getReportingOutcomeKey(resolution),
 		securityPoolAddress,
 		sides,
@@ -296,6 +368,9 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		startingTime,
 		totalCost,
 		universeId,
+		withdrawalEnabled: withdrawalState !== 'not-finalized',
+		withdrawalState,
+		...viewerVaultState,
 	}
 }
 

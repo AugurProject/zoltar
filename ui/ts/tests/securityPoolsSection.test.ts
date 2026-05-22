@@ -68,7 +68,7 @@ function createReportingProps(overrides: Partial<ReportingRouteContentProps> = {
 			reportAmount: '',
 			securityPoolAddress: '',
 			selectedOutcome: 'yes',
-			withdrawDepositIndexes: '',
+			selectedWithdrawDepositIndexes: [],
 		},
 		reportingResult: undefined,
 		...overrides,
@@ -580,6 +580,15 @@ void describe('SecurityPoolsSection', () => {
 							isPriceValid: true,
 							managerAddress: zeroAddress,
 						}),
+						securityPoolOverviewFeedback: {
+							action: 'queueLiquidation',
+							status: {
+								detail: 'Execution completed immediately.',
+								hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
+								title: 'Liquidation executed',
+								tone: 'success',
+							},
+						},
 						securityPoolOverviewResult: {
 							action: 'queueLiquidation',
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
@@ -592,7 +601,7 @@ void describe('SecurityPoolsSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText(/Liquidation successful/)).not.toBeNull()
+		expect(within(document.body).getByText('Liquidation executed')).not.toBeNull()
 	})
 
 	void test('shows liquidation queued in browse mode when the refreshed manager reports a pending liquidation', async () => {
@@ -628,7 +637,7 @@ void describe('SecurityPoolsSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText(/Liquidation queued/)).not.toBeNull()
+		expect(within(document.body).getByText('Liquidation Queued')).not.toBeNull()
 	})
 
 	void test('shows liquidation failed in browse mode with the revert detail', async () => {
@@ -644,6 +653,14 @@ void describe('SecurityPoolsSection', () => {
 							isPriceValid: true,
 							managerAddress: zeroAddress,
 						}),
+						securityPoolOverviewFeedback: {
+							action: 'queueLiquidation',
+							status: {
+								detail: 'Local Security Bond Allowance broken',
+								title: 'Liquidation failed',
+								tone: 'error',
+							},
+						},
 						securityPoolOverviewResult: {
 							action: 'queueLiquidation',
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000ac',
@@ -664,8 +681,7 @@ void describe('SecurityPoolsSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Liquidation failed')).not.toBeNull()
-		const liquidationDialog = documentQueries.getByRole('dialog', { name: 'Execute Vault Liquidation' })
-		expect(within(liquidationDialog).getByText('Local Security Bond Allowance broken')).not.toBeNull()
+		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
 	})
 
 	void test('keeps the route summary hidden in operate mode until the selected pool resolves', async () => {

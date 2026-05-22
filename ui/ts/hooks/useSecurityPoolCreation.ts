@@ -6,10 +6,12 @@ import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { runWriteAction } from '../lib/writeAction.js'
 import { createSecurityPoolParameters, hasDeployedStep } from '../lib/marketCreation.js'
 import { getDefaultSecurityPoolFormState, parseBigIntInput } from '../lib/marketForm.js'
 import type { SecurityPoolFormState } from '../types/app.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '../types/contracts.js'
 
 type UseSecurityPoolCreationParameters = {
@@ -49,6 +51,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 	const securityPoolCreating = useSignal(false)
 	const securityPoolError = useSignal<string | undefined>(undefined)
 	const securityPoolForm = useSignal<SecurityPoolFormState>(getDefaultSecurityPoolFormState())
+	const securityPoolCreationFeedback = useSignal<ActionFeedback<'createSecurityPool'> | undefined>(undefined)
 	const securityPoolResult = useSignal<SecurityPoolCreationResult | undefined>(undefined)
 	const duplicateOriginPoolExists = useSignal(false)
 	const nextMarketDetailsLoad = useRequestGuard()
@@ -129,6 +132,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 		}
 		securityPoolResult.value = undefined
 		poolCreationMarketDetails.value = undefined
+		securityPoolCreationFeedback.value = createPendingActionFeedback('createSecurityPool', 'Creating security pool')
 
 		let capturedDetails: MarketDetails | undefined
 
@@ -136,6 +140,9 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 			{
 				accountAddress,
 				missingWalletMessage: 'Connect a wallet before creating a security pool',
+				onRefreshError: (message, hash) => {
+					securityPoolCreationFeedback.value = createWarningActionFeedback('createSecurityPool', 'Security pool created', message, hash)
+				},
 				onTransaction,
 				onTransactionRequested: () => {
 					securityPoolCreating.value = true
@@ -144,6 +151,9 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 				onTransactionFinished: () => {
 					securityPoolCreating.value = false
 					onTransactionFinished()
+				},
+				onWriteError: message => {
+					securityPoolCreationFeedback.value = createErrorActionFeedback('createSecurityPool', 'Security pool creation failed', message)
 				},
 				refreshState,
 				setErrorMessage: message => {
@@ -177,6 +187,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 					poolCreationMarketDetails.value = capturedDetails
 				}
 				securityPoolResult.value = result
+				securityPoolCreationFeedback.value = createSuccessActionFeedback('createSecurityPool', 'Security pool created', result.hash)
 			},
 		)
 	}
@@ -212,6 +223,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 		loadMarket,
 		loadingMarketDetails: marketDetailsLoad.isLoading.value,
 		marketDetails: marketDetails.value,
+		securityPoolCreationFeedback: securityPoolCreationFeedback.value,
 		securityPoolCreating: securityPoolCreating.value,
 		securityPoolError: securityPoolError.value,
 		securityPoolForm: securityPoolForm.value,

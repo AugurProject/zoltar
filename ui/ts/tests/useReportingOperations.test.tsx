@@ -45,6 +45,7 @@ function createReportingDetails(securityPoolAddress: Address): ReportingDetails 
 			title: 'Will this resolve?',
 		},
 		nonDecisionThreshold: 20n,
+		questionOutcome: 'none',
 		resolution: 'none',
 		securityPoolAddress,
 		sides: [
@@ -57,6 +58,12 @@ function createReportingDetails(securityPoolAddress: Address): ReportingDetails 
 		startingTime: 120n,
 		totalCost: 0n,
 		universeId: 1n,
+		withdrawalEnabled: false,
+		withdrawalState: 'not-finalized',
+		viewerVaultAvailableEscalationRep: 8n,
+		viewerVaultExists: true,
+		viewerVaultLockedRepInEscalationGame: 2n,
+		viewerVaultRepDepositShare: 10n,
 	}
 }
 
@@ -179,5 +186,7 @@ describe('useReportingOperations', () => {
 		expect(requireHookState(hookState).reportingError).toBeUndefined()
 		expect(requireHookState(hookState).loadingReportingDetails).toBe(false)
 		expect(requireHookState(hookState).reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
+		expect(requireHookState(hookState).reportingDetails?.viewerVaultAvailableEscalationRep).toBe(8n)
+		expect(requireHookState(hookState).reportingDetails?.viewerVaultRepDepositShare).toBe(10n)
 	})
 })

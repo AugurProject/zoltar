@@ -69,7 +69,7 @@ function createReportingProps(overrides: Partial<ReportingRouteContentProps> = {
 			reportAmount: '',
 			securityPoolAddress: '',
 			selectedOutcome: 'yes',
-			withdrawDepositIndexes: '',
+			selectedWithdrawDepositIndexes: [],
 		},
 		reportingResult: undefined,
 		...overrides,
@@ -882,6 +882,15 @@ describe('SecurityPoolWorkflowSection', () => {
 						pendingOperation: undefined,
 					}),
 					securityPoolAddress: selectedPoolAddress,
+					securityPoolOverviewFeedback: {
+						action: 'queueLiquidation',
+						status: {
+							detail: 'Execution completed immediately.',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000c1',
+							title: 'Liquidation executed',
+							tone: 'success',
+						},
+					},
 					securityPoolOverviewResult: {
 						action: 'queueLiquidation',
 						hash: '0x00000000000000000000000000000000000000000000000000000000000000c1',
@@ -894,7 +903,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText(/Liquidation successful/)).not.toBeNull()
+		expect(within(document.body).getByText('Liquidation executed')).not.toBeNull()
 	})
 
 	test('shows liquidation failed in the selected pool workflow with the revert detail', async () => {
@@ -912,6 +921,14 @@ describe('SecurityPoolWorkflowSection', () => {
 						pendingOperation: undefined,
 					}),
 					securityPoolAddress: selectedPoolAddress,
+					securityPoolOverviewFeedback: {
+						action: 'queueLiquidation',
+						status: {
+							detail: 'Local Security Bond Allowance broken',
+							title: 'Liquidation failed',
+							tone: 'error',
+						},
+					},
 					securityPoolOverviewResult: {
 						action: 'queueLiquidation',
 						hash: '0x00000000000000000000000000000000000000000000000000000000000000c2',
@@ -932,8 +949,7 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Liquidation failed')).not.toBeNull()
-		const liquidationDialog = documentQueries.getByRole('dialog', { name: 'Execute Vault Liquidation' })
-		expect(within(liquidationDialog).getByText('Local Security Bond Allowance broken')).not.toBeNull()
+		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
 	})
 
 	test('refreshes the selected pool and loaded vault after an immediate REP withdrawal execution', async () => {
@@ -1207,6 +1223,18 @@ describe('SecurityPoolWorkflowSection', () => {
 							success: false,
 						},
 					},
+					poolOracleFeedback: {
+						action: 'executeStagedOperation',
+						status: {
+							detail: 'Local Security Bond Allowance broken',
+							title: 'Staged operation failed',
+							tone: 'error',
+						},
+					},
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+						managerAddress: zeroAddress,
+					}),
 					securityPoolAddress: selectedPoolAddress,
 					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
 					securityVault: createSecurityVaultProps({
@@ -1231,6 +1259,7 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		expect(refreshSelectedPoolCalls).toEqual([])
 		expect(loadSecurityVaultCalls).toEqual([])
+		expect(within(document.body).getByText('Staged operation failed')).not.toBeNull()
 		expect(within(document.body).getByText('Local Security Bond Allowance broken')).not.toBeNull()
 	})
 
@@ -1430,7 +1459,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState(),
+					accountState: createAccountState({ ethBalance: 2n * 10n ** 18n }),
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
 						lastPrice: 3n * 10n ** 18n,
@@ -1445,6 +1474,7 @@ describe('SecurityPoolWorkflowSection', () => {
 						}),
 					],
 					securityVault: createSecurityVaultProps({
+						accountState: createAccountState({ ethBalance: 2n * 10n ** 18n }),
 						securityVaultDetails: createSecurityVaultDetails({
 							repDepositShare: 12n * 10n ** 18n,
 							securityBondAllowance: 1n * 10n ** 18n,
@@ -1474,6 +1504,110 @@ describe('SecurityPoolWorkflowSection', () => {
 		const allowanceDialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
 		expect(within(allowanceDialog).queryByText(/^Blocked:/)).toBeNull()
 		expectTransactionButtonEnabled(allowanceDialog as HTMLElement, 'Set Security Bond Allowance')
+	})
+
+	test('blocks the workflow bond-allowance modal when the wallet lacks the buffered oracle bounty ETH', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+						lastPrice: 3n * 10n ** 18n,
+						requestPriceEthCost: 10n * 10n ** 18n,
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [
+						createSelectedPool({
+							managerAddress: zeroAddress,
+							securityPoolAddress: selectedPoolAddress,
+							totalRepDeposit: 9n * 10n ** 18n,
+							totalSecurityBondAllowance: 2n * 10n ** 18n,
+						}),
+					],
+					securityVault: createSecurityVaultProps({
+						accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+						securityVaultDetails: createSecurityVaultDetails({
+							repDepositShare: 12n * 10n ** 18n,
+							securityBondAllowance: 1n * 10n ** 18n,
+							securityPoolAddress: selectedPoolAddress,
+							totalSecurityBondAllowance: 2n * 10n ** 18n,
+						}),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '',
+							securityBondAllowanceAmount: '0',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set Bond Allowance' })[0] as HTMLElement)
+		})
+
+		const allowanceDialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
+		expectTransactionButtonDisabled(allowanceDialog as HTMLElement, 'Set Security Bond Allowance', 'Need 7 more ETH in this wallet to queue this bond allowance update.')
+	})
+
+	test('blocks withdraw REP in the workflow modal when the wallet lacks the buffered oracle bounty ETH', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+						lastPrice: 3n * 10n ** 18n,
+						requestPriceEthCost: 10n * 10n ** 18n,
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [
+						createSelectedPool({
+							managerAddress: zeroAddress,
+							securityPoolAddress: selectedPoolAddress,
+							totalRepDeposit: 9n * 10n ** 18n,
+							totalSecurityBondAllowance: 2n * 10n ** 18n,
+						}),
+					],
+					securityVault: createSecurityVaultProps({
+						accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+						securityVaultDetails: createSecurityVaultDetails({
+							repDepositShare: 12n * 10n ** 18n,
+							securityBondAllowance: 1n * 10n ** 18n,
+							securityPoolAddress: selectedPoolAddress,
+							totalSecurityBondAllowance: 2n * 10n ** 18n,
+						}),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '1',
+							securityBondAllowanceAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Withdraw REP' })[0] as HTMLElement)
+		})
+
+		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
+		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Need 7 more ETH in this wallet to queue this REP withdrawal.')
 	})
 
 	test('hides the truth auction metric when the selected pool has no truth auction address', async () => {
@@ -1517,10 +1651,14 @@ describe('SecurityPoolWorkflowSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByRole('heading', { name: 'Question' }).length).toBe(1)
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Outcome Sides' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Report Outcome' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Withdraw Escalation Deposits' })).toBeNull()
+		expect(documentQueries.queryByText('Load reporting details to populate live stakes, bond progression, and deposit indexes.')).toBeNull()
 		expect(documentQueries.queryByText('Reporting unlocks after the market end timestamp for the selected pool.')).toBeNull()
 		expect(documentQueries.queryByText('Reporting opens after market end.')).toBeNull()
+		expect(document.body.querySelectorAll('.escalation-side')).toHaveLength(3)
+		expect(document.body.textContent?.includes('Your deposits: None')).toBe(true)
 
 		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)
@@ -1714,6 +1852,28 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()
 	})
 
+	test('disables Request New Price when the wallet lacks the buffered oracle bounty ETH', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
+					checkedSecurityPoolAddress: zeroAddress,
+					poolOracleManagerDetails: createOracleManagerDetails({
+						pendingReportId: 0n,
+						requestPriceEthCost: 10n * 10n ** 18n,
+					}),
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					selectedPoolView: 'price-oracle',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Request New Price', 'Need 7 more ETH in this wallet to request a new price.')
+	})
+
 	test('uses the lifted selected pool view state and reports tab changes through the shared setter', async () => {
 		const selectedViews: string[] = []
 		const renderedComponent = await renderIntoDocument(
@@ -1796,7 +1956,7 @@ describe('SecurityPoolWorkflowSection', () => {
 					reportAmount: '',
 					securityPoolAddress: '',
 					selectedOutcome: 'yes',
-					withdrawDepositIndexes: '',
+					selectedWithdrawDepositIndexes: [],
 				},
 			}),
 			securityPoolAddress: selectedPoolAddress,
@@ -1820,7 +1980,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							reportAmount: '',
 							securityPoolAddress: stalePoolAddress,
 							selectedOutcome: 'yes',
-							withdrawDepositIndexes: '',
+							selectedWithdrawDepositIndexes: [],
 						},
 					})}
 					showHeader={false}
@@ -1843,7 +2003,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							reportAmount: '',
 							securityPoolAddress: selectedPoolAddress,
 							selectedOutcome: 'yes',
-							withdrawDepositIndexes: '',
+							selectedWithdrawDepositIndexes: [],
 						},
 					})}
 					showHeader={false}
@@ -1866,7 +2026,7 @@ describe('SecurityPoolWorkflowSection', () => {
 							reportAmount: '',
 							securityPoolAddress: selectedPoolAddress,
 							selectedOutcome: 'yes',
-							withdrawDepositIndexes: '',
+							selectedWithdrawDepositIndexes: [],
 						},
 					})}
 					showHeader={false}
@@ -1889,7 +2049,7 @@ describe('SecurityPoolWorkflowSection', () => {
 				reportAmount: '',
 				securityPoolAddress: selectedPoolAddress,
 				selectedOutcome: 'yes',
-				withdrawDepositIndexes: '',
+				selectedWithdrawDepositIndexes: [],
 			},
 		})
 		const baseProps = createSecurityPoolWorkflowProps({

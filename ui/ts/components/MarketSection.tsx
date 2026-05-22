@@ -17,9 +17,11 @@ export function MarketSection({
 	hasLoadedZoltarQuestions,
 	loadingZoltarForkAccess,
 	zoltarForkActiveAction,
+	zoltarForkFeedback,
 	loadingZoltarQuestionCount,
 	loadingZoltarQuestions,
 	loadingZoltarUniverse,
+	marketFeedback,
 	marketForm,
 	marketCreating,
 	marketError,
@@ -38,6 +40,7 @@ export function MarketSection({
 	onUseQuestionForPool,
 	onZoltarForkQuestionIdChange,
 	onZoltarMigrationFormChange,
+	zoltarChildUniverseFeedback,
 	zoltarChildUniverseError,
 	zoltarChildUniversePendingOutcomeIndex,
 	zoltarForkApproval,
@@ -48,10 +51,10 @@ export function MarketSection({
 	zoltarMigrationChildRepBalances,
 	zoltarMigrationActiveAction,
 	zoltarMigrationError,
+	zoltarMigrationFeedback,
 	zoltarMigrationForm,
 	zoltarMigrationPending,
 	zoltarMigrationPreparedRepBalance,
-	zoltarMigrationResult,
 	zoltarQuestionCount,
 	zoltarQuestions,
 	zoltarUniverse,
@@ -70,11 +73,6 @@ export function MarketSection({
 		if (hasForked) return
 		onActiveViewChange('questions')
 	}, [hasForked, onActiveViewChange, view, zoltarUniverse])
-
-	useEffect(() => {
-		if (!hasForked) return
-		setForkModalOpen(false)
-	}, [hasForked])
 
 	useEffect(() => {
 		if (view !== 'questions') return
@@ -99,6 +97,7 @@ export function MarketSection({
 						isMainnet={isMainnet}
 						loadingZoltarUniverse={loadingZoltarUniverse}
 						onCreateChildUniverseForOutcomeIndex={onCreateChildUniverseForOutcomeIndex}
+						zoltarChildUniverseFeedback={zoltarChildUniverseFeedback}
 						zoltarChildUniverseError={zoltarChildUniverseError}
 						zoltarChildUniversePendingOutcomeIndex={zoltarChildUniversePendingOutcomeIndex}
 						zoltarUniverse={zoltarUniverse}
@@ -154,6 +153,7 @@ export function MarketSection({
 						hasForked={hasForked}
 						isMainnet={isMainnet}
 						loadingZoltarQuestions={loadingZoltarQuestions}
+						marketFeedback={marketFeedback}
 						marketCreating={marketCreating}
 						marketError={marketError}
 						marketForm={marketForm}
@@ -191,6 +191,7 @@ export function MarketSection({
 								zoltarForkActiveAction={zoltarForkActiveAction}
 								zoltarForkApproval={zoltarForkApproval}
 								zoltarForkError={zoltarForkError}
+								zoltarForkFeedback={zoltarForkFeedback}
 								zoltarForkPending={zoltarForkPending}
 								zoltarForkQuestionId={zoltarForkQuestionId}
 								zoltarForkRepBalance={zoltarForkRepBalance}
@@ -214,13 +215,14 @@ export function MarketSection({
 						zoltarForkRepBalance={zoltarForkRepBalance}
 						zoltarForkApproval={zoltarForkApproval}
 						zoltarForkActiveAction={zoltarForkActiveAction}
+						zoltarForkFeedback={zoltarForkFeedback}
 						zoltarMigrationChildRepBalances={zoltarMigrationChildRepBalances}
 						zoltarMigrationActiveAction={zoltarMigrationActiveAction}
 						zoltarMigrationError={zoltarMigrationError}
+						zoltarMigrationFeedback={zoltarMigrationFeedback}
 						zoltarMigrationForm={zoltarMigrationForm}
 						zoltarMigrationPending={zoltarMigrationPending}
 						zoltarMigrationPreparedRepBalance={zoltarMigrationPreparedRepBalance}
-						zoltarMigrationResult={zoltarMigrationResult}
 						zoltarUniverse={zoltarUniverse}
 						zoltarUniverseState={zoltarUniverseState}
 						onApproveZoltarForkRep={onApproveZoltarForkRep}

@@ -5,8 +5,11 @@ import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { sameAddress } from '../lib/address.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
+import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { runWriteAction } from '../lib/writeAction.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '../types/contracts.js'
 
 type UsePriceOracleManagerParameters = {
@@ -20,10 +23,14 @@ type UsePriceOracleManagerParameters = {
 export function usePriceOracleManager({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted }: UsePriceOracleManagerParameters) {
 	const poolOracleManagerLoad = useLoadController()
 	const poolOracleActiveAction = useSignal<OpenOracleActionResult['action'] | undefined>(undefined)
+	const poolOracleFeedback = useSignal<ActionFeedback<OpenOracleActionResult['action']> | undefined>(undefined)
 	const poolOracleManagerDetails = useSignal<OracleManagerDetails | undefined>(undefined)
 	const poolOracleManagerError = useSignal<string | undefined>(undefined)
 	const poolPriceOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)
 	const nextPoolOracleManagerLoad = useRequestGuard()
+	const getPendingTitle = (actionName: OpenOracleActionResult['action']) => (actionName === 'requestPrice' ? 'Requesting price' : 'Executing staged operation')
+	const getSuccessTitle = (actionName: OpenOracleActionResult['action']) => (actionName === 'requestPrice' ? 'Price requested' : 'Staged operation executed')
+	const getFailureTitle = (actionName: OpenOracleActionResult['action']) => (actionName === 'requestPrice' ? 'Price request failed' : 'Staged operation failed')
 
 	const loadPoolOracleManager = async (managerAddress: Address) => {
 		const isCurrent = nextPoolOracleManagerLoad()
@@ -46,13 +53,20 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 		poolPriceOracleResult.value = undefined
 		try {
 			poolOracleActiveAction.value = 'requestPrice'
+			poolOracleFeedback.value = createPendingActionFeedback('requestPrice', getPendingTitle('requestPrice'))
 			await runWriteAction(
 				{
 					accountAddress,
 					missingWalletMessage: 'Connect a wallet before requesting a price',
+					onRefreshError: (message, hash) => {
+						poolOracleFeedback.value = createWarningActionFeedback('requestPrice', getSuccessTitle('requestPrice'), message, hash)
+					},
 					onTransaction,
 					onTransactionFinished,
 					onTransactionRequested,
+					onWriteError: message => {
+						poolOracleFeedback.value = createErrorActionFeedback('requestPrice', getFailureTitle('requestPrice'), message)
+					},
 					refreshErrorFallback: 'Price request succeeded, but refreshing price oracle details failed',
 					refreshState: async () => {
 						await loadPoolOracleManager(managerAddress)
@@ -66,11 +80,22 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 					if (currentManagerDetails === undefined || !sameAddress(currentManagerDetails.managerAddress, managerAddress)) {
 						poolOracleManagerDetails.value = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
 					}
+					const refreshedManagerDetails = poolOracleManagerDetails.value
+					const walletEthBalance = await createConnectedReadClient().getBalance({ address: walletAddress })
+					const requestPriceGuardMessage = getOracleRequestEthGuardMessage({
+						actionLabel: 'request a new price',
+						requestPriceEthCost: refreshedManagerDetails?.requestPriceEthCost,
+						walletEthBalance,
+					})
+					if (requestPriceGuardMessage !== undefined) {
+						throw new Error(requestPriceGuardMessage)
+					}
 					return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress)
 				},
 				'Failed to request price',
 				result => {
 					poolPriceOracleResult.value = result
+					poolOracleFeedback.value = createSuccessActionFeedback('requestPrice', getSuccessTitle('requestPrice'), result.hash)
 				},
 			)
 		} finally {
@@ -82,13 +107,20 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 		poolPriceOracleResult.value = undefined
 		try {
 			poolOracleActiveAction.value = 'executeStagedOperation'
+			poolOracleFeedback.value = createPendingActionFeedback('executeStagedOperation', getPendingTitle('executeStagedOperation'))
 			await runWriteAction(
 				{
 					accountAddress,
 					missingWalletMessage: 'Connect a wallet before executing a staged operation',
+					onRefreshError: (message, hash) => {
+						poolOracleFeedback.value = createWarningActionFeedback('executeStagedOperation', getSuccessTitle('executeStagedOperation'), message, hash)
+					},
 					onTransaction,
 					onTransactionFinished,
 					onTransactionRequested,
+					onWriteError: message => {
+						poolOracleFeedback.value = createErrorActionFeedback('executeStagedOperation', getFailureTitle('executeStagedOperation'), message)
+					},
 					refreshErrorFallback: 'Staged operation execution succeeded, but refreshing price oracle details failed',
 					refreshState: async () => {
 						await loadPoolOracleManager(managerAddress)
@@ -101,6 +133,7 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 				'Failed to execute staged operation',
 				result => {
 					poolPriceOracleResult.value = result
+					poolOracleFeedback.value = createSuccessActionFeedback('executeStagedOperation', getSuccessTitle('executeStagedOperation'), result.hash)
 				},
 			)
 		} finally {
@@ -113,6 +146,7 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 		loadingPoolOracleManager: poolOracleManagerLoad.isLoading.value,
 		loadPoolOracleManager,
 		poolOracleActiveAction: poolOracleActiveAction.value,
+		poolOracleFeedback: poolOracleFeedback.value,
 		poolOracleManagerDetails: poolOracleManagerDetails.value,
 		poolOracleManagerError: poolOracleManagerError.value,
 		poolPriceOracleResult: poolPriceOracleResult.value,

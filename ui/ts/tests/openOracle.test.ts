@@ -5,6 +5,7 @@ import { getAddress, zeroAddress, type Address } from 'viem'
 import { createOpenOracleReportInstance, getOpenOracleAddress, loadErc20Balance, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, loadOracleManagerDetails, requestOraclePrice, settleOracleReport, submitInitialOracleReport, wrapWeth as wrapUiWeth } from '../contracts.js'
 import {
 	addOpenOracleBountyBuffer,
+	deriveOpenOracleDisputeSubmissionDetails,
 	deriveOpenOracleInitialReportSubmissionDetails,
 	formatOpenOracleDisputeWriteErrorMessage,
 	formatOpenOracleFeePercentage,
@@ -128,6 +129,46 @@ function createOpenOracleLifecycleReport(
 		timeType: true,
 		...overrides,
 	}
+}
+
+function createDisputeSubmissionPreview(overrides: Partial<Parameters<typeof deriveOpenOracleDisputeSubmissionDetails>[0]> = {}) {
+	return deriveOpenOracleDisputeSubmissionDetails({
+		approvedToken1Amount: 1_000n,
+		approvedToken2Amount: 1_000n,
+		disputeNewAmount1Input: '200',
+		disputeNewAmount2Input: '80',
+		disputeTokenToSwap: 'token1',
+		reportDetails: {
+			currentAmount1: 100n,
+			currentAmount2: 50n,
+			currentBlockNumber: 0n,
+			currentReporter: getAddress(addressString(TEST_ADDRESSES[1])),
+			currentTime: 200n,
+			disputeDelay: 10n,
+			escalationHalt: 200n,
+			feePercentage: 1_000_000n,
+			feeToken: false,
+			isDistributed: false,
+			multiplier: 20_000n,
+			protocolFee: 500_000n,
+			reportTimestamp: 100n,
+			settlementTime: 200n,
+			timeType: true,
+			token1: REP_ADDRESS,
+			token1Symbol: 'REP',
+			token2: WETH_ADDRESS,
+			token2Symbol: 'WETH',
+		},
+		token1AllowanceError: undefined,
+		token1Balance: 1_000n,
+		token1BalanceError: undefined,
+		token1Decimals: 0,
+		token2AllowanceError: undefined,
+		token2Balance: 1_000n,
+		token2BalanceError: undefined,
+		token2Decimals: 0,
+		...overrides,
+	})
 }
 
 describe('Open Oracle helpers', () => {
@@ -327,6 +368,47 @@ describe('Open Oracle helpers', () => {
 			kind: 'visible',
 			message: 'WETH approval required',
 		})
+	})
+
+	test('dispute submission helper computes token contributions across both swap directions and fee-token modes', () => {
+		const cases = [
+			{ disputeTokenToSwap: 'token1' as const, feeToken: false, expectedToken1Contribution: 300n, expectedToken2Contribution: 37n },
+			{ disputeTokenToSwap: 'token1' as const, feeToken: true, expectedToken1Contribution: 315n, expectedToken2Contribution: 30n },
+			{ disputeTokenToSwap: 'token2' as const, feeToken: false, expectedToken1Contribution: 115n, expectedToken2Contribution: 130n },
+			{ disputeTokenToSwap: 'token2' as const, feeToken: true, expectedToken1Contribution: 100n, expectedToken2Contribution: 137n },
+		]
+
+		for (const testCase of cases) {
+			const preview = createDisputeSubmissionPreview({
+				disputeTokenToSwap: testCase.disputeTokenToSwap,
+				reportDetails: {
+					currentAmount1: 100n,
+					currentAmount2: 50n,
+					currentBlockNumber: 0n,
+					currentReporter: getAddress(addressString(TEST_ADDRESSES[1])),
+					currentTime: 200n,
+					disputeDelay: 10n,
+					escalationHalt: 200n,
+					feePercentage: 1_000_000n,
+					feeToken: testCase.feeToken,
+					isDistributed: false,
+					multiplier: 20_000n,
+					protocolFee: 500_000n,
+					reportTimestamp: 100n,
+					settlementTime: 200n,
+					timeType: true,
+					token1: REP_ADDRESS,
+					token1Symbol: 'REP',
+					token2: WETH_ADDRESS,
+					token2Symbol: 'WETH',
+				},
+			})
+
+			expect(preview.expectedNewAmount1).toBe(200n)
+			expect(preview.token1ContributionAmount).toBe(testCase.expectedToken1Contribution)
+			expect(preview.token2ContributionAmount).toBe(testCase.expectedToken2Contribution)
+			expect(preview.canSubmit).toBe(true)
+		}
 	})
 
 	test('initial report submission helper hides the automatic quote loading state', () => {

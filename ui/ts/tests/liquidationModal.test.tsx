@@ -11,6 +11,9 @@ import { ChainTimestampContext } from '../lib/chainTimestamp.js'
 import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled } from './testUtils/transactionActionButton.js'
+
+const ETH = 10n ** 18n
 
 function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
 	return {
@@ -289,6 +292,15 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '5',
 			liquidationMaxAmount: 5n * 10n ** 18n,
+			securityPoolOverviewFeedback: {
+				action: 'queueLiquidation',
+				status: {
+					detail: 'Execution completed immediately.',
+					hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
+					title: 'Liquidation executed',
+					tone: 'success',
+				},
+			},
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
@@ -304,10 +316,24 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
+		expect(documentQueries.getByText('Liquidation executed')).not.toBeNull()
+		expect(documentQueries.getByText('Execution completed immediately.')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Execute Vault Liquidation' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Queue Vault Liquidation' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
+	})
+
+	test('disables queued liquidation when the wallet lacks the buffered oracle bounty ETH', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: false,
+				requestPriceEthCost: 10n * ETH,
+			}),
+			walletEthBalance: 5n * ETH,
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Queue Liquidation', 'Need 7 more ETH in this wallet to queue this liquidation.')
 	})
 
 	test('shows liquidation failure details when the staged execution event reports a rejection', async () => {
@@ -319,6 +345,14 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '5',
 			liquidationMaxAmount: 5n * 10n ** 18n,
+			securityPoolOverviewFeedback: {
+				action: 'queueLiquidation',
+				status: {
+					detail: 'Local Security Bond Allowance broken',
+					title: 'Liquidation failed',
+					tone: 'error',
+				},
+			},
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000ab',
@@ -334,7 +368,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
+		expect(documentQueries.getByText('Liquidation failed')).not.toBeNull()
 		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
 	})
@@ -342,6 +376,7 @@ describe('LiquidationModal', () => {
 	test('keeps the dialog open and shows execution results when the parent closes it after submit', async () => {
 		function LiquidationExecutionHarness() {
 			const [liquidationModalOpen, setLiquidationModalOpen] = useState(true)
+			const [securityPoolOverviewFeedback, setSecurityPoolOverviewFeedback] = useState<Parameters<typeof LiquidationModal>[0]['securityPoolOverviewFeedback']>(undefined)
 			const [securityPoolOverviewResult, setSecurityPoolOverviewResult] = useState<SecurityPoolOverviewActionResult | undefined>(undefined)
 
 			return (
@@ -349,6 +384,7 @@ describe('LiquidationModal', () => {
 					accountAddress={defaultCallerVaultAddress}
 					closeLiquidationModal={() => {
 						setLiquidationModalOpen(false)
+						setSecurityPoolOverviewFeedback(undefined)
 						setSecurityPoolOverviewResult(undefined)
 					}}
 					currentPoolOracleManagerDetails={createOracleManagerDetails({
@@ -369,6 +405,15 @@ describe('LiquidationModal', () => {
 					onLiquidationAmountChange={() => undefined}
 					onQueueLiquidation={() => {
 						setLiquidationModalOpen(false)
+						setSecurityPoolOverviewFeedback({
+							action: 'queueLiquidation',
+							status: {
+								detail: 'Execution completed immediately.',
+								hash: '0x00000000000000000000000000000000000000000000000000000000000000cd',
+								title: 'Liquidation executed',
+								tone: 'success',
+							},
+						})
 						setSecurityPoolOverviewResult({
 							action: 'queueLiquidation',
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000cd',
@@ -390,6 +435,7 @@ describe('LiquidationModal', () => {
 					})}
 					securityPoolOverviewActiveAction={undefined}
 					securityPoolOverviewError={undefined}
+					securityPoolOverviewFeedback={securityPoolOverviewFeedback}
 					securityPoolOverviewResult={securityPoolOverviewResult}
 					callerVaultSummary={createTargetVaultSummary({
 						repDepositShare: 20n * 10n ** 18n,
@@ -418,7 +464,13 @@ describe('LiquidationModal', () => {
 		})
 
 		expect(documentQueries.getByRole('dialog', { name: 'Execute Vault Liquidation' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
+		expect(documentQueries.getByText('Liquidation executed')).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Close' }))
+		})
+
+		expect(documentQueries.queryByRole('dialog', { name: 'Execute Vault Liquidation' })).toBeNull()
 
 		render(null, container)
 		container.remove()

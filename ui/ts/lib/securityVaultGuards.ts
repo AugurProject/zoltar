@@ -1,5 +1,6 @@
 import type { Address } from 'viem'
 import { formatCurrencyBalance } from './formatters.js'
+import { getOracleRequestEthGuardMessage } from './oracleRequestEth.js'
 import { MIN_SECURITY_BOND_ALLOWANCE, MIN_SECURITY_VAULT_REP_DEPOSIT } from './securityVault.js'
 
 export function getVaultApprovalGuardMessage({ accountAddress, isMainnet, selectedVaultDetailsLoaded, selectedVaultIsOwnedByAccount }: { accountAddress: Address | undefined; isMainnet: boolean; selectedVaultDetailsLoaded: boolean; selectedVaultIsOwnedByAccount: boolean }) {
@@ -41,16 +42,20 @@ export function getVaultWithdrawGuardMessage({
 	accountAddress,
 	hasValidOraclePrice,
 	isMainnet,
+	requestPriceEthCost,
 	selectedVaultIsOwnedByAccount,
 	withdrawAmount,
 	withdrawableRepAmount,
+	walletEthBalance,
 }: {
 	accountAddress: Address | undefined
 	hasValidOraclePrice: boolean
 	isMainnet: boolean
+	requestPriceEthCost: bigint | undefined
 	selectedVaultIsOwnedByAccount: boolean
 	withdrawAmount: bigint | undefined
 	withdrawableRepAmount: bigint | undefined
+	walletEthBalance: bigint | undefined
 }) {
 	if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to withdraw REP.'
 	if (accountAddress === undefined) return 'Connect a wallet before withdrawing REP.'
@@ -59,6 +64,12 @@ export function getVaultWithdrawGuardMessage({
 	if (withdrawAmount === undefined || withdrawAmount <= 0n) return 'Enter a valid REP withdraw amount.'
 	if (withdrawableRepAmount === undefined || withdrawableRepAmount <= 0n) return 'No REP is currently withdrawable from this vault.'
 	if (withdrawAmount > withdrawableRepAmount) return `Reduce the withdrawal to ${formatCurrencyBalance(withdrawableRepAmount)} REP or less.`
+	const ethGuardMessage = getOracleRequestEthGuardMessage({
+		actionLabel: 'queue this REP withdrawal',
+		requestPriceEthCost,
+		walletEthBalance,
+	})
+	if (ethGuardMessage !== undefined) return ethGuardMessage
 	return undefined
 }
 
@@ -66,16 +77,20 @@ export function getVaultSetSecurityBondAllowanceGuardMessage({
 	hasValidOraclePrice,
 	isMainnet,
 	maxSecurityBondAllowanceAmount,
+	requestPriceEthCost,
 	securityBondAllowanceAmount,
 	selectedVaultDetailsLoaded,
 	selectedVaultIsOwnedByAccount,
+	walletEthBalance,
 }: {
 	hasValidOraclePrice: boolean
 	isMainnet: boolean
 	maxSecurityBondAllowanceAmount: bigint | undefined
+	requestPriceEthCost: bigint | undefined
 	securityBondAllowanceAmount: bigint | undefined
 	selectedVaultDetailsLoaded: boolean
 	selectedVaultIsOwnedByAccount: boolean
+	walletEthBalance: bigint | undefined
 }) {
 	if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to set the security bond allowance.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before setting the security bond allowance.'
@@ -86,6 +101,12 @@ export function getVaultSetSecurityBondAllowanceGuardMessage({
 	if (maxSecurityBondAllowanceAmount !== undefined && securityBondAllowanceAmount > maxSecurityBondAllowanceAmount) {
 		return `Reduce the security bond allowance to ${formatCurrencyBalance(maxSecurityBondAllowanceAmount)} ETH or less.`
 	}
+	const ethGuardMessage = getOracleRequestEthGuardMessage({
+		actionLabel: 'queue this bond allowance update',
+		requestPriceEthCost,
+		walletEthBalance,
+	})
+	if (ethGuardMessage !== undefined) return ethGuardMessage
 	return undefined
 }
 
@@ -96,11 +117,31 @@ export function getVaultClaimFeesGuardMessage({ hasClaimableFees, isMainnet, sel
 	return undefined
 }
 
-export function getVaultRequestPriceGuardMessage({ accountAddress, hasLoadedSelectedPool, isMainnet, pendingReportId }: { accountAddress: Address | undefined; hasLoadedSelectedPool: boolean; isMainnet: boolean; pendingReportId: bigint | undefined }) {
+export function getVaultRequestPriceGuardMessage({
+	accountAddress,
+	hasLoadedSelectedPool,
+	isMainnet,
+	pendingReportId,
+	requestPriceEthCost,
+	walletEthBalance,
+}: {
+	accountAddress: Address | undefined
+	hasLoadedSelectedPool: boolean
+	isMainnet: boolean
+	pendingReportId: bigint | undefined
+	requestPriceEthCost: bigint | undefined
+	walletEthBalance: bigint | undefined
+}) {
 	if (accountAddress === undefined) return 'Connect a wallet before requesting a new price.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before requesting a new price.'
 	if (!hasLoadedSelectedPool) return 'Load a security pool before requesting a new price.'
 	if (pendingReportId !== undefined && pendingReportId > 0n) return 'A pending price report already exists for this pool.'
+	const ethGuardMessage = getOracleRequestEthGuardMessage({
+		actionLabel: 'request a new price',
+		requestPriceEthCost,
+		walletEthBalance,
+	})
+	if (ethGuardMessage !== undefined) return ethGuardMessage
 	return undefined
 }
 

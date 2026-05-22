@@ -70,7 +70,6 @@ function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): Zolt
 		zoltarMigrationForm: createForm(),
 		zoltarMigrationPending: false,
 		zoltarMigrationPreparedRepBalance: 10n * REP,
-		zoltarMigrationResult: undefined,
 		zoltarUniverse: createUniverse(),
 		zoltarUniverseState: 'ready',
 		...overrides,
