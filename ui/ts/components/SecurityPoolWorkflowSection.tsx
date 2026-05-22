@@ -533,7 +533,7 @@ export function SecurityPoolWorkflowSection({
 														actionLabel: 'Liquidate Vault',
 														description: 'Queue a high-risk liquidation against the selected vault.',
 														key: 'liquidate-vault',
-														readiness: currentPoolOracleManagerDetails?.isPriceValid === false ? 'blocked' : 'warning',
+														readiness: 'ready',
 														title: 'Liquidate Vault',
 														...(selectedPool === undefined || selectedVaultDetails === undefined ? { blocker: 'Refresh the selected vault first.' } : selectedVaultAddress === '' ? { blocker: 'Select a pool and vault first.' } : {}),
 														...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === ''

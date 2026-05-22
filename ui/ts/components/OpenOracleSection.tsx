@@ -408,7 +408,6 @@ function renderReportDetailsCard(
 		actionMode,
 		disputeMessage: disputeAvailability.message,
 		hasReport: true,
-		isConnected,
 		reportId: openOracleForm.reportId,
 		settleMessage: settleAvailability.message,
 	}).map(action =>

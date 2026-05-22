@@ -609,10 +609,10 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Deposit REP', 'Refresh the selected vault first.')
-		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Refresh the selected vault first.')
-		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance', 'Refresh the selected vault first.')
-		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'Refresh the selected vault first.')
+		expectTransactionButtonEnabled(document.body, 'Deposit REP')
+		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+		expectTransactionButtonEnabled(document.body, 'Set Bond Allowance')
+		expectTransactionButtonEnabled(document.body, 'Claim Fees')
 	})
 
 	test('allows selecting a vault from the directory within the current pool', async () => {
@@ -1234,7 +1234,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(within(document.body).getByText('Local Security Bond Allowance broken')).not.toBeNull()
 	})
 
-	test('keeps vault launcher buttons disabled until a selected vault is loaded', async () => {
+	test('opens vault launchers even before a selected vault is loaded', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
@@ -1256,10 +1256,20 @@ describe('SecurityPoolWorkflowSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Deposit REP', 'Refresh the selected vault first.')
-		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Refresh the selected vault first.')
-		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance', 'Refresh the selected vault first.')
-		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'Refresh the selected vault first.')
+		const documentQueries = within(document.body)
+		const depositLauncherButton = documentQueries.getByRole('button', { name: 'Deposit REP' })
+		if (!(depositLauncherButton instanceof HTMLElement)) {
+			throw new Error('Expected deposit launcher button')
+		}
+
+		expect(depositLauncherButton.hasAttribute('disabled')).toBe(false)
+
+		await act(() => {
+			fireEvent.click(depositLauncherButton)
+		})
+
+		const dialog = documentQueries.getByRole('dialog')
+		expect(within(dialog).getByText('Refresh the selected vault before depositing REP.')).not.toBeNull()
 	})
 
 	test('keeps REP approval guidance inside the approval control in the deposit modal', async () => {
