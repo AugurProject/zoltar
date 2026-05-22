@@ -154,7 +154,7 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Security pool created' })).not.toBeNull()
-		expect(documentQueries.getAllByRole('button', { name: `Copy address ${poolAddress}` }).length).toBeGreaterThanOrEqual(2)
+		expect(documentQueries.getByRole('heading', { name: 'Pool Created' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: `Copy address ${poolAddress}` })).not.toBeNull()
 	})
 })

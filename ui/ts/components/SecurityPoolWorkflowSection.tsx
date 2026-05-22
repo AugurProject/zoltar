@@ -10,18 +10,16 @@ import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
 import { Question } from './Question.js'
-import { ResultBanner } from './ResultBanner.js'
 import { ReportingSection } from './ReportingSection.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
 import { SecurityPoolVaultDirectory } from './SecurityPoolVaultDirectory.js'
 import { SectionBlock } from './SectionBlock.js'
-import { getQueuedVaultOperation, getVaultWorkflowOutcomePresentation, SecurityVaultSection, SelectedVaultSummarySection } from './SecurityVaultSection.js'
+import { getQueuedVaultOperation, SecurityVaultSection, SelectedVaultSummarySection } from './SecurityVaultSection.js'
 import { StickyObjectContext } from './StickyObjectContext.js'
 import { StateHint } from './StateHint.js'
 import { TradingSection } from './TradingSection.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { ViewTabs } from './ViewTabs.js'
 import { WarningSurface } from './WarningSurface.js'
@@ -91,6 +89,7 @@ export function SecurityPoolWorkflowSection({
 	onRequestPoolPrice,
 	onViewPendingReport,
 	poolOracleActiveAction,
+	poolOracleFeedback,
 	poolOracleManagerDetails,
 	poolOracleManagerError,
 	poolPriceOracleResult,
@@ -101,6 +100,7 @@ export function SecurityPoolWorkflowSection({
 	reporting,
 	selectedPoolView,
 	securityPoolOverviewActiveAction,
+	securityPoolOverviewFeedback,
 	securityPoolOverviewError,
 	securityPoolOverviewResult,
 	securityPoolAddress,
@@ -201,7 +201,6 @@ export function SecurityPoolWorkflowSection({
 	const lastImmediateQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastLiquidationOutcomeRefreshKey = useRef<string | undefined>(undefined)
 	const lastExecutedOperationRefreshHash = useRef<string | undefined>(undefined)
-	const vaultWorkflowOutcome = getVaultWorkflowOutcomePresentation(currentSecurityVaultResult)
 	const queuedVaultOperation = getQueuedVaultOperation({
 		pendingOperation: currentPoolOracleManagerDetails?.pendingOperation,
 		selectedVaultAddress,
@@ -364,19 +363,6 @@ export function SecurityPoolWorkflowSection({
 
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Selected Pool'>
-			{securityPoolOverviewResult === undefined || liquidationNoticeState === undefined ? undefined : liquidationNoticeState === 'failed' ? (
-				<div className='notice error'>
-					<strong>Liquidation failed</strong>
-					<p>
-						Pool <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
-					</p>
-					{securityPoolOverviewResult.stagedExecution?.errorMessage === undefined ? undefined : <p>{securityPoolOverviewResult.stagedExecution.errorMessage}</p>}
-				</div>
-			) : (
-				<p className='notice success'>
-					{liquidationNoticeState === 'successful' ? 'Liquidation successful' : liquidationNoticeState === 'queued' ? 'Liquidation queued' : 'Liquidation submitted'} for <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
-				</p>
-			)}
 			<StickyObjectContext {...(loadedSelectedPool === undefined ? {} : { badge: <span className={`badge ${getSecurityPoolStatusBadgeTone(loadedSelectedPool.systemState)}`}>{loadedSelectedPool.systemState}</span> })} sticky={false} title={getSelectedPoolCardTitle()} items={[]}>
 				<div className='selected-pool-context-controls'>
 					<div className='selected-pool-context-lookup'>
@@ -428,8 +414,6 @@ export function SecurityPoolWorkflowSection({
 					</div>
 				)}
 			</StickyObjectContext>
-
-			<ResultBanner outcome={vaultWorkflowOutcome} />
 
 			{selectedPool === undefined || !selectedPoolUniverseMismatch ? undefined : (
 				<SectionBlock title='Universe Mismatch' tone='critical'>
@@ -603,13 +587,6 @@ export function SecurityPoolWorkflowSection({
 								{view === 'staged-operations' && loadedSelectedPool !== undefined ? (
 									<SectionBlock density='compact' title='Staged Operations'>
 										<ErrorNotice message={poolOracleManagerError} />
-										{poolPriceOracleResult === undefined ? undefined : poolPriceOracleResult.action === 'executeStagedOperation' && poolPriceOracleResult.stagedExecution?.success === false ? (
-											<ErrorNotice message={poolPriceOracleResult.stagedExecution.errorMessage ?? 'Failed to execute the staged operation'} />
-										) : (
-											<p className='notice success'>
-												{poolPriceOracleResult.action === 'executeStagedOperation' ? 'Executed staged operation' : 'Requested price'}: <TransactionHashLink hash={poolPriceOracleResult.hash} />
-											</p>
-										)}
 										<SectionBlock density='compact' headingLevel={4} title='Staged Operations List' variant='embedded'>
 											{currentPoolOracleManagerDetails?.pendingOperation === undefined ? null : (
 												<WarningSurface as='article' className='warning-entity-card' variant='compact'>
@@ -653,6 +630,7 @@ export function SecurityPoolWorkflowSection({
 														onExecutePendingPoolOperation(loadedSelectedPool.managerAddress, resolvedPendingOperationId)
 													}}
 													pending={poolOracleActiveAction === 'executeStagedOperation'}
+													status={poolOracleFeedback?.action === 'executeStagedOperation' ? poolOracleFeedback.status : undefined}
 													tone='secondary'
 													availability={{ disabled: executePendingOperationGuardMessage !== undefined, reason: executePendingOperationGuardMessage }}
 												/>
@@ -686,13 +664,6 @@ export function SecurityPoolWorkflowSection({
 											)}
 										</div>
 										<ErrorNotice message={poolOracleManagerError} />
-										{poolPriceOracleResult === undefined ? undefined : poolPriceOracleResult.action === 'executeStagedOperation' && poolPriceOracleResult.stagedExecution?.success === false ? (
-											<ErrorNotice message={poolPriceOracleResult.stagedExecution.errorMessage ?? 'Failed to execute the staged operation'} />
-										) : (
-											<p className='notice success'>
-												{poolPriceOracleResult.action === 'requestPrice' ? 'Requested price' : 'Executed staged operation'}: <TransactionHashLink hash={poolPriceOracleResult.hash} />
-											</p>
-										)}
 										<div className='actions'>
 											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
 												{loadingPoolOracleManager ? <LoadingText>Refreshing oracle...</LoadingText> : 'Refresh Oracle'}
@@ -702,6 +673,7 @@ export function SecurityPoolWorkflowSection({
 												pendingLabel='Requesting new price...'
 												onClick={() => onRequestPoolPrice(loadedSelectedPool.managerAddress)}
 												pending={poolOracleActiveAction === 'requestPrice'}
+												status={poolOracleFeedback?.action === 'requestPrice' ? poolOracleFeedback.status : undefined}
 												tone='secondary'
 												availability={{ disabled: requestPriceGuardMessage !== undefined, reason: requestPriceGuardMessage }}
 											/>
@@ -733,6 +705,7 @@ export function SecurityPoolWorkflowSection({
 				selectedPool={selectedPool}
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
 				securityPoolOverviewError={securityPoolOverviewError}
+				securityPoolOverviewFeedback={securityPoolOverviewFeedback}
 				securityPoolOverviewResult={securityPoolOverviewResult}
 				callerVaultSummary={accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))}
 				targetVaultSummary={selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))}

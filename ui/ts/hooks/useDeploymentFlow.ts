@@ -1,9 +1,11 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from 'viem'
 import { createWalletWriteClient } from '../lib/clients.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback } from '../lib/actionFeedback.js'
 import { findNextDeployableStep, getPrerequisiteLabel } from '../lib/deployment.js'
 import { formatWriteErrorMessage } from '../lib/errors.js'
 import { requireWallet } from '../lib/walletGuard.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { DeploymentStatus, DeploymentStepId } from '../types/contracts.js'
 
 type UseDeploymentFlowParameters = {
@@ -18,14 +20,17 @@ type UseDeploymentFlowParameters = {
 
 export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, setDeploymentStatuses }: UseDeploymentFlowParameters) {
 	const busyStepId = useSignal<DeploymentStepId | undefined>(undefined)
+	const deploymentFeedback = useSignal<ActionFeedback<DeploymentStepId | 'deployNextMissing'> | undefined>(undefined)
 	const errorMessage = useSignal<string | undefined>(undefined)
 
-	const deployStep = async (stepId: DeploymentStepId) => {
+	const deployStep = async (stepId: DeploymentStepId, feedbackAction: DeploymentStepId | 'deployNextMissing' = stepId) => {
 		if (
 			!requireWallet(
 				accountAddress,
 				message => {
-					errorMessage.value = message
+					const resolvedMessage = message ?? 'Connect wallet to continue.'
+					errorMessage.value = resolvedMessage
+					deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', resolvedMessage)
 				},
 				'deploying',
 			)
@@ -37,7 +42,9 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 
 		const prerequisiteLabel = getPrerequisiteLabel(deploymentStatuses, stepIndex)
 		if (prerequisiteLabel !== undefined) {
-			errorMessage.value = `Deploy ${prerequisiteLabel} first`
+			const message = `Deploy ${prerequisiteLabel} first`
+			errorMessage.value = message
+			deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment blocked', message)
 			return
 		}
 
@@ -48,6 +55,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 
 		busyStepId.value = step.id
 		errorMessage.value = undefined
+		deploymentFeedback.value = createPendingActionFeedback(feedbackAction, `Deploying ${step.label}`)
 
 		try {
 			onTransactionRequested()
@@ -55,8 +63,11 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 			const hash = await step.deploy(client)
 			onTransaction(hash)
 			setDeploymentStatuses(current => current.map(currentStep => (currentStep.id === step.id ? { ...currentStep, deployed: true } : currentStep)))
+			deploymentFeedback.value = createSuccessActionFeedback(feedbackAction, `${step.label} deployed`, hash)
 		} catch (error) {
-			errorMessage.value = formatWriteErrorMessage(error, `Failed to deploy ${step.label}`)
+			const message = formatWriteErrorMessage(error, `Failed to deploy ${step.label}`)
+			errorMessage.value = message
+			deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', message)
 		} finally {
 			busyStepId.value = undefined
 			onTransactionFinished()
@@ -66,11 +77,12 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 	const deployNextMissing = async () => {
 		const nextMissing = findNextDeployableStep(deploymentStatuses)
 		if (nextMissing === undefined) return
-		await deployStep(nextMissing.id)
+		await deployStep(nextMissing.id, 'deployNextMissing')
 	}
 
 	return {
 		busyStepId: busyStepId.value,
+		deploymentFeedback: deploymentFeedback.value,
 		deployNextMissing,
 		deployStep,
 		errorMessage: errorMessage.value,

@@ -3503,6 +3503,49 @@ button:focus-visible {
 	gap: var(--space-2);
 }
 
+.transaction-action-status {
+	display: grid;
+	gap: 0.28rem;
+	padding: 0.75rem 0.85rem;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-record);
+	line-height: 1.45;
+}
+
+.transaction-action-status.pending {
+	background: linear-gradient(180deg, rgba(16, 43, 64, 0.92) 0%, rgba(8, 28, 46, 0.92) 100%);
+	border-color: var(--interactive-border);
+}
+
+.transaction-action-status.success {
+	background: linear-gradient(180deg, rgba(11, 51, 43, 0.92) 0%, rgba(8, 34, 29, 0.92) 100%);
+	border-color: var(--success-border);
+}
+
+.transaction-action-status.error {
+	background: var(--notice-error-gradient);
+	border-color: var(--danger-border);
+}
+
+.transaction-action-status-title {
+	font-size: var(--font-caption);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.transaction-action-status-detail {
+	margin: 0;
+}
+
+.transaction-action-status.warning {
+	gap: 0.28rem;
+}
+
+.transaction-action-status.warning .transaction-action-status-title,
+.transaction-action-status.warning .transaction-action-status-detail {
+	margin: 0;
+}
+
 .tx-action-button {
 	width: 100%;
 }

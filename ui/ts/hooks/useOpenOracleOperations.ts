@@ -23,8 +23,10 @@ import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState, par
 import { requireDefined } from '../lib/required.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import type { OpenOracleCreateFormState, OpenOracleFormState, WriteOperationsParameters } from '../types/app.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { OpenOracleActionResult, OpenOracleReportDetails } from '../types/contracts.js'
 
 type UseOpenOracleOperationsParameters = WriteOperationsParameters & {
@@ -69,6 +71,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 	const { state: openOracleCreateForm, setState: setOpenOracleCreateForm } = useFormState<OpenOracleCreateFormState>(getDefaultOpenOracleCreateFormState())
 	const openOracleError = useSignal<string | undefined>(undefined)
 	const openOracleActiveAction = useSignal<OpenOracleActionResult['action'] | undefined>(undefined)
+	const openOracleFeedback = useSignal<ActionFeedback<OpenOracleActionResult['action']> | undefined>(undefined)
 	const { state: openOracleForm, setState: setOpenOracleForm } = useFormState<OpenOracleFormState>(getDefaultOpenOracleFormState())
 	const openOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)
 	const openOracleReportDetails = useSignal<OpenOracleReportDetails | undefined>(undefined)
@@ -101,6 +104,78 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 	const nextOpenOracleInitialReportPriceLoad = useRequestGuard()
 	const nextOpenOracleInitialReportTokenAccessLoad = useRequestGuard()
 	const nextOracleReportLoad = useRequestGuard()
+	const getPendingTitle = (actionName: OpenOracleActionResult['action']) => {
+		switch (actionName) {
+			case 'approveToken1':
+				return 'Approving token1'
+			case 'approveToken2':
+				return 'Approving token2'
+			case 'createReportInstance':
+				return 'Creating report instance'
+			case 'dispute':
+				return 'Submitting dispute'
+			case 'executeStagedOperation':
+				return 'Executing staged operation'
+			case 'queueOperation':
+				return 'Queueing operation'
+			case 'requestPrice':
+				return 'Requesting price'
+			case 'settle':
+				return 'Settling report'
+			case 'submitInitialReport':
+				return 'Submitting initial report'
+			case 'wrapWeth':
+				return 'Wrapping ETH to WETH'
+		}
+	}
+	const getSuccessTitle = (actionName: OpenOracleActionResult['action']) => {
+		switch (actionName) {
+			case 'approveToken1':
+				return 'Token1 approved'
+			case 'approveToken2':
+				return 'Token2 approved'
+			case 'createReportInstance':
+				return 'Report instance created'
+			case 'dispute':
+				return 'Dispute submitted'
+			case 'executeStagedOperation':
+				return 'Staged operation executed'
+			case 'queueOperation':
+				return 'Operation queued'
+			case 'requestPrice':
+				return 'Price requested'
+			case 'settle':
+				return 'Report settled'
+			case 'submitInitialReport':
+				return 'Initial report submitted'
+			case 'wrapWeth':
+				return 'ETH wrapped to WETH'
+		}
+	}
+	const getFailureTitle = (actionName: OpenOracleActionResult['action']) => {
+		switch (actionName) {
+			case 'approveToken1':
+				return 'Token1 approval failed'
+			case 'approveToken2':
+				return 'Token2 approval failed'
+			case 'createReportInstance':
+				return 'Report creation failed'
+			case 'dispute':
+				return 'Dispute failed'
+			case 'executeStagedOperation':
+				return 'Staged operation failed'
+			case 'queueOperation':
+				return 'Queue operation failed'
+			case 'requestPrice':
+				return 'Price request failed'
+			case 'settle':
+				return 'Settlement failed'
+			case 'submitInitialReport':
+				return 'Initial report failed'
+			case 'wrapWeth':
+				return 'ETH wrap failed'
+		}
+	}
 
 	const setOpenOracleInitialReportTokenAccessMode = (mode: 'idle' | 'initial' | 'background') => {
 		openOracleInitialReportTokenAccessLoadingInitial.value = mode === 'initial'
@@ -433,10 +508,17 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 		},
 	) => {
 		try {
+			openOracleFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
 				{
 					...buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, openOracleError, 'Connect a wallet before operating open oracle'),
 					formatErrorMessage: options?.formatErrorMessage,
+					onRefreshError: (message, hash) => {
+						openOracleFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
+					},
+					onWriteError: message => {
+						openOracleFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
+					},
 					refreshErrorFallback: 'Oracle transaction succeeded, but refreshing the selected report failed',
 				},
 				async walletAddress => {
@@ -447,6 +529,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 				errorFallback,
 				async result => {
 					openOracleResult.value = result
+					openOracleFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					if (result.action === 'createReportInstance') {
 						openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
 					}
@@ -663,6 +746,7 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 		loadingOracleReport: oracleReportLoad.isLoading.value,
 		openOracleCreateForm: openOracleCreateForm.value,
 		openOracleError: openOracleError.value,
+		openOracleFeedback: openOracleFeedback.value,
 		openOracleForm: openOracleForm.value,
 		openOracleInitialReportState: {
 			defaultPrice: openOracleInitialReportDefaultPrice.value,

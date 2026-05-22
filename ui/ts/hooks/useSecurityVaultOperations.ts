@@ -9,6 +9,7 @@ import { createConnectedReadClient, createWalletWriteClient } from '../lib/clien
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { getErrorMessage } from '../lib/errors.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { parseAddressInput } from '../lib/inputs.js'
 import { getDefaultSecurityVaultFormState, parseRepAmountInput } from '../lib/marketForm.js'
 import { requireDefined } from '../lib/required.js'
@@ -16,6 +17,7 @@ import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, MIN_SEC
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import type { SecurityVaultFormState, WriteOperationsParameters } from '../types/app.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { SecurityVaultActionResult, SecurityVaultDetails } from '../types/contracts.js'
 
 type UseSecurityVaultOperationsParameters = WriteOperationsParameters & {
@@ -31,11 +33,60 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	const repBalanceLoader = useErc20BalanceLoader()
 	const repAllowanceLoader = useErc20AllowanceLoader()
 	const securityVaultActiveAction = useSignal<SecurityVaultActionResult['action'] | undefined>(undefined)
+	const securityVaultFeedback = useSignal<ActionFeedback<SecurityVaultActionResult['action']> | undefined>(undefined)
 	const securityVaultResult = useSignal<SecurityVaultActionResult | undefined>(undefined)
 	const nextSecurityVaultLoad = useRequestGuard()
 	const lastEffectiveVaultSelectionKey = useRef<string | undefined>(undefined)
 	const effectiveSelectedVaultAddress = getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress)
 	const effectiveVaultSelectionKey = `${normalizeAddress(securityVaultForm.value.securityPoolAddress) ?? ''}:${normalizeAddress(effectiveSelectedVaultAddress) ?? ''}`
+	const getPendingTitle = (actionName: SecurityVaultActionResult['action']) => {
+		switch (actionName) {
+			case 'approveRep':
+				return 'Approving REP'
+			case 'depositRep':
+				return 'Depositing REP'
+			case 'queueSetSecurityBondAllowance':
+				return 'Setting security bond allowance'
+			case 'queueWithdrawRep':
+				return 'Withdrawing REP'
+			case 'redeemFees':
+				return 'Claiming fees'
+			case 'updateVaultFees':
+				return 'Refreshing vault fees'
+		}
+	}
+	const getSuccessTitle = (actionName: SecurityVaultActionResult['action']) => {
+		switch (actionName) {
+			case 'approveRep':
+				return 'REP approved'
+			case 'depositRep':
+				return 'REP deposited'
+			case 'queueSetSecurityBondAllowance':
+				return 'Security bond allowance set'
+			case 'queueWithdrawRep':
+				return 'REP withdrawal queued'
+			case 'redeemFees':
+				return 'Fees claimed'
+			case 'updateVaultFees':
+				return 'Vault fees refreshed'
+		}
+	}
+	const getFailureTitle = (actionName: SecurityVaultActionResult['action']) => {
+		switch (actionName) {
+			case 'approveRep':
+				return 'REP approval failed'
+			case 'depositRep':
+				return 'REP deposit failed'
+			case 'queueSetSecurityBondAllowance':
+				return 'Security bond allowance update failed'
+			case 'queueWithdrawRep':
+				return 'REP withdrawal failed'
+			case 'redeemFees':
+				return 'Fee claim failed'
+			case 'updateVaultFees':
+				return 'Vault fee refresh failed'
+		}
+	}
 	const clearRepLoaders = () => {
 		repBalanceLoader.invalidate()
 		repBalanceLoader.signal.value = undefined
@@ -158,14 +209,23 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 	) => {
 		let securityPoolAddress: Address | undefined
 		try {
+			securityVaultActiveAction.value = actionName
+			securityVaultFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
-				buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, securityVaultError, 'Connect a wallet before operating a security vault'),
+				{
+					...buildWriteActionConfig({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, refreshState }, securityVaultError, 'Connect a wallet before operating a security vault'),
+					onRefreshError: (message, hash) => {
+						securityVaultFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
+					},
+					onWriteError: message => {
+						securityVaultFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
+					},
+				},
 				async walletAddress => {
 					const currentForm = securityVaultForm.value
 					securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
 					if (securityVaultMissing.value) {
-						securityVaultError.value = 'Security pool does not exist'
-						return undefined
+						throw new Error('Security pool does not exist')
 					}
 					const selectedVaultAddress = resolveSelectedVaultAddress()
 					if (!sameAddress(selectedVaultAddress, walletAddress)) {
@@ -173,13 +233,13 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 					}
 					securityVaultError.value = undefined
 					securityVaultResult.value = undefined
-					securityVaultActiveAction.value = actionName
 					return await action(selectedVaultAddress, securityPoolAddress)
 				},
 				errorFallback,
 				async (result, walletAddress) => {
 					const resolvedSecurityPoolAddress = requireDefined(securityPoolAddress, 'Security pool address is required')
 					securityVaultResult.value = result
+					securityVaultFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					await onSuccess?.(result, resolvedSecurityPoolAddress, walletAddress)
 				},
 			)
@@ -332,6 +392,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 		loadingSecurityVault: securityVaultLoad.isLoading.value,
 		redeemFees,
 		securityVaultActiveAction: securityVaultActiveAction.value,
+		securityVaultFeedback: securityVaultFeedback.value,
 		setSecurityBondAllowance,
 		withdrawRep,
 		securityVaultRepApproval: repAllowanceLoader.signal.value,

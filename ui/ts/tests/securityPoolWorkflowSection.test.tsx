@@ -882,6 +882,15 @@ describe('SecurityPoolWorkflowSection', () => {
 						pendingOperation: undefined,
 					}),
 					securityPoolAddress: selectedPoolAddress,
+					securityPoolOverviewFeedback: {
+						action: 'queueLiquidation',
+						status: {
+							detail: 'Execution completed immediately.',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000c1',
+							title: 'Liquidation executed',
+							tone: 'success',
+						},
+					},
 					securityPoolOverviewResult: {
 						action: 'queueLiquidation',
 						hash: '0x00000000000000000000000000000000000000000000000000000000000000c1',
@@ -894,7 +903,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText(/Liquidation successful/)).not.toBeNull()
+		expect(within(document.body).getByText('Liquidation executed')).not.toBeNull()
 	})
 
 	test('shows liquidation failed in the selected pool workflow with the revert detail', async () => {
@@ -912,6 +921,14 @@ describe('SecurityPoolWorkflowSection', () => {
 						pendingOperation: undefined,
 					}),
 					securityPoolAddress: selectedPoolAddress,
+					securityPoolOverviewFeedback: {
+						action: 'queueLiquidation',
+						status: {
+							detail: 'Local Security Bond Allowance broken',
+							title: 'Liquidation failed',
+							tone: 'error',
+						},
+					},
 					securityPoolOverviewResult: {
 						action: 'queueLiquidation',
 						hash: '0x00000000000000000000000000000000000000000000000000000000000000c2',
@@ -932,8 +949,7 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Liquidation failed')).not.toBeNull()
-		const liquidationDialog = documentQueries.getByRole('dialog', { name: 'Execute Vault Liquidation' })
-		expect(within(liquidationDialog).getByText('Local Security Bond Allowance broken')).not.toBeNull()
+		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
 	})
 
 	test('refreshes the selected pool and loaded vault after an immediate REP withdrawal execution', async () => {
@@ -1207,6 +1223,18 @@ describe('SecurityPoolWorkflowSection', () => {
 							success: false,
 						},
 					},
+					poolOracleFeedback: {
+						action: 'executeStagedOperation',
+						status: {
+							detail: 'Local Security Bond Allowance broken',
+							title: 'Staged operation failed',
+							tone: 'error',
+						},
+					},
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+						managerAddress: zeroAddress,
+					}),
 					securityPoolAddress: selectedPoolAddress,
 					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
 					securityVault: createSecurityVaultProps({
@@ -1231,6 +1259,7 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		expect(refreshSelectedPoolCalls).toEqual([])
 		expect(loadSecurityVaultCalls).toEqual([])
+		expect(within(document.body).getByText('Staged operation failed')).not.toBeNull()
 		expect(within(document.body).getByText('Local Security Bond Allowance broken')).not.toBeNull()
 	})
 

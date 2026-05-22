@@ -8,10 +8,12 @@ import { useLoadController } from './useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { requireWallet } from '../lib/walletGuard.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } from '../lib/errors.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { parseBigIntInput } from '../lib/marketForm.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import { getGenesisReputationTokenAddress } from '../lib/universe.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
+import type { ActionFeedback } from '../types/components.js'
 import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type UseZoltarForkParameters = {
@@ -51,9 +53,14 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 	})
 	const zoltarForkRepBalance = useSignal<bigint | undefined>(undefined)
 	const zoltarForkActiveAction = useSignal<'approve' | 'fork' | undefined>(undefined)
+	const zoltarForkFeedback = useSignal<ActionFeedback<ZoltarForkActionResult['action']> | undefined>(undefined)
 	const zoltarMigrationPreparedRepBalance = useSignal<bigint | undefined>(undefined)
 	const zoltarMigrationChildRepBalances = useSignal<Record<string, bigint | undefined>>({})
 	const nextForkAccessLoad = useRequestGuard()
+	const resolveActionResultName = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'approveForkRep' : 'forkZoltar')
+	const getPendingTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'Approving REP for fork' : 'Forking Zoltar')
+	const getSuccessTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'REP approved for fork' : 'Zoltar fork submitted')
+	const getFailureTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'Fork REP approval failed' : 'Zoltar fork failed')
 
 	const loadZoltarForkAccess = async () => {
 		const reputationToken = zoltarUniverse?.reputationToken ?? (activeUniverseId === 0n ? getGenesisReputationTokenAddress() : undefined)
@@ -162,6 +169,7 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 		zoltarForkPending.value = true
 		zoltarForkActiveAction.value = actionName
 		zoltarForkError.value = undefined
+		zoltarForkFeedback.value = createPendingActionFeedback(resolveActionResultName(actionName), getPendingTitle(actionName))
 		zoltarForkResult.value = undefined
 
 		try {
@@ -178,9 +186,12 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 						})()
 				result = await action(accountAddress, universe, questionId)
 				zoltarForkResult.value = result
+				zoltarForkFeedback.value = createSuccessActionFeedback(result.action, getSuccessTitle(actionName), result.hash)
 				onTransaction(result.hash)
 			} catch (error) {
-				zoltarForkError.value = formatWriteErrorMessage(error, errorFallback)
+				const message = formatWriteErrorMessage(error, errorFallback)
+				zoltarForkError.value = message
+				zoltarForkFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), message)
 				return
 			}
 
@@ -191,7 +202,9 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 				}
 				await loadZoltarForkAccess()
 			} catch (error) {
-				zoltarForkError.value = formatRefreshErrorMessage(error, 'Zoltar fork transaction succeeded, but refreshing the UI failed')
+				const message = formatRefreshErrorMessage(error, 'Zoltar fork transaction succeeded, but refreshing the UI failed')
+				zoltarForkError.value = message
+				zoltarForkFeedback.value = createWarningActionFeedback(result.action, getSuccessTitle(actionName), message, result.hash)
 			}
 		} finally {
 			zoltarForkPending.value = false
@@ -245,6 +258,7 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 		zoltarForkActiveAction: zoltarForkActiveAction.value,
 		zoltarForkApproval: zoltarForkApproval.value,
 		zoltarForkError: zoltarForkError.value,
+		zoltarForkFeedback: zoltarForkFeedback.value,
 		zoltarForkPending: zoltarForkPending.value,
 		zoltarForkQuestionId: zoltarForkQuestionId.value,
 		zoltarForkRepBalance: zoltarForkRepBalance.value,
