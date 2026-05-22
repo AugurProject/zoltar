@@ -1632,22 +1632,76 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(selectedViews).toEqual(['staged-operations'])
 	})
 
-	test('retries reporting autoload on rerender until matching details are available', async () => {
+	test('autoloads reporting once after the reporting form pool matches the selected pool', async () => {
 		let reportingLoadCalls = 0
+		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		const stalePoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
 		const baseProps = createSecurityPoolWorkflowProps({
-			checkedSecurityPoolAddress: zeroAddress,
+			checkedSecurityPoolAddress: selectedPoolAddress,
 			reporting: createReportingProps({
 				onLoadReporting: () => {
 					reportingLoadCalls += 1
 				},
+				reportingForm: {
+					reportAmount: '',
+					securityPoolAddress: '',
+					selectedOutcome: 'yes',
+					withdrawDepositIndexes: '',
+				},
 			}),
-			securityPoolAddress: zeroAddress,
-			securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }) })],
+			securityPoolAddress: selectedPoolAddress,
+			securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress: selectedPoolAddress })],
 			selectedPoolView: 'reporting',
 		})
 
 		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(reportingLoadCalls).toBe(0)
+
+		await act(async () => {
+			render(
+				<SecurityPoolWorkflowSection
+					{...baseProps}
+					reporting={createReportingProps({
+						onLoadReporting: () => {
+							reportingLoadCalls += 1
+						},
+						reportingForm: {
+							reportAmount: '',
+							securityPoolAddress: stalePoolAddress,
+							selectedOutcome: 'yes',
+							withdrawDepositIndexes: '',
+						},
+					})}
+					showHeader={false}
+				/>,
+				renderedComponent.container,
+			)
+		})
+
+		expect(reportingLoadCalls).toBe(0)
+
+		await act(async () => {
+			render(
+				<SecurityPoolWorkflowSection
+					{...baseProps}
+					reporting={createReportingProps({
+						onLoadReporting: () => {
+							reportingLoadCalls += 1
+						},
+						reportingForm: {
+							reportAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedOutcome: 'yes',
+							withdrawDepositIndexes: '',
+						},
+					})}
+					showHeader={false}
+				/>,
+				renderedComponent.container,
+			)
+		})
+
 		expect(reportingLoadCalls).toBe(1)
 
 		await act(async () => {
@@ -1658,11 +1712,55 @@ describe('SecurityPoolWorkflowSection', () => {
 						onLoadReporting: () => {
 							reportingLoadCalls += 1
 						},
+						reportingForm: {
+							reportAmount: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedOutcome: 'yes',
+							withdrawDepositIndexes: '',
+						},
 					})}
 					showHeader={false}
 				/>,
 				renderedComponent.container,
 			)
+		})
+
+		expect(reportingLoadCalls).toBe(1)
+	})
+
+	test('re-arms reporting autoload after leaving and re-entering the reporting tab', async () => {
+		let reportingLoadCalls = 0
+		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
+		const reportingProps = createReportingProps({
+			onLoadReporting: () => {
+				reportingLoadCalls += 1
+			},
+			reportingForm: {
+				reportAmount: '',
+				securityPoolAddress: selectedPoolAddress,
+				selectedOutcome: 'yes',
+				withdrawDepositIndexes: '',
+			},
+		})
+		const baseProps = createSecurityPoolWorkflowProps({
+			checkedSecurityPoolAddress: selectedPoolAddress,
+			reporting: reportingProps,
+			securityPoolAddress: selectedPoolAddress,
+			securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress: selectedPoolAddress })],
+		})
+
+		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='reporting' showHeader={false} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(reportingLoadCalls).toBe(1)
+
+		await act(async () => {
+			render(<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='vaults' showHeader={false} />, renderedComponent.container)
+		})
+
+		expect(reportingLoadCalls).toBe(1)
+
+		await act(async () => {
+			render(<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='reporting' showHeader={false} />, renderedComponent.container)
 		})
 
 		expect(reportingLoadCalls).toBe(2)

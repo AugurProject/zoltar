@@ -114,6 +114,8 @@ export function SecurityPoolWorkflowSection({
 	const [vaultView, setVaultView] = useState<SelectedVaultView>('selected-vault')
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedPool = securityPools.find(pool => sameCaseInsensitiveText(pool.securityPoolAddress, securityPoolAddress))
+	const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
+	const normalizedReportingFormPoolAddress = normalizeAddress(reporting.reportingForm.securityPoolAddress)
 	const currentReportingDetails = sameAddress(reporting.reportingDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) ? reporting.reportingDetails : undefined
 	const currentForkAuctionDetails = sameAddress(forkAuction.forkAuctionDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) ? forkAuction.forkAuctionDetails : undefined
 	const selectedPoolLookupState = resolveRequestedLoadableValueState({
@@ -182,6 +184,7 @@ export function SecurityPoolWorkflowSection({
 	const selectedVaultAutoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(selectedPool?.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = selectedVaultDetails !== undefined && sameAddress(selectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(selectedVaultDetails.securityPoolAddress, selectedPool?.securityPoolAddress)
 	const lastSelectedVaultAutoLoadKey = useRef<string | undefined>(undefined)
+	const lastReportingAutoLoadKey = useRef<string | undefined>(undefined)
 	const lastQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastImmediateQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastLiquidationOutcomeRefreshKey = useRef<string | undefined>(undefined)
@@ -280,12 +283,18 @@ export function SecurityPoolWorkflowSection({
 	}, [accountState.address, hasLoadedCurrentVault, securityVault.loadingSecurityVault, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, selectedVaultAddress, selectedVaultAutoLoadKey, selectedVaultSecurityPoolAddress, showSelectedPoolWorkflowDetails, view])
 
 	useEffect(() => {
-		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
-		if (view !== 'reporting' || !reportingReady || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) return
+		if (view !== 'reporting' || !reportingReady || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {
+			lastReportingAutoLoadKey.current = undefined
+			return
+		}
 		if (sameAddress(reporting.reportingDetails?.securityPoolAddress, normalizedSelectedPoolAddress)) return
+		if (normalizedReportingFormPoolAddress === undefined || normalizedReportingFormPoolAddress !== normalizedSelectedPoolAddress) return
 		if (reporting.loadingReportingDetails) return
+		const reportingAutoLoadKey = `${normalizedSelectedPoolAddress}:${normalizedReportingFormPoolAddress}`
+		if (lastReportingAutoLoadKey.current === reportingAutoLoadKey) return
+		lastReportingAutoLoadKey.current = reportingAutoLoadKey
 		void reporting.onLoadReporting()
-	}, [reporting.loadingReportingDetails, reporting.onLoadReporting, reporting.reportingDetails?.securityPoolAddress, reportingReady, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
+	}, [normalizedReportingFormPoolAddress, normalizedSelectedPoolAddress, reporting.loadingReportingDetails, reporting.onLoadReporting, reporting.reportingDetails?.securityPoolAddress, reportingReady, showSelectedPoolWorkflowDetails, view])
 
 	useEffect(() => {
 		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)

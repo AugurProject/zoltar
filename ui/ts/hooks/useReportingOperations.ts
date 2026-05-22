@@ -8,6 +8,7 @@ import { getErrorMessage } from '../lib/errors.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import { parseAddressInput, resolveOptionalBigIntListInput } from '../lib/inputs.js'
 import { getDefaultReportingFormState, parseBigIntInput } from '../lib/marketForm.js'
+import { useRequestGuard } from '../lib/requestGuard.js'
 import type { ReportingFormState, WriteOperationsParameters } from '../types/app.js'
 import type { ReportingActionResult, ReportingDetails } from '../types/contracts.js'
 
@@ -20,9 +21,12 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 	const { state: reportingForm, setState: setReportingForm } = useFormState<ReportingFormState>(getDefaultReportingFormState())
 	const reportingActiveAction = useSignal<ReportingActionResult['action'] | undefined>(undefined)
 	const reportingResult = useSignal<ReportingActionResult | undefined>(undefined)
+	const nextReportingLoad = useRequestGuard()
 
 	const loadReporting = async () => {
+		const isCurrent = nextReportingLoad()
 		await reportingLoad.run({
+			isCurrent,
 			onStart: () => {
 				reportingError.value = undefined
 			},
