@@ -295,7 +295,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByText(/current escalation lifecycle phase/i)).toBeNull()
 	})
 
-	test('keeps outcome sides visible with placeholder cards before reporting details load', async () => {
+	test('keeps outcome sides visible with zeroed cards before reporting details load', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -308,7 +308,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		const outcomeSidesSection = getClosestSection(documentQueries.getByRole('heading', { name: 'Outcome Sides' }))
-		expect(within(outcomeSidesSection).getByText('Load reporting details to populate live stakes, bond progression, and deposit indexes.')).not.toBeNull()
+		expect(within(outcomeSidesSection).queryByText('Load reporting details to populate live stakes, bond progression, and deposit indexes.')).toBeNull()
 
 		const sideCards = Array.from(outcomeSidesSection.querySelectorAll('.escalation-side'))
 		expect(sideCards).toHaveLength(3)
@@ -318,7 +318,8 @@ describe('ReportingSection', () => {
 			return label
 		})
 		expect(sideLabels).toEqual(['Invalid', 'Yes', 'No'])
-		expect(outcomeSidesSection.textContent?.includes('Your deposits: —')).toBe(true)
+		expect(outcomeSidesSection.textContent?.includes('Your deposits: None')).toBe(true)
+		expect(outcomeSidesSection.querySelector('[title="0 REP"]')).not.toBeNull()
 	})
 
 	test('disables reporting buttons when deterministic prerequisites are missing', async () => {
@@ -391,7 +392,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
 	})
 
-	test('shows placeholder outcome sides before the first report starts the escalation game', async () => {
+	test('shows zeroed outcome sides before the first report starts the escalation game', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -406,8 +407,10 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByText('Escalation Metrics')).toBeNull()
 		const outcomeSidesSection = getClosestSection(documentQueries.getByRole('heading', { name: 'Outcome Sides' }))
 		expect(documentQueries.queryByRole('heading', { name: 'Escalation Status' })).toBeNull()
-		expect(within(outcomeSidesSection).getByText('Escalation game has not started yet. The first report will populate live stakes, bond progression, and deposit indexes.')).not.toBeNull()
+		expect(within(outcomeSidesSection).queryByText('Escalation game has not started yet. The first report will populate live stakes, bond progression, and deposit indexes.')).toBeNull()
 		expect(outcomeSidesSection.querySelectorAll('.escalation-side')).toHaveLength(3)
+		expect(outcomeSidesSection.textContent?.includes('Your deposits: None')).toBe(true)
+		expect(outcomeSidesSection.querySelector('[title="0 REP"]')).not.toBeNull()
 		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
 	})
 

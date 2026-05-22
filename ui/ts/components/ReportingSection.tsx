@@ -42,6 +42,8 @@ type EscalationSideDisplay = {
 	userStake: bigint | undefined
 }
 
+const ZERO_REP = 0n
+
 function getOutcomeSides({ activeReportingDetails, selectedAmount }: { activeReportingDetails: ActiveReportingDetails | undefined; selectedAmount: bigint | undefined }) {
 	if (activeReportingDetails !== undefined) {
 		return activeReportingDetails.sides.map<EscalationSideDisplay>(side => {
@@ -58,23 +60,13 @@ function getOutcomeSides({ activeReportingDetails, selectedAmount }: { activeRep
 	}
 
 	return REPORTING_OUTCOME_DROPDOWN_OPTIONS.map<EscalationSideDisplay>(option => ({
-		balance: undefined,
+		balance: ZERO_REP,
 		estimate: undefined,
 		key: option.value,
 		label: option.label,
-		userDeposits: undefined,
-		userStake: undefined,
+		userDeposits: [],
+		userStake: ZERO_REP,
 	}))
-}
-
-function getOutcomeSidesHint(reportingStatus: ReportingStatus) {
-	if (reportingStatus === 'missing') {
-		return 'Load reporting details to populate live stakes, bond progression, and deposit indexes.'
-	}
-	if (reportingStatus === 'not-started') {
-		return 'Escalation game has not started yet. The first report will populate live stakes, bond progression, and deposit indexes.'
-	}
-	return undefined
 }
 
 function getDepositEntryCountLabel(count: number) {
@@ -128,12 +120,11 @@ export function ReportingSection({
 		activeReportingDetails,
 		selectedAmount,
 	})
-	const outcomeSidesHint = getOutcomeSidesHint(reportingStatus)
 	const presetFallbackReason = reportingStatus === 'not-started' ? 'Escalation game has not started yet.' : 'Load reporting details before using presets.'
 	const minimumOutcomeChangeContribution = activeReportingDetails === undefined ? { amount: undefined, reason: presetFallbackReason } : getMinimumOutcomeChangeContribution(activeReportingDetails, reportingForm.selectedOutcome)
 	const maxProfitContribution = activeReportingDetails === undefined ? { amount: undefined, reason: presetFallbackReason } : getMaxProfitContribution(activeReportingDetails, reportingForm.selectedOutcome)
 	const presetReasons = reportingLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && reasons.indexOf(reason) === index)
-	const escalationTimeRemaining = activeReportingDetails === undefined ? undefined : formatDuration(getEscalationTimeRemaining(activeReportingDetails))
+	const escalationTimeRemaining = activeReportingDetails === undefined ? formatDuration(ZERO_REP) : formatDuration(getEscalationTimeRemaining(activeReportingDetails))
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 	const reportGuardMessage = getReportingReportGuardMessage({
 		accountAddress: accountState.address,
@@ -214,23 +205,22 @@ export function ReportingSection({
 				<SectionBlock title='Outcome Sides' {...(activeReportingDetails === undefined ? {} : { description: 'Bars show total REP on each outcome. The marker shows current binding capital, and the thin inset shows your wallet stake.' })}>
 					<div className='escalation-metrics'>
 						<MetricField label='Current Bond'>
-							<CurrencyValue value={activeReportingDetails?.currentRequiredBond} suffix='REP' />
+							<CurrencyValue value={activeReportingDetails?.currentRequiredBond ?? ZERO_REP} suffix='REP' />
 						</MetricField>
 						<MetricField label='Binding Capital'>
-							<CurrencyValue value={activeReportingDetails?.bindingCapital} suffix='REP' />
+							<CurrencyValue value={activeReportingDetails?.bindingCapital ?? ZERO_REP} suffix='REP' />
 						</MetricField>
 						<MetricField label='Threshold'>
-							<CurrencyValue value={activeReportingDetails?.nonDecisionThreshold} suffix='REP' />
+							<CurrencyValue value={activeReportingDetails?.nonDecisionThreshold ?? ZERO_REP} suffix='REP' />
 						</MetricField>
-						<MetricField label='Time Left'>{escalationTimeRemaining ?? '—'}</MetricField>
+						<MetricField label='Time Left'>{escalationTimeRemaining}</MetricField>
 						<MetricField label='Game Start'>
 							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails?.startingTime} />
 						</MetricField>
 						<MetricField label='Start Bond'>
-							<CurrencyValue value={activeReportingDetails?.startBond} suffix='REP' />
+							<CurrencyValue value={activeReportingDetails?.startBond ?? ZERO_REP} suffix='REP' />
 						</MetricField>
 					</div>
-					{outcomeSidesHint === undefined ? undefined : <p className='detail'>{outcomeSidesHint}</p>}
 					<div className='escalation-sides-shell'>
 						{activeReportingDetails === undefined ? undefined : (
 							<div className='escalation-sides-legend'>
