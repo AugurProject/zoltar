@@ -1517,10 +1517,13 @@ describe('SecurityPoolWorkflowSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByRole('heading', { name: 'Question' }).length).toBe(1)
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Outcome Sides' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Report Outcome' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Withdraw Escalation Deposits' })).toBeNull()
+		expect(documentQueries.getByText('Load reporting details to populate live stakes, bond progression, and deposit indexes.')).not.toBeNull()
 		expect(documentQueries.queryByText('Reporting unlocks after the market end timestamp for the selected pool.')).toBeNull()
 		expect(documentQueries.queryByText('Reporting opens after market end.')).toBeNull()
+		expect(document.body.querySelectorAll('.escalation-side')).toHaveLength(3)
 
 		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)
