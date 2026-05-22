@@ -14,6 +14,7 @@ import { Question } from './Question.js'
 import { ResultBanner } from './ResultBanner.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
+import { StateHint } from './StateHint.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -24,6 +25,7 @@ import { isMainnetChain } from '../lib/network.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome } from '../lib/reportingDomain.js'
+import type { UserMessagePresentation } from '../lib/userCopy.js'
 import type { LifecycleStagePresentation, ReportingSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
 
 function getReportingStagePresentation({ effectiveCurrentTimestamp, marketDetails, reportingDetails }: { effectiveCurrentTimestamp: bigint | undefined; marketDetails: ReportingSectionProps['previewMarketDetails']; reportingDetails: ReportingSectionProps['reportingDetails'] }): LifecycleStagePresentation | undefined {
@@ -38,8 +40,9 @@ function getReportingStagePresentation({ effectiveCurrentTimestamp, marketDetail
 			tone: 'warning',
 		}
 	}
+	if (reportingDetails === undefined) return undefined
 
-	const phase = reportingDetails === undefined ? 'Reporting Open' : getEscalationPhase(reportingDetails)
+	const phase = getEscalationPhase(reportingDetails)
 	return {
 		availableActions: ['Report / Contribute', 'Withdraw escalation deposits'],
 		blockedActions: [],
@@ -56,6 +59,15 @@ function getReportingOutcomePresentation(result: ReportingSectionProps['reportin
 		return { title: 'Reporting contribution submitted', detail: `Contributed on the ${getReportingOutcomeLabel(result.outcome)} side.`, nextStep: 'Review the leading side and updated bond before contributing again.' }
 	}
 	return { title: 'Escalation deposits withdrawn', detail: `Withdrew deposits from the ${getReportingOutcomeLabel(result.outcome)} side.`, nextStep: 'Confirm the remaining deposits and whether any other sides are still withdrawable.' }
+}
+
+function getReportingLockedPresentation({ effectiveCurrentTimestamp, marketDetails }: { effectiveCurrentTimestamp: bigint | undefined; marketDetails: ReportingSectionProps['previewMarketDetails'] }): UserMessagePresentation | undefined {
+	if (effectiveCurrentTimestamp === undefined || marketDetails === undefined || marketDetails.endTime <= effectiveCurrentTimestamp) return undefined
+	return {
+		actionHint: `Reporting opens in ${formatDuration(marketDetails.endTime - effectiveCurrentTimestamp)}.`,
+		detail: 'Reporting is not enabled at the moment.',
+		key: 'action_needed',
+	}
 }
 
 export function ReportingSection({
@@ -118,6 +130,7 @@ export function ReportingSection({
 		)
 	const reportingStage = getReportingStagePresentation({ effectiveCurrentTimestamp, marketDetails, reportingDetails })
 	const reportingOutcome = getReportingOutcomePresentation(reportingResult)
+	const reportingLockedPresentation = getReportingLockedPresentation({ effectiveCurrentTimestamp, marketDetails })
 
 	const sections = (
 		<>
@@ -143,10 +156,10 @@ export function ReportingSection({
 						<MetricField label='Market End'>
 							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={marketDetails.endTime} />
 						</MetricField>
-						{effectiveCurrentTimestamp === undefined ? undefined : <MetricField label='Reporting'>{marketDetails.endTime <= effectiveCurrentTimestamp ? 'Open' : 'Locked'}</MetricField>}
-						{effectiveCurrentTimestamp === undefined || marketDetails.endTime <= effectiveCurrentTimestamp ? undefined : <MetricField label='Opens In'>{formatDuration(marketDetails.endTime - effectiveCurrentTimestamp)}</MetricField>}
+						{effectiveCurrentTimestamp !== undefined && marketDetails.endTime <= effectiveCurrentTimestamp ? <MetricField label='Reporting'>Open</MetricField> : undefined}
 					</div>
 				)}
+				{reportingLockedPresentation === undefined ? undefined : <StateHint presentation={reportingLockedPresentation} />}
 
 				{reportingDetails !== undefined || marketDetails === undefined ? undefined : (
 					<SectionBlock headingLevel={4} title='Question' variant='embedded'>

@@ -124,6 +124,42 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Selected side has')).toBe(true)
 	})
 
+	test('shows a warning dialog instead of locked reporting metrics before the market end time', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 50n,
+					reportingDetails: undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Reporting is not enabled at the moment.')).not.toBeNull()
+		expect(documentQueries.getByText('Reporting opens in less than a minute.')).not.toBeNull()
+		expect(documentQueries.queryByText('Locked')).toBeNull()
+		expect(documentQueries.queryByText('Opens In')).toBeNull()
+	})
+
+	test('does not show an escalation status banner when reporting is open but escalation details are not loaded yet', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 150n,
+					reportingDetails: undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Reporting Open')).toBeNull()
+		expect(documentQueries.queryByText(/current escalation lifecycle phase/i)).toBeNull()
+	})
+
 	test('disables reporting buttons when deterministic prerequisites are missing', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
