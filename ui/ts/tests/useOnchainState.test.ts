@@ -1,10 +1,17 @@
 /// <reference types="bun-types" />
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { fireEvent, within } from '@testing-library/dom'
+import { h } from 'preact'
+import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
-import { loadWalletState } from '../hooks/useOnchainState.js'
+import { loadWalletState, useOnchainState } from '../hooks/useOnchainState.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createLoadController } from '../lib/loadState.js'
 import type { AccountState } from '../types/app.js'
+import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { createFakeBackend } from './testUtils/fakeBackend.js'
+import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -143,5 +150,63 @@ void describe('loadWalletState', () => {
 
 		expect(accountState.ethBalance).toBe(123n)
 		expect(accountState.wethBalance).toBe(456n)
+	})
+})
+
+void describe('useOnchainState', () => {
+	let restoreDomEnvironment: (() => void) | undefined
+	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+
+	function OnchainStateHarness() {
+		const { connectWallet, errorMessage } = useOnchainState()
+
+		return h('div', {}, [
+			h(
+				'button',
+				{
+					onClick: () => {
+						void connectWallet()
+					},
+					type: 'button',
+				},
+				'Connect wallet',
+			),
+			h('output', { 'aria-label': 'Error message' }, errorMessage ?? ''),
+		])
+	}
+
+	beforeEach(() => {
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+	})
+
+	afterEach(async () => {
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+		restoreDomEnvironment?.()
+		restoreDomEnvironment = undefined
+		resetActiveEnvironmentForTesting()
+	})
+
+	void test('surfaces an explicit error when connect wallet is clicked without a wallet installed', async () => {
+		installActiveEnvironmentForTesting({
+			...createFakeBackend({ hasWallet: false }),
+			isBootstrapped: false,
+		})
+
+		const renderedComponent = await renderIntoDocument(h(OnchainStateHarness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			await Promise.resolve()
+		})
+
+		const documentQueries = within(document.body)
+		const connectButton = documentQueries.getByRole('button', { name: 'Connect wallet' })
+
+		await act(() => {
+			fireEvent.click(connectButton)
+		})
+
+		expect(documentQueries.getByLabelText('Error message').textContent).toBe('No wallet detected. Install or enable a wallet to continue.')
 	})
 })

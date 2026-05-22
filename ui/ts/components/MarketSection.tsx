@@ -173,7 +173,7 @@ export function MarketSection({
 						<SectionBlock title='Fork'>
 							<div className='actions'>
 								<button className='primary' type='button' onClick={() => setForkModalOpen(true)}>
-									Open Fork Flow
+									Fork Zoltar
 								</button>
 							</div>
 							{zoltarForkQuestionId.trim() === '' ? undefined : <p className='detail'>Selected fork question: {zoltarForkQuestionId}</p>}

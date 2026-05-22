@@ -2,16 +2,22 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from 'viem'
-import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation } from '../contracts.js'
+import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadOracleManagerDetails, loadReportingDetails, loadSecurityVaultDetails, queueOracleManagerOperation } from '../contracts.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
 import { getSecurityVaultWithdrawableRepAmount } from '../lib/securityVault.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
+import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '../simulation/clock.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
 import type { SimulationScenario } from '../simulation/scenarios.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
+const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const SEEDED_REP_DEPOSIT = 10_000n * 10n ** 18n
 const SEEDED_SECURITY_BOND_ALLOWANCE = SEEDED_REP_DEPOSIT / 4n
+const SEEDED_SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
+const SEEDED_SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE = 1_000n * 10n ** 18n
+const SEEDED_SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT = SEEDED_REP_DEPOSIT
+const SEEDED_SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE = SEEDED_SECURITY_BOND_ALLOWANCE
 
 afterEach(() => {
 	resetActiveEnvironmentForTesting()
@@ -139,7 +145,7 @@ void describe('simulation backend', () => {
 		expect(backend.currentScenario).toBe('baseline')
 		expect(backend.isBootstrapped).toBe(false)
 		expect(backend.isBootstrapping).toBe(false)
-		expect(backend.repPerEthPrice).toBe(10n ** 18n)
+		expect(backend.repPerEthPrice).toBe(DEFAULT_SIMULATION_REP_PER_ETH_PRICE)
 		expect(backend.repPerUsdcPrice).toBe(10n ** 6n)
 	})
 
@@ -159,6 +165,22 @@ void describe('simulation backend', () => {
 			expect(backend.bootstrapError).toBeUndefined()
 		} finally {
 			await backend.dispose()
+		}
+	}, 30_000)
+
+	void test('boots every fresh baseline simulation from the fixed initial timestamp progression', async () => {
+		const backendA = await createSimulationBackend({ scenario: 'baseline' })
+		const backendB = await createSimulationBackend({ scenario: 'baseline' })
+
+		try {
+			await backendA.bootstrap()
+			await backendB.bootstrap()
+
+			expect(backendA.currentTimestamp >= SIMULATION_INITIAL_TIMESTAMP).toBe(true)
+			expect(backendA.currentTimestamp).toBe(backendB.currentTimestamp)
+		} finally {
+			await backendA.dispose()
+			await backendB.dispose()
 		}
 	}, 30_000)
 
@@ -261,13 +283,15 @@ void describe('simulation backend', () => {
 
 			expect(backend.blockCountSinceReset).toBe(initialBlockCount + 1n)
 			expect(backend.transactionCountSinceReset).toBe(initialTransactionCount + 1n)
+			expect(backend.currentTimestamp).toBe(initialTimestamp + SIMULATION_BLOCK_INTERVAL_SECONDS)
 
 			await backend.mineBlock()
 			expect(backend.blockCountSinceReset).toBe(initialBlockCount + 2n)
+			expect(backend.currentTimestamp).toBe(initialTimestamp + 2n * SIMULATION_BLOCK_INTERVAL_SECONDS)
 
 			await backend.advanceTime(60n * 60n)
 			expect(backend.blockCountSinceReset).toBe(initialBlockCount + 3n)
-			expect(backend.currentTimestamp > initialTimestamp).toBe(true)
+			expect(backend.currentTimestamp).toBe(initialTimestamp + 2n * SIMULATION_BLOCK_INTERVAL_SECONDS + 60n * 60n)
 		} finally {
 			await backend.dispose()
 		}
@@ -302,19 +326,36 @@ void describe('simulation backend', () => {
 		}
 	}, 30_000)
 
-	void test('tracks the configured simulation REP/ETH mock price and resets it with the scenario', async () => {
+	void test('tracks the configured simulation REP/ETH mock price and resets it to the shared default', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
 		await backend.bootstrap()
 
-		backend.setRepPerEthPrice(3n * 10n ** 18n)
-		expect(backend.repPerEthPrice).toBe(3n * 10n ** 18n)
+		backend.setRepPerEthPrice(2n * 10n ** 18n)
+		expect(backend.repPerEthPrice).toBe(2n * 10n ** 18n)
 		backend.setRepPerUsdcPrice(7n * 10n ** 6n)
 		expect(backend.repPerUsdcPrice).toBe(7n * 10n ** 6n)
 
 		await backend.reset()
-		expect(backend.repPerEthPrice).toBe(10n ** 18n)
+		expect(backend.repPerEthPrice).toBe(DEFAULT_SIMULATION_REP_PER_ETH_PRICE)
 		expect(backend.repPerUsdcPrice).toBe(10n ** 6n)
 	}, 30_000)
+
+	void test('restores the shared simulation REP/ETH mock price on reset for security scenarios', async () => {
+		const backend = await createSimulationBackend({ scenario: 'securitypoolx2' })
+		await backend.bootstrap()
+
+		try {
+			expect(backend.repPerEthPrice).toBe(DEFAULT_SIMULATION_REP_PER_ETH_PRICE)
+
+			backend.setRepPerEthPrice(2n * 10n ** 18n)
+			expect(backend.repPerEthPrice).toBe(2n * 10n ** 18n)
+
+			await backend.reset()
+			expect(backend.repPerEthPrice).toBe(DEFAULT_SIMULATION_REP_PER_ETH_PRICE)
+		} finally {
+			await backend.dispose()
+		}
+	}, 90_000)
 
 	void test('bootstraps the deployed scenario with app contracts already deployed', async () => {
 		const backend = deployedBackend
@@ -354,6 +395,51 @@ void describe('simulation backend', () => {
 		expect(seededVault.securityBondAllowance).toBe(SEEDED_SECURITY_BOND_ALLOWANCE)
 	}, 60_000)
 
+	void test('reuses the same seeded pool address and question id across fresh security-pool bootstraps and after reset', async () => {
+		const backendA = await createBootstrappedSimulationBackendWithRetry('security-pool')
+		const backendB = await createBootstrappedSimulationBackendWithRetry('security-pool')
+		backendA.setTransactionDelayMilliseconds(0)
+		backendB.setTransactionDelayMilliseconds(0)
+
+		try {
+			const [poolA] = await loadAllSecurityPools(backendA.createReadClient())
+			const [poolB] = await loadAllSecurityPools(backendB.createReadClient())
+			if (poolA === undefined || poolB === undefined) {
+				throw new Error('Expected a seeded security pool in both simulation backends')
+			}
+
+			const baselineTimestamp = backendA.currentTimestamp
+			expect(poolA.securityPoolAddress).toBe(poolB.securityPoolAddress)
+			expect(poolA.questionId).toBe(poolB.questionId)
+
+			const primaryAccount = backendA.accounts[0]
+			const secondaryAccount = backendA.accounts[1]
+			if (primaryAccount === undefined || secondaryAccount === undefined) {
+				throw new Error('Expected seeded simulation QA accounts')
+			}
+
+			const writeClient = backendA.createWriteClient(primaryAccount)
+			const hash = await writeClient.sendTransaction({
+				to: getAddress(secondaryAccount),
+				value: 1n,
+			})
+			await writeClient.waitForTransactionReceipt({ hash })
+			await backendA.reset()
+
+			const [resetPool] = await loadAllSecurityPools(backendA.createReadClient())
+			if (resetPool === undefined) {
+				throw new Error('Expected a seeded security pool after resetting the simulation backend')
+			}
+
+			expect(resetPool.securityPoolAddress).toBe(poolA.securityPoolAddress)
+			expect(resetPool.questionId).toBe(poolA.questionId)
+			expect(backendA.currentTimestamp).toBe(baselineTimestamp)
+		} finally {
+			await backendA.dispose()
+			await backendB.dispose()
+		}
+	}, 60_000)
+
 	void test('bootstraps the securitypoolx2 scenario with two seeded pools and two vaults in each pool', async () => {
 		const backend = await createBootstrappedSimulationBackendWithRetry('securitypoolx2')
 		backend.setTransactionDelayMilliseconds(0)
@@ -369,6 +455,7 @@ void describe('simulation backend', () => {
 			const pools = await loadAllSecurityPools(readClient)
 
 			expect(backend.currentScenario).toBe('securitypoolx2')
+			expect(backend.repPerEthPrice).toBe(3n * 10n ** 18n)
 			expect(pools).toHaveLength(2)
 			expect(pools.map(pool => pool.marketDetails.title)).toEqual(['Will this resolve? (securitypoolx2 #1)', 'Will this resolve? (securitypoolx2 #2)'])
 
@@ -382,14 +469,42 @@ void describe('simulation backend', () => {
 				const managerDetails = await loadOracleManagerDetails(readClient, pool.managerAddress)
 
 				expect(pool.vaultCount).toBe(2n)
-				expect(pool.totalRepDeposit).toBe(2n * SEEDED_REP_DEPOSIT)
-				expect(pool.totalSecurityBondAllowance).toBe(2n * SEEDED_SECURITY_BOND_ALLOWANCE)
-				expect(primaryVault.repDepositShare).toBe(SEEDED_REP_DEPOSIT)
-				expect(primaryVault.securityBondAllowance).toBe(SEEDED_SECURITY_BOND_ALLOWANCE)
-				expect(secondaryVault.repDepositShare).toBe(SEEDED_REP_DEPOSIT)
-				expect(secondaryVault.securityBondAllowance).toBe(SEEDED_SECURITY_BOND_ALLOWANCE)
+				expect(pool.totalRepDeposit).toBe(SEEDED_SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT + SEEDED_SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT)
+				expect(pool.totalSecurityBondAllowance).toBe(SEEDED_SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE + SEEDED_SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE)
+				expect(primaryVault.repDepositShare).toBe(SEEDED_SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT)
+				expect(primaryVault.securityBondAllowance).toBe(SEEDED_SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE)
+				expect(secondaryVault.repDepositShare).toBe(SEEDED_SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT)
+				expect(secondaryVault.securityBondAllowance).toBe(SEEDED_SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE)
 				expect(managerDetails.isPriceValid).toBe(true)
 			}
+		} finally {
+			await backend.dispose()
+		}
+	}, 90_000)
+
+	void test('loads reporting without errors before the first escalation report in securitypoolx2', async () => {
+		const backend = await createBootstrappedSimulationBackendWithRetry('securitypoolx2')
+		backend.setTransactionDelayMilliseconds(0)
+
+		try {
+			const primaryAccount = backend.accounts[0]
+			if (primaryAccount === undefined) {
+				throw new Error('Expected seeded simulation QA account A1')
+			}
+
+			await backend.advanceTime(366n * 24n * 60n * 60n)
+
+			const readClient = backend.createReadClient()
+			const pools = await loadAllSecurityPools(readClient)
+			const seededPool = pools[0]
+			if (seededPool === undefined) {
+				throw new Error('Expected a seeded security pool')
+			}
+
+			const reportingDetails = await loadReportingDetails(readClient, seededPool.securityPoolAddress, primaryAccount)
+
+			expect(reportingDetails.status).toBe('not-started')
+			expect(reportingDetails.marketDetails.endTime < reportingDetails.currentTime).toBe(true)
 		} finally {
 			await backend.dispose()
 		}

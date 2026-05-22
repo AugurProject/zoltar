@@ -156,7 +156,6 @@ export type OutcomeSelectionListProps = {
 }
 
 export type VaultMetricGridProps = {
-	approvedRep?: TokenApprovalState | undefined
 	className?: string
 	lockedRepInEscalationGame?: bigint | undefined
 	priceValidUntilTimestamp?: bigint | undefined
@@ -251,10 +250,6 @@ export type TabNavigationProps = {
 export type ZoltarView = 'create' | 'fork' | 'migrate' | 'questions'
 
 export type SecurityPoolsView = 'browse' | 'create' | 'operate'
-
-export type MainnetGateSectionProps = {
-	message: string
-}
 
 export type DeploymentRouteContentProps = {
 	accountAddress: Address | undefined
@@ -352,6 +347,7 @@ type LiquidationControlsProps = {
 	liquidationSecurityPoolAddress: Address | undefined
 	loadingPoolOracleManager: boolean
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
+	securityPoolOverviewError: string | undefined
 	liquidationTargetVault: string
 	onLiquidationAmountChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
@@ -399,6 +395,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
+	securityPoolOverviewError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	poolOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	poolOracleManagerDetails: OracleManagerDetails | undefined
@@ -451,7 +448,12 @@ export type SecurityVaultRouteContentProps = {
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	compactLayout?: boolean
+	extraReadinessActions?: ReadinessAction[]
+	modalFirst?: boolean
+	onViewStagedOperations?: () => void
 	oracleManagerDetails?: OracleManagerDetails | undefined
+	selectedPoolTotalRepDeposit?: bigint | undefined
+	selectedPoolTotalSecurityBondAllowance?: bigint | undefined
 	autoLoadVault?: boolean
 	showLookupSection?: boolean
 	showSummarySection?: boolean

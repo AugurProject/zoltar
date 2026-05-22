@@ -20,6 +20,7 @@ import { useSecurityVaultOperations } from './hooks/useSecurityVaultOperations.j
 import { useTradingOperations } from './hooks/useTradingOperations.js'
 import { useUrlState } from './hooks/useUrlState.js'
 import { getActiveSimulationController } from './lib/activeEnvironment.js'
+import { ChainTimestampContext } from './lib/chainTimestamp.js'
 import { getDeploymentSections } from './lib/deployment.js'
 import { resolveLoadableValueState } from './lib/loadState.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from './lib/network.js'
@@ -29,7 +30,7 @@ import { createInitialTransactionState, markTransactionFinished, markTransaction
 import type { TransactionState } from './lib/transactionState.js'
 import { buildRouteHref, DEPLOY_ROUTE, getRouteHashSearch, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
 import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam, writeZoltarViewQueryParam } from './lib/urlParams.js'
-import { getUniversePresentation, getWalletPresentation } from './lib/userCopy.js'
+import { getUniversePresentation } from './lib/userCopy.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from './lib/viewState.js'
 import type { DeploymentRouteContentProps, MarketRouteContentProps, OpenOracleSectionProps, OpenOracleView, SecurityPoolsSectionProps, SecurityPoolsView, ZoltarView } from './types/components.js'
@@ -59,11 +60,11 @@ export function App() {
 		accountState,
 		augurPlaceHolderDeployed,
 		connectWallet,
+		currentTimestamp,
 		deploymentStatuses,
 		environmentBootstrapError,
 		environmentReady,
 		errorMessage: walletErrorMessage,
-		hasInjectedWallet,
 		hasLoadedDeploymentStatuses,
 		isConnectingWallet,
 		isLoadingDeploymentStatuses,
@@ -244,7 +245,6 @@ export function App() {
 	const isRouteContentDisabled = transactionState.value.transactionInFlightCount > 0 || disableRouteContent
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
-	const walletPresentation = getWalletPresentation({ accountAddress: accountState.address, hasWallet: hasInjectedWallet, isSupportedChain: isMainnet })
 	const showTransactionSuccessNotice =
 		route === 'deploy'
 			? true
@@ -322,6 +322,7 @@ export function App() {
 	}
 
 	useAppRouteEffects({
+		accountAddress: accountState.address,
 		augurPlaceHolderDeploymentMissing,
 		environmentReady,
 		loadOracleReport: async reportId => await loadOracleReport(reportId),
@@ -336,6 +337,7 @@ export function App() {
 		setForkAuctionFormSecurityPoolAddress: nextSecurityPoolAddress => setForkAuctionForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
 		setOpenOracleReport,
 		setReportingFormSecurityPoolAddress: nextSecurityPoolAddress => setReportingForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
+		setSecurityVaultFormSelectedVaultAddress: nextSelectedVaultAddress => setSecurityVaultForm(current => (current.selectedVaultAddress === nextSelectedVaultAddress ? current : { ...current, selectedVaultAddress: nextSelectedVaultAddress })),
 		setSecurityVaultFormSecurityPoolAddress: nextSecurityPoolAddress => setSecurityVaultForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
 		setTradingFormSecurityPoolAddress: nextSecurityPoolAddress => setTradingForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
 		tradingResultHash: tradingResult?.hash,
@@ -507,6 +509,7 @@ export function App() {
 				void loadOracleReport(reportId.toString())
 			},
 			securityPoolOverviewActiveAction,
+			securityPoolOverviewError,
 			securityPoolOverviewResult,
 			poolOracleActiveAction,
 			poolOracleManagerDetails,
@@ -654,23 +657,24 @@ export function App() {
 		) : undefined
 
 	return (
-		<main>
-			<AppStatusNotices
-				errorMessage={errorMessage}
-				hasInjectedWallet={hasInjectedWallet}
-				simulationBootstrapError={environmentBootstrapError}
-				showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
-				showTransactionSuccessNotice={showTransactionSuccessNotice}
-				showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
-				transactionState={transactionState.value}
-				walletPresentation={walletPresentation}
-				zoltarUniverse={zoltarUniverse}
-			/>
-			<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onRefresh={refreshSimulationView} />
+		<ChainTimestampContext.Provider value={currentTimestamp}>
+			<main>
+				<AppStatusNotices
+					errorMessage={errorMessage}
+					simulationBootstrapError={environmentBootstrapError}
+					showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
+					showTransactionSuccessNotice={showTransactionSuccessNotice}
+					showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
+					transactionState={transactionState.value}
+					wrongNetworkMessage={wrongNetworkMessage}
+					zoltarUniverse={zoltarUniverse}
+				/>
+				<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onRefresh={refreshSimulationView} />
 
-			<fieldset className='route-shell' disabled={isRouteContentDisabled}>
-				<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} route={route} securityPools={securityPoolsRouteContentProps} wrongNetworkMessage={wrongNetworkMessage} />
-			</fieldset>
-		</main>
+				<fieldset className='route-shell' disabled={isRouteContentDisabled}>
+					<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} route={route} securityPools={securityPoolsRouteContentProps} wrongNetworkMessage={wrongNetworkMessage} />
+				</fieldset>
+			</main>
+		</ChainTimestampContext.Provider>
 	)
 }

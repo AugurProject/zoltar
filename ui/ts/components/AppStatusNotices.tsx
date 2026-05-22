@@ -2,24 +2,22 @@ import { NoticeStack } from './NoticeStack.js'
 import { TimestampValue } from './TimestampValue.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { formatUniverseLabel } from '../lib/universe.js'
-import type { UserMessagePresentation } from '../lib/userCopy.js'
 import type { TransactionState } from '../lib/transactionState.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
 import type { NoticeItem } from '../types/components.js'
 
 type AppStatusNoticesProps = {
 	errorMessage: string | undefined
-	hasInjectedWallet: boolean
+	wrongNetworkMessage: string | undefined
 	simulationBootstrapError: string | undefined
 	showAugurPlaceHolderDeploymentWarning: boolean
 	showTransactionSuccessNotice: boolean
 	showZoltarUniverseForkedWarning: boolean
 	transactionState: TransactionState
-	walletPresentation: UserMessagePresentation | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
-export function AppStatusNotices({ errorMessage, hasInjectedWallet, showTransactionSuccessNotice, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, transactionState, walletPresentation, zoltarUniverse }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, wrongNetworkMessage, showTransactionSuccessNotice, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning, showZoltarUniverseForkedWarning, transactionState, zoltarUniverse }: AppStatusNoticesProps) {
 	const items: NoticeItem[] = []
 	if (simulationBootstrapError !== undefined) {
 		items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: 'Simulation bootstrap failed' })
@@ -39,8 +37,13 @@ export function AppStatusNotices({ errorMessage, hasInjectedWallet, showTransact
 	if (showAugurPlaceHolderDeploymentWarning) {
 		items.push({ detail: 'Finish setup in Deploy before using the app.', id: 'setup-incomplete', tone: 'blocking', title: 'Setup incomplete' })
 	}
-	if (walletPresentation !== undefined && !hasInjectedWallet) {
-		items.push({ detail: walletPresentation.detail, id: 'wallet-guidance', tone: 'warning', title: 'Wallet guidance' })
+	if (wrongNetworkMessage !== undefined) {
+		items.push({
+			detail: `This interface only enables contract interactions on Ethereum mainnet. ${wrongNetworkMessage === 'Switch to Ethereum mainnet.' ? 'Switch the connected wallet network to Ethereum mainnet to continue.' : wrongNetworkMessage}`,
+			id: 'wrong-network',
+			tone: 'blocking',
+			title: 'Wrong network',
+		})
 	}
 	if (errorMessage !== undefined) {
 		items.push({ detail: errorMessage, id: 'app-error', tone: 'blocking', title: 'Error' })

@@ -58,8 +58,21 @@ function createReportingDetails(): ReportingDetails {
 			{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 		],
 		startBond: 1n,
+		status: 'active',
 		startingTime: 120n,
 		totalCost: 0n,
+		universeId: 1n,
+	}
+}
+
+function createNotStartedReportingDetails(): ReportingDetails {
+	return {
+		completeSetCollateralAmount: 1n,
+		currentTime: 150n,
+		marketDetails: createMarketDetails(),
+		resolution: 'none',
+		securityPoolAddress: zeroAddress,
+		status: 'not-started',
 		universeId: 1n,
 	}
 }
@@ -126,6 +139,23 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Selected side has')).toBe(false)
 	})
 
+	test('renders the pre-reporting stage inside the shared warning surface', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 50n,
+					reportingDetails: undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Pre-Reporting' })).not.toBeNull()
+		expect(document.body.querySelector('.warning-surface.lifecycle-stage-banner')).not.toBeNull()
+	})
+
 	test('disables reporting buttons when deterministic prerequisites are missing', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -164,6 +194,28 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
 		expectTransactionButtonEnabled(document.body, 'Withdraw Escalation Deposits')
+	})
+
+	test('shows first-report guidance before the escalation game starts', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createNotStartedReportingDetails(),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Loaded Escalation Game')).toBeNull()
+		expect(documentQueries.queryByText('Escalation Metrics')).toBeNull()
+		expect(documentQueries.queryByText('Outcome Sides')).toBeNull()
+		expect(document.body.textContent?.includes('Reporting is open, but the escalation game has not started yet.')).toBe(true)
+		expect(document.body.textContent?.includes('The first report or contribution will deploy and initialize the escalation game for this pool.')).toBe(true)
+
+		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
+		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
 	})
 
 	test('accepts decimal report amounts for profit preview', async () => {

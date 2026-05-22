@@ -1,5 +1,6 @@
 import type { Address } from 'viem'
 import type { OracleManagerDetails } from '../types/contracts.js'
+import type { SecurityVaultDetails } from '../types/contracts.js'
 import { sameAddress } from './address.js'
 
 export const MIN_SECURITY_VAULT_REP_DEPOSIT = 10n * 10n ** 18n
@@ -17,6 +18,13 @@ export function isSelectedVaultOwnedByAccount(selectedVaultAddress: string | und
 	const trimmedSelectedVaultAddress = selectedVaultAddress?.trim() ?? ''
 	if (trimmedSelectedVaultAddress === '' || accountAddress === undefined) return false
 	return sameAddress(trimmedSelectedVaultAddress, accountAddress)
+}
+
+export function doesLoadedSecurityVaultMatchSelection({ accountAddress, securityPoolAddress, securityVaultDetails, selectedVaultAddress }: { accountAddress: Address | undefined; securityPoolAddress: string | undefined; securityVaultDetails: SecurityVaultDetails | undefined; selectedVaultAddress: string | undefined }) {
+	if (securityVaultDetails === undefined) return false
+	const effectiveSelectedVaultAddress = getSelectedVaultAddress(selectedVaultAddress, accountAddress)
+	if (effectiveSelectedVaultAddress === undefined) return false
+	return sameAddress(securityVaultDetails.securityPoolAddress, securityPoolAddress) && sameAddress(securityVaultDetails.vaultAddress, effectiveSelectedVaultAddress)
 }
 
 export function isSecurityVaultDepositBelowMinimum(currentRepDeposit: bigint | undefined, depositAmount: bigint | undefined) {

@@ -13,6 +13,7 @@ type RouteEffectsProps = Parameters<typeof useAppRouteEffects>[0]
 
 function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEffectsProps {
 	return {
+		accountAddress: undefined,
 		augurPlaceHolderDeploymentMissing: false,
 		environmentReady: true,
 		loadOracleReport: async () => undefined,
@@ -27,6 +28,7 @@ function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEf
 		setForkAuctionFormSecurityPoolAddress: () => undefined,
 		setOpenOracleReport: () => undefined,
 		setReportingFormSecurityPoolAddress: () => undefined,
+		setSecurityVaultFormSelectedVaultAddress: () => undefined,
 		setSecurityVaultFormSecurityPoolAddress: () => undefined,
 		setTradingFormSecurityPoolAddress: () => undefined,
 		tradingResultHash: undefined,
@@ -212,6 +214,7 @@ describe('app route effects integration', () => {
 	test('clears route-backed pool forms when the selected pool address is cleared', async () => {
 		const dom = installDomEnvironment('http://localhost/#/security-pools')
 		const securityVaultUpdates: string[] = []
+		const selectedVaultUpdates: string[] = []
 		const tradingUpdates: string[] = []
 		const forkUpdates: string[] = []
 		const reportingUpdates: string[] = []
@@ -227,6 +230,9 @@ describe('app route effects integration', () => {
 					setReportingFormSecurityPoolAddress: value => {
 						reportingUpdates.push(value)
 					},
+					setSecurityVaultFormSelectedVaultAddress: value => {
+						selectedVaultUpdates.push(value)
+					},
 					setSecurityVaultFormSecurityPoolAddress: value => {
 						securityVaultUpdates.push(value)
 					},
@@ -238,9 +244,44 @@ describe('app route effects integration', () => {
 		)
 
 		expect(securityVaultUpdates).toEqual([''])
+		expect(selectedVaultUpdates).toEqual([''])
 		expect(tradingUpdates).toEqual([''])
 		expect(forkUpdates).toEqual([''])
 		expect(reportingUpdates).toEqual([''])
+
+		await cleanup()
+		dom.cleanup()
+	})
+
+	test('resets the selected vault when the selected pool changes, but not on same-pool rerenders', async () => {
+		const dom = installDomEnvironment('http://localhost/#/security-pools')
+		const selectedVaultUpdates: string[] = []
+		const initialProps = createDefaultProps({
+			accountAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
+			route: 'security-pools',
+			securityPoolAddress: '0x1111111111111111111111111111111111111111',
+			setSecurityVaultFormSelectedVaultAddress: value => {
+				selectedVaultUpdates.push(value)
+			},
+		})
+
+		const { cleanup, container } = await renderIntoDocument(<RouteEffectsHarness {...initialProps} />)
+		expect(selectedVaultUpdates).toEqual(['0x84834d4Dccea071b363e53952BD300F7bf56a009'])
+
+		await act(() => {
+			render(<RouteEffectsHarness {...initialProps} />, container)
+		})
+		expect(selectedVaultUpdates).toEqual(['0x84834d4Dccea071b363e53952BD300F7bf56a009'])
+
+		await act(() => {
+			render(<RouteEffectsHarness {...initialProps} securityPoolAddress='0x2222222222222222222222222222222222222222' />, container)
+		})
+		expect(selectedVaultUpdates).toEqual(['0x84834d4Dccea071b363e53952BD300F7bf56a009', '0x84834d4Dccea071b363e53952BD300F7bf56a009'])
+
+		await act(() => {
+			render(<RouteEffectsHarness {...initialProps} securityPoolAddress='' />, container)
+		})
+		expect(selectedVaultUpdates).toEqual(['0x84834d4Dccea071b363e53952BD300F7bf56a009', '0x84834d4Dccea071b363e53952BD300F7bf56a009', ''])
 
 		await cleanup()
 		dom.cleanup()

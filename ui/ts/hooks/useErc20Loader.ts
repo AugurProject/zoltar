@@ -9,6 +9,9 @@ import type { ReadClient } from '../types/contracts.js'
 function useErc20Loader<TArgs extends unknown[]>(loadFn: (client: ReadClient, ...args: TArgs) => Promise<bigint>) {
 	const signal = useSignal<bigint | undefined>(undefined)
 	const nextLoad = useRequestGuard()
+	const invalidate = () => {
+		void nextLoad()
+	}
 	const reload = async (...args: TArgs) => {
 		const isCurrent = nextLoad()
 		try {
@@ -20,7 +23,7 @@ function useErc20Loader<TArgs extends unknown[]>(loadFn: (client: ReadClient, ..
 			signal.value = undefined
 		}
 	}
-	return { signal, reload }
+	return { invalidate, signal, reload }
 }
 
 export function useErc20BalanceLoader() {
@@ -34,6 +37,9 @@ export function useErc20AllowanceLoader() {
 		value: undefined,
 	})
 	const nextLoad = useRequestGuard()
+	const invalidate = () => {
+		void nextLoad()
+	}
 	const reload = async (...args: Parameters<typeof loadErc20Allowance> extends [ReadClient, ...infer TArgs] ? TArgs : never) => {
 		const isCurrent = nextLoad()
 		signal.value = {
@@ -59,5 +65,5 @@ export function useErc20AllowanceLoader() {
 		}
 	}
 
-	return { signal, reload }
+	return { invalidate, signal, reload }
 }

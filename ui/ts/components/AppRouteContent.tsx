@@ -1,6 +1,5 @@
 import type { ComponentProps } from 'preact'
 import { DeploymentRouteContent } from './DeploymentRouteContent.js'
-import { MainnetGateSection } from './MainnetGateSection.js'
 import { MarketSection } from './MarketSection.js'
 import { NotFoundSection } from './NotFoundSection.js'
 import { OpenOracleSection } from './OpenOracleSection.js'
@@ -19,7 +18,7 @@ type Props = {
 
 export function AppRouteContent({ deploy, market, openOracle, route, securityPools, wrongNetworkMessage }: Props) {
 	if (wrongNetworkMessage !== undefined) {
-		return <MainnetGateSection message={wrongNetworkMessage} />
+		return null
 	}
 
 	switch (route) {

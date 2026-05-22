@@ -66,14 +66,15 @@ function extractParams(args: SimulateArgs): CapturedCall {
 }
 
 function createStubReadClient(): ReadClient {
-	return {
+	const client: Pick<ReadClient, 'readContract' | 'simulateContract'> = {
 		readContract: async () => {
 			throw new Error('readContract should not be used in this test')
 		},
 		simulateContract: async () => {
 			throw new Error('simulateContract must be overridden in this test')
 		},
-	} as unknown as ReadClient
+	}
+	return client as ReadClient
 }
 
 function createCapturingClient(amountOut: bigint): { client: ReadClient; captured: CapturedCall } {

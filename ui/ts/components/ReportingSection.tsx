@@ -38,7 +38,7 @@ function getReportingStagePresentation({ effectiveCurrentTimestamp, marketDetail
 		}
 	}
 
-	const phase = reportingDetails === undefined ? 'Reporting Open' : getEscalationPhase(reportingDetails)
+	const phase = reportingDetails === undefined || reportingDetails.status === 'not-started' ? 'Reporting Open' : getEscalationPhase(reportingDetails)
 	return {
 		availableActions: ['Report / Contribute', 'Withdraw escalation deposits'],
 		blockedActions: [],
@@ -78,15 +78,17 @@ export function ReportingSection({
 	mode = 'full-reporting',
 }: ReportingSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
+	const activeReportingDetails = reportingDetails?.status === 'active' ? reportingDetails : undefined
+	const reportingStatus = reportingDetails === undefined ? 'missing' : reportingDetails.status
 	const marketDetails = reportingDetails?.marketDetails ?? previewMarketDetails
 	const effectiveCurrentTimestamp = reportingDetails?.currentTime ?? currentTimestamp
 	const reportingLocked = lockedReason !== undefined
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const showFullReporting = mode === 'full-reporting'
 	const showWithdrawOnly = mode === 'withdraw-only'
-	const totalBalance = reportingDetails === undefined ? 0n : reportingDetails.sides.reduce((sum, side) => sum + side.balance, 0n)
-	const leadingOutcome = reportingDetails === undefined ? undefined : getLeadingEscalationOutcome(reportingDetails.sides)
-	const selectedSide = reportingDetails?.sides.find(side => side.key === reportingForm.selectedOutcome)
+	const totalBalance = activeReportingDetails === undefined ? 0n : activeReportingDetails.sides.reduce((sum, side) => sum + side.balance, 0n)
+	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
+	const selectedSide = activeReportingDetails?.sides.find(side => side.key === reportingForm.selectedOutcome)
 	const selectedEstimate = selectedSide === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(selectedSide.balance, totalBalance, selectedAmount)
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 	const reportGuardMessage = getReportingReportGuardMessage({
@@ -94,7 +96,7 @@ export function ReportingSection({
 		isMainnet,
 		lockedReason,
 		reportAmount: reportingForm.reportAmount,
-		reportingDetailsLoaded: reportingDetails !== undefined,
+		reportingStatus,
 		selectedAmount,
 	})
 	const withdrawGuardMessage = getReportingWithdrawGuardMessage({
@@ -102,7 +104,7 @@ export function ReportingSection({
 		hasUserDepositsOnSelectedSide: (selectedSide?.userDeposits.length ?? 0) > 0,
 		isMainnet,
 		lockedReason,
-		reportingDetailsLoaded: reportingDetails !== undefined,
+		reportingStatus,
 	})
 	const latestReportingAction =
 		reportingResult === undefined ? undefined : (
@@ -127,7 +129,7 @@ export function ReportingSection({
 			<ResultBanner outcome={reportingOutcome} />
 			{showFullReporting && reportingStage !== undefined ? <LifecycleStageBanner stage={reportingStage} /> : undefined}
 			{showFullReporting ? (
-				<EntityCard title='Reporting Context' variant='record' badge={reportingDetails === undefined ? undefined : <span className='badge ok'>{getEscalationPhase(reportingDetails)}</span>}>
+				<EntityCard title='Reporting Context' variant='record' badge={activeReportingDetails === undefined ? undefined : <span className='badge ok'>{getEscalationPhase(activeReportingDetails)}</span>}>
 					{showSecurityPoolAddressInput ? (
 						<LookupFieldRow
 							label='Security Pool Address'
@@ -160,12 +162,14 @@ export function ReportingSection({
 									<AddressValue address={reportingDetails.securityPoolAddress} />
 								</strong>
 							</li>
-							<li>
-								<span>Escalation Game</span>
-								<strong>
-									<AddressValue address={reportingDetails.escalationGameAddress} />
-								</strong>
-							</li>
+							{activeReportingDetails === undefined ? undefined : (
+								<li>
+									<span>Escalation Game</span>
+									<strong>
+										<AddressValue address={activeReportingDetails.escalationGameAddress} />
+									</strong>
+								</li>
+							)}
 							<li>
 								<span>Universe</span>
 								<strong>
@@ -181,30 +185,37 @@ export function ReportingSection({
 				</EntityCard>
 			) : undefined}
 
-			{showFullReporting && reportingDetails !== undefined ? (
+			{showFullReporting && reportingDetails?.status === 'not-started' ? (
+				<SectionBlock title='Escalation Status'>
+					<p className='detail'>Reporting is open, but the escalation game has not started yet.</p>
+					<p className='detail'>The first report or contribution will deploy and initialize the escalation game for this pool.</p>
+				</SectionBlock>
+			) : undefined}
+
+			{showFullReporting && activeReportingDetails !== undefined ? (
 				<SectionBlock title='Escalation Metrics'>
 					<div className='escalation-metrics'>
 						<MetricField label='Current Bond'>
-							<CurrencyValue value={reportingDetails.currentRequiredBond} suffix='REP' />
+							<CurrencyValue value={activeReportingDetails.currentRequiredBond} suffix='REP' />
 						</MetricField>
 						<MetricField label='Binding Capital'>
-							<CurrencyValue value={reportingDetails.bindingCapital} suffix='REP' />
+							<CurrencyValue value={activeReportingDetails.bindingCapital} suffix='REP' />
 						</MetricField>
 						<MetricField label='Threshold'>
-							<CurrencyValue value={reportingDetails.nonDecisionThreshold} suffix='REP' />
+							<CurrencyValue value={activeReportingDetails.nonDecisionThreshold} suffix='REP' />
 						</MetricField>
-						<MetricField label='Time Left'>{formatDuration(getEscalationTimeRemaining(reportingDetails))}</MetricField>
+						<MetricField label='Time Left'>{formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
 					</div>
 					<p className='detail'>
-						Game starts at <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={reportingDetails.startingTime} /> and currently uses a start bond of <CurrencyValue value={reportingDetails.startBond} suffix='REP' />.
+						Game starts at <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails.startingTime} /> and currently uses a start bond of <CurrencyValue value={activeReportingDetails.startBond} suffix='REP' />.
 					</p>
 				</SectionBlock>
 			) : undefined}
 
-			{showFullReporting && reportingDetails !== undefined ? (
+			{showFullReporting && activeReportingDetails !== undefined ? (
 				<SectionBlock title='Outcome Sides'>
 					<div className='escalation-sides'>
-						{reportingDetails.sides.map(side => {
+						{activeReportingDetails.sides.map(side => {
 							const estimate = selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(side.balance, totalBalance, selectedAmount)
 							const userStake = side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n)
 							return <EscalationSide key={side.key} estimate={estimate} isLeading={leadingOutcome === side.key} isSelected={reportingForm.selectedOutcome === side.key} side={side} userStake={userStake} />

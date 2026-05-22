@@ -4,6 +4,7 @@ const MILLISECONDS_PER_SECOND = 1000
 const SECONDS_PER_MINUTE = 60n
 const SECONDS_PER_HOUR = 60n * SECONDS_PER_MINUTE
 const SECONDS_PER_DAY = 24n * SECONDS_PER_HOUR
+const SI_SUFFIXES = ['k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'] as const
 
 function formatGroupedInteger(value: bigint) {
 	return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
@@ -25,6 +26,41 @@ function assertInteger(value: number, label: string) {
 function assertNonNegativeInteger(value: number, label: string) {
 	assertInteger(value, label)
 	if (value < 0) throw new RangeError(`${label} must be non-negative`)
+}
+
+function formatTrimmedDecimal(integerPart: bigint, fractionalPart: bigint, decimals: number) {
+	if (decimals === 0 || fractionalPart === 0n) return integerPart.toString()
+
+	return `${integerPart}.${fractionalPart.toString().padStart(decimals, '0').replace(/0+$/, '')}`
+}
+
+function formatRoundedScaledValue(value: bigint, divisor: bigint, decimals: number) {
+	const scale = 10n ** BigInt(decimals)
+	const rounded = (value * scale + divisor / 2n) / divisor
+	const integerPart = rounded / scale
+	const fractionalPart = rounded % scale
+
+	return {
+		integerPart,
+		text: formatTrimmedDecimal(integerPart, fractionalPart, decimals),
+	}
+}
+
+function formatScientificCurrencyBalance(value: bigint, units: number, decimals: number) {
+	const isNegative = value < 0n
+	const absoluteValue = isNegative ? -value : value
+	const unitBase = 10n ** BigInt(units)
+	const wholeUnits = absoluteValue / unitBase
+	let exponent = wholeUnits.toString().length - 1
+
+	while (true) {
+		const divisor = 10n ** BigInt(exponent) * unitBase
+		const rounded = formatRoundedScaledValue(absoluteValue, divisor, decimals)
+		if (rounded.integerPart < 10n) {
+			return `${isNegative ? '-' : ''}${rounded.text}E${exponent}`
+		}
+		exponent += 1
+	}
 }
 
 function formatTimestampPart(value: number) {
@@ -74,6 +110,35 @@ export function formatRoundedCurrencyBalance(value: bigint | undefined, units: n
 
 	const fractionalPart = rounded % scale
 	return `${prefix}${formatGroupedInteger(integerPart)}.${fractionalPart.toString().padStart(effectiveDecimals, '0')}`
+}
+
+export function formatCompactCurrencyBalance(value: bigint | undefined, units: number = 18, decimals: number = 1) {
+	if (value === undefined) return '—'
+	assertNonNegativeInteger(units, 'Units')
+	assertInteger(decimals, 'Decimals')
+	if (decimals < 0) return formatCurrencyBalance(value, units)
+
+	const isNegative = value < 0n
+	const absoluteValue = isNegative ? -value : value
+	const unitBase = 10n ** BigInt(units)
+
+	if (absoluteValue < 1000n * unitBase) {
+		return formatRoundedCurrencyBalance(value, units, decimals)
+	}
+
+	const wholeUnits = absoluteValue / unitBase
+	let suffixIndex = Math.floor((wholeUnits.toString().length - 1) / 3) - 1
+
+	while (suffixIndex < SI_SUFFIXES.length) {
+		const divisor = 1000n ** BigInt(suffixIndex + 1) * unitBase
+		const rounded = formatRoundedScaledValue(absoluteValue, divisor, decimals)
+		if (rounded.integerPart < 1000n) {
+			return `${isNegative ? '-' : ''}${rounded.text}${SI_SUFFIXES[suffixIndex]}`
+		}
+		suffixIndex += 1
+	}
+
+	return formatScientificCurrencyBalance(value, units, decimals)
 }
 
 export function formatTimestamp(timestamp: bigint) {

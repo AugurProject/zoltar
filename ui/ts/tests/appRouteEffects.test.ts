@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { shouldLoadOpenOracleReportFromUrl, shouldRefreshSelectedPoolForRoute, shouldSyncSecurityPoolAddressToRouteForms } from '../hooks/useAppRouteEffects.js'
+import { getSelectedVaultAddressForRoutePoolChange, shouldLoadOpenOracleReportFromUrl, shouldRefreshSelectedPoolForRoute, shouldSyncSecurityPoolAddressToRouteForms } from '../hooks/useAppRouteEffects.js'
 
 describe('app route effects', () => {
 	test('loads the open oracle report from the URL only on the open-oracle route', () => {
@@ -85,5 +85,43 @@ describe('app route effects', () => {
 				securityPoolAddress: '',
 			}),
 		).toBe(true)
+	})
+
+	test('resets the selected vault only when the selected pool changes on the security-pools route', () => {
+		expect(
+			getSelectedVaultAddressForRoutePoolChange({
+				accountAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
+				lastSecurityPoolAddress: '0x1111111111111111111111111111111111111111',
+				route: 'security-pools',
+				securityPoolAddress: '0x2222222222222222222222222222222222222222',
+			}),
+		).toBe('0x84834d4Dccea071b363e53952BD300F7bf56a009')
+
+		expect(
+			getSelectedVaultAddressForRoutePoolChange({
+				accountAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
+				lastSecurityPoolAddress: '0x1111111111111111111111111111111111111111',
+				route: 'security-pools',
+				securityPoolAddress: '   ',
+			}),
+		).toBe('')
+
+		expect(
+			getSelectedVaultAddressForRoutePoolChange({
+				accountAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
+				lastSecurityPoolAddress: '0x1111111111111111111111111111111111111111',
+				route: 'security-pools',
+				securityPoolAddress: '0x1111111111111111111111111111111111111111',
+			}),
+		).toBeUndefined()
+
+		expect(
+			getSelectedVaultAddressForRoutePoolChange({
+				accountAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
+				lastSecurityPoolAddress: undefined,
+				route: 'zoltar',
+				securityPoolAddress: '0x2222222222222222222222222222222222222222',
+			}),
+		).toBeUndefined()
 	})
 })
