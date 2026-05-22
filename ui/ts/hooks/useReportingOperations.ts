@@ -83,6 +83,9 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 			'withdrawEscalation',
 			async (walletAddress, securityPoolAddress, currentForm) => {
 				const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
+				if (latestDetails.status !== 'active') {
+					throw new Error('Escalation game has not started yet')
+				}
 				const selectedSide = latestDetails.sides.find(side => side.key === currentForm.selectedOutcome)
 				const depositIndexes = resolveOptionalBigIntListInput(currentForm.withdrawDepositIndexes, selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? [], 'Deposit indexes')
 
