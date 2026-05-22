@@ -1,10 +1,10 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { act } from 'preact/test-utils'
 import { fireEvent, within } from '@testing-library/dom'
 import { h } from 'preact'
 import { useState } from 'preact/hooks'
-import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 import { ReportingSection } from '../components/ReportingSection.js'
 import { formatDuration } from '../lib/formatters.js'
@@ -15,8 +15,10 @@ import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from './testUtils/transactionActionButton.js'
 
+const REP = 10n ** 18n
+
 function rep(value: bigint) {
-	return value * 10n ** 18n
+	return value * REP
 }
 
 function getClosestSection(heading: HTMLElement | null) {
@@ -154,7 +156,7 @@ function createProps(overrides: Partial<ReportingSectionProps> = {}): ReportingS
 }
 
 function ReportingSectionHarness({ initialProps }: { initialProps?: Partial<ReportingSectionProps> }) {
-	const [reportingForm, setReportingForm] = useState<ReportingFormState>(createReportingForm())
+	const [reportingForm, setReportingForm] = useState<ReportingFormState>(createReportingForm(initialProps?.reportingForm))
 
 	return (
 		<ReportingSection
@@ -168,6 +170,12 @@ function ReportingSectionHarness({ initialProps }: { initialProps?: Partial<Repo
 			}}
 		/>
 	)
+}
+
+function findProfitPreview() {
+	return Array.from(document.body.querySelectorAll('p.detail'))
+		.map(element => element.textContent ?? '')
+		.find(text => text.includes('projects roughly'))
 }
 
 describe('ReportingSection', () => {
@@ -427,18 +435,14 @@ describe('ReportingSection', () => {
 		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const previewBefore = Array.from(document.body.querySelectorAll('p.detail'))
-			.map(element => element.textContent ?? '')
-			.find(text => text.includes('If Yes wins'))
+		const previewBefore = findProfitPreview()
 
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Max profit' }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount' })
-		const previewAfter = Array.from(document.body.querySelectorAll('p.detail'))
-			.map(element => element.textContent ?? '')
-			.find(text => text.includes('If Yes wins'))
+		const previewAfter = findProfitPreview()
 		expect((amountInput as HTMLInputElement).value).toBe('7')
 		expect(previewBefore).not.toBe(previewAfter)
 	})
@@ -459,18 +463,23 @@ describe('ReportingSection', () => {
 				ReportingSection,
 				createProps({
 					reportingDetails: createReportingDetails({
+						nonDecisionThreshold: rep(20n),
 						sides: [
-							{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-							{ balance: rep(20n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(20n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: rep(19n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
+						startBond: rep(1n),
+					}),
+					reportingForm: createReportingForm({
+						selectedOutcome: 'no',
 					}),
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Min preset unavailable because another side is already over the current bond.')).toBe(true)
+		expect(document.body.textContent?.includes('Min preset unavailable because the selected side cannot take the lead within the remaining bond capacity.')).toBe(true)
 	})
 
 	test('renders the shared outcome chart with per-side projections and deposit details', async () => {
@@ -478,10 +487,9 @@ describe('ReportingSection', () => {
 			h(
 				ReportingSection,
 				createProps({
-					reportingForm: {
-						...createReportingForm(),
+					reportingForm: createReportingForm({
 						selectedOutcome: 'no',
-					},
+					}),
 				}),
 			),
 		)
@@ -580,5 +588,108 @@ describe('ReportingSection', () => {
 		fireEvent.click(depositCheckbox)
 
 		expect(onReportingFormChangeCalls).toEqual([{ selectedWithdrawDepositIndexes: [1n] }, { selectedWithdrawDepositIndexes: [] }])
+	})
+
+	test('autofills the report amount for the minimum outcome change preset with 1001 REP when another side has 1000 REP', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(ReportingSectionHarness, {
+				initialProps: {
+					reportingDetails: createReportingDetails({
+						currentRequiredBond: rep(1_000n),
+						nonDecisionThreshold: rep(2_000n),
+						sides: [
+							{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(1_000n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+						startBond: rep(1n),
+					}),
+					reportingForm: createReportingForm({
+						selectedOutcome: 'no',
+					}),
+				},
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Min to change proposed outcome' }))
+		})
+
+		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount' })
+		expect((amountInput as HTMLInputElement).value).toBe('1001')
+	})
+
+	test('autofills the report amount for the max profit preset with 1500 REP when another side has 1000 REP', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(ReportingSectionHarness, {
+				initialProps: {
+					reportingDetails: createReportingDetails({
+						currentRequiredBond: rep(1_000n),
+						nonDecisionThreshold: rep(2_000n),
+						sides: [
+							{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(1_000n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+						startBond: rep(1n),
+					}),
+					reportingForm: createReportingForm({
+						selectedOutcome: 'no',
+					}),
+				},
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Max profit' }))
+		})
+
+		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount' })
+		expect((amountInput as HTMLInputElement).value).toBe('1500')
+		expect(document.body.textContent?.includes('projects roughly')).toBe(true)
+	})
+
+	test('updates the displayed profit preview after clicking max profit in a partial-depth scenario', async () => {
+		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const previewBefore = findProfitPreview()
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Max profit' }))
+		})
+
+		const previewAfter = findProfitPreview()
+		expect(previewBefore).not.toBe(previewAfter)
+	})
+
+	test('deduplicates identical preset unavailability reasons', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createReportingDetails({
+						nonDecisionThreshold: rep(20n),
+						sides: [
+							{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(20n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: rep(19n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+						startBond: rep(1n),
+					}),
+					reportingForm: createReportingForm({
+						selectedOutcome: 'no',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect((documentQueries.getByRole('button', { name: 'Min to change proposed outcome' }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('button', { name: 'Max profit' }) as HTMLButtonElement).disabled).toBe(true)
+		expect(documentQueries.getAllByText('Min preset unavailable because the selected side cannot take the lead within the remaining bond capacity.')).toHaveLength(1)
 	})
 })

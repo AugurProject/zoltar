@@ -5,8 +5,10 @@ import { zeroAddress } from 'viem'
 import { calculateEstimatedEscalationReturn, getMaxProfitContribution, getMinimumOutcomeChangeContribution } from '../lib/reportingDomain.js'
 import type { ActiveReportingDetails, MarketDetails } from '../types/contracts.js'
 
+const REP = 10n ** 18n
+
 function rep(value: bigint) {
-	return value * 10n ** 18n
+	return value * REP
 }
 
 function createMarketDetails(): MarketDetails {
@@ -64,6 +66,40 @@ describe('reportingDomain', () => {
 		})
 	})
 
+	test('getMinimumOutcomeChangeContribution returns 1001 REP for 1000 REP on yes and no selected', () => {
+		const details = createReportingDetails({
+			currentRequiredBond: rep(1_000n),
+			nonDecisionThreshold: rep(2_000n),
+			sides: [
+				{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(1_000n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+			startBond: rep(1n),
+		})
+
+		expect(getMinimumOutcomeChangeContribution(details, 'no')).toEqual({
+			amount: rep(1_001n),
+			reason: undefined,
+		})
+	})
+
+	test('getMinimumOutcomeChangeContribution respects startBond when the lead delta is smaller than the minimum report', () => {
+		const details = createReportingDetails({
+			sides: [
+				{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(5n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+			startBond: rep(3n),
+		})
+
+		expect(getMinimumOutcomeChangeContribution(details, 'no')).toEqual({
+			amount: rep(3n),
+			reason: undefined,
+		})
+	})
+
 	test('getMinimumOutcomeChangeContribution returns zero when the selected side already resolves', () => {
 		const details = createReportingDetails({
 			resolution: 'yes',
@@ -80,18 +116,20 @@ describe('reportingDomain', () => {
 		})
 	})
 
-	test('getMinimumOutcomeChangeContribution is unavailable when an opposing side is already over bond', () => {
+	test('getMinimumOutcomeChangeContribution is unavailable when the selected side cannot lead within remaining room', () => {
 		const details = createReportingDetails({
+			nonDecisionThreshold: rep(20n),
 			sides: [
-				{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-				{ balance: rep(20n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-				{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(20n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(19n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
+			startBond: rep(1n),
 		})
 
-		expect(getMinimumOutcomeChangeContribution(details, 'yes')).toEqual({
+		expect(getMinimumOutcomeChangeContribution(details, 'no')).toEqual({
 			amount: undefined,
-			reason: 'Min preset unavailable because another side is already over the current bond.',
+			reason: 'Min preset unavailable because the selected side cannot take the lead within the remaining bond capacity.',
 		})
 	})
 
@@ -102,10 +140,28 @@ describe('reportingDomain', () => {
 		})
 	})
 
+	test('getMaxProfitContribution returns 1500 REP for 1000 REP on yes and no selected', () => {
+		const details = createReportingDetails({
+			currentRequiredBond: rep(1_000n),
+			nonDecisionThreshold: rep(2_000n),
+			sides: [
+				{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(1_000n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+			startBond: rep(1n),
+		})
+
+		expect(getMaxProfitContribution(details, 'no')).toEqual({
+			amount: rep(1_500n),
+			reason: undefined,
+		})
+	})
+
 	test('getMaxProfitContribution is unavailable when the reward window is already filled', () => {
 		const details = createReportingDetails({
 			sides: [
-				{ balance: rep(13n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(15n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 				{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
 				{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 			],
@@ -119,16 +175,17 @@ describe('reportingDomain', () => {
 
 	test('calculateEstimatedEscalationReturn only rewards the eligible slice when a deposit crosses the cap', () => {
 		const details = createReportingDetails({
+			nonDecisionThreshold: rep(40n),
 			sides: [
-				{ balance: rep(14n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(20n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 				{ balance: rep(20n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
-				{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 			],
 		})
 
 		expect(calculateEstimatedEscalationReturn(details, 'yes', rep(14n))).toEqual({
-			payout: rep(20n),
-			profit: rep(6n),
+			payout: rep(18n),
+			profit: rep(4n),
 		})
 	})
 
