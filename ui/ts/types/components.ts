@@ -448,8 +448,8 @@ export type SecurityVaultRouteContentProps = {
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	compactLayout?: boolean
-	emphasizeReadinessActions?: boolean
 	extraReadinessActions?: ReadinessAction[]
+	launcherWarningStyle?: 'default-card' | 'surface'
 	modalFirst?: boolean
 	onViewStagedOperations?: () => void
 	oracleManagerDetails?: OracleManagerDetails | undefined

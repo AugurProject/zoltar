@@ -522,7 +522,6 @@ export function SecurityPoolWorkflowSection({
 											<SecurityVaultSection
 												{...securityVault}
 												compactLayout
-												emphasizeReadinessActions={false}
 												extraReadinessActions={[
 													{
 														actionLabel: 'Liquidate Vault',
@@ -539,6 +538,7 @@ export function SecurityPoolWorkflowSection({
 													},
 												]}
 												modalFirst
+												launcherWarningStyle='default-card'
 												onViewStagedOperations={() => onSelectedPoolViewChange('staged-operations')}
 												oracleManagerDetails={currentPoolOracleManagerDetails}
 												selectedPoolTotalRepDeposit={selectedPool?.totalRepDeposit}

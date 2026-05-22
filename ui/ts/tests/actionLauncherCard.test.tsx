@@ -38,4 +38,14 @@ describe('ActionLauncherCard', () => {
 		expect((documentQueries.getByRole('heading', { name: 'Blocked Action' }) as HTMLElement).closest('.warning-surface')).toBeNull()
 		expect(document.body.querySelectorAll('.warning-surface.action-launcher-card')).toHaveLength(1)
 	})
+
+	test('can render warning readiness as a default card when a section opts out of warning surfaces', async () => {
+		const renderedComponent = await renderIntoDocument(<ActionLauncherCard action={{ actionLabel: 'Warning Action', description: 'Warning details.', key: 'warning-default', onAction: () => undefined, readiness: 'warning', title: 'Warning Action' }} warningStyle='default-card' />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const warningHeading = documentQueries.getByRole('heading', { name: 'Warning Action' }) as HTMLElement
+		expect(warningHeading.closest('.warning-surface')).toBeNull()
+		expect(warningHeading.closest('.action-launcher-card.default')).not.toBeNull()
+	})
 })

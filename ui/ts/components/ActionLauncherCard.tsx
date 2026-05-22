@@ -6,13 +6,13 @@ import type { ReadinessAction } from '../types/components.js'
 type ActionLauncherCardProps = {
 	action: ReadinessAction
 	children?: ComponentChildren
-	emphasizeReadiness?: boolean
 	pending?: boolean
 	pendingLabel?: string
 	tone?: 'primary' | 'secondary'
+	warningStyle?: 'default-card' | 'surface'
 }
 
-export function ActionLauncherCard({ action, children, emphasizeReadiness = true, pending = false, pendingLabel = 'Opening...', tone = 'secondary' }: ActionLauncherCardProps) {
+export function ActionLauncherCard({ action, children, pending = false, pendingLabel = 'Opening...', tone = 'secondary', warningStyle = 'surface' }: ActionLauncherCardProps) {
 	const content = (
 		<>
 			<div className='action-launcher-card-copy'>
@@ -26,11 +26,11 @@ export function ActionLauncherCard({ action, children, emphasizeReadiness = true
 		</>
 	)
 
-	if (!emphasizeReadiness) {
-		return <section className='action-launcher-card default'>{content}</section>
-	}
-
 	if (action.readiness === 'warning') {
+		if (warningStyle === 'default-card') {
+			return <section className='action-launcher-card default'>{content}</section>
+		}
+
 		return <WarningSurface className='action-launcher-card'>{content}</WarningSurface>
 	}
 
