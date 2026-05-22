@@ -201,12 +201,10 @@ export type OpenOracleReportSummaryPage = {
 }
 
 export type OpenOracleReportDetails = {
-	// Identity
 	reportId: bigint
 	openOracleAddress: Address
 	currentTime: bigint
 	currentBlockNumber: bigint
-	// Meta
 	exactToken1Report: bigint
 	escalationHalt: bigint
 	fee: bigint
@@ -219,7 +217,6 @@ export type OpenOracleReportDetails = {
 	protocolFee: bigint
 	multiplier: bigint
 	disputeDelay: bigint
-	// Status
 	currentAmount1: bigint
 	currentAmount2: bigint
 	price: bigint
@@ -229,7 +226,6 @@ export type OpenOracleReportDetails = {
 	initialReporter: Address
 	disputeOccurred: boolean
 	isDistributed: boolean
-	// Extra
 	stateHash: Hex
 	callbackContract: Address
 	callbackSelector: Hex
@@ -325,9 +321,12 @@ type ReportingDetailsBase = {
 	completeSetCollateralAmount: bigint
 	currentTime: bigint
 	marketDetails: MarketDetails
+	questionOutcome: ReportingOutcomeKey | 'none'
 	resolution: ReportingOutcomeKey | 'none'
 	securityPoolAddress: Address
 	universeId: bigint
+	withdrawalEnabled: boolean
+	withdrawalState: 'not-finalized' | 'resolved' | 'canceled-by-external-fork'
 }
 
 export type ActiveReportingDetails = ReportingDetailsBase & {

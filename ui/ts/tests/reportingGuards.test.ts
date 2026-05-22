@@ -83,6 +83,8 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportingStatus: 'not-started',
+				withdrawalEnabled: false,
+				withdrawalState: 'not-finalized',
 			}),
 		).toBe('Escalation game has not started yet.')
 
@@ -93,6 +95,8 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportingStatus: 'active',
+				withdrawalEnabled: true,
+				withdrawalState: 'resolved',
 			}),
 		).toBe('No deposits are available to withdraw on the selected side.')
 
@@ -103,6 +107,34 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportingStatus: 'active',
+				withdrawalEnabled: true,
+				withdrawalState: 'resolved',
+			}),
+		).toBeUndefined()
+	})
+
+	test('blocks withdraw submission until the contract allows it', () => {
+		expect(
+			getReportingWithdrawGuardMessage({
+				accountAddress: zeroAddress,
+				hasUserDepositsOnSelectedSide: true,
+				isMainnet: true,
+				lockedReason: undefined,
+				reportingStatus: 'active',
+				withdrawalEnabled: false,
+				withdrawalState: 'not-finalized',
+			}),
+		).toBe('Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
+
+		expect(
+			getReportingWithdrawGuardMessage({
+				accountAddress: zeroAddress,
+				hasUserDepositsOnSelectedSide: true,
+				isMainnet: true,
+				lockedReason: undefined,
+				reportingStatus: 'active',
+				withdrawalEnabled: true,
+				withdrawalState: 'canceled-by-external-fork',
 			}),
 		).toBeUndefined()
 	})
