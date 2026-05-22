@@ -228,7 +228,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' })).not.toBeNull()
 	})
 
-	test('shows escalation metrics without the current bond field and keeps start bond copy', async () => {
+	test('shows escalation metrics without the legacy time-left or start-bond copy', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -236,8 +236,9 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByText('Current Bond')).toBeNull()
 		expect(documentQueries.getByText('Binding Capital')).not.toBeNull()
 		expect(documentQueries.getByText('Threshold')).not.toBeNull()
-		expect(documentQueries.getByText('Time Left')).not.toBeNull()
-		expect(document.body.textContent?.includes('currently uses a start bond of')).toBe(true)
+		expect(documentQueries.queryByText('Time Left')).toBeNull()
+		expect(document.body.textContent?.includes('currently uses a start bond of')).toBe(false)
+		expect(document.body.textContent?.includes('The market resolves as No in')).toBe(true)
 	})
 
 	test('shows a warning dialog instead of locked reporting metrics before the market end time', async () => {
@@ -315,11 +316,25 @@ describe('ReportingSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Withdraw Escalation Deposits', 'Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
 	})
 
-	test('renders time left from escalation end time and current chain time', async () => {
-		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ currentTime: 150n, escalationEndTime: 300n }) })))
+	test('shows the projected resolution outcome with remaining time', async () => {
+		const reportingDetails = createReportingDetails()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: {
+						...reportingDetails,
+						currentTime: 150n,
+						escalationEndTime: 300n,
+					},
+				}),
+			),
+		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes(formatDuration(300n - 150n))).toBe(true)
+		expect(document.body.textContent?.includes(`The market resolves as No in ${formatDuration(300n - 150n)} unless disputed.`)).toBe(true)
+		expect(document.body.textContent?.includes('Game starts at')).toBe(false)
+		expect(document.body.textContent?.includes('start bond')).toBe(false)
 	})
 
 	test('shows awaiting resolution with zero time left once the escalation end time has passed', async () => {
