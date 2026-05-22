@@ -322,7 +322,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('tablist', { name: 'Selected pool views' })).not.toBeNull()
 
-		for (const label of ['Vaults', 'Trading', 'Reporting', 'Fork', 'Staged Operations', 'Open Oracle']) {
+		for (const label of ['Vaults', 'Trading', 'Reporting', 'Withdraw Escalation Deposits', 'Fork', 'Staged Operations', 'Open Oracle']) {
 			const button = documentQueries.getByRole('tab', { name: label }) as HTMLButtonElement
 			expect(button.disabled).toBe(true)
 			expect(button.title).toBe('Load a pool to open this workflow.')
@@ -389,6 +389,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Open Oracle' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Pool Summary' })).toBeNull()
 		expect(documentQueries.queryByText('Workflow')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Question' })).not.toBeNull()
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
 		expect(documentQueries.getByText('Total REP Collateral')).not.toBeNull()
 		expect(documentQueries.getByText('Open Oracle Price')).not.toBeNull()
@@ -1142,9 +1143,10 @@ describe('SecurityPoolWorkflowSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		expect(documentQueries.getAllByRole('heading', { name: 'Question' }).length).toBe(1)
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Report Outcome' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Withdraw Escalation Deposits' })).toBeNull()
 		expect(documentQueries.queryByText('Reporting unlocks after the market end timestamp for the selected pool.')).toBeNull()
 		expect(documentQueries.queryByText('Reporting opens after market end.')).toBeNull()
 
@@ -1302,10 +1304,50 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect((documentQueries.getByRole('tab', { name: 'Reporting' }) as HTMLElement).getAttribute('aria-selected')).toBe('true')
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('tab', { name: 'Staged Operations' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Withdraw Escalation Deposits' }))
 		})
 
-		expect(selectedViews).toEqual(['staged-operations'])
+		expect(selectedViews).toEqual(['withdraw-escalation-deposits'])
+	})
+
+	test('shows the shared question card above a withdraw-only reporting tab', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					selectedPoolView: 'withdraw-escalation-deposits',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getAllByRole('heading', { name: 'Question' }).length).toBe(1)
+		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
+	})
+
+	test('shows only the shared question card when the fork tab is active', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					selectedPoolView: 'fork',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getAllByRole('heading', { name: 'Question' }).length).toBe(1)
+		expect(documentQueries.getByRole('heading', { name: 'Lifecycle' })).not.toBeNull()
 	})
 
 	test('retries reporting autoload on rerender until matching details are available', async () => {

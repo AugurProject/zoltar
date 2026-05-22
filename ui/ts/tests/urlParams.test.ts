@@ -6,12 +6,14 @@ import {
 	readOpenOracleViewQueryParam,
 	readSecurityPoolsViewQueryParam,
 	readSecurityPoolQueryParam,
+	readSelectedPoolViewQueryParam,
 	readUniverseQueryParam,
 	readZoltarViewQueryParam,
 	writeOpenOracleReportIdQueryParam,
 	writeOpenOracleViewQueryParam,
 	writeSecurityPoolsViewQueryParam,
 	writeSecurityPoolQueryParam,
+	writeSelectedPoolViewQueryParam,
 	writeUniverseQueryParam,
 	writeZoltarViewQueryParam,
 } from '../lib/urlParams.js'
@@ -62,6 +64,14 @@ void describe('url params', () => {
 		expect(writeSecurityPoolsViewQueryParam('?foo=bar', 'operate')).toBe('?foo=bar&securityPoolsView=operate')
 		expect(writeSecurityPoolsViewQueryParam('?foo=bar&securityPoolsView=operate', undefined)).toBe('?foo=bar')
 		expect(writeSecurityPoolsViewQueryParam('?securityPoolsView=operate&selectedPoolView=staged-operations&securityPool=0x1234', 'create')).toBe('?securityPoolsView=create')
+	})
+
+	void test('reads and writes a selected pool view query param', () => {
+		expect(readSelectedPoolViewQueryParam('?selectedPoolView=withdraw-escalation-deposits')).toBe('withdraw-escalation-deposits')
+		expect(readSelectedPoolViewQueryParam('?selectedPoolView=')).toBe(undefined)
+		expect(writeSelectedPoolViewQueryParam('', 'withdraw-escalation-deposits')).toBe('?selectedPoolView=withdraw-escalation-deposits&securityPoolsView=operate')
+		expect(writeSelectedPoolViewQueryParam('?foo=bar', 'withdraw-escalation-deposits')).toBe('?foo=bar&selectedPoolView=withdraw-escalation-deposits&securityPoolsView=operate')
+		expect(writeSelectedPoolViewQueryParam('?foo=bar&selectedPoolView=withdraw-escalation-deposits', undefined)).toBe('?foo=bar')
 	})
 
 	void test('reads and writes an open oracle view query param', () => {

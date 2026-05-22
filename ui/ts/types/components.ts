@@ -530,6 +530,7 @@ export type ReportingSectionProps = ReportingRouteContentProps & {
 	currentTimestamp?: bigint | undefined
 	embedInCard?: boolean
 	lockedReason?: string | undefined
+	mode?: 'full-reporting' | 'withdraw-only'
 	previewMarketDetails?: MarketDetails | undefined
 	showHeader?: boolean
 	showSecurityPoolAddressInput?: boolean
