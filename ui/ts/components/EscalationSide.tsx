@@ -11,12 +11,6 @@ type EscalationSideDisplay = {
 type EscalationSideProps = {
 	bindingCapital: bigint | undefined
 	chartScaleMax: bigint
-	estimate:
-		| {
-				profit: bigint
-				payout: bigint
-		  }
-		| undefined
 	isLeading: boolean
 	isSelected: boolean
 	side: EscalationSideDisplay
@@ -32,9 +26,7 @@ function getChartRatio(value: bigint | undefined, maxValue: bigint) {
 	return `${wholePercent.toString()}.${fractionalPercent}%`
 }
 
-export function EscalationSide({ bindingCapital, chartScaleMax, estimate, isLeading, isSelected, side }: EscalationSideProps) {
-	const depositIndexes = side.userDeposits === undefined ? '—' : side.userDeposits.map(deposit => deposit.depositIndex.toString()).join(', ') || 'None'
-
+export function EscalationSide({ bindingCapital, chartScaleMax, isLeading, isSelected, side }: EscalationSideProps) {
 	return (
 		<div
 			className={`escalation-side ${isSelected ? 'selected' : ''} ${isLeading ? 'leading' : ''}`}
@@ -72,13 +64,6 @@ export function EscalationSide({ bindingCapital, chartScaleMax, estimate, isLead
 					</div>
 				</div>
 			</div>
-			<p className='detail'>Your deposits: {depositIndexes}</p>
-			<p className='detail'>
-				Projected payout for current amount: <CurrencyValue copyable={false} value={estimate?.payout} suffix='REP' />
-			</p>
-			<p className='detail'>
-				Projected profit if this side wins: <CurrencyValue copyable={false} value={estimate?.profit} suffix='REP' />
-			</p>
 		</div>
 	)
 }

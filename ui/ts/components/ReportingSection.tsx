@@ -1,10 +1,9 @@
-import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
-import { EntityCard } from './EntityCard.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { EscalationSide } from './EscalationSide.js'
+import { LifecycleStageBanner } from './LifecycleStageBanner.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
@@ -12,56 +11,45 @@ import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
-import { WarningSurface } from './WarningSurface.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
+import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, previewReportingContribution } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
-import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getMaxProfitContribution, getMinimumOutcomeChangeContribution, previewReportingContribution } from '../lib/reportingDomain.js'
-import type { ReportingSectionProps } from '../types/components.js'
-import type { ActiveReportingDetails, EscalationDeposit, ReportingOutcomeKey } from '../types/contracts.js'
+import type { LifecycleStagePresentation, ReportingSectionProps } from '../types/components.js'
+import type { ActiveReportingDetails, EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
 type ReportingStatus = 'active' | 'missing' | 'not-started'
 
 type EscalationSideDisplay = {
 	balance: bigint | undefined
-	estimate:
-		| {
-				profit: bigint
-				payout: bigint
-		  }
-		| undefined
 	key: ReportingOutcomeKey
 	label: string
 	userDeposits: EscalationDeposit[] | undefined
 	userStake: bigint | undefined
 }
 
-const ZERO_REP = 0n
+const MAX_PROFIT_NOT_STARTED_REASON = 'Max profit becomes available after the escalation game starts.'
+const LOAD_REPORTING_PRESETS_REASON = 'Load reporting details before using presets.'
 
-function getOutcomeSides({ activeReportingDetails, selectedAmount }: { activeReportingDetails: ActiveReportingDetails | undefined; selectedAmount: bigint | undefined }) {
+function getOutcomeSides(activeReportingDetails: ActiveReportingDetails | undefined) {
 	if (activeReportingDetails !== undefined) {
-		return activeReportingDetails.sides.map<EscalationSideDisplay>(side => {
-			const userStake = side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n)
-			return {
-				balance: side.balance,
-				estimate: selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, side.key, selectedAmount),
-				key: side.key,
-				label: side.label,
-				userDeposits: side.userDeposits,
-				userStake,
-			}
-		})
+		return activeReportingDetails.sides.map<EscalationSideDisplay>(side => ({
+			balance: side.balance,
+			key: side.key,
+			label: side.label,
+			userDeposits: side.userDeposits,
+			userStake: side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n),
+		}))
 	}
 
 	return REPORTING_OUTCOME_DROPDOWN_OPTIONS.map<EscalationSideDisplay>(option => ({
-		balance: ZERO_REP,
-		estimate: undefined,
+		balance: undefined,
 		key: option.value,
 		label: option.label,
-		userDeposits: [],
-		userStake: ZERO_REP,
+		userDeposits: undefined,
+		userStake: undefined,
 	}))
 }
 
@@ -69,27 +57,92 @@ function getDepositEntryCountLabel(count: number) {
 	return count === 1 ? 'entry' : 'entries'
 }
 
-function isPresetLoadReason(reason: string | undefined) {
-	return reason === 'Load reporting details before using presets.'
+function isHiddenPresetReason(reason: string | undefined) {
+	return reason === LOAD_REPORTING_PRESETS_REASON || reason === MAX_PROFIT_NOT_STARTED_REASON
 }
 
-function renderReportingContextStatus(effectiveCurrentTimestamp: bigint | undefined, marketDetails: ReportingSectionProps['previewMarketDetails']) {
+function getReportingStagePresentation({
+	effectiveCurrentTimestamp,
+	marketDetails,
+	reportingDetails,
+}: {
+	effectiveCurrentTimestamp: bigint | undefined
+	marketDetails: ReportingDetails['marketDetails'] | ReportingSectionProps['previewMarketDetails']
+	reportingDetails: ReportingDetails | undefined
+}): LifecycleStagePresentation | undefined {
 	if (effectiveCurrentTimestamp === undefined || marketDetails === undefined) return undefined
+
 	if (marketDetails.endTime > effectiveCurrentTimestamp) {
-		return (
-			<WarningSurface as='div' className='transaction-action-status warning' role='status' variant='compact'>
-				<p className='detail transaction-action-status-detail'>Reporting is not enabled. Opens in {formatDuration(marketDetails.endTime - effectiveCurrentTimestamp)}.</p>
-			</WarningSurface>
-		)
+		return {
+			availableActions: [],
+			blockedActions: ['report'],
+			detail: 'Reporting opens after the market end timestamp for this pool.',
+			key: 'reporting-not-enabled',
+			label: 'Reporting Not Enabled',
+			tone: 'warning',
+		}
 	}
 
-	return (
-		<div className='transaction-action-status success' role='status'>
-			<p className='detail transaction-action-status-detail'>
-				Reporting is open. Market ended at <TimestampValue currentTimestamp={effectiveCurrentTimestamp} timestamp={marketDetails.endTime} /> ({formatDuration(effectiveCurrentTimestamp - marketDetails.endTime)} ago).
-			</p>
-		</div>
-	)
+	if (reportingDetails === undefined) {
+		return {
+			availableActions: [],
+			blockedActions: [],
+			detail: 'Load reporting details to view the escalation state for this pool.',
+			key: 'reporting-open',
+			label: 'Reporting Open',
+			tone: 'default',
+		}
+	}
+
+	if (reportingDetails.status === 'not-started') {
+		return {
+			availableActions: ['first-report'],
+			blockedActions: [],
+			detail: 'This pool does not have an escalation game yet. The first report or contribution will deploy it.',
+			key: 'first-report-starts-escalation',
+			label: 'First Report Starts Escalation',
+			tone: 'default',
+		}
+	}
+
+	switch (getEscalationPhase(reportingDetails)) {
+		case 'Pending Start':
+			return {
+				availableActions: [],
+				blockedActions: [],
+				detail: 'The escalation game has been initialized and will start at the scheduled start time.',
+				key: 'escalation-pending-start',
+				label: 'Pending Start',
+				tone: 'default',
+			}
+		case 'Active':
+			return {
+				availableActions: [],
+				blockedActions: [],
+				detail: 'Escalation is live. Review the bond, side balances, and time remaining before contributing or withdrawing.',
+				key: 'escalation-active',
+				label: 'Active',
+				tone: 'default',
+			}
+		case 'Awaiting Resolution':
+			return {
+				availableActions: [],
+				blockedActions: [],
+				detail: 'Escalation has reached its end time and is waiting for final resolution.',
+				key: 'escalation-awaiting-resolution',
+				label: 'Awaiting Resolution',
+				tone: 'default',
+			}
+		case 'Resolved':
+			return {
+				availableActions: [],
+				blockedActions: [],
+				detail: 'Escalation has resolved. Review the final state and any remaining deposits below.',
+				key: 'escalation-resolved',
+				label: 'Resolved',
+				tone: 'success',
+			}
+	}
 }
 
 export function ReportingSection({
@@ -128,15 +181,10 @@ export function ReportingSection({
 	const reportContributionPreview = reportingDetails === undefined || selectedAmount === undefined ? undefined : previewReportingContribution(reportingDetails, reportingForm.selectedOutcome, selectedAmount)
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
-	const outcomeSides = getOutcomeSides({
-		activeReportingDetails,
-		selectedAmount,
-	})
-	const presetFallbackReason = reportingStatus === 'not-started' ? 'Escalation game has not started yet.' : 'Load reporting details before using presets.'
-	const minimumOutcomeChangeContribution = activeReportingDetails === undefined ? { amount: undefined, reason: presetFallbackReason } : getMinimumOutcomeChangeContribution(activeReportingDetails, reportingForm.selectedOutcome)
-	const maxProfitContribution = activeReportingDetails === undefined ? { amount: undefined, reason: presetFallbackReason } : getMaxProfitContribution(activeReportingDetails, reportingForm.selectedOutcome)
-	const presetReasons = reportingLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && reasons.indexOf(reason) === index)
-	const escalationTimeRemaining = activeReportingDetails === undefined ? formatDuration(ZERO_REP) : formatDuration(getEscalationTimeRemaining(activeReportingDetails))
+	const outcomeSides = getOutcomeSides(activeReportingDetails)
+	const minimumOutcomeChangeContribution = getReportingMinimumOutcomeChangeContribution(reportingDetails, reportingForm.selectedOutcome)
+	const maxProfitContribution = getReportingMaxProfitContribution(reportingDetails, reportingForm.selectedOutcome)
+	const presetReasons = reportingLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && !isHiddenPresetReason(reason) && reasons.indexOf(reason) === index)
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 	const reportGuardMessage = getReportingReportGuardMessage({
 		actualDepositAmount: actualReportDepositAmount,
@@ -159,12 +207,19 @@ export function ReportingSection({
 		withdrawalEnabled: activeReportingDetails?.withdrawalEnabled ?? false,
 		withdrawalState: reportingDetails?.withdrawalState,
 	})
-	const reportingContextStatus = renderReportingContextStatus(effectiveCurrentTimestamp, marketDetails)
+	const reportingStage = showFullReporting
+		? getReportingStagePresentation({
+				effectiveCurrentTimestamp,
+				marketDetails,
+				reportingDetails,
+			})
+		: undefined
+	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStage !== undefined)
 
 	const sections = (
 		<>
-			{showFullReporting ? (
-				<EntityCard title='Reporting Context' variant='record' badge={activeReportingDetails === undefined ? undefined : <span className='badge ok'>{getEscalationPhase(activeReportingDetails)}</span>}>
+			{showReportingHeaderStack ? (
+				<div className='reporting-header-stack'>
 					{showSecurityPoolAddressInput ? (
 						<LookupFieldRow
 							label='Security Pool Address'
@@ -178,39 +233,28 @@ export function ReportingSection({
 							}
 						/>
 					) : undefined}
-					{reportingContextStatus}
-
-					{activeReportingDetails === undefined ? undefined : (
-						<ul className='status-list hashes'>
-							<li>
-								<span>Escalation Game</span>
-								<strong>
-									<AddressValue address={activeReportingDetails.escalationGameAddress} />
-								</strong>
-							</li>
-						</ul>
-					)}
-				</EntityCard>
+					<LifecycleStageBanner stage={reportingStage} />
+				</div>
 			) : undefined}
 
 			{showFullReporting ? (
 				<SectionBlock title='Outcome Sides' {...(activeReportingDetails === undefined ? {} : { description: 'Bars show total REP on each outcome. The marker shows current binding capital, and the thin inset shows your wallet stake.' })}>
 					<div className='escalation-metrics'>
 						<MetricField label='Current Bond'>
-							<CurrencyValue value={activeReportingDetails?.currentRequiredBond ?? ZERO_REP} suffix='REP' />
+							<CurrencyValue value={activeReportingDetails?.currentRequiredBond} suffix='REP' />
 						</MetricField>
 						<MetricField label='Binding Capital'>
-							<CurrencyValue value={activeReportingDetails?.bindingCapital ?? ZERO_REP} suffix='REP' />
+							<CurrencyValue value={activeReportingDetails?.bindingCapital} suffix='REP' />
 						</MetricField>
 						<MetricField label='Threshold'>
-							<CurrencyValue value={activeReportingDetails?.nonDecisionThreshold ?? ZERO_REP} suffix='REP' />
+							<CurrencyValue value={reportingDetails?.nonDecisionThreshold} suffix='REP' />
 						</MetricField>
-						<MetricField label='Time Left'>{escalationTimeRemaining}</MetricField>
+						<MetricField label='Time Left'>{activeReportingDetails === undefined ? '—' : formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
 						<MetricField label='Game Start'>
 							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails?.startingTime} />
 						</MetricField>
 						<MetricField label='Start Bond'>
-							<CurrencyValue value={activeReportingDetails?.startBond ?? ZERO_REP} suffix='REP' />
+							<CurrencyValue value={reportingDetails?.startBond} suffix='REP' />
 						</MetricField>
 					</div>
 					<div className='escalation-sides-shell'>
@@ -234,7 +278,7 @@ export function ReportingSection({
 					</div>
 					<div className='escalation-sides'>
 						{outcomeSides.map(side => (
-							<EscalationSide key={side.key} bindingCapital={activeReportingDetails?.bindingCapital} chartScaleMax={chartScaleMax} estimate={side.estimate} isLeading={leadingOutcome === side.key} isSelected={reportingForm.selectedOutcome === side.key} side={side} />
+							<EscalationSide key={side.key} bindingCapital={activeReportingDetails?.bindingCapital} chartScaleMax={chartScaleMax} isLeading={leadingOutcome === side.key} isSelected={reportingForm.selectedOutcome === side.key} side={side} />
 						))}
 					</div>
 				</SectionBlock>
@@ -247,7 +291,6 @@ export function ReportingSection({
 							Selected side currently has <CurrencyValue value={selectedSide.balance} suffix='REP' /> deposited.
 						</p>
 					)}
-					<p className='detail'>Reporting locks REP already deposited in your security vault. It does not spend wallet REP directly or require a wallet approval.</p>
 					{reportingDetails?.viewerVaultAvailableEscalationRep === undefined ? undefined : (
 						<p className='detail'>
 							Available unlocked vault REP for reporting: <CurrencyValue value={reportingDetails.viewerVaultAvailableEscalationRep} suffix='REP' />.
@@ -290,13 +333,11 @@ export function ReportingSection({
 						</button>
 					</div>
 
-					{presetReasons
-						.filter(reason => !isPresetLoadReason(reason))
-						.map(reason => (
-							<p key={reason} className='detail'>
-								{reason}
-							</p>
-						))}
+					{presetReasons.map(reason => (
+						<p key={reason} className='detail'>
+							{reason}
+						</p>
+					))}
 					{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
 
 					{selectedEstimate === undefined ? undefined : (

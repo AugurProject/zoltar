@@ -321,9 +321,11 @@ type ReportingDetailsBase = {
 	completeSetCollateralAmount: bigint
 	currentTime: bigint
 	marketDetails: MarketDetails
+	nonDecisionThreshold: bigint
 	questionOutcome: ReportingOutcomeKey | 'none'
 	resolution: ReportingOutcomeKey | 'none'
 	securityPoolAddress: Address
+	startBond: bigint
 	universeId: bigint
 	withdrawalEnabled: boolean
 	withdrawalState: 'not-finalized' | 'resolved' | 'canceled-by-external-fork'
@@ -339,9 +341,7 @@ export type ActiveReportingDetails = ReportingDetailsBase & {
 	currentRequiredBond: bigint
 	escalationEndTime: bigint
 	escalationGameAddress: Address
-	nonDecisionThreshold: bigint
 	sides: EscalationSide[]
-	startBond: bigint
 	startingTime: bigint
 	totalCost: bigint
 }

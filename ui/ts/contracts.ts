@@ -222,7 +222,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 }
 
 export async function loadReportingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
-	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId] = await readRequiredMulticall(client, [
+	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'questionId',
@@ -247,12 +247,30 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			address: securityPoolAddress,
 			args: [],
 		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'zoltar',
+			address: securityPoolAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'initialEscalationGameDeposit',
+			address: securityPoolAddress,
+			args: [],
+		},
 	])
-	const [marketDetails, block, escalationGameCode, viewerVaultState] = await Promise.all([
+	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThreshold] = await Promise.all([
 		loadMarketDetails(client, questionId),
 		client.getBlock(),
 		escalationGameAddress === zeroAddress ? Promise.resolve('0x' as const) : client.getCode({ address: escalationGameAddress }),
 		loadViewerReportingVaultState(client, securityPoolAddress, accountAddress),
+		client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			address: zoltarAddress,
+			functionName: 'getForkThreshold',
+			args: [universeId],
+		}),
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x') {
@@ -260,9 +278,11 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			completeSetCollateralAmount,
 			currentTime: block.timestamp,
 			marketDetails,
+			nonDecisionThreshold: forkThreshold / 2n,
 			questionOutcome: 'none',
 			resolution: 'none',
 			securityPoolAddress,
+			startBond: initialEscalationGameDeposit,
 			status: 'not-started',
 			universeId,
 			withdrawalEnabled: false,

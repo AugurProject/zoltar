@@ -118,9 +118,11 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 		completeSetCollateralAmount: 1n * REP,
 		currentTime: 150n,
 		marketDetails: createMarketDetails(),
+		nonDecisionThreshold: rep(50n),
 		questionOutcome: 'none',
 		resolution: 'none',
 		securityPoolAddress: zeroAddress,
+		startBond: rep(3n),
 		status: 'not-started',
 		universeId: 1n,
 		withdrawalEnabled: false,
@@ -205,22 +207,20 @@ describe('ReportingSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('renders the reporting workflow without banners or duplicate loaded-market metadata', async () => {
+	test('renders active reporting with a lifecycle banner and no reporting context card', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Pending Start' })).toBeNull()
-		expect(documentQueries.queryByText('The current escalation lifecycle phase is')).toBeNull()
-		expect(documentQueries.queryByText('Reporting contribution submitted')).toBeNull()
-		expect(document.body.textContent?.includes('Selected side currently has')).toBe(true)
-		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Active' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Min to change proposed outcome' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Max profit' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Selected side currently has')).toBe(true)
+		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
 	})
 
-	test('does not render the pre-reporting warning banner before market end', async () => {
+	test('renders Reporting Not Enabled before market end', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -233,11 +233,30 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('heading', { name: 'Pre-Reporting' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
+		expect(documentQueries.queryByText('Opens In')).toBeNull()
+		expect(document.body.textContent?.includes('Reporting opens after the market end timestamp for this pool.')).toBe(true)
 	})
 
-	test('renders button-local reporting feedback instead of the latest action card', async () => {
+	test('renders Reporting Open when the market has ended but details are not loaded', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 150n,
+					reportingDetails: undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Reporting Open' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Load reporting details to view the escalation state for this pool.')).toBe(true)
+	})
+
+	test('renders button-local reporting feedback instead of a latest action card', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -253,13 +272,11 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Latest Reporting Action' })).toBeNull()
 	})
 
-	test('renders escalation metrics inside outcome sides instead of a standalone card', async () => {
+	test('keeps escalation metrics inside Outcome Sides', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('heading', { name: 'Escalation Metrics' })).toBeNull()
-		const outcomeSidesSection = getClosestSection(documentQueries.getByRole('heading', { name: 'Outcome Sides' }))
+		const outcomeSidesSection = getClosestSection(within(document.body).getByRole('heading', { name: 'Outcome Sides' }))
 		const outcomeSidesQueries = within(outcomeSidesSection)
 		expect(outcomeSidesQueries.getByText('Current Bond')).not.toBeNull()
 		expect(outcomeSidesQueries.getByText('Binding Capital')).not.toBeNull()
@@ -269,69 +286,20 @@ describe('ReportingSection', () => {
 		expect(outcomeSidesQueries.getByText('Start Bond')).not.toBeNull()
 	})
 
-	test('shows a warning dialog instead of locked reporting metrics before the market end time', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ReportingSection,
-				createProps({
-					currentTimestamp: 50n,
-					reportingDetails: undefined,
-				}),
-			),
-		)
+	test('keeps placeholder outcome cards visible before reporting details load', async () => {
+		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: undefined })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Reporting is not enabled. Opens in less than a minute.')).not.toBeNull()
-		expect(documentQueries.queryByText('Locked')).toBeNull()
-		expect(documentQueries.queryByText('Opens In')).toBeNull()
+		const outcomeSidesSection = getClosestSection(within(document.body).getByRole('heading', { name: 'Outcome Sides' }))
+		expect(outcomeSidesSection.querySelectorAll('.escalation-side')).toHaveLength(3)
+		expect(outcomeSidesSection.textContent?.includes('Your deposits:')).toBe(false)
+		expect(outcomeSidesSection.textContent?.includes('Projected payout for current amount')).toBe(false)
+		expect(outcomeSidesSection.textContent?.includes('Projected profit if this side wins')).toBe(false)
+		expect(outcomeSidesSection.textContent?.includes('Total stake')).toBe(true)
+		expect(outcomeSidesSection.textContent?.includes('Your stake')).toBe(true)
 	})
 
-	test('shows a single reporting-open status line when escalation details are not loaded yet', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ReportingSection,
-				createProps({
-					currentTimestamp: 150n,
-					reportingDetails: undefined,
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(document.body.textContent?.includes('Reporting is open. Market ended at')).toBe(true)
-		expect(documentQueries.queryByText(/current escalation lifecycle phase/i)).toBeNull()
-	})
-
-	test('keeps outcome sides visible with zeroed cards before reporting details load', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ReportingSection,
-				createProps({
-					reportingDetails: undefined,
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		const outcomeSidesSection = getClosestSection(documentQueries.getByRole('heading', { name: 'Outcome Sides' }))
-		expect(within(outcomeSidesSection).queryByText('Load reporting details to populate live stakes, bond progression, and deposit indexes.')).toBeNull()
-
-		const sideCards = Array.from(outcomeSidesSection.querySelectorAll('.escalation-side'))
-		expect(sideCards).toHaveLength(3)
-		const sideLabels = sideCards.map(card => {
-			const label = card.querySelector('.panel-label')?.textContent
-			if (label === undefined) throw new Error('Expected side label')
-			return label
-		})
-		expect(sideLabels).toEqual(['Invalid', 'Yes', 'No'])
-		expect(outcomeSidesSection.textContent?.includes('Your deposits: None')).toBe(true)
-		expect(outcomeSidesSection.querySelector('[title="0 REP"]')).not.toBeNull()
-	})
-
-	test('disables reporting buttons when deterministic prerequisites are missing', async () => {
+	test('disables reporting when deterministic prerequisites are missing', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -348,27 +316,9 @@ describe('ReportingSection', () => {
 
 		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Connect a wallet before reporting on a market.')
 		expect(document.body.querySelector('button[title="Connect a wallet before withdrawing escalation deposits."]')).toBeNull()
-		expect(document.body.querySelector('.disabled-reason')).toBeNull()
 	})
 
-	test('enables reporting action when the selected side can accept reports', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ReportingSection,
-				createProps({
-					reportingForm: createReportingForm({
-						reportAmount: '4',
-					}),
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
-		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
-	})
-
-	test('shows vault-collateral copy and blocks reporting when unlocked vault REP is insufficient', async () => {
+	test('removes the approval explainer copy and still blocks when unlocked vault REP is insufficient', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -376,85 +326,94 @@ describe('ReportingSection', () => {
 					reportingDetails: createReportingDetails({
 						viewerVaultAvailableEscalationRep: 2n * REP,
 					}),
-					reportingForm: {
-						...createReportingForm(),
+					reportingForm: createReportingForm({
 						reportAmount: '5',
-					},
+					}),
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('It does not spend wallet REP directly or require a wallet approval.')).toBe(true)
+		expect(document.body.textContent?.includes('It does not spend wallet REP directly or require a wallet approval.')).toBe(false)
 		expect(document.body.textContent?.includes('Available unlocked vault REP for reporting:')).toBe(true)
 		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Need 3 more unlocked REP in your vault before reporting.')
 	})
 
-	test('renders a withdraw-only mode without reporting context or report form', async () => {
+	test('renders a compact withdraw-only mode without the reporting banner or report form', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ mode: 'withdraw-only' })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Withdraw Escalation Deposits', 'Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
 	})
 
-	test('shows the moved time and bond metrics inside outcome sides', async () => {
+	test('shows the time-left metric inside Outcome Sides', async () => {
 		const reportingDetails = createReportingDetails()
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ReportingSection,
-				createProps({
-					reportingDetails: {
-						...reportingDetails,
-						currentTime: 150n,
-						escalationEndTime: 300n,
-					},
-				}),
-			),
-		)
+		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const outcomeSidesSection = getClosestSection(within(document.body).getByRole('heading', { name: 'Outcome Sides' }))
 		expect(outcomeSidesSection.textContent?.includes(formatDuration(300n - 150n))).toBe(true)
-		expect(outcomeSidesSection.textContent?.includes('The market resolves as')).toBe(false)
-		expect(outcomeSidesSection.textContent?.includes('Game starts at')).toBe(false)
 	})
 
-	test('shows awaiting resolution with zero time left once the escalation end time has passed', async () => {
+	test('shows Awaiting Resolution with zero time left once the escalation end time has passed', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ currentTime: 300n, escalationEndTime: 300n }) })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getAllByText('Awaiting Resolution').length).toBeGreaterThan(0)
+		expect(documentQueries.getByRole('heading', { name: 'Awaiting Resolution' })).not.toBeNull()
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
 	})
 
-	test('shows zeroed outcome sides before the first report starts the escalation game', async () => {
+	test('renders pre-start metrics and placeholders before the first report starts escalation', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
 					reportingDetails: createNotStartedReportingDetails(),
+					reportingForm: createReportingForm({
+						reportAmount: '3',
+					}),
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Escalation Metrics')).toBeNull()
 		const outcomeSidesSection = getClosestSection(documentQueries.getByRole('heading', { name: 'Outcome Sides' }))
-		expect(documentQueries.queryByRole('heading', { name: 'Escalation Status' })).toBeNull()
-		expect(within(outcomeSidesSection).queryByText('Escalation game has not started yet. The first report will populate live stakes, bond progression, and deposit indexes.')).toBeNull()
-		expect(outcomeSidesSection.querySelectorAll('.escalation-side')).toHaveLength(3)
-		expect(outcomeSidesSection.textContent?.includes('Your deposits: None')).toBe(true)
-		expect(outcomeSidesSection.querySelector('[title="0 REP"]')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'First Report Starts Escalation' })).not.toBeNull()
+		expect(outcomeSidesSection.textContent?.includes('Your deposits:')).toBe(false)
+		expect(outcomeSidesSection.textContent?.includes('Projected payout for current amount')).toBe(false)
+		expect(outcomeSidesSection.textContent?.includes('Projected profit if this side wins')).toBe(false)
+		expect(outcomeSidesSection.querySelector('[title="50 REP"]')).not.toBeNull()
+		expect(outcomeSidesSection.querySelector('[title="3 REP"]')).not.toBeNull()
+		expect(outcomeSidesSection.querySelectorAll('.currency-value.unavailable').length).toBeGreaterThanOrEqual(2)
+		expect(document.body.textContent?.includes('Load reporting details to populate live stakes')).toBe(false)
 		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
 	})
 
-	test('accepts decimal report amounts for profit preview', async () => {
+	test('disables report submission for a pre-start amount below the first-report minimum', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createNotStartedReportingDetails(),
+					reportingForm: createReportingForm({
+						reportAmount: '2',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Enter at least 3 REP to start the escalation game.')
+	})
+
+	test('accepts decimal report amounts for the profit preview', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingForm: createReportingForm({ reportAmount: '1.5' }) })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -462,7 +421,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Enter a valid report amount to preview profit.')).toBe(false)
 	})
 
-	test('autofills the report amount for the minimum outcome change preset', async () => {
+	test('autofills the active minimum-outcome-change preset', async () => {
 		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -474,7 +433,7 @@ describe('ReportingSection', () => {
 		expect((amountInput as HTMLInputElement).value).toBe('4')
 	})
 
-	test('autofills the report amount for the max profit preset and updates the preview', async () => {
+	test('autofills the active max-profit preset and updates the preview', async () => {
 		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -490,7 +449,29 @@ describe('ReportingSection', () => {
 		expect(previewBefore).not.toBe(previewAfter)
 	})
 
-	test('disables preset buttons when reporting details are missing', async () => {
+	test('autofills the pre-start minimum-outcome-change preset from the pool start bond', async () => {
+		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: createNotStartedReportingDetails() }} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Min to change proposed outcome' }))
+		})
+
+		const amountInput = within(document.body).getByRole('textbox', { name: 'Report / Contribution Amount (REP)' })
+		expect((amountInput as HTMLInputElement).value).toBe('3')
+	})
+
+	test('disables Max profit before the escalation game exists', async () => {
+		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createNotStartedReportingDetails() })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const maxProfitButton = within(document.body).getByRole('button', { name: 'Max profit' }) as HTMLButtonElement
+		expect(maxProfitButton.disabled).toBe(true)
+		expect(maxProfitButton.title).toBe('Max profit becomes available after the escalation game starts.')
+		expect(document.body.textContent?.includes('Max profit becomes available after the escalation game starts.')).toBe(false)
+	})
+
+	test('disables preset buttons when reporting details are missing without showing the load reason inline', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: undefined })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -500,7 +481,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Load reporting details before using presets.')).toBe(false)
 	})
 
-	test('shows unavailable preset reasons for impossible states', async () => {
+	test('shows unavailable preset reasons for impossible active-game states', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -525,7 +506,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Min preset unavailable because the selected side cannot take the lead within the remaining bond capacity.')).toBe(true)
 	})
 
-	test('renders the shared outcome chart with per-side projections and deposit details', async () => {
+	test('removes side-level deposit and projection detail lines from the shared outcome chart', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -538,19 +519,11 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		const outcomeSection = getClosestSection(documentQueries.getByRole('heading', { name: 'Outcome Sides' }))
-		const outcomeSectionQueries = within(outcomeSection)
-
-		expect(outcomeSectionQueries.getByText('Bars show total REP on each outcome. The marker shows current binding capital, and the thin inset shows your wallet stake.')).not.toBeNull()
-		expect(outcomeSectionQueries.getAllByText('Total stake').length).toBeGreaterThan(0)
-		expect(outcomeSectionQueries.getAllByText('Your stake').length).toBeGreaterThan(0)
-		expect(outcomeSectionQueries.getByText('Binding capital')).not.toBeNull()
-		expect(outcomeSectionQueries.getByText('Leading')).not.toBeNull()
-		expect(outcomeSectionQueries.getByText('Selected')).not.toBeNull()
-		expect(outcomeSection.textContent?.includes('Projected payout for current amount')).toBe(true)
-		expect(outcomeSection.textContent?.includes('Projected profit if this side wins')).toBe(true)
-		expect(outcomeSection.textContent?.includes('Your deposits:')).toBe(true)
+		const outcomeSection = getClosestSection(within(document.body).getByRole('heading', { name: 'Outcome Sides' }))
+		expect(outcomeSection.textContent?.includes('Bars show total REP on each outcome. The marker shows current binding capital, and the thin inset shows your wallet stake.')).toBe(true)
+		expect(outcomeSection.textContent?.includes('Projected payout for current amount')).toBe(false)
+		expect(outcomeSection.textContent?.includes('Projected profit if this side wins')).toBe(false)
+		expect(outcomeSection.textContent?.includes('Your deposits:')).toBe(false)
 	})
 
 	test('renders withdraw-only messages and enables selectable deposits once withdrawal is allowed', async () => {
@@ -633,7 +606,7 @@ describe('ReportingSection', () => {
 		expect(onReportingFormChangeCalls).toEqual([{ selectedWithdrawDepositIndexes: [1n] }, { selectedWithdrawDepositIndexes: [] }])
 	})
 
-	test('autofills the report amount for the minimum outcome change preset with 1001 REP when another side has 1000 REP', async () => {
+	test('autofills the minimum-outcome-change preset with 1001 REP when another side has 1000 REP', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ReportingSectionHarness, {
 				initialProps: {
@@ -663,7 +636,7 @@ describe('ReportingSection', () => {
 		expect((amountInput as HTMLInputElement).value).toBe('1001')
 	})
 
-	test('autofills the report amount for the max profit preset with 1500 REP when another side has 1000 REP', async () => {
+	test('autofills the max-profit preset with 1500 REP when another side has 1000 REP', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ReportingSectionHarness, {
 				initialProps: {
@@ -694,45 +667,26 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('projects roughly')).toBe(true)
 	})
 
-	test('updates the displayed profit preview after clicking max profit in a partial-depth scenario', async () => {
-		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const previewBefore = findProfitPreview()
-
-		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Max profit' }))
-		})
-
-		const previewAfter = findProfitPreview()
-		expect(previewBefore).not.toBe(previewAfter)
-	})
-
-	test('deduplicates identical preset unavailability reasons', async () => {
+	test('disables the minimum-outcome-change preset when the selected side already leads', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
 					reportingDetails: createReportingDetails({
-						nonDecisionThreshold: rep(20n),
 						sides: [
-							{ balance: 0n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-							{ balance: rep(20n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-							{ balance: rep(19n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(9n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+							{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
-						startBond: rep(1n),
-					}),
-					reportingForm: createReportingForm({
-						selectedOutcome: 'no',
 					}),
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('button', { name: 'Min to change proposed outcome' }) as HTMLButtonElement).disabled).toBe(true)
-		expect((documentQueries.getByRole('button', { name: 'Max profit' }) as HTMLButtonElement).disabled).toBe(true)
-		expect(documentQueries.getAllByText('Min preset unavailable because the selected side cannot take the lead within the remaining bond capacity.')).toHaveLength(1)
+		const minButton = within(document.body).getByRole('button', { name: 'Min to change proposed outcome' }) as HTMLButtonElement
+		expect(minButton.disabled).toBe(true)
+		expect(minButton.title).toBe('Selected side already leads.')
+		expect(document.body.textContent?.includes('Selected side already leads.')).toBe(true)
 	})
 })

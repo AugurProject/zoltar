@@ -2532,6 +2532,11 @@ strong.metric-value-danger {
 	gap: 0.9rem;
 }
 
+.reporting-header-stack {
+	display: grid;
+	gap: 1rem;
+}
+
 .stage-list,
 .requirements-checklist {
 	margin: 0;

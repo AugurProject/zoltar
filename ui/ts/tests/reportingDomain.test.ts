@@ -2,8 +2,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from 'viem'
-import { calculateEstimatedEscalationReturn, getMaxProfitContribution, getMinimumOutcomeChangeContribution } from '../lib/reportingDomain.js'
-import type { ActiveReportingDetails, MarketDetails } from '../types/contracts.js'
+import { calculateEstimatedEscalationReturn, getMaxProfitContribution, getMinimumOutcomeChangeContribution, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, previewReportingContribution } from '../lib/reportingDomain.js'
+import type { ActiveReportingDetails, MarketDetails, ReportingDetails } from '../types/contracts.js'
 
 const REP = 10n ** 18n
 
@@ -58,6 +58,28 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		viewerVaultExists: true,
 		viewerVaultLockedRepInEscalationGame: 1n * REP,
 		viewerVaultRepDepositShare: 11n * REP,
+		...overrides,
+	}
+}
+
+function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDetails, { status: 'not-started' }>> = {}): ReportingDetails {
+	return {
+		completeSetCollateralAmount: 1n,
+		currentTime: 150n,
+		marketDetails: createMarketDetails(),
+		nonDecisionThreshold: rep(50n),
+		questionOutcome: 'none',
+		resolution: 'none',
+		securityPoolAddress: zeroAddress,
+		startBond: rep(3n),
+		status: 'not-started',
+		universeId: 1n,
+		withdrawalEnabled: false,
+		withdrawalState: 'not-finalized',
+		viewerVaultAvailableEscalationRep: 10n * REP,
+		viewerVaultExists: true,
+		viewerVaultLockedRepInEscalationGame: 0n,
+		viewerVaultRepDepositShare: 10n * REP,
 		...overrides,
 	}
 }
@@ -120,6 +142,21 @@ describe('reportingDomain', () => {
 		})
 	})
 
+	test('getReportingMinimumOutcomeChangeContribution disables the preset when the selected side already leads', () => {
+		const details = createReportingDetails({
+			sides: [
+				{ balance: rep(9n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+				{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			],
+		})
+
+		expect(getReportingMinimumOutcomeChangeContribution(details, 'yes')).toEqual({
+			amount: undefined,
+			reason: 'Selected side already leads.',
+		})
+	})
+
 	test('getMinimumOutcomeChangeContribution is unavailable when the selected side cannot lead within remaining room', () => {
 		const details = createReportingDetails({
 			nonDecisionThreshold: rep(20n),
@@ -174,6 +211,49 @@ describe('reportingDomain', () => {
 		expect(getMaxProfitContribution(details, 'yes')).toEqual({
 			amount: undefined,
 			reason: 'Max profit preset unavailable because the reward window is already filled on the selected side.',
+		})
+	})
+
+	test('getReportingMinimumOutcomeChangeContribution returns the first-report minimum before the escalation game exists', () => {
+		expect(getReportingMinimumOutcomeChangeContribution(createNotStartedReportingDetails(), 'yes')).toEqual({
+			amount: rep(3n),
+			reason: undefined,
+		})
+	})
+
+	test('getReportingMaxProfitContribution is unavailable before the escalation game exists', () => {
+		expect(getReportingMaxProfitContribution(createNotStartedReportingDetails(), 'yes')).toEqual({
+			amount: undefined,
+			reason: 'Max profit becomes available after the escalation game starts.',
+		})
+	})
+
+	test('reporting preset helpers disable both presets once the escalation game is resolved', () => {
+		const details = createReportingDetails({
+			resolution: 'yes',
+		})
+
+		expect(getReportingMinimumOutcomeChangeContribution(details, 'yes')).toEqual({
+			amount: undefined,
+			reason: 'Escalation is already resolved.',
+		})
+		expect(getReportingMaxProfitContribution(details, 'yes')).toEqual({
+			amount: undefined,
+			reason: 'Escalation is already resolved.',
+		})
+	})
+
+	test('previewReportingContribution rejects a pre-start amount below the first-report minimum', () => {
+		expect(previewReportingContribution(createNotStartedReportingDetails(), 'yes', rep(2n))).toEqual({
+			actualDepositAmount: undefined,
+			reason: 'Enter at least 3 REP to start the escalation game.',
+		})
+	})
+
+	test('previewReportingContribution accepts a valid pre-start amount', () => {
+		expect(previewReportingContribution(createNotStartedReportingDetails(), 'yes', rep(3n))).toEqual({
+			actualDepositAmount: rep(3n),
+			reason: undefined,
 		})
 	})
 

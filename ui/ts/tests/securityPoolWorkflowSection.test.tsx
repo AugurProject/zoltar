@@ -1650,7 +1650,8 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByRole('heading', { name: 'Question' }).length).toBe(1)
-		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Outcome Sides' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Report Outcome' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Withdraw Escalation Deposits' })).toBeNull()
@@ -1658,7 +1659,9 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByText('Reporting unlocks after the market end timestamp for the selected pool.')).toBeNull()
 		expect(documentQueries.queryByText('Reporting opens after market end.')).toBeNull()
 		expect(document.body.querySelectorAll('.escalation-side')).toHaveLength(3)
-		expect(document.body.textContent?.includes('Your deposits: None')).toBe(true)
+		expect(document.body.textContent?.includes('Your deposits: None')).toBe(false)
+		expect(document.body.textContent?.includes('Projected payout for current amount')).toBe(false)
+		expect(document.body.textContent?.includes('Projected profit if this side wins')).toBe(false)
 
 		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)

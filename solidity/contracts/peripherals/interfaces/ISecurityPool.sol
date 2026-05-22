@@ -64,6 +64,7 @@ interface ISecurityPool {
 	function getAvailableRepBalance() external view returns (uint256);
 	function getTotalRepBalance() external view returns (uint256);
 	function isEscalationResolved() external view returns (bool);
+	function initialEscalationGameDeposit() external pure returns (uint256);
 
 	function setStartingParams(uint256 currentRetentionRate, uint256 completeSetCollateralAmount) external;
 

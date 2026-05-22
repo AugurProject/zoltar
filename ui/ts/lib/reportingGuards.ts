@@ -64,7 +64,7 @@ export function getReportingWithdrawGuardMessage({
 	if (accountAddress === undefined) return 'Connect a wallet before withdrawing escalation deposits.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before withdrawing escalation deposits.'
 	if (reportingStatus === 'missing') return 'Load reporting details before withdrawing escalation deposits.'
-	if (reportingStatus === 'not-started') return 'Escalation game has not started yet.'
+	if (reportingStatus === 'not-started') return 'Withdrawals are unavailable until the first report or contribution deploys the escalation game.'
 	if (!withdrawalEnabled && withdrawalState === 'not-finalized') return 'Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.'
 	if (!hasUserDepositsOnSelectedSide) return 'No deposits are available to withdraw on the selected side.'
 	return undefined
