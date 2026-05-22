@@ -24,6 +24,50 @@ import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '..
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getMaxProfitContribution, getMinimumOutcomeChangeContribution } from '../lib/reportingDomain.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 import type { ReportingSectionProps } from '../types/components.js'
+import type { ActiveReportingDetails, EscalationDeposit, ReportingOutcomeKey } from '../types/contracts.js'
+
+type ReportingStatus = 'active' | 'missing' | 'not-started'
+
+type EscalationSideDisplay = {
+	balance: bigint | undefined
+	estimate:
+		| {
+				profit: bigint
+				payout: bigint
+		  }
+		| undefined
+	key: ReportingOutcomeKey
+	label: string
+	userDeposits: EscalationDeposit[] | undefined
+	userStake: bigint | undefined
+}
+
+const ZERO_REP = 0n
+
+function getOutcomeSides({ activeReportingDetails, selectedAmount }: { activeReportingDetails: ActiveReportingDetails | undefined; selectedAmount: bigint | undefined }) {
+	if (activeReportingDetails !== undefined) {
+		return activeReportingDetails.sides.map<EscalationSideDisplay>(side => {
+			const userStake = side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n)
+			return {
+				balance: side.balance,
+				estimate: selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, side.key, selectedAmount),
+				key: side.key,
+				label: side.label,
+				userDeposits: side.userDeposits,
+				userStake,
+			}
+		})
+	}
+
+	return REPORTING_OUTCOME_DROPDOWN_OPTIONS.map<EscalationSideDisplay>(option => ({
+		balance: ZERO_REP,
+		estimate: undefined,
+		key: option.value,
+		label: option.label,
+		userDeposits: [],
+		userStake: ZERO_REP,
+	}))
+}
 
 function getDepositEntryCountLabel(count: number) {
 	return count === 1 ? 'entry' : 'entries'
@@ -60,7 +104,7 @@ export function ReportingSection({
 }: ReportingSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const activeReportingDetails = reportingDetails?.status === 'active' ? reportingDetails : undefined
-	const reportingStatus = reportingDetails === undefined ? 'missing' : reportingDetails.status
+	const reportingStatus: ReportingStatus = reportingDetails === undefined ? 'missing' : reportingDetails.status
 	const marketDetails = reportingDetails?.marketDetails ?? previewMarketDetails
 	const effectiveCurrentTimestamp = reportingDetails?.currentTime ?? currentTimestamp
 	const reportingLocked = lockedReason !== undefined
@@ -71,13 +115,16 @@ export function ReportingSection({
 	const selectedWithdrawDepositIndexes = reportingForm.selectedWithdrawDepositIndexes
 	const chartScaleMax = activeReportingDetails === undefined ? 1n : activeReportingDetails.sides.reduce((maxBalance, side) => (side.balance > maxBalance ? side.balance : maxBalance), activeReportingDetails.bindingCapital > 1n ? activeReportingDetails.bindingCapital : 1n)
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
-	const leadingSide = activeReportingDetails?.sides.find(side => side.key === leadingOutcome)
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
+	const outcomeSides = getOutcomeSides({
+		activeReportingDetails,
+		selectedAmount,
+	})
 	const presetFallbackReason = reportingStatus === 'not-started' ? 'Escalation game has not started yet.' : 'Load reporting details before using presets.'
 	const minimumOutcomeChangeContribution = activeReportingDetails === undefined ? { amount: undefined, reason: presetFallbackReason } : getMinimumOutcomeChangeContribution(activeReportingDetails, reportingForm.selectedOutcome)
 	const maxProfitContribution = activeReportingDetails === undefined ? { amount: undefined, reason: presetFallbackReason } : getMaxProfitContribution(activeReportingDetails, reportingForm.selectedOutcome)
 	const presetReasons = reportingLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && reasons.indexOf(reason) === index)
-	const escalationTimeRemaining = activeReportingDetails === undefined ? undefined : formatDuration(getEscalationTimeRemaining(activeReportingDetails))
+	const escalationTimeRemaining = activeReportingDetails === undefined ? formatDuration(ZERO_REP) : formatDuration(getEscalationTimeRemaining(activeReportingDetails))
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 	const reportGuardMessage = getReportingReportGuardMessage({
 		accountAddress: accountState.address,
@@ -154,49 +201,49 @@ export function ReportingSection({
 				</EntityCard>
 			) : undefined}
 
-			{showFullReporting && activeReportingDetails !== undefined ? (
-				<SectionBlock title='Escalation Metrics'>
+			{showFullReporting ? (
+				<SectionBlock title='Outcome Sides' {...(activeReportingDetails === undefined ? {} : { description: 'Bars show total REP on each outcome. The marker shows current binding capital, and the thin inset shows your wallet stake.' })}>
 					<div className='escalation-metrics'>
+						<MetricField label='Current Bond'>
+							<CurrencyValue value={activeReportingDetails?.currentRequiredBond ?? ZERO_REP} suffix='REP' />
+						</MetricField>
 						<MetricField label='Binding Capital'>
-							<CurrencyValue value={activeReportingDetails.bindingCapital} suffix='REP' />
+							<CurrencyValue value={activeReportingDetails?.bindingCapital ?? ZERO_REP} suffix='REP' />
 						</MetricField>
 						<MetricField label='Threshold'>
-							<CurrencyValue value={activeReportingDetails.nonDecisionThreshold} suffix='REP' />
+							<CurrencyValue value={activeReportingDetails?.nonDecisionThreshold ?? ZERO_REP} suffix='REP' />
+						</MetricField>
+						<MetricField label='Time Left'>{escalationTimeRemaining}</MetricField>
+						<MetricField label='Game Start'>
+							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails?.startingTime} />
+						</MetricField>
+						<MetricField label='Start Bond'>
+							<CurrencyValue value={activeReportingDetails?.startBond ?? ZERO_REP} suffix='REP' />
 						</MetricField>
 					</div>
-					{escalationTimeRemaining === undefined ? undefined : (
-						<p className='detail'>
-							The market resolves as {leadingSide?.label ?? getReportingOutcomeLabel(activeReportingDetails.resolution)} in {escalationTimeRemaining} unless disputed.
-						</p>
-					)}
-				</SectionBlock>
-			) : undefined}
-
-			{showFullReporting && activeReportingDetails !== undefined ? (
-				<SectionBlock title='Outcome Sides' description='Bars show total REP on each outcome. The marker shows current binding capital, and the thin inset shows your wallet stake.'>
 					<div className='escalation-sides-shell'>
-						<div className='escalation-sides-legend'>
-							<div className='escalation-sides-legend-item'>
-								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-total' />
-								<span className='panel-label'>Total stake</span>
+						{activeReportingDetails === undefined ? undefined : (
+							<div className='escalation-sides-legend'>
+								<div className='escalation-sides-legend-item'>
+									<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-total' />
+									<span className='panel-label'>Total stake</span>
+								</div>
+								<div className='escalation-sides-legend-item'>
+									<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-user' />
+									<span className='panel-label'>Your stake</span>
+								</div>
+								<div className='escalation-sides-legend-item escalation-sides-legend-item-binding'>
+									<span aria-hidden='true' className='escalation-sides-legend-marker' />
+									<span className='panel-label'>Binding capital</span>
+									<CurrencyValue copyable={false} value={activeReportingDetails.bindingCapital} suffix='REP' />
+								</div>
 							</div>
-							<div className='escalation-sides-legend-item'>
-								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-user' />
-								<span className='panel-label'>Your stake</span>
-							</div>
-							<div className='escalation-sides-legend-item escalation-sides-legend-item-binding'>
-								<span aria-hidden='true' className='escalation-sides-legend-marker' />
-								<span className='panel-label'>Binding capital</span>
-								<CurrencyValue copyable={false} value={activeReportingDetails.bindingCapital} suffix='REP' />
-							</div>
-						</div>
+						)}
 					</div>
 					<div className='escalation-sides'>
-						{activeReportingDetails.sides.map(side => {
-							const userStake = side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n)
-
-							return <EscalationSide key={side.key} bindingCapital={activeReportingDetails.bindingCapital} chartScaleMax={chartScaleMax} isLeading={leadingOutcome === side.key} isSelected={reportingForm.selectedOutcome === side.key} side={side} userStake={userStake} />
-						})}
+						{outcomeSides.map(side => (
+							<EscalationSide key={side.key} bindingCapital={activeReportingDetails?.bindingCapital} chartScaleMax={chartScaleMax} estimate={side.estimate} isLeading={leadingOutcome === side.key} isSelected={reportingForm.selectedOutcome === side.key} side={side} />
+						))}
 					</div>
 				</SectionBlock>
 			) : undefined}
