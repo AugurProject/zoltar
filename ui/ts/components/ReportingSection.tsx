@@ -11,6 +11,7 @@ import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
+import { StateHint } from './StateHint.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -21,7 +22,17 @@ import { isMainnetChain } from '../lib/network.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getMaxProfitContribution, getMinimumOutcomeChangeContribution } from '../lib/reportingDomain.js'
+import type { UserMessagePresentation } from '../lib/userCopy.js'
 import type { ReportingSectionProps } from '../types/components.js'
+
+function getReportingLockedPresentation({ effectiveCurrentTimestamp, marketDetails }: { effectiveCurrentTimestamp: bigint | undefined; marketDetails: ReportingSectionProps['previewMarketDetails'] }): UserMessagePresentation | undefined {
+	if (effectiveCurrentTimestamp === undefined || marketDetails === undefined || marketDetails.endTime <= effectiveCurrentTimestamp) return undefined
+	return {
+		actionHint: `Reporting opens in ${formatDuration(marketDetails.endTime - effectiveCurrentTimestamp)}.`,
+		detail: 'Reporting is not enabled at the moment.',
+		key: 'action_needed',
+	}
+}
 
 export function ReportingSection({
 	accountState,
@@ -88,6 +99,7 @@ export function ReportingSection({
 				]}
 			/>
 		)
+	const reportingLockedPresentation = getReportingLockedPresentation({ effectiveCurrentTimestamp, marketDetails })
 	const visibleLatestReportingAction = reportingResult === undefined ? undefined : showFullReporting ? (reportingResult.action === 'reportOutcome' ? latestReportingAction : undefined) : reportingResult.action === 'withdrawEscalation' ? latestReportingAction : undefined
 
 	const sections = (
@@ -113,10 +125,10 @@ export function ReportingSection({
 							<MetricField label='Market End'>
 								<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={marketDetails.endTime} />
 							</MetricField>
-							{effectiveCurrentTimestamp === undefined ? undefined : <MetricField label='Reporting'>{marketDetails.endTime <= effectiveCurrentTimestamp ? 'Open' : 'Locked'}</MetricField>}
-							{effectiveCurrentTimestamp === undefined || marketDetails.endTime <= effectiveCurrentTimestamp ? undefined : <MetricField label='Opens In'>{formatDuration(marketDetails.endTime - effectiveCurrentTimestamp)}</MetricField>}
+							{effectiveCurrentTimestamp !== undefined && marketDetails.endTime <= effectiveCurrentTimestamp ? <MetricField label='Reporting'>Open</MetricField> : undefined}
 						</div>
 					)}
+					{reportingLockedPresentation === undefined ? undefined : <StateHint presentation={reportingLockedPresentation} />}
 
 					{activeReportingDetails === undefined ? undefined : (
 						<ul className='status-list hashes'>
@@ -129,13 +141,6 @@ export function ReportingSection({
 						</ul>
 					)}
 				</EntityCard>
-			) : undefined}
-
-			{showFullReporting && reportingDetails?.status === 'not-started' ? (
-				<SectionBlock title='Escalation Status'>
-					<p className='detail'>Reporting is open, but the escalation game has not started yet.</p>
-					<p className='detail'>The first report or contribution will deploy and initialize the escalation game for this pool.</p>
-				</SectionBlock>
 			) : undefined}
 
 			{showFullReporting && activeReportingDetails !== undefined ? (

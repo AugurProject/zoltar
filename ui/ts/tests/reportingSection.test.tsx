@@ -222,6 +222,42 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' })).not.toBeNull()
 	})
 
+	test('shows a warning dialog instead of locked reporting metrics before the market end time', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 50n,
+					reportingDetails: undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Reporting is not enabled at the moment.')).not.toBeNull()
+		expect(documentQueries.getByText('Reporting opens in less than a minute.')).not.toBeNull()
+		expect(documentQueries.queryByText('Locked')).toBeNull()
+		expect(documentQueries.queryByText('Opens In')).toBeNull()
+	})
+
+	test('does not show an escalation status banner when reporting is open but escalation details are not loaded yet', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 150n,
+					reportingDetails: undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Reporting Open')).toBeNull()
+		expect(documentQueries.queryByText(/current escalation lifecycle phase/i)).toBeNull()
+	})
+
 	test('disables reporting buttons when deterministic prerequisites are missing', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -300,7 +336,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
 	})
 
-	test('shows first-report guidance before the escalation game starts', async () => {
+	test('does not show a separate escalation status card before the first report starts the escalation game', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -314,8 +350,9 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Escalation Metrics')).toBeNull()
 		expect(documentQueries.queryByText('Outcome Sides')).toBeNull()
-		expect(document.body.textContent?.includes('Reporting is open, but the escalation game has not started yet.')).toBe(true)
-		expect(document.body.textContent?.includes('The first report or contribution will deploy and initialize the escalation game for this pool.')).toBe(true)
+		expect(documentQueries.queryByRole('heading', { name: 'Escalation Status' })).toBeNull()
+		expect(document.body.textContent?.includes('Reporting is open, but the escalation game has not started yet.')).toBe(false)
+		expect(document.body.textContent?.includes('The first report or contribution will deploy and initialize the escalation game for this pool.')).toBe(false)
 		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
 		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
 	})
