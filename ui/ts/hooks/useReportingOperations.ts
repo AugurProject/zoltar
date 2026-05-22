@@ -32,6 +32,12 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 	const getSuccessTitle = (actionName: ReportingActionResult['action']) => (actionName === 'reportOutcome' ? 'Report submitted' : 'Escalation deposits withdrawn')
 	const getFailureTitle = (actionName: ReportingActionResult['action']) => (actionName === 'reportOutcome' ? 'Report failed' : 'Withdrawal failed')
 
+	const requireSelectedOutcome = (selectedOutcome: ReportingFormState['selectedOutcome'], action: 'report' | 'withdraw') => {
+		if (selectedOutcome !== undefined) return selectedOutcome
+		if (action === 'report') throw new Error('Select an outcome side before reporting on a market.')
+		throw new Error('Select an outcome side before withdrawing escalation deposits.')
+	}
+
 	const loadReporting = async () => {
 		const isCurrent = nextReportingLoad()
 		await reportingLoad.run({
@@ -105,9 +111,10 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		await runReportingAction(
 			'reportOutcome',
 			async (walletAddress, securityPoolAddress, currentForm) => {
+				const selectedOutcome = requireSelectedOutcome(currentForm.selectedOutcome, 'report')
 				const reportAmount = parseRepAmountInput(currentForm.reportAmount, 'Report amount')
 				const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
-				const contributionPreview = previewReportingContribution(latestDetails, currentForm.selectedOutcome, reportAmount)
+				const contributionPreview = previewReportingContribution(latestDetails, selectedOutcome, reportAmount)
 				if (contributionPreview.actualDepositAmount === undefined) {
 					throw new Error(contributionPreview.reason ?? 'Unable to preview the REP that would be locked for this report.')
 				}
@@ -119,7 +126,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 					throw new Error(`Insufficient unlocked REP in your vault. Need ${formatCurrencyBalance(contributionPreview.actualDepositAmount - availableVaultRep)} more REP deposited and unlocked before reporting.`)
 				}
 
-				return await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, reportAmount)
+				return await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, selectedOutcome, reportAmount)
 			},
 			'Failed to report on outcome',
 		)
@@ -128,11 +135,12 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		await runReportingAction(
 			'withdrawEscalation',
 			async (walletAddress, securityPoolAddress, currentForm) => {
+				const selectedOutcome = requireSelectedOutcome(currentForm.selectedOutcome, 'withdraw')
 				const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
 				if (latestDetails.status !== 'active') {
 					throw new Error('Withdrawals are unavailable until the first report or contribution deploys the escalation game.')
 				}
-				const selectedSide = latestDetails.sides.find(side => side.key === currentForm.selectedOutcome)
+				const selectedSide = latestDetails.sides.find(side => side.key === selectedOutcome)
 				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 
 				if (!latestDetails.withdrawalEnabled) {
@@ -149,7 +157,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 					throw new Error('No deposits available to withdraw for the selected side')
 				}
 
-				return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, currentForm.selectedOutcome, depositIndexes)
+				return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, selectedOutcome, depositIndexes)
 			},
 			'Failed to withdraw escalation deposits',
 		)

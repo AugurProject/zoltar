@@ -67,7 +67,7 @@ function createReportingProps(overrides: Partial<ReportingRouteContentProps> = {
 		reportingForm: {
 			reportAmount: '',
 			securityPoolAddress: '',
-			selectedOutcome: 'yes',
+			selectedOutcome: undefined,
 			selectedWithdrawDepositIndexes: [],
 		},
 		reportingResult: undefined,

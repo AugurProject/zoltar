@@ -32,6 +32,7 @@ type EscalationSideDisplay = {
 
 const MAX_PROFIT_NOT_STARTED_REASON = 'Max profit becomes available after the escalation game starts.'
 const LOAD_REPORTING_PRESETS_REASON = 'Load reporting details before using presets.'
+const SELECT_OUTCOME_PRESET_REASON = 'Select an outcome side before using presets.'
 const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
 const MAX_PROFIT_WINDOW_FILLED_REASON = 'Max profit preset unavailable because the reward window is already filled on the selected side.'
 
@@ -60,7 +61,7 @@ function getDepositEntryCountLabel(count: number) {
 }
 
 function isHiddenPresetReason(reason: string | undefined) {
-	return reason === LOAD_REPORTING_PRESETS_REASON || reason === MAX_PROFIT_NOT_STARTED_REASON || reason === SELECTED_SIDE_ALREADY_LEADS_REASON || reason === MAX_PROFIT_WINDOW_FILLED_REASON
+	return reason === LOAD_REPORTING_PRESETS_REASON || reason === MAX_PROFIT_NOT_STARTED_REASON || reason === SELECT_OUTCOME_PRESET_REASON || reason === SELECTED_SIDE_ALREADY_LEADS_REASON || reason === MAX_PROFIT_WINDOW_FILLED_REASON
 }
 
 function getReportingStagePresentation({
@@ -176,16 +177,17 @@ export function ReportingSection({
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const showFullReporting = mode === 'full-reporting'
 	const showWithdrawOnly = mode === 'withdraw-only'
-	const selectedSide = activeReportingDetails?.sides.find(side => side.key === reportingForm.selectedOutcome)
+	const selectedOutcome = reportingForm.selectedOutcome
+	const selectedSide = selectedOutcome === undefined ? undefined : activeReportingDetails?.sides.find(side => side.key === selectedOutcome)
 	const selectedWithdrawDepositIndexes = reportingForm.selectedWithdrawDepositIndexes
 	const chartScaleMax = activeReportingDetails === undefined ? 1n : activeReportingDetails.sides.reduce((maxBalance, side) => (side.balance > maxBalance ? side.balance : maxBalance), activeReportingDetails.bindingCapital > 1n ? activeReportingDetails.bindingCapital : 1n)
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
-	const reportContributionPreview = reportingDetails === undefined || selectedAmount === undefined ? undefined : previewReportingContribution(reportingDetails, reportingForm.selectedOutcome, selectedAmount)
+	const reportContributionPreview = reportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : previewReportingContribution(reportingDetails, selectedOutcome, selectedAmount)
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
-	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
+	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, selectedOutcome, selectedAmount)
 	const outcomeSides = getOutcomeSides(activeReportingDetails)
-	const minimumOutcomeChangeContribution = getReportingMinimumOutcomeChangeContribution(reportingDetails, reportingForm.selectedOutcome)
-	const maxProfitContribution = getReportingMaxProfitContribution(reportingDetails, reportingForm.selectedOutcome)
+	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(reportingDetails, selectedOutcome)
+	const maxProfitContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(reportingDetails, selectedOutcome)
 	const presetReasons = reportingLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && !isHiddenPresetReason(reason) && reasons.indexOf(reason) === index)
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 	const reportGuardMessage = getReportingReportGuardMessage({
@@ -196,6 +198,7 @@ export function ReportingSection({
 		lockedReason,
 		reportAmount: reportingForm.reportAmount,
 		reportingStatus,
+		selectedOutcome,
 		selectedAmount,
 		viewerVaultAvailableEscalationRep: reportingDetails?.viewerVaultAvailableEscalationRep,
 		viewerVaultExists: reportingDetails?.viewerVaultExists ?? false,
@@ -208,6 +211,7 @@ export function ReportingSection({
 		reportingStatus,
 		withdrawalEnabled: activeReportingDetails?.withdrawalEnabled ?? false,
 		withdrawalState: reportingDetails?.withdrawalState,
+		selectedOutcome,
 	})
 	const reportingStage = showFullReporting
 		? getReportingStagePresentation({
@@ -280,7 +284,7 @@ export function ReportingSection({
 					</div>
 					<div className='escalation-sides'>
 						{outcomeSides.map(side => (
-							<EscalationSide key={side.key} bindingCapital={activeReportingDetails?.bindingCapital} chartScaleMax={chartScaleMax} isLeading={leadingOutcome === side.key} isSelected={reportingForm.selectedOutcome === side.key} side={side} />
+							<EscalationSide key={side.key} bindingCapital={activeReportingDetails?.bindingCapital} chartScaleMax={chartScaleMax} isLeading={leadingOutcome === side.key} isSelected={selectedOutcome !== undefined && selectedOutcome === side.key} side={side} />
 						))}
 					</div>
 				</SectionBlock>
@@ -300,9 +304,8 @@ export function ReportingSection({
 					)}
 					<label className='field'>
 						<span>Outcome Side</span>
-						<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={reportingForm.selectedOutcome} onChange={selectedOutcome => onReportingFormChange({ selectedOutcome, selectedWithdrawDepositIndexes: [] })} disabled={reportingLocked} />
+						<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={selectedOutcome} onChange={nextSelectedOutcome => onReportingFormChange({ selectedOutcome: nextSelectedOutcome, selectedWithdrawDepositIndexes: [] })} disabled={reportingLocked} placeholder='Select outcome side' />
 					</label>
-
 					<label className='field'>
 						<span>Report / Contribution Amount (REP)</span>
 						<FormInput value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportingLocked} />
@@ -341,10 +344,9 @@ export function ReportingSection({
 						</p>
 					))}
 					{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
-
-					{selectedEstimate === undefined ? undefined : (
+					{selectedEstimate === undefined || selectedOutcome === undefined ? undefined : (
 						<p className='detail'>
-							If {getReportingOutcomeLabel(reportingForm.selectedOutcome)} wins and no one else contributes afterward, the current amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit.
+							If {getReportingOutcomeLabel(selectedOutcome)} wins and no one else contributes afterward, the current amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit.
 						</p>
 					)}
 					{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (

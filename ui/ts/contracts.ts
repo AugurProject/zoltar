@@ -222,43 +222,43 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 }
 
 export async function loadReportingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
-	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit] = await readRequiredMulticall(client, [
-		{
+	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit] = await Promise.all([
+		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'questionId',
 			address: securityPoolAddress,
 			args: [],
-		},
-		{
+		}),
+		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'escalationGame',
 			address: securityPoolAddress,
 			args: [],
-		},
-		{
+		}),
+		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'completeSetCollateralAmount',
 			address: securityPoolAddress,
 			args: [],
-		},
-		{
+		}),
+		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'universeId',
 			address: securityPoolAddress,
 			args: [],
-		},
-		{
+		}),
+		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'zoltar',
 			address: securityPoolAddress,
 			args: [],
-		},
-		{
+		}),
+		client.readContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'initialEscalationGameDeposit',
 			address: securityPoolAddress,
 			args: [],
-		},
+		}),
 	])
 	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThreshold] = await Promise.all([
 		loadMarketDetails(client, questionId),
