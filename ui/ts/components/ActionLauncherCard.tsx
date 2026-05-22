@@ -1,6 +1,5 @@
 import type { ComponentChildren } from 'preact'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { WarningSurface } from './WarningSurface.js'
 import type { ReadinessAction } from '../types/components.js'
 
 type ActionLauncherCardProps = {
@@ -9,10 +8,9 @@ type ActionLauncherCardProps = {
 	pending?: boolean
 	pendingLabel?: string
 	tone?: 'primary' | 'secondary'
-	warningStyle?: 'default-card' | 'surface'
 }
 
-export function ActionLauncherCard({ action, children, pending = false, pendingLabel = 'Opening...', tone = 'secondary', warningStyle = 'surface' }: ActionLauncherCardProps) {
+export function ActionLauncherCard({ action, children, pending = false, pendingLabel = 'Opening...', tone = 'secondary' }: ActionLauncherCardProps) {
 	const content = (
 		<>
 			<div className='action-launcher-card-copy'>
@@ -27,11 +25,7 @@ export function ActionLauncherCard({ action, children, pending = false, pendingL
 	)
 
 	if (action.readiness === 'warning') {
-		if (warningStyle === 'default-card') {
-			return <section className='action-launcher-card default'>{content}</section>
-		}
-
-		return <WarningSurface className='action-launcher-card'>{content}</WarningSurface>
+		return <section className='action-launcher-card default'>{content}</section>
 	}
 
 	return <section className={`action-launcher-card ${action.readiness}`}>{content}</section>

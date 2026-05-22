@@ -260,7 +260,6 @@ export function SecurityVaultSection({
 	autoLoadVault = false,
 	extraReadinessActions = [],
 	loadingSecurityVault,
-	launcherWarningStyle = 'surface',
 	modalFirst = false,
 	onApproveRep,
 	onDepositRep,
@@ -502,7 +501,7 @@ export function SecurityVaultSection({
 			<SectionBlock title='Vault Action Launchers'>
 				<div className='vault-action-launcher-grid'>
 					{vaultReadinessActions.map(action => (
-						<ActionLauncherCard key={action.key} action={action} warningStyle={launcherWarningStyle} />
+						<ActionLauncherCard key={action.key} action={action} />
 					))}
 				</div>
 			</SectionBlock>

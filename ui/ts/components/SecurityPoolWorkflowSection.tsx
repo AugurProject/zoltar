@@ -538,7 +538,6 @@ export function SecurityPoolWorkflowSection({
 													},
 												]}
 												modalFirst
-												launcherWarningStyle='default-card'
 												onViewStagedOperations={() => onSelectedPoolViewChange('staged-operations')}
 												oracleManagerDetails={currentPoolOracleManagerDetails}
 												selectedPoolTotalRepDeposit={selectedPool?.totalRepDeposit}
