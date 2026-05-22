@@ -53,6 +53,7 @@ function createReportingDetails(securityPoolAddress: Address): ReportingDetails 
 			{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 		],
 		startBond: 1n,
+		status: 'active',
 		startingTime: 120n,
 		totalCost: 0n,
 		universeId: 1n,

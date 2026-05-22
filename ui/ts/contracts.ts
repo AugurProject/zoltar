@@ -207,58 +207,65 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			args: [],
 		},
 	])
+	const [marketDetails, block, escalationGameCode] = await Promise.all([loadMarketDetails(client, questionId), client.getBlock(), escalationGameAddress === zeroAddress ? Promise.resolve('0x' as const) : client.getCode({ address: escalationGameAddress })])
+	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
+	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x') {
+		return {
+			completeSetCollateralAmount,
+			currentTime: block.timestamp,
+			marketDetails,
+			resolution: 'none',
+			securityPoolAddress,
+			status: 'not-started',
+			universeId,
+		}
+	}
 
-	const [[startBond, nonDecisionThreshold, startingTime, totalCost, bindingCapital, balances, resolution], block] = await Promise.all([
-		readRequiredMulticall(client, [
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'startBond',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'nonDecisionThreshold',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'startingTime',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'totalCost',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'getBindingCapital',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'getBalances',
-				address: escalationGameAddress,
-				args: [],
-			},
-			{
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				functionName: 'getQuestionResolution',
-				address: escalationGameAddress,
-				args: [],
-			},
-		]),
-		client.getBlock(),
+	const [startBond, nonDecisionThreshold, startingTime, totalCost, bindingCapital, balances, resolution] = await readRequiredMulticall(client, [
+		{
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'startBond',
+			address: escalationGameAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'nonDecisionThreshold',
+			address: escalationGameAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'startingTime',
+			address: escalationGameAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'totalCost',
+			address: escalationGameAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getBindingCapital',
+			address: escalationGameAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getBalances',
+			address: escalationGameAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'getQuestionResolution',
+			address: escalationGameAddress,
+			args: [],
+		},
 	])
 	if (!isBigintTriple(balances)) throw new Error('Unexpected escalation balances response')
-	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
-
-	const marketDetails = await loadMarketDetails(client, questionId)
 	const [invalidDeposits, yesDeposits, noDeposits] = await Promise.all([loadEscalationDeposits(client, escalationGameAddress, 'invalid'), loadEscalationDeposits(client, escalationGameAddress, 'yes'), loadEscalationDeposits(client, escalationGameAddress, 'no')])
 
 	const sides: EscalationSide[] = [
@@ -280,6 +287,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		securityPoolAddress,
 		sides,
 		startBond,
+		status: 'active',
 		startingTime,
 		totalCost,
 		universeId,

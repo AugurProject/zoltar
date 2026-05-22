@@ -2,7 +2,7 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from 'viem'
-import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation } from '../contracts.js'
+import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadOracleManagerDetails, loadReportingDetails, loadSecurityVaultDetails, queueOracleManagerOperation } from '../contracts.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
 import { getSecurityVaultWithdrawableRepAmount } from '../lib/securityVault.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
@@ -477,6 +477,34 @@ void describe('simulation backend', () => {
 				expect(secondaryVault.securityBondAllowance).toBe(SEEDED_SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE)
 				expect(managerDetails.isPriceValid).toBe(true)
 			}
+		} finally {
+			await backend.dispose()
+		}
+	}, 90_000)
+
+	void test('loads reporting without errors before the first escalation report in securitypoolx2', async () => {
+		const backend = await createBootstrappedSimulationBackendWithRetry('securitypoolx2')
+		backend.setTransactionDelayMilliseconds(0)
+
+		try {
+			const primaryAccount = backend.accounts[0]
+			if (primaryAccount === undefined) {
+				throw new Error('Expected seeded simulation QA account A1')
+			}
+
+			await backend.advanceTime(366n * 24n * 60n * 60n)
+
+			const readClient = backend.createReadClient()
+			const pools = await loadAllSecurityPools(readClient)
+			const seededPool = pools[0]
+			if (seededPool === undefined) {
+				throw new Error('Expected a seeded security pool')
+			}
+
+			const reportingDetails = await loadReportingDetails(readClient, seededPool.securityPoolAddress, primaryAccount)
+
+			expect(reportingDetails.status).toBe('not-started')
+			expect(reportingDetails.marketDetails.endTime < reportingDetails.currentTime).toBe(true)
 		} finally {
 			await backend.dispose()
 		}
