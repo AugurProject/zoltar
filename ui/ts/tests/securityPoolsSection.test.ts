@@ -262,6 +262,7 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 		selectedPoolView: '',
 		securityPoolAddress: '',
 		securityPoolOverviewActiveAction: undefined,
+		securityPoolOverviewError: undefined,
 		securityPoolOverviewResult: undefined,
 		securityPools: [],
 		securityVault: createSecurityVaultProps(),
@@ -662,7 +663,8 @@ void describe('SecurityPoolsSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Liquidation failed')).not.toBeNull()
-		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
+		const liquidationDialog = documentQueries.getByRole('dialog', { name: 'Execute Vault Liquidation' })
+		expect(within(liquidationDialog).getByText('Local Security Bond Allowance broken')).not.toBeNull()
 	})
 
 	void test('keeps the route summary hidden in operate mode until the selected pool resolves', async () => {

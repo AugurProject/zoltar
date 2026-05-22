@@ -5,6 +5,7 @@ import { AddressValue } from './AddressValue.js'
 import { CollateralizationMetricField } from './CollateralizationMetricField.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { DataGrid } from './DataGrid.js'
+import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { MetricField } from './MetricField.js'
 import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
@@ -37,6 +38,7 @@ type LiquidationModalProps = {
 	repPerEthSourceUrl: string | undefined
 	selectedPool: ListedSecurityPool | undefined
 	securityPoolOverviewActiveAction: 'queueLiquidation' | undefined
+	securityPoolOverviewError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	callerVaultSummary: SecurityPoolVaultSummary | undefined
 	targetVaultSummary: SecurityPoolVaultSummary | undefined
@@ -91,6 +93,7 @@ export function LiquidationModal({
 	repPerEthSourceUrl,
 	selectedPool,
 	securityPoolOverviewActiveAction,
+	securityPoolOverviewError,
 	securityPoolOverviewResult,
 	callerVaultSummary,
 	targetVaultSummary,
@@ -101,19 +104,20 @@ export function LiquidationModal({
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const onCloseRef = useRef(closeLiquidationModal)
+	const showLiquidationModal = liquidationModalOpen || securityPoolOverviewActiveAction === 'queueLiquidation' || securityPoolOverviewResult?.action === 'queueLiquidation' || securityPoolOverviewError !== undefined
 
 	useEffect(() => {
 		onCloseRef.current = closeLiquidationModal
 	}, [closeLiquidationModal])
 
 	useEffect(() => {
-		if (!liquidationModalOpen) return
+		if (!showLiquidationModal) return
 		if (liquidationManagerAddress === undefined || currentPoolOracleManagerDetails !== undefined || loadingPoolOracleManager) return
 		onLoadPoolOracleManager(liquidationManagerAddress)
-	}, [currentPoolOracleManagerDetails, liquidationManagerAddress, liquidationModalOpen, loadingPoolOracleManager, onLoadPoolOracleManager])
+	}, [currentPoolOracleManagerDetails, liquidationManagerAddress, loadingPoolOracleManager, onLoadPoolOracleManager, showLiquidationModal])
 
 	useEffect(() => {
-		if (!liquidationModalOpen) return
+		if (!showLiquidationModal) return
 		const previouslyFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
 		closeButtonRef.current?.focus()
 		const handleKeyDown = (event: KeyboardEvent) => {
@@ -139,9 +143,9 @@ export function LiquidationModal({
 			document.removeEventListener('keydown', handleKeyDown)
 			previouslyFocusedElement?.focus()
 		}
-	}, [liquidationModalOpen])
+	}, [showLiquidationModal])
 
-	if (!liquidationModalOpen) return undefined
+	if (!showLiquidationModal) return undefined
 	const currentTimestamp = chainCurrentTimestamp ?? getLocalCurrentTimestamp()
 	const liquidationAmountValue = (() => {
 		try {
@@ -289,6 +293,7 @@ export function LiquidationModal({
 						<p className='detail'>Refreshing the oracle manager to determine whether the liquidation was queued or executed immediately.</p>
 					</section>
 				)}
+				<ErrorNotice message={securityPoolOverviewError} />
 				<DataGrid className='modal-summary-grid' columns={2}>
 					<AddressInfo address={liquidationSecurityPoolAddress} label='Security Pool' />
 					<MetricField label='Security Multiplier'>{selectedPool?.securityMultiplier === undefined ? 'Unavailable' : `${selectedPool.securityMultiplier.toString()}x`}</MetricField>

@@ -8,7 +8,7 @@ import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from 'viem'
 import { LiquidationModal } from '../components/LiquidationModal.js'
 import { ChainTimestampContext } from '../lib/chainTimestamp.js'
-import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary } from '../types/contracts.js'
+import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -132,6 +132,7 @@ describe('LiquidationModal', () => {
 				repPerEthSourceUrl={undefined}
 				selectedPool={createSelectedPool()}
 				securityPoolOverviewActiveAction={undefined}
+				securityPoolOverviewError={undefined}
 				securityPoolOverviewResult={undefined}
 				callerVaultSummary={createTargetVaultSummary({ vaultAddress: defaultCallerVaultAddress })}
 				targetVaultSummary={createTargetVaultSummary({ vaultAddress: defaultTargetVaultAddress })}
@@ -208,6 +209,7 @@ describe('LiquidationModal', () => {
 					repPerEthSourceUrl={undefined}
 					selectedPool={createSelectedPool()}
 					securityPoolOverviewActiveAction={undefined}
+					securityPoolOverviewError={undefined}
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({ vaultAddress: getAddress('0x0000000000000000000000000000000000000001') })}
 					targetVaultSummary={createTargetVaultSummary()}
@@ -335,6 +337,164 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
 	})
 
+	test('keeps the dialog open and shows execution results when the parent closes it after submit', async () => {
+		function LiquidationExecutionHarness() {
+			const [liquidationModalOpen, setLiquidationModalOpen] = useState(true)
+			const [securityPoolOverviewResult, setSecurityPoolOverviewResult] = useState<SecurityPoolOverviewActionResult | undefined>(undefined)
+
+			return (
+				<LiquidationModal
+					accountAddress={defaultCallerVaultAddress}
+					closeLiquidationModal={() => {
+						setLiquidationModalOpen(false)
+						setSecurityPoolOverviewResult(undefined)
+					}}
+					currentPoolOracleManagerDetails={createOracleManagerDetails({
+						isPriceValid: true,
+						lastPrice: 1n * 10n ** 18n,
+						pendingOperation: undefined,
+						pendingOperationSlotId: 0n,
+					})}
+					isMainnet
+					liquidationAmount='1'
+					liquidationMaxAmount={5n * 10n ** 18n}
+					liquidationManagerAddress={zeroAddress}
+					liquidationModalOpen={liquidationModalOpen}
+					liquidationSecurityPoolAddress={zeroAddress}
+					liquidationTargetVault={defaultTargetVaultAddress}
+					loadingPoolOracleManager={false}
+					onLoadPoolOracleManager={() => undefined}
+					onLiquidationAmountChange={() => undefined}
+					onQueueLiquidation={() => {
+						setLiquidationModalOpen(false)
+						setSecurityPoolOverviewResult({
+							action: 'queueLiquidation',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000cd',
+							securityPoolAddress: zeroAddress,
+							stagedExecution: {
+								errorMessage: undefined,
+								operation: 'liquidation',
+								operationId: 10n,
+								success: true,
+							},
+						})
+					}}
+					onSelectedPoolViewChange={() => undefined}
+					repPerEthPrice={1n * 10n ** 18n}
+					repPerEthSource='mock'
+					repPerEthSourceUrl={undefined}
+					selectedPool={createSelectedPool({
+						securityMultiplier: 2n,
+					})}
+					securityPoolOverviewActiveAction={undefined}
+					securityPoolOverviewError={undefined}
+					securityPoolOverviewResult={securityPoolOverviewResult}
+					callerVaultSummary={createTargetVaultSummary({
+						repDepositShare: 20n * 10n ** 18n,
+						securityBondAllowance: 1n * 10n ** 18n,
+						vaultAddress: defaultCallerVaultAddress,
+					})}
+					targetVaultSummary={createTargetVaultSummary({
+						repDepositShare: 11n * 10n ** 18n,
+						securityBondAllowance: 11n * 10n ** 18n,
+						vaultAddress: defaultTargetVaultAddress,
+					})}
+				/>
+			)
+		}
+
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		await act(() => {
+			render(<LiquidationExecutionHarness />, container)
+		})
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Execute Liquidation' }))
+		})
+
+		expect(documentQueries.getByRole('dialog', { name: 'Execute Vault Liquidation' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
+
+		render(null, container)
+		container.remove()
+	})
+
+	test('keeps the dialog open and shows liquidation errors inside the dialog', async () => {
+		function LiquidationErrorHarness() {
+			const [liquidationModalOpen, setLiquidationModalOpen] = useState(true)
+			const [securityPoolOverviewError, setSecurityPoolOverviewError] = useState<string | undefined>(undefined)
+
+			return (
+				<LiquidationModal
+					accountAddress={defaultCallerVaultAddress}
+					closeLiquidationModal={() => {
+						setLiquidationModalOpen(false)
+						setSecurityPoolOverviewError(undefined)
+					}}
+					currentPoolOracleManagerDetails={createOracleManagerDetails({
+						isPriceValid: true,
+						lastPrice: 1n * 10n ** 18n,
+						pendingOperation: undefined,
+						pendingOperationSlotId: 0n,
+					})}
+					isMainnet
+					liquidationAmount='1'
+					liquidationMaxAmount={5n * 10n ** 18n}
+					liquidationManagerAddress={zeroAddress}
+					liquidationModalOpen={liquidationModalOpen}
+					liquidationSecurityPoolAddress={zeroAddress}
+					liquidationTargetVault={defaultTargetVaultAddress}
+					loadingPoolOracleManager={false}
+					onLoadPoolOracleManager={() => undefined}
+					onLiquidationAmountChange={() => undefined}
+					onQueueLiquidation={() => {
+						setLiquidationModalOpen(false)
+						setSecurityPoolOverviewError('Liquidation execution reverted')
+					}}
+					onSelectedPoolViewChange={() => undefined}
+					repPerEthPrice={1n * 10n ** 18n}
+					repPerEthSource='mock'
+					repPerEthSourceUrl={undefined}
+					selectedPool={createSelectedPool()}
+					securityPoolOverviewActiveAction={undefined}
+					securityPoolOverviewError={securityPoolOverviewError}
+					securityPoolOverviewResult={undefined}
+					callerVaultSummary={createTargetVaultSummary({
+						repDepositShare: 20n * 10n ** 18n,
+						securityBondAllowance: 1n * 10n ** 18n,
+						vaultAddress: defaultCallerVaultAddress,
+					})}
+					targetVaultSummary={createTargetVaultSummary({
+						repDepositShare: 11n * 10n ** 18n,
+						securityBondAllowance: 11n * 10n ** 18n,
+						vaultAddress: defaultTargetVaultAddress,
+					})}
+				/>
+			)
+		}
+
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+
+		await act(() => {
+			render(<LiquidationErrorHarness />, container)
+		})
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Execute Liquidation' }))
+		})
+
+		expect(documentQueries.getByRole('dialog', { name: 'Execute Vault Liquidation' })).not.toBeNull()
+		expect(documentQueries.getByText('Liquidation execution reverted')).not.toBeNull()
+
+		render(null, container)
+		container.remove()
+	})
+
 	test('fills the liquidation amount from the provided Max value', async () => {
 		const amountChanges: string[] = []
 		const renderedComponent = await renderLiquidationModal({
@@ -411,6 +571,7 @@ describe('LiquidationModal', () => {
 							lastOracleSettlementTimestamp: 1n,
 						})}
 						securityPoolOverviewActiveAction={undefined}
+						securityPoolOverviewError={undefined}
 						securityPoolOverviewResult={undefined}
 						callerVaultSummary={createTargetVaultSummary({ vaultAddress: defaultCallerVaultAddress })}
 						targetVaultSummary={createTargetVaultSummary({ vaultAddress: defaultTargetVaultAddress })}
@@ -606,6 +767,7 @@ describe('LiquidationModal', () => {
 						securityMultiplier: 2n,
 					})}
 					securityPoolOverviewActiveAction={undefined}
+					securityPoolOverviewError={undefined}
 					securityPoolOverviewResult={undefined}
 					callerVaultSummary={createTargetVaultSummary({
 						repDepositShare: 12_000n * 10n ** 18n,

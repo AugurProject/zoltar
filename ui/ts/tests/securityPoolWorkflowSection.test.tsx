@@ -292,6 +292,7 @@ function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolWorkflow
 		selectedPoolView: '',
 		securityPoolAddress: '',
 		securityPoolOverviewActiveAction: undefined,
+		securityPoolOverviewError: undefined,
 		securityPoolOverviewResult: undefined,
 		securityPools: [],
 		securityVault: createSecurityVaultProps(),
@@ -834,7 +835,8 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Liquidation failed')).not.toBeNull()
-		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
+		const liquidationDialog = documentQueries.getByRole('dialog', { name: 'Execute Vault Liquidation' })
+		expect(within(liquidationDialog).getByText('Local Security Bond Allowance broken')).not.toBeNull()
 	})
 
 	test('refreshes the selected pool and loaded vault after an immediate REP withdrawal execution', async () => {
