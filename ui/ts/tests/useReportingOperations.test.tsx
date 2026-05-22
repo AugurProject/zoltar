@@ -45,6 +45,7 @@ function createReportingDetails(securityPoolAddress: Address): ReportingDetails 
 			title: 'Will this resolve?',
 		},
 		nonDecisionThreshold: 20n,
+		questionOutcome: 'none',
 		resolution: 'none',
 		securityPoolAddress,
 		sides: [
@@ -57,6 +58,8 @@ function createReportingDetails(securityPoolAddress: Address): ReportingDetails 
 		startingTime: 120n,
 		totalCost: 0n,
 		universeId: 1n,
+		withdrawalEnabled: false,
+		withdrawalState: 'not-finalized',
 	}
 }
 

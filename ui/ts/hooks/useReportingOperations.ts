@@ -5,10 +5,10 @@ import type { Address } from 'viem'
 import { loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
-import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
-import { parseAddressInput, resolveOptionalBigIntListInput } from '../lib/inputs.js'
+import { parseAddressInput } from '../lib/inputs.js'
 import { getDefaultReportingFormState, parseRepAmountInput } from '../lib/marketForm.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
+import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
 import type { ReportingFormState, WriteOperationsParameters } from '../types/app.js'
 import type { ReportingActionResult, ReportingDetails } from '../types/contracts.js'
 
@@ -64,6 +64,19 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 					const securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
 					const details = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
 					reportingDetails.value = details
+					setReportingForm(current => {
+						if (details.status !== 'active') {
+							return current.selectedWithdrawDepositIndexes.length === 0 ? current : { ...current, selectedWithdrawDepositIndexes: [] }
+						}
+						const selectedSide = details.sides.find(side => side.key === current.selectedOutcome)
+						const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
+						const selectedWithdrawDepositIndexes = current.selectedWithdrawDepositIndexes.filter(index => availableDepositIndexes.includes(index))
+						if (selectedWithdrawDepositIndexes.length === current.selectedWithdrawDepositIndexes.length) return current
+						return {
+							...current,
+							selectedWithdrawDepositIndexes,
+						}
+					})
 				},
 			)
 		} finally {
@@ -87,8 +100,18 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 					throw new Error('Escalation game has not started yet')
 				}
 				const selectedSide = latestDetails.sides.find(side => side.key === currentForm.selectedOutcome)
-				const depositIndexes = resolveOptionalBigIntListInput(currentForm.withdrawDepositIndexes, selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? [], 'Deposit indexes')
+				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 
+				if (!latestDetails.withdrawalEnabled) {
+					throw new Error('Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
+				}
+
+				const missingSelectedDepositIndex = currentForm.selectedWithdrawDepositIndexes.find(index => !availableDepositIndexes.includes(index))
+				if (missingSelectedDepositIndex !== undefined) {
+					throw new Error(`Selected deposit #${missingSelectedDepositIndex.toString()} is no longer available to withdraw on the selected side`)
+				}
+
+				const depositIndexes = currentForm.selectedWithdrawDepositIndexes.length > 0 ? currentForm.selectedWithdrawDepositIndexes : availableDepositIndexes
 				if (depositIndexes.length === 0) {
 					throw new Error('No deposits available to withdraw for the selected side')
 				}

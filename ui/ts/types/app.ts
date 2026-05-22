@@ -83,7 +83,7 @@ export type ReportingFormState = {
 	reportAmount: string
 	securityPoolAddress: string
 	selectedOutcome: ReportingOutcomeKey
-	withdrawDepositIndexes: string
+	selectedWithdrawDepositIndexes: bigint[]
 }
 
 export type ForkAuctionFormState = {

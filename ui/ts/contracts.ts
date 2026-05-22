@@ -213,14 +213,17 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			completeSetCollateralAmount,
 			currentTime: block.timestamp,
 			marketDetails,
+			questionOutcome: 'none',
 			resolution: 'none',
 			securityPoolAddress,
 			status: 'not-started',
 			universeId,
+			withdrawalEnabled: false,
+			withdrawalState: 'not-finalized',
 		}
 	}
 
-	const [startBond, nonDecisionThreshold, startingTime, totalCost, bindingCapital, balances, resolution, escalationEndTime] = await readRequiredMulticall(client, [
+	const [startBond, nonDecisionThreshold, startingTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'startBond',
@@ -269,6 +272,24 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			address: escalationGameAddress,
 			args: [],
 		},
+		{
+			abi: QUESTION_OUTCOME_ABI,
+			functionName: 'getQuestionOutcome',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		},
+		{
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'getForkTime',
+			address: getInfraContractAddresses().zoltar,
+			args: [universeId],
+		},
+		{
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'hasReachedNonDecision',
+			address: escalationGameAddress,
+			args: [],
+		},
 	])
 	if (!isBigintTriple(balances)) throw new Error('Unexpected escalation balances response')
 	const [invalidDeposits, yesDeposits, noDeposits] = await Promise.all([loadEscalationDeposits(client, escalationGameAddress, 'invalid'), loadEscalationDeposits(client, escalationGameAddress, 'yes'), loadEscalationDeposits(client, escalationGameAddress, 'no')])
@@ -278,6 +299,8 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		{ balance: balances[1] ?? 0n, deposits: yesDeposits, key: 'yes', label: getEscalationSideLabel('yes'), userDeposits: accountAddress === undefined ? [] : yesDeposits.filter(deposit => deposit.depositor === accountAddress) },
 		{ balance: balances[2] ?? 0n, deposits: noDeposits, key: 'no', label: getEscalationSideLabel('no'), userDeposits: accountAddress === undefined ? [] : noDeposits.filter(deposit => deposit.depositor === accountAddress) },
 	]
+	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcome)
+	const withdrawalState = normalizedQuestionOutcome !== 'none' ? 'resolved' : universeForkTime > 0n && hasReachedNonDecision === false ? 'canceled-by-external-fork' : 'not-finalized'
 
 	return {
 		bindingCapital,
@@ -288,6 +311,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		escalationGameAddress,
 		marketDetails,
 		nonDecisionThreshold,
+		questionOutcome: normalizedQuestionOutcome,
 		resolution: getReportingOutcomeKey(resolution),
 		securityPoolAddress,
 		sides,
@@ -296,6 +320,8 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		startingTime,
 		totalCost,
 		universeId,
+		withdrawalEnabled: withdrawalState !== 'not-finalized',
+		withdrawalState,
 	}
 }
 

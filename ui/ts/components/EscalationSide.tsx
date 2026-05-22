@@ -2,37 +2,62 @@ import { CurrencyValue } from './CurrencyValue.js'
 import type { EscalationSide } from '../types/contracts.js'
 
 type EscalationSideProps = {
-	estimate:
-		| {
-				profit: bigint
-				payout: bigint
-		  }
-		| undefined
+	bindingCapital: bigint
+	chartScaleMax: bigint
 	isLeading: boolean
 	isSelected: boolean
 	side: EscalationSide
 	userStake: bigint
 }
 
-export function EscalationSide({ estimate, isLeading, isSelected, side, userStake }: EscalationSideProps) {
+function getChartRatio(value: bigint, maxValue: bigint) {
+	if (value <= 0n || maxValue <= 0n) return '0%'
+
+	const basisPoints = (value * 10000n) / maxValue
+	const wholePercent = basisPoints / 100n
+	const fractionalPercent = (basisPoints % 100n).toString().padStart(2, '0')
+
+	return `${wholePercent.toString()}.${fractionalPercent}%`
+}
+
+export function EscalationSide({ bindingCapital, chartScaleMax, isLeading, isSelected, side, userStake }: EscalationSideProps) {
 	return (
-		<div className={`escalation-side ${isSelected ? 'selected' : ''} ${isLeading ? 'leading' : ''}`}>
-			<div className='escalation-side-header'>
-				<p className='panel-label'>{isLeading ? `${side.label} (Leading)` : side.label}</p>
+		<div
+			className={`escalation-side ${isSelected ? 'selected' : ''} ${isLeading ? 'leading' : ''}`}
+			style={{
+				'--binding-ratio': getChartRatio(bindingCapital, chartScaleMax),
+				'--side-ratio': getChartRatio(side.balance, chartScaleMax),
+				'--user-ratio': getChartRatio(userStake, chartScaleMax),
+			}}
+		>
+			<div className='escalation-side-row'>
+				<div className='escalation-side-copy'>
+					<div className='escalation-side-title-row'>
+						<span className='panel-label'>{side.label}</span>
+						<div className='escalation-side-badges'>
+							{isLeading ? <span className='badge ok'>Leading</span> : undefined}
+							{isSelected ? <span className='badge escalation-side-selected-badge'>Selected</span> : undefined}
+						</div>
+					</div>
+				</div>
+				<div aria-hidden='true' className='escalation-side-chart'>
+					<div className='escalation-side-track'>
+						<div className='escalation-side-total-bar' />
+						<div className='escalation-side-user-bar' />
+						<div className='escalation-side-binding-marker' />
+					</div>
+				</div>
+				<div className='escalation-side-values'>
+					<div className='escalation-side-value'>
+						<span className='metric-label'>Total stake</span>
+						<CurrencyValue copyable={false} value={side.balance} suffix='REP' />
+					</div>
+					<div className='escalation-side-value'>
+						<span className='metric-label'>Your stake</span>
+						<CurrencyValue copyable={false} value={userStake} suffix='REP' />
+					</div>
+				</div>
 			</div>
-			<p className='detail'>
-				Total stake: <CurrencyValue value={side.balance} suffix='REP' />
-			</p>
-			<p className='detail'>
-				Your stake: <CurrencyValue value={userStake} suffix='REP' />
-			</p>
-			<p className='detail'>Your deposits: {side.userDeposits.map(deposit => deposit.depositIndex.toString()).join(', ') || 'None'}</p>
-			<p className='detail'>
-				Projected payout for current amount: <CurrencyValue value={estimate?.payout} suffix='REP' />
-			</p>
-			<p className='detail'>
-				Projected profit if this side wins: <CurrencyValue value={estimate?.profit} suffix='REP' />
-			</p>
 		</div>
 	)
 }
