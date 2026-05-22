@@ -139,9 +139,6 @@ export function ReportingSection({
 			{showFullReporting && activeReportingDetails !== undefined ? (
 				<SectionBlock title='Escalation Metrics'>
 					<div className='escalation-metrics'>
-						<MetricField label='Current Bond'>
-							<CurrencyValue value={activeReportingDetails.currentRequiredBond} suffix='REP' />
-						</MetricField>
 						<MetricField label='Binding Capital'>
 							<CurrencyValue value={activeReportingDetails.bindingCapital} suffix='REP' />
 						</MetricField>

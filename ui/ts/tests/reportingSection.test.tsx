@@ -197,6 +197,18 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' })).not.toBeNull()
 	})
 
+	test('shows escalation metrics without the current bond field and keeps start bond copy', async () => {
+		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Current Bond')).toBeNull()
+		expect(documentQueries.getByText('Binding Capital')).not.toBeNull()
+		expect(documentQueries.getByText('Threshold')).not.toBeNull()
+		expect(documentQueries.getByText('Time Left')).not.toBeNull()
+		expect(document.body.textContent?.includes('currently uses a start bond of')).toBe(true)
+	})
+
 	test('disables reporting buttons when deterministic prerequisites are missing', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
