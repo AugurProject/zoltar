@@ -21,13 +21,25 @@ import {
 	getTradingRedeemSharesGuardMessage,
 	getVaultCollateralizationPercent,
 	hasRepBackedPoolWithNoActiveAllowance,
+	isTradingSystemDeployed,
 } from '../lib/trading.js'
 import { getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
-import type { ZoltarUniverseSummary } from '../types/contracts.js'
+import type { DeploymentStatus, ZoltarUniverseSummary } from '../types/contracts.js'
 
 const TOKEN_PRECISION = 10n ** 18n
 
 void describe('trading helpers', () => {
+	const createDeploymentStep = (id: DeploymentStatus['id'], deployed: boolean): DeploymentStatus => ({
+		address: zeroAddress,
+		dependencies: [],
+		deploy: async () => {
+			throw new Error('Not implemented in test helper')
+		},
+		deployed,
+		id,
+		label: id,
+	})
+
 	const shareBalances = {
 		invalid: 2n * 10n ** 18n,
 		no: 4n * 10n ** 18n,
@@ -121,6 +133,12 @@ void describe('trading helpers', () => {
 		expect(getRemainingMintCapacity(undefined, 12n)).toBeUndefined()
 	})
 
+	void test('treats the trading system as deployed only when every deterministic deployment step is deployed', () => {
+		expect(isTradingSystemDeployed([])).toBe(false)
+		expect(isTradingSystemDeployed([createDeploymentStep('proxyDeployer', true), createDeploymentStep('zoltar', true), createDeploymentStep('securityPoolFactory', true)])).toBe(true)
+		expect(isTradingSystemDeployed([createDeploymentStep('proxyDeployer', true), createDeploymentStep('zoltar', true), createDeploymentStep('securityPoolFactory', false)])).toBe(false)
+	})
+
 	void test('computes pool collateralization as a percentage using the canonical REP/ETH price', () => {
 		expect(getPoolCollateralizationPercent(3n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, TOKEN_PRECISION)).toBe(150n * TOKEN_PRECISION)
 		expect(getPoolCollateralizationPercent(undefined, 2n * TOKEN_PRECISION, TOKEN_PRECISION)).toBeUndefined()
@@ -133,9 +151,9 @@ void describe('trading helpers', () => {
 		expect(getVaultCollateralizationPercent(4n * TOKEN_PRECISION, undefined, TOKEN_PRECISION)).toBeUndefined()
 	})
 
-	void test('marks collateralization green only when it is strictly above the security multiplier threshold', () => {
+	void test('marks collateralization green when it is at or above the security multiplier threshold', () => {
 		expect(getCollateralizationTone(201n * TOKEN_PRECISION, 2n)).toBe('success')
-		expect(getCollateralizationTone(200n * TOKEN_PRECISION, 2n)).toBe('danger')
+		expect(getCollateralizationTone(200n * TOKEN_PRECISION, 2n)).toBe('success')
 		expect(getCollateralizationTone(199n * TOKEN_PRECISION, 2n)).toBe('danger')
 		expect(getCollateralizationTone(undefined, 2n)).toBeUndefined()
 	})

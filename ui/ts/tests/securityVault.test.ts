@@ -3,8 +3,18 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from 'viem'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
-import { parseRepAmountInput } from '../lib/marketForm.js'
-import { getOracleManagerPriceValidUntilTimestamp, getSecurityVaultMaxBondAllowanceAmount, getSelectedVaultAddress, hasValidSecurityVaultOraclePrice, isSecurityVaultDepositBelowMinimum, isSelectedVaultOwnedByAccount, MIN_SECURITY_VAULT_REP_DEPOSIT, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../lib/securityVault.js'
+import { parseOptionalRepAmountInput, parseRepAmountInput } from '../lib/marketForm.js'
+import {
+	doesLoadedSecurityVaultMatchSelection,
+	getOracleManagerPriceValidUntilTimestamp,
+	getSecurityVaultMaxBondAllowanceAmount,
+	getSelectedVaultAddress,
+	hasValidSecurityVaultOraclePrice,
+	isSecurityVaultDepositBelowMinimum,
+	isSelectedVaultOwnedByAccount,
+	MIN_SECURITY_VAULT_REP_DEPOSIT,
+	ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS,
+} from '../lib/securityVault.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { loadSecurityVaultDetails } from '../contracts.js'
 
@@ -26,10 +36,78 @@ void describe('security vault helpers', () => {
 		expect(isSelectedVaultOwnedByAccount(undefined, zeroAddress)).toBe(false)
 	})
 
+	void test('matches loaded vault details against the current effective pool and vault selection', () => {
+		const accountAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
+		const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
+		const details = {
+			currentRetentionRate: 10n,
+			lockedRepInEscalationGame: 0n,
+			managerAddress: zeroAddress,
+			poolOwnershipDenominator: 1n,
+			repDepositShare: 1n,
+			repToken: zeroAddress,
+			securityBondAllowance: 0n,
+			securityPoolAddress,
+			totalSecurityBondAllowance: 0n,
+			unpaidEthFees: 0n,
+			universeId: 1n,
+			vaultAddress,
+		}
+
+		expect(
+			doesLoadedSecurityVaultMatchSelection({
+				accountAddress,
+				securityPoolAddress,
+				securityVaultDetails: details,
+				selectedVaultAddress: vaultAddress,
+			}),
+		).toBe(true)
+
+		expect(
+			doesLoadedSecurityVaultMatchSelection({
+				accountAddress: vaultAddress,
+				securityPoolAddress,
+				securityVaultDetails: details,
+				selectedVaultAddress: '',
+			}),
+		).toBe(true)
+
+		expect(
+			doesLoadedSecurityVaultMatchSelection({
+				accountAddress,
+				securityPoolAddress,
+				securityVaultDetails: details,
+				selectedVaultAddress: accountAddress,
+			}),
+		).toBe(false)
+
+		expect(
+			doesLoadedSecurityVaultMatchSelection({
+				accountAddress,
+				securityPoolAddress: zeroAddress,
+				securityVaultDetails: details,
+				selectedVaultAddress: vaultAddress,
+			}),
+		).toBe(false)
+
+		expect(
+			doesLoadedSecurityVaultMatchSelection({
+				accountAddress,
+				securityPoolAddress,
+				securityVaultDetails: undefined,
+				selectedVaultAddress: vaultAddress,
+			}),
+		).toBe(false)
+	})
+
 	void test('parses security vault REP inputs as 18-decimal token amounts', () => {
 		expect(parseRepAmountInput('10', 'REP collateral amount')).toBe(MIN_SECURITY_VAULT_REP_DEPOSIT)
 		expect(parseRepAmountInput('10.5', 'REP collateral amount')).toBe(105n * 10n ** 17n)
 		expect(parseRepAmountInput('0.25', 'REP withdraw amount')).toBe(25n * 10n ** 16n)
+		expect(parseOptionalRepAmountInput('1')).toBe(10n ** 18n)
+		expect(parseOptionalRepAmountInput('1.5')).toBe(15n * 10n ** 17n)
+		expect(parseOptionalRepAmountInput('abc')).toBe(undefined)
 	})
 
 	void test('formats Max-style REP input amounts without grouped separators or raw base units', () => {

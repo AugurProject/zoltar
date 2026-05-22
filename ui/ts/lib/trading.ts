@@ -4,6 +4,7 @@ import { parseBigIntListInput } from './inputs.js'
 import { parseTradingAmountInput } from './marketForm.js'
 import { getReportingOutcomeLabel } from './reporting.js'
 import { isValidScalarOutcomeIndex } from './scalarOutcome.js'
+import type { DeploymentStatus } from '../types/contracts.js'
 import type { ReportingOutcomeKey, SecurityPoolSystemState, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
 
 const PRICE_PRECISION = 10n ** 18n
@@ -39,7 +40,7 @@ export function getVaultCollateralizationPercent(repDepositShare: bigint | undef
 
 export function getCollateralizationTone(collateralizationPercent: bigint | undefined, securityMultiplier: bigint | undefined): CollateralizationTone | undefined {
 	if (collateralizationPercent === undefined || securityMultiplier === undefined) return undefined
-	return collateralizationPercent > securityMultiplier * PERCENT_MULTIPLIER * PRICE_PRECISION ? 'success' : 'danger'
+	return collateralizationPercent < securityMultiplier * PERCENT_MULTIPLIER * PRICE_PRECISION ? 'danger' : 'success'
 }
 
 export function getCollateralizationDisplayState(securityBondAllowance: bigint | undefined, collateralizationPercent: bigint | undefined): CollateralizationDisplayState {
@@ -97,6 +98,10 @@ export function getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse
 	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return ''
 	if (tradingForkUniverse.forkQuestionDetails?.marketType === 'scalar') return ''
 	return tradingForkUniverse.childUniverses.map(child => child.outcomeIndex.toString()).join(', ')
+}
+
+export function isTradingSystemDeployed(deploymentStatuses: DeploymentStatus[]) {
+	return deploymentStatuses.length > 0 && deploymentStatuses.every(step => step.deployed)
 }
 
 export function getTradingMintGuardMessage({

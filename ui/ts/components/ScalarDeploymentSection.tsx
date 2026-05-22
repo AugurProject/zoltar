@@ -2,11 +2,10 @@ import { useRef, useState } from 'preact/hooks'
 import type { Address } from 'viem'
 import { ChildUniversesSection } from './ChildUniversesSection.js'
 import { ChildUniverseDetails } from './ChildUniverseDetails.js'
+import { ChildUniverseDeploymentModal } from './ChildUniverseDeploymentModal.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { useEffect } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
-import { OperationModal } from './OperationModal.js'
-import { RequirementsChecklist } from './RequirementsChecklist.js'
 import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
@@ -94,7 +93,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 			<ScalarOutcomePicker
 				action={
 					<TransactionActionButton
-						idleLabel={selectedScalarChildExists ? 'Deployed' : scalarOutcomeInvalid ? 'Open Invalid Universe Flow' : 'Open Universe Flow'}
+						idleLabel={selectedScalarChildExists ? 'Deployed' : scalarOutcomeInvalid ? 'Create invalid universe' : 'Create child universe'}
 						pendingLabel='Opening...'
 						onClick={() => {
 							try {
@@ -128,30 +127,28 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				selectedTick={clampedScalarOutcomeTick}
 				selectedTickLabel={scalarOutcomeInvalid ? 'Invalid' : `${clampedScalarOutcomeTick} / ${questionDetails.numTicks.toString()}`}
 			/>
-			<OperationModal isOpen={deployModalOpen} onClose={() => setDeployModalOpen(false)} title='Create Child Universe' description='Confirm the selected scalar outcome and deploy its child universe in one bounded execution flow.'>
+			<ChildUniverseDeploymentModal
+				actionAvailability={{ disabled: !canDeployScalarChild || scalarDeployError !== undefined, reason: deployReason }}
+				description='Confirm the selected scalar outcome and deploy its child universe in one bounded execution flow.'
+				idleLabel={scalarOutcomeInvalid ? 'Deploy Invalid Universe' : 'Deploy Universe'}
+				isOpen={deployModalOpen}
+				onClose={() => setDeployModalOpen(false)}
+				onConfirm={() => onCreateChildUniverseForOutcomeIndex(selectedScalarOutcomeIndex)}
+				pending={scalarDeployPending}
+				pendingLabel='Deploying universe...'
+				requirements={scalarDeployRequirements}
+				title='Create Child Universe'
+			>
 				{selectedScalarChild === undefined ? undefined : (
-					<>
-						<ChildUniversesSection
-							childUniverses={[selectedScalarChild]}
-							emptyMessage='No child universe selected.'
-							headerTitle='Selected Child Universe'
-							renderBadge={child => <span className={`badge ${child.exists ? 'ok' : 'pending'}`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
-							renderBody={child => <ChildUniverseDetails child={child} />}
-						/>
-						<RequirementsChecklist items={scalarDeployRequirements} />
-						<div className='actions'>
-							<TransactionActionButton
-								idleLabel={scalarOutcomeInvalid ? 'Deploy Invalid Universe' : 'Deploy Universe'}
-								pendingLabel='Deploying universe...'
-								onClick={() => onCreateChildUniverseForOutcomeIndex(selectedScalarOutcomeIndex)}
-								pending={scalarDeployPending}
-								tone='secondary'
-								availability={{ disabled: !canDeployScalarChild || scalarDeployError !== undefined, reason: deployReason }}
-							/>
-						</div>
-					</>
+					<ChildUniversesSection
+						childUniverses={[selectedScalarChild]}
+						emptyMessage='No child universe selected.'
+						headerTitle='Selected Child Universe'
+						renderBadge={child => <span className={`badge ${child.exists ? 'ok' : 'pending'}`}>{child.exists ? 'Exists' : 'Not deployed'}</span>}
+						renderBody={child => <ChildUniverseDetails child={child} />}
+					/>
 				)}
-			</OperationModal>
+			</ChildUniverseDeploymentModal>
 			<ErrorNotice message={scalarDeployError} />
 			<ErrorNotice message={zoltarChildUniverseError} />
 		</WorkflowSubsection>

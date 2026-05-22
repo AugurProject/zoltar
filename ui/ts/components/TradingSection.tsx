@@ -1,21 +1,17 @@
 import { useEffect, useState } from 'preact/hooks'
 import { ActionLauncherCard } from './ActionLauncherCard.js'
-import { AddressValue } from './AddressValue.js'
-import { ResultBanner } from './ResultBanner.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
-import { LatestActionSection } from './LatestActionSection.js'
 import { MetricField } from './MetricField.js'
 import { OperationModal } from './OperationModal.js'
+import { ResultBanner } from './ResultBanner.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { ShareMigrationTargetsSection } from './ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { TransactionHashLink } from './TransactionHashLink.js'
-import { UniverseLink } from './UniverseLink.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
+import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
 import {
@@ -208,30 +204,11 @@ export function TradingSection({
 			targetOutcomeIndexes: [...selectedTargetOutcomeIndexes, outcomeIndex].map(index => index.toString()).join(', '),
 		})
 	}
-	const renderShareMetricValue = (value: bigint | undefined) => {
-		if (loadingTradingDetails) return 'Loading...'
-		if (value === undefined) return '—'
-		return formatCurrencyBalance(value)
-	}
-	const latestTradingAction =
-		tradingResult === undefined ? undefined : (
-			<LatestActionSection
-				title='Latest Trading Action'
-				embedInCard={embedInCard}
-				rows={[
-					{ label: 'Action', value: tradingResult.action },
-					...(tradingResult.action !== 'migrateShares' || tradingResult.shareOutcome === undefined ? [] : [{ label: 'Share Outcome', value: tradingResult.shareOutcome }]),
-					...(tradingResult.action !== 'migrateShares' || tradingResult.targetOutcomeIndexes === undefined ? [] : [{ label: 'Target Outcome Indexes', value: tradingResult.targetOutcomeIndexes.join(', ') }]),
-					{ label: 'Pool', value: <AddressValue address={tradingResult.securityPoolAddress} /> },
-					{ label: 'Universe', value: <UniverseLink universeId={tradingResult.universeId} /> },
-					{ label: 'Transaction', value: <TransactionHashLink hash={tradingResult.hash} /> },
-				]}
-			/>
-		)
+	const renderShareMetricValue = (value: bigint | undefined) => <CurrencyValue loading={loadingTradingDetails} value={value} />
 	const tradingOutcome = getTradingOutcomePresentation(tradingResult)
 	const tradingLaunchers: ReadinessAction[] = [
 		{
-			actionLabel: 'Open Mint Flow',
+			actionLabel: 'Mint complete sets',
 			description: 'Review mint capacity, available backing, and the collateral amount before minting complete sets.',
 			key: 'mint-complete-sets',
 			readiness: mintLauncherBlocker === undefined ? 'ready' : 'blocked',
@@ -239,7 +216,7 @@ export function TradingSection({
 			...(mintLauncherBlocker === undefined ? { onAction: () => setActiveModal('mint') } : { blocker: mintLauncherBlocker }),
 		},
 		{
-			actionLabel: 'Open Redeem Flow',
+			actionLabel: 'Redeem complete sets',
 			description: 'Redeem matching yes, no, and invalid shares back into collateral using the available complete-set balance.',
 			key: 'redeem-complete-sets',
 			readiness: redeemCompleteSetsLauncherBlocker === undefined ? 'ready' : 'blocked',
@@ -247,7 +224,7 @@ export function TradingSection({
 			...(redeemCompleteSetsLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-complete-sets') } : { blocker: redeemCompleteSetsLauncherBlocker }),
 		},
 		{
-			actionLabel: 'Open Migration Flow',
+			actionLabel: 'Migrate forked shares',
 			description: 'Select the source outcome and target child universes before migrating forked shares.',
 			key: 'migrate-shares',
 			readiness: migrateSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
@@ -255,7 +232,7 @@ export function TradingSection({
 			...(migrateSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('migrate-shares') } : { blocker: migrateSharesLauncherBlocker }),
 		},
 		{
-			actionLabel: 'Open Redemption Flow',
+			actionLabel: 'Redeem resolved shares',
 			description: 'Redeem finalized winning shares once the selected pool has resolved.',
 			key: 'redeem-shares',
 			readiness: redeemSharesGuardMessage === undefined ? 'ready' : 'blocked',
@@ -282,8 +259,6 @@ export function TradingSection({
 					</label>
 				</SectionBlock>
 			)}
-
-			{latestTradingAction}
 
 			{selectedPool === undefined ? undefined : (
 				<SectionBlock title='Your Shares'>

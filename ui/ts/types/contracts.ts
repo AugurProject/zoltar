@@ -321,23 +321,33 @@ export type EscalationSide = {
 	userDeposits: EscalationDeposit[]
 }
 
-export type ReportingDetails = {
-	bindingCapital: bigint
+type ReportingDetailsBase = {
 	completeSetCollateralAmount: bigint
-	currentRequiredBond: bigint
 	currentTime: bigint
-	escalationEndTime: bigint
-	escalationGameAddress: Address
 	marketDetails: MarketDetails
-	nonDecisionThreshold: bigint
 	resolution: ReportingOutcomeKey | 'none'
 	securityPoolAddress: Address
+	universeId: bigint
+}
+
+export type ActiveReportingDetails = ReportingDetailsBase & {
+	status: 'active'
+	bindingCapital: bigint
+	currentRequiredBond: bigint
+	escalationEndTime: bigint
+	escalationGameAddress: Address
+	nonDecisionThreshold: bigint
 	sides: EscalationSide[]
 	startBond: bigint
 	startingTime: bigint
 	totalCost: bigint
-	universeId: bigint
 }
+
+export type ReportingDetails =
+	| (ReportingDetailsBase & {
+			status: 'not-started'
+	  })
+	| ActiveReportingDetails
 
 export type ReportingActionResult = ActionResult & {
 	action: 'reportOutcome' | 'withdrawEscalation'

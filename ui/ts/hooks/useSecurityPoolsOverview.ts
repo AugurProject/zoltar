@@ -59,6 +59,8 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 	}
 
 	const openLiquidationModal = (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => {
+		securityPoolOverviewError.value = undefined
+		securityPoolOverviewResult.value = undefined
 		liquidationManagerAddress.value = managerAddress
 		liquidationMaxAmount.value = maxAmount
 		liquidationSecurityPoolAddress.value = securityPoolAddress
@@ -67,6 +69,8 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 	}
 
 	const closeLiquidationModal = () => {
+		securityPoolOverviewError.value = undefined
+		securityPoolOverviewResult.value = undefined
 		liquidationModalOpen.value = false
 	}
 
@@ -82,13 +86,15 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 					return await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount)
 				},
 				'Failed to queue liquidation',
-				result => {
+				async result => {
 					securityPoolOverviewResult.value = {
 						action: 'queueLiquidation',
 						hash: result.hash,
 						securityPoolAddress,
 						...(result.stagedExecution === undefined ? {} : { stagedExecution: result.stagedExecution }),
 					}
+					liquidationModalOpen.value = false
+					await loadSecurityPools(securityPoolAddress)
 				},
 			)
 		} finally {
