@@ -748,7 +748,7 @@ export function SecurityPoolWorkflowSection({
 												<SectionBlock title='Vault Action Launchers'>
 													<div className='vault-action-launcher-grid'>
 														{vaultReadinessActions.map(action => (
-															<ActionLauncherCard key={action.key} action={action} />
+															<ActionLauncherCard key={action.key} action={action} emphasizeReadiness={false} />
 														))}
 													</div>
 												</SectionBlock>
