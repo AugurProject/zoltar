@@ -347,6 +347,7 @@ type LiquidationControlsProps = {
 	liquidationSecurityPoolAddress: Address | undefined
 	loadingPoolOracleManager: boolean
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
+	securityPoolOverviewError: string | undefined
 	liquidationTargetVault: string
 	onLiquidationAmountChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
@@ -394,6 +395,7 @@ export type SecurityPoolWorkflowRouteContentProps = {
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
+	securityPoolOverviewError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	poolOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	poolOracleManagerDetails: OracleManagerDetails | undefined

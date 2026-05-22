@@ -100,6 +100,7 @@ export function SecurityPoolWorkflowSection({
 	reporting,
 	selectedPoolView,
 	securityPoolOverviewActiveAction,
+	securityPoolOverviewError,
 	securityPoolOverviewResult,
 	securityPoolAddress,
 	securityPools,
@@ -688,6 +689,7 @@ export function SecurityPoolWorkflowSection({
 				repPerEthSourceUrl={repPerEthSourceUrl}
 				selectedPool={selectedPool}
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
+				securityPoolOverviewError={securityPoolOverviewError}
 				securityPoolOverviewResult={securityPoolOverviewResult}
 				callerVaultSummary={accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))}
 				targetVaultSummary={selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))}

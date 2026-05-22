@@ -507,6 +507,7 @@ export function App() {
 				void loadOracleReport(reportId.toString())
 			},
 			securityPoolOverviewActiveAction,
+			securityPoolOverviewError,
 			securityPoolOverviewResult,
 			poolOracleActiveAction,
 			poolOracleManagerDetails,

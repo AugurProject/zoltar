@@ -202,6 +202,7 @@ export function SecurityPoolsOverviewSection({
 				repPerEthSourceUrl={repPerEthSourceUrl}
 				selectedPool={selectedPool}
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
+				securityPoolOverviewError={securityPoolOverviewError}
 				securityPoolOverviewResult={securityPoolOverviewResult}
 				callerVaultSummary={callerVaultSummary}
 				targetVaultSummary={targetVaultSummary}
