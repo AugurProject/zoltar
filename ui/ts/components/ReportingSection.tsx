@@ -4,14 +4,12 @@ import { EntityCard } from './EntityCard.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
-import { LifecycleStageBanner } from './LifecycleStageBanner.js'
 import { EscalationSide } from './EscalationSide.js'
 import { LatestActionSection } from './LatestActionSection.js'
 import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { Question } from './Question.js'
-import { ResultBanner } from './ResultBanner.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
@@ -24,39 +22,7 @@ import { isMainnetChain } from '../lib/network.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome } from '../lib/reportingDomain.js'
-import type { LifecycleStagePresentation, ReportingSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
-
-function getReportingStagePresentation({ effectiveCurrentTimestamp, marketDetails, reportingDetails }: { effectiveCurrentTimestamp: bigint | undefined; marketDetails: ReportingSectionProps['previewMarketDetails']; reportingDetails: ReportingSectionProps['reportingDetails'] }): LifecycleStagePresentation | undefined {
-	if (marketDetails === undefined) return undefined
-	if (effectiveCurrentTimestamp !== undefined && effectiveCurrentTimestamp < marketDetails.endTime) {
-		return {
-			availableActions: ['Monitor question end'],
-			blockedActions: ['Report / Contribute', 'Withdraw escalation deposits'],
-			detail: 'Reporting is still locked because the market end time has not passed yet.',
-			key: 'reporting-locked',
-			label: 'Pre-Reporting',
-			tone: 'warning',
-		}
-	}
-
-	const phase = reportingDetails === undefined ? 'Reporting Open' : getEscalationPhase(reportingDetails)
-	return {
-		availableActions: ['Report / Contribute', 'Withdraw escalation deposits'],
-		blockedActions: [],
-		detail: `The current escalation lifecycle phase is ${phase}. Contribution and withdrawal actions stay inline because side-by-side context matters.`,
-		key: 'reporting-open',
-		label: phase,
-		tone: 'default',
-	}
-}
-
-function getReportingOutcomePresentation(result: ReportingSectionProps['reportingResult']): WorkflowOutcomePresentation | undefined {
-	if (result === undefined) return undefined
-	if (result.action === 'reportOutcome') {
-		return { title: 'Reporting contribution submitted', detail: `Contributed on the ${getReportingOutcomeLabel(result.outcome)} side.`, nextStep: 'Review the leading side and updated bond before contributing again.' }
-	}
-	return { title: 'Escalation deposits withdrawn', detail: `Withdrew deposits from the ${getReportingOutcomeLabel(result.outcome)} side.`, nextStep: 'Confirm the remaining deposits and whether any other sides are still withdrawable.' }
-}
+import type { ReportingSectionProps } from '../types/components.js'
 
 export function ReportingSection({
 	accountState,
@@ -116,13 +82,9 @@ export function ReportingSection({
 				]}
 			/>
 		)
-	const reportingStage = getReportingStagePresentation({ effectiveCurrentTimestamp, marketDetails, reportingDetails })
-	const reportingOutcome = getReportingOutcomePresentation(reportingResult)
 
 	const sections = (
 		<>
-			<ResultBanner outcome={reportingOutcome} />
-			{reportingStage === undefined ? undefined : <LifecycleStageBanner stage={reportingStage} />}
 			<SectionBlock title='Reporting Context'>
 				{showSecurityPoolAddressInput ? (
 					<LookupFieldRow
@@ -159,32 +121,10 @@ export function ReportingSection({
 				<EntityCard title='Loaded Escalation Game' variant='record' badge={<span className='badge ok'>{getEscalationPhase(reportingDetails)}</span>}>
 					<ul className='status-list hashes'>
 						<li>
-							<span>Security Pool</span>
-							<strong>
-								<AddressValue address={reportingDetails.securityPoolAddress} />
-							</strong>
-						</li>
-						<li>
 							<span>Escalation Game</span>
 							<strong>
 								<AddressValue address={reportingDetails.escalationGameAddress} />
 							</strong>
-						</li>
-						<li>
-							<span>Universe</span>
-							<strong>
-								<UniverseLink universeId={reportingDetails.universeId} />
-							</strong>
-						</li>
-						<li>
-							<span>Market End</span>
-							<strong>
-								<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={reportingDetails.marketDetails.endTime} />
-							</strong>
-						</li>
-						<li>
-							<span>Resolution</span>
-							<strong>{getReportingOutcomeLabel(reportingDetails.resolution)}</strong>
 						</li>
 					</ul>
 					<SectionBlock headingLevel={4} title='Question' variant='embedded'>

@@ -6,7 +6,7 @@ import { h } from 'preact'
 import { zeroAddress } from 'viem'
 import { ReportingSection } from '../components/ReportingSection.js'
 import type { AccountState, ReportingFormState } from '../types/app.js'
-import type { MarketDetails, ReportingDetails } from '../types/contracts.js'
+import type { MarketDetails, ReportingActionResult, ReportingDetails } from '../types/contracts.js'
 import type { ReportingSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -22,7 +22,7 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 	}
 }
 
-function createMarketDetails(): MarketDetails {
+function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
 	return {
 		answerUnit: '',
 		createdAt: 1n,
@@ -37,10 +37,11 @@ function createMarketDetails(): MarketDetails {
 		questionId: '0x01',
 		startTime: 1n,
 		title: 'Will this resolve?',
+		...overrides,
 	}
 }
 
-function createReportingDetails(): ReportingDetails {
+function createReportingDetails(overrides: Partial<ReportingDetails> = {}): ReportingDetails {
 	return {
 		bindingCapital: 10n,
 		completeSetCollateralAmount: 1n,
@@ -61,6 +62,18 @@ function createReportingDetails(): ReportingDetails {
 		startingTime: 120n,
 		totalCost: 0n,
 		universeId: 1n,
+		...overrides,
+	}
+}
+
+function createReportingResult(overrides: Partial<ReportingActionResult> = {}): ReportingActionResult {
+	return {
+		action: 'reportOutcome',
+		hash: '0x01',
+		outcome: 'yes',
+		securityPoolAddress: zeroAddress,
+		universeId: 1n,
+		...overrides,
 	}
 }
 
@@ -111,17 +124,46 @@ describe('ReportingSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('shows a reporting stage banner and workflow summary strip', async () => {
+	test('renders the reporting workflow without banners or duplicate loaded-market metadata', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByText('Active').length).toBeGreaterThan(0)
-		expect(documentQueries.queryByText('Available')).toBeNull()
-		expect(documentQueries.queryByText('Blocked')).toBeNull()
-		expect(documentQueries.queryByText('Reporting Workflow')).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Pending Start' })).toBeNull()
+		expect(documentQueries.queryByText('The current escalation lifecycle phase is')).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Loaded Escalation Game' })).not.toBeNull()
+
+		const loadedEscalationCard = documentQueries.getByRole('heading', { name: 'Loaded Escalation Game' }).closest('.entity-card')
+		if (loadedEscalationCard === null) throw new Error('Expected loaded escalation entity card')
+		const loadedEscalationQueries = within(loadedEscalationCard as HTMLElement)
+		expect(loadedEscalationQueries.getByText('Escalation Game')).not.toBeNull()
+		expect(loadedEscalationQueries.queryByText('Security Pool')).toBeNull()
+		expect(loadedEscalationQueries.queryByText('Universe')).toBeNull()
+		expect(loadedEscalationQueries.queryByText('Resolution')).toBeNull()
+		expect(loadedEscalationQueries.queryByText('Market End')).toBeNull()
+
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(true)
 		expect(document.body.textContent?.includes('Selected side has')).toBe(true)
+	})
+
+	test('does not render the reporting success banner after a contribution result', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createReportingDetails({ currentTime: 110n, startingTime: 120n }),
+					reportingResult: createReportingResult(),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Reporting contribution submitted')).toBeNull()
+		expect(documentQueries.queryByText('Contributed on the Yes side.')).toBeNull()
+		expect(documentQueries.queryByText('Next: Review the leading side and updated bond before contributing again.')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' })).not.toBeNull()
 	})
 
 	test('disables reporting buttons when deterministic prerequisites are missing', async () => {
