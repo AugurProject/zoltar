@@ -132,11 +132,7 @@ export function getVaultWorkflowOutcomePresentation(action: SecurityVaultActionR
 				title: 'Bond Allowance Queued',
 			}
 		case 'queueWithdrawRep':
-			return {
-				detail: 'A REP withdrawal was queued for the selected vault.',
-				nextStep: 'Review the queued entry in Staged Operations and execute it when the oracle price is valid.',
-				title: 'REP Withdrawal Queued',
-			}
+			return undefined
 		case 'redeemFees':
 			return {
 				detail: 'Claimable fees were redeemed from the selected vault.',

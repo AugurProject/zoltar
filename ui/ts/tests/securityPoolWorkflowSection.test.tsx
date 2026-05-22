@@ -745,6 +745,8 @@ describe('SecurityPoolWorkflowSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('A REP withdrawal was queued for the selected vault.')).toBeNull()
+		expect(documentQueries.queryByText('Next: Review the queued entry in Staged Operations and execute it when the oracle price is valid.')).toBeNull()
 
 		await act(() => {
 			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Withdraw REP' })[0] as HTMLElement)
