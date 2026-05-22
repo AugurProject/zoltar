@@ -133,8 +133,10 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByText('Available')).toBeNull()
 		expect(documentQueries.queryByText('Blocked')).toBeNull()
 		expect(documentQueries.queryByText('Reporting Workflow')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Reporting Context' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Question' })).toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(true)
-		expect(document.body.textContent?.includes('Selected side has')).toBe(true)
+		expect(document.body.textContent?.includes('Selected side has')).toBe(false)
 	})
 
 	test('renders the pre-reporting stage inside the shared warning surface', async () => {
@@ -171,15 +173,26 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Connect a wallet before reporting on a market.')
-		expectTransactionButtonDisabled(document.body, 'Withdraw Escalation Deposits', 'Connect a wallet before withdrawing escalation deposits.')
+		expect(document.body.querySelector('button[title=\"Connect a wallet before withdrawing escalation deposits.\"]')).toBeNull()
 		expect(document.body.querySelector('.disabled-reason')).toBeNull()
 	})
 
-	test('enables reporting actions when the selected side can accept reports and has deposits to withdraw', async () => {
+	test('enables reporting action when the selected side can accept reports', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
+		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
+	})
+
+	test('renders a withdraw-only mode without reporting context or report form', async () => {
+		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ mode: 'withdraw-only' })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
 		expectTransactionButtonEnabled(document.body, 'Withdraw Escalation Deposits')
 	})
 
@@ -202,6 +215,24 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('The first report or contribution will deploy and initialize the escalation game for this pool.')).toBe(true)
 
 		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
-		expectTransactionButtonDisabled(document.body, 'Withdraw Escalation Deposits', 'Escalation game has not started yet.')
+		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
+	})
+
+	test('accepts decimal report amounts for profit preview', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingForm: {
+						...createReportingForm(),
+						reportAmount: '1.5',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('projects roughly')).toBe(true)
+		expect(document.body.textContent?.includes('Enter a valid report amount to preview profit.')).toBe(false)
 	})
 })

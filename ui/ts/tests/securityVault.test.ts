@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from 'viem'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
-import { parseRepAmountInput } from '../lib/marketForm.js'
+import { parseOptionalRepAmountInput, parseRepAmountInput } from '../lib/marketForm.js'
 import {
 	doesLoadedSecurityVaultMatchSelection,
 	getOracleManagerPriceValidUntilTimestamp,
@@ -105,6 +105,9 @@ void describe('security vault helpers', () => {
 		expect(parseRepAmountInput('10', 'REP collateral amount')).toBe(MIN_SECURITY_VAULT_REP_DEPOSIT)
 		expect(parseRepAmountInput('10.5', 'REP collateral amount')).toBe(105n * 10n ** 17n)
 		expect(parseRepAmountInput('0.25', 'REP withdraw amount')).toBe(25n * 10n ** 16n)
+		expect(parseOptionalRepAmountInput('1')).toBe(10n ** 18n)
+		expect(parseOptionalRepAmountInput('1.5')).toBe(15n * 10n ** 17n)
+		expect(parseOptionalRepAmountInput('abc')).toBe(undefined)
 	})
 
 	void test('formats Max-style REP input amounts without grouped separators or raw base units', () => {

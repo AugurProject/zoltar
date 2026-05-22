@@ -9,6 +9,7 @@ import { LookupFieldRow } from './LookupFieldRow.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
+import { Question } from './Question.js'
 import { ResultBanner } from './ResultBanner.js'
 import { ReportingSection } from './ReportingSection.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
@@ -156,6 +157,7 @@ export function SecurityPoolWorkflowSection({
 					{ label: 'Vaults', value: 'vaults' },
 					{ label: 'Trading', value: 'trading' },
 					{ label: 'Reporting', value: 'reporting' },
+					{ label: 'Withdraw Escalation Deposits', value: 'withdraw-escalation-deposits' },
 					{ label: 'Fork', value: 'fork' },
 					{ label: 'Staged Operations', value: 'staged-operations' },
 					{ label: 'Open Oracle', value: 'price-oracle' },
@@ -164,6 +166,7 @@ export function SecurityPoolWorkflowSection({
 					{ disabled: true, label: 'Vaults', reason: selectedPoolWorkflowGuardMessage, value: 'vaults' },
 					{ disabled: true, label: 'Trading', reason: selectedPoolWorkflowGuardMessage, value: 'trading' },
 					{ disabled: true, label: 'Reporting', reason: selectedPoolWorkflowGuardMessage, value: 'reporting' },
+					{ disabled: true, label: 'Withdraw Escalation Deposits', reason: selectedPoolWorkflowGuardMessage, value: 'withdraw-escalation-deposits' },
 					{ disabled: true, label: 'Fork', reason: selectedPoolWorkflowGuardMessage, value: 'fork' },
 					{ disabled: true, label: 'Staged Operations', reason: selectedPoolWorkflowGuardMessage, value: 'staged-operations' },
 					{ disabled: true, label: 'Open Oracle', reason: selectedPoolWorkflowGuardMessage, value: 'price-oracle' },
@@ -210,7 +213,6 @@ export function SecurityPoolWorkflowSection({
 		loadingPoolOracleManager,
 		securityPoolOverviewResult,
 	})
-	const selectedPoolQuestionDescription = marketDetails === undefined ? undefined : marketDetails.description.trim() === '' ? undefined : marketDetails.description
 	const loadedSelectedPool = selectedPool
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({
@@ -292,7 +294,7 @@ export function SecurityPoolWorkflowSection({
 	}, [accountState.address, hasLoadedCurrentVault, securityVault.loadingSecurityVault, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, selectedVaultAddress, selectedVaultAutoLoadKey, selectedVaultSecurityPoolAddress, showSelectedPoolWorkflowDetails, view])
 
 	useEffect(() => {
-		if (view !== 'reporting' || !reportingReady || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {
+		if ((view !== 'reporting' && view !== 'withdraw-escalation-deposits') || !reportingReady || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {
 			lastReportingAutoLoadKey.current = undefined
 			return
 		}
@@ -394,7 +396,6 @@ export function SecurityPoolWorkflowSection({
 				{loadedSelectedPool === undefined ? undefined : (
 					<div className='selected-pool-context-summary'>
 						<div className='selected-pool-context-overview'>
-							{selectedPoolQuestionDescription === undefined ? undefined : <p className='detail selected-pool-context-description'>{selectedPoolQuestionDescription}</p>}
 							<SecurityPoolSummaryMetrics className='selected-pool-context-grid' pool={loadedSelectedPool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showTotalBacking>
 								<MetricField label='Open Oracle Price' valueTagName='span'>
 									<OpenOraclePriceValue
@@ -419,6 +420,11 @@ export function SecurityPoolWorkflowSection({
 								)}
 							</SecurityPoolSummaryMetrics>
 						</div>
+						{marketDetails === undefined ? undefined : (
+							<SectionBlock headingLevel={3} title='Question' variant='embedded'>
+								<Question question={marketDetails} />
+							</SectionBlock>
+						)}
 					</div>
 				)}
 			</StickyObjectContext>
@@ -559,6 +565,21 @@ export function SecurityPoolWorkflowSection({
 										currentTimestamp={currentTimestamp}
 										embedInCard
 										lockedReason={reportingReady ? undefined : 'Reporting opens after market end.'}
+										mode='full-reporting'
+										previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
+										reportingDetails={currentReportingDetails}
+										showHeader={false}
+										showSecurityPoolAddressInput={false}
+									/>
+								) : undefined}
+
+								{view === 'withdraw-escalation-deposits' ? (
+									<ReportingSection
+										{...reporting}
+										currentTimestamp={currentTimestamp}
+										embedInCard
+										lockedReason={reportingReady ? undefined : 'Reporting opens after market end.'}
+										mode='withdraw-only'
 										previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
 										reportingDetails={currentReportingDetails}
 										showHeader={false}
