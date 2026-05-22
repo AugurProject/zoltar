@@ -195,6 +195,7 @@ export function App() {
 	} = useSecurityPoolsOverview(baseHookConfig)
 	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
 		...baseHookConfig,
+		deploymentStatuses,
 		enabled: route === 'security-pools',
 	})
 	const {
