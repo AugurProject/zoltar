@@ -11,6 +11,7 @@ import { LoadingText } from './LoadingText.js'
 import { MetricField } from './MetricField.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
+import { StateHint } from './StateHint.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -21,7 +22,21 @@ import { isMainnetChain } from '../lib/network.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getMaxProfitContribution, getMinimumOutcomeChangeContribution } from '../lib/reportingDomain.js'
+import type { UserMessagePresentation } from '../lib/userCopy.js'
 import type { ReportingSectionProps } from '../types/components.js'
+
+function getDepositEntryCountLabel(count: number) {
+	return count === 1 ? 'entry' : 'entries'
+}
+
+function getReportingLockedPresentation({ effectiveCurrentTimestamp, marketDetails }: { effectiveCurrentTimestamp: bigint | undefined; marketDetails: ReportingSectionProps['previewMarketDetails'] }): UserMessagePresentation | undefined {
+	if (effectiveCurrentTimestamp === undefined || marketDetails === undefined || marketDetails.endTime <= effectiveCurrentTimestamp) return undefined
+	return {
+		actionHint: `Reporting opens in ${formatDuration(marketDetails.endTime - effectiveCurrentTimestamp)}.`,
+		detail: 'Reporting is not enabled at the moment.',
+		key: 'action_needed',
+	}
+}
 
 export function ReportingSection({
 	accountState,
@@ -52,9 +67,10 @@ export function ReportingSection({
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const showFullReporting = mode === 'full-reporting'
 	const showWithdrawOnly = mode === 'withdraw-only'
+	const selectedSide = activeReportingDetails?.sides.find(side => side.key === reportingForm.selectedOutcome)
+	const selectedWithdrawDepositIndexes = reportingForm.selectedWithdrawDepositIndexes
 	const chartScaleMax = activeReportingDetails === undefined ? 1n : activeReportingDetails.sides.reduce((maxBalance, side) => (side.balance > maxBalance ? side.balance : maxBalance), activeReportingDetails.bindingCapital > 1n ? activeReportingDetails.bindingCapital : 1n)
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
-	const selectedSide = activeReportingDetails?.sides.find(side => side.key === reportingForm.selectedOutcome)
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
 	const minimumOutcomeChangeContribution =
 		activeReportingDetails === undefined ? { amount: undefined, reason: reportingStatus === 'not-started' ? 'Escalation game has not started yet.' : 'Load reporting details before using presets.' } : getMinimumOutcomeChangeContribution(activeReportingDetails, reportingForm.selectedOutcome)
@@ -74,6 +90,8 @@ export function ReportingSection({
 		isMainnet,
 		lockedReason,
 		reportingStatus,
+		withdrawalEnabled: activeReportingDetails?.withdrawalEnabled ?? false,
+		withdrawalState: reportingDetails?.withdrawalState,
 	})
 	const latestReportingAction =
 		reportingResult === undefined ? undefined : (
@@ -89,6 +107,7 @@ export function ReportingSection({
 				]}
 			/>
 		)
+	const reportingLockedPresentation = getReportingLockedPresentation({ effectiveCurrentTimestamp, marketDetails })
 	const visibleLatestReportingAction = reportingResult === undefined ? undefined : showFullReporting ? (reportingResult.action === 'reportOutcome' ? latestReportingAction : undefined) : reportingResult.action === 'withdrawEscalation' ? latestReportingAction : undefined
 
 	const sections = (
@@ -114,10 +133,10 @@ export function ReportingSection({
 							<MetricField label='Market End'>
 								<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={marketDetails.endTime} />
 							</MetricField>
-							{effectiveCurrentTimestamp === undefined ? undefined : <MetricField label='Reporting'>{marketDetails.endTime <= effectiveCurrentTimestamp ? 'Open' : 'Locked'}</MetricField>}
-							{effectiveCurrentTimestamp === undefined || marketDetails.endTime <= effectiveCurrentTimestamp ? undefined : <MetricField label='Opens In'>{formatDuration(marketDetails.endTime - effectiveCurrentTimestamp)}</MetricField>}
+							{effectiveCurrentTimestamp !== undefined && marketDetails.endTime <= effectiveCurrentTimestamp ? <MetricField label='Reporting'>Open</MetricField> : undefined}
 						</div>
 					)}
+					{reportingLockedPresentation === undefined ? undefined : <StateHint presentation={reportingLockedPresentation} />}
 
 					{activeReportingDetails === undefined ? undefined : (
 						<ul className='status-list hashes'>
@@ -132,19 +151,9 @@ export function ReportingSection({
 				</EntityCard>
 			) : undefined}
 
-			{showFullReporting && reportingDetails?.status === 'not-started' ? (
-				<SectionBlock title='Escalation Status'>
-					<p className='detail'>Reporting is open, but the escalation game has not started yet.</p>
-					<p className='detail'>The first report or contribution will deploy and initialize the escalation game for this pool.</p>
-				</SectionBlock>
-			) : undefined}
-
 			{showFullReporting && activeReportingDetails !== undefined ? (
 				<SectionBlock title='Escalation Metrics'>
 					<div className='escalation-metrics'>
-						<MetricField label='Current Bond'>
-							<CurrencyValue value={activeReportingDetails.currentRequiredBond} suffix='REP' />
-						</MetricField>
 						<MetricField label='Binding Capital'>
 							<CurrencyValue value={activeReportingDetails.bindingCapital} suffix='REP' />
 						</MetricField>
@@ -199,7 +208,7 @@ export function ReportingSection({
 					)}
 					<label className='field'>
 						<span>Outcome Side</span>
-						<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={reportingForm.selectedOutcome} onChange={selectedOutcome => onReportingFormChange({ selectedOutcome })} disabled={reportingLocked} />
+						<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={reportingForm.selectedOutcome} onChange={selectedOutcome => onReportingFormChange({ selectedOutcome, selectedWithdrawDepositIndexes: [] })} disabled={reportingLocked} />
 					</label>
 
 					<label className='field'>
@@ -252,15 +261,42 @@ export function ReportingSection({
 
 			{showWithdrawOnly ? (
 				<SectionBlock title='Withdraw Escalation Deposits'>
-					{selectedSide === undefined ? undefined : (
+					{selectedSide === undefined ? undefined : selectedSide.userDeposits.length === 0 ? (
+						<p className='detail'>Connected wallet has no unsettled deposits on the selected side.</p>
+					) : activeReportingDetails?.withdrawalEnabled ? (
 						<p className='detail'>
-							Selected side has <strong>{selectedSide.userDeposits.length.toString()}</strong> withdrawable deposit entries for the connected wallet.
+							Connected wallet has <strong>{selectedSide.userDeposits.length.toString()}</strong> withdrawable unsettled deposit {getDepositEntryCountLabel(selectedSide.userDeposits.length)} on the selected side.
+						</p>
+					) : (
+						<p className='detail'>
+							Connected wallet has <strong>{selectedSide.userDeposits.length.toString()}</strong> unsettled deposit {getDepositEntryCountLabel(selectedSide.userDeposits.length)} on the selected side, but withdrawals are not available yet.
 						</p>
 					)}
-					<label className='field'>
-						<span>Withdraw Deposit Indexes</span>
-						<FormInput value={reportingForm.withdrawDepositIndexes} onInput={event => onReportingFormChange({ withdrawDepositIndexes: event.currentTarget.value })} placeholder='Leave empty to withdraw all your deposits on the selected side' disabled={reportingLocked} />
-					</label>
+					{selectedSide === undefined || selectedSide.userDeposits.length === 0 ? undefined : (
+						<div className='field'>
+							<span>Choose deposits to withdraw</span>
+							<p className='detail'>Leave all unchecked to withdraw every eligible deposit on this side.</p>
+							<div>
+								{selectedSide.userDeposits.map(deposit => {
+									const isChecked = selectedWithdrawDepositIndexes.includes(deposit.depositIndex)
+									return (
+										<label key={deposit.depositIndex.toString()} className='detail'>
+											<input
+												type='checkbox'
+												checked={isChecked}
+												disabled={reportingLocked}
+												onChange={event => {
+													const nextSelectedWithdrawDepositIndexes = event.currentTarget.checked ? [...selectedWithdrawDepositIndexes, deposit.depositIndex] : selectedWithdrawDepositIndexes.filter(index => index !== deposit.depositIndex)
+													onReportingFormChange({ selectedWithdrawDepositIndexes: nextSelectedWithdrawDepositIndexes })
+												}}
+											/>{' '}
+											Deposit #{deposit.depositIndex.toString()} | Amount: <CurrencyValue value={deposit.amount} suffix='REP' /> | Cumulative at entry: <CurrencyValue value={deposit.cumulativeAmount} suffix='REP' />
+										</label>
+									)
+								})}
+							</div>
+						</div>
+					)}
 
 					<div className='actions'>
 						<TransactionActionButton idleLabel='Withdraw Escalation Deposits' pendingLabel='Withdrawing deposits...' onClick={onWithdrawEscalation} pending={reportingActiveAction === 'withdrawEscalation'} tone='secondary' availability={{ disabled: withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }} />

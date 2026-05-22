@@ -37,6 +37,7 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		escalationGameAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold: rep(100n),
+		questionOutcome: 'none',
 		resolution: 'none',
 		securityPoolAddress: zeroAddress,
 		sides: [
@@ -49,6 +50,8 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		status: 'active',
 		totalCost: rep(20n),
 		universeId: 1n,
+		withdrawalEnabled: false,
+		withdrawalState: 'not-finalized',
 		...overrides,
 	}
 }

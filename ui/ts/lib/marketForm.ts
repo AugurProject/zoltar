@@ -80,7 +80,7 @@ export function getDefaultReportingFormState(): ReportingFormState {
 		reportAmount: '0',
 		securityPoolAddress: '',
 		selectedOutcome: 'yes',
-		withdrawDepositIndexes: '',
+		selectedWithdrawDepositIndexes: [],
 	}
 }
 

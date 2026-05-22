@@ -1,4 +1,5 @@
 import type { Address } from 'viem'
+import type { ReportingDetails } from '../types/contracts.js'
 
 type ReportingStatus = 'missing' | 'not-started' | 'active'
 
@@ -26,12 +27,29 @@ export function getReportingReportGuardMessage({
 	return undefined
 }
 
-export function getReportingWithdrawGuardMessage({ accountAddress, hasUserDepositsOnSelectedSide, isMainnet, lockedReason, reportingStatus }: { accountAddress: Address | undefined; hasUserDepositsOnSelectedSide: boolean; isMainnet: boolean; lockedReason: string | undefined; reportingStatus: ReportingStatus }) {
+export function getReportingWithdrawGuardMessage({
+	accountAddress,
+	hasUserDepositsOnSelectedSide,
+	isMainnet,
+	lockedReason,
+	reportingStatus,
+	withdrawalEnabled,
+	withdrawalState,
+}: {
+	accountAddress: Address | undefined
+	hasUserDepositsOnSelectedSide: boolean
+	isMainnet: boolean
+	lockedReason: string | undefined
+	reportingStatus: ReportingStatus
+	withdrawalEnabled: boolean
+	withdrawalState: ReportingDetails['withdrawalState'] | undefined
+}) {
 	if (lockedReason !== undefined) return lockedReason
 	if (accountAddress === undefined) return 'Connect a wallet before withdrawing escalation deposits.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before withdrawing escalation deposits.'
 	if (reportingStatus === 'missing') return 'Load reporting details before withdrawing escalation deposits.'
 	if (reportingStatus === 'not-started') return 'Escalation game has not started yet.'
+	if (!withdrawalEnabled && withdrawalState === 'not-finalized') return 'Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.'
 	if (!hasUserDepositsOnSelectedSide) return 'No deposits are available to withdraw on the selected side.'
 	return undefined
 }
