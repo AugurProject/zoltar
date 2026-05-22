@@ -1,4 +1,4 @@
-import { decodeEventLog, parseAbiItem, zeroAddress, type Address, type ContractFunctionParameters, type Hash, type Hex, type TransactionReceipt } from 'viem'
+import { decodeEventLog, getAddress, isHex, parseAbiItem, zeroAddress, type Address, type ContractFunctionParameters, type Hash, type Hex, type TransactionReceipt } from 'viem'
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from './shared/bigInt.js'
 import { assertNever } from './lib/assert.js'
@@ -222,7 +222,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 }
 
 export async function loadReportingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
-	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit] = await readRequiredMulticall(client, [
+	const reportingContracts: readonly ContractFunctionParameters[] = [
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'questionId',
@@ -259,7 +259,17 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			address: securityPoolAddress,
 			args: [],
 		},
-	])
+	]
+	const [rawQuestionId, rawEscalationGameAddress, rawCompleteSetCollateralAmount, rawUniverseId, rawZoltarAddress, rawInitialEscalationGameDeposit] = await readRequiredMulticall(client, reportingContracts)
+	if (typeof rawQuestionId !== 'bigint' || !isHex(rawEscalationGameAddress) || typeof rawCompleteSetCollateralAmount !== 'bigint' || typeof rawUniverseId !== 'bigint' || !isHex(rawZoltarAddress) || typeof rawInitialEscalationGameDeposit !== 'bigint') {
+		throw new Error('Unexpected reporting details response')
+	}
+	const questionId = rawQuestionId
+	const escalationGameAddress = getAddress(rawEscalationGameAddress)
+	const completeSetCollateralAmount = rawCompleteSetCollateralAmount
+	const universeId = rawUniverseId
+	const zoltarAddress = getAddress(rawZoltarAddress)
+	const initialEscalationGameDeposit = rawInitialEscalationGameDeposit
 	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThreshold] = await Promise.all([
 		loadMarketDetails(client, questionId),
 		client.getBlock(),

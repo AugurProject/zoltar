@@ -129,7 +129,7 @@ export function SecurityPoolWorkflowSection({
 	const marketDetails = selectedPool?.marketDetails ?? currentReportingDetails?.marketDetails ?? currentForkAuctionDetails?.marketDetails
 	const selectedPoolState = selectedPool?.systemState ?? currentForkAuctionDetails?.systemState
 	const selectedPoolHasForkActivity = selectedPool !== undefined ? hasForkActivity(selectedPool) : currentForkAuctionDetails !== undefined ? hasForkActivity(currentForkAuctionDetails) : false
-	const currentTimestamp = currentReportingDetails?.currentTime ?? chainCurrentTimestamp ?? getLocalCurrentTimestamp()
+	const currentTimestamp = chainCurrentTimestamp ?? currentReportingDetails?.currentTime ?? getLocalCurrentTimestamp()
 	const reportingReady = marketDetails !== undefined && marketDetails.endTime <= currentTimestamp
 	const forkWorkflowDisabled = isForkWorkflowDisabled(selectedPoolState, selectedPoolHasForkActivity)
 	const selectedPoolUniverseMismatch = selectedPool !== undefined && selectedPool.universeId !== activeUniverseId
@@ -576,6 +576,7 @@ export function SecurityPoolWorkflowSection({
 								{view === 'fork' ? (
 									<ForkAuctionSection
 										{...forkAuction}
+										currentTimestamp={currentTimestamp}
 										disabled={forkWorkflowDisabled}
 										disabledMessage={forkWorkflowDisabled ? 'This pool is currently operational, so fork and truth auction actions are read only.' : undefined}
 										embedInCard

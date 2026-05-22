@@ -23,6 +23,7 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { TimestampValue } from './TimestampValue.js'
 import { useLoadController } from '../hooks/useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
+import { useChainBlockNumber, useChainTimestamp } from '../lib/chainTimestamp.js'
 import {
 	getOpenOracleCreateGuardMessage,
 	formatOpenOracleFeePercentage,
@@ -48,6 +49,19 @@ import type { OpenOracleSectionProps } from '../types/components.js'
 const BROWSE_PAGE_SIZE = 10
 type SelectedReportModal = 'dispute' | 'initial-report' | 'settle' | undefined
 type BrowseStatusFilter = 'all' | 'Awaiting Initial Report' | 'Pending' | 'Disputed' | 'Settled'
+
+function getEffectiveOpenOracleReportDetails(report: OpenOracleReportDetails | undefined, currentTimestamp: bigint | undefined, currentBlockNumber: bigint | undefined) {
+	if (report === undefined) return undefined
+	if ((currentTimestamp === undefined || report.currentTime === currentTimestamp) && (currentBlockNumber === undefined || report.currentBlockNumber === currentBlockNumber)) {
+		return report
+	}
+
+	return {
+		...report,
+		currentBlockNumber: currentBlockNumber ?? report.currentBlockNumber,
+		currentTime: currentTimestamp ?? report.currentTime,
+	}
+}
 
 function resolveBrowseStatusFilter(value: string): BrowseStatusFilter {
 	switch (value) {
@@ -755,6 +769,8 @@ export function OpenOracleSection({
 	onActiveViewChange,
 }: OpenOracleSectionProps) {
 	const view = activeView
+	const chainCurrentTimestamp = useChainTimestamp()
+	const chainCurrentBlockNumber = useChainBlockNumber()
 	const [browsePage, setBrowsePage] = useState<OpenOracleReportSummaryPage | undefined>(undefined)
 	const [browseError, setBrowseError] = useState<string | undefined>(undefined)
 	const [browsePageIndex, setBrowsePageIndex] = useState(0)
@@ -771,6 +787,7 @@ export function OpenOracleSection({
 		walletConnected: isConnected,
 		walletEthBalance: accountState.ethBalance,
 	})
+	const effectiveOpenOracleReportDetails = getEffectiveOpenOracleReportDetails(openOracleReportDetails, chainCurrentTimestamp, chainCurrentBlockNumber)
 
 	useEffect(() => {
 		let cancelled = false
@@ -977,7 +994,7 @@ export function OpenOracleSection({
 			{view === 'selected-report' ? (
 				<div className='workflow-stack route-workflow-stack'>
 					{renderReportDetailsCard(
-						openOracleReportDetails,
+						effectiveOpenOracleReportDetails,
 						openOracleForm,
 						openOracleInitialReportState,
 						openOracleDisputeSubmission,

@@ -77,9 +77,9 @@ function renderAddress(address: string | undefined) {
 	return <AddressValue address={address} />
 }
 
-function renderTimestamp(timestamp: bigint | undefined, fallbackText: string) {
+function renderTimestamp(timestamp: bigint | undefined, fallbackText: string, currentTimestamp?: bigint) {
 	if (timestamp === undefined) return fallbackText
-	return <TimestampValue timestamp={timestamp} />
+	return <TimestampValue {...(currentTimestamp === undefined ? {} : { currentTimestamp })} timestamp={timestamp} />
 }
 
 function getForkOnlyFallbackText(hasPreviewForkActivity: boolean) {
@@ -156,6 +156,7 @@ function estimateBidRep(bidAmount: string, selectedAuctionPrice: bigint | undefi
 
 export function ForkAuctionSection({
 	accountState,
+	currentTimestamp,
 	disabled = false,
 	disabledMessage,
 	embedInCard = false,
@@ -187,9 +188,11 @@ export function ForkAuctionSection({
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedAuctionPrice = forkAuctionDetails?.truthAuction?.clearingPrice
 	const estimatedRep = estimateBidRep(forkAuctionForm.submitBidAmount, selectedAuctionPrice)
-	const migrationTimeRemaining = forkAuctionDetails === undefined ? undefined : getTimeRemaining(forkAuctionDetails.migrationEndsAt, forkAuctionDetails.currentTime)
+	const effectiveCurrentTimestamp = currentTimestamp ?? forkAuctionDetails?.currentTime
+	const migrationTimeRemaining = forkAuctionDetails === undefined ? undefined : getTimeRemaining(forkAuctionDetails.migrationEndsAt, effectiveCurrentTimestamp ?? forkAuctionDetails.currentTime)
 	const previewAuctionWindow = getTruthAuctionWindow(previewPool?.truthAuctionStartedAt)
 	const auctionWindow = forkAuctionDetails === undefined ? previewAuctionWindow : getTruthAuctionWindow(forkAuctionDetails.truthAuctionStartedAt)
+	const truthAuctionEndsAt = forkAuctionDetails?.truthAuction?.auctionEndsAt ?? auctionWindow?.endsAt
 	const securityPoolAddress = forkAuctionDetails?.securityPoolAddress ?? previewPool?.securityPoolAddress
 	const universeId = forkAuctionDetails?.universeId ?? previewPool?.universeId
 	const parentSecurityPoolAddress = forkAuctionDetails?.parentSecurityPoolAddress ?? previewPool?.parent
@@ -223,12 +226,13 @@ export function ForkAuctionSection({
 		forkAuctionDetails === undefined
 			? previewPool?.truthAuctionStartedAt === undefined || previewPool.truthAuctionStartedAt === 0n
 				? 'Not started'
-				: renderTimestamp(previewPool.truthAuctionStartedAt, 'Not started')
+				: renderTimestamp(previewPool.truthAuctionStartedAt, 'Not started', effectiveCurrentTimestamp)
 			: forkAuctionDetails.truthAuctionStartedAt === 0n
 				? 'Not started'
-				: renderTimestamp(forkAuctionDetails.truthAuctionStartedAt, 'Not started')
-	const endsDisplay = auctionWindow === undefined ? 'Not started' : <TimestampValue timestamp={auctionWindow.endsAt} />
-	const timeLeftDisplay = forkAuctionDetails?.truthAuction?.timeRemaining === undefined ? (forkAuctionDetails?.truthAuction === undefined ? forkOnlyFallbackText : formatDuration(AUCTION_TIME_SECONDS)) : formatDuration(forkAuctionDetails.truthAuction.timeRemaining)
+				: renderTimestamp(forkAuctionDetails.truthAuctionStartedAt, 'Not started', effectiveCurrentTimestamp)
+	const endsDisplay = auctionWindow === undefined ? 'Not started' : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={auctionWindow.endsAt} />
+	const truthAuctionTimeRemaining = truthAuctionEndsAt === undefined || effectiveCurrentTimestamp === undefined ? forkAuctionDetails?.truthAuction?.timeRemaining : getTimeRemaining(truthAuctionEndsAt, effectiveCurrentTimestamp)
+	const timeLeftDisplay = forkAuctionDetails?.truthAuction === undefined ? forkOnlyFallbackText : truthAuctionTimeRemaining === undefined ? formatDuration(AUCTION_TIME_SECONDS) : formatDuration(truthAuctionTimeRemaining)
 	const ethRaisedCapDisplay =
 		forkAuctionDetails?.truthAuction === undefined ? (
 			forkOnlyFallbackText
@@ -326,7 +330,10 @@ export function ForkAuctionSection({
 				? [
 						{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
 						{ label: 'Migrated REP', value: renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, 'REP', UNKNOWN_VALUE) },
-						{ label: 'Migration Ends', value: forkAuctionDetails === undefined ? migrationSummaryText : forkAuctionDetails.migrationEndsAt === undefined ? 'Started/finished' : <TimestampValue timestamp={forkAuctionDetails.migrationEndsAt} /> },
+						{
+							label: 'Migration Ends',
+							value: forkAuctionDetails === undefined ? migrationSummaryText : forkAuctionDetails.migrationEndsAt === undefined ? 'Started/finished' : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={forkAuctionDetails.migrationEndsAt} />,
+						},
 						{ label: 'Time Left', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : migrationTimeRemaining === undefined ? formatDuration(MIGRATION_TIME_SECONDS) : formatDuration(migrationTimeRemaining) },
 					]
 				: selectedStage === 'auction'
@@ -354,7 +361,10 @@ export function ForkAuctionSection({
 		{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
 		{ label: 'Migrated REP', value: renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, 'REP', UNKNOWN_VALUE) },
 		{ label: 'Collateral', value: renderMetricValue(forkAuctionDetails?.completeSetCollateralAmount ?? previewPool?.completeSetCollateralAmount, 'ETH', UNKNOWN_VALUE) },
-		{ label: 'Migration Ends', value: forkAuctionDetails === undefined ? migrationSummaryText : forkAuctionDetails.migrationEndsAt === undefined ? 'Started/finished' : <TimestampValue timestamp={forkAuctionDetails.migrationEndsAt} /> },
+		{
+			label: 'Migration Ends',
+			value: forkAuctionDetails === undefined ? migrationSummaryText : forkAuctionDetails.migrationEndsAt === undefined ? 'Started/finished' : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={forkAuctionDetails.migrationEndsAt} />,
+		},
 		{ label: 'Time Left', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : migrationTimeRemaining === undefined ? formatDuration(MIGRATION_TIME_SECONDS) : formatDuration(migrationTimeRemaining) },
 		{ label: 'Fork Type', value: forkAuctionDetails === undefined ? getPreviewForkType(previewPool, hasPreviewForkActivity) : forkAuctionDetails.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent/Zoltar fork' },
 	]

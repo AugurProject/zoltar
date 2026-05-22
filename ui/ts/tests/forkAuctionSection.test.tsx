@@ -5,6 +5,8 @@ import { fireEvent, within } from '@testing-library/dom'
 import { h } from 'preact'
 import { zeroAddress } from 'viem'
 import { ForkAuctionSection } from '../components/ForkAuctionSection.js'
+import { AUCTION_TIME_SECONDS } from '../lib/forkAuction.js'
+import { formatDuration } from '../lib/formatters.js'
 import type { AccountState, ForkAuctionFormState } from '../types/app.js'
 import type { ForkAuctionDetails, MarketDetails } from '../types/contracts.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
@@ -192,6 +194,61 @@ describe('ForkAuctionSection', () => {
 		fireEvent.click(modalQueries.getByRole('button', { name: 'Create Yes Child Universe' }))
 
 		expect(createChildUniverseCallCount).toBe(1)
+	})
+
+	test('prefers the live chain timestamp over the loaded snapshot for migration time left', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentTimestamp: 150n,
+					forkAuctionDetails: createForkAuctionDetails(),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes(formatDuration(200n - 100n))).toBe(false)
+		expect(document.body.textContent?.includes(formatDuration(200n - 150n))).toBe(true)
+	})
+
+	test('recomputes truth auction time left from the live chain timestamp', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentTimestamp: 150n,
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						currentTime: 100n,
+						systemState: 'forkTruthAuction',
+						truthAuction: {
+							accumulatedEth: 0n,
+							auctionEndsAt: 200n,
+							clearingPrice: undefined,
+							clearingTick: undefined,
+							ethAtClearingTick: 0n,
+							ethRaiseCap: 10n,
+							ethRaised: 0n,
+							finalized: false,
+							hitCap: false,
+							maxRepBeingSold: 10n,
+							minBidSize: 1n,
+							repPurchasableAtBid: undefined,
+							timeRemaining: 100n,
+							totalRepPurchased: 0n,
+							underfunded: false,
+						},
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 200n - AUCTION_TIME_SECONDS,
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes(formatDuration(100n))).toBe(false)
+		expect(document.body.textContent?.includes(formatDuration(50n))).toBe(true)
 	})
 
 	test('blocks truth auction bids below the minimum bid size', async () => {
