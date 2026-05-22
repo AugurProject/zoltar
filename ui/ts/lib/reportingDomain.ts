@@ -14,6 +14,24 @@ function roundUpToRepUnit(value: bigint) {
 	return ((value + REP_UNIT - 1n) / REP_UNIT) * REP_UNIT
 }
 
+function getSelectedAndOtherSides(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey) {
+	const selectedSide = details.sides.find(side => side.key === selectedOutcome)
+	const largestOtherBalance = details.sides.filter(side => side.key !== selectedOutcome).reduce((maxBalance, side) => (side.balance > maxBalance ? side.balance : maxBalance), 0n)
+
+	return {
+		largestOtherBalance,
+		selectedSide,
+	}
+}
+
+function getAvailableRoom(details: ActiveReportingDetails, selectedBalance: bigint) {
+	return details.nonDecisionThreshold > selectedBalance ? details.nonDecisionThreshold - selectedBalance : 0n
+}
+
+function isUniqueWinner(selectedBalance: bigint, largestOtherBalance: bigint) {
+	return selectedBalance > largestOtherBalance
+}
+
 export function getEscalationTimeRemaining(details: ActiveReportingDetails) {
 	return requireDefined(getTimeRemaining(details.escalationEndTime, details.currentTime), 'Escalation end time is required')
 }
@@ -37,38 +55,24 @@ export function getLeadingEscalationOutcome(sides: EscalationSide[]) {
 	return leadingSide?.key
 }
 
-function getSelectedAndOtherSides(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey) {
-	const selectedSide = details.sides.find(side => side.key === selectedOutcome)
-	const otherSides = details.sides.filter(side => side.key !== selectedOutcome)
-	const largestOtherBalance = otherSides.reduce((maxBalance, side) => (side.balance > maxBalance ? side.balance : maxBalance), 0n)
-
-	return {
-		largestOtherBalance,
-		otherSides,
-		selectedSide,
-	}
-}
-
-function isUniqueWinner(selectedBalance: bigint, largestOtherBalance: bigint) {
-	return selectedBalance > largestOtherBalance
-}
-
 export function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
-	const { largestOtherBalance, otherSides, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
+	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
 	if (selectedSide === undefined) return { amount: undefined, reason: 'Selected side is unavailable.' }
-	if (details.resolution === selectedOutcome) return { amount: 0n, reason: undefined }
-
-	const selectedAlreadyUniqueWinner = isUniqueWinner(selectedSide.balance, largestOtherBalance)
-	const opposingSideOverBond = otherSides.some(side => side.balance >= details.currentRequiredBond)
-	if (opposingSideOverBond && !selectedAlreadyUniqueWinner) {
-		return { amount: undefined, reason: 'Min preset unavailable because another side is already over the current bond.' }
+	if (details.resolution === selectedOutcome || isUniqueWinner(selectedSide.balance, largestOtherBalance)) {
+		return { amount: 0n, reason: undefined }
 	}
 
-	const rawAmount = largestOtherBalance + 1n > selectedSide.balance ? largestOtherBalance + 1n - selectedSide.balance : 0n
-	const minimumAllowedAmount = rawAmount > 0n && rawAmount < details.startBond ? details.startBond : rawAmount
-	const amount = roundUpToRepUnit(minimumAllowedAmount)
-	if (selectedSide.balance + amount > details.nonDecisionThreshold) {
-		return { amount: undefined, reason: 'Min preset unavailable because the selected side cannot accept that much REP.' }
+	const requiredLeadAmount = largestOtherBalance + 1n - selectedSide.balance
+	const enteredAmount = details.startBond > requiredLeadAmount ? details.startBond : requiredLeadAmount
+	const amount = roundUpToRepUnit(enteredAmount)
+	const availableRoom = getAvailableRoom(details, selectedSide.balance)
+	const effectiveAmount = amount > availableRoom ? availableRoom : amount
+
+	if (availableRoom === 0n || selectedSide.balance + effectiveAmount <= largestOtherBalance) {
+		return {
+			amount: undefined,
+			reason: 'Min preset unavailable because the selected side cannot take the lead within the remaining bond capacity.',
+		}
 	}
 
 	return { amount, reason: undefined }
@@ -77,7 +81,10 @@ export function getMinimumOutcomeChangeContribution(details: ActiveReportingDeta
 export function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	const minContribution = getMinimumOutcomeChangeContribution(details, selectedOutcome)
 	if (minContribution.amount === undefined) {
-		return { amount: undefined, reason: minContribution.reason ?? 'Max profit preset is unavailable.' }
+		return {
+			amount: undefined,
+			reason: minContribution.reason ?? 'Max profit preset is unavailable.',
+		}
 	}
 
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
@@ -86,15 +93,24 @@ export function getMaxProfitContribution(details: ActiveReportingDetails, select
 	const rewardEligibleCap = largestOtherBalance + largestOtherBalance / 2n
 	const targetFinalBalance = rewardEligibleCap < details.nonDecisionThreshold ? rewardEligibleCap : details.nonDecisionThreshold
 	if (isUniqueWinner(selectedSide.balance, largestOtherBalance) && selectedSide.balance >= targetFinalBalance) {
-		return { amount: undefined, reason: 'Max profit preset unavailable because the reward window is already filled on the selected side.' }
+		return {
+			amount: undefined,
+			reason: 'Max profit preset unavailable because the reward window is already filled on the selected side.',
+		}
 	}
 
-	const rawAmount = targetFinalBalance > selectedSide.balance ? targetFinalBalance - selectedSide.balance : 0n
-	const targetAmount = rawAmount > minContribution.amount ? rawAmount : minContribution.amount
-	const minimumAllowedAmount = targetAmount > 0n && targetAmount < details.startBond ? details.startBond : targetAmount
-	const amount = roundUpToRepUnit(minimumAllowedAmount)
-	if (selectedSide.balance + amount > details.nonDecisionThreshold) {
-		return { amount: undefined, reason: 'Max profit preset unavailable because the selected side cannot accept that much REP.' }
+	const requiredWindowAmount = targetFinalBalance > selectedSide.balance ? targetFinalBalance - selectedSide.balance : 0n
+	const minimumEnteredAmount = minContribution.amount > requiredWindowAmount ? minContribution.amount : requiredWindowAmount
+	const enteredAmount = details.startBond > minimumEnteredAmount ? details.startBond : minimumEnteredAmount
+	const amount = roundUpToRepUnit(enteredAmount)
+	const availableRoom = getAvailableRoom(details, selectedSide.balance)
+	const effectiveAmount = amount > availableRoom ? availableRoom : amount
+
+	if (selectedSide.balance + effectiveAmount < targetFinalBalance) {
+		return {
+			amount: undefined,
+			reason: 'Max profit preset unavailable because the selected side cannot fill the reward window within the remaining bond capacity.',
+		}
 	}
 
 	return { amount, reason: undefined }
@@ -116,7 +132,7 @@ export function calculateEstimatedEscalationReturn(details: ActiveReportingDetai
 		}
 	}
 
-	const availableRoom = details.nonDecisionThreshold > selectedSide.balance ? details.nonDecisionThreshold - selectedSide.balance : 0n
+	const availableRoom = getAvailableRoom(details, selectedSide.balance)
 	const effectiveAmount = amount > availableRoom ? availableRoom : amount
 	if (effectiveAmount <= 0n) {
 		return {
@@ -142,10 +158,9 @@ export function calculateEstimatedEscalationReturn(details: ActiveReportingDetai
 	const rewardEligibleDepositAmount = eligibleEnd > depositStart ? eligibleEnd - depositStart : 0n
 	const rewardBonusPool = (bindingCapital * 3n) / 5n
 	const bonusShare = (rewardEligibleDepositAmount * rewardBonusPool) / rewardEligiblePrincipal
-	const payout = effectiveAmount + bonusShare
 
 	return {
-		payout,
-		profit: payout - effectiveAmount,
+		payout: effectiveAmount + bonusShare,
+		profit: bonusShare,
 	}
 }

@@ -73,9 +73,10 @@ export function ReportingSection({
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
 	const leadingSide = activeReportingDetails?.sides.find(side => side.key === leadingOutcome)
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
-	const minimumOutcomeChangeContribution =
-		activeReportingDetails === undefined ? { amount: undefined, reason: reportingStatus === 'not-started' ? 'Escalation game has not started yet.' : 'Load reporting details before using presets.' } : getMinimumOutcomeChangeContribution(activeReportingDetails, reportingForm.selectedOutcome)
-	const maxProfitContribution = activeReportingDetails === undefined ? { amount: undefined, reason: reportingStatus === 'not-started' ? 'Escalation game has not started yet.' : 'Load reporting details before using presets.' } : getMaxProfitContribution(activeReportingDetails, reportingForm.selectedOutcome)
+	const presetFallbackReason = reportingStatus === 'not-started' ? 'Escalation game has not started yet.' : 'Load reporting details before using presets.'
+	const minimumOutcomeChangeContribution = activeReportingDetails === undefined ? { amount: undefined, reason: presetFallbackReason } : getMinimumOutcomeChangeContribution(activeReportingDetails, reportingForm.selectedOutcome)
+	const maxProfitContribution = activeReportingDetails === undefined ? { amount: undefined, reason: presetFallbackReason } : getMaxProfitContribution(activeReportingDetails, reportingForm.selectedOutcome)
+	const presetReasons = reportingLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && reasons.indexOf(reason) === index)
 	const escalationTimeRemaining = activeReportingDetails === undefined ? undefined : formatDuration(getEscalationTimeRemaining(activeReportingDetails))
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 	const reportGuardMessage = getReportingReportGuardMessage({
@@ -246,8 +247,11 @@ export function ReportingSection({
 						</button>
 					</div>
 
-					{minimumOutcomeChangeContribution.reason === undefined ? undefined : <p className='detail'>{minimumOutcomeChangeContribution.reason}</p>}
-					{maxProfitContribution.reason === undefined ? undefined : <p className='detail'>{maxProfitContribution.reason}</p>}
+					{presetReasons.map(reason => (
+						<p key={reason} className='detail'>
+							{reason}
+						</p>
+					))}
 					{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
 
 					{selectedEstimate === undefined ? undefined : (
