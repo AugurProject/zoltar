@@ -39,14 +39,9 @@ export function SecurityPoolSummaryMetrics({ children, className = 'workflow-met
 				<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix='%' />
 			</MetricField>
 			{showTotalBacking ? (
-				<>
-					<MetricField label='Total REP Collateral'>
-						<CurrencyValue value={pool.totalRepDeposit} suffix='REP' />
-					</MetricField>
-					<MetricField label='Total Security Bond Allowance'>
-						<CurrencyValue value={pool.totalSecurityBondAllowance} suffix='ETH' />
-					</MetricField>
-				</>
+				<MetricField label='Total REP Collateral'>
+					<CurrencyValue value={pool.totalRepDeposit} suffix='REP' />
+				</MetricField>
 			) : undefined}
 			<OpenInterestCapacityMetrics
 				completeSetCollateralAmount={pool.completeSetCollateralAmount}

@@ -556,6 +556,7 @@ void describe('SecurityPoolsSection', () => {
 		expect(contextQueries.queryByRole('tab', { name: 'Create' })).toBeNull()
 		expect(contextQueries.queryByRole('tab', { name: 'Operate' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Security pools' })).toBeNull()
+		expect(contextQueries.queryByText('Total Security Bond Allowance')).toBeNull()
 		const lookupLabel = contextQueries.getByText('Security Pool Address')
 		const summaryMetric = contextQueries.getByText('Total REP Collateral')
 		const lookupPosition = selectedPoolContext.textContent?.indexOf(lookupLabel.textContent ?? '') ?? -1
