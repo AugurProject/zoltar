@@ -426,4 +426,34 @@ describe('ReportingSection', () => {
 
 		expect(document.body.textContent?.includes('Min preset unavailable because another side is already over the current bond.')).toBe(true)
 	})
+
+	test('renders the shared outcome chart without per-side projections or deposit details', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingForm: {
+						...createReportingForm(),
+						selectedOutcome: 'no',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const outcomeSection = documentQueries.getByRole('heading', { name: 'Outcome Sides' }).closest('section')
+		if (outcomeSection === null) throw new Error('Expected outcome sides section')
+		const outcomeSectionQueries = within(outcomeSection as HTMLElement)
+
+		expect(outcomeSectionQueries.getByText('Bars show total REP on each outcome. The marker shows current binding capital, and the thin inset shows your wallet stake.')).not.toBeNull()
+		expect(outcomeSectionQueries.getAllByText('Total stake').length).toBeGreaterThan(0)
+		expect(outcomeSectionQueries.getAllByText('Your stake').length).toBeGreaterThan(0)
+		expect(outcomeSectionQueries.getByText('Binding capital')).not.toBeNull()
+		expect(outcomeSectionQueries.getByText('Leading')).not.toBeNull()
+		expect(outcomeSectionQueries.getByText('Selected')).not.toBeNull()
+		expect(outcomeSection.textContent?.includes('Projected payout for current amount')).toBe(false)
+		expect(outcomeSection.textContent?.includes('Projected profit if this side wins')).toBe(false)
+		expect(outcomeSection.textContent?.includes('Your deposits:')).toBe(false)
+	})
 })

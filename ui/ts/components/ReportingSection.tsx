@@ -52,6 +52,7 @@ export function ReportingSection({
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const showFullReporting = mode === 'full-reporting'
 	const showWithdrawOnly = mode === 'withdraw-only'
+	const chartScaleMax = activeReportingDetails === undefined ? 1n : activeReportingDetails.sides.reduce((maxBalance, side) => (side.balance > maxBalance ? side.balance : maxBalance), activeReportingDetails.bindingCapital > 1n ? activeReportingDetails.bindingCapital : 1n)
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
 	const selectedSide = activeReportingDetails?.sides.find(side => side.key === reportingForm.selectedOutcome)
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
@@ -159,12 +160,29 @@ export function ReportingSection({
 			) : undefined}
 
 			{showFullReporting && activeReportingDetails !== undefined ? (
-				<SectionBlock title='Outcome Sides'>
+				<SectionBlock title='Outcome Sides' description='Bars show total REP on each outcome. The marker shows current binding capital, and the thin inset shows your wallet stake.'>
+					<div className='escalation-sides-shell'>
+						<div className='escalation-sides-legend'>
+							<div className='escalation-sides-legend-item'>
+								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-total' />
+								<span className='panel-label'>Total stake</span>
+							</div>
+							<div className='escalation-sides-legend-item'>
+								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-user' />
+								<span className='panel-label'>Your stake</span>
+							</div>
+							<div className='escalation-sides-legend-item escalation-sides-legend-item-binding'>
+								<span aria-hidden='true' className='escalation-sides-legend-marker' />
+								<span className='panel-label'>Binding capital</span>
+								<CurrencyValue copyable={false} value={activeReportingDetails.bindingCapital} suffix='REP' />
+							</div>
+						</div>
+					</div>
 					<div className='escalation-sides'>
 						{activeReportingDetails.sides.map(side => {
-							const estimate = selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, side.key, selectedAmount)
 							const userStake = side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n)
-							return <EscalationSide key={side.key} estimate={estimate} isLeading={leadingOutcome === side.key} isSelected={reportingForm.selectedOutcome === side.key} side={side} userStake={userStake} />
+
+							return <EscalationSide key={side.key} bindingCapital={activeReportingDetails.bindingCapital} chartScaleMax={chartScaleMax} isLeading={leadingOutcome === side.key} isSelected={reportingForm.selectedOutcome === side.key} side={side} userStake={userStake} />
 						})}
 					</div>
 				</SectionBlock>
