@@ -19,6 +19,7 @@ import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
+import { WarningSurface } from './WarningSurface.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { balanceShortage } from '../lib/inputs.js'
@@ -155,7 +156,6 @@ function VaultQueuedOperationStatusCard({
 	failedTitle,
 	missingTitle,
 	missingDescription,
-	queuedBadgeLabel = 'Queued',
 	queuedTitle,
 	queuedVaultOperation,
 	refreshingTitle,
@@ -171,7 +171,6 @@ function VaultQueuedOperationStatusCard({
 	missingDescription: string
 	missingTitle: string
 	onViewStagedOperations: (() => void) | undefined
-	queuedBadgeLabel?: string
 	queuedTitle: string
 	queuedVaultOperation: ReturnType<typeof getQueuedVaultOperation>
 	refreshingDescription: string
@@ -183,12 +182,11 @@ function VaultQueuedOperationStatusCard({
 
 	if (status === 'queued') {
 		return (
-			<section className='entity-card compact'>
+			<WarningSurface as='section' variant='compact'>
 				<div className='entity-card-header'>
 					<div>
 						<h4>{queuedTitle}</h4>
 					</div>
-					<span className='badge warn'>{queuedBadgeLabel}</span>
 				</div>
 				<div className='workflow-metric-grid'>
 					<MetricField label='Staged Operation'>{queuedVaultOperation === undefined ? 'Refreshing...' : `#${queuedVaultOperation.operationId.toString()}`}</MetricField>
@@ -201,7 +199,7 @@ function VaultQueuedOperationStatusCard({
 						</button>
 					</div>
 				)}
-			</section>
+			</WarningSurface>
 		)
 	}
 
@@ -235,15 +233,14 @@ function VaultQueuedOperationStatusCard({
 
 	if (status === 'missing') {
 		return (
-			<section className='entity-card compact'>
+			<WarningSurface as='section' variant='compact'>
 				<div className='entity-card-header'>
 					<div>
 						<h4>{missingTitle}</h4>
 					</div>
-					<span className='badge warn'>Check State</span>
 				</div>
 				<p className='detail'>{missingDescription}</p>
-			</section>
+			</WarningSurface>
 		)
 	}
 

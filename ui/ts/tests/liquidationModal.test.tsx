@@ -270,6 +270,8 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Queued' })).not.toBeNull()
 		expect(documentQueries.getByText('#9')).not.toBeNull()
+		expect(document.body.querySelector('.warning-surface')).not.toBeNull()
+		expect(document.body.querySelector('.badge.warn')).toBeNull()
 
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'View In Staged Operations' }))
@@ -701,6 +703,8 @@ describe('LiquidationModal', () => {
 		const executeButton = documentQueries.getByRole('button', { name: 'Execute Liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(true)
 		expect(documentQueries.getByRole('heading', { name: 'Invalid Liquidation Pair' })).not.toBeNull()
+		expect(document.body.querySelector('.warning-surface')).not.toBeNull()
+		expect(document.body.querySelector('.badge.warn')).toBeNull()
 		expect(documentQueries.getAllByText('Select a target vault that is different from the caller vault.')).toHaveLength(2)
 	})
 

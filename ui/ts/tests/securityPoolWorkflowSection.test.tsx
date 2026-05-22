@@ -662,6 +662,8 @@ describe('SecurityPoolWorkflowSection', () => {
 		const dialogQueries = within(withdrawDialog)
 		expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
 		expect(dialogQueries.getByText('#7')).not.toBeNull()
+		expect(withdrawDialog.querySelector('.warning-surface')).not.toBeNull()
+		expect(withdrawDialog.querySelector('.badge.warn')).toBeNull()
 
 		await act(() => {
 			fireEvent.click(dialogQueries.getByRole('button', { name: 'View In Staged Operations' }))

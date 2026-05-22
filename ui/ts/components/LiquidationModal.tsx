@@ -10,6 +10,7 @@ import { FormInput } from './FormInput.js'
 import { MetricField } from './MetricField.js'
 import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
+import { WarningSurface } from './WarningSurface.js'
 import { sameAddress } from '../lib/address.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
@@ -232,12 +233,11 @@ export function LiquidationModal({
 				</div>
 				{queuedLiquidationStatus === undefined ? null : queuedLiquidationStatus === 'queued' ? (
 					queuedLiquidationOperation === undefined ? null : (
-						<section className='entity-card compact'>
+						<WarningSurface as='section' variant='compact'>
 							<div className='entity-card-header'>
 								<div>
 									<h4>Liquidation Queued</h4>
 								</div>
-								<span className='badge warn'>Queued</span>
 							</div>
 							<div className='workflow-metric-grid'>
 								<MetricField label='Staged Operation'>#{queuedLiquidationOperation.operationId.toString()}</MetricField>
@@ -250,7 +250,7 @@ export function LiquidationModal({
 									View In Staged Operations
 								</button>
 							</div>
-						</section>
+						</WarningSurface>
 					)
 				) : queuedLiquidationStatus === 'failed' ? (
 					<section className='entity-card compact'>
@@ -273,15 +273,14 @@ export function LiquidationModal({
 						<p className='detail'>A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.</p>
 					</section>
 				) : queuedLiquidationStatus === 'missing' ? (
-					<section className='entity-card compact'>
+					<WarningSurface as='section' variant='compact'>
 						<div className='entity-card-header'>
 							<div>
 								<h4>Liquidation Submitted</h4>
 							</div>
-							<span className='badge warn'>Check State</span>
 						</div>
 						<p className='detail'>The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.</p>
-					</section>
+					</WarningSurface>
 				) : (
 					<section className='entity-card compact'>
 						<div className='entity-card-header'>
@@ -344,15 +343,14 @@ export function LiquidationModal({
 					/>
 				</DataGrid>
 				{sameVaultWarning === undefined ? null : (
-					<section className='entity-card compact'>
+					<WarningSurface as='section' variant='compact'>
 						<div className='entity-card-header'>
 							<div>
 								<h4>Invalid Liquidation Pair</h4>
 							</div>
-							<span className='badge warn'>Warning</span>
 						</div>
 						<p className='detail'>{sameVaultWarning}</p>
-					</section>
+					</WarningSurface>
 				)}
 				<div className='form-grid'>
 					<label className='field'>
