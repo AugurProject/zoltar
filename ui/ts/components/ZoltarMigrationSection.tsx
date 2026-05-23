@@ -9,7 +9,9 @@ import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
+import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
@@ -41,6 +43,7 @@ type ZoltarMigrationSectionProps = {
 	zoltarMigrationForm: ZoltarMigrationFormState
 	zoltarMigrationPending: boolean
 	zoltarMigrationPreparedRepBalance: bigint | undefined
+	zoltarMigrationResult?: ZoltarMigrationActionResult | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseState: LoadableValueState
 	onApproveZoltarForkRep: (amount?: bigint) => void
@@ -74,14 +77,13 @@ export function ZoltarMigrationSection({
 	zoltarForkRepBalance,
 	zoltarForkApproval,
 	zoltarForkActiveAction,
-	zoltarForkFeedback,
 	zoltarMigrationChildRepBalances,
 	zoltarMigrationActiveAction,
 	zoltarMigrationError,
-	zoltarMigrationFeedback,
 	zoltarMigrationForm,
 	zoltarMigrationPending,
 	zoltarMigrationPreparedRepBalance,
+	zoltarMigrationResult,
 	zoltarUniverse,
 	zoltarUniverseState,
 	onApproveZoltarForkRep,
@@ -194,6 +196,18 @@ export function ZoltarMigrationSection({
 		}
 		onZoltarMigrationFormChange({ outcomeIndexes: [...selectedOutcomeIndexes, outcomeIndex].map((index: bigint) => index.toString()).join(', ') })
 	}
+	const latestMigrationAction =
+		zoltarMigrationResult === undefined
+			? undefined
+			: {
+					title: 'Latest Migration Action',
+					rows: [
+						{ label: 'Action', value: zoltarMigrationResult.action },
+						{ label: 'Amount', value: <CurrencyValue value={zoltarMigrationResult.amount} suffix='REP' /> },
+						{ label: 'Outcome Indexes', value: zoltarMigrationResult.outcomeIndexes.length === 0 ? 'None' : zoltarMigrationResult.outcomeIndexes.join(', ') },
+						{ label: 'Transaction', value: <TransactionHashLink hash={zoltarMigrationResult.hash} /> },
+					],
+				}
 
 	if (universeMissing) {
 		const presentation = getUniversePresentation(zoltarUniverseState)
@@ -207,6 +221,7 @@ export function ZoltarMigrationSection({
 
 	return (
 		<>
+			<WorkflowTransactionStatus latestAction={latestMigrationAction} outcome={undefined} />
 			<SectionBlock title='Migrate REP' description='Prepare REP into your migration balance, choose target universes, and split migration REP across outcomes.'>
 				<DataGrid>
 					<MetricField label='Migration REP Balance'>
@@ -245,7 +260,6 @@ export function ZoltarMigrationSection({
 						pendingLabel='Approving REP...'
 						requiredAmount={missingPreparationAmount}
 						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${missingPreparationAmount.toString()}`}
-						status={zoltarForkFeedback?.action === 'approveForkRep' ? zoltarForkFeedback.status : undefined}
 						tokenSymbol='REP'
 						tokenUnits={18}
 					/>
@@ -264,23 +278,8 @@ export function ZoltarMigrationSection({
 					)}
 
 					<div className='actions'>
-						<TransactionActionButton
-							idleLabel='Prepare REP'
-							pendingLabel='Preparing REP...'
-							onClick={onPrepareRepForMigration}
-							pending={zoltarMigrationActiveAction === 'prepare'}
-							status={zoltarMigrationFeedback?.action === 'addRepToMigrationBalance' ? zoltarMigrationFeedback.status : undefined}
-							tone='secondary'
-							availability={{ disabled: !canPrepare, reason: prepareHintMessage }}
-						/>
-						<TransactionActionButton
-							idleLabel='Split REP'
-							pendingLabel='Splitting REP...'
-							onClick={onMigrateInternalRep}
-							pending={zoltarMigrationActiveAction === 'split'}
-							status={zoltarMigrationFeedback?.action === 'splitMigrationRep' ? zoltarMigrationFeedback.status : undefined}
-							availability={{ disabled: !canSplit, reason: splitHintMessage }}
-						/>
+						<TransactionActionButton idleLabel='Prepare REP' pendingLabel='Preparing REP...' onClick={onPrepareRepForMigration} pending={zoltarMigrationActiveAction === 'prepare'} tone='secondary' availability={{ disabled: !canPrepare, reason: prepareHintMessage }} />
+						<TransactionActionButton idleLabel='Split REP' pendingLabel='Splitting REP...' onClick={onMigrateInternalRep} pending={zoltarMigrationActiveAction === 'split'} availability={{ disabled: !canSplit, reason: splitHintMessage }} />
 					</div>
 				</div>
 			</SectionBlock>

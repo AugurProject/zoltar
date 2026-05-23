@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks'
+import { AddressValue } from './AddressValue.js'
 import { EntityCard } from './EntityCard.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
@@ -10,6 +11,8 @@ import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
 import { SecurityPoolVaultDirectory } from './SecurityPoolVaultDirectory.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
+import { TransactionStatusCard } from './TransactionStatusCard.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { sameAddress } from '../lib/address.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -81,6 +84,17 @@ export function SecurityPoolsOverviewSection({
 					</button>
 				}
 			>
+				{securityPoolOverviewResult === undefined ? undefined : (
+					<TransactionStatusCard
+						title='Liquidation Submitted'
+						badge={<span className='badge warn'>Check State</span>}
+						detail={
+							<>
+								Queued liquidation for <AddressValue address={securityPoolOverviewResult.securityPoolAddress} />. Transaction: <TransactionHashLink hash={securityPoolOverviewResult.hash} />
+							</>
+						}
+					/>
+				)}
 				<ErrorNotice message={securityPoolOverviewError} />
 				<div className='filter-toolbar'>
 					<label className='field'>

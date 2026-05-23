@@ -16,8 +16,10 @@ import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { WarningSurface } from './WarningSurface.js'
+import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { balanceShortage } from '../lib/inputs.js'
@@ -237,7 +239,6 @@ export function SecurityVaultSection({
 	securityVaultForm,
 	securityVaultMissing,
 	securityVaultActiveAction,
-	securityVaultFeedback,
 	securityVaultRepApproval,
 	securityVaultRepBalance,
 	securityVaultResult,
@@ -379,6 +380,18 @@ export function SecurityVaultSection({
 		<StateHint presentation={{ key: 'not_found', badgeLabel: 'Not found', badgeTone: 'blocked', detail: 'Try another pool address.' }} />
 	) : undefined
 
+	const latestAction =
+		securityVaultResult === undefined
+			? undefined
+			: {
+					title: 'Latest Vault Action',
+					embedInCard: compactLayout,
+					rows: [
+						{ label: 'Action', value: securityVaultResult.action },
+						{ label: 'Transaction', value: <TransactionHashLink hash={securityVaultResult.hash} /> },
+					],
+				}
+
 	useEffect(() => {
 		if (!autoLoadVault) return
 		if (accountState.address === undefined) return
@@ -427,6 +440,7 @@ export function SecurityVaultSection({
 
 	const actionSections = modalFirst ? (
 		<>
+			<WorkflowTransactionStatus latestAction={latestAction} outcome={undefined} />
 			<SectionBlock title='Vault Action Launchers'>
 				<div className='vault-action-launcher-grid'>
 					{vaultReadinessActions.map(action => (
@@ -482,7 +496,6 @@ export function SecurityVaultSection({
 							pendingLabel='Approving REP...'
 							requiredAmount={depositAmount}
 							resetKey={`${currentSelectedVaultDetails.repToken}:${currentSelectedVaultDetails.securityPoolAddress}:${depositAmount?.toString() ?? ''}`}
-							status={securityVaultFeedback?.action === 'approveRep' ? securityVaultFeedback.status : undefined}
 							tokenSymbol='REP'
 							tokenUnits={18}
 						/>
@@ -497,14 +510,7 @@ export function SecurityVaultSection({
 							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
 								Cancel
 							</button>
-							<TransactionActionButton
-								idleLabel='Create / Deposit REP'
-								pendingLabel='Depositing REP...'
-								onClick={onDepositRep}
-								pending={securityVaultActiveAction === 'depositRep'}
-								status={securityVaultFeedback?.action === 'depositRep' ? securityVaultFeedback.status : undefined}
-								availability={{ disabled: depositGuardMessage !== undefined, reason: depositGuardMessage }}
-							/>
+							<TransactionActionButton idleLabel='Create / Deposit REP' pendingLabel='Depositing REP...' onClick={onDepositRep} pending={securityVaultActiveAction === 'depositRep'} availability={{ disabled: depositGuardMessage !== undefined, reason: depositGuardMessage }} />
 						</div>
 					</>
 				)}
@@ -570,15 +576,7 @@ export function SecurityVaultSection({
 							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
 								Cancel
 							</button>
-							<TransactionActionButton
-								idleLabel='Withdraw REP'
-								pendingLabel='Queueing REP withdrawal...'
-								onClick={onWithdrawRep}
-								pending={securityVaultActiveAction === 'queueWithdrawRep'}
-								status={securityVaultFeedback?.action === 'queueWithdrawRep' ? securityVaultFeedback.status : undefined}
-								tone='secondary'
-								availability={{ disabled: withdrawRepGuardMessage !== undefined, reason: withdrawRepGuardMessage }}
-							/>
+							<TransactionActionButton idleLabel='Withdraw REP' pendingLabel='Queueing REP withdrawal...' onClick={onWithdrawRep} pending={securityVaultActiveAction === 'queueWithdrawRep'} tone='secondary' availability={{ disabled: withdrawRepGuardMessage !== undefined, reason: withdrawRepGuardMessage }} />
 						</div>
 					</>
 				)}
@@ -633,7 +631,6 @@ export function SecurityVaultSection({
 								pendingLabel='Queueing allowance update...'
 								onClick={onSetSecurityBondAllowance}
 								pending={securityVaultActiveAction === 'queueSetSecurityBondAllowance'}
-								status={securityVaultFeedback?.action === 'queueSetSecurityBondAllowance' ? securityVaultFeedback.status : undefined}
 								tone='secondary'
 								availability={{ disabled: setSecurityBondAllowanceGuardMessage !== undefined, reason: setSecurityBondAllowanceGuardMessage }}
 							/>
@@ -657,19 +654,13 @@ export function SecurityVaultSection({
 					<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
 						Cancel
 					</button>
-					<TransactionActionButton
-						idleLabel='Claim Fees'
-						pendingLabel='Claiming fees...'
-						onClick={onRedeemFees}
-						pending={securityVaultActiveAction === 'redeemFees'}
-						status={securityVaultFeedback?.action === 'redeemFees' ? securityVaultFeedback.status : undefined}
-						availability={{ disabled: claimFeesGuardMessage !== undefined, reason: claimFeesGuardMessage }}
-					/>
+					<TransactionActionButton idleLabel='Claim Fees' pendingLabel='Claiming fees...' onClick={onRedeemFees} pending={securityVaultActiveAction === 'redeemFees'} availability={{ disabled: claimFeesGuardMessage !== undefined, reason: claimFeesGuardMessage }} />
 				</div>
 			</OperationModal>
 		</>
 	) : (
 		<>
+			<WorkflowTransactionStatus latestAction={latestAction} outcome={undefined} />
 			<SectionBlock title='Claim Fees'>
 				{currentSelectedVaultDetails === undefined ? (
 					<p className='detail'>Refresh the vault to inspect claimable fees.</p>
@@ -681,14 +672,7 @@ export function SecurityVaultSection({
 					</div>
 				)}
 				<div className='actions'>
-					<TransactionActionButton
-						idleLabel='Claim Fees'
-						pendingLabel='Claiming fees...'
-						onClick={onRedeemFees}
-						pending={securityVaultActiveAction === 'redeemFees'}
-						status={securityVaultFeedback?.action === 'redeemFees' ? securityVaultFeedback.status : undefined}
-						availability={{ disabled: !canClaimFees, reason: claimFeesGuardMessage }}
-					/>
+					<TransactionActionButton idleLabel='Claim Fees' pendingLabel='Claiming fees...' onClick={onRedeemFees} pending={securityVaultActiveAction === 'redeemFees'} availability={{ disabled: !canClaimFees, reason: claimFeesGuardMessage }} />
 				</div>
 			</SectionBlock>
 
@@ -721,19 +705,11 @@ export function SecurityVaultSection({
 					pendingLabel='Approving REP...'
 					requiredAmount={depositAmount}
 					resetKey={`${currentSelectedVaultDetails?.repToken ?? ''}:${currentSelectedVaultDetails?.securityPoolAddress ?? ''}:${depositAmount?.toString() ?? ''}`}
-					status={securityVaultFeedback?.action === 'approveRep' ? securityVaultFeedback.status : undefined}
 					tokenSymbol='REP'
 					tokenUnits={18}
 				/>
 				<div className='actions'>
-					<TransactionActionButton
-						idleLabel='Create / Deposit REP'
-						pendingLabel='Depositing REP...'
-						onClick={onDepositRep}
-						pending={securityVaultActiveAction === 'depositRep'}
-						status={securityVaultFeedback?.action === 'depositRep' ? securityVaultFeedback.status : undefined}
-						availability={{ disabled: depositGuardMessage !== undefined, reason: depositGuardMessage }}
-					/>
+					<TransactionActionButton idleLabel='Create / Deposit REP' pendingLabel='Depositing REP...' onClick={onDepositRep} pending={securityVaultActiveAction === 'depositRep'} availability={{ disabled: depositGuardMessage !== undefined, reason: depositGuardMessage }} />
 				</div>
 				{repBalanceGap !== undefined && repBalanceGap > 0n ? (
 					<ErrorNotice message={`Insufficient REP balance. Deposit amount exceeds your wallet balance by ${formatCurrencyBalance(repBalanceGap)} REP.`} />
@@ -774,7 +750,6 @@ export function SecurityVaultSection({
 								pendingLabel='Queueing allowance update...'
 								onClick={onSetSecurityBondAllowance}
 								pending={securityVaultActiveAction === 'queueSetSecurityBondAllowance'}
-								status={securityVaultFeedback?.action === 'queueSetSecurityBondAllowance' ? securityVaultFeedback.status : undefined}
 								tone='secondary'
 								availability={{ disabled: setSecurityBondAllowanceGuardMessage !== undefined, reason: setSecurityBondAllowanceGuardMessage }}
 							/>
@@ -816,15 +791,7 @@ export function SecurityVaultSection({
 					</div>
 				</label>
 				<div className='actions'>
-					<TransactionActionButton
-						idleLabel='Withdraw REP'
-						pendingLabel='Queueing REP withdrawal...'
-						onClick={onWithdrawRep}
-						pending={securityVaultActiveAction === 'queueWithdrawRep'}
-						status={securityVaultFeedback?.action === 'queueWithdrawRep' ? securityVaultFeedback.status : undefined}
-						tone='secondary'
-						availability={{ disabled: !canWithdrawRep, reason: withdrawRepGuardMessage }}
-					/>
+					<TransactionActionButton idleLabel='Withdraw REP' pendingLabel='Queueing REP withdrawal...' onClick={onWithdrawRep} pending={securityVaultActiveAction === 'queueWithdrawRep'} tone='secondary' availability={{ disabled: !canWithdrawRep, reason: withdrawRepGuardMessage }} />
 				</div>
 			</SectionBlock>
 

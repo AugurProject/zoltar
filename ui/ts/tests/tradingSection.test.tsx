@@ -217,18 +217,16 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Redeem Resolved Shares' })).not.toBeNull()
 	})
 
-	void test('renders button-local trading feedback without a latest action card', async () => {
+	void test('renders the latest trading action pool with the shared address value component', async () => {
+		const poolAddress = '0x00000000000000000000000000000000000000ab'
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
-					tradingFeedback: {
+					tradingResult: {
 						action: 'createCompleteSet',
-						status: {
-							detail: 'Complete sets are now available in the selected pool.',
-							hash: zeroHash,
-							title: 'Complete sets minted',
-							tone: 'success',
-						},
+						hash: zeroHash,
+						securityPoolAddress: poolAddress,
+						universeId: 0n,
 					},
 				})}
 			/>,
@@ -240,8 +238,11 @@ void describe('TradingSection', () => {
 		})
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Complete sets minted')).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Latest Trading Action' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Latest Trading Action' })).not.toBeNull()
+		expect(documentQueries.getByText('Complete Sets Minted')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: `Copy address ${poolAddress}` })).not.toBeNull()
+		expect(document.body.querySelector('.workflow-transaction-status')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Latest Trading Action' }).closest('.actions')).toBeNull()
 	})
 
 	void test('renders your share metrics using rounded values with exact copy affordances', async () => {

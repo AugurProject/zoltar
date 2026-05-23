@@ -273,8 +273,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Queued' })).not.toBeNull()
 		expect(documentQueries.getByText('#9')).not.toBeNull()
-		expect(document.body.querySelector('.warning-surface')).not.toBeNull()
-		expect(document.body.querySelector('.badge.warn')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Liquidation Queued' }).closest('.liquidation-modal-actions')).toBeNull()
 
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'View In Staged Operations' }))
@@ -316,8 +315,8 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Liquidation executed')).not.toBeNull()
-		expect(documentQueries.getByText('Execution completed immediately.')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
+		expect(documentQueries.getByText('A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Execute Vault Liquidation' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Queue Vault Liquidation' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
@@ -368,7 +367,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Liquidation failed')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
 		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
 	})
@@ -464,7 +463,8 @@ describe('LiquidationModal', () => {
 		})
 
 		expect(documentQueries.getByRole('dialog', { name: 'Execute Vault Liquidation' })).not.toBeNull()
-		expect(documentQueries.getByText('Liquidation executed')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
+		expect(documentQueries.getByText('A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.')).not.toBeNull()
 
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Close' }))
