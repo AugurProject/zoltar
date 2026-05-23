@@ -126,7 +126,7 @@ Once a universe forks, child universes can be deployed lazily through `deployChi
 
 For categorical questions, that means `Invalid`, which is a legitimate answer state, and any in-range categorical outcome are allowed, while out-of-range values are rejected. For scalar questions, only well-formed scalar encodings are allowed.
 
-This is Zoltar’s core branching primitive. A REP holder does not choose one destination universe and abandon all others inside the substrate. Instead, the holder takes a post-fork migration balance and uses it to mint child-universe REP across one or more selected branches. If multiple child outcomes are selected, the same migrated balance is reproduced into each selected child universe. That is the key Colored Coins-style property: the fork branches the claim structure itself, and later value concentration determines which branch matters economically.
+This is Zoltar’s core branching primitive. A REP holder does not choose one destination universe and abandon all others inside Zoltar. Instead, the holder takes a post-fork migration balance and uses it to mint child-universe REP across one or more selected branches. If multiple child outcomes are selected, the same migrated balance is reproduced into each selected child universe. That is the key Colored Coins-style property: the fork branches the claim structure itself, and later value concentration determines which branch matters economically.
 
 ```
 Post-fork migration balance
@@ -252,7 +252,7 @@ Zoltar currently supports:
 - categorical questions, implemented as an ordered array of non-empty outcome labels
 - scalar questions, implemented as a tick-based numeric range with no categorical labels
 
-Zoltar can represent arbitrary categorical questions and scalar questions, while higher-level protocols may choose narrower market shapes on top of that substrate. It defines answer spaces and forkable resolution state, not the collateralized trading mechanics that may later be attached to those questions.
+Zoltar can represent arbitrary categorical questions and scalar questions, while higher-level protocols may choose narrower market shapes on top of it. It defines answer spaces and forkable resolution state, not the collateralized trading mechanics that may later be attached to those questions.
 
 ## 8. Invalid vs Malformed
 
