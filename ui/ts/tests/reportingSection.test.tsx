@@ -8,6 +8,7 @@ import { useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'
 import { ReportingSection } from '../components/ReportingSection.js'
 import { formatDuration } from '../lib/formatters.js'
+import { computeEscalationTimeSinceStartFromAttritionCost, getEscalationBalanceTuple, getEscalationBindingCapital } from '../lib/reportingDomain.js'
 import type { AccountState, ReportingFormState } from '../types/app.js'
 import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingDetails } from '../types/contracts.js'
 import type { ReportingSectionProps } from '../types/components.js'
@@ -97,6 +98,58 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		viewerVaultLockedRepInEscalationGame: 1n * REP,
 		viewerVaultRepDepositShare: 11n * REP,
 		...overrides,
+	}
+}
+
+function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
+	const sides = overrides.sides ?? [
+		{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+		{ balance: rep(8n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+		{ balance: rep(3n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+	]
+	const startBond = overrides.startBond ?? rep(1n)
+	const nonDecisionThreshold = overrides.nonDecisionThreshold ?? rep(20n)
+	const startingTime = overrides.startingTime ?? 120n
+	const currentTime = overrides.currentTime ?? 150n
+	const bindingCapital = getEscalationBindingCapital(getEscalationBalanceTuple(sides))
+	const escalationEndTime = startingTime + computeEscalationTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, bindingCapital)
+
+	const baseDetails: ActiveReportingDetails = {
+		bindingCapital,
+		completeSetCollateralAmount: 1n,
+		currentRequiredBond: rep(2n),
+		currentTime,
+		escalationEndTime,
+		escalationGameAddress: zeroAddress,
+		marketDetails: createMarketDetails(),
+		nonDecisionThreshold,
+		questionOutcome: 'none',
+		resolution: 'none',
+		securityPoolAddress: zeroAddress,
+		sides,
+		startBond,
+		startingTime,
+		status: 'active',
+		totalCost: 0n,
+		universeId: 1n,
+		withdrawalEnabled: false,
+		withdrawalState: 'not-finalized',
+		viewerVaultAvailableEscalationRep: 10n * REP,
+		viewerVaultExists: true,
+		viewerVaultLockedRepInEscalationGame: 1n * REP,
+		viewerVaultRepDepositShare: 11n * REP,
+	}
+
+	return {
+		...baseDetails,
+		...overrides,
+		bindingCapital,
+		currentTime,
+		escalationEndTime,
+		nonDecisionThreshold,
+		sides,
+		startBond,
+		startingTime,
 	}
 }
 
@@ -361,12 +414,29 @@ describe('ReportingSection', () => {
 	})
 
 	test('shows Awaiting Resolution with zero time left once the escalation end time has passed', async () => {
-		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ currentTime: 300n, escalationEndTime: 300n }) })))
+		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ currentTime: 301n, escalationEndTime: 300n }) })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Awaiting Resolution' })).not.toBeNull()
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
+	})
+
+	test('disables reporting after the escalation timer ends', async () => {
+		const reportingDetails = createDynamicReportingDetails()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createDynamicReportingDetails({
+						currentTime: reportingDetails.escalationEndTime + 1n,
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Reporting is closed because the escalation timer has ended.')
 	})
 
 	test('renders pre-start metrics and placeholders before the first report starts escalation', async () => {
@@ -419,6 +489,59 @@ describe('ReportingSection', () => {
 
 		expect(document.body.textContent?.includes('projects roughly')).toBe(true)
 		expect(document.body.textContent?.includes('Enter a valid report amount to preview profit.')).toBe(false)
+	})
+
+	test('shows the timer-extension preview below the report button for contributions that raise binding capital', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createDynamicReportingDetails(),
+					reportingForm: createReportingForm({
+						reportAmount: '2',
+						selectedOutcome: 'no',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' })
+		const preview = documentQueries.getByText(/^This contribution would extend the timer by /)
+		expect(reportButton.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+	})
+
+	test('shows a no-extension preview when the selected contribution leaves binding capital unchanged', async () => {
+		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createDynamicReportingDetails() })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('This contribution would not extend the timer.')).toBe(true)
+	})
+
+	test('shows the accepted-deposit note when the typed contribution exceeds the remaining room on the selected side', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createDynamicReportingDetails({
+						sides: [
+							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(19n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+							{ balance: rep(3n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+					}),
+					reportingForm: createReportingForm({
+						reportAmount: '5',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('This contribution would not extend the timer.')).toBe(true)
+		expect(document.body.textContent?.includes('Based on an accepted deposit of')).toBe(true)
+		expect(document.body.textContent?.includes('≈ 1.00 REP.')).toBe(true)
 	})
 
 	test('autofills the active minimum-outcome-change preset', async () => {

@@ -9,10 +9,28 @@ type ReportingAmountSuggestion = {
 }
 
 const REP_UNIT = 10n ** 18n
+const ESCALATION_TIME_LENGTH = 4_233_600n
+const SCALE = 1_000_000n
+const LN2_SCALED = 693_147n
+const MAX_ATANH_ITERATIONS = 16
 const LOAD_REPORTING_PRESETS_REASON = 'Load reporting details before using presets.'
 const MAX_PROFIT_NOT_STARTED_REASON = 'Max profit becomes available after the escalation game starts.'
 const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
 const ESCALATION_RESOLVED_REASON = 'Escalation is already resolved.'
+
+type EscalationBalanceTuple = readonly [bigint, bigint, bigint]
+
+type ProjectedEscalationDeposit = {
+	acceptedAmount: bigint
+	projectedBalances: EscalationBalanceTuple
+	reachesNonDecision: boolean
+}
+
+type ProjectedEscalationEndTime = {
+	acceptedAmount: bigint
+	endsImmediately: boolean
+	projectedEndTime: bigint
+}
 
 function roundUpToRepUnit(value: bigint) {
 	if (value <= 0n) return 0n
@@ -41,11 +59,76 @@ export function getEscalationTimeRemaining(details: ActiveReportingDetails) {
 	return requireDefined(getTimeRemaining(details.escalationEndTime, details.currentTime), 'Escalation end time is required')
 }
 
+export function isReportingClosed(details: ActiveReportingDetails) {
+	return details.resolution !== 'none' || details.currentTime > details.escalationEndTime
+}
+
 export function getEscalationPhase(details: ActiveReportingDetails) {
 	if (details.resolution !== 'none') return 'Resolved'
 	if (details.currentTime < details.startingTime) return 'Pending Start'
-	if (details.currentTime >= details.escalationEndTime) return 'Awaiting Resolution'
+	if (details.currentTime > details.escalationEndTime) return 'Awaiting Resolution'
 	return 'Active'
+}
+
+export function getEscalationBalanceTuple(sides: EscalationSide[]): EscalationBalanceTuple {
+	const invalidBalance = sides.find(side => side.key === 'invalid')?.balance ?? 0n
+	const yesBalance = sides.find(side => side.key === 'yes')?.balance ?? 0n
+	const noBalance = sides.find(side => side.key === 'no')?.balance ?? 0n
+
+	return [invalidBalance, yesBalance, noBalance]
+}
+
+export function getEscalationBindingCapital(balances: EscalationBalanceTuple) {
+	const [invalidBalance, yesBalance, noBalance] = balances
+
+	if ((invalidBalance >= yesBalance && invalidBalance <= noBalance) || (invalidBalance >= noBalance && invalidBalance <= yesBalance)) {
+		return invalidBalance
+	}
+
+	if ((yesBalance >= invalidBalance && yesBalance <= noBalance) || (yesBalance >= noBalance && yesBalance <= invalidBalance)) {
+		return yesBalance
+	}
+
+	return noBalance
+}
+
+export function computeEscalationTimeSinceStartFromAttritionCost(startBond: bigint, nonDecisionThreshold: bigint, attritionCost: bigint) {
+	if (attritionCost <= startBond) return 0n
+	if (attritionCost >= nonDecisionThreshold) return ESCALATION_TIME_LENGTH
+
+	const lnRatioScaled = computeLnRatioScaled(startBond, nonDecisionThreshold)
+	if (lnRatioScaled === 0n) return 0n
+
+	const lnCostRatioScaled = computeLnRatioScaled(startBond, attritionCost)
+	return (lnCostRatioScaled * ESCALATION_TIME_LENGTH) / lnRatioScaled
+}
+
+export function projectEscalationEndTime(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, amount: bigint): ProjectedEscalationEndTime | undefined {
+	if (amount <= 0n) return undefined
+
+	const projectedDeposit = projectEscalationDeposit({
+		amount,
+		balances: getEscalationBalanceTuple(details.sides),
+		nonDecisionThreshold: details.nonDecisionThreshold,
+		outcome,
+		startBond: details.startBond,
+	})
+	if (projectedDeposit === undefined) return undefined
+
+	if (projectedDeposit.reachesNonDecision) {
+		return {
+			acceptedAmount: projectedDeposit.acceptedAmount,
+			endsImmediately: true,
+			projectedEndTime: details.currentTime,
+		}
+	}
+
+	const projectedBindingCapital = getEscalationBindingCapital(projectedDeposit.projectedBalances)
+	return {
+		acceptedAmount: projectedDeposit.acceptedAmount,
+		endsImmediately: false,
+		projectedEndTime: details.startingTime + computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, projectedBindingCapital),
+	}
 }
 
 export function getLeadingEscalationOutcome(sides: EscalationSide[]) {
@@ -274,24 +357,22 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 		}
 	}
 
-	const room = details.nonDecisionThreshold - selectedSide.balance
-	let effectiveDeposit = amount > room ? room : amount
-	const balances = details.sides.map(side => side.balance)
-	const maxBalance = balances.reduce((currentMax, sideBalance) => (sideBalance > currentMax ? sideBalance : currentMax), 0n)
-	const newBalance = selectedSide.balance + effectiveDeposit
-	const otherSideHasMax = details.sides.some(side => side.key !== outcome && side.balance === maxBalance)
-	if (newBalance === maxBalance && otherSideHasMax && maxBalance < details.nonDecisionThreshold) {
-		effectiveDeposit -= 1n
-		if (effectiveDeposit < details.startBond) {
-			return {
-				actualDepositAmount: undefined,
-				reason: 'Increase the report amount slightly to avoid a tie at the minimum bond.',
-			}
+	const projectedDeposit = projectEscalationDeposit({
+		amount,
+		balances: getEscalationBalanceTuple(details.sides),
+		nonDecisionThreshold: details.nonDecisionThreshold,
+		outcome,
+		startBond: details.startBond,
+	})
+	if (projectedDeposit === undefined) {
+		return {
+			actualDepositAmount: undefined,
+			reason: 'Increase the report amount slightly to avoid a tie at the minimum bond.',
 		}
 	}
 
 	return {
-		actualDepositAmount: effectiveDeposit,
+		actualDepositAmount: projectedDeposit.acceptedAmount,
 		reason: undefined,
 	}
 }
@@ -312,4 +393,101 @@ export function previewReportingContribution(details: ReportingDetails, outcome:
 	}
 
 	return previewEscalationContribution(details, outcome, amount)
+}
+
+function computeLnRatioScaled(lowValue: bigint, highValue: bigint) {
+	let normalizedLow = lowValue
+	let log2Count = 0n
+
+	while (highValue >= normalizedLow * 2n) {
+		normalizedLow *= 2n
+		log2Count += 1n
+	}
+
+	const diff = highValue - normalizedLow
+	const sum = highValue + normalizedLow
+	const z = (diff * SCALE) / sum
+	if (z === 0n) return 0n
+
+	return log2Count * LN2_SCALED + 2n * computeAtanhScaled(z)
+}
+
+function computeAtanhScaled(z: bigint) {
+	const z2 = (z * z) / SCALE
+	let term = z
+	let atanhScaled = term
+
+	for (let iteration = 1; iteration < MAX_ATANH_ITERATIONS; iteration += 1) {
+		term = (term * z2 * BigInt(2 * iteration - 1)) / (BigInt(2 * iteration + 1) * SCALE)
+		if (term === 0n) break
+		atanhScaled += term
+	}
+
+	return atanhScaled
+}
+
+function getOutcomeIndex(outcome: ReportingOutcomeKey) {
+	switch (outcome) {
+		case 'invalid':
+			return 0
+		case 'yes':
+			return 1
+		case 'no':
+			return 2
+	}
+}
+
+function getMaxEscalationBalance(balances: EscalationBalanceTuple) {
+	const [invalidBalance, yesBalance, noBalance] = balances
+	return invalidBalance > yesBalance ? (invalidBalance > noBalance ? invalidBalance : noBalance) : yesBalance > noBalance ? yesBalance : noBalance
+}
+
+function hasReachedNonDecision(balances: EscalationBalanceTuple, nonDecisionThreshold: bigint) {
+	let thresholdHits = 0
+
+	if (balances[0] >= nonDecisionThreshold) thresholdHits += 1
+	if (balances[1] >= nonDecisionThreshold) thresholdHits += 1
+	if (balances[2] >= nonDecisionThreshold) thresholdHits += 1
+
+	return thresholdHits >= 2
+}
+
+function setBalanceAtIndex(balances: EscalationBalanceTuple, index: number, value: bigint): EscalationBalanceTuple {
+	switch (index) {
+		case 0:
+			return [value, balances[1], balances[2]]
+		case 1:
+			return [balances[0], value, balances[2]]
+		case 2:
+			return [balances[0], balances[1], value]
+		default:
+			throw new RangeError(`Unknown escalation balance index: ${index.toString()}`)
+	}
+}
+
+function projectEscalationDeposit({ amount, balances, nonDecisionThreshold, outcome, startBond }: { amount: bigint; balances: EscalationBalanceTuple; nonDecisionThreshold: bigint; outcome: ReportingOutcomeKey; startBond: bigint }): ProjectedEscalationDeposit | undefined {
+	if (amount < startBond) return undefined
+
+	const outcomeIndex = getOutcomeIndex(outcome)
+	const currentBalance = balances[outcomeIndex]
+	if (currentBalance >= nonDecisionThreshold) return undefined
+
+	const room = nonDecisionThreshold - currentBalance
+	let acceptedAmount = amount > room ? room : amount
+	let newBalance = currentBalance + acceptedAmount
+	const maxBalance = getMaxEscalationBalance(balances)
+	const otherHasMax = outcomeIndex === 0 ? balances[1] === maxBalance || balances[2] === maxBalance : outcomeIndex === 1 ? balances[0] === maxBalance || balances[2] === maxBalance : balances[0] === maxBalance || balances[1] === maxBalance
+
+	if (newBalance === maxBalance && otherHasMax && maxBalance < nonDecisionThreshold) {
+		acceptedAmount -= 1n
+		if (acceptedAmount < startBond) return undefined
+		newBalance = currentBalance + acceptedAmount
+	}
+
+	const projectedBalances = setBalanceAtIndex(balances, outcomeIndex, newBalance)
+	return {
+		acceptedAmount,
+		projectedBalances,
+		reachesNonDecision: hasReachedNonDecision(projectedBalances, nonDecisionThreshold),
+	}
 }
