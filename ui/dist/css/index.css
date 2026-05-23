@@ -2481,6 +2481,11 @@ strong.metric-value-danger {
 	gap: 0.75rem;
 }
 
+.workflow-transaction-status {
+	display: grid;
+	gap: var(--space-3);
+}
+
 .sticky-object-context-body {
 	display: grid;
 	gap: 0.9rem;
@@ -3053,11 +3058,19 @@ button:focus-visible {
 }
 
 .escalation-side {
+	display: block;
+	width: 100%;
 	min-width: 0;
 	padding: 1rem;
+	border: 0;
 	border-top: 1px solid var(--border-default);
 	background: transparent;
 	border-radius: 0;
+	appearance: none;
+	cursor: pointer;
+	color: inherit;
+	font: inherit;
+	text-align: left;
 }
 
 .escalation-side:first-child {
@@ -3075,6 +3088,16 @@ button:focus-visible {
 
 .escalation-side.leading.selected {
 	background: linear-gradient(90deg, rgba(56, 213, 255, 0.1) 0%, rgba(66, 232, 194, 0.06) 100%);
+}
+
+.escalation-side:focus-visible {
+	outline: 2px solid var(--interactive-border-hover);
+	outline-offset: 0.25rem;
+}
+
+.escalation-side:disabled {
+	cursor: not-allowed;
+	opacity: 0.6;
 }
 
 .escalation-side-row {

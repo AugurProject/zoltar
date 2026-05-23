@@ -601,7 +601,10 @@ void describe('SecurityPoolsSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText('Liquidation executed')).not.toBeNull()
+		const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
+		const dialogQueries = within(dialog)
+		expect(dialogQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
+		expect(dialogQueries.getByText('A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.')).not.toBeNull()
 	})
 
 	void test('shows liquidation queued in browse mode when the refreshed manager reports a pending liquidation', async () => {
@@ -679,9 +682,10 @@ void describe('SecurityPoolsSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Liquidation failed')).not.toBeNull()
-		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
+		const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
+		const dialogQueries = within(dialog)
+		expect(dialogQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
+		expect(dialogQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
 	})
 
 	void test('keeps the route summary hidden in operate mode until the selected pool resolves', async () => {

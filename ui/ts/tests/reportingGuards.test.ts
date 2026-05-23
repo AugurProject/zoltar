@@ -14,6 +14,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: 'Reporting opens after market end.',
 				reportAmount: '1',
+				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				viewerVaultAvailableEscalationRep: 10n,
@@ -30,6 +31,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
+				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				viewerVaultAvailableEscalationRep: 10n,
@@ -46,6 +48,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
+				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: undefined,
@@ -62,6 +65,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '0',
+				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 0n,
 				viewerVaultAvailableEscalationRep: 10n,
@@ -80,6 +84,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
+				reportingClosed: false,
 				reportingStatus: 'missing',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
@@ -96,6 +101,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
+				reportingClosed: false,
 				reportingStatus: 'not-started',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
@@ -112,6 +118,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
+				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
@@ -119,6 +126,25 @@ describe('reporting guards', () => {
 				viewerVaultExists: true,
 			}),
 		).toBeUndefined()
+	})
+
+	test('blocks reporting once the escalation timer is closed', () => {
+		expect(
+			getReportingReportGuardMessage({
+				actualDepositAmount: 1n,
+				accountAddress: zeroAddress,
+				contributionPreviewReason: undefined,
+				isMainnet: true,
+				lockedReason: undefined,
+				reportAmount: '1',
+				reportingClosed: true,
+				reportingStatus: 'active',
+				selectedAmount: 1n,
+				selectedOutcome: 'yes',
+				viewerVaultAvailableEscalationRep: 10n,
+				viewerVaultExists: true,
+			}),
+		).toBe('Reporting is closed because the escalation timer has ended.')
 	})
 
 	test('blocks reporting when the vault lacks unlocked REP or the contribution preview is invalid', () => {
@@ -130,6 +156,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '5',
+				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 5n * 10n ** 18n,
 				selectedOutcome: 'yes',
@@ -146,6 +173,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
+				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n * 10n ** 18n,
 				selectedOutcome: 'yes',
@@ -162,6 +190,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
+				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',

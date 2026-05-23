@@ -12,6 +12,7 @@ export function getReportingReportGuardMessage({
 	isMainnet,
 	lockedReason,
 	reportAmount,
+	reportingClosed,
 	reportingStatus,
 	selectedOutcome,
 	selectedAmount,
@@ -24,6 +25,7 @@ export function getReportingReportGuardMessage({
 	isMainnet: boolean
 	lockedReason: string | undefined
 	reportAmount: string
+	reportingClosed: boolean
 	reportingStatus: ReportingStatus
 	selectedOutcome: ReportingOutcomeKey | undefined
 	selectedAmount: bigint | undefined
@@ -31,6 +33,7 @@ export function getReportingReportGuardMessage({
 	viewerVaultExists: boolean
 }) {
 	if (lockedReason !== undefined) return lockedReason
+	if (reportingClosed) return 'Reporting is closed because the escalation timer has ended.'
 	if (accountAddress === undefined) return 'Connect a wallet before reporting on a market.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before reporting on a market.'
 	if (reportingStatus === 'missing') return 'Load reporting details before reporting on an outcome.'

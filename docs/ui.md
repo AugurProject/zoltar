@@ -363,9 +363,9 @@ The `Reporting` subview handles reporting and escalation.
 | --- | --- | --- | --- |
 | `Security Pool Address` | Select the target pool when reporting is used standalone. | Free-form address interpreted by the reporting loader. | Hidden in embedded pool workflows. |
 | `Refresh reporting` | Load or reload escalation/reporting state. | No field input. | Disabled while reporting details are loading or when the workflow is locked by pool state. |
-| `Outcome Side` | Choose the reporting side for contribution or withdrawal. | Must be one of the supported reporting outcomes. | Disabled when the workflow is locked. |
+| `Outcome Sides` | Choose the reporting side for contribution or withdrawal by selecting one of the visible outcome cards. | Must be one of the supported reporting outcomes. | Disabled when the workflow is locked. |
 | `Report / Contribution Amount` | Set the REP amount to stake on the selected side. | Must parse into a valid positive REP amount. | Disabled when the workflow is locked. |
-| `Report / Contribute On Selected Side` | Submit reporting or contribution. | Requires unlocked workflow, connected wallet, mainnet, loaded reporting details, and valid positive amount. | Disabled whenever any reporting guard condition fails. |
+| `Report / Contribute {Selected Side}` | Submit reporting or contribution on the currently selected outcome card. | Requires unlocked workflow, connected wallet, mainnet, loaded reporting details, and valid positive amount. | Disabled whenever any reporting guard condition fails. |
 | Deposit selection list | Optionally narrow withdrawal to specific owned unsettled deposits on the selected side. Leaving every checkbox clear withdraws all eligible deposits on that side. | No text parsing. Selected entries must still exist on refresh. | Disabled when the workflow is locked. |
 | `Withdraw Escalation Deposits` | Submit the withdrawal. | Requires unlocked workflow, connected wallet, mainnet, loaded reporting details, the question to be finalized or the game to be canceled by an external fork, and at least one owned unsettled deposit on the selected side. | Disabled whenever any withdrawal guard condition fails. |
 

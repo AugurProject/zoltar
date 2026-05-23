@@ -11,8 +11,10 @@ type EscalationSideDisplay = {
 type EscalationSideProps = {
 	bindingCapital: bigint | undefined
 	chartScaleMax: bigint
+	disabled?: boolean
 	isLeading: boolean
 	isSelected: boolean
+	onSelect: () => void
 	side: EscalationSideDisplay
 }
 
@@ -26,15 +28,19 @@ function getChartRatio(value: bigint | undefined, maxValue: bigint) {
 	return `${wholePercent.toString()}.${fractionalPercent}%`
 }
 
-export function EscalationSide({ bindingCapital, chartScaleMax, isLeading, isSelected, side }: EscalationSideProps) {
+export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false, isLeading, isSelected, onSelect, side }: EscalationSideProps) {
 	return (
-		<div
+		<button
+			aria-pressed={isSelected}
 			className={`escalation-side ${isSelected ? 'selected' : ''} ${isLeading ? 'leading' : ''}`}
+			disabled={disabled}
+			onClick={onSelect}
 			style={{
 				'--binding-ratio': getChartRatio(bindingCapital, chartScaleMax),
 				'--side-ratio': getChartRatio(side.balance, chartScaleMax),
 				'--user-ratio': getChartRatio(side.userStake, chartScaleMax),
 			}}
+			type='button'
 		>
 			<div className='escalation-side-row'>
 				<div className='escalation-side-copy'>
@@ -61,6 +67,6 @@ export function EscalationSide({ bindingCapital, chartScaleMax, isLeading, isSel
 					</div>
 				</div>
 			</div>
-		</div>
+		</button>
 	)
 }
