@@ -1,5 +1,4 @@
 import { CurrencyValue } from './CurrencyValue.js'
-import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { EscalationSide } from './EscalationSide.js'
@@ -184,6 +183,7 @@ export function ReportingSection({
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
 	const outcomeSides = getOutcomeSides(activeReportingDetails)
+	const selectedOutcomeLabel = outcomeSides.find(side => side.key === reportingForm.selectedOutcome)?.label ?? getReportingOutcomeLabel(reportingForm.selectedOutcome)
 	const minimumOutcomeChangeContribution = getReportingMinimumOutcomeChangeContribution(reportingDetails, reportingForm.selectedOutcome)
 	const maxProfitContribution = getReportingMaxProfitContribution(reportingDetails, reportingForm.selectedOutcome)
 	const presetReasons = reportingLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && !isHiddenPresetReason(reason) && reasons.indexOf(reason) === index)
@@ -280,7 +280,16 @@ export function ReportingSection({
 					</div>
 					<div className='escalation-sides'>
 						{outcomeSides.map(side => (
-							<EscalationSide key={side.key} bindingCapital={activeReportingDetails?.bindingCapital} chartScaleMax={chartScaleMax} isLeading={leadingOutcome === side.key} isSelected={reportingForm.selectedOutcome === side.key} side={side} />
+							<EscalationSide
+								key={side.key}
+								bindingCapital={activeReportingDetails?.bindingCapital}
+								chartScaleMax={chartScaleMax}
+								disabled={reportingLocked}
+								isLeading={leadingOutcome === side.key}
+								isSelected={reportingForm.selectedOutcome === side.key}
+								onSelect={() => onReportingFormChange({ selectedOutcome: side.key, selectedWithdrawDepositIndexes: [] })}
+								side={side}
+							/>
 						))}
 					</div>
 				</SectionBlock>
@@ -298,10 +307,6 @@ export function ReportingSection({
 							Available unlocked vault REP for reporting: <CurrencyValue value={reportingDetails.viewerVaultAvailableEscalationRep} suffix='REP' />.
 						</p>
 					)}
-					<label className='field'>
-						<span>Outcome Side</span>
-						<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={reportingForm.selectedOutcome} onChange={selectedOutcome => onReportingFormChange({ selectedOutcome, selectedWithdrawDepositIndexes: [] })} disabled={reportingLocked} />
-					</label>
 
 					<label className='field'>
 						<span>Report / Contribution Amount (REP)</span>
@@ -344,7 +349,7 @@ export function ReportingSection({
 
 					{selectedEstimate === undefined ? undefined : (
 						<p className='detail'>
-							If {getReportingOutcomeLabel(reportingForm.selectedOutcome)} wins and no one else contributes afterward, the current amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit.
+							If {selectedOutcomeLabel} wins and no one else contributes afterward, the current amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit.
 						</p>
 					)}
 					{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
@@ -354,7 +359,7 @@ export function ReportingSection({
 					)}
 					<div className='actions'>
 						<TransactionActionButton
-							idleLabel='Report / Contribute On Selected Side'
+							idleLabel={`Report / Contribute ${selectedOutcomeLabel}`}
 							pendingLabel='Submitting report...'
 							onClick={onReportOutcome}
 							pending={reportingActiveAction === 'reportOutcome'}

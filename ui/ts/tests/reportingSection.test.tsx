@@ -176,6 +176,7 @@ function ReportingSectionHarness({ initialProps }: { initialProps?: Partial<Repo
 			{...createProps(initialProps)}
 			reportingForm={reportingForm}
 			onReportingFormChange={changes => {
+				initialProps?.onReportingFormChange?.(changes)
 				setReportingForm(currentForm => ({
 					...currentForm,
 					...changes,
@@ -190,7 +191,6 @@ function findProfitPreview() {
 		.map(element => element.textContent ?? '')
 		.find(text => text.includes('projects roughly'))
 }
-
 describe('ReportingSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -314,7 +314,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Connect a wallet before reporting on a market.')
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute No', 'Connect a wallet before reporting on a market.')
 		expect(document.body.querySelector('button[title="Connect a wallet before withdrawing escalation deposits."]')).toBeNull()
 	})
 
@@ -333,10 +333,9 @@ describe('ReportingSection', () => {
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-
 		expect(document.body.textContent?.includes('It does not spend wallet REP directly or require a wallet approval.')).toBe(false)
 		expect(document.body.textContent?.includes('Available unlocked vault REP for reporting:')).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Need 3 more unlocked REP in your vault before reporting.')
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute Yes', 'Need 3 more unlocked REP in your vault before reporting.')
 	})
 
 	test('renders a compact withdraw-only mode without the reporting banner or report form', async () => {
@@ -393,7 +392,7 @@ describe('ReportingSection', () => {
 		expect(outcomeSidesSection.querySelector('[title="3 REP"]')).not.toBeNull()
 		expect(outcomeSidesSection.querySelectorAll('.currency-value.unavailable').length).toBeGreaterThanOrEqual(2)
 		expect(document.body.textContent?.includes('Load reporting details to populate live stakes')).toBe(false)
-		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
+		expectTransactionButtonEnabled(document.body, 'Report / Contribute Yes')
 	})
 
 	test('disables report submission for a pre-start amount below the first-report minimum', async () => {
@@ -410,7 +409,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Enter at least 3 REP to start the escalation game.')
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute Yes', 'Enter at least 3 REP to start the escalation game.')
 	})
 
 	test('accepts decimal report amounts for the profit preview', async () => {
@@ -541,7 +540,6 @@ describe('ReportingSection', () => {
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-
 		expectTransactionButtonEnabled(document.body, 'Withdraw Escalation Deposits')
 		expect(document.body.textContent?.includes('Connected wallet has 1 withdrawable unsettled deposit entry on the selected side.')).toBe(true)
 		expect(within(document.body).getByRole('checkbox', { name: /Deposit #0/i })).toBeDefined()
@@ -711,5 +709,53 @@ describe('ReportingSection', () => {
 		expect(maxProfitButton.disabled).toBe(true)
 		expect(maxProfitButton.title).toBe('Max profit preset unavailable because the reward window is already filled on the selected side.')
 		expect(document.body.textContent?.includes('Max profit preset unavailable because the reward window is already filled on the selected side.')).toBe(false)
+	})
+
+	test('lets users select an outcome side from the outcome cards and updates the report button label', async () => {
+		const updates: Partial<ReportingFormState>[] = []
+		const renderedComponent = await renderIntoDocument(
+			<ReportingSectionHarness
+				initialProps={{
+					onReportingFormChange: update => {
+						updates.push(update)
+					},
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const yesButton = documentQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement
+		const noButton = documentQueries.getByRole('button', { name: /^No/ }) as HTMLButtonElement
+
+		expect(yesButton.getAttribute('aria-pressed')).toBe('true')
+		expect(noButton.getAttribute('aria-pressed')).toBe('false')
+		expect(documentQueries.getByRole('button', { name: 'Report / Contribute Yes' })).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(noButton)
+		})
+
+		expect(updates).toEqual([{ selectedOutcome: 'no', selectedWithdrawDepositIndexes: [] }])
+		expect((documentQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement).getAttribute('aria-pressed')).toBe('false')
+		expect((documentQueries.getByRole('button', { name: /^No/ }) as HTMLButtonElement).getAttribute('aria-pressed')).toBe('true')
+		expect(documentQueries.getByRole('button', { name: 'Report / Contribute No' })).not.toBeNull()
+	})
+
+	test('disables outcome side selection when the reporting workflow is locked', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					lockedReason: 'Reporting opens after market end.',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect((documentQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('button', { name: /^No/ }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('button', { name: /^Invalid/ }) as HTMLButtonElement).disabled).toBe(true)
 	})
 })
