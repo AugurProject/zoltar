@@ -38,6 +38,7 @@ describe('AppStatusNotices', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Transaction complete')).toBeNull()
+		expect(documentQueries.queryByText(/^Last transaction:/)).toBeNull()
 	})
 
 	test('shows the wrong network notice in the page-level notice stack', async () => {

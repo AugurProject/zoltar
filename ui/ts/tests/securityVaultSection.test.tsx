@@ -219,4 +219,23 @@ describe('SecurityVaultSection', () => {
 
 		expectTransactionButtonDisabled(document.body, 'Set Security Bond Allowance', 'Enter at least 1 ETH for a non-zero allowance.')
 	})
+
+	test('renders vault transaction status outside action rows', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					securityVaultResult: {
+						action: 'depositRep',
+						hash: '0x1234000000000000000000000000000000000000000000000000000000000000',
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(document.body.querySelector('.workflow-transaction-status')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Latest Vault Action' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Latest Vault Action' }).closest('.actions')).toBeNull()
+	})
 })
