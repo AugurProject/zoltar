@@ -2,7 +2,18 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from 'viem'
-import { calculateEstimatedEscalationReturn, getMaxProfitContribution, getMinimumOutcomeChangeContribution, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, previewReportingContribution } from '../lib/reportingDomain.js'
+import {
+	calculateEstimatedEscalationReturn,
+	computeEscalationTimeSinceStartFromAttritionCost,
+	getEscalationBalanceTuple,
+	getEscalationBindingCapital,
+	getMaxProfitContribution,
+	getMinimumOutcomeChangeContribution,
+	getReportingMaxProfitContribution,
+	getReportingMinimumOutcomeChangeContribution,
+	previewReportingContribution,
+	projectEscalationEndTime,
+} from '../lib/reportingDomain.js'
 import type { ActiveReportingDetails, MarketDetails, ReportingDetails } from '../types/contracts.js'
 
 const REP = 10n ** 18n
@@ -81,6 +92,58 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 		viewerVaultLockedRepInEscalationGame: 0n,
 		viewerVaultRepDepositShare: 10n * REP,
 		...overrides,
+	}
+}
+
+function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
+	const sides = overrides.sides ?? [
+		{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+		{ balance: rep(8n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+		{ balance: rep(3n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+	]
+	const startBond = overrides.startBond ?? rep(1n)
+	const nonDecisionThreshold = overrides.nonDecisionThreshold ?? rep(20n)
+	const startingTime = overrides.startingTime ?? 120n
+	const currentTime = overrides.currentTime ?? 150n
+	const bindingCapital = getEscalationBindingCapital(getEscalationBalanceTuple(sides))
+	const escalationEndTime = startingTime + computeEscalationTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, bindingCapital)
+
+	const baseDetails: ActiveReportingDetails = {
+		bindingCapital,
+		completeSetCollateralAmount: 1n,
+		currentRequiredBond: rep(2n),
+		currentTime,
+		escalationEndTime,
+		escalationGameAddress: zeroAddress,
+		marketDetails: createMarketDetails(),
+		nonDecisionThreshold,
+		questionOutcome: 'none',
+		resolution: 'none',
+		securityPoolAddress: zeroAddress,
+		sides,
+		startBond,
+		startingTime,
+		status: 'active',
+		totalCost: 0n,
+		universeId: 1n,
+		withdrawalEnabled: false,
+		withdrawalState: 'not-finalized',
+		viewerVaultAvailableEscalationRep: 10n * REP,
+		viewerVaultExists: true,
+		viewerVaultLockedRepInEscalationGame: 1n * REP,
+		viewerVaultRepDepositShare: 11n * REP,
+	}
+
+	return {
+		...baseDetails,
+		...overrides,
+		bindingCapital,
+		currentTime,
+		escalationEndTime,
+		nonDecisionThreshold,
+		sides,
+		startBond,
+		startingTime,
 	}
 }
 
@@ -254,6 +317,55 @@ describe('reportingDomain', () => {
 		expect(previewReportingContribution(createNotStartedReportingDetails(), 'yes', rep(3n))).toEqual({
 			actualDepositAmount: rep(3n),
 			reason: undefined,
+		})
+	})
+
+	test('projectEscalationEndTime keeps the timer unchanged for a leading-side deposit', () => {
+		const details = createDynamicReportingDetails()
+
+		expect(projectEscalationEndTime(details, 'yes', rep(1n))).toEqual({
+			acceptedAmount: rep(1n),
+			endsImmediately: false,
+			projectedEndTime: details.escalationEndTime,
+		})
+	})
+
+	test('projectEscalationEndTime extends the timer for a non-leading-side deposit that raises binding capital', () => {
+		const details = createDynamicReportingDetails()
+		const projection = projectEscalationEndTime(details, 'no', rep(2n))
+
+		expect(projection).toBeDefined()
+		expect(projection?.acceptedAmount).toBe(rep(2n))
+		expect(projection?.endsImmediately).toBe(false)
+		expect(projection?.projectedEndTime).toBeGreaterThan(details.escalationEndTime)
+	})
+
+	test('projectEscalationEndTime reflects the tie-adjusted accepted amount', () => {
+		const details = createDynamicReportingDetails({
+			sides: [
+				{ balance: rep(5n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: 0n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+		})
+
+		expect(projectEscalationEndTime(details, 'yes', rep(5n))?.acceptedAmount).toBe(rep(5n) - 1n)
+	})
+
+	test('projectEscalationEndTime ends escalation immediately when a deposit creates a threshold tie', () => {
+		const details = createDynamicReportingDetails({
+			nonDecisionThreshold: rep(10n),
+			sides: [
+				{ balance: rep(10n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(9n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: 0n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+		})
+
+		expect(projectEscalationEndTime(details, 'yes', rep(1n))).toEqual({
+			acceptedAmount: rep(1n),
+			endsImmediately: true,
+			projectedEndTime: details.currentTime,
 		})
 	})
 

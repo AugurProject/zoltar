@@ -18,7 +18,7 @@ import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
-import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, previewReportingContribution } from '../lib/reportingDomain.js'
+import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, isReportingClosed, previewReportingContribution, projectEscalationEndTime } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import type { LifecycleStagePresentation, ReportingSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
@@ -206,6 +206,8 @@ export function ReportingSection({
 	const reportContributionPreview = reportingDetails === undefined || selectedAmount === undefined ? undefined : previewReportingContribution(reportingDetails, reportingForm.selectedOutcome, selectedAmount)
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
+	const reportingClosed = activeReportingDetails === undefined ? false : isReportingClosed(activeReportingDetails)
+	const timerProjection = activeReportingDetails === undefined || selectedAmount === undefined || selectedAmount <= 0n || reportingClosed ? undefined : projectEscalationEndTime(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
 	const outcomeSides = getOutcomeSides(activeReportingDetails)
 	const minimumOutcomeChangeContribution = getReportingMinimumOutcomeChangeContribution(reportingDetails, reportingForm.selectedOutcome)
 	const maxProfitContribution = getReportingMaxProfitContribution(reportingDetails, reportingForm.selectedOutcome)
@@ -218,6 +220,7 @@ export function ReportingSection({
 		isMainnet,
 		lockedReason,
 		reportAmount: reportingForm.reportAmount,
+		reportingClosed,
 		reportingStatus,
 		selectedAmount,
 		viewerVaultAvailableEscalationRep: reportingDetails?.viewerVaultAvailableEscalationRep,
@@ -386,14 +389,24 @@ export function ReportingSection({
 							If {getReportingOutcomeLabel(reportingForm.selectedOutcome)} wins and no one else contributes afterward, the current amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit.
 						</p>
 					)}
-					{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
-						<p className='detail'>
-							Based on the current escalation state, this action would lock <CurrencyValue value={actualReportDepositAmount} suffix='REP' /> instead of the full entered amount.
-						</p>
-					)}
 					<div className='actions'>
 						<TransactionActionButton idleLabel='Report / Contribute On Selected Side' pendingLabel='Submitting report...' onClick={onReportOutcome} pending={reportingActiveAction === 'reportOutcome'} availability={{ disabled: reportGuardMessage !== undefined, reason: reportGuardMessage }} />
 					</div>
+					{timerProjection === undefined || activeReportingDetails === undefined ? undefined : (
+						<p className='detail'>
+							{timerProjection.endsImmediately
+								? 'This contribution would end the escalation immediately instead of extending the timer.'
+								: timerProjection.projectedEndTime > activeReportingDetails.escalationEndTime
+									? `This contribution would extend the timer by ${formatDuration(timerProjection.projectedEndTime - activeReportingDetails.escalationEndTime)}.`
+									: 'This contribution would not extend the timer.'}
+							{timerProjection.acceptedAmount === selectedAmount ? undefined : (
+								<>
+									{' '}
+									Based on an accepted deposit of <CurrencyValue copyable={false} value={timerProjection.acceptedAmount} suffix='REP' />.
+								</>
+							)}
+						</p>
+					)}
 				</SectionBlock>
 			) : undefined}
 
