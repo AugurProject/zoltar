@@ -71,45 +71,27 @@ Parent universe
 
 Zoltar defines the branch set; it does not choose one winner at the substrate layer.
 
-## 3. Fork Thresholds and REP Economics
+## 3. Fork Costs and REP Economics
 
-The current fork threshold is:
+In order to trigger a fork, someone must pay a `forkFee` and they also must commit `migrationCommitment` REP to migrate to one of the child universes.
 
-$$
-\text{forkThreshold} = \frac{\text{totalTheoreticalRepSupply}}{20}
-$$
-
-where `forkThreshold` denotes the REP amount required to trigger a fork in the current universe.
-
-Initiating a fork requires supplying REP equal to 5% of the universe’s total theoretical supply as the fork threshold. Under the current constants, 20% of that threshold deposit is permanently burned, which is 1% of total theoretical supply, and the remaining 80% becomes the initiator’s migration balance.
-
-Using descriptive names for the fork initiator’s two post-fork quantities:
+The current `forkFee` is:
 
 $$
-\text{burnedRepAmount} = \frac{\text{forkThreshold}}{5}
+\text{forkFee} = \frac{\text{totalTheoreticalRepSupply}}{250}
 $$
 
+The current `migrationCommitment` is:
+
 $$
-\text{forkInitiatorMigrationBalance} = \text{forkThreshold} - \text{burnedRepAmount} = \frac{4 \cdot \text{forkThreshold}}{5}
+\text{migrationCommitment} = \frac{\text{totalTheoreticalRepSupply}}{50}
 $$
 
-```
-Fork initiator deposits forkThreshold REP
-                    |
-                    v
-         +----------------------+
-         | threshold deposit    |
-         +----------------------+
-             |              |
-             |              |
-             v              v
-      20% burned        80% kept as
-                        migration balance
-```
+The `forkFee` is burned immediately, and the `migrationCommitment` is returned back to the user in its split form (see Child Universes and REP Splitting below).
 
 Genesis REP cannot be burned natively, so the contract transfers it to the configured burn address. Child-universe REP is minted and burned directly by [`ReputationToken`](../solidity/contracts/ReputationToken.sol) under Zoltar’s control.
 
-In the Colored Coins framing, the threshold deposit is the cost of forcing the branch point into existence.
+In the Colored Coins framing, the combination of these two numbers represents the capital required to force the branch point into existence.
 
 ### Current parameter values
 
@@ -117,8 +99,8 @@ In the Colored Coins framing, the threshold deposit is the cost of forcing the b
 | --- | --- | --- |
 | `GENESIS_REPUTATION_TOKEN` | `0x221657776846890989a759BA2973e427DfF5C9bB` | Genesis-universe REP token address |
 | `BURN_ADDRESS` | `0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF` | Burn sink used for genesis REP |
-| `FORK_THRESHOLD_DIVISOR` | `20` | Fork threshold is `totalTheoreticalRepSupply / 20`, or 5% of supply |
-| `FORK_BURN_DIVISOR` | `5` | Burned amount is `forkThreshold / 5`, or 20% of threshold |
+| `FORK_FEE_DIVISOR` | `250` | 0.4% of supply |
+| `MIGRATION_COMMITMENT_DIVISOR` | `250` | 2% of supply |
 
 ## 4. Child Universes and REP Splitting
 
