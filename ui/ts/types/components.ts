@@ -83,6 +83,36 @@ export type ReadinessAction = {
 	title: string
 }
 
+export type WorkflowOutcomePresentation = {
+	detail: ComponentChildren
+	nextStep?: string
+	title: string
+}
+
+type WorkflowLatestActionRow = {
+	label: string
+	value: ComponentChildren
+}
+
+export type WorkflowLatestActionPresentation = {
+	embedInCard?: boolean
+	rows: WorkflowLatestActionRow[]
+	title: string
+}
+
+export type WorkflowTransactionStatusProps = {
+	latestAction: WorkflowLatestActionPresentation | undefined
+	outcome: WorkflowOutcomePresentation | undefined
+}
+
+export type TransactionStatusCardProps = {
+	actions?: ComponentChildren
+	badge: ComponentChildren
+	className?: string
+	detail?: ComponentChildren
+	metrics?: ComponentChildren
+	title: ComponentChildren
+}
 export type RouteHeaderProps = {
 	actions?: ComponentChildren
 	badge?: ComponentChildren

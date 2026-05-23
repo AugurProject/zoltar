@@ -309,7 +309,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Load reporting details to view the escalation state for this pool.')).toBe(true)
 	})
 
-	test('renders button-local reporting feedback instead of a latest action card', async () => {
+	test('does not render inline button-local reporting feedback when no reporting result is present', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -321,7 +321,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Reporting submitted')).not.toBeNull()
+		expect(documentQueries.queryByText('Reporting submitted')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Latest Reporting Action' })).toBeNull()
 	})
 
@@ -834,5 +834,30 @@ describe('ReportingSection', () => {
 		expect(maxProfitButton.disabled).toBe(true)
 		expect(maxProfitButton.title).toBe('Max profit preset unavailable because the reward window is already filled on the selected side.')
 		expect(document.body.textContent?.includes('Max profit preset unavailable because the reward window is already filled on the selected side.')).toBe(false)
+	})
+
+	test('renders reporting transaction status outside the action rows', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingResult: {
+						action: 'reportOutcome',
+						hash: '0x1234000000000000000000000000000000000000000000000000000000000000',
+						outcome: 'yes',
+						securityPoolAddress: zeroAddress,
+						universeId: 1n,
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const statusStack = document.body.querySelector('.workflow-transaction-status')
+		if (!(statusStack instanceof HTMLElement)) throw new Error('Expected reporting status stack to render')
+		expect(statusStack.firstElementChild?.textContent?.includes('Reporting Contribution Submitted')).toBe(true)
+		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' }).closest('.actions')).toBeNull()
 	})
 })

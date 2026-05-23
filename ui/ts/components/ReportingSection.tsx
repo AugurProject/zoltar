@@ -1,3 +1,4 @@
+import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -10,14 +11,17 @@ import { MetricField } from './MetricField.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
+import { UniverseLink } from './UniverseLink.js'
+import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, isReportingClosed, previewReportingContribution, projectEscalationEndTime } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
-import type { LifecycleStagePresentation, ReportingSectionProps } from '../types/components.js'
+import type { LifecycleStagePresentation, ReportingSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
 import type { ActiveReportingDetails, EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
 type ReportingStatus = 'active' | 'missing' | 'not-started'
@@ -147,6 +151,25 @@ function getReportingStagePresentation({
 	}
 }
 
+function getReportingOutcomePresentation(action: ReportingSectionProps['reportingResult']): WorkflowOutcomePresentation | undefined {
+	if (action === undefined) return undefined
+
+	switch (action.action) {
+		case 'reportOutcome':
+			return {
+				detail: 'The selected escalation outcome received your report or contribution.',
+				nextStep: 'Monitor the escalation state and withdraw eligible deposits when the workflow allows it.',
+				title: 'Reporting Contribution Submitted',
+			}
+		case 'withdrawEscalation':
+			return {
+				detail: 'Eligible escalation deposits were withdrawn for the selected outcome side.',
+				nextStep: 'Review the updated escalation balances before taking another reporting action.',
+				title: 'Escalation Deposits Withdrawn',
+			}
+	}
+}
+
 export function ReportingSection({
 	accountState,
 	currentTimestamp,
@@ -161,8 +184,8 @@ export function ReportingSection({
 	reportingActiveAction,
 	reportingDetails,
 	reportingError,
-	reportingFeedback,
 	reportingForm,
+	reportingResult,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 	mode = 'full-reporting',
@@ -220,9 +243,25 @@ export function ReportingSection({
 			})
 		: undefined
 	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStage !== undefined)
+	const latestReportingAction =
+		reportingResult === undefined
+			? undefined
+			: {
+					title: 'Latest Reporting Action',
+					embedInCard,
+					rows: [
+						{ label: 'Action', value: reportingResult.action },
+						{ label: 'Outcome', value: getReportingOutcomeLabel(reportingResult.outcome) },
+						{ label: 'Pool', value: <AddressValue address={reportingResult.securityPoolAddress} /> },
+						{ label: 'Universe', value: <UniverseLink universeId={reportingResult.universeId} /> },
+						{ label: 'Transaction', value: <TransactionHashLink hash={reportingResult.hash} /> },
+					],
+				}
+	const reportingOutcome = getReportingOutcomePresentation(reportingResult)
 
 	const sections = (
 		<>
+			<WorkflowTransactionStatus latestAction={latestReportingAction} outcome={reportingOutcome} />
 			{showReportingHeaderStack ? (
 				<div className='reporting-header-stack'>
 					{showSecurityPoolAddressInput ? (
@@ -351,14 +390,7 @@ export function ReportingSection({
 						</p>
 					)}
 					<div className='actions'>
-						<TransactionActionButton
-							idleLabel='Report / Contribute On Selected Side'
-							pendingLabel='Submitting report...'
-							onClick={onReportOutcome}
-							pending={reportingActiveAction === 'reportOutcome'}
-							status={reportingFeedback?.action === 'reportOutcome' ? reportingFeedback.status : undefined}
-							availability={{ disabled: reportGuardMessage !== undefined, reason: reportGuardMessage }}
-						/>
+						<TransactionActionButton idleLabel='Report / Contribute On Selected Side' pendingLabel='Submitting report...' onClick={onReportOutcome} pending={reportingActiveAction === 'reportOutcome'} availability={{ disabled: reportGuardMessage !== undefined, reason: reportGuardMessage }} />
 					</div>
 					{timerProjection === undefined || activeReportingDetails === undefined ? undefined : (
 						<p className='detail'>
@@ -418,15 +450,7 @@ export function ReportingSection({
 					)}
 
 					<div className='actions'>
-						<TransactionActionButton
-							idleLabel='Withdraw Escalation Deposits'
-							pendingLabel='Withdrawing deposits...'
-							onClick={onWithdrawEscalation}
-							pending={reportingActiveAction === 'withdrawEscalation'}
-							status={reportingFeedback?.action === 'withdrawEscalation' ? reportingFeedback.status : undefined}
-							tone='secondary'
-							availability={{ disabled: withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
-						/>
+						<TransactionActionButton idleLabel='Withdraw Escalation Deposits' pendingLabel='Withdrawing deposits...' onClick={onWithdrawEscalation} pending={reportingActiveAction === 'withdrawEscalation'} tone='secondary' availability={{ disabled: withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }} />
 					</div>
 				</SectionBlock>
 			) : undefined}

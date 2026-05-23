@@ -65,7 +65,6 @@ function getPendingOperationLabel(operation: 'liquidation' | 'setSecurityBondsAl
 function getSecurityPoolStatusBadgeTone(systemState: SecurityPoolSystemState) {
 	return systemState === 'operational' ? 'ok' : 'warn'
 }
-
 export function SecurityPoolWorkflowSection({
 	accountState,
 	activeUniverseId,
@@ -89,7 +88,6 @@ export function SecurityPoolWorkflowSection({
 	onRequestPoolPrice,
 	onViewPendingReport,
 	poolOracleActiveAction,
-	poolOracleFeedback,
 	poolOracleManagerDetails,
 	poolOracleManagerError,
 	poolPriceOracleResult,
@@ -632,7 +630,6 @@ export function SecurityPoolWorkflowSection({
 														onExecutePendingPoolOperation(loadedSelectedPool.managerAddress, resolvedPendingOperationId)
 													}}
 													pending={poolOracleActiveAction === 'executeStagedOperation'}
-													status={poolOracleFeedback?.action === 'executeStagedOperation' ? poolOracleFeedback.status : undefined}
 													tone='secondary'
 													availability={{ disabled: executePendingOperationGuardMessage !== undefined, reason: executePendingOperationGuardMessage }}
 												/>
@@ -675,7 +672,6 @@ export function SecurityPoolWorkflowSection({
 												pendingLabel='Requesting new price...'
 												onClick={() => onRequestPoolPrice(loadedSelectedPool.managerAddress)}
 												pending={poolOracleActiveAction === 'requestPrice'}
-												status={poolOracleFeedback?.action === 'requestPrice' ? poolOracleFeedback.status : undefined}
 												tone='secondary'
 												availability={{ disabled: requestPriceGuardMessage !== undefined, reason: requestPriceGuardMessage }}
 											/>
