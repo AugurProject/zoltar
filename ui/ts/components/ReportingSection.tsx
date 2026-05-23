@@ -1,3 +1,4 @@
+import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
@@ -9,14 +10,17 @@ import { MetricField } from './MetricField.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
+import { UniverseLink } from './UniverseLink.js'
+import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
-import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, previewReportingContribution } from '../lib/reportingDomain.js'
+import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, isReportingClosed, previewReportingContribution, projectEscalationEndTime } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
-import type { LifecycleStagePresentation, ReportingSectionProps } from '../types/components.js'
+import type { LifecycleStagePresentation, ReportingSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
 import type { ActiveReportingDetails, EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
 type ReportingStatus = 'active' | 'missing' | 'not-started'
@@ -146,6 +150,25 @@ function getReportingStagePresentation({
 	}
 }
 
+function getReportingOutcomePresentation(action: ReportingSectionProps['reportingResult']): WorkflowOutcomePresentation | undefined {
+	if (action === undefined) return undefined
+
+	switch (action.action) {
+		case 'reportOutcome':
+			return {
+				detail: 'The selected escalation outcome received your report or contribution.',
+				nextStep: 'Monitor the escalation state and withdraw eligible deposits when the workflow allows it.',
+				title: 'Reporting Contribution Submitted',
+			}
+		case 'withdrawEscalation':
+			return {
+				detail: 'Eligible escalation deposits were withdrawn for the selected outcome side.',
+				nextStep: 'Review the updated escalation balances before taking another reporting action.',
+				title: 'Escalation Deposits Withdrawn',
+			}
+	}
+}
+
 export function ReportingSection({
 	accountState,
 	currentTimestamp,
@@ -160,8 +183,8 @@ export function ReportingSection({
 	reportingActiveAction,
 	reportingDetails,
 	reportingError,
-	reportingFeedback,
 	reportingForm,
+	reportingResult,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 	mode = 'full-reporting',
@@ -182,6 +205,8 @@ export function ReportingSection({
 	const reportContributionPreview = reportingDetails === undefined || selectedAmount === undefined ? undefined : previewReportingContribution(reportingDetails, reportingForm.selectedOutcome, selectedAmount)
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
+	const reportingClosed = activeReportingDetails === undefined ? false : isReportingClosed(activeReportingDetails)
+	const timerProjection = activeReportingDetails === undefined || selectedAmount === undefined || selectedAmount <= 0n || reportingClosed ? undefined : projectEscalationEndTime(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
 	const outcomeSides = getOutcomeSides(activeReportingDetails)
 	const selectedOutcomeLabel = outcomeSides.find(side => side.key === reportingForm.selectedOutcome)?.label ?? getReportingOutcomeLabel(reportingForm.selectedOutcome)
 	const minimumOutcomeChangeContribution = getReportingMinimumOutcomeChangeContribution(reportingDetails, reportingForm.selectedOutcome)
@@ -195,6 +220,7 @@ export function ReportingSection({
 		isMainnet,
 		lockedReason,
 		reportAmount: reportingForm.reportAmount,
+		reportingClosed,
 		reportingStatus,
 		selectedAmount,
 		viewerVaultAvailableEscalationRep: reportingDetails?.viewerVaultAvailableEscalationRep,
@@ -217,9 +243,25 @@ export function ReportingSection({
 			})
 		: undefined
 	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStage !== undefined)
+	const latestReportingAction =
+		reportingResult === undefined
+			? undefined
+			: {
+					title: 'Latest Reporting Action',
+					embedInCard,
+					rows: [
+						{ label: 'Action', value: reportingResult.action },
+						{ label: 'Outcome', value: getReportingOutcomeLabel(reportingResult.outcome) },
+						{ label: 'Pool', value: <AddressValue address={reportingResult.securityPoolAddress} /> },
+						{ label: 'Universe', value: <UniverseLink universeId={reportingResult.universeId} /> },
+						{ label: 'Transaction', value: <TransactionHashLink hash={reportingResult.hash} /> },
+					],
+				}
+	const reportingOutcome = getReportingOutcomePresentation(reportingResult)
 
 	const sections = (
 		<>
+			<WorkflowTransactionStatus latestAction={latestReportingAction} outcome={reportingOutcome} />
 			{showReportingHeaderStack ? (
 				<div className='reporting-header-stack'>
 					{showSecurityPoolAddressInput ? (
@@ -352,21 +394,24 @@ export function ReportingSection({
 							If {selectedOutcomeLabel} wins and no one else contributes afterward, the current amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit.
 						</p>
 					)}
-					{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
+					<div className='actions'>
+						<TransactionActionButton idleLabel={`Report / Contribute ${selectedOutcomeLabel}`} pendingLabel='Submitting report...' onClick={onReportOutcome} pending={reportingActiveAction === 'reportOutcome'} availability={{ disabled: reportGuardMessage !== undefined, reason: reportGuardMessage }} />
+					</div>
+					{timerProjection === undefined || activeReportingDetails === undefined ? undefined : (
 						<p className='detail'>
-							Based on the current escalation state, this action would lock <CurrencyValue value={actualReportDepositAmount} suffix='REP' /> instead of the full entered amount.
+							{timerProjection.endsImmediately
+								? 'This contribution would end the escalation immediately instead of extending the timer.'
+								: timerProjection.projectedEndTime > activeReportingDetails.escalationEndTime
+									? `This contribution would extend the timer by ${formatDuration(timerProjection.projectedEndTime - activeReportingDetails.escalationEndTime)}.`
+									: 'This contribution would not extend the timer.'}
+							{timerProjection.acceptedAmount === selectedAmount ? undefined : (
+								<>
+									{' '}
+									Based on an accepted deposit of <CurrencyValue copyable={false} value={timerProjection.acceptedAmount} suffix='REP' />.
+								</>
+							)}
 						</p>
 					)}
-					<div className='actions'>
-						<TransactionActionButton
-							idleLabel={`Report / Contribute ${selectedOutcomeLabel}`}
-							pendingLabel='Submitting report...'
-							onClick={onReportOutcome}
-							pending={reportingActiveAction === 'reportOutcome'}
-							status={reportingFeedback?.action === 'reportOutcome' ? reportingFeedback.status : undefined}
-							availability={{ disabled: reportGuardMessage !== undefined, reason: reportGuardMessage }}
-						/>
-					</div>
 				</SectionBlock>
 			) : undefined}
 
@@ -410,15 +455,7 @@ export function ReportingSection({
 					)}
 
 					<div className='actions'>
-						<TransactionActionButton
-							idleLabel='Withdraw Escalation Deposits'
-							pendingLabel='Withdrawing deposits...'
-							onClick={onWithdrawEscalation}
-							pending={reportingActiveAction === 'withdrawEscalation'}
-							status={reportingFeedback?.action === 'withdrawEscalation' ? reportingFeedback.status : undefined}
-							tone='secondary'
-							availability={{ disabled: withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
-						/>
+						<TransactionActionButton idleLabel='Withdraw Escalation Deposits' pendingLabel='Withdrawing deposits...' onClick={onWithdrawEscalation} pending={reportingActiveAction === 'withdrawEscalation'} tone='secondary' availability={{ disabled: withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }} />
 					</div>
 				</SectionBlock>
 			) : undefined}

@@ -222,7 +222,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 }
 
 export async function loadReportingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
-	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit] = await readRequiredMulticall(client, [
+	const reportingPoolReads: readonly ContractFunctionParameters[] = [
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'questionId',
@@ -259,7 +259,8 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			address: securityPoolAddress,
 			args: [],
 		},
-	])
+	]
+	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit] = (await readRequiredMulticall(client, reportingPoolReads)) as [bigint, Address, bigint, bigint, Address, bigint]
 	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThreshold] = await Promise.all([
 		loadMarketDetails(client, questionId),
 		client.getBlock(),

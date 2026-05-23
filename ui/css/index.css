@@ -2481,6 +2481,11 @@ strong.metric-value-danger {
 	gap: 0.75rem;
 }
 
+.workflow-transaction-status {
+	display: grid;
+	gap: var(--space-3);
+}
+
 .sticky-object-context-body {
 	display: grid;
 	gap: 0.9rem;

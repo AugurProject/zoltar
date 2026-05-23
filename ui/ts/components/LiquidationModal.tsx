@@ -11,6 +11,7 @@ import { MetricField } from './MetricField.js'
 import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { WarningSurface } from './WarningSurface.js'
+import { TransactionStatusCard } from './TransactionStatusCard.js'
 import { sameAddress } from '../lib/address.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
@@ -79,6 +80,56 @@ function getLiquidationButtonLabels(currentPoolOracleManagerDetails: OracleManag
 	}
 }
 
+function renderQueuedLiquidationStatusCard({
+	onViewInStagedOperations,
+	queuedLiquidationOperation,
+	queuedLiquidationStatus,
+	securityPoolOverviewResult,
+}: {
+	onViewInStagedOperations: () => void
+	queuedLiquidationOperation: OracleManagerDetails['pendingOperation']
+	queuedLiquidationStatus: 'executed' | 'failed' | 'missing' | 'queued' | 'refreshing' | undefined
+	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
+}) {
+	if (queuedLiquidationStatus === undefined) return null
+
+	if (queuedLiquidationStatus === 'queued') {
+		if (queuedLiquidationOperation === undefined) return null
+		return (
+			<TransactionStatusCard
+				title='Liquidation Queued'
+				badge={<span className='badge warn'>Queued</span>}
+				metrics={
+					<div className='workflow-metric-grid'>
+						<MetricField label='Staged Operation'>#{queuedLiquidationOperation.operationId.toString()}</MetricField>
+						<MetricField label='Amount'>
+							<CurrencyValue value={queuedLiquidationOperation.amount} />
+						</MetricField>
+					</div>
+				}
+				actions={
+					<button className='secondary' type='button' onClick={onViewInStagedOperations}>
+						View In Staged Operations
+					</button>
+				}
+			/>
+		)
+	}
+
+	if (queuedLiquidationStatus === 'failed') {
+		return <TransactionStatusCard title='Liquidation Failed' badge={<span className='badge blocked'>Failed</span>} detail={securityPoolOverviewResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the liquidation immediately, but the security pool rejected it.'} />
+	}
+
+	if (queuedLiquidationStatus === 'executed') {
+		return <TransactionStatusCard title='Liquidation Executed' badge={<span className='badge ok'>Executed</span>} detail='A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.' />
+	}
+
+	if (queuedLiquidationStatus === 'missing') {
+		return <TransactionStatusCard title='Liquidation Submitted' badge={<span className='badge warn'>Check State</span>} detail='The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.' />
+	}
+
+	return <TransactionStatusCard title='Refreshing Liquidation State' badge={<span className='badge muted'>Refreshing</span>} detail='Refreshing the oracle manager to determine whether the liquidation was queued or executed immediately.' />
+}
 export function LiquidationModal({
 	accountAddress,
 	closeLiquidationModal,
@@ -245,28 +296,12 @@ export function LiquidationModal({
 						×
 					</button>
 				</div>
-				{queuedLiquidationStatus === 'queued' ? (
-					queuedLiquidationOperation === undefined ? null : (
-						<WarningSurface as='section' variant='compact'>
-							<div className='entity-card-header'>
-								<div>
-									<h4>Liquidation Queued</h4>
-								</div>
-							</div>
-							<div className='workflow-metric-grid'>
-								<MetricField label='Staged Operation'>#{queuedLiquidationOperation.operationId.toString()}</MetricField>
-								<MetricField label='Amount'>
-									<CurrencyValue value={queuedLiquidationOperation.amount} />
-								</MetricField>
-							</div>
-							<div className='actions'>
-								<button className='secondary' type='button' onClick={() => onSelectedPoolViewChange('staged-operations')}>
-									View In Staged Operations
-								</button>
-							</div>
-						</WarningSurface>
-					)
-				) : null}
+				{renderQueuedLiquidationStatusCard({
+					onViewInStagedOperations: () => onSelectedPoolViewChange('staged-operations'),
+					queuedLiquidationOperation,
+					queuedLiquidationStatus,
+					securityPoolOverviewResult,
+				})}
 				<ErrorNotice message={securityPoolOverviewError} />
 				<DataGrid className='modal-summary-grid' columns={2}>
 					<AddressInfo address={liquidationSecurityPoolAddress} label='Security Pool' />
@@ -379,7 +414,6 @@ export function LiquidationModal({
 							onQueueLiquidation(liquidationManagerAddress, liquidationSecurityPoolAddress)
 						}}
 						pending={securityPoolOverviewActiveAction === 'queueLiquidation'}
-						status={securityPoolOverviewFeedback?.action === 'queueLiquidation' ? securityPoolOverviewFeedback.status : undefined}
 						availability={{ disabled: liquidationActionReason !== undefined, reason: liquidationActionReason }}
 						showDisabledReason={liquidationExecutionMode !== 'queue'}
 					/>
