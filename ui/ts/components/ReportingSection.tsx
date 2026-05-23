@@ -1,6 +1,5 @@
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
-import { EnumDropdown } from './EnumDropdown.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { FormInput } from './FormInput.js'
 import { EscalationSide } from './EscalationSide.js'
@@ -355,10 +354,6 @@ export function ReportingSection({
 							Available unlocked vault REP for reporting: <CurrencyValue value={reportingDetails.viewerVaultAvailableEscalationRep} suffix='REP' />.
 						</p>
 					)}
-					<label className='field'>
-						<span>Outcome Side</span>
-						<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={selectedOutcome} onChange={nextSelectedOutcome => onReportingFormChange({ selectedOutcome: nextSelectedOutcome, selectedWithdrawDepositIndexes: [] })} disabled={reportingLocked} placeholder='Select outcome side' />
-					</label>
 					<label className='field'>
 						<span>Report / Contribution Amount (REP)</span>
 						<FormInput value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportingLocked} />

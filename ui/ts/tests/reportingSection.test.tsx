@@ -270,7 +270,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByText('Blocked')).toBeNull()
 		expect(documentQueries.queryByText('Reporting Workflow')).toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
-		expect(documentQueries.getByText('Select outcome side')).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Outcome Side' })).toBeNull()
 		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(0)
 	})
 
@@ -296,7 +296,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
 	})
 
-	test('keeps the outcome dropdown unselected when reporting is locked', async () => {
+	test('keeps the outcome cards unselected when reporting is locked', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -309,9 +309,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Select outcome side')).not.toBeNull()
-		const outcomeButton = documentQueries.getByRole('button', { name: 'Outcome Side' }) as HTMLButtonElement
-		expect(outcomeButton.disabled).toBe(true)
+		expect(documentQueries.queryByRole('button', { name: 'Outcome Side' })).toBeNull()
 		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(0)
 	})
 
