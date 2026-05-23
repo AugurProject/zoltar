@@ -1664,7 +1664,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(document.body.textContent?.includes('Projected payout for current amount')).toBe(false)
 		expect(document.body.textContent?.includes('Projected profit if this side wins')).toBe(false)
 
-		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
+		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute Yes' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)
 		expect(reportButton.title).toBe('Reporting opens after market end.')
 	})
@@ -1721,7 +1721,7 @@ describe('SecurityPoolWorkflowSection', () => {
 			cleanupRenderedComponent = renderedComponent.cleanup
 
 			const documentQueries = within(document.body)
-			const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
+			const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute Yes' }) as HTMLButtonElement
 			expect(reportButton.disabled).toBe(true)
 			expect(reportButton.title).toBe('Load reporting details before reporting on an outcome.')
 		} finally {
