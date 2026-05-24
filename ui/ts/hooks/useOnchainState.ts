@@ -16,6 +16,11 @@ type RefreshStateOptions = {
 	loadWalletState?: boolean
 }
 
+type ChainClock = {
+	currentBlockNumber: bigint | undefined
+	currentTimestamp: bigint | undefined
+}
+
 type LoadWalletStateParameters = {
 	chainIdPromise: Promise<string> | undefined
 	connectedAddress: Address | undefined
@@ -67,15 +72,27 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 	})
 }
 
-async function loadBackendCurrentTimestamp(backend: ChainBackend) {
-	if (backend.currentTimestamp !== undefined) return backend.currentTimestamp
-	if (backend.isBootstrapped === false) return undefined
+const CHAIN_CLOCK_POLL_INTERVAL_MILLISECONDS = 12_000
+
+async function loadBackendChainClock(backend: ChainBackend): Promise<ChainClock> {
+	if (backend.isBootstrapped === false) {
+		return {
+			currentBlockNumber: undefined,
+			currentTimestamp: undefined,
+		}
+	}
 
 	try {
 		const block = await backend.createReadClient().getBlock()
-		return typeof block.timestamp === 'bigint' ? block.timestamp : undefined
+		return {
+			currentBlockNumber: typeof block.number === 'bigint' ? block.number : undefined,
+			currentTimestamp: typeof block.timestamp === 'bigint' ? block.timestamp : undefined,
+		}
 	} catch {
-		return undefined
+		return {
+			currentBlockNumber: undefined,
+			currentTimestamp: undefined,
+		}
 	}
 }
 
@@ -98,6 +115,7 @@ export function useOnchainState() {
 	const deploymentStatusesLoaded = useSignal(false)
 	const augurPlaceHolderDeployed = useSignal<boolean | undefined>(undefined)
 	const currentTimestamp = useSignal<bigint | undefined>(getActiveBackend().currentTimestamp)
+	const currentBlockNumber = useSignal<bigint | undefined>(undefined)
 	const environmentBootstrapError = useSignal<string | undefined>(undefined)
 	const environmentBootstrapLabel = useSignal(getActiveBackend().bootstrapLabel)
 	const environmentBootstrapProgress = useSignal(getActiveBackend().bootstrapProgress)
@@ -106,23 +124,23 @@ export function useOnchainState() {
 	const walletBootstrapComplete = useSignal(false)
 	const isConnectingWallet = useSignal(false)
 	const nextRefresh = useRequestGuard()
-	const nextTimestampRefresh = useRequestGuard()
+	const nextChainClockRefresh = useRequestGuard()
 	const errorMessage = useSignal<string | undefined>(undefined)
 	const setDeploymentStatuses = (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => {
 		const updated = update(deploymentStatuses.value)
 		deploymentStatuses.value = updated
 		if (updated.every(step => step.deployed)) augurPlaceHolderDeployed.value = true
 	}
-	const refreshCurrentTimestamp = async (backend: ChainBackend) => {
-		if (backend.currentTimestamp !== undefined) {
-			currentTimestamp.value = backend.currentTimestamp
-			return
+	const refreshChainClock = async (backend: ChainBackend) => {
+		const isCurrent = nextChainClockRefresh()
+		const nextChainClock = await loadBackendChainClock(backend)
+		if (!isCurrent()) return
+		if (nextChainClock.currentTimestamp !== undefined) {
+			currentTimestamp.value = nextChainClock.currentTimestamp
 		}
-
-		const isCurrent = nextTimestampRefresh()
-		const nextCurrentTimestamp = await loadBackendCurrentTimestamp(backend)
-		if (!isCurrent() || nextCurrentTimestamp === undefined) return
-		currentTimestamp.value = nextCurrentTimestamp
+		if (nextChainClock.currentBlockNumber !== undefined) {
+			currentBlockNumber.value = nextChainClock.currentBlockNumber
+		}
 	}
 
 	const refreshState = async (options: RefreshStateOptions = {}) => {
@@ -132,7 +150,7 @@ export function useOnchainState() {
 		hasInjectedWallet.value = backend.hasWallet()
 		errorMessage.value = undefined
 		backend.setReadTransportMode?.('rpc')
-		void refreshCurrentTimestamp(backend)
+		void refreshChainClock(backend)
 
 		if (backend.isBootstrapped === false) {
 			deploymentStatusesLoaded.value = false
@@ -272,11 +290,7 @@ export function useOnchainState() {
 			environmentBootstrapLabel.value = backend.bootstrapLabel
 			environmentBootstrapProgress.value = backend.bootstrapProgress
 			environmentReady.value = backend.isBootstrapped ?? true
-			if (backend.currentTimestamp !== undefined) {
-				currentTimestamp.value = backend.currentTimestamp
-				return
-			}
-			void refreshCurrentTimestamp(backend)
+			void refreshChainClock(backend)
 		})
 		const handleWalletChange = () => {
 			void refreshState()
@@ -293,17 +307,14 @@ export function useOnchainState() {
 
 	useEffect(() => {
 		const backend = getActiveBackend()
-		if (backend.currentTimestamp !== undefined || backend.isBootstrapped === false) {
-			if (backend.currentTimestamp !== undefined) {
-				currentTimestamp.value = backend.currentTimestamp
-			}
+		if (backend.isBootstrapped === false) {
 			return
 		}
 
-		void refreshCurrentTimestamp(backend)
+		void refreshChainClock(backend)
 		const intervalId = window.setInterval(() => {
-			void refreshCurrentTimestamp(backend)
-		}, 1000)
+			void refreshChainClock(backend)
+		}, CHAIN_CLOCK_POLL_INTERVAL_MILLISECONDS)
 
 		return () => {
 			window.clearInterval(intervalId)
@@ -313,6 +324,7 @@ export function useOnchainState() {
 	return {
 		accountState: accountState.value,
 		connectWallet,
+		currentBlockNumber: currentBlockNumber.value,
 		currentTimestamp: currentTimestamp.value,
 		deploymentStatuses: deploymentStatuses.value,
 		errorMessage: errorMessage.value,

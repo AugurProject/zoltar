@@ -170,6 +170,17 @@ function getReportingOutcomePresentation(action: ReportingSectionProps['reportin
 	}
 }
 
+function getEffectiveReportingDetails(reportingDetails: ReportingDetails | undefined, currentTimestamp: bigint | undefined) {
+	if (reportingDetails === undefined || currentTimestamp === undefined || reportingDetails.currentTime === currentTimestamp) {
+		return reportingDetails
+	}
+
+	return {
+		...reportingDetails,
+		currentTime: currentTimestamp,
+	}
+}
+
 export function ReportingSection({
 	accountState,
 	currentTimestamp,
@@ -191,10 +202,11 @@ export function ReportingSection({
 	mode = 'full-reporting',
 }: ReportingSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
-	const activeReportingDetails = reportingDetails?.status === 'active' ? reportingDetails : undefined
-	const reportingStatus: ReportingStatus = reportingDetails === undefined ? 'missing' : reportingDetails.status
-	const marketDetails = reportingDetails?.marketDetails ?? previewMarketDetails
-	const effectiveCurrentTimestamp = reportingDetails?.currentTime ?? currentTimestamp
+	const effectiveCurrentTimestamp = currentTimestamp ?? reportingDetails?.currentTime
+	const effectiveReportingDetails = getEffectiveReportingDetails(reportingDetails, effectiveCurrentTimestamp)
+	const activeReportingDetails = effectiveReportingDetails?.status === 'active' ? effectiveReportingDetails : undefined
+	const reportingStatus: ReportingStatus = effectiveReportingDetails === undefined ? 'missing' : effectiveReportingDetails.status
+	const marketDetails = effectiveReportingDetails?.marketDetails ?? previewMarketDetails
 	const reportingLocked = lockedReason !== undefined
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const showFullReporting = mode === 'full-reporting'
@@ -204,7 +216,7 @@ export function ReportingSection({
 	const selectedWithdrawDepositIndexes = reportingForm.selectedWithdrawDepositIndexes
 	const chartScaleMax = activeReportingDetails === undefined ? 1n : activeReportingDetails.sides.reduce((maxBalance, side) => (side.balance > maxBalance ? side.balance : maxBalance), activeReportingDetails.bindingCapital > 1n ? activeReportingDetails.bindingCapital : 1n)
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
-	const reportContributionPreview = reportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : previewReportingContribution(reportingDetails, selectedOutcome, selectedAmount)
+	const reportContributionPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : previewReportingContribution(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, selectedOutcome, selectedAmount)
 	const reportingClosed = activeReportingDetails === undefined ? false : isReportingClosed(activeReportingDetails)
@@ -212,8 +224,8 @@ export function ReportingSection({
 	const outcomeSides = getOutcomeSides(activeReportingDetails)
 	const selectedOutcomeLabel = selectedOutcome === undefined ? 'Selected Side' : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
 	const reportButtonLabel = selectedOutcome === undefined ? 'Report / Contribute On Selected Side' : `Report / Contribute ${selectedOutcomeLabel}`
-	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(reportingDetails, selectedOutcome)
-	const maxProfitContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(reportingDetails, selectedOutcome)
+	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
+	const maxProfitContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
 	const presetReasons = reportingLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && !isHiddenPresetReason(reason) && reasons.indexOf(reason) === index)
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 	const reportGuardMessage = getReportingReportGuardMessage({
@@ -227,8 +239,8 @@ export function ReportingSection({
 		reportingStatus,
 		selectedOutcome,
 		selectedAmount,
-		viewerVaultAvailableEscalationRep: reportingDetails?.viewerVaultAvailableEscalationRep,
-		viewerVaultExists: reportingDetails?.viewerVaultExists ?? false,
+		viewerVaultAvailableEscalationRep: effectiveReportingDetails?.viewerVaultAvailableEscalationRep,
+		viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
 	})
 	const withdrawGuardMessage = getReportingWithdrawGuardMessage({
 		accountAddress: accountState.address,
@@ -237,14 +249,14 @@ export function ReportingSection({
 		lockedReason,
 		reportingStatus,
 		withdrawalEnabled: activeReportingDetails?.withdrawalEnabled ?? false,
-		withdrawalState: reportingDetails?.withdrawalState,
+		withdrawalState: effectiveReportingDetails?.withdrawalState,
 		selectedOutcome,
 	})
 	const reportingStage = showFullReporting
 		? getReportingStagePresentation({
 				effectiveCurrentTimestamp,
 				marketDetails,
-				reportingDetails,
+				reportingDetails: effectiveReportingDetails,
 			})
 		: undefined
 	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStage !== undefined)
@@ -296,14 +308,14 @@ export function ReportingSection({
 							<CurrencyValue value={activeReportingDetails?.bindingCapital} suffix='REP' />
 						</MetricField>
 						<MetricField label='Threshold'>
-							<CurrencyValue value={reportingDetails?.nonDecisionThreshold} suffix='REP' />
+							<CurrencyValue value={effectiveReportingDetails?.nonDecisionThreshold} suffix='REP' />
 						</MetricField>
 						<MetricField label='Time Left'>{activeReportingDetails === undefined ? '—' : formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
 						<MetricField label='Game Start'>
 							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails?.startingTime} />
 						</MetricField>
 						<MetricField label='Start Bond'>
-							<CurrencyValue value={reportingDetails?.startBond} suffix='REP' />
+							<CurrencyValue value={effectiveReportingDetails?.startBond} suffix='REP' />
 						</MetricField>
 					</div>
 					<div className='escalation-sides-shell'>
@@ -349,9 +361,9 @@ export function ReportingSection({
 							Selected side currently has <CurrencyValue value={selectedSide.balance} suffix='REP' /> deposited.
 						</p>
 					)}
-					{reportingDetails?.viewerVaultAvailableEscalationRep === undefined ? undefined : (
+					{effectiveReportingDetails?.viewerVaultAvailableEscalationRep === undefined ? undefined : (
 						<p className='detail'>
-							Available unlocked vault REP for reporting: <CurrencyValue value={reportingDetails.viewerVaultAvailableEscalationRep} suffix='REP' />.
+							Available unlocked vault REP for reporting: <CurrencyValue value={effectiveReportingDetails.viewerVaultAvailableEscalationRep} suffix='REP' />.
 						</p>
 					)}
 					<label className='field'>

@@ -648,6 +648,7 @@ export type ForkAuctionRouteContentProps = {
 }
 
 export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
+	currentTimestamp?: bigint | undefined
 	disabled?: boolean
 	disabledMessage?: string | undefined
 	embedInCard?: boolean

@@ -738,42 +738,6 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 		void refreshOpenOracleInitialReportTokenAccess(openOracleReportDetails.value)
 	}, [accountAddress, enabled, openOracleReportDetails.value?.reportId, openOracleReportDetails.value?.token1, openOracleReportDetails.value?.token2, openOracleReportDetails.value?.exactToken1Report])
 
-	useEffect(() => {
-		if (!enabled) return
-		const loadedReport = openOracleReportDetails.value
-		if (loadedReport === undefined) return
-
-		let cancelled = false
-		const trackedReportId = loadedReport.reportId
-		const refreshChainClock = async () => {
-			try {
-				const block = await createConnectedReadClient().getBlock()
-				if (cancelled || typeof block.timestamp !== 'bigint' || typeof block.number !== 'bigint') return
-
-				const currentReport = openOracleReportDetails.value
-				if (currentReport === undefined || currentReport.reportId !== trackedReportId) return
-
-				openOracleReportDetails.value = {
-					...currentReport,
-					currentTime: block.timestamp,
-					currentBlockNumber: block.number,
-				}
-			} catch {
-				return
-			}
-		}
-
-		void refreshChainClock()
-		const intervalId = window.setInterval(() => {
-			void refreshChainClock()
-		}, 1000)
-
-		return () => {
-			cancelled = true
-			window.clearInterval(intervalId)
-		}
-	}, [enabled, openOracleReportDetails.value?.reportId])
-
 	const openOracleInitialReportSubmission = openOracleReportDetails.value === undefined ? undefined : getInitialReportSubmission(openOracleReportDetails.value)
 	const openOracleDisputeSubmission = openOracleReportDetails.value === undefined ? undefined : getDisputeSubmission(openOracleReportDetails.value)
 

@@ -5,6 +5,7 @@ import { within } from '@testing-library/dom'
 import { h } from 'preact'
 import { zeroAddress } from 'viem'
 import { OpenOracleSection } from '../components/OpenOracleSection.js'
+import { ChainBlockNumberContext, ChainTimestampContext } from '../lib/chainTimestamp.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../lib/marketForm.js'
 import { deriveOpenOracleDisputeSubmissionDetails, deriveOpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
 import type { AccountState } from '../types/app.js'
@@ -255,5 +256,57 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Create Open Oracle Game', 'Need 100 more ETH in this wallet to create the selected Open Oracle game.')
+	})
+
+	test('uses the shared live chain timestamp to switch a selected report into settle mode', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={161n}>
+				<OpenOracleSection
+					{...createOpenOracleSectionProps({
+						activeView: 'selected-report',
+						openOracleReportDetails: createOpenOracleReportDetails({
+							currentBlockNumber: 100n,
+							currentReporter: '0x3000000000000000000000000000000000000000',
+							currentTime: 100n,
+							disputeDelay: 10n,
+							reportTimestamp: 100n,
+							settlementTime: 60n,
+							timeType: true,
+						}),
+					})}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('button', { name: 'Dispute & Swap' })).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Settle Report' })).not.toBeNull()
+	})
+
+	test('uses the shared live block number to switch a selected report into settle mode', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainBlockNumberContext.Provider value={161n}>
+				<OpenOracleSection
+					{...createOpenOracleSectionProps({
+						activeView: 'selected-report',
+						openOracleReportDetails: createOpenOracleReportDetails({
+							currentBlockNumber: 100n,
+							currentReporter: '0x3000000000000000000000000000000000000000',
+							currentTime: 100n,
+							disputeDelay: 10n,
+							reportTimestamp: 100n,
+							settlementTime: 60n,
+							timeType: false,
+						}),
+					})}
+				/>
+			</ChainBlockNumberContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('button', { name: 'Dispute & Swap' })).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Settle Report' })).not.toBeNull()
 	})
 })

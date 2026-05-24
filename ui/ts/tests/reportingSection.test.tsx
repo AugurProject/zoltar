@@ -482,12 +482,66 @@ describe('ReportingSection', () => {
 		expect(outcomeSidesSection.textContent?.includes(formatDuration(300n - 150n))).toBe(true)
 	})
 
+	test('prefers the live chain timestamp over the loaded reporting snapshot for time left', async () => {
+		const reportingDetails = createReportingDetails()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 200n,
+					reportingDetails: {
+						...reportingDetails,
+						currentTime: 150n,
+						escalationEndTime: 300n,
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes(formatDuration(300n - 100n))).toBe(false)
+		expect(document.body.textContent?.includes(formatDuration(300n - 200n))).toBe(true)
+	})
+
 	test('shows Awaiting Resolution with zero time left once the escalation end time has passed', async () => {
-		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ currentTime: 301n, escalationEndTime: 300n }) })))
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: undefined,
+					reportingDetails: {
+						...createReportingDetails(),
+						currentTime: 301n,
+						escalationEndTime: 300n,
+					},
+				}),
+			),
+		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Awaiting Resolution' })).not.toBeNull()
+		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
+	})
+
+	test('uses the live chain timestamp to flip the escalation phase once the end time passes', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 301n,
+					reportingDetails: {
+						...createReportingDetails(),
+						currentTime: 150n,
+						escalationEndTime: 300n,
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getAllByText('Awaiting Resolution').length).toBeGreaterThan(0)
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
 	})
 
@@ -497,6 +551,7 @@ describe('ReportingSection', () => {
 			h(
 				ReportingSection,
 				createProps({
+					currentTimestamp: reportingDetails.escalationEndTime + 1n,
 					reportingDetails: createDynamicReportingDetails({
 						currentTime: reportingDetails.escalationEndTime + 1n,
 					}),
