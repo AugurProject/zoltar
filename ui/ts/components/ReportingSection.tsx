@@ -35,6 +35,7 @@ type EscalationSideDisplay = {
 
 const MAX_PROFIT_NOT_STARTED_REASON = 'Max profit becomes available after the escalation game starts.'
 const LOAD_REPORTING_PRESETS_REASON = 'Load reporting details before using presets.'
+const SELECT_OUTCOME_PRESET_REASON = 'Select an outcome side before using presets.'
 const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
 const MAX_PROFIT_WINDOW_FILLED_REASON = 'Max profit preset unavailable because the reward window is already filled on the selected side.'
 
@@ -63,7 +64,7 @@ function getDepositEntryCountLabel(count: number) {
 }
 
 function isHiddenPresetReason(reason: string | undefined) {
-	return reason === LOAD_REPORTING_PRESETS_REASON || reason === MAX_PROFIT_NOT_STARTED_REASON || reason === SELECTED_SIDE_ALREADY_LEADS_REASON || reason === MAX_PROFIT_WINDOW_FILLED_REASON
+	return reason === LOAD_REPORTING_PRESETS_REASON || reason === MAX_PROFIT_NOT_STARTED_REASON || reason === SELECT_OUTCOME_PRESET_REASON || reason === SELECTED_SIDE_ALREADY_LEADS_REASON || reason === MAX_PROFIT_WINDOW_FILLED_REASON
 }
 
 function getReportingStagePresentation({
@@ -198,19 +199,21 @@ export function ReportingSection({
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const showFullReporting = mode === 'full-reporting'
 	const showWithdrawOnly = mode === 'withdraw-only'
-	const selectedSide = activeReportingDetails?.sides.find(side => side.key === reportingForm.selectedOutcome)
+	const selectedOutcome = reportingForm.selectedOutcome
+	const selectedSide = selectedOutcome === undefined ? undefined : activeReportingDetails?.sides.find(side => side.key === selectedOutcome)
 	const selectedWithdrawDepositIndexes = reportingForm.selectedWithdrawDepositIndexes
 	const chartScaleMax = activeReportingDetails === undefined ? 1n : activeReportingDetails.sides.reduce((maxBalance, side) => (side.balance > maxBalance ? side.balance : maxBalance), activeReportingDetails.bindingCapital > 1n ? activeReportingDetails.bindingCapital : 1n)
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
-	const reportContributionPreview = reportingDetails === undefined || selectedAmount === undefined ? undefined : previewReportingContribution(reportingDetails, reportingForm.selectedOutcome, selectedAmount)
+	const reportContributionPreview = reportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : previewReportingContribution(reportingDetails, selectedOutcome, selectedAmount)
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
-	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
+	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, selectedOutcome, selectedAmount)
 	const reportingClosed = activeReportingDetails === undefined ? false : isReportingClosed(activeReportingDetails)
-	const timerProjection = activeReportingDetails === undefined || selectedAmount === undefined || selectedAmount <= 0n || reportingClosed ? undefined : projectEscalationEndTime(activeReportingDetails, reportingForm.selectedOutcome, selectedAmount)
+	const timerProjection = activeReportingDetails === undefined || selectedAmount === undefined || selectedAmount <= 0n || reportingClosed || selectedOutcome === undefined ? undefined : projectEscalationEndTime(activeReportingDetails, selectedOutcome, selectedAmount)
 	const outcomeSides = getOutcomeSides(activeReportingDetails)
-	const selectedOutcomeLabel = outcomeSides.find(side => side.key === reportingForm.selectedOutcome)?.label ?? getReportingOutcomeLabel(reportingForm.selectedOutcome)
-	const minimumOutcomeChangeContribution = getReportingMinimumOutcomeChangeContribution(reportingDetails, reportingForm.selectedOutcome)
-	const maxProfitContribution = getReportingMaxProfitContribution(reportingDetails, reportingForm.selectedOutcome)
+	const selectedOutcomeLabel = selectedOutcome === undefined ? 'Selected Side' : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
+	const reportButtonLabel = selectedOutcome === undefined ? 'Report / Contribute On Selected Side' : `Report / Contribute ${selectedOutcomeLabel}`
+	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(reportingDetails, selectedOutcome)
+	const maxProfitContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(reportingDetails, selectedOutcome)
 	const presetReasons = reportingLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && !isHiddenPresetReason(reason) && reasons.indexOf(reason) === index)
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 	const reportGuardMessage = getReportingReportGuardMessage({
@@ -222,6 +225,7 @@ export function ReportingSection({
 		reportAmount: reportingForm.reportAmount,
 		reportingClosed,
 		reportingStatus,
+		selectedOutcome,
 		selectedAmount,
 		viewerVaultAvailableEscalationRep: reportingDetails?.viewerVaultAvailableEscalationRep,
 		viewerVaultExists: reportingDetails?.viewerVaultExists ?? false,
@@ -234,6 +238,7 @@ export function ReportingSection({
 		reportingStatus,
 		withdrawalEnabled: activeReportingDetails?.withdrawalEnabled ?? false,
 		withdrawalState: reportingDetails?.withdrawalState,
+		selectedOutcome,
 	})
 	const reportingStage = showFullReporting
 		? getReportingStagePresentation({
@@ -328,7 +333,7 @@ export function ReportingSection({
 								chartScaleMax={chartScaleMax}
 								disabled={reportingLocked}
 								isLeading={leadingOutcome === side.key}
-								isSelected={reportingForm.selectedOutcome === side.key}
+								isSelected={selectedOutcome !== undefined && selectedOutcome === side.key}
 								onSelect={() => onReportingFormChange({ selectedOutcome: side.key, selectedWithdrawDepositIndexes: [] })}
 								side={side}
 							/>
@@ -349,7 +354,6 @@ export function ReportingSection({
 							Available unlocked vault REP for reporting: <CurrencyValue value={reportingDetails.viewerVaultAvailableEscalationRep} suffix='REP' />.
 						</p>
 					)}
-
 					<label className='field'>
 						<span>Report / Contribution Amount (REP)</span>
 						<FormInput value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportingLocked} />
@@ -388,14 +392,18 @@ export function ReportingSection({
 						</p>
 					))}
 					{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
-
-					{selectedEstimate === undefined ? undefined : (
+					{selectedEstimate === undefined || selectedOutcome === undefined ? undefined : (
 						<p className='detail'>
 							If {selectedOutcomeLabel} wins and no one else contributes afterward, the current amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit.
 						</p>
 					)}
+					{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
+						<p className='detail'>
+							Based on the current escalation state, this action would lock <CurrencyValue value={actualReportDepositAmount} suffix='REP' /> instead of the full entered amount.
+						</p>
+					)}
 					<div className='actions'>
-						<TransactionActionButton idleLabel={`Report / Contribute ${selectedOutcomeLabel}`} pendingLabel='Submitting report...' onClick={onReportOutcome} pending={reportingActiveAction === 'reportOutcome'} availability={{ disabled: reportGuardMessage !== undefined, reason: reportGuardMessage }} />
+						<TransactionActionButton idleLabel={reportButtonLabel} pendingLabel='Submitting report...' onClick={onReportOutcome} pending={reportingActiveAction === 'reportOutcome'} availability={{ disabled: reportGuardMessage !== undefined, reason: reportGuardMessage }} />
 					</div>
 					{timerProjection === undefined || activeReportingDetails === undefined ? undefined : (
 						<p className='detail'>

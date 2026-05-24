@@ -5,7 +5,7 @@ import { zeroAddress } from 'viem'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 
 describe('reporting guards', () => {
-	test('blocks report submission for locked, disconnected, and invalid amount states', () => {
+	test('blocks report submission for locked, disconnected, unselected, and invalid amount states', () => {
 		expect(
 			getReportingReportGuardMessage({
 				actualDepositAmount: 1n,
@@ -19,6 +19,7 @@ describe('reporting guards', () => {
 				selectedAmount: 1n,
 				viewerVaultAvailableEscalationRep: 10n,
 				viewerVaultExists: true,
+				selectedOutcome: 'yes',
 			}),
 		).toBe('Reporting opens after market end.')
 
@@ -35,6 +36,7 @@ describe('reporting guards', () => {
 				selectedAmount: 1n,
 				viewerVaultAvailableEscalationRep: 10n,
 				viewerVaultExists: true,
+				selectedOutcome: 'yes',
 			}),
 		).toBe('Connect a wallet before reporting on a market.')
 
@@ -45,12 +47,30 @@ describe('reporting guards', () => {
 				contributionPreviewReason: undefined,
 				isMainnet: true,
 				lockedReason: undefined,
+				reportAmount: '1',
+				reportingClosed: false,
+				reportingStatus: 'active',
+				selectedAmount: 1n,
+				selectedOutcome: undefined,
+				viewerVaultAvailableEscalationRep: 10n,
+				viewerVaultExists: true,
+			}),
+		).toBe('Select an outcome side before reporting on a market.')
+
+		expect(
+			getReportingReportGuardMessage({
+				actualDepositAmount: 1n,
+				accountAddress: zeroAddress,
+				contributionPreviewReason: undefined,
+				isMainnet: true,
+				lockedReason: undefined,
 				reportAmount: '0',
 				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 0n,
 				viewerVaultAvailableEscalationRep: 10n,
 				viewerVaultExists: true,
+				selectedOutcome: 'yes',
 			}),
 		).toBe('Enter a valid report amount greater than zero.')
 	})
@@ -67,6 +87,7 @@ describe('reporting guards', () => {
 				reportingClosed: false,
 				reportingStatus: 'missing',
 				selectedAmount: 1n,
+				selectedOutcome: 'yes',
 				viewerVaultAvailableEscalationRep: 10n,
 				viewerVaultExists: true,
 			}),
@@ -83,6 +104,7 @@ describe('reporting guards', () => {
 				reportingClosed: false,
 				reportingStatus: 'not-started',
 				selectedAmount: 1n,
+				selectedOutcome: 'yes',
 				viewerVaultAvailableEscalationRep: 10n,
 				viewerVaultExists: true,
 			}),
@@ -99,6 +121,7 @@ describe('reporting guards', () => {
 				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
+				selectedOutcome: 'yes',
 				viewerVaultAvailableEscalationRep: 10n,
 				viewerVaultExists: true,
 			}),
@@ -117,6 +140,7 @@ describe('reporting guards', () => {
 				reportingClosed: true,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
+				selectedOutcome: 'yes',
 				viewerVaultAvailableEscalationRep: 10n,
 				viewerVaultExists: true,
 			}),
@@ -135,6 +159,7 @@ describe('reporting guards', () => {
 				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 5n * 10n ** 18n,
+				selectedOutcome: 'yes',
 				viewerVaultAvailableEscalationRep: 2n * 10n ** 18n,
 				viewerVaultExists: true,
 			}),
@@ -151,6 +176,7 @@ describe('reporting guards', () => {
 				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n * 10n ** 18n,
+				selectedOutcome: 'yes',
 				viewerVaultAvailableEscalationRep: 10n * 10n ** 18n,
 				viewerVaultExists: true,
 			}),
@@ -167,13 +193,14 @@ describe('reporting guards', () => {
 				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
+				selectedOutcome: 'yes',
 				viewerVaultAvailableEscalationRep: 0n,
 				viewerVaultExists: false,
 			}),
 		).toBe('Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.')
 	})
 
-	test('blocks withdraw submission until the escalation game is active and the selected side has deposits', () => {
+	test('blocks withdraw submission until an outcome is selected and that side has deposits', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
@@ -181,6 +208,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportingStatus: 'not-started',
+				selectedOutcome: 'yes',
 				withdrawalEnabled: false,
 				withdrawalState: 'not-finalized',
 			}),
@@ -193,6 +221,20 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportingStatus: 'active',
+				selectedOutcome: undefined,
+				withdrawalEnabled: true,
+				withdrawalState: 'resolved',
+			}),
+		).toBe('Select an outcome side before withdrawing escalation deposits.')
+
+		expect(
+			getReportingWithdrawGuardMessage({
+				accountAddress: zeroAddress,
+				hasUserDepositsOnSelectedSide: false,
+				isMainnet: true,
+				lockedReason: undefined,
+				reportingStatus: 'active',
+				selectedOutcome: 'yes',
 				withdrawalEnabled: true,
 				withdrawalState: 'resolved',
 			}),
@@ -207,6 +249,7 @@ describe('reporting guards', () => {
 				reportingStatus: 'active',
 				withdrawalEnabled: true,
 				withdrawalState: 'resolved',
+				selectedOutcome: 'yes',
 			}),
 		).toBeUndefined()
 	})
@@ -219,6 +262,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportingStatus: 'active',
+				selectedOutcome: 'yes',
 				withdrawalEnabled: false,
 				withdrawalState: 'not-finalized',
 			}),
@@ -231,6 +275,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportingStatus: 'active',
+				selectedOutcome: 'yes',
 				withdrawalEnabled: true,
 				withdrawalState: 'canceled-by-external-fork',
 			}),

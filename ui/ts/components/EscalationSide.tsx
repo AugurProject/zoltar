@@ -46,10 +46,7 @@ export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false
 				<div className='escalation-side-copy'>
 					<div className='escalation-side-title-row'>
 						<span className='panel-label'>{side.label}</span>
-						<div className='escalation-side-badges'>
-							{isLeading ? <span className='badge ok'>Leading</span> : undefined}
-							{isSelected ? <span className='badge escalation-side-selected-badge'>Selected</span> : undefined}
-						</div>
+						{isLeading ? <span className='badge ok'>Leading</span> : undefined}
 					</div>
 				</div>
 				<div aria-hidden='true' className='escalation-side-chart'>

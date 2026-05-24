@@ -83,6 +83,7 @@ const CONTRACT_PAGE_SIZE = 30n
 
 type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
+type ReportingBootstrapReadResult = readonly [bigint, Address, bigint, bigint, Address, bigint]
 
 type SecurityPoolDeploymentQueryResult = {
 	completeSetCollateralAmount: bigint
@@ -260,7 +261,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			args: [],
 		},
 	]
-	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit] = (await readRequiredMulticall(client, reportingPoolReads)) as [bigint, Address, bigint, bigint, Address, bigint]
+	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit] = (await readRequiredMulticall(client, reportingPoolReads)) as unknown as ReportingBootstrapReadResult
 	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThreshold] = await Promise.all([
 		loadMarketDetails(client, questionId),
 		client.getBlock(),

@@ -1,5 +1,6 @@
 import type { Address } from 'viem'
 import type { ReportingDetails } from '../types/contracts.js'
+import type { ReportingOutcomeKey } from '../types/contracts.js'
 import { formatCurrencyBalance } from './formatters.js'
 
 type ReportingStatus = 'missing' | 'not-started' | 'active'
@@ -13,6 +14,7 @@ export function getReportingReportGuardMessage({
 	reportAmount,
 	reportingClosed,
 	reportingStatus,
+	selectedOutcome,
 	selectedAmount,
 	viewerVaultAvailableEscalationRep,
 	viewerVaultExists,
@@ -25,6 +27,7 @@ export function getReportingReportGuardMessage({
 	reportAmount: string
 	reportingClosed: boolean
 	reportingStatus: ReportingStatus
+	selectedOutcome: ReportingOutcomeKey | undefined
 	selectedAmount: bigint | undefined
 	viewerVaultAvailableEscalationRep: bigint | undefined
 	viewerVaultExists: boolean
@@ -34,6 +37,7 @@ export function getReportingReportGuardMessage({
 	if (accountAddress === undefined) return 'Connect a wallet before reporting on a market.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before reporting on a market.'
 	if (reportingStatus === 'missing') return 'Load reporting details before reporting on an outcome.'
+	if (selectedOutcome === undefined) return 'Select an outcome side before reporting on a market.'
 	if (reportAmount.trim() === '') return 'Enter a report amount greater than zero.'
 	if (selectedAmount === undefined || selectedAmount <= 0n) return 'Enter a valid report amount greater than zero.'
 	if (contributionPreviewReason !== undefined) return contributionPreviewReason
@@ -54,6 +58,7 @@ export function getReportingWithdrawGuardMessage({
 	reportingStatus,
 	withdrawalEnabled,
 	withdrawalState,
+	selectedOutcome,
 }: {
 	accountAddress: Address | undefined
 	hasUserDepositsOnSelectedSide: boolean
@@ -62,6 +67,7 @@ export function getReportingWithdrawGuardMessage({
 	reportingStatus: ReportingStatus
 	withdrawalEnabled: boolean
 	withdrawalState: ReportingDetails['withdrawalState'] | undefined
+	selectedOutcome: ReportingOutcomeKey | undefined
 }) {
 	if (lockedReason !== undefined) return lockedReason
 	if (accountAddress === undefined) return 'Connect a wallet before withdrawing escalation deposits.'
@@ -69,6 +75,7 @@ export function getReportingWithdrawGuardMessage({
 	if (reportingStatus === 'missing') return 'Load reporting details before withdrawing escalation deposits.'
 	if (reportingStatus === 'not-started') return 'Withdrawals are unavailable until the first report or contribution deploys the escalation game.'
 	if (!withdrawalEnabled && withdrawalState === 'not-finalized') return 'Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.'
+	if (selectedOutcome === undefined) return 'Select an outcome side before withdrawing escalation deposits.'
 	if (!hasUserDepositsOnSelectedSide) return 'No deposits are available to withdraw on the selected side.'
 	return undefined
 }
