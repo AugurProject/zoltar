@@ -82,7 +82,7 @@ export type TradingFormState = {
 export type ReportingFormState = {
 	reportAmount: string
 	securityPoolAddress: string
-	selectedOutcome: ReportingOutcomeKey
+	selectedOutcome: ReportingOutcomeKey | undefined
 	selectedWithdrawDepositIndexes: bigint[]
 }
 

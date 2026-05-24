@@ -207,6 +207,9 @@ describe('OpenOracleSection route create view', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('button', { name: 'Return to Browse' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Create Another' })).not.toBeNull()
+		expect(document.body.querySelector('.workflow-transaction-status')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Latest Oracle Action' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Latest Oracle Action' }).closest('.actions')).toBeNull()
 	})
 
 	test('renders selected report actions without readiness cards or visible blocker copy', async () => {

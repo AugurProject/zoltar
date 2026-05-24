@@ -15,9 +15,11 @@ import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { ViewTabs } from './ViewTabs.js'
+import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import {
 	AUCTION_TIME_SECONDS,
 	type ForkAuctionStageView,
@@ -163,8 +165,8 @@ export function ForkAuctionSection({
 	forkAuctionDetails,
 	forkAuctionActiveAction,
 	forkAuctionError,
-	forkAuctionFeedback,
 	forkAuctionForm,
+	forkAuctionResult,
 	loadingForkAuctionDetails,
 	onClaimAuctionProceeds,
 	onCreateChildUniverse,
@@ -299,7 +301,6 @@ export function ForkAuctionSection({
 				pendingLabel={pendingLabel}
 				onClick={onClick}
 				pending={forkAuctionActiveAction === action}
-				status={forkAuctionFeedback?.action === action ? forkAuctionFeedback.status : undefined}
 				tone={tone}
 				availability={{
 					disabled: disabled || accountState.address === undefined || !isMainnet || resolvedAvailability.disabled,
@@ -315,6 +316,23 @@ export function ForkAuctionSection({
 		setSelectedStage(currentStage)
 	}, [currentStage, securityPoolAddress])
 
+	useEffect(() => {
+		if (forkAuctionResult?.action !== 'createChildUniverse') return
+		setChildUniverseModalOpen(false)
+	}, [forkAuctionResult])
+	const latestForkAuctionAction =
+		forkAuctionResult === undefined
+			? undefined
+			: {
+					title: 'Latest Fork / Auction Action',
+					embedInCard,
+					rows: [
+						{ label: 'Action', value: forkAuctionResult.action },
+						{ label: 'Pool', value: <AddressValue address={forkAuctionResult.securityPoolAddress} /> },
+						{ label: 'Universe', value: <UniverseLink universeId={forkAuctionResult.universeId} /> },
+						{ label: 'Transaction', value: <TransactionHashLink hash={forkAuctionResult.hash} /> },
+					],
+				}
 	const poolSummaryMetrics: DisplayMetric[] = [
 		{ label: 'Security Pool', value: renderAddress(securityPoolAddress) },
 		{ label: 'Universe', value: universeId === undefined ? UNKNOWN_VALUE : <UniverseLink universeId={universeId} /> },
@@ -608,6 +626,7 @@ export function ForkAuctionSection({
 
 			{hasLoadedPoolContext ? <ReadOnlyDetailAccordion title='Live Snapshot'>{renderSummaryMetricGrid(liveSnapshotMetrics)}</ReadOnlyDetailAccordion> : undefined}
 
+			<WorkflowTransactionStatus latestAction={latestForkAuctionAction} outcome={undefined} />
 			{hasLoadedPoolContext ? (
 				<SectionBlock title='Lifecycle'>
 					<ViewTabs
@@ -635,7 +654,6 @@ export function ForkAuctionSection({
 				pending={forkAuctionActiveAction === 'createChildUniverse'}
 				pendingLabel='Creating child universe...'
 				requirements={childUniverseRequirements}
-				status={forkAuctionFeedback?.action === 'createChildUniverse' ? forkAuctionFeedback.status : undefined}
 				title='Create Child Universe'
 				tone='primary'
 			>

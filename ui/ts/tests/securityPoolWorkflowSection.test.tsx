@@ -68,7 +68,7 @@ function createReportingProps(overrides: Partial<ReportingRouteContentProps> = {
 		reportingForm: {
 			reportAmount: '',
 			securityPoolAddress: '',
-			selectedOutcome: 'yes',
+			selectedOutcome: undefined,
 			selectedWithdrawDepositIndexes: [],
 		},
 		reportingResult: undefined,
@@ -757,8 +757,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		const dialogQueries = within(withdrawDialog)
 		expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
 		expect(dialogQueries.getByText('#7')).not.toBeNull()
-		expect(withdrawDialog.querySelector('.warning-surface')).not.toBeNull()
-		expect(withdrawDialog.querySelector('.badge.warn')).toBeNull()
+		expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' }).closest('.actions')).toBeNull()
 
 		await act(() => {
 			fireEvent.click(dialogQueries.getByRole('button', { name: 'View In Staged Operations' }))
@@ -903,7 +902,10 @@ describe('SecurityPoolWorkflowSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText('Liquidation executed')).not.toBeNull()
+		const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
+		const dialogQueries = within(dialog)
+		expect(dialogQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
+		expect(dialogQueries.getByText('A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.')).not.toBeNull()
 	})
 
 	test('shows liquidation failed in the selected pool workflow with the revert detail', async () => {
@@ -947,9 +949,10 @@ describe('SecurityPoolWorkflowSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Liquidation failed')).not.toBeNull()
-		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
+		const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
+		const dialogQueries = within(dialog)
+		expect(dialogQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
+		expect(dialogQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
 	})
 
 	test('refreshes the selected pool and loaded vault after an immediate REP withdrawal execution', async () => {
@@ -1202,7 +1205,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(loadSecurityVaultCalls).toEqual([undefined])
 	})
 
-	test('does not refresh the selected pool after a failed staged operation execution and shows the failure reason in staged operations', async () => {
+	test('does not refresh the selected pool after a failed staged operation execution', async () => {
 		const refreshSelectedPoolCalls: Array<string | undefined> = []
 		const loadSecurityVaultCalls: Array<string | undefined> = []
 		const selectedPoolAddress = zeroAddress
@@ -1259,8 +1262,6 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		expect(refreshSelectedPoolCalls).toEqual([])
 		expect(loadSecurityVaultCalls).toEqual([])
-		expect(within(document.body).getByText('Staged operation failed')).not.toBeNull()
-		expect(within(document.body).getByText('Local Security Bond Allowance broken')).not.toBeNull()
 	})
 
 	test('opens vault launchers even before a selected vault is loaded', async () => {

@@ -1,4 +1,4 @@
-import { decodeEventLog, getAddress, isHex, parseAbiItem, zeroAddress, type Address, type ContractFunctionParameters, type Hash, type Hex, type TransactionReceipt } from 'viem'
+import { decodeEventLog, parseAbiItem, zeroAddress, type Address, type ContractFunctionParameters, type Hash, type Hex, type TransactionReceipt } from 'viem'
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from './shared/bigInt.js'
 import { assertNever } from './lib/assert.js'
@@ -83,6 +83,7 @@ const CONTRACT_PAGE_SIZE = 30n
 
 type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
+type ReportingBootstrapReadResult = readonly [bigint, Address, bigint, bigint, Address, bigint]
 
 type SecurityPoolDeploymentQueryResult = {
 	completeSetCollateralAmount: bigint
@@ -222,7 +223,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 }
 
 export async function loadReportingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
-	const reportingContracts: readonly ContractFunctionParameters[] = [
+	const reportingPoolReads: readonly ContractFunctionParameters[] = [
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
 			functionName: 'questionId',
@@ -260,16 +261,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			args: [],
 		},
 	]
-	const [rawQuestionId, rawEscalationGameAddress, rawCompleteSetCollateralAmount, rawUniverseId, rawZoltarAddress, rawInitialEscalationGameDeposit] = await readRequiredMulticall(client, reportingContracts)
-	if (typeof rawQuestionId !== 'bigint' || !isHex(rawEscalationGameAddress) || typeof rawCompleteSetCollateralAmount !== 'bigint' || typeof rawUniverseId !== 'bigint' || !isHex(rawZoltarAddress) || typeof rawInitialEscalationGameDeposit !== 'bigint') {
-		throw new Error('Unexpected reporting details response')
-	}
-	const questionId = rawQuestionId
-	const escalationGameAddress = getAddress(rawEscalationGameAddress)
-	const completeSetCollateralAmount = rawCompleteSetCollateralAmount
-	const universeId = rawUniverseId
-	const zoltarAddress = getAddress(rawZoltarAddress)
-	const initialEscalationGameDeposit = rawInitialEscalationGameDeposit
+	const [questionId, escalationGameAddress, completeSetCollateralAmount, universeId, zoltarAddress, initialEscalationGameDeposit] = (await readRequiredMulticall(client, reportingPoolReads)) as unknown as ReportingBootstrapReadResult
 	const [marketDetails, block, escalationGameCode, viewerVaultState, forkThreshold] = await Promise.all([
 		loadMarketDetails(client, questionId),
 		client.getBlock(),

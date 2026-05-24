@@ -20,7 +20,9 @@ import { StickyObjectContext } from './StickyObjectContext.js'
 import { StateHint } from './StateHint.js'
 import { TokenApprovalControl } from './TokenApprovalControl.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
+import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
+import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { useLoadController } from '../hooks/useLoadController.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { useChainBlockNumber, useChainTimestamp } from '../lib/chainTimestamp.js'
@@ -44,7 +46,7 @@ import { isMainnetChain } from '../lib/network.js'
 import { getReportPresentation } from '../lib/userCopy.js'
 import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
-import type { OpenOracleSectionProps } from '../types/components.js'
+import type { OpenOracleSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
 
 const BROWSE_PAGE_SIZE = 10
 type SelectedReportModal = 'dispute' | 'initial-report' | 'settle' | undefined
@@ -262,7 +264,6 @@ export function renderSelectedReportActionSection({
 									pendingLabel='Wrapping ETH...'
 									onClick={onWrapWethForInitialReport}
 									pending={openOracleActiveAction === 'wrapWeth'}
-									status={openOracleFeedback?.action === 'wrapWeth' ? openOracleFeedback.status : undefined}
 									tone='secondary'
 									availability={{
 										disabled: !isConnected || !initialReportSubmission.canWrapRequiredWeth,
@@ -275,7 +276,6 @@ export function renderSelectedReportActionSection({
 								pendingLabel='Submitting...'
 								onClick={onSubmitInitialReport}
 								pending={openOracleActiveAction === 'submitInitialReport'}
-								status={openOracleFeedback?.action === 'submitInitialReport' ? openOracleFeedback.status : undefined}
 								availability={{
 									disabled: !isConnected || !initialReportSubmission.canSubmit,
 									reason: !isConnected ? 'Connect a wallet before submitting the initial report.' : initialReportSubmission.blockMessage?.kind === 'visible' ? initialReportSubmission.blockMessage.message : undefined,
@@ -353,7 +353,6 @@ export function renderSelectedReportActionSection({
 								pendingLabel='Submitting dispute...'
 								onClick={onDisputeReport}
 								pending={openOracleActiveAction === 'dispute'}
-								status={openOracleFeedback?.action === 'dispute' ? openOracleFeedback.status : undefined}
 								tone='secondary'
 								availability={{
 									disabled: !isConnected || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false,
@@ -384,7 +383,6 @@ export function renderSelectedReportActionSection({
 								pendingLabel='Settling report...'
 								onClick={onSettleReport}
 								pending={openOracleActiveAction === 'settle'}
-								status={openOracleFeedback?.action === 'settle' ? openOracleFeedback.status : undefined}
 								tone='secondary'
 								availability={{
 									disabled: !isConnected || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct,
@@ -740,6 +738,68 @@ function renderReportDetailsCard(
 	)
 }
 
+function getLatestActionPresentation(action: OpenOracleSectionProps['openOracleResult']) {
+	if (action === undefined) return undefined
+
+	return {
+		title: 'Latest Oracle Action',
+		rows: [
+			{ label: 'Action', value: action.action },
+			{ label: 'Transaction', value: <TransactionHashLink hash={action.hash} /> },
+		],
+	}
+}
+
+function getOpenOracleOutcomePresentation(action: OpenOracleSectionProps['openOracleResult']): WorkflowOutcomePresentation | undefined {
+	if (action === undefined) return undefined
+
+	switch (action.action) {
+		case 'approveToken1':
+			return {
+				detail: 'Token1 approval was updated for the selected report workflow.',
+				nextStep: 'Return to the report modal and complete the report submission.',
+				title: 'Token1 Approved',
+			}
+		case 'approveToken2':
+			return {
+				detail: 'Token2 approval was updated for the selected report workflow.',
+				nextStep: 'Return to the report modal and complete the report submission.',
+				title: 'Token2 Approved',
+			}
+		case 'wrapWeth':
+			return {
+				detail: 'ETH was wrapped to WETH for the selected report flow.',
+				nextStep: 'Submit the initial report once all requirements are ready.',
+				title: 'WETH Wrapped',
+			}
+		case 'submitInitialReport':
+			return {
+				detail: 'The selected report now has an initial report on-chain.',
+				nextStep: 'Monitor the dispute window and settle once the report is ready.',
+				title: 'Initial Report Submitted',
+			}
+		case 'dispute':
+			return {
+				detail: 'The selected report was disputed with the replacement swap amounts.',
+				nextStep: 'Monitor the updated report state and settle when the dispute window closes.',
+				title: 'Report Disputed',
+			}
+		case 'settle':
+			return {
+				detail: 'The selected report was settled on-chain.',
+				nextStep: 'No further write actions are expected for this report.',
+				title: 'Report Settled',
+			}
+		case 'createReportInstance':
+			return {
+				detail: 'A new Open Oracle game was created.',
+				nextStep: 'Open the new report to continue its lifecycle.',
+				title: 'Open Oracle Game Created',
+			}
+	}
+
+	return undefined
+}
 export function OpenOracleSection({
 	activeView,
 	accountState,
@@ -788,6 +848,8 @@ export function OpenOracleSection({
 		walletEthBalance: accountState.ethBalance,
 	})
 	const effectiveOpenOracleReportDetails = getEffectiveOpenOracleReportDetails(openOracleReportDetails, chainCurrentTimestamp, chainCurrentBlockNumber)
+	const latestOracleAction = getLatestActionPresentation(openOracleResult)
+	const openOracleOutcome = getOpenOracleOutcomePresentation(openOracleResult)
 
 	useEffect(() => {
 		let cancelled = false
@@ -844,6 +906,7 @@ export function OpenOracleSection({
 
 	return (
 		<div className='route-view-flow'>
+			<WorkflowTransactionStatus latestAction={latestOracleAction} outcome={openOracleOutcome} />
 			{view === 'browse' ? (
 				<div className='workflow-stack route-workflow-stack'>
 					<SectionBlock
@@ -976,14 +1039,7 @@ export function OpenOracleSection({
 							</SectionBlock>
 
 							<div className='actions'>
-								<TransactionActionButton
-									idleLabel='Create Open Oracle Game'
-									pendingLabel='Creating...'
-									onClick={onCreateOpenOracleGame}
-									pending={loadingOpenOracleCreate}
-									status={openOracleFeedback?.action === 'createReportInstance' ? openOracleFeedback.status : undefined}
-									availability={{ disabled: createGuardMessage !== undefined, reason: createGuardMessage }}
-								/>
+								<TransactionActionButton idleLabel='Create Open Oracle Game' pendingLabel='Creating...' onClick={onCreateOpenOracleGame} pending={loadingOpenOracleCreate} availability={{ disabled: createGuardMessage !== undefined, reason: createGuardMessage }} />
 							</div>
 						</div>
 					</SectionBlock>

@@ -8,6 +8,7 @@ import { useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'
 import { ReportingSection } from '../components/ReportingSection.js'
 import { formatDuration } from '../lib/formatters.js'
+import { computeEscalationTimeSinceStartFromAttritionCost, getEscalationBalanceTuple, getEscalationBindingCapital } from '../lib/reportingDomain.js'
 import type { AccountState, ReportingFormState } from '../types/app.js'
 import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingDetails } from '../types/contracts.js'
 import type { ReportingSectionProps } from '../types/components.js'
@@ -100,6 +101,58 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 	}
 }
 
+function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
+	const sides = overrides.sides ?? [
+		{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+		{ balance: rep(8n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+		{ balance: rep(3n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+	]
+	const startBond = overrides.startBond ?? rep(1n)
+	const nonDecisionThreshold = overrides.nonDecisionThreshold ?? rep(20n)
+	const startingTime = overrides.startingTime ?? 120n
+	const currentTime = overrides.currentTime ?? 150n
+	const bindingCapital = getEscalationBindingCapital(getEscalationBalanceTuple(sides))
+	const escalationEndTime = startingTime + computeEscalationTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, bindingCapital)
+
+	const baseDetails: ActiveReportingDetails = {
+		bindingCapital,
+		completeSetCollateralAmount: 1n,
+		currentRequiredBond: rep(2n),
+		currentTime,
+		escalationEndTime,
+		escalationGameAddress: zeroAddress,
+		marketDetails: createMarketDetails(),
+		nonDecisionThreshold,
+		questionOutcome: 'none',
+		resolution: 'none',
+		securityPoolAddress: zeroAddress,
+		sides,
+		startBond,
+		startingTime,
+		status: 'active',
+		totalCost: 0n,
+		universeId: 1n,
+		withdrawalEnabled: false,
+		withdrawalState: 'not-finalized',
+		viewerVaultAvailableEscalationRep: 10n * REP,
+		viewerVaultExists: true,
+		viewerVaultLockedRepInEscalationGame: 1n * REP,
+		viewerVaultRepDepositShare: 11n * REP,
+	}
+
+	return {
+		...baseDetails,
+		...overrides,
+		bindingCapital,
+		currentTime,
+		escalationEndTime,
+		nonDecisionThreshold,
+		sides,
+		startBond,
+		startingTime,
+	}
+}
+
 function createReportingFeedback(overrides: Partial<NonNullable<ReportingSectionProps['reportingFeedback']>> = {}): NonNullable<ReportingSectionProps['reportingFeedback']> {
 	return {
 		action: 'reportOutcome',
@@ -139,7 +192,7 @@ function createReportingForm(overrides: Partial<ReportingFormState> = {}): Repor
 	return {
 		reportAmount: '1',
 		securityPoolAddress: zeroAddress,
-		selectedOutcome: 'yes',
+		selectedOutcome: undefined,
 		selectedWithdrawDepositIndexes: [],
 		...overrides,
 	}
@@ -176,6 +229,7 @@ function ReportingSectionHarness({ initialProps }: { initialProps?: Partial<Repo
 			{...createProps(initialProps)}
 			reportingForm={reportingForm}
 			onReportingFormChange={changes => {
+				initialProps?.onReportingFormChange?.(changes)
 				setReportingForm(currentForm => ({
 					...currentForm,
 					...changes,
@@ -190,7 +244,6 @@ function findProfitPreview() {
 		.map(element => element.textContent ?? '')
 		.find(text => text.includes('projects roughly'))
 }
-
 describe('ReportingSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -207,8 +260,31 @@ describe('ReportingSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('renders active reporting with a lifecycle banner and no reporting context card', async () => {
+	test('starts unselected until the user explicitly chooses an outcome side', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getAllByText('Active').length).toBeGreaterThan(0)
+		expect(documentQueries.queryByText('Available')).toBeNull()
+		expect(documentQueries.queryByText('Blocked')).toBeNull()
+		expect(documentQueries.queryByText('Reporting Workflow')).toBeNull()
+		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
+		expect(documentQueries.queryByRole('button', { name: 'Outcome Side' })).toBeNull()
+		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(0)
+	})
+
+	test('renders active reporting with a lifecycle banner and no reporting context card', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingForm: createReportingForm({
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -218,6 +294,23 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('button', { name: 'Max profit' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(true)
 		expect(document.body.textContent?.includes('Withdraw Escalation Deposits')).toBe(false)
+	})
+
+	test('keeps the outcome cards unselected when reporting is locked', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					lockedReason: 'Reporting opens after market end.',
+					reportingDetails: undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('button', { name: 'Outcome Side' })).toBeNull()
+		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(0)
 	})
 
 	test('renders Reporting Not Enabled before market end', async () => {
@@ -256,7 +349,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Load reporting details to view the escalation state for this pool.')).toBe(true)
 	})
 
-	test('renders button-local reporting feedback instead of a latest action card', async () => {
+	test('does not render inline button-local reporting feedback when no reporting result is present', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -268,7 +361,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Reporting submitted')).not.toBeNull()
+		expect(documentQueries.queryByText('Reporting submitted')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Latest Reporting Action' })).toBeNull()
 	})
 
@@ -314,8 +407,27 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Connect a wallet before reporting on a market.')
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute No', 'Connect a wallet before reporting on a market.')
 		expect(document.body.querySelector('button[title="Connect a wallet before withdrawing escalation deposits."]')).toBeNull()
+	})
+
+	test('shows the selected side details after an explicit outcome choice', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingForm: createReportingForm({
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(1)
+		expect(document.body.textContent?.includes('Selected side currently has')).toBe(true)
+		expect(documentQueries.getByText(/If Yes wins and no one else contributes afterward/)).not.toBeNull()
 	})
 
 	test('removes the approval explainer copy and still blocks when unlocked vault REP is insufficient', async () => {
@@ -328,19 +440,29 @@ describe('ReportingSection', () => {
 					}),
 					reportingForm: createReportingForm({
 						reportAmount: '5',
+						selectedOutcome: 'yes',
 					}),
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-
 		expect(document.body.textContent?.includes('It does not spend wallet REP directly or require a wallet approval.')).toBe(false)
 		expect(document.body.textContent?.includes('Available unlocked vault REP for reporting:')).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Need 3 more unlocked REP in your vault before reporting.')
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute Yes', 'Need 3 more unlocked REP in your vault before reporting.')
 	})
 
 	test('renders a compact withdraw-only mode without the reporting banner or report form', async () => {
-		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ mode: 'withdraw-only' })))
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					mode: 'withdraw-only',
+					reportingForm: createReportingForm({
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -389,7 +511,7 @@ describe('ReportingSection', () => {
 					currentTimestamp: undefined,
 					reportingDetails: {
 						...createReportingDetails(),
-						currentTime: 300n,
+						currentTime: 301n,
 						escalationEndTime: 300n,
 					},
 				}),
@@ -407,7 +529,7 @@ describe('ReportingSection', () => {
 			h(
 				ReportingSection,
 				createProps({
-					currentTimestamp: 300n,
+					currentTimestamp: 301n,
 					reportingDetails: {
 						...createReportingDetails(),
 						currentTime: 150n,
@@ -423,6 +545,27 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
 	})
 
+	test('disables reporting after the escalation timer ends', async () => {
+		const reportingDetails = createDynamicReportingDetails()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: reportingDetails.escalationEndTime + 1n,
+					reportingDetails: createDynamicReportingDetails({
+						currentTime: reportingDetails.escalationEndTime + 1n,
+					}),
+					reportingForm: createReportingForm({
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute Yes', 'Reporting is closed because the escalation timer has ended.')
+	})
+
 	test('renders pre-start metrics and placeholders before the first report starts escalation', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -431,6 +574,7 @@ describe('ReportingSection', () => {
 					reportingDetails: createNotStartedReportingDetails(),
 					reportingForm: createReportingForm({
 						reportAmount: '3',
+						selectedOutcome: 'yes',
 					}),
 				}),
 			),
@@ -447,7 +591,7 @@ describe('ReportingSection', () => {
 		expect(outcomeSidesSection.querySelector('[title="3 REP"]')).not.toBeNull()
 		expect(outcomeSidesSection.querySelectorAll('.currency-value.unavailable').length).toBeGreaterThanOrEqual(2)
 		expect(document.body.textContent?.includes('Load reporting details to populate live stakes')).toBe(false)
-		expectTransactionButtonEnabled(document.body, 'Report / Contribute On Selected Side')
+		expectTransactionButtonEnabled(document.body, 'Report / Contribute Yes')
 	})
 
 	test('disables report submission for a pre-start amount below the first-report minimum', async () => {
@@ -458,25 +602,100 @@ describe('ReportingSection', () => {
 					reportingDetails: createNotStartedReportingDetails(),
 					reportingForm: createReportingForm({
 						reportAmount: '2',
+						selectedOutcome: 'yes',
 					}),
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Enter at least 3 REP to start the escalation game.')
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute Yes', 'Enter at least 3 REP to start the escalation game.')
 	})
 
 	test('accepts decimal report amounts for the profit preview', async () => {
-		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingForm: createReportingForm({ reportAmount: '1.5' }) })))
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingForm: createReportingForm({
+						reportAmount: '1.5',
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent?.includes('projects roughly')).toBe(true)
 		expect(document.body.textContent?.includes('Enter a valid report amount to preview profit.')).toBe(false)
 	})
 
+	test('shows the timer-extension preview below the report button for contributions that raise binding capital', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createDynamicReportingDetails(),
+					reportingForm: createReportingForm({
+						reportAmount: '2',
+						selectedOutcome: 'no',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute No' })
+		const preview = documentQueries.getByText(/^This contribution would extend the timer by /)
+		expect(reportButton.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+	})
+
+	test('shows a no-extension preview when the selected contribution leaves binding capital unchanged', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createDynamicReportingDetails(),
+					reportingForm: createReportingForm({
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('This contribution would not extend the timer.')).toBe(true)
+	})
+
+	test('shows the accepted-deposit note when the typed contribution exceeds the remaining room on the selected side', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createDynamicReportingDetails({
+						sides: [
+							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(19n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+							{ balance: rep(3n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+					}),
+					reportingForm: createReportingForm({
+						reportAmount: '5',
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('This contribution would not extend the timer.')).toBe(true)
+		expect(document.body.textContent?.includes('Based on an accepted deposit of')).toBe(true)
+		expect(document.body.textContent?.includes('≈ 1.00 REP.')).toBe(true)
+	})
+
 	test('autofills the active minimum-outcome-change preset', async () => {
-		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness />)
+		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingForm: createReportingForm({ selectedOutcome: 'yes' }) }} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
@@ -488,7 +707,7 @@ describe('ReportingSection', () => {
 	})
 
 	test('autofills the active max-profit preset and updates the preview', async () => {
-		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness />)
+		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingForm: createReportingForm({ selectedOutcome: 'yes' }) }} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const previewBefore = findProfitPreview()
@@ -504,7 +723,7 @@ describe('ReportingSection', () => {
 	})
 
 	test('autofills the pre-start minimum-outcome-change preset from the pool start bond', async () => {
-		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: createNotStartedReportingDetails() }} />)
+		const renderedComponent = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: createNotStartedReportingDetails(), reportingForm: createReportingForm({ selectedOutcome: 'yes' }) }} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
@@ -516,7 +735,17 @@ describe('ReportingSection', () => {
 	})
 
 	test('disables Max profit before the escalation game exists', async () => {
-		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createNotStartedReportingDetails() })))
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createNotStartedReportingDetails(),
+					reportingForm: createReportingForm({
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const maxProfitButton = within(document.body).getByRole('button', { name: 'Max profit' }) as HTMLButtonElement
@@ -526,7 +755,17 @@ describe('ReportingSection', () => {
 	})
 
 	test('disables preset buttons when reporting details are missing without showing the load reason inline', async () => {
-		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: undefined })))
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: undefined,
+					reportingForm: createReportingForm({
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -586,6 +825,9 @@ describe('ReportingSection', () => {
 				ReportingSection,
 				createProps({
 					mode: 'withdraw-only',
+					reportingForm: createReportingForm({
+						selectedOutcome: 'yes',
+					}),
 					reportingDetails: createReportingDetails({
 						questionOutcome: 'yes',
 						withdrawalEnabled: true,
@@ -595,7 +837,6 @@ describe('ReportingSection', () => {
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-
 		expectTransactionButtonEnabled(document.body, 'Withdraw Escalation Deposits')
 		expect(document.body.textContent?.includes('Connected wallet has 1 withdrawable unsettled deposit entry on the selected side.')).toBe(true)
 		expect(within(document.body).getByRole('checkbox', { name: /Deposit #0/i })).toBeDefined()
@@ -632,6 +873,9 @@ describe('ReportingSection', () => {
 					onReportingFormChange: update => {
 						onReportingFormChangeCalls.push(update)
 					},
+					reportingForm: createReportingForm({
+						selectedOutcome: 'yes',
+					}),
 					reportingDetails: createReportingDetails({
 						questionOutcome: 'yes',
 						sides: [
@@ -733,6 +977,9 @@ describe('ReportingSection', () => {
 							{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 					}),
+					reportingForm: createReportingForm({
+						selectedOutcome: 'yes',
+					}),
 				}),
 			),
 		)
@@ -756,6 +1003,9 @@ describe('ReportingSection', () => {
 							{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 						],
 					}),
+					reportingForm: createReportingForm({
+						selectedOutcome: 'yes',
+					}),
 				}),
 			),
 		)
@@ -765,5 +1015,78 @@ describe('ReportingSection', () => {
 		expect(maxProfitButton.disabled).toBe(true)
 		expect(maxProfitButton.title).toBe('Max profit preset unavailable because the reward window is already filled on the selected side.')
 		expect(document.body.textContent?.includes('Max profit preset unavailable because the reward window is already filled on the selected side.')).toBe(false)
+	})
+
+	test('lets users select an outcome side from the outcome cards and updates the report button label', async () => {
+		const updates: Partial<ReportingFormState>[] = []
+		const renderedComponent = await renderIntoDocument(
+			<ReportingSectionHarness
+				initialProps={{
+					onReportingFormChange: update => {
+						updates.push(update)
+					},
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const yesButton = documentQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement
+		const noButton = documentQueries.getByRole('button', { name: /^No/ }) as HTMLButtonElement
+
+		expect(yesButton.getAttribute('aria-pressed')).toBe('false')
+		expect(noButton.getAttribute('aria-pressed')).toBe('false')
+		expect(documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' })).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(noButton)
+		})
+
+		expect(updates).toEqual([{ selectedOutcome: 'no', selectedWithdrawDepositIndexes: [] }])
+		expect((documentQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement).getAttribute('aria-pressed')).toBe('false')
+		expect((documentQueries.getByRole('button', { name: /^No/ }) as HTMLButtonElement).getAttribute('aria-pressed')).toBe('true')
+		expect(documentQueries.getByRole('button', { name: 'Report / Contribute No' })).not.toBeNull()
+	})
+
+	test('disables outcome side selection when the reporting workflow is locked', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					lockedReason: 'Reporting opens after market end.',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect((documentQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('button', { name: /^No/ }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('button', { name: /^Invalid/ }) as HTMLButtonElement).disabled).toBe(true)
+	})
+
+	test('renders reporting transaction status outside the action rows', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingResult: {
+						action: 'reportOutcome',
+						hash: '0x1234000000000000000000000000000000000000000000000000000000000000',
+						outcome: 'yes',
+						securityPoolAddress: zeroAddress,
+						universeId: 1n,
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const statusStack = document.body.querySelector('.workflow-transaction-status')
+		if (!(statusStack instanceof HTMLElement)) throw new Error('Expected reporting status stack to render')
+		expect(statusStack.firstElementChild?.textContent?.includes('Reporting Contribution Submitted')).toBe(true)
+		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' }).closest('.actions')).toBeNull()
 	})
 })

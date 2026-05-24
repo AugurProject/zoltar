@@ -24,6 +24,7 @@ import { ChainBlockNumberContext, ChainTimestampContext } from './lib/chainTimes
 import { getDeploymentSections } from './lib/deployment.js'
 import { resolveLoadableValueState } from './lib/loadState.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from './lib/network.js'
+import { applyReportingFormUpdate } from './lib/reportingForm.js'
 import { createLoadSecurityVaultHandler } from './lib/securityVaultHandlers.js'
 import { getUseQuestionForPoolState } from './lib/securityPoolNavigation.js'
 import { createInitialTransactionState, markTransactionFinished, markTransactionRequested, markTransactionSubmitted } from './lib/transactionState.js'
@@ -33,6 +34,7 @@ import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam, writeZ
 import { getUniversePresentation } from './lib/userCopy.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from './lib/viewState.js'
+import type { ReportingFormState } from './types/app.js'
 import type { DeploymentRouteContentProps, MarketRouteContentProps, OpenOracleSectionProps, OpenOracleView, SecurityPoolsSectionProps, SecurityPoolsView, ZoltarView } from './types/components.js'
 
 export function App() {
@@ -196,6 +198,9 @@ export function App() {
 		wrapWethForInitialReport,
 	} = useOpenOracleOperations({ ...baseHookConfig, enabled: route === 'open-oracle' })
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingFeedback, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations(baseHookConfig)
+	const updateReportingForm = (update: Partial<ReportingFormState>) => {
+		setReportingForm(current => applyReportingFormUpdate(current, update))
+	}
 	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleFeedback, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(baseHookConfig)
 	const {
 		checkedSecurityPoolAddress,
@@ -354,7 +359,7 @@ export function App() {
 		selectedPoolSecurityPoolAddress: selectedPool?.securityPoolAddress,
 		setForkAuctionFormSecurityPoolAddress: nextSecurityPoolAddress => setForkAuctionForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
 		setOpenOracleReport,
-		setReportingFormSecurityPoolAddress: nextSecurityPoolAddress => setReportingForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
+		setReportingFormSecurityPoolAddress: nextSecurityPoolAddress => updateReportingForm({ securityPoolAddress: nextSecurityPoolAddress }),
 		setSecurityVaultFormSelectedVaultAddress: nextSelectedVaultAddress => setSecurityVaultForm(current => (current.selectedVaultAddress === nextSelectedVaultAddress ? current : { ...current, selectedVaultAddress: nextSelectedVaultAddress })),
 		setSecurityVaultFormSecurityPoolAddress: nextSecurityPoolAddress => setSecurityVaultForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
 		setTradingFormSecurityPoolAddress: nextSecurityPoolAddress => setTradingForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
@@ -555,7 +560,7 @@ export function App() {
 				loadingReportingDetails,
 				onLoadReporting: () => void loadReporting(),
 				onReportOutcome: () => void onReportOutcome(),
-				onReportingFormChange: update => setReportingForm(current => ({ ...current, ...update })),
+				onReportingFormChange: update => updateReportingForm(update),
 				onWithdrawEscalation: () => void withdrawEscalation(),
 				reportingActiveAction,
 				reportingDetails,

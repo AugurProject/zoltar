@@ -212,6 +212,28 @@ describe('ForkAuctionSection', () => {
 		expect(document.body.textContent?.includes(formatDuration(200n - 150n))).toBe(true)
 	})
 
+	test('renders latest fork action status outside action rows', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					forkAuctionResult: {
+						action: 'migrateVault',
+						hash: '0x1234000000000000000000000000000000000000000000000000000000000000',
+						securityPoolAddress: zeroAddress,
+						universeId: 1n,
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(document.body.querySelector('.workflow-transaction-status')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Latest Fork / Auction Action' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Latest Fork / Auction Action' }).closest('.actions')).toBeNull()
+	})
+
 	test('recomputes truth auction time left from the live chain timestamp', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(

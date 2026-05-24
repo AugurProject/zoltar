@@ -9,13 +9,14 @@ type EnumDropdownProps<T extends string> = {
 	disabled?: boolean
 	onChange: (value: T) => void
 	options: ReadonlyArray<EnumDropdownOption<T>>
-	value: T
+	placeholder?: string
+	value: T | undefined
 }
 
-export function EnumDropdown<T extends string>({ disabled = false, onChange, options, value }: EnumDropdownProps<T>) {
+export function EnumDropdown<T extends string>({ disabled = false, onChange, options, placeholder, value }: EnumDropdownProps<T>) {
 	const [open, setOpen] = useState(false)
 	const rootRef = useRef<HTMLDivElement | null>(null)
-	const selectedOption = options.find(option => option.value === value) ?? options[0]
+	const selectedOption = value === undefined ? undefined : options.find(option => option.value === value)
 
 	useEffect(() => {
 		const handleDocumentMouseDown = (event: MouseEvent) => {
@@ -51,7 +52,7 @@ export function EnumDropdown<T extends string>({ disabled = false, onChange, opt
 					setOpen(current => !current)
 				}}
 			>
-				<span className='enum-dropdown-label'>{selectedOption?.label ?? value}</span>
+				<span className='enum-dropdown-label'>{selectedOption?.label ?? value ?? placeholder ?? ''}</span>
 				<span className='enum-dropdown-chevron' aria-hidden='true' />
 			</button>
 			{open ? (
