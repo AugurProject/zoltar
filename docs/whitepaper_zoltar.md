@@ -49,7 +49,7 @@ $$
 
 This makes each branch reproducible from parent universe and outcome index alone. Child universes are then deployed lazily when a forked branch is actually needed.
 
-The resulting child universes coexist. Zoltar does not, at the substrate level, select one canonical child universe and delete the others. It deterministically defines all valid branches for the forked question and leaves later economic and social coordination to determine which branch accumulates meaningful value.
+The resulting child universes coexist. Zoltar does not select one canonical child universe and delete the others. It deterministically defines all valid branches for the forked question and leaves later economic and social coordination to determine which branch accumulates meaningful value.
 
 ```
 Parent universe
@@ -69,7 +69,7 @@ Parent universe
       +--> child for outcome N
 ```
 
-Zoltar defines the branch set; it does not choose one winner at the substrate layer.
+Zoltar defines the branch set; it does not choose one winner.
 
 ## 3. Fork Thresholds and REP Economics
 
