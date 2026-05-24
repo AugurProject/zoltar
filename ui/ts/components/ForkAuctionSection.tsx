@@ -79,9 +79,9 @@ function renderAddress(address: string | undefined) {
 	return <AddressValue address={address} />
 }
 
-function renderTimestamp({ chainCurrentTimestamp, fallbackText, valueTimestamp }: { chainCurrentTimestamp: bigint | undefined; fallbackText: string; valueTimestamp: bigint | undefined }) {
-	if (valueTimestamp === undefined) return fallbackText
-	return <TimestampValue {...(chainCurrentTimestamp === undefined ? {} : { currentTimestamp: chainCurrentTimestamp })} timestamp={valueTimestamp} />
+function renderTimestamp({ displayTimestamp, fallbackText, relativeToTimestamp }: { displayTimestamp: bigint | undefined; fallbackText: string; relativeToTimestamp: bigint | undefined }) {
+	if (displayTimestamp === undefined) return fallbackText
+	return <TimestampValue {...(relativeToTimestamp === undefined ? {} : { currentTimestamp: relativeToTimestamp })} timestamp={displayTimestamp} />
 }
 
 function getForkOnlyFallbackText(hasPreviewForkActivity: boolean) {
@@ -229,16 +229,16 @@ export function ForkAuctionSection({
 			? previewPool?.truthAuctionStartedAt === undefined || previewPool.truthAuctionStartedAt === 0n
 				? 'Not started'
 				: renderTimestamp({
-						chainCurrentTimestamp: effectiveCurrentTimestamp,
+						displayTimestamp: previewPool.truthAuctionStartedAt,
 						fallbackText: 'Not started',
-						valueTimestamp: previewPool.truthAuctionStartedAt,
+						relativeToTimestamp: effectiveCurrentTimestamp,
 					})
 			: forkAuctionDetails.truthAuctionStartedAt === 0n
 				? 'Not started'
 				: renderTimestamp({
-						chainCurrentTimestamp: effectiveCurrentTimestamp,
+						displayTimestamp: forkAuctionDetails.truthAuctionStartedAt,
 						fallbackText: 'Not started',
-						valueTimestamp: forkAuctionDetails.truthAuctionStartedAt,
+						relativeToTimestamp: effectiveCurrentTimestamp,
 					})
 	const endsDisplay = auctionWindow === undefined ? 'Not started' : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={auctionWindow.endsAt} />
 	const truthAuctionTimeRemaining = truthAuctionEndsAt === undefined || effectiveCurrentTimestamp === undefined ? forkAuctionDetails?.truthAuction?.timeRemaining : getTimeRemaining(truthAuctionEndsAt, effectiveCurrentTimestamp)
