@@ -1,4 +1,4 @@
-import { decodeEventLog, parseAbiItem, zeroAddress, type Address, type ContractFunctionParameters, type Hash, type Hex, type TransactionReceipt } from 'viem'
+import { decodeEventLog, getAddress, parseAbiItem, zeroAddress, type Address, type ContractFunctionParameters, type Hash, type Hex, type TransactionReceipt } from 'viem'
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from './shared/bigInt.js'
 import { assertNever } from './lib/assert.js'
@@ -64,7 +64,7 @@ import {
 	requireSecurityVaultTupleArray,
 	toUint8Array,
 } from './contracts/helpers.js'
-import { type ContractRevertReasonParams, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './contracts/core.js'
+import { type ContractRevertReasonParams, type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './contracts/core.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from './contracts/deploymentHelpers.js'
 export { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from './contracts/deployment.js'
 import { getDeploymentSteps } from './contracts/deployment.js'
@@ -80,6 +80,12 @@ const TRUTH_AUCTION_TIME_LENGTH = 604_800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
 
 const CONTRACT_PAGE_SIZE = 30n
+
+type ContractReadClient = {
+	readContract: (params: ContractFunctionParameters) => Promise<unknown>
+}
+
+type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = ContractReadClient & WriteContractClient<TReceipt>
 
 type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
@@ -135,13 +141,15 @@ function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOpe
 	}
 	return undefined
 }
-async function readSecurityPoolUniverseId(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address) {
-	return await client.readContract({
+async function readSecurityPoolUniverseId(client: ContractReadClient, securityPoolAddress: Address) {
+	const universeId = await client.readContract({
 		address: securityPoolAddress,
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'universeId',
 		args: [],
 	})
+	if (typeof universeId !== 'bigint') throw new Error('Unexpected security pool universe id response')
+	return universeId
 }
 
 function getDeploymentStep(id: DeploymentStepId) {
@@ -150,7 +158,7 @@ function getDeploymentStep(id: DeploymentStepId) {
 	return step
 }
 
-export async function loadEscalationDeposits(client: ReadClient, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
+export async function loadEscalationDeposits(client: ContractReadClient, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
 	let currentIndex = 0n
 	const deposits: EscalationDeposit[] = []
 
@@ -997,7 +1005,7 @@ export async function submitInitialOracleReport(client: WriteClient, openOracleA
 	} satisfies OpenOracleActionResult
 }
 
-export async function settleOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint) {
+export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, reportId: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
@@ -1674,7 +1682,7 @@ export async function redeemSharesInSecurityPool(client: WriteClient, securityPo
 	} satisfies TradingActionResult
 }
 
-export async function migrateSharesFromUniverse(client: WriteClient, securityPoolAddress: Address, shareOutcome: ReportingOutcomeKey, targetOutcomeIndexes: bigint[]) {
+export async function migrateSharesFromUniverse<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: ReadWriteContractClient<TReceipt>, securityPoolAddress: Address, shareOutcome: ReportingOutcomeKey, targetOutcomeIndexes: bigint[]) {
 	const sortedTargetOutcomeIndexes = sortBigIntsAscending(targetOutcomeIndexes)
 	const [universeId, shareTokenAddress] = await Promise.all([
 		readSecurityPoolUniverseId(client, securityPoolAddress),
@@ -1685,8 +1693,9 @@ export async function migrateSharesFromUniverse(client: WriteClient, securityPoo
 			args: [],
 		}),
 	])
+	if (typeof shareTokenAddress !== 'string') throw new Error('Unexpected share token address response')
 	const hash = await writeContractAndWait(client, () => ({
-		address: shareTokenAddress,
+		address: getAddress(shareTokenAddress),
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'migrate',
 		args: [getShareTokenId(universeId, shareOutcome), sortedTargetOutcomeIndexes],

@@ -4,35 +4,33 @@ import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, type Address, type Hash, type Hex } from 'viem'
 import { getOpenOracleAddress, loadEscalationDeposits, migrateSharesFromUniverse, settleOracleReport } from '../contracts.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
-import type { ReadClient, WriteClient } from '../types/contracts.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
 const transactionHash = '0x00000000000000000000000000000000000000000000000000000000000000c3' satisfies Hash
 
-function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undefined; gas?: bigint | undefined; to?: Address | null | undefined }) => void): WriteClient {
-	const client = {} as WriteClient
-	const readContract: WriteClient['readContract'] = async ({ functionName }) => {
-		if (functionName === 'universeId') return 12n as never
-		if (functionName === 'shareToken') return shareTokenAddress as never
-		throw new Error(`Unexpected readContract function: ${functionName}`)
-	}
-	const sendTransaction: WriteClient['sendTransaction'] = async request => {
-		onSendTransaction(request)
-		return transactionHash
-	}
-	const waitForTransactionReceipt: WriteClient['waitForTransactionReceipt'] = async () => ({ status: 'success' }) as never
-	client.readContract = readContract
-	client.sendTransaction = sendTransaction
-	client.waitForTransactionReceipt = waitForTransactionReceipt
+type MockWriteClient = Parameters<typeof migrateSharesFromUniverse>[0]
+type MockReadClient = Parameters<typeof loadEscalationDeposits>[0]
 
-	return client
+function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undefined; gas?: bigint | undefined; to?: Address | undefined }) => void): MockWriteClient {
+	return {
+		readContract: async request => {
+			if (request.functionName === 'universeId') return 12n
+			if (request.functionName === 'shareToken') return shareTokenAddress
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		},
+		sendTransaction: async request => {
+			onSendTransaction(request)
+			return transactionHash
+		},
+		waitForTransactionReceipt: async () => ({ status: 'success' }),
+	} satisfies MockWriteClient
 }
 
-function createMockReadClient(readContract: ReadClient['readContract']): ReadClient {
-	const client = {} as ReadClient
-	client.readContract = readContract
-	return client
+function createMockReadClient(readContract: MockReadClient['readContract']): MockReadClient {
+	return {
+		readContract,
+	}
 }
 
 describe('contracts helpers', () => {
@@ -101,8 +99,8 @@ describe('contracts helpers', () => {
 			const startIndex = Array.isArray(args) ? args[1] : undefined
 			if (typeof startIndex !== 'bigint') throw new Error('Expected pagination start index')
 			readCalls.push(startIndex)
-			if (startIndex === 0n) return firstPage as never
-			if (startIndex === 30n) return secondPage as never
+			if (startIndex === 0n) return firstPage
+			if (startIndex === 30n) return secondPage
 			throw new Error(`Unexpected start index: ${startIndex.toString()}`)
 		})
 

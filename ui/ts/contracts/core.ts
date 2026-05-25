@@ -1,6 +1,6 @@
 import { encodeFunctionData, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType, type TransactionReceipt } from 'viem'
 import { getMulticall3Address } from './deploymentHelpers.js'
-import type { ReadClient, WriteClient } from '../types/contracts.js'
+import type { ReadClient } from '../types/contracts.js'
 
 export type ContractRevertReasonParams = {
 	account?: Account | Address | undefined | null
@@ -10,6 +10,15 @@ export type ContractRevertReasonParams = {
 	functionName: string
 	gas?: bigint
 	value?: bigint
+}
+
+type ContractCallClient = {
+	call?: (params: { account?: Account | Address | undefined; data: `0x${string}`; gas?: bigint | undefined; to: Address; value?: bigint | undefined }) => Promise<unknown>
+}
+
+export type WriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = ContractCallClient & {
+	sendTransaction: (params: { account?: Account | Address | undefined; data: `0x${string}`; gas?: bigint | undefined; to: Address; value?: bigint | undefined }) => Promise<Hash>
+	waitForTransactionReceipt: (params: { hash: Hash }) => Promise<TReceipt>
 }
 
 export async function readRequiredMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts): Promise<MulticallReturnType<TContracts, false>> {
@@ -28,7 +37,8 @@ export async function readOptionalMulticall<const TContracts extends readonly un
 	})) as MulticallReturnType<TContracts, true>
 }
 
-async function getContractRevertReason<TCallParams extends ContractRevertReasonParams>(client: ReadClient | WriteClient, params: TCallParams) {
+async function getContractRevertReason<TCallParams extends ContractRevertReasonParams>(client: ContractCallClient, params: TCallParams) {
+	if (client.call === undefined) return undefined
 	try {
 		const data = encodeFunctionData({
 			abi: params.abi,
@@ -61,12 +71,12 @@ function getOriginalErrorMessage(error: unknown) {
 	return undefined
 }
 
-export async function writeContractAndWait<TCallParams extends ContractRevertReasonParams>(client: WriteClient, getCallParams: () => TCallParams) {
+export async function writeContractAndWait<TCallParams extends ContractRevertReasonParams, TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, getCallParams: () => TCallParams) {
 	const { hash } = await writeContractAndWaitForReceipt(client, getCallParams)
 	return hash
 }
 
-export async function writeContractAndWaitForReceipt<TCallParams extends ContractRevertReasonParams>(client: WriteClient, getCallParams: () => TCallParams): Promise<{ hash: Hash; receipt: TransactionReceipt }> {
+export async function writeContractAndWaitForReceipt<TCallParams extends ContractRevertReasonParams, TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, getCallParams: () => TCallParams): Promise<{ hash: Hash; receipt: TReceipt }> {
 	const callParams = getCallParams()
 	const data = encodeFunctionData({
 		abi: callParams.abi,
