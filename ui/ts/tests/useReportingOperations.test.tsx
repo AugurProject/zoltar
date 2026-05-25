@@ -30,7 +30,6 @@ function createReportingDetails(securityPoolAddress: Address): ReportingDetails 
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
 		forkThreshold: 40n,
-		gameCreatedAt: 90n,
 		hasReachedNonDecision: false,
 		marketDetails: {
 			answerUnit: '',

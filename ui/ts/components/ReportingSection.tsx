@@ -355,7 +355,7 @@ export function ReportingSection({
 						</MetricField>
 						<MetricField label='Time Left'>{activeReportingDetails === undefined ? '—' : formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
 						<MetricField label='Game Start'>
-							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails?.gameCreatedAt} />
+							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails?.activationTime} />
 						</MetricField>
 						<MetricField label='Start Bond'>
 							<CurrencyValue value={effectiveReportingDetails?.startBond} suffix='REP' />

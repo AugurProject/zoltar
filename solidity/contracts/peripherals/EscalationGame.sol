@@ -22,7 +22,6 @@ uint256 constant EXCESS_REWARD_WINDOW_DIVISOR = 2;
 contract EscalationGame {
 	uint256 public constant activationDelay = 3 days;
 	uint256 public activationTime;
-	uint256 public createdAt;
 	uint256[3] public balances; // outcome -> amount
 	mapping(uint8 => Deposit[]) public deposits; // make a fixed array with dynamic
 	ISecurityPool public securityPool;
@@ -32,7 +31,7 @@ contract EscalationGame {
 	address public owner;
 	uint256 public nonDecisionTimestamp;
 
-	event GameStarted(uint256 createdAt, uint256 activationTime, uint256 startBond, uint256 nonDecisionThreshold);
+	event GameStarted(uint256 activationTime, uint256 startBond, uint256 nonDecisionThreshold);
 	event DepositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount, uint256 depositIndex, uint256 cumulativeAmount);
 	event WithdrawDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountToWithdraw, uint256 depositIndex);
 	event ClaimDeposit(uint256 amountToWithdraw, uint256 burnAmount);
@@ -49,12 +48,11 @@ contract EscalationGame {
 		require(_startBond > 0, 'start bond must be positive');
 		require(_startBond >= 1e18, 'start bond must be at least 1 ether');
 		require(_nonDecisionThreshold >= 1e18, 'threshold must be at least 1 ether');
-		createdAt = block.timestamp;
 		activationTime = block.timestamp + activationDelay;
 		nonDecisionThreshold = _nonDecisionThreshold;
 		startBond = _startBond;
 		lnRatioScaled = _computeLnRatioScaled(_startBond, _nonDecisionThreshold);
-		emit GameStarted(createdAt, activationTime, startBond, nonDecisionThreshold);
+		emit GameStarted(activationTime, startBond, nonDecisionThreshold);
 	}
 
 	function getBalances() public view returns (uint256[3] memory) {

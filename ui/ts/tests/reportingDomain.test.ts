@@ -53,7 +53,6 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
 		forkThreshold: rep(200n),
-		gameCreatedAt: 90n,
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold: rep(100n),
@@ -114,7 +113,6 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 	const forkThreshold = overrides.forkThreshold ?? nonDecisionThreshold * 2n
 	const activationTime = overrides.activationTime ?? 120n
 	const currentTime = overrides.currentTime ?? 150n
-	const gameCreatedAt = overrides.gameCreatedAt ?? 90n
 	const bindingCapital = getEscalationBindingCapital(getEscalationBalanceTuple(sides))
 	const escalationEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, bindingCapital)
 
@@ -126,7 +124,6 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		escalationEndTime,
 		escalationGameAddress: zeroAddress,
 		forkThreshold,
-		gameCreatedAt,
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold,
@@ -154,7 +151,6 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		currentTime,
 		escalationEndTime,
 		forkThreshold,
-		gameCreatedAt,
 		nonDecisionThreshold,
 		sides,
 		startBond,

@@ -294,7 +294,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}
 	}
 
-	const [startBond, nonDecisionThreshold, gameCreatedAt, activationTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = await readRequiredMulticall(client, [
+	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'startBond',
@@ -304,12 +304,6 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		{
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'nonDecisionThreshold',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'createdAt',
 			address: escalationGameAddress,
 			args: [],
 		},
@@ -387,7 +381,6 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		escalationEndTime,
 		escalationGameAddress,
 		forkThreshold,
-		gameCreatedAt,
 		hasReachedNonDecision,
 		marketDetails,
 		nonDecisionThreshold,

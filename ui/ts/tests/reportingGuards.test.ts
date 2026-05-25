@@ -14,7 +14,6 @@ function createActiveReportingDetails(overrides: Partial<ActiveReportingDetails>
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
 		forkThreshold: 40n,
-		gameCreatedAt: 90n,
 		hasReachedNonDecision: false,
 		marketDetails: {
 			answerUnit: '',
