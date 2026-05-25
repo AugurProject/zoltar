@@ -378,6 +378,24 @@ export function getReportingMaxProfitContribution(details: ReportingDetails | un
 	return getMaxProfitContribution(details, selectedOutcome)
 }
 
+export function getSelectedOutcomeRewardWindowFillTimestamp(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey, acceptedAmount: bigint) {
+	if (acceptedAmount <= 0n) return undefined
+
+	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
+	if (selectedSide === undefined) return undefined
+
+	const availableRoom = getAvailableRoom(details, selectedSide.balance)
+	const effectiveAmount = acceptedAmount > availableRoom ? availableRoom : acceptedAmount
+	const projectedSelectedBalance = selectedSide.balance + effectiveAmount
+	const rewardEligibleCap = largestOtherBalance + largestOtherBalance / 2n
+	if (rewardEligibleCap <= 0n) return undefined
+
+	const targetFinalBalance = rewardEligibleCap < details.nonDecisionThreshold ? rewardEligibleCap : details.nonDecisionThreshold
+	if (projectedSelectedBalance >= targetFinalBalance) return undefined
+
+	return details.activationTime + computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, targetFinalBalance)
+}
+
 export function calculateEstimatedEscalationReturn(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey, amount: bigint) {
 	if (amount <= 0n) {
 		return {

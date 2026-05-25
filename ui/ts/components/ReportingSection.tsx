@@ -27,6 +27,7 @@ import {
 	getLeadingEscalationOutcome,
 	getReportingMaxProfitContribution,
 	getReportingMinimumOutcomeChangeContribution,
+	getSelectedOutcomeRewardWindowFillTimestamp,
 	getReportingTimerPreview,
 	isReportingClosed,
 	previewReportingContribution,
@@ -199,6 +200,30 @@ function getClosedReportingLockReason(escalationPhase: ReturnType<typeof getEsca
 	}
 }
 
+function getLatestOutcomeReminder({ currentTimestamp, projectedFinalizationTimestamp, rewardWindowFillTimestamp, selectedOutcomeLabel }: { currentTimestamp: bigint | undefined; projectedFinalizationTimestamp: bigint | undefined; rewardWindowFillTimestamp: bigint | undefined; selectedOutcomeLabel: string }) {
+	if (projectedFinalizationTimestamp !== undefined && currentTimestamp !== undefined && projectedFinalizationTimestamp <= currentTimestamp) {
+		return <>Check back immediately to confirm the market finalized as {selectedOutcomeLabel}.</>
+	}
+
+	if (rewardWindowFillTimestamp !== undefined && currentTimestamp !== undefined && rewardWindowFillTimestamp > currentTimestamp) {
+		return (
+			<>
+				Check back no later than <TimestampValue {...(currentTimestamp === undefined ? {} : { currentTimestamp })} timestamp={rewardWindowFillTimestamp} /> to confirm {selectedOutcomeLabel} is the leading outcome before the remaining reward-eligible REP on {selectedOutcomeLabel} is filled.
+			</>
+		)
+	}
+
+	if (projectedFinalizationTimestamp !== undefined) {
+		return (
+			<>
+				Check back no later than <TimestampValue {...(currentTimestamp === undefined ? {} : { currentTimestamp })} timestamp={projectedFinalizationTimestamp} /> to confirm {selectedOutcomeLabel} is the leading outcome before finalization.
+			</>
+		)
+	}
+
+	return <>Check back later to confirm {selectedOutcomeLabel} is the leading outcome.</>
+}
+
 function getEffectiveReportingDetails(reportingDetails: ReportingDetails | undefined, currentTimestamp: bigint | undefined) {
 	if (reportingDetails === undefined || currentTimestamp === undefined || reportingDetails.currentTime === currentTimestamp) {
 		return reportingDetails
@@ -267,10 +292,26 @@ export function ReportingSection({
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, selectedOutcome, selectedAmount)
 	const timerPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : getReportingTimerPreview(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	const selectedOutcomeLabel = selectedOutcome === undefined ? 'Selected Side' : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
+	const projectedFinalizationTimestamp =
+		timerPreview === undefined || effectiveCurrentTimestamp === undefined
+			? undefined
+			: timerPreview.kind === 'not-started'
+				? effectiveCurrentTimestamp + timerPreview.timeUntilEnd
+				: timerPreview.actualState === 'ends-immediately'
+					? effectiveCurrentTimestamp
+					: activeReportingDetails === undefined
+						? undefined
+						: effectiveCurrentTimestamp + getEscalationTimeRemaining(activeReportingDetails) + (timerPreview.timerIncrease ?? 0n)
+	const rewardWindowFillTimestamp = activeReportingDetails === undefined || selectedOutcome === undefined || actualReportDepositAmount === undefined ? undefined : getSelectedOutcomeRewardWindowFillTimestamp(activeReportingDetails, selectedOutcome, actualReportDepositAmount)
 	const getProjectedReportingPreview = () => {
 		if (activeReportingDetails !== undefined && isReportingClosed(activeReportingDetails)) return undefined
 
-		const finalizationReminder = `Check back later to confirm ${selectedOutcomeLabel} is still the leading outcome as finalization approaches.`
+		const finalizationReminder = getLatestOutcomeReminder({
+			currentTimestamp: effectiveCurrentTimestamp,
+			projectedFinalizationTimestamp,
+			rewardWindowFillTimestamp,
+			selectedOutcomeLabel,
+		})
 		if (timerPreview === undefined) {
 			if (selectedEstimate === undefined) return undefined
 

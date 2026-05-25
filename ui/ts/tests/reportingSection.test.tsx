@@ -9,7 +9,7 @@ import { zeroAddress } from 'viem'
 import { ReportingSection } from '../components/ReportingSection.js'
 import { formatDuration, formatTimestamp } from '../lib/formatters.js'
 import { getReportingLockedUntilMessage } from '../lib/reporting.js'
-import { computeEscalationTimeSinceStartFromAttritionCost, ESCALATION_GAME_ACTIVATION_DELAY, getEscalationBalanceTuple, getEscalationBindingCapital } from '../lib/reportingDomain.js'
+import { computeEscalationTimeSinceStartFromAttritionCost, ESCALATION_GAME_ACTIVATION_DELAY, getEscalationBalanceTuple, getEscalationBindingCapital, getSelectedOutcomeRewardWindowFillTimestamp } from '../lib/reportingDomain.js'
 import type { AccountState, ReportingFormState } from '../types/app.js'
 import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingDetails } from '../types/contracts.js'
 import type { ReportingSectionProps } from '../types/components.js'
@@ -256,7 +256,10 @@ function ReportingSectionHarness({ initialProps }: { initialProps?: Partial<Repo
 }
 
 function findProjectionPreviewElement() {
-	return Array.from(document.body.querySelectorAll('p.detail')).find(element => (element.textContent ?? '').includes('Check back later to confirm'))
+	return Array.from(document.body.querySelectorAll('p.detail')).find(element => {
+		const text = element.textContent ?? ''
+		return text.includes('Check back no later than') || text.includes('Check back immediately')
+	})
 }
 
 function findProjectionPreviewText() {
@@ -298,6 +301,7 @@ describe('ReportingSection', () => {
 				ReportingSection,
 				createProps({
 					reportingForm: createReportingForm({
+						reportAmount: '3',
 						selectedOutcome: 'yes',
 					}),
 				}),
@@ -496,7 +500,7 @@ describe('ReportingSection', () => {
 		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(1)
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect(selectedButton.textContent?.includes('Selected')).toBe(true)
-		expect(findProjectionPreviewText().includes('If Yes wins and no one else contributes afterward')).toBe(true)
+		expect(document.body.textContent?.includes('If Yes wins and no one else contributes afterward')).toBe(true)
 	})
 
 	test('removes the approval explainer copy and still blocks when unlocked vault REP is insufficient', async () => {
@@ -838,7 +842,8 @@ describe('ReportingSection', () => {
 		expect(reportOutcomeSection.querySelectorAll('.currency-value.unavailable')).toHaveLength(0)
 		expect(document.body.textContent?.includes('Load reporting details to populate live stakes')).toBe(false)
 		expectTransactionButtonEnabled(document.body, 'Report / Contribute Yes')
-		expect(document.body.textContent?.includes('If no one disputes after this report, the market would finalize in 3d 0h 0m. Check back later to confirm Yes is still the leading outcome as finalization approaches.')).toBe(true)
+		expect(document.body.textContent?.includes('If no one disputes after this report, the market would finalize in 3d 0h 0m.')).toBe(true)
+		expect(document.body.textContent?.includes(`Check back no later than ${formatTimestamp(150n + ESCALATION_GAME_ACTIVATION_DELAY)} (in 3d 0h 0m) to confirm Yes is the leading outcome before finalization.`)).toBe(true)
 	})
 
 	test('disables report submission for a pre-start amount below the first-report minimum', async () => {
@@ -865,7 +870,7 @@ describe('ReportingSection', () => {
 				ReportingSection,
 				createProps({
 					reportingForm: createReportingForm({
-						reportAmount: '1.5',
+						reportAmount: '3.5',
 						selectedOutcome: 'yes',
 					}),
 				}),
@@ -896,20 +901,24 @@ describe('ReportingSection', () => {
 		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute No' })
 		const preview = findProjectionPreviewElement()
 		if (preview === undefined) throw new Error('Expected projection preview to render')
+		const expectedCheckBackTimestamp = getSelectedOutcomeRewardWindowFillTimestamp(createDynamicReportingDetails(), 'no', rep(2n))
 		expect(reportButton.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 		expect(preview.textContent?.includes('projects roughly')).toBe(true)
 		expect(preview.textContent?.includes('This contribution would extend the timer by')).toBe(true)
 		expect(preview.textContent?.includes('the market would finalize in')).toBe(true)
-		expect(preview.textContent?.includes('Check back later to confirm No is still the leading outcome as finalization approaches.')).toBe(true)
+		expect(preview.textContent?.includes('Check back no later than')).toBe(true)
+		expect(expectedCheckBackTimestamp === undefined ? false : preview.textContent?.includes(formatTimestamp(expectedCheckBackTimestamp))).toBe(true)
+		expect(preview.textContent?.includes('to confirm No is the leading outcome before the remaining reward-eligible REP on No is filled.')).toBe(true)
 		expect(document.body.textContent?.includes('became binding capital')).toBe(false)
 	})
 
 	test('shows a no-extension preview when the selected contribution leaves binding capital unchanged', async () => {
+		const reportingDetails = createDynamicReportingDetails()
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
-					reportingDetails: createDynamicReportingDetails(),
+					reportingDetails,
 					reportingForm: createReportingForm({
 						selectedOutcome: 'yes',
 					}),
@@ -921,7 +930,7 @@ describe('ReportingSection', () => {
 		const previewText = findProjectionPreviewText()
 		expect(previewText.includes('projects roughly')).toBe(true)
 		expect(previewText.includes('This contribution would not extend the timer, and if no one disputes after it, the market would finalize in')).toBe(true)
-		expect(previewText.includes('Check back later to confirm Yes is still the leading outcome as finalization approaches.')).toBe(true)
+		expect(previewText.includes(`Check back no later than ${formatTimestamp(reportingDetails.escalationEndTime)} (in ${formatDuration(reportingDetails.escalationEndTime - reportingDetails.currentTime)}) to confirm Yes is the leading outcome before finalization.`)).toBe(true)
 		expect(document.body.textContent?.includes('became binding capital')).toBe(false)
 	})
 
@@ -949,7 +958,7 @@ describe('ReportingSection', () => {
 
 		const previewText = findProjectionPreviewText()
 		expect(previewText.includes('This contribution would end the escalation and finalize the market immediately.')).toBe(true)
-		expect(previewText.includes('Check back later to confirm Yes is still the leading outcome as finalization approaches.')).toBe(true)
+		expect(previewText.includes('Check back immediately to confirm the market finalized as Yes.')).toBe(true)
 	})
 
 	test('shows the accepted-deposit note when the typed contribution exceeds the remaining room on the selected side', async () => {

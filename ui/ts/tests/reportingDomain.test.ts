@@ -14,6 +14,7 @@ import {
 	getReportingMaxProfitContribution,
 	getReportingMinimumOutcomeChangeContribution,
 	getReportingTimerPreview,
+	getSelectedOutcomeRewardWindowFillTimestamp,
 	isReportingClosed,
 	previewReportingContribution,
 	projectEscalationEndTime,
@@ -326,6 +327,18 @@ describe('reportingDomain', () => {
 			amount: undefined,
 			reason: 'Max profit preset unavailable because the reward window is already filled on the selected side.',
 		})
+	})
+
+	test('getSelectedOutcomeRewardWindowFillTimestamp returns the future reward-window fill time when room remains', () => {
+		const details = createDynamicReportingDetails()
+
+		expect(getSelectedOutcomeRewardWindowFillTimestamp(details, 'no', rep(2n))).toBe(details.activationTime + computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, rep(12n)))
+	})
+
+	test('getSelectedOutcomeRewardWindowFillTimestamp returns undefined when the reward window is already filled', () => {
+		const details = createDynamicReportingDetails()
+
+		expect(getSelectedOutcomeRewardWindowFillTimestamp(details, 'yes', rep(1n))).toBeUndefined()
 	})
 
 	test('getReportingMinimumOutcomeChangeContribution returns the first-report minimum before the escalation game exists', () => {
