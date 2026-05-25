@@ -29,6 +29,7 @@ function createReportingDetails(securityPoolAddress: Address): ReportingDetails 
 		currentTime: 150n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
+		hasReachedNonDecision: false,
 		marketDetails: {
 			answerUnit: '',
 			createdAt: 1n,

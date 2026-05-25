@@ -46,6 +46,8 @@ type ReportingTimerPreview =
 			timerIncrease?: bigint
 	  }
 
+type EscalationPhase = 'Resolved' | 'Fork Triggered' | 'Pending Start' | 'Timed Out' | 'Active'
+
 function roundUpToRepUnit(value: bigint) {
 	if (value <= 0n) return 0n
 	return ((value + REP_UNIT - 1n) / REP_UNIT) * REP_UNIT
@@ -73,14 +75,19 @@ export function getEscalationTimeRemaining(details: ActiveReportingDetails) {
 	return requireDefined(getTimeRemaining(details.escalationEndTime, details.currentTime), 'Escalation end time is required')
 }
 
-export function isReportingClosed(details: ActiveReportingDetails) {
-	return details.resolution !== 'none' || details.currentTime > details.escalationEndTime
+function hasEscalationTimedOut(details: ActiveReportingDetails) {
+	return details.currentTime >= details.escalationEndTime
 }
 
-export function getEscalationPhase(details: ActiveReportingDetails) {
+export function isReportingClosed(details: ActiveReportingDetails) {
+	return details.resolution !== 'none' || details.hasReachedNonDecision || hasEscalationTimedOut(details)
+}
+
+export function getEscalationPhase(details: ActiveReportingDetails): EscalationPhase {
 	if (details.resolution !== 'none') return 'Resolved'
+	if (details.hasReachedNonDecision) return 'Fork Triggered'
 	if (details.currentTime < details.startingTime) return 'Pending Start'
-	if (details.currentTime > details.escalationEndTime) return 'Awaiting Resolution'
+	if (hasEscalationTimedOut(details)) return 'Timed Out'
 	return 'Active'
 }
 

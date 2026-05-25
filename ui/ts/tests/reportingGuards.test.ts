@@ -3,6 +3,55 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from 'viem'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
+import type { ActiveReportingDetails } from '../types/contracts.js'
+
+function createActiveReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
+	return {
+		bindingCapital: 10n,
+		completeSetCollateralAmount: 1n,
+		currentRequiredBond: 2n,
+		currentTime: 150n,
+		escalationEndTime: 300n,
+		escalationGameAddress: zeroAddress,
+		hasReachedNonDecision: false,
+		marketDetails: {
+			answerUnit: '',
+			createdAt: 1n,
+			description: 'Question description',
+			displayValueMax: 100n,
+			displayValueMin: 0n,
+			endTime: 100n,
+			exists: true,
+			marketType: 'binary',
+			numTicks: 2n,
+			outcomeLabels: ['Yes', 'No'],
+			questionId: '0x01',
+			startTime: 1n,
+			title: 'Will this resolve?',
+		},
+		nonDecisionThreshold: 20n,
+		questionOutcome: 'none',
+		resolution: 'none',
+		securityPoolAddress: zeroAddress,
+		sides: [
+			{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			{ balance: 5n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+			{ balance: 2n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+		],
+		startBond: 1n,
+		startingTime: 120n,
+		status: 'active',
+		totalCost: 2n,
+		universeId: 1n,
+		withdrawalEnabled: false,
+		withdrawalState: 'not-finalized',
+		viewerVaultAvailableEscalationRep: 10n,
+		viewerVaultExists: true,
+		viewerVaultLockedRepInEscalationGame: 0n,
+		viewerVaultRepDepositShare: 10n,
+		...overrides,
+	}
+}
 
 describe('reporting guards', () => {
 	test('blocks report submission for locked, disconnected, unselected, and invalid amount states', () => {
@@ -14,7 +63,6 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: 'Reporting opens after market end.',
 				reportAmount: '1',
-				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				viewerVaultAvailableEscalationRep: 10n,
@@ -31,7 +79,6 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
-				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				viewerVaultAvailableEscalationRep: 10n,
@@ -48,7 +95,6 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
-				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: undefined,
@@ -65,7 +111,6 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '0',
-				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 0n,
 				viewerVaultAvailableEscalationRep: 10n,
@@ -84,7 +129,6 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
-				reportingClosed: false,
 				reportingStatus: 'missing',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
@@ -101,7 +145,6 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
-				reportingClosed: false,
 				reportingStatus: 'not-started',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
@@ -118,7 +161,6 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
-				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
@@ -128,23 +170,49 @@ describe('reporting guards', () => {
 		).toBeUndefined()
 	})
 
-	test('blocks reporting once the escalation timer is closed', () => {
+	test('blocks reporting once the escalation timeout is reached', () => {
 		expect(
 			getReportingReportGuardMessage({
 				actualDepositAmount: 1n,
+				activeReportingDetails: createActiveReportingDetails({
+					currentTime: 300n,
+					escalationEndTime: 300n,
+				}),
 				accountAddress: zeroAddress,
 				contributionPreviewReason: undefined,
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
-				reportingClosed: true,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
 				viewerVaultAvailableEscalationRep: 10n,
 				viewerVaultExists: true,
 			}),
-		).toBe('Reporting is closed because the escalation timer has ended.')
+		).toBe('Reporting is closed because the escalation timeout has been reached.')
+	})
+
+	test('blocks reporting once non-decision moves escalation into the fork workflow', () => {
+		expect(
+			getReportingReportGuardMessage({
+				actualDepositAmount: 1n,
+				activeReportingDetails: createActiveReportingDetails({
+					currentTime: 300n,
+					escalationEndTime: 300n,
+					hasReachedNonDecision: true,
+				}),
+				accountAddress: zeroAddress,
+				contributionPreviewReason: undefined,
+				isMainnet: true,
+				lockedReason: undefined,
+				reportAmount: '1',
+				reportingStatus: 'active',
+				selectedAmount: 1n,
+				selectedOutcome: 'yes',
+				viewerVaultAvailableEscalationRep: 10n,
+				viewerVaultExists: true,
+			}),
+		).toBe('Reporting is closed because escalation reached non-decision and moved into the fork workflow.')
 	})
 
 	test('blocks reporting when the vault lacks unlocked REP or the contribution preview is invalid', () => {
@@ -156,7 +224,6 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '5',
-				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 5n * 10n ** 18n,
 				selectedOutcome: 'yes',
@@ -173,7 +240,6 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
-				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n * 10n ** 18n,
 				selectedOutcome: 'yes',
@@ -190,7 +256,6 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				lockedReason: undefined,
 				reportAmount: '1',
-				reportingClosed: false,
 				reportingStatus: 'active',
 				selectedAmount: 1n,
 				selectedOutcome: 'yes',
@@ -255,6 +320,22 @@ describe('reporting guards', () => {
 	})
 
 	test('blocks withdraw submission until the contract allows it', () => {
+		expect(
+			getReportingWithdrawGuardMessage({
+				activeReportingDetails: createActiveReportingDetails({
+					hasReachedNonDecision: true,
+				}),
+				accountAddress: zeroAddress,
+				hasUserDepositsOnSelectedSide: true,
+				isMainnet: true,
+				lockedReason: undefined,
+				reportingStatus: 'active',
+				selectedOutcome: 'yes',
+				withdrawalEnabled: false,
+				withdrawalState: 'not-finalized',
+			}),
+		).toBe('Escalation deposits move through the Fork workflow after non-decision; they cannot be withdrawn from this panel.')
+
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,

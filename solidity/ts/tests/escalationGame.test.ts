@@ -47,6 +47,14 @@ describe('Escalation Game Test Suite', () => {
 			args: [],
 		})
 
+	const readHasReachedNonDecision = async (escalationGame: Address) =>
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'hasReachedNonDecision',
+			address: escalationGame,
+			args: [],
+		})
+
 	const deployEscalationGameTestSecurityPool = async () => {
 		const zoltarAddress = getZoltarAddress()
 		const deploymentHash = await client.sendTransaction({
@@ -155,6 +163,19 @@ describe('Escalation Game Test Suite', () => {
 		const startingTime = await getStartingTime(client, escalationGame)
 		await mockWindow.setTime(startingTime + ESCALATION_TIME_LENGTH + 1n)
 		assert.strictEqual(await getQuestionResolution(client, escalationGame), QuestionOutcome.Invalid, 'empty game should resolve as invalid')
+	})
+
+	test('non-decision keeps question resolution at None even after the nominal timeout window', async () => {
+		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, nonDecisionThreshold)
+		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, nonDecisionThreshold)
+		assert.strictEqual(await readHasReachedNonDecision(escalationGame), true, 'two threshold-reaching outcomes should trigger non-decision')
+		assert.strictEqual(await getQuestionResolution(client, escalationGame), QuestionOutcome.None, 'non-decision should leave the question unresolved')
+
+		const startingTime = await getStartingTime(client, escalationGame)
+		await mockWindow.setTime(startingTime + ESCALATION_TIME_LENGTH + 1n)
+		assert.strictEqual(await readHasReachedNonDecision(escalationGame), true, 'non-decision should stay active after time advances')
+		assert.strictEqual(await getQuestionResolution(client, escalationGame), QuestionOutcome.None, 'non-decision should still take precedence after time advances')
 	})
 
 	test('depositOnOutcome reverts when outcome is None', async () => {
