@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from 'viem'
 import {
+	MARKET_ALREADY_FINALIZED_MESSAGE,
 	MARKET_NOT_FINALIZED_MESSAGE,
 	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
 	NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE,
@@ -241,6 +242,22 @@ void describe('trading helpers', () => {
 	})
 
 	void test('surfaces the main mint block reasons before the transaction is sent', () => {
+		expect(
+			getTradingMintGuardMessage({
+				accountAddress: '0x1234567890123456789012345678901234567890',
+				completeSetCollateralAmount: 1n,
+				ethBalance: 10n ** 18n,
+				hasSelectedPool: true,
+				isMainnet: true,
+				mintAmountInput: '100',
+				questionOutcome: 'yes',
+				systemState: 'operational',
+				totalRepDeposit: 0n,
+				totalSecurityBondAllowance: 10n,
+				universeHasForked: false,
+			}),
+		).toBe(MARKET_ALREADY_FINALIZED_MESSAGE)
+
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',

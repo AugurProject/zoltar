@@ -58,11 +58,20 @@ export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddre
 		}
 	}
 
+	if (hasSelectedPoolAddress) {
+		return {
+			actionHint: 'Refresh this address after the pool is deployed.',
+			badgeLabel: 'Not found',
+			badgeTone: 'blocked',
+			detail: 'Pool not found.',
+			key: 'not_found',
+		}
+	}
+
 	return {
-		badgeLabel: hasSelectedPoolAddress ? 'Waiting for pool' : 'No pool selected',
+		badgeLabel: 'No pool selected',
 		badgeTone: 'muted',
-		detail: hasSelectedPoolAddress ? 'Pool not available yet.' : 'No pool selected.',
-		...(hasSelectedPoolAddress ? { actionHint: 'Refresh this address after the pool is deployed.' } : {}),
+		detail: 'No pool selected.',
 		key: 'action_needed',
 	}
 }

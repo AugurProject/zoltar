@@ -6,7 +6,7 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { zeroAddress, zeroHash } from 'viem'
 import { TradingSection } from '../components/TradingSection.js'
-import { MARKET_NOT_FINALIZED_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE } from '../lib/trading.js'
+import { MARKET_ALREADY_FINALIZED_MESSAGE, MARKET_NOT_FINALIZED_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE } from '../lib/trading.js'
 import type { AccountState, TradingFormState } from '../types/app.js'
 import type { ListedSecurityPool, MarketDetails, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
 import type { TradingSectionProps } from '../types/components.js'
@@ -43,7 +43,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		marketDetails: createMarketDetails(),
 		migratedRep: 0n,
 		parent: zeroAddress,
-		questionOutcome: 'yes',
+		questionOutcome: 'none',
 		questionId: '0x01',
 		securityMultiplier: 2n,
 		securityPoolAddress: zeroAddress,
@@ -370,6 +370,49 @@ void describe('TradingSection', () => {
 		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Redeem resolved shares' }) as HTMLButtonElement
 		expect(redeemSharesButton.disabled).toBe(true)
 		expect(redeemSharesButton.title).toBe(MARKET_NOT_FINALIZED_MESSAGE)
+	})
+
+	void test('blocks minting once the selected market has finalized', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ questionOutcome: 'yes' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
+		expect(mintButton.disabled).toBe(true)
+		expect(mintButton.title).toBe(MARKET_ALREADY_FINALIZED_MESSAGE)
+	})
+
+	void test('shows mint write failures inline in the modal', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					tradingFeedback: {
+						action: 'createCompleteSet',
+						status: {
+							detail: 'Transaction failed. Reason: question already resolved.',
+							title: 'Mint failed',
+							tone: 'error',
+						},
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
+
+		const modalQueries = within(documentQueries.getByRole('dialog'))
+		expect(modalQueries.getByText('Mint failed')).not.toBeNull()
+		expect(modalQueries.getByText('Transaction failed. Reason: question already resolved.')).not.toBeNull()
 	})
 
 	void test('keeps non-suppressed trading guard messages visible in the redeem modal', async () => {
