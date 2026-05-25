@@ -238,4 +238,29 @@ describe('SecurityVaultSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Latest Vault Action' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Latest Vault Action' }).closest('.actions')).toBeNull()
 	})
+
+	test('blocks collateral actions when the selected pool has ended but still allows fee claims', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					oracleManagerDetails: createOracleManagerDetails(),
+					poolActionLockReason: 'Vault collateral operations are unavailable after this pool has ended.',
+					securityVaultForm: {
+						depositAmount: '1',
+						repWithdrawAmount: '1',
+						securityBondAllowanceAmount: '1',
+						securityPoolAddress: zeroAddress,
+						selectedVaultAddress: zeroAddress,
+					},
+					securityVaultRepBalance: 10n * 10n ** 18n,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Create / Deposit REP', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Set Security Bond Allowance', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonEnabled(document.body, 'Claim Fees')
+	})
 })

@@ -77,7 +77,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		marketDetails: createMarketDetails(),
 		migratedRep: 0n,
 		parent: zeroAddress,
-		questionOutcome: 'yes',
+		questionOutcome: 'none',
 		questionId: '0x01',
 		securityMultiplier: 2n,
 		securityPoolAddress: zeroAddress,
@@ -143,6 +143,34 @@ describe('LiquidationModal', () => {
 			/>,
 		)
 	}
+
+	test('disables execute liquidation when the selected pool has ended', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: true,
+			}),
+			selectedPool: createSelectedPool({
+				questionOutcome: 'yes',
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Execute Liquidation', 'Liquidation is unavailable after this pool has ended.')
+	})
+
+	test('disables queued liquidation when the selected pool has ended', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({
+				isPriceValid: false,
+			}),
+			selectedPool: createSelectedPool({
+				questionOutcome: 'yes',
+			}),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Queue Liquidation', 'Liquidation is unavailable after this pool has ended.')
+	})
 
 	test('traps focus while open and restores it when closed', async () => {
 		let open = true

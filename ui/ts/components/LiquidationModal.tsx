@@ -19,9 +19,12 @@ import { getLiquidationFailureReason, simulateLiquidation } from '../lib/liquida
 import { parseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
+import { isSecurityPoolEnded } from '../lib/securityPoolState.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import type { ActionFeedback } from '../types/components.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
+
+const LIQUIDATION_ENDED_REASON = 'Liquidation is unavailable after this pool has ended.'
 
 type LiquidationModalProps = {
 	accountAddress: Address | undefined
@@ -220,6 +223,10 @@ export function LiquidationModal({
 	const liquidationExecutionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
 	const buttonLabels = getLiquidationButtonLabels(currentPoolOracleManagerDetails)
 	const trimmedLiquidationTargetVault = liquidationTargetVault.trim()
+	const selectedPoolEnded = isSecurityPoolEnded({
+		questionOutcome: selectedPool?.questionOutcome,
+		systemState: selectedPool?.systemState,
+	})
 	const sameVaultWarning = accountAddress === undefined || trimmedLiquidationTargetVault === '' || !sameAddress(accountAddress, trimmedLiquidationTargetVault) ? undefined : 'Select a target vault that is different from the caller vault.'
 	const liquidationSimulation =
 		targetVaultSummary === undefined || poolOraclePrice === undefined || selectedPool?.securityMultiplier === undefined || liquidationAmountValue === undefined
@@ -255,17 +262,19 @@ export function LiquidationModal({
 			? 'Connect a wallet before liquidating.'
 			: !isMainnet
 				? 'Switch to Ethereum mainnet before liquidating.'
-				: liquidationExecutionMode === 'refreshing'
-					? 'Refreshing Open Oracle validity before liquidation.'
-					: liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined
-						? 'Reload the selected pool before liquidating.'
-						: trimmedLiquidationTargetVault === ''
-							? 'Select a target vault first.'
-							: sameVaultWarning !== undefined
-								? sameVaultWarning
-								: liquidationAmount.trim() === ''
-									? 'Enter a liquidation amount.'
-									: (directLiquidationReason ?? queueLiquidationEthGuardMessage)
+				: selectedPoolEnded
+					? LIQUIDATION_ENDED_REASON
+					: liquidationExecutionMode === 'refreshing'
+						? 'Refreshing Open Oracle validity before liquidation.'
+						: liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined
+							? 'Reload the selected pool before liquidating.'
+							: trimmedLiquidationTargetVault === ''
+								? 'Select a target vault first.'
+								: sameVaultWarning !== undefined
+									? sameVaultWarning
+									: liquidationAmount.trim() === ''
+										? 'Enter a liquidation amount.'
+										: (directLiquidationReason ?? queueLiquidationEthGuardMessage)
 
 	const queuedLiquidationOperation =
 		securityPoolOverviewResult?.action !== 'queueLiquidation' || currentPoolOracleManagerDetails?.pendingOperation?.operation !== 'liquidation' || currentPoolOracleManagerDetails.pendingOperation.targetVault !== liquidationTargetVault ? undefined : currentPoolOracleManagerDetails.pendingOperation

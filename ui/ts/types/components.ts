@@ -506,6 +506,7 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	modalFirst?: boolean
 	onViewStagedOperations?: () => void
 	oracleManagerDetails?: OracleManagerDetails | undefined
+	poolActionLockReason?: string | undefined
 	selectedPoolTotalRepDeposit?: bigint | undefined
 	selectedPoolTotalSecurityBondAllowance?: bigint | undefined
 	autoLoadVault?: boolean

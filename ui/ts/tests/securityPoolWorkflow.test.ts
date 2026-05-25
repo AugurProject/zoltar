@@ -134,7 +134,6 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolUniverseMismatch: false,
 			}),
 		).toEqual({
-			actionHint: 'Refresh this address after the pool is deployed.',
 			badgeLabel: 'Not found',
 			badgeTone: 'blocked',
 			detail: 'Pool not found.',

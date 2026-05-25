@@ -20,23 +20,11 @@ import { UniverseLink } from './UniverseLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { ViewTabs } from './ViewTabs.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
-import {
-	AUCTION_TIME_SECONDS,
-	type ForkAuctionStageView,
-	estimateRepPurchased,
-	getForkAuctionStageView,
-	getForkStageDescription,
-	getForkStageDescriptionForState,
-	getOutcomeActionLabel,
-	getSystemStateLabel,
-	getTimeRemaining,
-	getTruthAuctionBidGuardMessage,
-	hasForkActivity,
-	MIGRATION_TIME_SECONDS,
-} from '../lib/forkAuction.js'
+import { AUCTION_TIME_SECONDS, type ForkAuctionStageView, estimateRepPurchased, getForkAuctionStageView, getForkStageDescription, getForkStageDescriptionForState, getOutcomeActionLabel, getTimeRemaining, getTruthAuctionBidGuardMessage, hasForkActivity, MIGRATION_TIME_SECONDS } from '../lib/forkAuction.js'
 import { formatDuration } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
+import { getSecurityPoolDisplayState, getSecurityPoolDisplayStateLabel } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
 import type { ForkAuctionSectionProps, ReadinessAction } from '../types/components.js'
 
@@ -204,6 +192,10 @@ export function ForkAuctionSection({
 	const truthAuctionAddress = forkAuctionDetails?.truthAuctionAddress ?? previewPool?.truthAuctionAddress
 	const hasPreviewForkActivity = previewPool === undefined ? false : hasForkActivity(previewPool)
 	const forkOnlyFallbackText = getForkOnlyFallbackText(hasPreviewForkActivity)
+	const displaySystemState = getSecurityPoolDisplayState({
+		questionOutcome,
+		systemState,
+	})
 	const forkStageDescription = forkAuctionDetails === undefined ? (systemState === undefined ? undefined : getForkStageDescriptionForState(systemState)) : getForkStageDescription(forkAuctionDetails)
 	const migrationSummaryText = forkAuctionDetails === undefined ? getPreviewMigrationSummary(previewPool, hasPreviewForkActivity) : undefined
 	const hasLoadedPoolContext = securityPoolAddress !== undefined && systemState !== undefined
@@ -336,7 +328,7 @@ export function ForkAuctionSection({
 		{ label: 'Security Pool', value: renderAddress(securityPoolAddress) },
 		{ label: 'Universe', value: universeId === undefined ? UNKNOWN_VALUE : <UniverseLink universeId={universeId} /> },
 		{ label: 'Parent Pool', value: renderAddress(parentSecurityPoolAddress) },
-		{ label: 'System State', value: systemState === undefined ? UNKNOWN_VALUE : getSystemStateLabel(systemState) },
+		{ label: 'System State', value: displaySystemState === undefined ? UNKNOWN_VALUE : getSecurityPoolDisplayStateLabel(displaySystemState) },
 		{ label: 'Fork Type', value: forkAuctionDetails === undefined ? getPreviewForkType(previewPool, hasPreviewForkActivity) : forkAuctionDetails.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent/Zoltar fork' },
 		{ label: 'Question Outcome', value: questionOutcome === undefined ? UNKNOWN_VALUE : getReportingOutcomeLabel(questionOutcome) },
 		{ label: 'Fork Outcome', value: forkOutcome === undefined ? UNKNOWN_VALUE : getReportingOutcomeLabel(forkOutcome) },

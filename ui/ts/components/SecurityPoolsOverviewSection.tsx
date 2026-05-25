@@ -16,9 +16,11 @@ import { TransactionStatusCard } from './TransactionStatusCard.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { sameAddress } from '../lib/address.js'
 import { isMainnetChain } from '../lib/network.js'
+import { getSecurityPoolDisplayState, getSecurityPoolDisplayStateLabel, type SecurityPoolDisplayState, isSecurityPoolEnded } from '../lib/securityPoolState.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
-import type { ListedSecurityPool } from '../types/contracts.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
+
+const LIQUIDATION_ENDED_REASON = 'Liquidation is unavailable after this pool has ended.'
 
 export function SecurityPoolsOverviewSection({
 	accountState,
@@ -50,7 +52,7 @@ export function SecurityPoolsOverviewSection({
 }: SecurityPoolsOverviewSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const [searchText, setSearchText] = useState('')
-	const [systemStateFilter, setSystemStateFilter] = useState<'all' | ListedSecurityPool['systemState']>('all')
+	const [systemStateFilter, setSystemStateFilter] = useState<'all' | SecurityPoolDisplayState>('all')
 	const [vaultFilter, setVaultFilter] = useState<'all' | 'has-vaults' | 'empty'>('all')
 	const registryPresentation = getPoolRegistryPresentation({
 		hasLoaded: hasLoadedSecurityPools,
@@ -64,7 +66,11 @@ export function SecurityPoolsOverviewSection({
 	const callerVaultSummary = accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const normalizedSearchText = searchText.trim().toLowerCase()
 	const filteredSecurityPools = securityPools.filter(pool => {
-		if (systemStateFilter !== 'all' && pool.systemState !== systemStateFilter) return false
+		const displayState = getSecurityPoolDisplayState({
+			questionOutcome: pool.questionOutcome,
+			systemState: pool.systemState,
+		})
+		if (systemStateFilter !== 'all' && displayState !== systemStateFilter) return false
 		if (vaultFilter === 'has-vaults' && pool.vaults.length === 0) return false
 		if (vaultFilter === 'empty' && pool.vaults.length > 0) return false
 		if (normalizedSearchText === '') return true
@@ -103,9 +109,10 @@ export function SecurityPoolsOverviewSection({
 					</label>
 					<label className='field'>
 						<span>System State</span>
-						<select value={systemStateFilter} onChange={event => setSystemStateFilter(event.currentTarget.value as 'all' | ListedSecurityPool['systemState'])}>
+						<select value={systemStateFilter} onChange={event => setSystemStateFilter(event.currentTarget.value as 'all' | SecurityPoolDisplayState)}>
 							<option value='all'>All states</option>
 							<option value='operational'>Operational</option>
+							<option value='ended'>Ended</option>
 							<option value='poolForked'>Pool Forked</option>
 							<option value='forkMigration'>Fork Migration</option>
 							<option value='forkTruthAuction'>Truth Auction</option>
@@ -134,44 +141,61 @@ export function SecurityPoolsOverviewSection({
 					<StateHint presentation={{ key: 'empty', badgeLabel: 'No matches', badgeTone: 'muted', detail: 'No pools match the current search and filter settings.' }} />
 				) : (
 					<div className='entity-card-list'>
-						{filteredSecurityPools.map(pool => (
-							<EntityCard
-								key={pool.securityPoolAddress}
-								title={getQuestionTitle(pool.marketDetails)}
-								variant='record'
-								badge={<span className={`badge ${pool.systemState === 'operational' ? 'ok' : 'warning'}`}>{pool.systemState}</span>}
-								actions={
-									onSelectSecurityPool === undefined ? undefined : (
-										<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
-											Open Pool
-										</button>
-									)
-								}
-							>
-								<WorkflowSubsection title='Question'>
-									<Question question={pool.marketDetails} />
-								</WorkflowSubsection>
-
-								<WorkflowSubsection title='Pool'>
-									<SecurityPoolSummaryMetrics pool={pool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showPoolAddress showUniverse />
-								</WorkflowSubsection>
-
-								<WorkflowSubsection title='Vaults'>
-									<SecurityPoolVaultDirectory
-										emptyState={<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />}
-										pool={pool}
-										renderActions={vault => (
-											<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)} disabled={accountState.address === undefined || !isMainnet}>
-												Liquidate Vault
+						{filteredSecurityPools.map(pool => {
+							const displayState = getSecurityPoolDisplayState({
+								questionOutcome: pool.questionOutcome,
+								systemState: pool.systemState,
+							})
+							const liquidationDisabledReason = isSecurityPoolEnded({
+								questionOutcome: pool.questionOutcome,
+								systemState: pool.systemState,
+							})
+								? LIQUIDATION_ENDED_REASON
+								: undefined
+							return (
+								<EntityCard
+									key={pool.securityPoolAddress}
+									title={getQuestionTitle(pool.marketDetails)}
+									variant='record'
+									badge={<span className={`badge ${displayState === 'operational' ? 'ok' : 'warning'}`}>{displayState === undefined ? 'Unknown' : getSecurityPoolDisplayStateLabel(displayState)}</span>}
+									actions={
+										onSelectSecurityPool === undefined ? undefined : (
+											<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
+												Open Pool
 											</button>
-										)}
-										repPerEthPrice={repPerEthPrice}
-										repPerEthSource={repPerEthSource}
-										repPerEthSourceUrl={repPerEthSourceUrl}
-									/>
-								</WorkflowSubsection>
-							</EntityCard>
-						))}
+										)
+									}
+								>
+									<WorkflowSubsection title='Question'>
+										<Question question={pool.marketDetails} />
+									</WorkflowSubsection>
+
+									<WorkflowSubsection title='Pool'>
+										<SecurityPoolSummaryMetrics pool={pool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showPoolAddress showUniverse />
+									</WorkflowSubsection>
+
+									<WorkflowSubsection title='Vaults'>
+										<SecurityPoolVaultDirectory
+											emptyState={<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />}
+											pool={pool}
+											renderActions={vault => (
+												<button
+													className='destructive'
+													onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
+													disabled={accountState.address === undefined || !isMainnet || liquidationDisabledReason !== undefined}
+													title={liquidationDisabledReason}
+												>
+													Liquidate Vault
+												</button>
+											)}
+											repPerEthPrice={repPerEthPrice}
+											repPerEthSource={repPerEthSource}
+											repPerEthSourceUrl={repPerEthSourceUrl}
+										/>
+									</WorkflowSubsection>
+								</EntityCard>
+							)
+						})}
 					</div>
 				)}
 			</SectionBlock>

@@ -231,6 +231,7 @@ export function SecurityVaultSection({
 	oracleManagerDetails,
 	onViewStagedOperations,
 	onWithdrawRep,
+	poolActionLockReason,
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
@@ -317,47 +318,55 @@ export function SecurityVaultSection({
 	const canClaimFees = selectedVaultIsOwnedByAccount && isMainnet && hasClaimableFees
 	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && depositAmount !== undefined && depositAmount > 0n && approvalRequirement.hasSufficientApproval
 	const hasInsufficientRepBalance = repBalanceGap !== undefined && repBalanceGap > 0n
-	const canWithdrawRep = selectedVaultIsOwnedByAccount && accountState.address !== undefined && isMainnet && hasValidOraclePrice && hasWithdrawAmount && withdrawableRepAmount !== undefined && withdrawableRepAmount > 0n
+	const canWithdrawRep = poolActionLockReason === undefined && selectedVaultIsOwnedByAccount && accountState.address !== undefined && isMainnet && hasValidOraclePrice && hasWithdrawAmount && withdrawableRepAmount !== undefined && withdrawableRepAmount > 0n
 	const claimFeesGuardMessage = getVaultClaimFeesGuardMessage({
 		hasClaimableFees,
 		isMainnet,
 		selectedVaultIsOwnedByAccount,
 	})
-	const setSecurityBondAllowanceGuardMessage = getVaultSetSecurityBondAllowanceGuardMessage({
-		hasValidOraclePrice,
-		isMainnet,
-		maxSecurityBondAllowanceAmount,
-		requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
-		securityBondAllowanceAmount,
-		selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
-		selectedVaultIsOwnedByAccount,
-		walletEthBalance: accountState.ethBalance,
-	})
-	const depositGuardMessage = getVaultDepositGuardMessage({
-		accountAddress: accountState.address,
-		approvalSatisfied: hasSufficientDepositAllowance,
-		isDepositBelowMinimum,
-		isMainnet,
-		repBalanceGap: hasInsufficientRepBalance ? repBalanceGap : undefined,
-		selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
-		selectedVaultIsOwnedByAccount,
-	})
-	const withdrawRepGuardMessage = getVaultWithdrawGuardMessage({
-		accountAddress: accountState.address,
-		hasValidOraclePrice,
-		isMainnet,
-		requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
-		selectedVaultIsOwnedByAccount,
-		withdrawAmount: hasWithdrawAmount ? withdrawAmount : undefined,
-		withdrawableRepAmount,
-		walletEthBalance: accountState.ethBalance,
-	})
-	const approvalGuardMessage = getVaultApprovalGuardMessage({
-		accountAddress: accountState.address,
-		isMainnet,
-		selectedVaultDetailsLoaded: !securityVaultMissing && currentSelectedVaultDetails !== undefined,
-		selectedVaultIsOwnedByAccount,
-	})
+	const setSecurityBondAllowanceGuardMessage =
+		poolActionLockReason ??
+		getVaultSetSecurityBondAllowanceGuardMessage({
+			hasValidOraclePrice,
+			isMainnet,
+			maxSecurityBondAllowanceAmount,
+			requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
+			securityBondAllowanceAmount,
+			selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
+			selectedVaultIsOwnedByAccount,
+			walletEthBalance: accountState.ethBalance,
+		})
+	const depositGuardMessage =
+		poolActionLockReason ??
+		getVaultDepositGuardMessage({
+			accountAddress: accountState.address,
+			approvalSatisfied: hasSufficientDepositAllowance,
+			isDepositBelowMinimum,
+			isMainnet,
+			repBalanceGap: hasInsufficientRepBalance ? repBalanceGap : undefined,
+			selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
+			selectedVaultIsOwnedByAccount,
+		})
+	const withdrawRepGuardMessage =
+		poolActionLockReason ??
+		getVaultWithdrawGuardMessage({
+			accountAddress: accountState.address,
+			hasValidOraclePrice,
+			isMainnet,
+			requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
+			selectedVaultIsOwnedByAccount,
+			withdrawAmount: hasWithdrawAmount ? withdrawAmount : undefined,
+			withdrawableRepAmount,
+			walletEthBalance: accountState.ethBalance,
+		})
+	const approvalGuardMessage =
+		poolActionLockReason ??
+		getVaultApprovalGuardMessage({
+			accountAddress: accountState.address,
+			isMainnet,
+			selectedVaultDetailsLoaded: !securityVaultMissing && currentSelectedVaultDetails !== undefined,
+			selectedVaultIsOwnedByAccount,
+		})
 	const autoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = currentSelectedVaultDetails !== undefined && sameAddress(currentSelectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(currentSelectedVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
 	const lastAutoLoadKey = useRef<string | undefined>(undefined)
@@ -409,24 +418,27 @@ export function SecurityVaultSection({
 			description: 'Add REP to the selected vault.',
 			key: 'deposit-rep',
 			onAction: () => setVaultActionModal('deposit-rep'),
-			readiness: 'ready',
+			readiness: poolActionLockReason === undefined ? 'ready' : 'blocked',
 			title: 'Deposit REP',
+			...(poolActionLockReason === undefined ? {} : { blocker: poolActionLockReason }),
 		},
 		{
 			actionLabel: 'Withdraw REP',
 			description: 'Queue a REP withdrawal once a valid oracle price exists.',
 			key: 'withdraw-rep',
 			onAction: () => setVaultActionModal('withdraw-rep'),
-			readiness: 'ready',
+			readiness: poolActionLockReason === undefined ? 'ready' : 'blocked',
 			title: 'Withdraw REP',
+			...(poolActionLockReason === undefined ? {} : { blocker: poolActionLockReason }),
 		},
 		{
 			actionLabel: 'Set Bond Allowance',
 			description: 'Queue a new security bond allowance using the current oracle price context.',
 			key: 'set-bond-allowance',
 			onAction: () => setVaultActionModal('set-bond-allowance'),
-			readiness: 'ready',
+			readiness: poolActionLockReason === undefined ? 'ready' : 'blocked',
 			title: 'Set Security Bond Allowance',
+			...(poolActionLockReason === undefined ? {} : { blocker: poolActionLockReason }),
 		},
 		{
 			actionLabel: 'Claim Fees',
@@ -467,7 +479,7 @@ export function SecurityVaultSection({
 						<label className='field'>
 							<span>REP Collateral Amount</span>
 							<div className='field-inline'>
-								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} />
+								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={poolActionLockReason !== undefined} />
 								<button
 									className='quiet field-inline-action'
 									type='button'
@@ -475,7 +487,7 @@ export function SecurityVaultSection({
 										if (securityVaultRepBalance === undefined) return
 										onSecurityVaultFormChange({ depositAmount: formatCurrencyInputBalance(securityVaultRepBalance) })
 									}}
-									disabled={securityVaultRepBalance === undefined}
+									disabled={securityVaultRepBalance === undefined || poolActionLockReason !== undefined}
 								>
 									Max
 								</button>
@@ -552,7 +564,7 @@ export function SecurityVaultSection({
 						<label className='field'>
 							<span>REP Withdraw Amount</span>
 							<div className='field-inline'>
-								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} />
+								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={poolActionLockReason !== undefined} />
 								<button
 									className='quiet field-inline-action'
 									type='button'
@@ -560,7 +572,7 @@ export function SecurityVaultSection({
 										if (withdrawableRepAmount === undefined) return
 										onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(withdrawableRepAmount) })
 									}}
-									disabled={withdrawableRepAmount === undefined}
+									disabled={withdrawableRepAmount === undefined || poolActionLockReason !== undefined}
 								>
 									Max
 								</button>
@@ -610,8 +622,8 @@ export function SecurityVaultSection({
 						<label className='field'>
 							<span>Security Bond Allowance Amount</span>
 							<div className='field-inline'>
-								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} />
-								<button className='quiet field-inline-action' type='button' onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n}>
+								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} disabled={poolActionLockReason !== undefined} />
+								<button className='quiet field-inline-action' type='button' onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n || poolActionLockReason !== undefined}>
 									Max
 								</button>
 							</div>
@@ -681,7 +693,7 @@ export function SecurityVaultSection({
 				<label className='field'>
 					<span>REP Collateral Amount</span>
 					<div className='field-inline'>
-						<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} />
+						<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={poolActionLockReason !== undefined} />
 						<button
 							className='quiet field-inline-action'
 							type='button'
@@ -689,7 +701,7 @@ export function SecurityVaultSection({
 								if (securityVaultRepBalance === undefined) return
 								onSecurityVaultFormChange({ depositAmount: formatCurrencyInputBalance(securityVaultRepBalance) })
 							}}
-							disabled={securityVaultRepBalance === undefined}
+							disabled={securityVaultRepBalance === undefined || poolActionLockReason !== undefined}
 						>
 							Max
 						</button>
@@ -739,8 +751,8 @@ export function SecurityVaultSection({
 						<label className='field'>
 							<span>Security Bond Allowance Amount</span>
 							<div className='field-inline'>
-								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} />
-								<button className='quiet field-inline-action' type='button' onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n}>
+								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} disabled={poolActionLockReason !== undefined} />
+								<button className='quiet field-inline-action' type='button' onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n || poolActionLockReason !== undefined}>
 									Max
 								</button>
 							</div>
@@ -777,7 +789,7 @@ export function SecurityVaultSection({
 				<label className='field'>
 					<span>REP Withdraw Amount</span>
 					<div className='field-inline'>
-						<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} />
+						<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={poolActionLockReason !== undefined} />
 						<button
 							className='quiet field-inline-action'
 							type='button'
@@ -785,7 +797,7 @@ export function SecurityVaultSection({
 								if (withdrawableRepAmount === undefined) return
 								onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(withdrawableRepAmount) })
 							}}
-							disabled={withdrawableRepAmount === undefined}
+							disabled={withdrawableRepAmount === undefined || poolActionLockReason !== undefined}
 						>
 							Max
 						</button>
