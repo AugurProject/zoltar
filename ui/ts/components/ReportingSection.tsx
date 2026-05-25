@@ -505,17 +505,17 @@ export function ReportingSection({
 											/>
 											<span className='withdraw-deposit-copy'>
 												<strong>Deposit #{deposit.depositIndex.toString()}</strong>
-												{claimLabel === undefined ? undefined : <span>{claimLabel}</span>}
+												<span>
+													Initially deposited: <CurrencyValue value={deposit.amount} suffix='REP' />
+												</span>
 												{claimAmount === undefined ? (
-													<span>Available after finalization</span>
+													<span>Worth after finalization: Pending finalization</span>
 												) : (
 													<span>
-														Available now: <CurrencyValue value={claimAmount} suffix='REP' />
+														Worth now: <CurrencyValue value={claimAmount} suffix='REP' />
 													</span>
 												)}
-												<span>
-													Amount deposited: <CurrencyValue value={deposit.amount} suffix='REP' />
-												</span>
+												<span>Current claim type: {claimLabel ?? 'Pending finalization'}</span>
 												<span>
 													Entry depth: <CurrencyValue value={deposit.cumulativeAmount} suffix='REP' />
 												</span>

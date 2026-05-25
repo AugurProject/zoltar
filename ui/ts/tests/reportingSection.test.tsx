@@ -1002,8 +1002,9 @@ describe('ReportingSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Deposits', 'Select at least one deposit to withdraw or use Withdraw all.')
 		expectTransactionButtonEnabled(document.body, 'Withdraw All')
 		expect(within(document.body).getByRole('checkbox', { name: /Deposit #0/i })).toBeDefined()
-		expect(document.body.textContent?.includes('Winning payout')).toBe(true)
-		expect(document.body.textContent?.includes('Available now:')).toBe(true)
+		expect(document.body.textContent?.includes('Current claim type: Winning payout')).toBe(true)
+		expect(document.body.textContent?.includes('Initially deposited:')).toBe(true)
+		expect(document.body.textContent?.includes('Worth now:')).toBe(true)
 	})
 
 	test('renders withdraw-only empty state when the selected side has no deposits', async () => {
