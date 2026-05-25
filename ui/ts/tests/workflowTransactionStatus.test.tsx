@@ -111,4 +111,26 @@ describe('WorkflowTransactionStatus', () => {
 		})
 		expect((container as HTMLDivElement).textContent).toBe('')
 	})
+
+	test('keeps a dismissed latest action hidden after unmounting and remounting the same dismiss key', async () => {
+		const latestAction = {
+			dismissKey: 'workflow-status-remount-latest-action',
+			rows: [{ label: 'Action', value: 'reportOutcome' }],
+			title: 'Latest Reporting Action',
+		}
+
+		render(<WorkflowTransactionStatus latestAction={latestAction} outcome={undefined} />, container as HTMLDivElement)
+
+		const containerQueries = within(container as HTMLDivElement)
+		await act(async () => {
+			fireEvent.click(containerQueries.getByRole('button', { name: 'Dismiss latest action' }))
+			await Promise.resolve()
+		})
+		expect((container as HTMLDivElement).textContent).toBe('')
+
+		render(null, container as HTMLDivElement)
+		render(<WorkflowTransactionStatus latestAction={latestAction} outcome={undefined} />, container as HTMLDivElement)
+
+		expect((container as HTMLDivElement).textContent).toBe('')
+	})
 })

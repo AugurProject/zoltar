@@ -337,6 +337,24 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByText('Locked')).toBeNull()
 	})
 
+	test('shows a pool not found warning while an entered address is still unresolved', async () => {
+		const unresolvedAddress = '0x00000000000000000000000000000000000000ab'
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					securityPoolAddress: unresolvedAddress,
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Pool Workflows' })).not.toBeNull()
+		expect(documentQueries.getByText('Pool not found.')).not.toBeNull()
+		expect(documentQueries.getByText('Refresh this address after the pool is deployed.')).not.toBeNull()
+	})
+
 	test('shows a pool not found card when the selected address does not resolve', async () => {
 		const missingAddress = '0x00000000000000000000000000000000000000ab'
 		const renderedComponent = await renderIntoDocument(

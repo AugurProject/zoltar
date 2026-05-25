@@ -19,6 +19,7 @@ import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
 import {
 	getDefaultShareMigrationTargetOutcomeIndexes,
+	MARKET_ALREADY_FINALIZED_MESSAGE,
 	getRemainingMintCapacity,
 	getSelectedOutcomeShareBalance,
 	getTradingMigrateSharesGuardMessage,
@@ -83,6 +84,7 @@ export function TradingSection({
 	tradingDetails,
 	selectedPool,
 	tradingActiveAction,
+	tradingFeedback,
 	tradingError,
 	tradingForm,
 	tradingForkUniverse,
@@ -114,6 +116,7 @@ export function TradingSection({
 		hasSelectedPool,
 		isMainnet,
 		mintAmountInput: tradingForm.completeSetAmount,
+		questionOutcome: selectedPool?.questionOutcome,
 		systemState: selectedPool?.systemState,
 		totalRepDeposit: selectedPool?.totalRepDeposit,
 		totalSecurityBondAllowance: selectedPool?.totalSecurityBondAllowance,
@@ -159,15 +162,17 @@ export function TradingSection({
 				? 'Switch to Ethereum mainnet before minting complete sets.'
 				: poolUniverseHasForked === true
 					? 'Minting is unavailable after this universe has forked.'
-					: selectedPool?.systemState !== undefined && selectedPool.systemState !== 'operational'
-						? 'Minting is only available while the pool is operational.'
-						: remainingMintCapacity === undefined
-							? 'Loading mint capacity.'
-							: remainingMintCapacity === 0n
-								? hasRepBackedPoolWithNoActiveAllowance(selectedPool?.totalRepDeposit, selectedPool?.totalSecurityBondAllowance)
-									? NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
-									: 'No mint capacity remaining.'
-								: undefined
+					: selectedPool?.questionOutcome !== undefined && selectedPool.questionOutcome !== 'none'
+						? MARKET_ALREADY_FINALIZED_MESSAGE
+						: selectedPool?.systemState !== undefined && selectedPool.systemState !== 'operational'
+							? 'Minting is only available while the pool is operational.'
+							: remainingMintCapacity === undefined
+								? 'Loading mint capacity.'
+								: remainingMintCapacity === 0n
+									? hasRepBackedPoolWithNoActiveAllowance(selectedPool?.totalRepDeposit, selectedPool?.totalSecurityBondAllowance)
+										? NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
+										: 'No mint capacity remaining.'
+									: undefined
 	const redeemCompleteSetsLauncherBlocker = !hasSelectedPool
 		? 'Load a pool before redeeming complete sets.'
 		: accountState.address === undefined
@@ -226,6 +231,10 @@ export function TradingSection({
 		})
 	}
 	const renderShareMetricValue = (value: bigint | undefined) => <CurrencyValue loading={loadingTradingDetails} value={value} />
+	const getTradingActionStatus = (actionName: NonNullable<TradingSectionProps['tradingFeedback']>['action']) => {
+		if (tradingFeedback?.action !== actionName) return undefined
+		return tradingFeedback.status.tone === 'success' ? undefined : tradingFeedback.status
+	}
 	const latestTradingAction =
 		tradingResult === undefined
 			? undefined
@@ -328,7 +337,14 @@ export function TradingSection({
 				</label>
 				{mintGuardMessage === undefined ? undefined : <p className='detail'>{mintGuardMessage}</p>}
 				<div className='actions'>
-					<TransactionActionButton idleLabel='Mint Complete Sets' pendingLabel='Minting complete sets...' onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} availability={{ disabled: mintGuardMessage !== undefined, reason: mintGuardMessage }} />
+					<TransactionActionButton
+						idleLabel='Mint Complete Sets'
+						pendingLabel='Minting complete sets...'
+						onClick={onCreateCompleteSet}
+						pending={tradingActiveAction === 'createCompleteSet'}
+						status={getTradingActionStatus('createCompleteSet')}
+						availability={{ disabled: mintGuardMessage !== undefined, reason: mintGuardMessage }}
+					/>
 				</div>
 			</OperationModal>
 
@@ -357,6 +373,7 @@ export function TradingSection({
 						pendingLabel='Redeeming complete sets...'
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
+						status={getTradingActionStatus('redeemCompleteSet')}
 						tone='secondary'
 						availability={{ disabled: redeemCompleteSetGuardMessage !== undefined, reason: redeemCompleteSetGuardMessage }}
 					/>
@@ -379,14 +396,30 @@ export function TradingSection({
 				/>
 				{migrateSharesGuardMessage === undefined ? undefined : <p className='detail'>{migrateSharesGuardMessage}</p>}
 				<div className='actions'>
-					<TransactionActionButton idleLabel='Migrate Shares' pendingLabel='Migrating shares...' onClick={onMigrateShares} pending={tradingActiveAction === 'migrateShares'} tone='secondary' availability={{ disabled: migrateSharesGuardMessage !== undefined, reason: migrateSharesGuardMessage }} />
+					<TransactionActionButton
+						idleLabel='Migrate Shares'
+						pendingLabel='Migrating shares...'
+						onClick={onMigrateShares}
+						pending={tradingActiveAction === 'migrateShares'}
+						status={getTradingActionStatus('migrateShares')}
+						tone='secondary'
+						availability={{ disabled: migrateSharesGuardMessage !== undefined, reason: migrateSharesGuardMessage }}
+					/>
 				</div>
 			</OperationModal>
 
 			<OperationModal description='Redeem finalized winning shares once the selected pool has resolved.' isOpen={activeModal === 'redeem-shares'} onClose={() => setActiveModal(undefined)} title='Redeem Resolved Shares'>
 				{redeemSharesGuardMessage === undefined ? undefined : <p className='detail'>{redeemSharesGuardMessage}</p>}
 				<div className='actions'>
-					<TransactionActionButton idleLabel='Redeem Shares' pendingLabel='Redeeming shares...' onClick={onRedeemShares} pending={tradingActiveAction === 'redeemShares'} tone='secondary' availability={{ disabled: redeemSharesGuardMessage !== undefined, reason: redeemSharesGuardMessage }} />
+					<TransactionActionButton
+						idleLabel='Redeem Shares'
+						pendingLabel='Redeeming shares...'
+						onClick={onRedeemShares}
+						pending={tradingActiveAction === 'redeemShares'}
+						status={getTradingActionStatus('redeemShares')}
+						tone='secondary'
+						availability={{ disabled: redeemSharesGuardMessage !== undefined, reason: redeemSharesGuardMessage }}
+					/>
 				</div>
 			</OperationModal>
 		</>

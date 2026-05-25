@@ -20,6 +20,7 @@ import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import {
 	calculateEstimatedEscalationReturn,
+	ESCALATION_GAME_ACTIVATION_DELAY,
 	getEscalationDepositClaimAmount,
 	getEscalationPhase,
 	getEscalationTimeRemaining,
@@ -31,7 +32,7 @@ import {
 } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel } from '../lib/reporting.js'
-import type { LifecycleStagePresentation, ReportingSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
+import type { LifecycleStagePresentation, ReportingSectionProps } from '../types/components.js'
 import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
 type ReportingStatus = 'active' | 'missing' | 'not-started'
@@ -169,7 +170,7 @@ function getReportingStagePresentation({
 			return {
 				availableActions: [],
 				blockedActions: [],
-				detail: `Market finalized as ${getResolvedReportingOutcomeLabel(reportingDetails)}. Review any remaining deposits below.`,
+				detail: `Market finalized as ${getResolvedReportingOutcomeLabel(reportingDetails)}.`,
 				key: 'escalation-resolved',
 				label: 'Resolved',
 				tone: 'success',
@@ -177,20 +178,9 @@ function getReportingStagePresentation({
 	}
 }
 
-function getReportingOutcomePresentation(action: ReportingSectionProps['reportingResult']): WorkflowOutcomePresentation | undefined {
-	if (action === undefined) return undefined
-
-	switch (action.action) {
-		case 'reportOutcome':
-			return undefined
-		case 'withdrawEscalation':
-			return {
-				detail: 'Eligible escalation deposits were withdrawn for the selected outcome side.',
-				dismissKey: `${action.action}:${action.hash}:outcome`,
-				nextStep: 'Review the updated escalation balances before taking another reporting action.',
-				title: 'Escalation Deposits Withdrawn',
-			}
-	}
+function getEscalationGameStartTimestamp(activationTime: bigint | undefined) {
+	if (activationTime === undefined) return undefined
+	return activationTime > ESCALATION_GAME_ACTIVATION_DELAY ? activationTime - ESCALATION_GAME_ACTIVATION_DELAY : 0n
 }
 
 function getEffectiveReportingDetails(reportingDetails: ReportingDetails | undefined, currentTimestamp: bigint | undefined) {
@@ -230,6 +220,7 @@ export function ReportingSection({
 	const effectiveReportingDetails = getEffectiveReportingDetails(reportingDetails, effectiveCurrentTimestamp)
 	const activeReportingDetails = effectiveReportingDetails?.status === 'active' ? effectiveReportingDetails : undefined
 	const escalationPhase = activeReportingDetails === undefined ? undefined : getEscalationPhase(activeReportingDetails)
+	const escalationGameStartTimestamp = getEscalationGameStartTimestamp(activeReportingDetails?.activationTime)
 	const reportingStatus: ReportingStatus = effectiveReportingDetails === undefined ? 'missing' : effectiveReportingDetails.status
 	const marketDetails = effectiveReportingDetails?.marketDetails ?? previewMarketDetails
 	const reportingLocked = lockedReason !== undefined
@@ -254,6 +245,16 @@ export function ReportingSection({
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, selectedOutcome, selectedAmount)
 	const timerPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : getReportingTimerPreview(effectiveReportingDetails, selectedOutcome, selectedAmount)
+	const projectedFinalizationNotice =
+		timerPreview === undefined
+			? undefined
+			: timerPreview.kind === 'not-started'
+				? `If no one disputes after this report, the market would finalize in ${formatDuration(timerPreview.timeUntilEnd)}.`
+				: activeReportingDetails === undefined
+					? undefined
+					: timerPreview.actualState === 'ends-immediately'
+						? 'If no one disputes after this contribution, the market would finalize immediately.'
+						: `If no one disputes after this contribution, the market would finalize in ${formatDuration(getEscalationTimeRemaining(activeReportingDetails) + (timerPreview.timerIncrease ?? 0n))}.`
 	const selectedOutcomeLabel = selectedOutcome === undefined ? 'Selected Side' : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
 	const reportButtonLabel = selectedOutcome === undefined ? 'Report / Contribute On Selected Side' : `Report / Contribute ${selectedOutcomeLabel}`
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
@@ -323,11 +324,9 @@ export function ReportingSection({
 						{ label: 'Transaction', value: <TransactionHashLink hash={reportingResult.hash} /> },
 					],
 				}
-	const reportingOutcome = getReportingOutcomePresentation(reportingResult)
-
 	const sections = (
 		<>
-			<WorkflowTransactionStatus latestAction={latestReportingAction} outcome={reportingOutcome} />
+			<WorkflowTransactionStatus latestAction={latestReportingAction} outcome={undefined} />
 			{showReportingHeaderStack ? (
 				<div className='reporting-header-stack'>
 					{showSecurityPoolAddressInput ? (
@@ -343,7 +342,7 @@ export function ReportingSection({
 							}
 						/>
 					) : undefined}
-					{reportingOpenNotice === undefined ? <LifecycleStageBanner stage={reportingStage} /> : <p className='notice'>{reportingOpenNotice}</p>}
+					{reportingOpenNotice === undefined ? <LifecycleStageBanner stage={reportingStage} /> : <p className='notice success'>{reportingOpenNotice}</p>}
 				</div>
 			) : undefined}
 
@@ -355,7 +354,7 @@ export function ReportingSection({
 						</MetricField>
 						<MetricField label='Time Left'>{activeReportingDetails === undefined ? '—' : formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
 						<MetricField label='Game Start'>
-							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails?.activationTime} />
+							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={escalationGameStartTimestamp} />
 						</MetricField>
 						<MetricField label='Start Bond'>
 							<CurrencyValue value={effectiveReportingDetails?.startBond} suffix='REP' />
@@ -454,16 +453,7 @@ export function ReportingSection({
 						<TransactionActionButton idleLabel={reportButtonLabel} pendingLabel='Submitting report...' onClick={onReportOutcome} pending={reportingActiveAction === 'reportOutcome'} availability={{ disabled: reportGuardMessage !== undefined, reason: reportGuardMessage }} />
 					</div>
 					{timerPreview === undefined ? undefined : timerPreview.kind === 'not-started' ? (
-						<>
-							<p className='detail'>This contribution would start the escalation timer in {formatDuration(timerPreview.timeUntilStart)}.</p>
-							{timerPreview.hypotheticalDuration === 0n ? (
-								<p className='detail'>At that binding capital, the dispute timer would expire as soon as it activates, so reporting would close in {formatDuration(timerPreview.timeUntilEnd)}.</p>
-							) : (
-								<p className='detail'>
-									If <CurrencyValue copyable={false} value={selectedAmount} suffix='REP' /> became binding capital, the dispute window would run for {formatDuration(timerPreview.hypotheticalDuration)} after activation and end in {formatDuration(timerPreview.timeUntilEnd)}.
-								</p>
-							)}
-						</>
+						<p className='detail'>{projectedFinalizationNotice}</p>
 					) : (
 						<>
 							<p className='detail'>
@@ -473,9 +463,7 @@ export function ReportingSection({
 										? `This contribution would extend the timer by ${formatDuration(timerPreview.timerIncrease ?? 0n)}.`
 										: 'This contribution would not extend the timer.'}
 							</p>
-							<p className='detail'>
-								If <CurrencyValue copyable={false} value={selectedAmount} suffix='REP' /> became binding capital, the dispute window would last {formatDuration(timerPreview.hypotheticalDuration)} from game start.
-							</p>
+							{projectedFinalizationNotice === undefined ? undefined : <p className='detail'>{projectedFinalizationNotice}</p>}
 						</>
 					)}
 				</SectionBlock>

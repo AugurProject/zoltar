@@ -17,6 +17,7 @@ export const NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE = 'No mint capacity. N
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
 export const SHARE_MIGRATION_AFTER_FORK_MESSAGE = 'Share migration is only available after this universe has forked.'
 export const MARKET_NOT_FINALIZED_MESSAGE = 'This market has not finalized yet.'
+export const MARKET_ALREADY_FINALIZED_MESSAGE = 'This market has already finalized.'
 
 const HIDDEN_TRADING_GUARD_MESSAGES = [NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE, MARKET_NOT_FINALIZED_MESSAGE]
 
@@ -111,6 +112,7 @@ export function getTradingMintGuardMessage({
 	hasSelectedPool,
 	isMainnet,
 	mintAmountInput,
+	questionOutcome,
 	systemState,
 	totalRepDeposit,
 	totalSecurityBondAllowance,
@@ -122,6 +124,7 @@ export function getTradingMintGuardMessage({
 	hasSelectedPool: boolean
 	isMainnet: boolean
 	mintAmountInput: string
+	questionOutcome?: ReportingOutcomeKey | 'none' | undefined
 	systemState: SecurityPoolSystemState | undefined
 	totalRepDeposit: bigint | undefined
 	totalSecurityBondAllowance: bigint | undefined
@@ -131,6 +134,7 @@ export function getTradingMintGuardMessage({
 	if (accountAddress === undefined) return 'Connect a wallet before minting complete sets.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before minting complete sets.'
 	if (universeHasForked === true) return 'Minting is unavailable after this universe has forked.'
+	if (questionOutcome !== undefined && questionOutcome !== 'none') return MARKET_ALREADY_FINALIZED_MESSAGE
 	if (systemState !== undefined && systemState !== 'operational') return 'Minting is only available while the pool is operational.'
 
 	const remainingCapacity = getRemainingMintCapacity(totalSecurityBondAllowance, completeSetCollateralAmount)

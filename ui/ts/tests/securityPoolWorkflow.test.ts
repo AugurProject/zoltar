@@ -130,6 +130,20 @@ void describe('selected pool workflow visibility', () => {
 		expect(
 			getSelectedPoolWorkflowLockedPresentation({
 				hasSelectedPoolAddress: true,
+				selectedPoolLookupState: 'unknown',
+				selectedPoolUniverseMismatch: false,
+			}),
+		).toEqual({
+			actionHint: 'Refresh this address after the pool is deployed.',
+			badgeLabel: 'Not found',
+			badgeTone: 'blocked',
+			detail: 'Pool not found.',
+			key: 'not_found',
+		})
+
+		expect(
+			getSelectedPoolWorkflowLockedPresentation({
+				hasSelectedPoolAddress: true,
 				selectedPoolLookupState: 'loading',
 				selectedPoolUniverseMismatch: false,
 			}),

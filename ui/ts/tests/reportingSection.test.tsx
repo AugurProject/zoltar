@@ -7,9 +7,9 @@ import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'
 import { ReportingSection } from '../components/ReportingSection.js'
-import { formatDuration } from '../lib/formatters.js'
+import { formatDuration, formatTimestamp } from '../lib/formatters.js'
 import { getReportingLockedUntilMessage } from '../lib/reporting.js'
-import { computeEscalationTimeSinceStartFromAttritionCost, getEscalationBalanceTuple, getEscalationBindingCapital } from '../lib/reportingDomain.js'
+import { computeEscalationTimeSinceStartFromAttritionCost, ESCALATION_GAME_ACTIVATION_DELAY, getEscalationBalanceTuple, getEscalationBindingCapital } from '../lib/reportingDomain.js'
 import type { AccountState, ReportingFormState } from '../types/app.js'
 import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingDetails } from '../types/contracts.js'
 import type { ReportingSectionProps } from '../types/components.js'
@@ -418,6 +418,28 @@ describe('ReportingSection', () => {
 		expect(metricsQueries.getByText('Start Bond')).not.toBeNull()
 	})
 
+	test('shows Game Start as activation time minus the initial delay', async () => {
+		const gameStartTimestamp = 120n
+		const activationTime = ESCALATION_GAME_ACTIVATION_DELAY + gameStartTimestamp
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: gameStartTimestamp,
+					reportingDetails: createDynamicReportingDetails({
+						activationTime,
+						currentTime: gameStartTimestamp,
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const metricsSection = getEscalationMetricsSection()
+		expect(metricsSection.textContent?.includes(formatTimestamp(gameStartTimestamp))).toBe(true)
+		expect(metricsSection.textContent?.includes(formatTimestamp(activationTime))).toBe(false)
+	})
+
 	test('keeps placeholder outcome cards visible inside Report Outcome before reporting details load', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: undefined })))
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -608,7 +630,8 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Resolved' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Market finalized as Yes. Review any remaining deposits below.')).toBe(true)
+		expect(document.body.textContent?.includes('Market finalized as Yes.')).toBe(true)
+		expect(document.body.textContent?.includes('Review any remaining deposits below.')).toBe(false)
 	})
 
 	test('disables reporting after the escalation timer ends', async () => {
@@ -742,6 +765,7 @@ describe('ReportingSection', () => {
 		const reportOutcomeSection = getReportOutcomeSection()
 		expect(documentQueries.queryByRole('heading', { name: 'First Report Starts Escalation' })).toBeNull()
 		expect(document.body.textContent?.includes('Reporting is open.')).toBe(true)
+		expect(document.body.querySelector('.notice.success')?.textContent).toContain('Reporting is open.')
 		expect(reportOutcomeSection.textContent?.includes('Your deposits:')).toBe(false)
 		expect(reportOutcomeSection.textContent?.includes('Projected payout for current amount')).toBe(false)
 		expect(reportOutcomeSection.textContent?.includes('Projected profit if this side wins')).toBe(false)
@@ -750,8 +774,7 @@ describe('ReportingSection', () => {
 		expect(reportOutcomeSection.querySelectorAll('.currency-value.unavailable')).toHaveLength(0)
 		expect(document.body.textContent?.includes('Load reporting details to populate live stakes')).toBe(false)
 		expectTransactionButtonEnabled(document.body, 'Report / Contribute Yes')
-		expect(document.body.textContent?.includes('This contribution would start the escalation timer in 3d 0h 0m.')).toBe(true)
-		expect(document.body.textContent?.includes('the dispute timer would expire as soon as it activates, so reporting would close in 3d 0h 0m.')).toBe(true)
+		expect(document.body.textContent?.includes('If no one disputes after this report, the market would finalize in 3d 0h 0m.')).toBe(true)
 	})
 
 	test('disables report submission for a pre-start amount below the first-report minimum', async () => {
@@ -809,7 +832,8 @@ describe('ReportingSection', () => {
 		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute No' })
 		const preview = documentQueries.getByText(/^This contribution would extend the timer by /)
 		expect(reportButton.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-		expect(document.body.textContent?.includes('became binding capital')).toBe(true)
+		expect(document.body.textContent?.includes('If no one disputes after this contribution, the market would finalize in')).toBe(true)
+		expect(document.body.textContent?.includes('became binding capital')).toBe(false)
 	})
 
 	test('shows a no-extension preview when the selected contribution leaves binding capital unchanged', async () => {
@@ -827,7 +851,8 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent?.includes('This contribution would not extend the timer.')).toBe(true)
-		expect(document.body.textContent?.includes('became binding capital')).toBe(true)
+		expect(document.body.textContent?.includes('If no one disputes after this contribution, the market would finalize in')).toBe(true)
+		expect(document.body.textContent?.includes('became binding capital')).toBe(false)
 	})
 
 	test('shows the accepted-deposit note when the typed contribution exceeds the remaining room on the selected side', async () => {
@@ -1254,5 +1279,28 @@ describe('ReportingSection', () => {
 		expect(statusStack.textContent?.includes('Reporting Contribution Submitted')).toBe(false)
 		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' }).closest('.actions')).toBeNull()
+	})
+
+	test('uses only the latest action card after withdrawing escalation deposits', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingResult: {
+						action: 'withdrawEscalation',
+						hash: '0x5678000000000000000000000000000000000000000000000000000000000000',
+						outcome: 'yes',
+						securityPoolAddress: zeroAddress,
+						universeId: 1n,
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Latest Reporting Action' })).not.toBeNull()
+		expect(documentQueries.queryByText('Escalation Deposits Withdrawn')).toBeNull()
+		expect(documentQueries.queryByText('Eligible escalation deposits were withdrawn for the selected outcome side.')).toBeNull()
 	})
 })

@@ -539,6 +539,7 @@ button.destructive:hover:not(:disabled) {
 
 .notice.success {
 	border-color: var(--success-border);
+	background: linear-gradient(180deg, rgba(11, 51, 43, 0.92) 0%, rgba(8, 34, 29, 0.92) 100%);
 }
 
 .notice a {
