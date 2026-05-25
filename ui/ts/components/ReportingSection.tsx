@@ -17,11 +17,11 @@ import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
-import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, isReportingClosed, previewReportingContribution, projectEscalationEndTime } from '../lib/reportingDomain.js'
+import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, getReportingTimerPreview, isReportingClosed, previewReportingContribution } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import type { LifecycleStagePresentation, ReportingSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
-import type { ActiveReportingDetails, EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
+import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
 type ReportingStatus = 'active' | 'missing' | 'not-started'
 
@@ -39,14 +39,24 @@ const SELECT_OUTCOME_PRESET_REASON = 'Select an outcome side before using preset
 const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
 const MAX_PROFIT_WINDOW_FILLED_REASON = 'Max profit preset unavailable because the reward window is already filled on the selected side.'
 
-function getOutcomeSides(activeReportingDetails: ActiveReportingDetails | undefined) {
-	if (activeReportingDetails !== undefined) {
-		return activeReportingDetails.sides.map<EscalationSideDisplay>(side => ({
+function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
+	if (reportingDetails?.status === 'active') {
+		return reportingDetails.sides.map<EscalationSideDisplay>(side => ({
 			balance: side.balance,
 			key: side.key,
 			label: side.label,
 			userDeposits: side.userDeposits,
 			userStake: side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n),
+		}))
+	}
+
+	if (reportingDetails?.status === 'not-started') {
+		return REPORTING_OUTCOME_DROPDOWN_OPTIONS.map<EscalationSideDisplay>(option => ({
+			balance: 0n,
+			key: option.value,
+			label: option.label,
+			userDeposits: [],
+			userStake: 0n,
 		}))
 	}
 
@@ -101,26 +111,12 @@ function getReportingStagePresentation({
 	}
 
 	if (reportingDetails.status === 'not-started') {
-		return {
-			availableActions: ['first-report'],
-			blockedActions: [],
-			detail: 'This pool does not have an escalation game yet. The first report or contribution will deploy it.',
-			key: 'first-report-starts-escalation',
-			label: 'First Report Starts Escalation',
-			tone: 'default',
-		}
+		return undefined
 	}
 
 	switch (getEscalationPhase(reportingDetails)) {
 		case 'Pending Start':
-			return {
-				availableActions: [],
-				blockedActions: [],
-				detail: 'The escalation game has been initialized and will start at the scheduled start time.',
-				key: 'escalation-pending-start',
-				label: 'Pending Start',
-				tone: 'default',
-			}
+			return undefined
 		case 'Active':
 			return {
 				availableActions: [],
@@ -156,11 +152,7 @@ function getReportingOutcomePresentation(action: ReportingSectionProps['reportin
 
 	switch (action.action) {
 		case 'reportOutcome':
-			return {
-				detail: 'The selected escalation outcome received your report or contribution.',
-				nextStep: 'Monitor the escalation state and withdraw eligible deposits when the workflow allows it.',
-				title: 'Reporting Contribution Submitted',
-			}
+			return undefined
 		case 'withdrawEscalation':
 			return {
 				detail: 'Eligible escalation deposits were withdrawn for the selected outcome side.',
@@ -214,14 +206,21 @@ export function ReportingSection({
 	const selectedOutcome = reportingForm.selectedOutcome
 	const selectedSide = selectedOutcome === undefined ? undefined : activeReportingDetails?.sides.find(side => side.key === selectedOutcome)
 	const selectedWithdrawDepositIndexes = reportingForm.selectedWithdrawDepositIndexes
-	const chartScaleMax = activeReportingDetails === undefined ? 1n : activeReportingDetails.sides.reduce((maxBalance, side) => (side.balance > maxBalance ? side.balance : maxBalance), activeReportingDetails.bindingCapital > 1n ? activeReportingDetails.bindingCapital : 1n)
+	const displayBindingCapital = effectiveReportingDetails === undefined ? undefined : effectiveReportingDetails.status === 'not-started' ? 0n : effectiveReportingDetails.bindingCapital
+	const outcomeSides = getOutcomeSides(effectiveReportingDetails)
+	const chartScaleMax = outcomeSides.reduce(
+		(maxBalance, side) => {
+			if (side.balance === undefined || side.balance <= maxBalance) return maxBalance
+			return side.balance
+		},
+		displayBindingCapital !== undefined && displayBindingCapital > 1n ? displayBindingCapital : 1n,
+	)
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getLeadingEscalationOutcome(activeReportingDetails.sides)
 	const reportContributionPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : previewReportingContribution(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, selectedOutcome, selectedAmount)
 	const reportingClosed = activeReportingDetails === undefined ? false : isReportingClosed(activeReportingDetails)
-	const timerProjection = activeReportingDetails === undefined || selectedAmount === undefined || selectedAmount <= 0n || reportingClosed || selectedOutcome === undefined ? undefined : projectEscalationEndTime(activeReportingDetails, selectedOutcome, selectedAmount)
-	const outcomeSides = getOutcomeSides(activeReportingDetails)
+	const timerPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : getReportingTimerPreview(effectiveReportingDetails, selectedOutcome, selectedAmount, effectiveCurrentTimestamp)
 	const selectedOutcomeLabel = selectedOutcome === undefined ? 'Selected Side' : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
 	const reportButtonLabel = selectedOutcome === undefined ? 'Report / Contribute On Selected Side' : `Report / Contribute ${selectedOutcomeLabel}`
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
@@ -252,6 +251,7 @@ export function ReportingSection({
 		withdrawalState: effectiveReportingDetails?.withdrawalState,
 		selectedOutcome,
 	})
+	const reportingOpenNotice = showFullReporting && reportingStatus === 'not-started' ? 'Reporting is open.' : undefined
 	const reportingStage = showFullReporting
 		? getReportingStagePresentation({
 				effectiveCurrentTimestamp,
@@ -259,7 +259,7 @@ export function ReportingSection({
 				reportingDetails: effectiveReportingDetails,
 			})
 		: undefined
-	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStage !== undefined)
+	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStage !== undefined || reportingOpenNotice !== undefined)
 	const latestReportingAction =
 		reportingResult === undefined
 			? undefined
@@ -294,18 +294,15 @@ export function ReportingSection({
 							}
 						/>
 					) : undefined}
-					<LifecycleStageBanner stage={reportingStage} />
+					{reportingOpenNotice === undefined ? <LifecycleStageBanner stage={reportingStage} /> : <p className='notice'>{reportingOpenNotice}</p>}
 				</div>
 			) : undefined}
 
 			{showFullReporting ? (
-				<SectionBlock title='Outcome Sides' {...(activeReportingDetails === undefined ? {} : { description: 'Bars show total REP on each outcome. The marker shows current binding capital, and the thin inset shows your wallet stake.' })}>
+				<SectionBlock title='Escalation Metrics'>
 					<div className='escalation-metrics'>
-						<MetricField label='Current Bond'>
-							<CurrencyValue value={activeReportingDetails?.currentRequiredBond} suffix='REP' />
-						</MetricField>
 						<MetricField label='Binding Capital'>
-							<CurrencyValue value={activeReportingDetails?.bindingCapital} suffix='REP' />
+							<CurrencyValue value={displayBindingCapital} suffix='REP' />
 						</MetricField>
 						<MetricField label='Threshold'>
 							<CurrencyValue value={effectiveReportingDetails?.nonDecisionThreshold} suffix='REP' />
@@ -318,49 +315,42 @@ export function ReportingSection({
 							<CurrencyValue value={effectiveReportingDetails?.startBond} suffix='REP' />
 						</MetricField>
 					</div>
-					<div className='escalation-sides-shell'>
-						{activeReportingDetails === undefined ? undefined : (
-							<div className='escalation-sides-legend'>
-								<div className='escalation-sides-legend-item'>
-									<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-total' />
-									<span className='panel-label'>Total stake</span>
-								</div>
-								<div className='escalation-sides-legend-item'>
-									<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-user' />
-									<span className='panel-label'>Your stake</span>
-								</div>
-								<div className='escalation-sides-legend-item escalation-sides-legend-item-binding'>
-									<span aria-hidden='true' className='escalation-sides-legend-marker' />
-									<span className='panel-label'>Binding capital</span>
-									<CurrencyValue copyable={false} value={activeReportingDetails.bindingCapital} suffix='REP' />
-								</div>
-							</div>
-						)}
-					</div>
-					<div className='escalation-sides'>
-						{outcomeSides.map(side => (
-							<EscalationSide
-								key={side.key}
-								bindingCapital={activeReportingDetails?.bindingCapital}
-								chartScaleMax={chartScaleMax}
-								disabled={reportingLocked}
-								isLeading={leadingOutcome === side.key}
-								isSelected={selectedOutcome !== undefined && selectedOutcome === side.key}
-								onSelect={() => onReportingFormChange({ selectedOutcome: side.key, selectedWithdrawDepositIndexes: [] })}
-								side={side}
-							/>
-						))}
-					</div>
 				</SectionBlock>
 			) : undefined}
 
 			{showFullReporting ? (
 				<SectionBlock title='Report Outcome'>
-					{selectedSide === undefined ? undefined : (
-						<p className='detail'>
-							Selected side currently has <CurrencyValue value={selectedSide.balance} suffix='REP' /> deposited.
-						</p>
-					)}
+					<div className='escalation-sides-shell'>
+						<div className='escalation-sides-legend'>
+							<div className='escalation-sides-legend-item'>
+								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-total' />
+								<span className='panel-label'>Total stake</span>
+							</div>
+							<div className='escalation-sides-legend-item'>
+								<span aria-hidden='true' className='escalation-sides-legend-swatch escalation-sides-legend-swatch-user' />
+								<span className='panel-label'>Your stake</span>
+							</div>
+							<div className='escalation-sides-legend-item escalation-sides-legend-item-binding'>
+								<span aria-hidden='true' className='escalation-sides-legend-marker' />
+								<span className='panel-label'>Binding capital</span>
+								<CurrencyValue copyable={false} value={displayBindingCapital} suffix='REP' />
+							</div>
+						</div>
+						<div className='escalation-sides'>
+							{outcomeSides.map(side => (
+								<EscalationSide
+									key={side.key}
+									bindingCapital={displayBindingCapital}
+									chartScaleMax={chartScaleMax}
+									disabled={reportingLocked}
+									isLeading={leadingOutcome === side.key}
+									isSelected={selectedOutcome !== undefined && selectedOutcome === side.key}
+									onSelect={() => onReportingFormChange({ selectedOutcome: side.key, selectedWithdrawDepositIndexes: [] })}
+									side={side}
+								/>
+							))}
+						</div>
+					</div>
 					{effectiveReportingDetails?.viewerVaultAvailableEscalationRep === undefined ? undefined : (
 						<p className='detail'>
 							Available unlocked vault REP for reporting: <CurrencyValue value={effectiveReportingDetails.viewerVaultAvailableEscalationRep} suffix='REP' />.
@@ -417,20 +407,26 @@ export function ReportingSection({
 					<div className='actions'>
 						<TransactionActionButton idleLabel={reportButtonLabel} pendingLabel='Submitting report...' onClick={onReportOutcome} pending={reportingActiveAction === 'reportOutcome'} availability={{ disabled: reportGuardMessage !== undefined, reason: reportGuardMessage }} />
 					</div>
-					{timerProjection === undefined || activeReportingDetails === undefined ? undefined : (
-						<p className='detail'>
-							{timerProjection.endsImmediately
-								? 'This contribution would end the escalation immediately instead of extending the timer.'
-								: timerProjection.projectedEndTime > activeReportingDetails.escalationEndTime
-									? `This contribution would extend the timer by ${formatDuration(timerProjection.projectedEndTime - activeReportingDetails.escalationEndTime)}.`
-									: 'This contribution would not extend the timer.'}
-							{timerProjection.acceptedAmount === selectedAmount ? undefined : (
-								<>
-									{' '}
-									Based on an accepted deposit of <CurrencyValue copyable={false} value={timerProjection.acceptedAmount} suffix='REP' />.
-								</>
-							)}
-						</p>
+					{timerPreview === undefined ? undefined : timerPreview.kind === 'not-started' ? (
+						<>
+							<p className='detail'>This contribution would start the escalation timer at {timerPreview.startsAt === undefined ? 'immediately' : <TimestampValue currentTimestamp={timerPreview.startsAt} timestamp={timerPreview.startsAt} />}.</p>
+							<p className='detail'>
+								If <CurrencyValue copyable={false} value={selectedAmount} suffix='REP' /> became binding capital, the dispute window would last {formatDuration(timerPreview.hypotheticalDuration)} from game start.
+							</p>
+						</>
+					) : (
+						<>
+							<p className='detail'>
+								{timerPreview.actualState === 'ends-immediately'
+									? 'This contribution would end the escalation immediately instead of extending the timer.'
+									: timerPreview.actualState === 'extends'
+										? `This contribution would extend the timer by ${formatDuration(timerPreview.timerIncrease ?? 0n)}.`
+										: 'This contribution would not extend the timer.'}
+							</p>
+							<p className='detail'>
+								If <CurrencyValue copyable={false} value={selectedAmount} suffix='REP' /> became binding capital, the dispute window would last {formatDuration(timerPreview.hypotheticalDuration)} from game start.
+							</p>
+						</>
 					)}
 				</SectionBlock>
 			) : undefined}
