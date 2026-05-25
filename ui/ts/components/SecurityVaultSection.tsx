@@ -384,6 +384,7 @@ export function SecurityVaultSection({
 		securityVaultResult === undefined
 			? undefined
 			: {
+					dismissKey: securityVaultResult.hash,
 					title: 'Latest Vault Action',
 					embedInCard: compactLayout,
 					rows: [

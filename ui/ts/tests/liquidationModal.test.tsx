@@ -595,49 +595,42 @@ describe('LiquidationModal', () => {
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
-		const originalDateNow = Date.now
-		Date.now = () => 0
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1n + 60n * 60n + 60n}>
+				<LiquidationModal
+					accountAddress={defaultCallerVaultAddress}
+					closeLiquidationModal={() => undefined}
+					currentPoolOracleManagerDetails={undefined}
+					isMainnet
+					liquidationAmount='1'
+					liquidationMaxAmount={5n * 10n ** 18n}
+					liquidationManagerAddress={zeroAddress}
+					liquidationModalOpen
+					liquidationSecurityPoolAddress={zeroAddress}
+					liquidationTargetVault={defaultTargetVaultAddress}
+					loadingPoolOracleManager={false}
+					onLoadPoolOracleManager={() => undefined}
+					onLiquidationAmountChange={() => undefined}
+					onQueueLiquidation={() => undefined}
+					onSelectedPoolViewChange={() => undefined}
+					repPerEthPrice={1n * 10n ** 18n}
+					repPerEthSource='mock'
+					repPerEthSourceUrl={undefined}
+					selectedPool={createSelectedPool({
+						lastOraclePrice: 3n * 10n ** 18n,
+						lastOracleSettlementTimestamp: 1n,
+					})}
+					securityPoolOverviewActiveAction={undefined}
+					securityPoolOverviewError={undefined}
+					securityPoolOverviewResult={undefined}
+					callerVaultSummary={createTargetVaultSummary({ vaultAddress: defaultCallerVaultAddress })}
+					targetVaultSummary={createTargetVaultSummary({ vaultAddress: defaultTargetVaultAddress })}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
 
-		try {
-			const renderedComponent = await renderIntoDocument(
-				<ChainTimestampContext.Provider value={1n + 60n * 60n + 60n}>
-					<LiquidationModal
-						accountAddress={defaultCallerVaultAddress}
-						closeLiquidationModal={() => undefined}
-						currentPoolOracleManagerDetails={undefined}
-						isMainnet
-						liquidationAmount='1'
-						liquidationMaxAmount={5n * 10n ** 18n}
-						liquidationManagerAddress={zeroAddress}
-						liquidationModalOpen
-						liquidationSecurityPoolAddress={zeroAddress}
-						liquidationTargetVault={defaultTargetVaultAddress}
-						loadingPoolOracleManager={false}
-						onLoadPoolOracleManager={() => undefined}
-						onLiquidationAmountChange={() => undefined}
-						onQueueLiquidation={() => undefined}
-						onSelectedPoolViewChange={() => undefined}
-						repPerEthPrice={1n * 10n ** 18n}
-						repPerEthSource='mock'
-						repPerEthSourceUrl={undefined}
-						selectedPool={createSelectedPool({
-							lastOraclePrice: 3n * 10n ** 18n,
-							lastOracleSettlementTimestamp: 1n,
-						})}
-						securityPoolOverviewActiveAction={undefined}
-						securityPoolOverviewError={undefined}
-						securityPoolOverviewResult={undefined}
-						callerVaultSummary={createTargetVaultSummary({ vaultAddress: defaultCallerVaultAddress })}
-						targetVaultSummary={createTargetVaultSummary({ vaultAddress: defaultTargetVaultAddress })}
-					/>
-				</ChainTimestampContext.Provider>,
-			)
-			cleanupRenderedComponent = renderedComponent.cleanup
-
-			expect(document.body.textContent?.includes('(expired 1m ago)')).toBe(true)
-		} finally {
-			Date.now = originalDateNow
-		}
+		expect(document.body.textContent?.includes('(expired 1m ago)')).toBe(true)
 	})
 
 	test('uses a dedicated top-aligned action row when execute liquidation shows a disabled reason', async () => {

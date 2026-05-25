@@ -1,4 +1,4 @@
-import type { ActiveReportingDetails, EscalationSide, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
+import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 import { formatCurrencyBalance } from './formatters.js'
 import { requireDefined } from './required.js'
 import { getTimeRemaining } from './time.js'
@@ -10,6 +10,7 @@ type ReportingAmountSuggestion = {
 
 const REP_UNIT = 10n ** 18n
 const ESCALATION_TIME_LENGTH = 4_233_600n
+export const ESCALATION_GAME_ACTIVATION_DELAY = 3n * 24n * 60n * 60n
 const SCALE = 1_000_000n
 const LN2_SCALED = 693_147n
 const MAX_ATANH_ITERATIONS = 16
@@ -36,7 +37,8 @@ type ReportingTimerPreview =
 	| {
 			hypotheticalDuration: bigint
 			kind: 'not-started'
-			startsAt: bigint | undefined
+			timeUntilEnd: bigint
+			timeUntilStart: bigint
 	  }
 	| {
 			acceptedAmount: bigint
@@ -86,7 +88,7 @@ export function isReportingClosed(details: ActiveReportingDetails) {
 export function getEscalationPhase(details: ActiveReportingDetails): EscalationPhase {
 	if (details.resolution !== 'none') return 'Resolved'
 	if (details.hasReachedNonDecision) return 'Fork Triggered'
-	if (details.currentTime < details.startingTime) return 'Pending Start'
+	if (details.currentTime < details.activationTime) return 'Pending Start'
 	if (hasEscalationTimedOut(details)) return 'Timed Out'
 	return 'Active'
 }
@@ -153,11 +155,50 @@ export function projectEscalationEndTime(details: ActiveReportingDetails, outcom
 	return {
 		acceptedAmount: projectedDeposit.acceptedAmount,
 		endsImmediately: false,
-		projectedEndTime: details.startingTime + computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, projectedBindingCapital),
+		projectedEndTime: details.activationTime + computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, projectedBindingCapital),
 	}
 }
 
-export function getReportingTimerPreview(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint, currentTimestamp: bigint | undefined): ReportingTimerPreview | undefined {
+function getWinningEscalationDepositClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: EscalationDeposit) {
+	const winningOutcomeBalance = details.sides.find(side => side.key === outcome)?.balance
+	if (winningOutcomeBalance === undefined) return undefined
+
+	const bindingCapitalAmount = details.bindingCapital
+	const rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / 2n
+	const rewardEligiblePrincipalAmount = winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount
+	const rewardBonusPoolAmount = (bindingCapitalAmount * 3n) / 5n
+
+	let amountToWithdraw: bigint
+	if (rewardEligiblePrincipalAmount === 0n) {
+		amountToWithdraw = deposit.amount
+	} else {
+		const depositStart = deposit.cumulativeAmount - deposit.amount
+		const eligibleEndAmount = deposit.cumulativeAmount < rewardEligibleCapAmount ? deposit.cumulativeAmount : rewardEligibleCapAmount
+		const rewardEligibleDepositAmount = eligibleEndAmount > depositStart ? eligibleEndAmount - depositStart : 0n
+		const cappedRewardEligibleDepositAmount = rewardEligibleDepositAmount > deposit.amount ? deposit.amount : rewardEligibleDepositAmount
+		const bonusShare = (cappedRewardEligibleDepositAmount * rewardBonusPoolAmount) / rewardEligiblePrincipalAmount
+		amountToWithdraw = deposit.amount + bonusShare
+	}
+
+	if (details.forkThreshold < details.nonDecisionThreshold) {
+		return (amountToWithdraw * details.forkThreshold) / details.nonDecisionThreshold
+	}
+
+	return amountToWithdraw
+}
+
+export function getEscalationDepositClaimAmount(details: ReportingDetails | undefined, outcome: ReportingOutcomeKey, deposit: EscalationDeposit) {
+	if (details === undefined || details.status !== 'active' || !details.withdrawalEnabled) return undefined
+	if (details.withdrawalState === 'canceled-by-external-fork') return deposit.amount
+
+	const resolvedOutcome = details.questionOutcome !== 'none' ? details.questionOutcome : details.resolution
+	if (resolvedOutcome === 'none') return undefined
+	if (resolvedOutcome !== outcome) return 0n
+
+	return getWinningEscalationDepositClaimAmount(details, outcome, deposit)
+}
+
+export function getReportingTimerPreview(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint): ReportingTimerPreview | undefined {
 	if (amount <= 0n) return undefined
 
 	const hypotheticalDuration = computeHypotheticalBindingDuration(details.startBond, details.nonDecisionThreshold, amount)
@@ -169,7 +210,8 @@ export function getReportingTimerPreview(details: ReportingDetails, outcome: Rep
 		return {
 			hypotheticalDuration,
 			kind: 'not-started',
-			startsAt: currentTimestamp,
+			timeUntilEnd: ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration,
+			timeUntilStart: ESCALATION_GAME_ACTIVATION_DELAY,
 		}
 	}
 

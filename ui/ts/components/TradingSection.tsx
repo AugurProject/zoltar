@@ -42,24 +42,28 @@ function getTradingOutcomePresentation(action: TradingSectionProps['tradingResul
 		case 'createCompleteSet':
 			return {
 				detail: 'Complete sets were minted for the selected pool.',
+				dismissKey: `${action.action}:${action.hash}:outcome`,
 				nextStep: 'Review the updated share balances before your next trading action.',
 				title: 'Complete Sets Minted',
 			}
 		case 'redeemCompleteSet':
 			return {
 				detail: 'Matching complete sets were redeemed back into collateral.',
+				dismissKey: `${action.action}:${action.hash}:outcome`,
 				nextStep: 'Review the updated share balances and wallet collateral balance.',
 				title: 'Complete Sets Redeemed',
 			}
 		case 'migrateShares':
 			return {
 				detail: 'Forked shares were migrated into the selected child universes.',
+				dismissKey: `${action.action}:${action.hash}:outcome`,
 				nextStep: 'Open the target universe or pool views to inspect the migrated balances.',
 				title: 'Shares Migrated',
 			}
 		case 'redeemShares':
 			return {
 				detail: 'Resolved shares were redeemed for the selected pool.',
+				dismissKey: `${action.action}:${action.hash}:outcome`,
 				nextStep: 'Review the updated balances and proceed with any remaining resolved positions.',
 				title: 'Resolved Shares Redeemed',
 			}
@@ -226,6 +230,7 @@ export function TradingSection({
 		tradingResult === undefined
 			? undefined
 			: {
+					dismissKey: tradingResult.hash,
 					title: 'Latest Trading Action',
 					embedInCard,
 					rows: [

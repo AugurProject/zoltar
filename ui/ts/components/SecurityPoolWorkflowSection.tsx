@@ -41,9 +41,9 @@ import { hasForkActivity } from '../lib/forkAuction.js'
 import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
 import { isMainnetChain } from '../lib/network.js'
+import { getReportingLockedUntilMessage } from '../lib/reporting.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
 import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
-import { getCurrentTimestamp as getLocalCurrentTimestamp } from '../lib/time.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import type { SecurityPoolSystemState } from '../types/contracts.js'
@@ -127,8 +127,9 @@ export function SecurityPoolWorkflowSection({
 	const marketDetails = selectedPool?.marketDetails ?? currentReportingDetails?.marketDetails ?? currentForkAuctionDetails?.marketDetails
 	const selectedPoolState = selectedPool?.systemState ?? currentForkAuctionDetails?.systemState
 	const selectedPoolHasForkActivity = selectedPool !== undefined ? hasForkActivity(selectedPool) : currentForkAuctionDetails !== undefined ? hasForkActivity(currentForkAuctionDetails) : false
-	const currentTimestamp = chainCurrentTimestamp ?? currentReportingDetails?.currentTime ?? getLocalCurrentTimestamp()
-	const reportingReady = marketDetails !== undefined && marketDetails.endTime <= currentTimestamp
+	const currentTimestamp = chainCurrentTimestamp ?? currentReportingDetails?.currentTime ?? currentForkAuctionDetails?.currentTime
+	const reportingReady = marketDetails !== undefined && currentTimestamp !== undefined && marketDetails.endTime <= currentTimestamp
+	const reportingLockedReason = reportingReady ? undefined : marketDetails === undefined ? 'Reporting opens after market end.' : getReportingLockedUntilMessage(marketDetails.endTime, currentTimestamp)
 	const forkWorkflowDisabled = isForkWorkflowDisabled(selectedPoolState, selectedPoolHasForkActivity)
 	const selectedPoolUniverseMismatch = selectedPool !== undefined && selectedPool.universeId !== activeUniverseId
 	const hasSelectedPoolAddress = securityPoolAddress.trim() !== ''
@@ -548,7 +549,7 @@ export function SecurityPoolWorkflowSection({
 										{...reporting}
 										currentTimestamp={currentTimestamp}
 										embedInCard
-										lockedReason={reportingReady ? undefined : 'Reporting opens after market end.'}
+										lockedReason={reportingLockedReason}
 										mode='full-reporting'
 										previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
 										reportingDetails={currentReportingDetails}
@@ -562,7 +563,7 @@ export function SecurityPoolWorkflowSection({
 										{...reporting}
 										currentTimestamp={currentTimestamp}
 										embedInCard
-										lockedReason={reportingReady ? undefined : 'Reporting opens after market end.'}
+										lockedReason={reportingLockedReason}
 										mode='withdraw-only'
 										previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
 										reportingDetails={currentReportingDetails}

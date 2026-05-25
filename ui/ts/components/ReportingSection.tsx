@@ -18,9 +18,19 @@ import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
-import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, getReportingTimerPreview, previewReportingContribution } from '../lib/reportingDomain.js'
+import {
+	calculateEstimatedEscalationReturn,
+	getEscalationDepositClaimAmount,
+	getEscalationPhase,
+	getEscalationTimeRemaining,
+	getLeadingEscalationOutcome,
+	getReportingMaxProfitContribution,
+	getReportingMinimumOutcomeChangeContribution,
+	getReportingTimerPreview,
+	previewReportingContribution,
+} from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
-import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
+import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel } from '../lib/reporting.js'
 import type { LifecycleStagePresentation, ReportingSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
 import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
@@ -70,12 +80,22 @@ function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 	}))
 }
 
-function getDepositEntryCountLabel(count: number) {
-	return count === 1 ? 'entry' : 'entries'
-}
-
 function isHiddenPresetReason(reason: string | undefined) {
 	return reason === LOAD_REPORTING_PRESETS_REASON || reason === MAX_PROFIT_NOT_STARTED_REASON || reason === SELECT_OUTCOME_PRESET_REASON || reason === SELECTED_SIDE_ALREADY_LEADS_REASON || reason === MAX_PROFIT_WINDOW_FILLED_REASON
+}
+
+function getResolvedReportingOutcomeLabel(reportingDetails: ReportingDetails) {
+	const resolvedOutcome = reportingDetails.questionOutcome !== 'none' ? reportingDetails.questionOutcome : reportingDetails.resolution
+	return getReportingOutcomeLabel(resolvedOutcome)
+}
+
+function getWithdrawDepositClaimLabel(details: ReportingDetails | undefined, selectedOutcome: ReportingOutcomeKey) {
+	if (details === undefined || details.status !== 'active') return undefined
+	if (details.withdrawalState === 'canceled-by-external-fork') return 'External fork refund'
+
+	const resolvedOutcome = details.questionOutcome !== 'none' ? details.questionOutcome : details.resolution
+	if (resolvedOutcome === 'none') return undefined
+	return resolvedOutcome === selectedOutcome ? 'Winning payout' : 'Losing deposit settlement'
 }
 
 function getReportingStagePresentation({
@@ -93,7 +113,7 @@ function getReportingStagePresentation({
 		return {
 			availableActions: [],
 			blockedActions: ['report'],
-			detail: 'Reporting opens after the market end timestamp for this pool.',
+			detail: getReportingLockedUntilMessage(marketDetails.endTime, effectiveCurrentTimestamp),
 			key: 'reporting-not-enabled',
 			label: 'Reporting Not Enabled',
 			tone: 'warning',
@@ -149,7 +169,7 @@ function getReportingStagePresentation({
 			return {
 				availableActions: [],
 				blockedActions: [],
-				detail: 'Escalation has resolved. Review the final state and any remaining deposits below.',
+				detail: `Market finalized as ${getResolvedReportingOutcomeLabel(reportingDetails)}. Review any remaining deposits below.`,
 				key: 'escalation-resolved',
 				label: 'Resolved',
 				tone: 'success',
@@ -166,6 +186,7 @@ function getReportingOutcomePresentation(action: ReportingSectionProps['reportin
 		case 'withdrawEscalation':
 			return {
 				detail: 'Eligible escalation deposits were withdrawn for the selected outcome side.',
+				dismissKey: `${action.action}:${action.hash}:outcome`,
 				nextStep: 'Review the updated escalation balances before taking another reporting action.',
 				title: 'Escalation Deposits Withdrawn',
 			}
@@ -218,6 +239,7 @@ export function ReportingSection({
 	const selectedOutcome = reportingForm.selectedOutcome
 	const selectedSide = selectedOutcome === undefined ? undefined : activeReportingDetails?.sides.find(side => side.key === selectedOutcome)
 	const selectedWithdrawDepositIndexes = reportingForm.selectedWithdrawDepositIndexes
+	const allWithdrawDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 	const displayBindingCapital = effectiveReportingDetails === undefined ? undefined : effectiveReportingDetails.status === 'not-started' ? 0n : effectiveReportingDetails.bindingCapital
 	const outcomeSides = getOutcomeSides(effectiveReportingDetails)
 	const chartScaleMax = outcomeSides.reduce(
@@ -231,7 +253,7 @@ export function ReportingSection({
 	const reportContributionPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : previewReportingContribution(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, selectedOutcome, selectedAmount)
-	const timerPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : getReportingTimerPreview(effectiveReportingDetails, selectedOutcome, selectedAmount, effectiveCurrentTimestamp)
+	const timerPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : getReportingTimerPreview(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	const selectedOutcomeLabel = selectedOutcome === undefined ? 'Selected Side' : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
 	const reportButtonLabel = selectedOutcome === undefined ? 'Report / Contribute On Selected Side' : `Report / Contribute ${selectedOutcomeLabel}`
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
@@ -263,6 +285,7 @@ export function ReportingSection({
 		selectedOutcome,
 		...(activeReportingDetails === undefined ? {} : { activeReportingDetails }),
 	})
+	const withdrawSelectedGuardMessage = withdrawGuardMessage ?? (selectedSide !== undefined && selectedSide.userDeposits.length > 0 && selectedWithdrawDepositIndexes.length === 0 ? 'Select at least one deposit to withdraw or use Withdraw all.' : undefined)
 	const reportingOpenNotice = showFullReporting && reportingStatus === 'not-started' ? 'Reporting is open.' : undefined
 
 	useEffect(() => {
@@ -289,6 +312,7 @@ export function ReportingSection({
 		reportingResult === undefined
 			? undefined
 			: {
+					dismissKey: reportingResult.hash,
 					title: 'Latest Reporting Action',
 					embedInCard,
 					rows: [
@@ -326,15 +350,12 @@ export function ReportingSection({
 			{showFullReporting ? (
 				<SectionBlock title='Escalation Metrics'>
 					<div className='escalation-metrics'>
-						<MetricField label='Binding Capital'>
-							<CurrencyValue value={displayBindingCapital} suffix='REP' />
-						</MetricField>
 						<MetricField label='Threshold'>
 							<CurrencyValue value={effectiveReportingDetails?.nonDecisionThreshold} suffix='REP' />
 						</MetricField>
 						<MetricField label='Time Left'>{activeReportingDetails === undefined ? '—' : formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
 						<MetricField label='Game Start'>
-							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails?.startingTime} />
+							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={activeReportingDetails?.activationTime} />
 						</MetricField>
 						<MetricField label='Start Bond'>
 							<CurrencyValue value={effectiveReportingDetails?.startBond} suffix='REP' />
@@ -434,10 +455,14 @@ export function ReportingSection({
 					</div>
 					{timerPreview === undefined ? undefined : timerPreview.kind === 'not-started' ? (
 						<>
-							<p className='detail'>This contribution would start the escalation timer at {timerPreview.startsAt === undefined ? 'immediately' : <TimestampValue currentTimestamp={timerPreview.startsAt} timestamp={timerPreview.startsAt} />}.</p>
-							<p className='detail'>
-								If <CurrencyValue copyable={false} value={selectedAmount} suffix='REP' /> became binding capital, the dispute window would last {formatDuration(timerPreview.hypotheticalDuration)} from game start.
-							</p>
+							<p className='detail'>This contribution would start the escalation timer in {formatDuration(timerPreview.timeUntilStart)}.</p>
+							{timerPreview.hypotheticalDuration === 0n ? (
+								<p className='detail'>At that binding capital, the dispute timer would expire as soon as it activates, so reporting would close in {formatDuration(timerPreview.timeUntilEnd)}.</p>
+							) : (
+								<p className='detail'>
+									If <CurrencyValue copyable={false} value={selectedAmount} suffix='REP' /> became binding capital, the dispute window would run for {formatDuration(timerPreview.hypotheticalDuration)} after activation and end in {formatDuration(timerPreview.timeUntilEnd)}.
+								</p>
+							)}
 						</>
 					) : (
 						<>
@@ -458,26 +483,17 @@ export function ReportingSection({
 
 			{showWithdrawOnly ? (
 				<SectionBlock title='Withdraw Escalation Deposits'>
-					{selectedSide === undefined ? undefined : selectedSide.userDeposits.length === 0 ? (
-						<p className='detail'>Connected wallet has no unsettled deposits on the selected side.</p>
-					) : activeReportingDetails?.withdrawalEnabled ? (
-						<p className='detail'>
-							Connected wallet has <strong>{selectedSide.userDeposits.length.toString()}</strong> withdrawable unsettled deposit {getDepositEntryCountLabel(selectedSide.userDeposits.length)} on the selected side.
-						</p>
-					) : (
-						<p className='detail'>
-							Connected wallet has <strong>{selectedSide.userDeposits.length.toString()}</strong> unsettled deposit {getDepositEntryCountLabel(selectedSide.userDeposits.length)} on the selected side, but withdrawals are not available yet.
-						</p>
-					)}
+					{selectedSide === undefined ? undefined : selectedSide.userDeposits.length === 0 ? <p className='detail'>Connected wallet has no unsettled deposits on the selected side.</p> : undefined}
 					{selectedSide === undefined || selectedSide.userDeposits.length === 0 ? undefined : (
 						<div className='field'>
 							<span>Choose deposits to withdraw</span>
-							<p className='detail'>Leave all unchecked to withdraw every eligible deposit on this side.</p>
-							<div>
+							<div className='withdraw-deposit-list'>
 								{selectedSide.userDeposits.map(deposit => {
 									const isChecked = selectedWithdrawDepositIndexes.includes(deposit.depositIndex)
+									const claimLabel = getWithdrawDepositClaimLabel(effectiveReportingDetails, selectedSide.key)
+									const claimAmount = getEscalationDepositClaimAmount(effectiveReportingDetails, selectedSide.key, deposit)
 									return (
-										<label key={deposit.depositIndex.toString()} className='detail'>
+										<label key={deposit.depositIndex.toString()} className='withdraw-deposit-option'>
 											<input
 												type='checkbox'
 												checked={isChecked}
@@ -486,8 +502,24 @@ export function ReportingSection({
 													const nextSelectedWithdrawDepositIndexes = event.currentTarget.checked ? [...selectedWithdrawDepositIndexes, deposit.depositIndex] : selectedWithdrawDepositIndexes.filter(index => index !== deposit.depositIndex)
 													onReportingFormChange({ selectedWithdrawDepositIndexes: nextSelectedWithdrawDepositIndexes })
 												}}
-											/>{' '}
-											Deposit #{deposit.depositIndex.toString()} | Amount: <CurrencyValue value={deposit.amount} suffix='REP' /> | Cumulative at entry: <CurrencyValue value={deposit.cumulativeAmount} suffix='REP' />
+											/>
+											<span className='withdraw-deposit-copy'>
+												<strong>Deposit #{deposit.depositIndex.toString()}</strong>
+												<span>
+													Initially deposited: <CurrencyValue value={deposit.amount} suffix='REP' />
+												</span>
+												{claimAmount === undefined ? (
+													<span>Worth after finalization: Pending finalization</span>
+												) : (
+													<span>
+														Worth now: <CurrencyValue value={claimAmount} suffix='REP' />
+													</span>
+												)}
+												<span>Current claim type: {claimLabel ?? 'Pending finalization'}</span>
+												<span>
+													Entry depth: <CurrencyValue value={deposit.cumulativeAmount} suffix='REP' />
+												</span>
+											</span>
 										</label>
 									)
 								})}
@@ -496,7 +528,22 @@ export function ReportingSection({
 					)}
 
 					<div className='actions'>
-						<TransactionActionButton idleLabel='Withdraw Escalation Deposits' pendingLabel='Withdrawing deposits...' onClick={onWithdrawEscalation} pending={reportingActiveAction === 'withdrawEscalation'} tone='secondary' availability={{ disabled: withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }} />
+						<TransactionActionButton
+							idleLabel='Withdraw Selected Deposits'
+							pendingLabel='Withdrawing deposits...'
+							onClick={() => onWithdrawEscalation(selectedWithdrawDepositIndexes)}
+							pending={reportingActiveAction === 'withdrawEscalation'}
+							tone='secondary'
+							availability={{ disabled: withdrawSelectedGuardMessage !== undefined, reason: withdrawSelectedGuardMessage }}
+						/>
+						<TransactionActionButton
+							idleLabel='Withdraw All'
+							pendingLabel='Withdrawing deposits...'
+							onClick={() => onWithdrawEscalation(allWithdrawDepositIndexes)}
+							pending={reportingActiveAction === 'withdrawEscalation'}
+							tone='secondary'
+							availability={{ disabled: withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
+						/>
 					</div>
 				</SectionBlock>
 			) : undefined}

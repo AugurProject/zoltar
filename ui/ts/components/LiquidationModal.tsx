@@ -20,7 +20,6 @@ import { parseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
-import { getCurrentTimestamp as getLocalCurrentTimestamp } from '../lib/time.js'
 import type { ActionFeedback } from '../types/components.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 
@@ -204,7 +203,7 @@ export function LiquidationModal({
 	}, [showLiquidationModal])
 
 	if (!showLiquidationModal) return undefined
-	const currentTimestamp = chainCurrentTimestamp ?? getLocalCurrentTimestamp()
+	const currentTimestamp = chainCurrentTimestamp
 	const liquidationAmountValue = (() => {
 		try {
 			return parseRepAmountInput(liquidationAmount, 'Liquidation amount')

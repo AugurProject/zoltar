@@ -3,13 +3,13 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { TimestampValue } from '../components/TimestampValue.js'
 import { ChainTimestampContext } from '../lib/chainTimestamp.js'
+import { formatTimestamp } from '../lib/formatters.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('TimestampValue', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let restoreDomEnvironment: (() => void) | undefined
-	const originalDateNow = Date.now
 
 	beforeEach(() => {
 		const domEnvironment = installDomEnvironment()
@@ -17,7 +17,6 @@ describe('TimestampValue', () => {
 	})
 
 	afterEach(async () => {
-		Date.now = originalDateNow
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 		restoreDomEnvironment?.()
@@ -47,11 +46,11 @@ describe('TimestampValue', () => {
 		expect(document.body.textContent?.includes('(in 2m)')).toBe(true)
 	})
 
-	test('falls back to browser time only when no chain timestamp is available', async () => {
-		Date.now = () => 900_000
+	test('omits relative time when no chain timestamp is available', async () => {
 		const renderedComponent = await renderIntoDocument(<TimestampValue timestamp={840n} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('(1m ago)')).toBe(true)
+		expect(document.body.textContent?.includes(formatTimestamp(840n))).toBe(true)
+		expect(document.body.querySelector('.timestamp-value-relative')).toBeNull()
 	})
 })

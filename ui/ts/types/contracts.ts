@@ -320,6 +320,7 @@ export type EscalationSide = {
 type ReportingDetailsBase = {
 	completeSetCollateralAmount: bigint
 	currentTime: bigint
+	forkThreshold: bigint
 	marketDetails: MarketDetails
 	nonDecisionThreshold: bigint
 	questionOutcome: ReportingOutcomeKey | 'none'
@@ -343,7 +344,7 @@ export type ActiveReportingDetails = ReportingDetailsBase & {
 	escalationGameAddress: Address
 	hasReachedNonDecision: boolean
 	sides: EscalationSide[]
-	startingTime: bigint
+	activationTime: bigint
 	totalCost: bigint
 }
 

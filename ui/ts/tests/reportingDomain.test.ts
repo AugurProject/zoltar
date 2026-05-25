@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from 'viem'
 import {
+	ESCALATION_GAME_ACTIVATION_DELAY,
 	calculateEstimatedEscalationReturn,
 	computeEscalationTimeSinceStartFromAttritionCost,
 	getEscalationBalanceTuple,
@@ -51,6 +52,7 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		currentTime: 150n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
+		forkThreshold: rep(200n),
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold: rep(100n),
@@ -62,8 +64,8 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 			{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
 			{ balance: rep(2n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 		],
+		activationTime: 120n,
 		startBond: rep(3n),
-		startingTime: 120n,
 		status: 'active',
 		totalCost: rep(20n),
 		universeId: 1n,
@@ -81,6 +83,7 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 	return {
 		completeSetCollateralAmount: 1n,
 		currentTime: 150n,
+		forkThreshold: rep(100n),
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold: rep(50n),
 		questionOutcome: 'none',
@@ -107,10 +110,11 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 	]
 	const startBond = overrides.startBond ?? rep(1n)
 	const nonDecisionThreshold = overrides.nonDecisionThreshold ?? rep(20n)
-	const startingTime = overrides.startingTime ?? 120n
+	const forkThreshold = overrides.forkThreshold ?? nonDecisionThreshold * 2n
+	const activationTime = overrides.activationTime ?? 120n
 	const currentTime = overrides.currentTime ?? 150n
 	const bindingCapital = getEscalationBindingCapital(getEscalationBalanceTuple(sides))
-	const escalationEndTime = startingTime + computeEscalationTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, bindingCapital)
+	const escalationEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, bindingCapital)
 
 	const baseDetails: ActiveReportingDetails = {
 		bindingCapital,
@@ -119,6 +123,7 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		currentTime,
 		escalationEndTime,
 		escalationGameAddress: zeroAddress,
+		forkThreshold,
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold,
@@ -127,7 +132,7 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		securityPoolAddress: zeroAddress,
 		sides,
 		startBond,
-		startingTime,
+		activationTime,
 		status: 'active',
 		totalCost: 0n,
 		universeId: 1n,
@@ -145,10 +150,11 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		bindingCapital,
 		currentTime,
 		escalationEndTime,
+		forkThreshold,
 		nonDecisionThreshold,
 		sides,
 		startBond,
-		startingTime,
+		activationTime,
 	}
 }
 
@@ -366,15 +372,18 @@ describe('reportingDomain', () => {
 	})
 
 	test('getReportingTimerPreview returns a pre-start timer preview for a valid first report', () => {
-		expect(getReportingTimerPreview(createNotStartedReportingDetails(), 'yes', rep(10n), 150n)).toEqual({
+		const hypotheticalDuration = computeEscalationTimeSinceStartFromAttritionCost(rep(3n), rep(50n), rep(10n))
+
+		expect(getReportingTimerPreview(createNotStartedReportingDetails(), 'yes', rep(10n))).toEqual({
 			hypotheticalDuration: computeEscalationTimeSinceStartFromAttritionCost(rep(3n), rep(50n), rep(10n)),
 			kind: 'not-started',
-			startsAt: 150n,
+			timeUntilEnd: ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration,
+			timeUntilStart: ESCALATION_GAME_ACTIVATION_DELAY,
 		})
 	})
 
 	test('getReportingTimerPreview returns undefined for an invalid pre-start amount', () => {
-		expect(getReportingTimerPreview(createNotStartedReportingDetails(), 'yes', rep(2n), 150n)).toBeUndefined()
+		expect(getReportingTimerPreview(createNotStartedReportingDetails(), 'yes', rep(2n))).toBeUndefined()
 	})
 
 	test('projectEscalationEndTime keeps the timer unchanged for a leading-side deposit', () => {
@@ -400,7 +409,7 @@ describe('reportingDomain', () => {
 	test('getReportingTimerPreview reports timer extensions for active escalation contributions', () => {
 		const details = createDynamicReportingDetails()
 
-		expect(getReportingTimerPreview(details, 'no', rep(2n), details.currentTime)).toEqual({
+		expect(getReportingTimerPreview(details, 'no', rep(2n))).toEqual({
 			acceptedAmount: rep(2n),
 			actualState: 'extends',
 			hypotheticalDuration: computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, rep(2n)),
@@ -412,7 +421,7 @@ describe('reportingDomain', () => {
 	test('getReportingTimerPreview reports unchanged timers while still using the standalone amount for hypothetical duration', () => {
 		const details = createDynamicReportingDetails()
 
-		expect(getReportingTimerPreview(details, 'yes', rep(5n), details.currentTime)).toEqual({
+		expect(getReportingTimerPreview(details, 'yes', rep(5n))).toEqual({
 			acceptedAmount: rep(5n),
 			actualState: 'unchanged',
 			hypotheticalDuration: computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, rep(5n)),

@@ -561,7 +561,7 @@ export function App() {
 				onLoadReporting: () => void loadReporting(),
 				onReportOutcome: () => void onReportOutcome(),
 				onReportingFormChange: update => updateReportingForm(update),
-				onWithdrawEscalation: () => void withdrawEscalation(),
+				onWithdrawEscalation: depositIndexes => void withdrawEscalation(depositIndexes),
 				reportingActiveAction,
 				reportingDetails,
 				reportingError,

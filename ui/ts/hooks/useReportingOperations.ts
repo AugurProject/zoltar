@@ -131,7 +131,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 			'Failed to report on outcome',
 		)
 
-	const withdrawEscalation = async () =>
+	const withdrawEscalation = async (depositIndexesOverride?: bigint[]) =>
 		await runReportingAction(
 			'withdrawEscalation',
 			async (walletAddress, securityPoolAddress, currentForm) => {
@@ -147,14 +147,15 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 					throw new Error('Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
 				}
 
-				const missingSelectedDepositIndex = currentForm.selectedWithdrawDepositIndexes.find(index => !availableDepositIndexes.includes(index))
+				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexes
+				const missingSelectedDepositIndex = requestedDepositIndexes.find(index => !availableDepositIndexes.includes(index))
 				if (missingSelectedDepositIndex !== undefined) {
 					throw new Error(`Selected deposit #${missingSelectedDepositIndex.toString()} is no longer available to withdraw on the selected side`)
 				}
 
-				const depositIndexes = currentForm.selectedWithdrawDepositIndexes.length > 0 ? currentForm.selectedWithdrawDepositIndexes : availableDepositIndexes
+				const depositIndexes = requestedDepositIndexes
 				if (depositIndexes.length === 0) {
-					throw new Error('No deposits available to withdraw for the selected side')
+					throw new Error('Select at least one deposit to withdraw or use Withdraw all.')
 				}
 
 				return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, selectedOutcome, depositIndexes)

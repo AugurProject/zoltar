@@ -316,9 +316,9 @@ void describe('simulation backend', () => {
 				to: getAddress(toAccount),
 				value: 1n,
 			})
-			const startTime = Date.now()
+			const startTime = performance.now()
 			await writeClient.waitForTransactionReceipt({ hash })
-			const elapsedMilliseconds = Date.now() - startTime
+			const elapsedMilliseconds = performance.now() - startTime
 
 			expect(elapsedMilliseconds >= 200).toBe(true)
 		} finally {

@@ -55,7 +55,6 @@ import {
 	hasTimestamp,
 	hasTimestampAndNumber,
 	isBigintTriple,
-	isEscalationDepositPage,
 	requireOpenOracleExtraDataTuple,
 	requireOpenOracleReportMetaTuple,
 	requireOpenOracleReportMetaTupleArray,
@@ -64,7 +63,7 @@ import {
 	requireSecurityVaultTupleArray,
 	toUint8Array,
 } from './contracts/helpers.js'
-import { type ContractRevertReasonParams, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './contracts/core.js'
+import { type ContractRevertReasonParams, type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './contracts/core.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from './contracts/deploymentHelpers.js'
 export { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from './contracts/deployment.js'
 import { getDeploymentSteps } from './contracts/deployment.js'
@@ -80,6 +79,8 @@ const TRUTH_AUCTION_TIME_LENGTH = 604_800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
 
 const CONTRACT_PAGE_SIZE = 30n
+
+type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 
 type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
@@ -150,7 +151,7 @@ function getDeploymentStep(id: DeploymentStepId) {
 	return step
 }
 
-async function loadEscalationDeposits(client: ReadClient, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
+export async function loadEscalationDeposits(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
 	let currentIndex = 0n
 	const deposits: EscalationDeposit[] = []
 
@@ -161,7 +162,6 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 			functionName: 'getDepositsByOutcome',
 			args: [getReportingOutcomeValue(outcome), currentIndex, CONTRACT_PAGE_SIZE],
 		})
-		if (!isEscalationDepositPage(page)) throw new Error('Unexpected escalation deposits response')
 
 		const normalizedPage = page
 			.map((deposit, index) => ({
@@ -170,10 +170,10 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 				depositIndex: currentIndex + BigInt(index),
 				depositor: deposit.depositor,
 			}))
-			.filter(deposit => deposit.depositor !== zeroAddress)
+			.filter(deposit => deposit.depositor !== zeroAddress && deposit.amount > 0n)
 
 		deposits.push(...normalizedPage)
-		if (BigInt(normalizedPage.length) !== CONTRACT_PAGE_SIZE) break
+		if (BigInt(page.length) !== CONTRACT_PAGE_SIZE) break
 		currentIndex += CONTRACT_PAGE_SIZE
 	}
 
@@ -279,6 +279,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		return {
 			completeSetCollateralAmount,
 			currentTime: block.timestamp,
+			forkThreshold,
 			marketDetails,
 			nonDecisionThreshold: forkThreshold / 2n,
 			questionOutcome: 'none',
@@ -293,7 +294,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}
 	}
 
-	const [startBond, nonDecisionThreshold, startingTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = await readRequiredMulticall(client, [
+	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'startBond',
@@ -308,7 +309,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		},
 		{
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'startingTime',
+			functionName: 'activationTime',
 			address: escalationGameAddress,
 			args: [],
 		},
@@ -379,6 +380,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		currentTime: block.timestamp,
 		escalationEndTime,
 		escalationGameAddress,
+		forkThreshold,
 		hasReachedNonDecision,
 		marketDetails,
 		nonDecisionThreshold,
@@ -388,7 +390,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		sides,
 		startBond,
 		status: 'active',
-		startingTime,
+		activationTime,
 		totalCost,
 		universeId,
 		withdrawalEnabled: withdrawalState !== 'not-finalized',
@@ -995,7 +997,7 @@ export async function submitInitialOracleReport(client: WriteClient, openOracleA
 	} satisfies OpenOracleActionResult
 }
 
-export async function settleOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint) {
+export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, reportId: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
@@ -1672,7 +1674,7 @@ export async function redeemSharesInSecurityPool(client: WriteClient, securityPo
 	} satisfies TradingActionResult
 }
 
-export async function migrateSharesFromUniverse(client: WriteClient, securityPoolAddress: Address, shareOutcome: ReportingOutcomeKey, targetOutcomeIndexes: bigint[]) {
+export async function migrateSharesFromUniverse<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: ReadWriteContractClient<TReceipt>, securityPoolAddress: Address, shareOutcome: ReportingOutcomeKey, targetOutcomeIndexes: bigint[]) {
 	const sortedTargetOutcomeIndexes = sortBigIntsAscending(targetOutcomeIndexes)
 	const [universeId, shareTokenAddress] = await Promise.all([
 		readSecurityPoolUniverseId(client, securityPoolAddress),

@@ -166,7 +166,7 @@ function formatRelativeDuration(seconds: bigint) {
 	return `${minutes}m`
 }
 
-export function formatRelativeTimestamp(timestamp: bigint, currentTimestamp: bigint = BigInt(Math.floor(Date.now() / MILLISECONDS_PER_SECOND))) {
+export function formatRelativeTimestamp(timestamp: bigint, currentTimestamp: bigint) {
 	const delta = timestamp - currentTimestamp
 	if (delta === 0n) return 'now'
 	if (delta > 0n) return `in ${formatRelativeDuration(delta)}`

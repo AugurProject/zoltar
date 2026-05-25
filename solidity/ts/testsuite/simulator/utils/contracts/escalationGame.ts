@@ -63,7 +63,7 @@ export const getEscalationGameDeposits = async (client: ReadClient, escalationGa
 		).map((deposit, index) => ({ ...deposit, depositIndex: currentIndex + BigInt(index) }))
 		const newDeposits = returnedDeposits.filter(deposit => BigInt(deposit.depositor) !== 0n || deposit.amount !== 0n || deposit.cumulativeAmount !== 0n)
 		pages.push(...newDeposits)
-		if (BigInt(returnedDeposits.length) !== CONTRACT_PAGE_SIZE || BigInt(newDeposits.length) !== CONTRACT_PAGE_SIZE) break
+		if (BigInt(returnedDeposits.length) !== CONTRACT_PAGE_SIZE) break
 		currentIndex += CONTRACT_PAGE_SIZE
 	} while (true)
 	return pages
@@ -107,10 +107,10 @@ export const getBalances = async (client: ReadClient, escalationGame: AccountAdd
 	return { invalid, yes, no }
 }
 
-export const getStartingTime = async (client: ReadClient, escalationGame: AccountAddress) =>
+export const getActivationTime = async (client: ReadClient, escalationGame: AccountAddress) =>
 	await client.readContract({
 		abi: peripherals_EscalationGame_EscalationGame.abi,
-		functionName: 'startingTime',
+		functionName: 'activationTime',
 		address: escalationGame,
 		args: [],
 	})

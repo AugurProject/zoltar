@@ -7,6 +7,7 @@ import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from 'viem'
 import { SecurityPoolWorkflowSection } from '../components/SecurityPoolWorkflowSection.js'
 import { ChainTimestampContext } from '../lib/chainTimestamp.js'
+import { getReportingLockedUntilMessage } from '../lib/reporting.js'
 import type { AccountState } from '../types/app.js'
 import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '../types/contracts.js'
 import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../types/components.js'
@@ -1635,17 +1636,20 @@ describe('SecurityPoolWorkflowSection', () => {
 	})
 
 	test('shows disabled reporting actions before market end instead of a placeholder message', async () => {
-		const futureMarket = createMarketDetails({ endTime: BigInt(Math.floor(Date.now() / 1000) + 3600) })
+		const futureMarket = createMarketDetails({ endTime: 1_700_003_600n })
+		const expectedLockedReason = getReportingLockedUntilMessage(futureMarket.endTime, 1_700_000_000n)
 		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					checkedSecurityPoolAddress: zeroAddress,
-					securityPoolAddress: zeroAddress,
-					securityPools: [createSelectedPool({ marketDetails: futureMarket })],
-					selectedPoolView: 'reporting',
-				})}
-				showHeader={false}
-			/>,
+			<ChainTimestampContext.Provider value={1_700_000_000n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: zeroAddress,
+						securityPoolAddress: zeroAddress,
+						securityPools: [createSelectedPool({ marketDetails: futureMarket })],
+						selectedPoolView: 'reporting',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -1659,7 +1663,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Withdraw Escalation Deposits' })).toBeNull()
 		expect(documentQueries.queryByText('Load reporting details to populate live stakes, bond progression, and deposit indexes.')).toBeNull()
 		expect(documentQueries.queryByText('Reporting unlocks after the market end timestamp for the selected pool.')).toBeNull()
-		expect(documentQueries.queryByText('Reporting opens after market end.')).toBeNull()
+		expect(documentQueries.queryByText(expectedLockedReason)).not.toBeNull()
 		expect(document.body.querySelectorAll('.escalation-side')).toHaveLength(3)
 		expect(document.body.textContent?.includes('Your deposits: None')).toBe(false)
 		expect(document.body.textContent?.includes('Projected payout for current amount')).toBe(false)
@@ -1667,67 +1671,53 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)
-		expect(reportButton.title).toBe('Reporting opens after market end.')
+		expect(reportButton.title).toBe(expectedLockedReason)
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
-		const originalDateNow = Date.now
-		Date.now = () => 0
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1n + 60n * 60n + 60n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: zeroAddress,
+						securityPoolAddress: zeroAddress,
+						securityPools: [
+							createSelectedPool({
+								lastOraclePrice: 3n * 10n ** 18n,
+								lastOracleSettlementTimestamp: 1n,
+							}),
+						],
+						selectedPoolView: 'price-oracle',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
 
-		try {
-			const renderedComponent = await renderIntoDocument(
-				<ChainTimestampContext.Provider value={1n + 60n * 60n + 60n}>
-					<SecurityPoolWorkflowSection
-						{...createSecurityPoolWorkflowProps({
-							checkedSecurityPoolAddress: zeroAddress,
-							securityPoolAddress: zeroAddress,
-							securityPools: [
-								createSelectedPool({
-									lastOraclePrice: 3n * 10n ** 18n,
-									lastOracleSettlementTimestamp: 1n,
-								}),
-							],
-							selectedPoolView: 'price-oracle',
-						})}
-						showHeader={false}
-					/>
-				</ChainTimestampContext.Provider>,
-			)
-			cleanupRenderedComponent = renderedComponent.cleanup
-
-			expect(document.body.textContent?.includes('(expired 1m ago)')).toBe(true)
-		} finally {
-			Date.now = originalDateNow
-		}
+		expect(document.body.textContent?.includes('(expired 1m ago)')).toBe(true)
 	})
 
 	test('uses the shared chain timestamp context to unlock reporting after market end', async () => {
-		const originalDateNow = Date.now
-		Date.now = () => 0
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={150n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: zeroAddress,
+						securityPoolAddress: zeroAddress,
+						securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 100n }) })],
+						selectedPoolView: 'reporting',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
 
-		try {
-			const renderedComponent = await renderIntoDocument(
-				<ChainTimestampContext.Provider value={150n}>
-					<SecurityPoolWorkflowSection
-						{...createSecurityPoolWorkflowProps({
-							checkedSecurityPoolAddress: zeroAddress,
-							securityPoolAddress: zeroAddress,
-							securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 100n }) })],
-							selectedPoolView: 'reporting',
-						})}
-						showHeader={false}
-					/>
-				</ChainTimestampContext.Provider>,
-			)
-			cleanupRenderedComponent = renderedComponent.cleanup
-
-			const documentQueries = within(document.body)
-			const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
-			expect(reportButton.disabled).toBe(true)
-			expect(reportButton.title).toBe('Load reporting details before reporting on an outcome.')
-		} finally {
-			Date.now = originalDateNow
-		}
+		const documentQueries = within(document.body)
+		const reportButton = documentQueries.getByRole('button', { name: 'Report / Contribute On Selected Side' }) as HTMLButtonElement
+		expect(reportButton.disabled).toBe(true)
+		expect(reportButton.title).toBe('Load reporting details before reporting on an outcome.')
 	})
 
 	test('renders staged operations management inside the staged operations tab instead of a standalone section', async () => {
@@ -1969,27 +1959,33 @@ describe('SecurityPoolWorkflowSection', () => {
 			selectedPoolView: 'reporting',
 		})
 
-		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1n}>
+				<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />
+			</ChainTimestampContext.Provider>,
+		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(reportingLoadCalls).toBe(0)
 
 		await act(async () => {
 			render(
-				<SecurityPoolWorkflowSection
-					{...baseProps}
-					reporting={createReportingProps({
-						onLoadReporting: () => {
-							reportingLoadCalls += 1
-						},
-						reportingForm: {
-							reportAmount: '',
-							securityPoolAddress: stalePoolAddress,
-							selectedOutcome: 'yes',
-							selectedWithdrawDepositIndexes: [],
-						},
-					})}
-					showHeader={false}
-				/>,
+				<ChainTimestampContext.Provider value={1n}>
+					<SecurityPoolWorkflowSection
+						{...baseProps}
+						reporting={createReportingProps({
+							onLoadReporting: () => {
+								reportingLoadCalls += 1
+							},
+							reportingForm: {
+								reportAmount: '',
+								securityPoolAddress: stalePoolAddress,
+								selectedOutcome: 'yes',
+								selectedWithdrawDepositIndexes: [],
+							},
+						})}
+						showHeader={false}
+					/>
+				</ChainTimestampContext.Provider>,
 				renderedComponent.container,
 			)
 		})
@@ -1998,21 +1994,23 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		await act(async () => {
 			render(
-				<SecurityPoolWorkflowSection
-					{...baseProps}
-					reporting={createReportingProps({
-						onLoadReporting: () => {
-							reportingLoadCalls += 1
-						},
-						reportingForm: {
-							reportAmount: '',
-							securityPoolAddress: selectedPoolAddress,
-							selectedOutcome: 'yes',
-							selectedWithdrawDepositIndexes: [],
-						},
-					})}
-					showHeader={false}
-				/>,
+				<ChainTimestampContext.Provider value={1n}>
+					<SecurityPoolWorkflowSection
+						{...baseProps}
+						reporting={createReportingProps({
+							onLoadReporting: () => {
+								reportingLoadCalls += 1
+							},
+							reportingForm: {
+								reportAmount: '',
+								securityPoolAddress: selectedPoolAddress,
+								selectedOutcome: 'yes',
+								selectedWithdrawDepositIndexes: [],
+							},
+						})}
+						showHeader={false}
+					/>
+				</ChainTimestampContext.Provider>,
 				renderedComponent.container,
 			)
 		})
@@ -2021,21 +2019,23 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		await act(async () => {
 			render(
-				<SecurityPoolWorkflowSection
-					{...baseProps}
-					reporting={createReportingProps({
-						onLoadReporting: () => {
-							reportingLoadCalls += 1
-						},
-						reportingForm: {
-							reportAmount: '',
-							securityPoolAddress: selectedPoolAddress,
-							selectedOutcome: 'yes',
-							selectedWithdrawDepositIndexes: [],
-						},
-					})}
-					showHeader={false}
-				/>,
+				<ChainTimestampContext.Provider value={1n}>
+					<SecurityPoolWorkflowSection
+						{...baseProps}
+						reporting={createReportingProps({
+							onLoadReporting: () => {
+								reportingLoadCalls += 1
+							},
+							reportingForm: {
+								reportAmount: '',
+								securityPoolAddress: selectedPoolAddress,
+								selectedOutcome: 'yes',
+								selectedWithdrawDepositIndexes: [],
+							},
+						})}
+						showHeader={false}
+					/>
+				</ChainTimestampContext.Provider>,
 				renderedComponent.container,
 			)
 		})
@@ -2064,18 +2064,32 @@ describe('SecurityPoolWorkflowSection', () => {
 			securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress: selectedPoolAddress })],
 		})
 
-		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='reporting' showHeader={false} />)
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1n}>
+				<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='reporting' showHeader={false} />
+			</ChainTimestampContext.Provider>,
+		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(reportingLoadCalls).toBe(1)
 
 		await act(async () => {
-			render(<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='vaults' showHeader={false} />, renderedComponent.container)
+			render(
+				<ChainTimestampContext.Provider value={1n}>
+					<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='vaults' showHeader={false} />
+				</ChainTimestampContext.Provider>,
+				renderedComponent.container,
+			)
 		})
 
 		expect(reportingLoadCalls).toBe(1)
 
 		await act(async () => {
-			render(<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='reporting' showHeader={false} />, renderedComponent.container)
+			render(
+				<ChainTimestampContext.Provider value={1n}>
+					<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='reporting' showHeader={false} />
+				</ChainTimestampContext.Provider>,
+				renderedComponent.container,
+			)
 		})
 
 		expect(reportingLoadCalls).toBe(2)
