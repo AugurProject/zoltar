@@ -1,8 +1,6 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatRelativeTimestamp, formatTimestamp } from '../lib/formatters.js'
-import { getCurrentTimestamp } from '../lib/time.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 
 type TimestampValueProps = {
@@ -17,20 +15,6 @@ type TimestampValueProps = {
 export function TimestampValue({ className = '', currentTimestamp, loading = false, timestamp, undefinedText = getMetricPlaceholderPresentation(undefined)?.placeholder, zeroText }: TimestampValueProps) {
 	const chainCurrentTimestamp = useChainTimestamp()
 	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp
-	const [fallbackNow, setFallbackNow] = useState(() => getCurrentTimestamp())
-	const now = resolvedCurrentTimestamp ?? fallbackNow
-
-	useEffect(() => {
-		if (loading || resolvedCurrentTimestamp !== undefined) return
-		setFallbackNow(getCurrentTimestamp())
-		const intervalId = window.setInterval(() => {
-			setFallbackNow(getCurrentTimestamp())
-		}, 1000)
-
-		return () => {
-			window.clearInterval(intervalId)
-		}
-	}, [loading, resolvedCurrentTimestamp])
 
 	if (loading) {
 		return <span className={`timestamp-value loading ${className}`}>Loading...</span>
@@ -49,11 +33,17 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 	}
 
 	const absoluteTimestamp = formatTimestamp(timestamp)
-	const relativeTimestamp = formatRelativeTimestamp(timestamp, now)
+	const relativeTimestamp = resolvedCurrentTimestamp === undefined ? undefined : formatRelativeTimestamp(timestamp, resolvedCurrentTimestamp)
 
 	return (
 		<time className={`timestamp-value ${className}`} dateTime={new Date(Number(timestamp) * 1000).toISOString()} title={absoluteTimestamp}>
-			{absoluteTimestamp} <span className='timestamp-value-relative'>({relativeTimestamp})</span>
+			{absoluteTimestamp}
+			{relativeTimestamp === undefined ? null : (
+				<>
+					{' '}
+					<span className='timestamp-value-relative'>({relativeTimestamp})</span>
+				</>
+			)}
 		</time>
 	)
 }

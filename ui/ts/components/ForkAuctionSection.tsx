@@ -322,6 +322,7 @@ export function ForkAuctionSection({
 		forkAuctionResult === undefined
 			? undefined
 			: {
+					dismissKey: forkAuctionResult.hash,
 					title: 'Latest Fork / Auction Action',
 					embedInCard,
 					rows: [

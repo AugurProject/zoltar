@@ -29,7 +29,6 @@ function createQuestion(overrides: Partial<MarketDetails> = {}): MarketDetails {
 describe('Question component', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let restoreDomEnvironment: (() => void) | undefined
-	const originalDateNow = Date.now
 
 	beforeEach(() => {
 		const domEnvironment = installDomEnvironment()
@@ -37,7 +36,6 @@ describe('Question component', () => {
 	})
 
 	afterEach(async () => {
-		Date.now = originalDateNow
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 		restoreDomEnvironment?.()
@@ -45,7 +43,6 @@ describe('Question component', () => {
 	})
 
 	test('inherits the shared chain timestamp for route-level relative time rendering', async () => {
-		Date.now = () => 0
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={240n}>
 				<Question question={createQuestion()} showTitle={false} />

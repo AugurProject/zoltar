@@ -85,6 +85,7 @@ export type ReadinessAction = {
 
 export type WorkflowOutcomePresentation = {
 	detail: ComponentChildren
+	dismissKey?: string
 	nextStep?: string
 	title: string
 }
@@ -95,6 +96,7 @@ type WorkflowLatestActionRow = {
 }
 
 export type WorkflowLatestActionPresentation = {
+	dismissKey?: string
 	embedInCard?: boolean
 	rows: WorkflowLatestActionRow[]
 	title: string
@@ -574,7 +576,7 @@ export type ReportingRouteContentProps = {
 	onLoadReporting: () => void
 	onReportOutcome: () => void
 	onReportingFormChange: (update: Partial<ReportingFormState>) => void
-	onWithdrawEscalation: () => void
+	onWithdrawEscalation: (depositIndexes?: bigint[]) => void
 	reportingActiveAction: ReportingActionResult['action'] | undefined
 	reportingDetails: ReportingDetails | undefined
 	reportingError: string | undefined

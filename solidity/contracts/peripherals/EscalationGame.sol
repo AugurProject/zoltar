@@ -20,7 +20,9 @@ uint256 constant MAX_EXP_ITERATIONS = 16;
 uint256 constant EXCESS_REWARD_WINDOW_DIVISOR = 2;
 
 contract EscalationGame {
-	uint256 public startingTime;
+	uint256 public constant activationDelay = 3 days;
+	uint256 public activationTime;
+	uint256 public createdAt;
 	uint256[3] public balances; // outcome -> amount
 	mapping(uint8 => Deposit[]) public deposits; // make a fixed array with dynamic
 	ISecurityPool public securityPool;
@@ -30,7 +32,7 @@ contract EscalationGame {
 	address public owner;
 	uint256 public nonDecisionTimestamp;
 
-	event GameStarted(uint256 startingTime, uint256 startBond, uint256 nonDecisionThreshold);
+	event GameStarted(uint256 createdAt, uint256 activationTime, uint256 startBond, uint256 nonDecisionThreshold);
 	event DepositOnOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount, uint256 depositIndex, uint256 cumulativeAmount);
 	event WithdrawDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountToWithdraw, uint256 depositIndex);
 	event ClaimDeposit(uint256 amountToWithdraw, uint256 burnAmount);
@@ -42,16 +44,17 @@ contract EscalationGame {
 
 	function start(uint256 _startBond, uint256 _nonDecisionThreshold) public {
 		require(owner == msg.sender, 'only owner can start');
-		require(startingTime == 0, 'already started');
+		require(activationTime == 0, 'already started');
 		require(_nonDecisionThreshold > _startBond, 'threshold must exceed start bond');
 		require(_startBond > 0, 'start bond must be positive');
 		require(_startBond >= 1e18, 'start bond must be at least 1 ether');
 		require(_nonDecisionThreshold >= 1e18, 'threshold must be at least 1 ether');
-		startingTime = block.timestamp + 3 days;
+		createdAt = block.timestamp;
+		activationTime = block.timestamp + activationDelay;
 		nonDecisionThreshold = _nonDecisionThreshold;
 		startBond = _startBond;
 		lnRatioScaled = _computeLnRatioScaled(_startBond, _nonDecisionThreshold);
-		emit GameStarted(startingTime, startBond, nonDecisionThreshold);
+		emit GameStarted(createdAt, activationTime, startBond, nonDecisionThreshold);
 	}
 
 	function getBalances() public view returns (uint256[3] memory) {
@@ -141,12 +144,12 @@ contract EscalationGame {
 
 	function getEscalationGameEndDate() public view returns (uint256 endTime) {
 		if (nonDecisionTimestamp > 0) return nonDecisionTimestamp;
-		return startingTime + computeTimeSinceStartFromAttritionCost(getBindingCapital());
+		return activationTime + computeTimeSinceStartFromAttritionCost(getBindingCapital());
 	}
 
 	function totalCost() public view returns (uint256) {
-		if (startingTime >= block.timestamp) return 0;
-		uint256 timeFromStart = block.timestamp - startingTime;
+		if (activationTime >= block.timestamp) return 0;
+		uint256 timeFromStart = block.timestamp - activationTime;
 		if (timeFromStart >= escalationTimeLength) return nonDecisionThreshold;
 		return computeIterativeAttritionCost(timeFromStart);
 	}

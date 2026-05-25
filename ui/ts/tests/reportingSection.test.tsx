@@ -8,6 +8,7 @@ import { useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'
 import { ReportingSection } from '../components/ReportingSection.js'
 import { formatDuration } from '../lib/formatters.js'
+import { getReportingLockedUntilMessage } from '../lib/reporting.js'
 import { computeEscalationTimeSinceStartFromAttritionCost, getEscalationBalanceTuple, getEscalationBindingCapital } from '../lib/reportingDomain.js'
 import type { AccountState, ReportingFormState } from '../types/app.js'
 import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingDetails } from '../types/contracts.js'
@@ -84,6 +85,8 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		currentTime: 150n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
+		forkThreshold: rep(40n),
+		gameCreatedAt: 90n,
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold: rep(20n),
@@ -95,8 +98,8 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 			{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
 			{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
 		],
+		activationTime: 120n,
 		startBond: rep(3n),
-		startingTime: 120n,
 		status: 'active',
 		totalCost: rep(20n),
 		universeId: 1n,
@@ -118,10 +121,12 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 	]
 	const startBond = overrides.startBond ?? rep(1n)
 	const nonDecisionThreshold = overrides.nonDecisionThreshold ?? rep(20n)
-	const startingTime = overrides.startingTime ?? 120n
+	const forkThreshold = overrides.forkThreshold ?? nonDecisionThreshold * 2n
+	const activationTime = overrides.activationTime ?? 120n
 	const currentTime = overrides.currentTime ?? 150n
+	const gameCreatedAt = overrides.gameCreatedAt ?? 90n
 	const bindingCapital = getEscalationBindingCapital(getEscalationBalanceTuple(sides))
-	const escalationEndTime = startingTime + computeEscalationTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, bindingCapital)
+	const escalationEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, bindingCapital)
 
 	const baseDetails: ActiveReportingDetails = {
 		bindingCapital,
@@ -130,6 +135,8 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		currentTime,
 		escalationEndTime,
 		escalationGameAddress: zeroAddress,
+		forkThreshold,
+		gameCreatedAt,
 		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold,
@@ -138,7 +145,7 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		securityPoolAddress: zeroAddress,
 		sides,
 		startBond,
-		startingTime,
+		activationTime,
 		status: 'active',
 		totalCost: 0n,
 		universeId: 1n,
@@ -156,10 +163,12 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		bindingCapital,
 		currentTime,
 		escalationEndTime,
+		forkThreshold,
+		gameCreatedAt,
 		nonDecisionThreshold,
 		sides,
 		startBond,
-		startingTime,
+		activationTime,
 	}
 }
 
@@ -180,6 +189,7 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 	return {
 		completeSetCollateralAmount: 1n * REP,
 		currentTime: 150n,
+		forkThreshold: rep(100n),
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold: rep(50n),
 		questionOutcome: 'none',
@@ -315,7 +325,7 @@ describe('ReportingSection', () => {
 					currentTimestamp: 110n,
 					reportingDetails: createDynamicReportingDetails({
 						currentTime: 110n,
-						startingTime: 120n,
+						activationTime: 120n,
 					}),
 					reportingForm: createReportingForm({
 						selectedOutcome: 'yes',
@@ -363,7 +373,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
 		expect(documentQueries.queryByText('Opens In')).toBeNull()
-		expect(document.body.textContent?.includes('Reporting opens after the market end timestamp for this pool.')).toBe(true)
+		expect(document.body.textContent?.includes(getReportingLockedUntilMessage(100n, 50n))).toBe(true)
 	})
 
 	test('renders Reporting Open when the market has ended but details are not loaded', async () => {
@@ -406,7 +416,6 @@ describe('ReportingSection', () => {
 		const metricsSection = getEscalationMetricsSection()
 		const metricsQueries = within(metricsSection)
 		expect(metricsQueries.queryByText('Current Bond')).toBeNull()
-		expect(metricsQueries.getByText('Binding Capital')).not.toBeNull()
 		expect(metricsQueries.getByText('Threshold')).not.toBeNull()
 		expect(metricsQueries.getByText('Time Left')).not.toBeNull()
 		expect(metricsQueries.getByText('Game Start')).not.toBeNull()
@@ -510,7 +519,8 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Withdraw Escalation Deposits', 'Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Deposits', 'Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw All', 'Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
 	})
 
 	test('shows the time-left metric inside Escalation Metrics', async () => {
@@ -584,6 +594,25 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByText('Timed Out').length).toBeGreaterThan(0)
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
+	})
+
+	test('shows the finalized outcome in the resolved banner', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createReportingDetails({
+						questionOutcome: 'yes',
+						resolution: 'yes',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Resolved' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Market finalized as Yes. Review any remaining deposits below.')).toBe(true)
 	})
 
 	test('disables reporting after the escalation timer ends', async () => {
@@ -720,15 +749,13 @@ describe('ReportingSection', () => {
 		expect(reportOutcomeSection.textContent?.includes('Your deposits:')).toBe(false)
 		expect(reportOutcomeSection.textContent?.includes('Projected payout for current amount')).toBe(false)
 		expect(reportOutcomeSection.textContent?.includes('Projected profit if this side wins')).toBe(false)
-		expect(metricsSection.querySelector('[title="0 REP"]')).not.toBeNull()
 		expect(metricsSection.querySelector('[title="50 REP"]')).not.toBeNull()
 		expect(metricsSection.querySelector('[title="3 REP"]')).not.toBeNull()
 		expect(reportOutcomeSection.querySelectorAll('.currency-value.unavailable')).toHaveLength(0)
 		expect(document.body.textContent?.includes('Load reporting details to populate live stakes')).toBe(false)
 		expectTransactionButtonEnabled(document.body, 'Report / Contribute Yes')
-		expect(document.body.textContent?.includes('This contribution would start the escalation timer at')).toBe(true)
-		expect(document.body.textContent?.includes('If')).toBe(true)
-		expect(document.body.textContent?.includes('became binding capital')).toBe(true)
+		expect(document.body.textContent?.includes('This contribution would start the escalation timer in 3d 0h 0m.')).toBe(true)
+		expect(document.body.textContent?.includes('the dispute timer would expire as soon as it activates, so reporting would close in 3d 0h 0m.')).toBe(true)
 	})
 
 	test('disables report submission for a pre-start amount below the first-report minimum', async () => {
@@ -976,9 +1003,11 @@ describe('ReportingSection', () => {
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expectTransactionButtonEnabled(document.body, 'Withdraw Escalation Deposits')
-		expect(document.body.textContent?.includes('Connected wallet has 1 withdrawable unsettled deposit entry on the selected side.')).toBe(true)
+		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Deposits', 'Select at least one deposit to withdraw or use Withdraw all.')
+		expectTransactionButtonEnabled(document.body, 'Withdraw All')
 		expect(within(document.body).getByRole('checkbox', { name: /Deposit #0/i })).toBeDefined()
+		expect(document.body.textContent?.includes('Winning payout')).toBe(true)
+		expect(document.body.textContent?.includes('Available now:')).toBe(true)
 	})
 
 	test('renders withdraw-only empty state when the selected side has no deposits', async () => {
@@ -999,7 +1028,8 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent?.includes('Connected wallet has no unsettled deposits on the selected side.')).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Withdraw Escalation Deposits', 'No deposits are available to withdraw on the selected side.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Deposits', 'No deposits are available to withdraw on the selected side.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw All', 'No deposits are available to withdraw on the selected side.')
 	})
 
 	test('updates selected withdrawal indexes from deposit checkboxes in withdraw-only mode', async () => {

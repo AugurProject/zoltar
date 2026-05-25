@@ -2,9 +2,9 @@
 
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, type Address, type Hash, type Hex } from 'viem'
-import { getOpenOracleAddress, migrateSharesFromUniverse, settleOracleReport } from '../contracts.js'
+import { getOpenOracleAddress, loadEscalationDeposits, migrateSharesFromUniverse, settleOracleReport } from '../contracts.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
-import type { WriteClient } from '../types/contracts.js'
+import type { ReadClient, WriteClient } from '../types/contracts.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
@@ -26,6 +26,12 @@ function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undef
 	client.sendTransaction = sendTransaction
 	client.waitForTransactionReceipt = waitForTransactionReceipt
 
+	return client
+}
+
+function createMockReadClient(readContract: ReadClient['readContract']): ReadClient {
+	const client = {} as ReadClient
+	client.readContract = readContract
 	return client
 }
 
@@ -72,5 +78,40 @@ describe('contracts helpers', () => {
 		})
 		expect(decodedCall.functionName).toBe('settle')
 		expect(decodedCall.args).toEqual([7n])
+	})
+
+	test('loadEscalationDeposits continues paging past settled entries on a full page', async () => {
+		const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000d4')
+		const depositor = getAddress('0x00000000000000000000000000000000000000e5')
+		const readCalls: bigint[] = []
+		const firstPage = Array.from({ length: 30 }, (_, index) => ({
+			amount: index === 29 ? 0n : BigInt(index + 1),
+			cumulativeAmount: BigInt(index + 1),
+			depositor,
+		}))
+		const secondPage = [
+			{
+				amount: 31n,
+				cumulativeAmount: 31n,
+				depositor,
+			},
+		]
+		const client = createMockReadClient(async request => {
+			const args = Reflect.get(request, 'args')
+			const startIndex = Array.isArray(args) ? args[1] : undefined
+			if (typeof startIndex !== 'bigint') throw new Error('Expected pagination start index')
+			readCalls.push(startIndex)
+			if (startIndex === 0n) return firstPage as never
+			if (startIndex === 30n) return secondPage as never
+			throw new Error(`Unexpected start index: ${startIndex.toString()}`)
+		})
+
+		const deposits = await loadEscalationDeposits(client, escalationGameAddress, 'yes')
+
+		expect(readCalls).toEqual([0n, 30n])
+		expect(deposits).toHaveLength(30)
+		expect(deposits.some(deposit => deposit.amount === 0n)).toBe(false)
+		expect(deposits[28]?.depositIndex).toBe(28n)
+		expect(deposits[29]?.depositIndex).toBe(30n)
 	})
 })

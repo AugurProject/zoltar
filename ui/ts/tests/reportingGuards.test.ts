@@ -13,6 +13,8 @@ function createActiveReportingDetails(overrides: Partial<ActiveReportingDetails>
 		currentTime: 150n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
+		forkThreshold: 40n,
+		gameCreatedAt: 90n,
 		hasReachedNonDecision: false,
 		marketDetails: {
 			answerUnit: '',
@@ -38,8 +40,8 @@ function createActiveReportingDetails(overrides: Partial<ActiveReportingDetails>
 			{ balance: 5n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
 			{ balance: 2n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
 		],
+		activationTime: 120n,
 		startBond: 1n,
-		startingTime: 120n,
 		status: 'active',
 		totalCost: 2n,
 		universeId: 1n,

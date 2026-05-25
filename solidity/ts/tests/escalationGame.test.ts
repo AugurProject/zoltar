@@ -7,7 +7,7 @@ import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
 import assert from 'node:assert'
-import { deployEscalationGame, depositOnOutcome, getBalances, getEscalationGameDeposits, getStartingTime, getQuestionResolution } from '../testsuite/simulator/utils/contracts/escalationGame'
+import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'
 import { peripherals_EscalationGame_EscalationGame, peripherals_test_EscalationGameTestSecurityPool_EscalationGameTestSecurityPool } from '../types/contractArtifact'
@@ -149,8 +149,8 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(outcomeBalances.no, 0n, 'no stake')
 		assert.strictEqual(outcomeBalances.invalid, 0n, 'invalid stake')
 
-		const startingTime = await getStartingTime(client, escalationGame)
-		assert.strictEqual(startingTime !== 0n, true, 'game was started')
+		const activationTime = await getActivationTime(client, escalationGame)
+		assert.strictEqual(activationTime !== 0n, true, 'game was started')
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, reportBond)
 		const outcomeBalancesAfterDeposit = await getBalances(client, escalationGame)
 		assert.strictEqual(outcomeBalancesAfterDeposit.yes, 0n, 'yes stake')
@@ -160,8 +160,8 @@ describe('Escalation Game Test Suite', () => {
 
 	test('empty started game resolves to invalid after timeout', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
-		const startingTime = await getStartingTime(client, escalationGame)
-		await mockWindow.setTime(startingTime + ESCALATION_TIME_LENGTH + 1n)
+		const activationTime = await getActivationTime(client, escalationGame)
+		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 		assert.strictEqual(await getQuestionResolution(client, escalationGame), QuestionOutcome.Invalid, 'empty game should resolve as invalid')
 	})
 
@@ -172,8 +172,8 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(await readHasReachedNonDecision(escalationGame), true, 'two threshold-reaching outcomes should trigger non-decision')
 		assert.strictEqual(await getQuestionResolution(client, escalationGame), QuestionOutcome.None, 'non-decision should leave the question unresolved')
 
-		const startingTime = await getStartingTime(client, escalationGame)
-		await mockWindow.setTime(startingTime + ESCALATION_TIME_LENGTH + 1n)
+		const activationTime = await getActivationTime(client, escalationGame)
+		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 		assert.strictEqual(await readHasReachedNonDecision(escalationGame), true, 'non-decision should stay active after time advances')
 		assert.strictEqual(await getQuestionResolution(client, escalationGame), QuestionOutcome.None, 'non-decision should still take precedence after time advances')
 	})
@@ -346,7 +346,7 @@ describe('Escalation Game Test Suite', () => {
 	test('totalCost: returns 0 before game starts and nonDecisionThreshold after timeout', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
 
-		// totalCost before game starts (startingTime is 3 days in future) returns 0
+		// totalCost before activationTime (3 days in the future) returns 0
 		const costBeforeStart = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'totalCost',
@@ -356,8 +356,8 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(costBeforeStart, 0n, 'totalCost returns 0 before game starts')
 
 		// Advance time past the escalation period to test after-timeout behavior
-		const startTime = await getStartingTime(client, escalationGame)
-		await mockWindow.setTime(startTime + ESCALATION_TIME_LENGTH + 1n)
+		const activationTime = await getActivationTime(client, escalationGame)
+		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 		const costAfterTimeout = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'totalCost',
@@ -468,8 +468,8 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(balances.invalid, depositAmount - 1n, 'Invalid balance reduced by 1 wei')
 		assert.strictEqual(balances.no, 0n, 'No balance remains zero')
 		// Advance time past game end
-		const startTime = await getStartingTime(client, escalationGame)
-		await mockWindow.setTime(startTime + ESCALATION_TIME_LENGTH + 1n)
+		const activationTime = await getActivationTime(client, escalationGame)
+		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 		const resolution = await getQuestionResolution(client, escalationGame)
 		assert.strictEqual(resolution, QuestionOutcome.Yes, 'Winner should be Yes')
 	})
@@ -484,8 +484,8 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(balances.yes, amount1 + amount2, 'Yes balance increased without adjustment')
 		assert.strictEqual(balances.invalid, 0n, 'Invalid balance zero')
 		assert.strictEqual(balances.no, 0n, 'No balance zero')
-		const startTime = await getStartingTime(client, escalationGame)
-		await mockWindow.setTime(startTime + ESCALATION_TIME_LENGTH + 1n)
+		const activationTime = await getActivationTime(client, escalationGame)
+		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 		const resolution = await getQuestionResolution(client, escalationGame)
 		assert.strictEqual(resolution, QuestionOutcome.Yes, 'Resolution should be Yes')
 	})
@@ -506,8 +506,8 @@ describe('Escalation Game Test Suite', () => {
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, winningDepositorAddress, QuestionOutcome.Yes, excessWinningDeposit)
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
 
-		const startTime = await getStartingTime(client, escalationGameAddress)
-		await mockWindow.setTime(startTime + ESCALATION_TIME_LENGTH + 1n)
+		const activationTime = await getActivationTime(client, escalationGameAddress)
+		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 
 		assert.strictEqual(await getQuestionResolution(client, escalationGameAddress), QuestionOutcome.Yes, 'Resolution should be Yes')
 		const claimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
@@ -528,8 +528,8 @@ describe('Escalation Game Test Suite', () => {
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, secondWinningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
 
-		const startTime = await getStartingTime(client, escalationGameAddress)
-		await mockWindow.setTime(startTime + ESCALATION_TIME_LENGTH + 1n)
+		const activationTime = await getActivationTime(client, escalationGameAddress)
+		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 
 		assert.strictEqual(await getQuestionResolution(client, escalationGameAddress), QuestionOutcome.Yes, 'Resolution should be Yes')
 		const claimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 1n, QuestionOutcome.Yes)
@@ -550,8 +550,8 @@ describe('Escalation Game Test Suite', () => {
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, secondWinningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
 		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)
 
-		const startTime = await getStartingTime(client, escalationGameAddress)
-		await mockWindow.setTime(startTime + ESCALATION_TIME_LENGTH + 1n)
+		const activationTime = await getActivationTime(client, escalationGameAddress)
+		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 
 		assert.strictEqual(await getQuestionResolution(client, escalationGameAddress), QuestionOutcome.Yes, 'Resolution should be Yes')
 		const firstClaimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 0n, QuestionOutcome.Yes)

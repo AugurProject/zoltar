@@ -1,8 +1,10 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { fireEvent } from '@testing-library/dom'
 import { within } from '@testing-library/dom'
 import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import { WorkflowTransactionStatus } from '../components/WorkflowTransactionStatus.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 
@@ -64,10 +66,11 @@ describe('WorkflowTransactionStatus', () => {
 		render(
 			<WorkflowTransactionStatus
 				latestAction={{
+					dismissKey: 'latest-vault-action',
 					rows: [{ label: 'Action', value: 'queueWithdrawRep' }],
 					title: 'Latest Vault Action',
 				}}
-				outcome={{ detail: 'Queued successfully', title: 'Vault Action Queued' }}
+				outcome={{ detail: 'Queued successfully', dismissKey: 'vault-action-queued', title: 'Vault Action Queued' }}
 			/>,
 			container as HTMLDivElement,
 		)
@@ -77,5 +80,35 @@ describe('WorkflowTransactionStatus', () => {
 		expect(statusStack.children).toHaveLength(2)
 		expect(statusStack.children[0]?.textContent?.includes('Vault Action Queued')).toBe(true)
 		expect(statusStack.children[1]?.textContent?.includes('Latest Vault Action')).toBe(true)
+	})
+
+	test('dismisses the latest action and outcome independently when close buttons are clicked', async () => {
+		render(
+			<WorkflowTransactionStatus
+				latestAction={{
+					dismissKey: 'latest-action',
+					rows: [{ label: 'Action', value: 'queueWithdrawRep' }],
+					title: 'Latest Vault Action',
+				}}
+				outcome={{ detail: 'Queued successfully', dismissKey: 'queued-outcome', title: 'Vault Action Queued' }}
+			/>,
+			container as HTMLDivElement,
+		)
+
+		const containerQueries = within(container as HTMLDivElement)
+		await act(async () => {
+			fireEvent.click(containerQueries.getByRole('button', { name: 'Dismiss workflow outcome' }))
+			await Promise.resolve()
+		})
+		const statusStackAfterOutcomeDismiss = (container as HTMLDivElement).querySelector('.workflow-transaction-status')
+		if (!(statusStackAfterOutcomeDismiss instanceof HTMLElement)) throw new Error('Expected status stack to remain after dismissing the outcome')
+		expect(statusStackAfterOutcomeDismiss.children).toHaveLength(1)
+		expect(statusStackAfterOutcomeDismiss.textContent?.includes('Latest Vault Action')).toBe(true)
+
+		await act(async () => {
+			fireEvent.click(containerQueries.getByRole('button', { name: 'Dismiss latest action' }))
+			await Promise.resolve()
+		})
+		expect((container as HTMLDivElement).textContent).toBe('')
 	})
 })

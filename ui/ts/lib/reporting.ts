@@ -1,5 +1,6 @@
 import type { ReportingOutcomeKey } from '../types/contracts.js'
 import { assertNever } from './assert.js'
+import { formatRelativeTimestamp, formatTimestamp } from './formatters.js'
 
 const REPORTING_OUTCOME_OPTIONS: { key: ReportingOutcomeKey; label: string }[] = [
 	{ key: 'invalid', label: 'Invalid' },
@@ -25,4 +26,12 @@ export function getReportingOutcomeLabel(outcome: ReportingOutcomeKey | 'none') 
 		default:
 			return assertNever(outcome)
 	}
+}
+
+export function getReportingLockedUntilMessage(endTime: bigint, currentTimestamp: bigint | undefined) {
+	if (currentTimestamp === undefined) {
+		return `Reporting opens at this pool's market end timestamp: ${formatTimestamp(endTime)}.`
+	}
+
+	return `Reporting opens at this pool's market end timestamp: ${formatTimestamp(endTime)} (${formatRelativeTimestamp(endTime, currentTimestamp)}).`
 }

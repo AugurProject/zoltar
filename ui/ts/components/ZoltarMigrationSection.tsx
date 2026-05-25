@@ -200,6 +200,7 @@ export function ZoltarMigrationSection({
 		zoltarMigrationResult === undefined
 			? undefined
 			: {
+					dismissKey: zoltarMigrationResult.hash,
 					title: 'Latest Migration Action',
 					rows: [
 						{ label: 'Action', value: zoltarMigrationResult.action },

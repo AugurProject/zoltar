@@ -150,7 +150,7 @@ function getDeploymentStep(id: DeploymentStepId) {
 	return step
 }
 
-async function loadEscalationDeposits(client: ReadClient, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
+export async function loadEscalationDeposits(client: ReadClient, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
 	let currentIndex = 0n
 	const deposits: EscalationDeposit[] = []
 
@@ -170,10 +170,10 @@ async function loadEscalationDeposits(client: ReadClient, escalationGameAddress:
 				depositIndex: currentIndex + BigInt(index),
 				depositor: deposit.depositor,
 			}))
-			.filter(deposit => deposit.depositor !== zeroAddress)
+			.filter(deposit => deposit.depositor !== zeroAddress && deposit.amount > 0n)
 
 		deposits.push(...normalizedPage)
-		if (BigInt(normalizedPage.length) !== CONTRACT_PAGE_SIZE) break
+		if (BigInt(page.length) !== CONTRACT_PAGE_SIZE) break
 		currentIndex += CONTRACT_PAGE_SIZE
 	}
 
@@ -279,6 +279,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		return {
 			completeSetCollateralAmount,
 			currentTime: block.timestamp,
+			forkThreshold,
 			marketDetails,
 			nonDecisionThreshold: forkThreshold / 2n,
 			questionOutcome: 'none',
@@ -293,7 +294,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}
 	}
 
-	const [startBond, nonDecisionThreshold, startingTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = await readRequiredMulticall(client, [
+	const [startBond, nonDecisionThreshold, gameCreatedAt, activationTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'startBond',
@@ -308,7 +309,13 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		},
 		{
 			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'startingTime',
+			functionName: 'createdAt',
+			address: escalationGameAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'activationTime',
 			address: escalationGameAddress,
 			args: [],
 		},
@@ -379,6 +386,8 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		currentTime: block.timestamp,
 		escalationEndTime,
 		escalationGameAddress,
+		forkThreshold,
+		gameCreatedAt,
 		hasReachedNonDecision,
 		marketDetails,
 		nonDecisionThreshold,
@@ -388,7 +397,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		sides,
 		startBond,
 		status: 'active',
-		startingTime,
+		activationTime,
 		totalCost,
 		universeId,
 		withdrawalEnabled: withdrawalState !== 'not-finalized',

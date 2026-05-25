@@ -742,6 +742,7 @@ function getLatestActionPresentation(action: OpenOracleSectionProps['openOracleR
 	if (action === undefined) return undefined
 
 	return {
+		dismissKey: action.hash,
 		title: 'Latest Oracle Action',
 		rows: [
 			{ label: 'Action', value: action.action },
@@ -757,42 +758,49 @@ function getOpenOracleOutcomePresentation(action: OpenOracleSectionProps['openOr
 		case 'approveToken1':
 			return {
 				detail: 'Token1 approval was updated for the selected report workflow.',
+				dismissKey: `${action.action}:${action.hash}:outcome`,
 				nextStep: 'Return to the report modal and complete the report submission.',
 				title: 'Token1 Approved',
 			}
 		case 'approveToken2':
 			return {
 				detail: 'Token2 approval was updated for the selected report workflow.',
+				dismissKey: `${action.action}:${action.hash}:outcome`,
 				nextStep: 'Return to the report modal and complete the report submission.',
 				title: 'Token2 Approved',
 			}
 		case 'wrapWeth':
 			return {
 				detail: 'ETH was wrapped to WETH for the selected report flow.',
+				dismissKey: `${action.action}:${action.hash}:outcome`,
 				nextStep: 'Submit the initial report once all requirements are ready.',
 				title: 'WETH Wrapped',
 			}
 		case 'submitInitialReport':
 			return {
 				detail: 'The selected report now has an initial report on-chain.',
+				dismissKey: `${action.action}:${action.hash}:outcome`,
 				nextStep: 'Monitor the dispute window and settle once the report is ready.',
 				title: 'Initial Report Submitted',
 			}
 		case 'dispute':
 			return {
 				detail: 'The selected report was disputed with the replacement swap amounts.',
+				dismissKey: `${action.action}:${action.hash}:outcome`,
 				nextStep: 'Monitor the updated report state and settle when the dispute window closes.',
 				title: 'Report Disputed',
 			}
 		case 'settle':
 			return {
 				detail: 'The selected report was settled on-chain.',
+				dismissKey: `${action.action}:${action.hash}:outcome`,
 				nextStep: 'No further write actions are expected for this report.',
 				title: 'Report Settled',
 			}
 		case 'createReportInstance':
 			return {
 				detail: 'A new Open Oracle game was created.',
+				dismissKey: `${action.action}:${action.hash}:outcome`,
 				nextStep: 'Open the new report to continue its lifecycle.',
 				title: 'Open Oracle Game Created',
 			}

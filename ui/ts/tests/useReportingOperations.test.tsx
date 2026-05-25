@@ -29,6 +29,8 @@ function createReportingDetails(securityPoolAddress: Address): ReportingDetails 
 		currentTime: 150n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
+		forkThreshold: 40n,
+		gameCreatedAt: 90n,
 		hasReachedNonDecision: false,
 		marketDetails: {
 			answerUnit: '',
@@ -54,9 +56,9 @@ function createReportingDetails(securityPoolAddress: Address): ReportingDetails 
 			{ balance: 2n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
 			{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 		],
+		activationTime: 120n,
 		startBond: 1n,
 		status: 'active',
-		startingTime: 120n,
 		totalCost: 0n,
 		universeId: 1n,
 		withdrawalEnabled: false,
@@ -134,7 +136,7 @@ describe('useReportingOperations', () => {
 			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
 		}))
 
-		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${Date.now().toString()}`)
+		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
 		let hookState: UseReportingOperationsState | undefined
 		const Harness = createHarness(useReportingOperations, state => {
 			hookState = state
