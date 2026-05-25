@@ -1,6 +1,6 @@
 import { encodeFunctionData, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType, type TransactionReceipt } from 'viem'
 import { getMulticall3Address } from './deploymentHelpers.js'
-import type { ReadClient } from '../types/contracts.js'
+import type { ReadClient, WriteClient } from '../types/contracts.js'
 
 export type ContractRevertReasonParams = {
 	account?: Account | Address | undefined | null
@@ -13,13 +13,13 @@ export type ContractRevertReasonParams = {
 }
 
 type ContractCallClient = {
-	call?: (params: { account?: Account | Address | undefined; data: `0x${string}`; gas?: bigint | undefined; to: Address; value?: bigint | undefined }) => Promise<unknown>
+	call?: WriteClient['call']
 }
 
-export type WriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = ContractCallClient & {
-	sendTransaction: (params: { account?: Account | Address | undefined; data: `0x${string}`; gas?: bigint | undefined; to: Address; value?: bigint | undefined }) => Promise<Hash>
-	waitForTransactionReceipt: (params: { hash: Hash }) => Promise<TReceipt>
-}
+export type WriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<WriteClient, 'sendTransaction'> &
+	ContractCallClient & {
+		waitForTransactionReceipt: (...args: Parameters<WriteClient['waitForTransactionReceipt']>) => Promise<TReceipt>
+	}
 
 export async function readRequiredMulticall<const TContracts extends readonly unknown[]>(client: Pick<ReadClient, 'multicall'>, contracts: TContracts): Promise<MulticallReturnType<TContracts, false>> {
 	return (await client.multicall({

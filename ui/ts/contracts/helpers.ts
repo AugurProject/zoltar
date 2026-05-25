@@ -25,10 +25,6 @@ export function isStringArray(value: unknown): value is string[] {
 	return Array.isArray(value) && value.every(item => typeof item === 'string')
 }
 
-export function isEscalationDepositPage(value: unknown): value is readonly { amount: bigint; cumulativeAmount: bigint; depositor: Address }[] {
-	return Array.isArray(value) && value.every(item => isObjectRecord(item) && typeof item['amount'] === 'bigint' && typeof item['cumulativeAmount'] === 'bigint' && typeof item['depositor'] === 'string')
-}
-
 export function isBigintTriple(value: unknown): value is [bigint, bigint, bigint] {
 	return Array.isArray(value) && value.length === 3 && value.every(item => typeof item === 'bigint')
 }

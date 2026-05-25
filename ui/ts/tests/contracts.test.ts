@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, type Address, type Hash, type Hex } from 'viem'
 import { getOpenOracleAddress, loadEscalationDeposits, migrateSharesFromUniverse, settleOracleReport } from '../contracts.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
+import type { ReadClient } from '../types/contracts.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
@@ -12,13 +13,15 @@ const transactionHash = '0x00000000000000000000000000000000000000000000000000000
 type MockWriteClient = Parameters<typeof migrateSharesFromUniverse>[0]
 type MockReadClient = Parameters<typeof loadEscalationDeposits>[0]
 
-function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undefined; gas?: bigint | undefined; to?: Address | undefined }) => void): MockWriteClient {
+function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undefined; gas?: bigint | undefined; to?: Address | null | undefined }) => void): MockWriteClient {
+	const readContract: ReadClient['readContract'] = async request => {
+		if (request.functionName === 'universeId') return 12n as never
+		if (request.functionName === 'shareToken') return shareTokenAddress as never
+		throw new Error(`Unexpected readContract function: ${request.functionName}`)
+	}
+
 	return {
-		readContract: async request => {
-			if (request.functionName === 'universeId') return 12n
-			if (request.functionName === 'shareToken') return shareTokenAddress
-			throw new Error(`Unexpected readContract function: ${request.functionName}`)
-		},
+		readContract,
 		sendTransaction: async request => {
 			onSendTransaction(request)
 			return transactionHash
@@ -94,14 +97,17 @@ describe('contracts helpers', () => {
 				depositor,
 			},
 		]
-		const client = createMockReadClient(async request => {
+		const readContract: ReadClient['readContract'] = async request => {
 			const args = Reflect.get(request, 'args')
 			const startIndex = Array.isArray(args) ? args[1] : undefined
 			if (typeof startIndex !== 'bigint') throw new Error('Expected pagination start index')
 			readCalls.push(startIndex)
-			if (startIndex === 0n) return firstPage
-			if (startIndex === 30n) return secondPage
+			if (startIndex === 0n) return firstPage as never
+			if (startIndex === 30n) return secondPage as never
 			throw new Error(`Unexpected start index: ${startIndex.toString()}`)
+		}
+		const client = createMockReadClient(async request => {
+			return await readContract(request)
 		})
 
 		const deposits = await loadEscalationDeposits(client, escalationGameAddress, 'yes')
