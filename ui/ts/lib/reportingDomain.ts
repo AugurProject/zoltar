@@ -32,6 +32,20 @@ type ProjectedEscalationEndTime = {
 	projectedEndTime: bigint
 }
 
+type ReportingTimerPreview =
+	| {
+			hypotheticalDuration: bigint
+			kind: 'not-started'
+			startsAt: bigint | undefined
+	  }
+	| {
+			acceptedAmount: bigint
+			actualState: 'ends-immediately' | 'extends' | 'unchanged'
+			hypotheticalDuration: bigint
+			kind: 'active-or-pending'
+			timerIncrease?: bigint
+	  }
+
 function roundUpToRepUnit(value: bigint) {
 	if (value <= 0n) return 0n
 	return ((value + REP_UNIT - 1n) / REP_UNIT) * REP_UNIT
@@ -103,6 +117,11 @@ export function computeEscalationTimeSinceStartFromAttritionCost(startBond: bigi
 	return (lnCostRatioScaled * ESCALATION_TIME_LENGTH) / lnRatioScaled
 }
 
+function computeHypotheticalBindingDuration(startBond: bigint, nonDecisionThreshold: bigint, bindingCapital: bigint) {
+	if (bindingCapital <= 0n) return 0n
+	return computeEscalationTimeSinceStartFromAttritionCost(startBond, nonDecisionThreshold, bindingCapital)
+}
+
 export function projectEscalationEndTime(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, amount: bigint): ProjectedEscalationEndTime | undefined {
 	if (amount <= 0n) return undefined
 
@@ -128,6 +147,54 @@ export function projectEscalationEndTime(details: ActiveReportingDetails, outcom
 		acceptedAmount: projectedDeposit.acceptedAmount,
 		endsImmediately: false,
 		projectedEndTime: details.startingTime + computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, projectedBindingCapital),
+	}
+}
+
+export function getReportingTimerPreview(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint, currentTimestamp: bigint | undefined): ReportingTimerPreview | undefined {
+	if (amount <= 0n) return undefined
+
+	const hypotheticalDuration = computeHypotheticalBindingDuration(details.startBond, details.nonDecisionThreshold, amount)
+
+	if (details.status === 'not-started') {
+		const preview = previewReportingContribution(details, outcome, amount)
+		if (preview.actualDepositAmount === undefined) return undefined
+
+		return {
+			hypotheticalDuration,
+			kind: 'not-started',
+			startsAt: currentTimestamp,
+		}
+	}
+
+	if (isReportingClosed(details)) return undefined
+
+	const projection = projectEscalationEndTime(details, outcome, amount)
+	if (projection === undefined) return undefined
+
+	if (projection.endsImmediately) {
+		return {
+			acceptedAmount: projection.acceptedAmount,
+			actualState: 'ends-immediately',
+			hypotheticalDuration,
+			kind: 'active-or-pending',
+		}
+	}
+
+	if (projection.projectedEndTime > details.escalationEndTime) {
+		return {
+			acceptedAmount: projection.acceptedAmount,
+			actualState: 'extends',
+			hypotheticalDuration,
+			kind: 'active-or-pending',
+			timerIncrease: projection.projectedEndTime - details.escalationEndTime,
+		}
+	}
+
+	return {
+		acceptedAmount: projection.acceptedAmount,
+		actualState: 'unchanged',
+		hypotheticalDuration,
+		kind: 'active-or-pending',
 	}
 }
 

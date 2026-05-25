@@ -11,6 +11,7 @@ import {
 	getMinimumOutcomeChangeContribution,
 	getReportingMaxProfitContribution,
 	getReportingMinimumOutcomeChangeContribution,
+	getReportingTimerPreview,
 	previewReportingContribution,
 	projectEscalationEndTime,
 } from '../lib/reportingDomain.js'
@@ -320,6 +321,18 @@ describe('reportingDomain', () => {
 		})
 	})
 
+	test('getReportingTimerPreview returns a pre-start timer preview for a valid first report', () => {
+		expect(getReportingTimerPreview(createNotStartedReportingDetails(), 'yes', rep(10n), 150n)).toEqual({
+			hypotheticalDuration: computeEscalationTimeSinceStartFromAttritionCost(rep(3n), rep(50n), rep(10n)),
+			kind: 'not-started',
+			startsAt: 150n,
+		})
+	})
+
+	test('getReportingTimerPreview returns undefined for an invalid pre-start amount', () => {
+		expect(getReportingTimerPreview(createNotStartedReportingDetails(), 'yes', rep(2n), 150n)).toBeUndefined()
+	})
+
 	test('projectEscalationEndTime keeps the timer unchanged for a leading-side deposit', () => {
 		const details = createDynamicReportingDetails()
 
@@ -338,6 +351,29 @@ describe('reportingDomain', () => {
 		expect(projection?.acceptedAmount).toBe(rep(2n))
 		expect(projection?.endsImmediately).toBe(false)
 		expect(projection?.projectedEndTime).toBeGreaterThan(details.escalationEndTime)
+	})
+
+	test('getReportingTimerPreview reports timer extensions for active escalation contributions', () => {
+		const details = createDynamicReportingDetails()
+
+		expect(getReportingTimerPreview(details, 'no', rep(2n), details.currentTime)).toEqual({
+			acceptedAmount: rep(2n),
+			actualState: 'extends',
+			hypotheticalDuration: computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, rep(2n)),
+			kind: 'active-or-pending',
+			timerIncrease: computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, rep(5n)) - computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, rep(3n)),
+		})
+	})
+
+	test('getReportingTimerPreview reports unchanged timers while still using the standalone amount for hypothetical duration', () => {
+		const details = createDynamicReportingDetails()
+
+		expect(getReportingTimerPreview(details, 'yes', rep(5n), details.currentTime)).toEqual({
+			acceptedAmount: rep(5n),
+			actualState: 'unchanged',
+			hypotheticalDuration: computeEscalationTimeSinceStartFromAttritionCost(details.startBond, details.nonDecisionThreshold, rep(5n)),
+			kind: 'active-or-pending',
+		})
 	})
 
 	test('projectEscalationEndTime reflects the tie-adjusted accepted amount', () => {
