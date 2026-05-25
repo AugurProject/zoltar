@@ -42,14 +42,17 @@ import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingLockedUntilMessage } from '../lib/reporting.js'
+import { getSecurityPoolDisplayState, getSecurityPoolDisplayStateLabel, isSecurityPoolEnded, type SecurityPoolDisplayState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
 import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
-import type { SecurityPoolSystemState } from '../types/contracts.js'
 import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../types/components.js'
 
 type SelectedVaultView = 'browse-vaults' | 'selected-vault'
+
+const POOL_ACTION_LOCK_REASON = 'Vault collateral operations are unavailable after this pool has ended.'
+const LIQUIDATION_ENDED_REASON = 'Liquidation is unavailable after this pool has ended.'
 
 function getPendingOperationLabel(operation: 'liquidation' | 'setSecurityBondsAllowance' | 'withdrawRep') {
 	switch (operation) {
@@ -62,7 +65,7 @@ function getPendingOperationLabel(operation: 'liquidation' | 'setSecurityBondsAl
 	}
 }
 
-function getSecurityPoolStatusBadgeTone(systemState: SecurityPoolSystemState) {
+function getSecurityPoolStatusBadgeTone(systemState: SecurityPoolDisplayState) {
 	return systemState === 'operational' ? 'ok' : 'warn'
 }
 export function SecurityPoolWorkflowSection({
@@ -125,7 +128,16 @@ export function SecurityPoolWorkflowSection({
 		value: selectedPool,
 	})
 	const marketDetails = selectedPool?.marketDetails ?? currentReportingDetails?.marketDetails ?? currentForkAuctionDetails?.marketDetails
-	const selectedPoolState = selectedPool?.systemState ?? currentForkAuctionDetails?.systemState
+	const selectedPoolState = currentForkAuctionDetails?.systemState ?? selectedPool?.systemState
+	const selectedPoolQuestionOutcome = currentForkAuctionDetails?.questionOutcome ?? currentReportingDetails?.questionOutcome ?? selectedPool?.questionOutcome
+	const selectedPoolDisplayState = getSecurityPoolDisplayState({
+		questionOutcome: selectedPoolQuestionOutcome,
+		systemState: selectedPoolState,
+	})
+	const selectedPoolEnded = isSecurityPoolEnded({
+		questionOutcome: selectedPoolQuestionOutcome,
+		systemState: selectedPoolState,
+	})
 	const selectedPoolHasForkActivity = selectedPool !== undefined ? hasForkActivity(selectedPool) : currentForkAuctionDetails !== undefined ? hasForkActivity(currentForkAuctionDetails) : false
 	const currentTimestamp = chainCurrentTimestamp ?? currentReportingDetails?.currentTime ?? currentForkAuctionDetails?.currentTime
 	const reportingReady = marketDetails !== undefined && currentTimestamp !== undefined && marketDetails.endTime <= currentTimestamp
@@ -222,6 +234,8 @@ export function SecurityPoolWorkflowSection({
 		walletEthBalance: accountState.ethBalance,
 	})
 	const selectedPendingOperationId = currentPoolOracleManagerDetails?.pendingOperationSlotId ?? 0n
+	const selectedPoolActionLockReason = selectedPoolEnded ? POOL_ACTION_LOCK_REASON : undefined
+	const liquidationDisabledReason = selectedPoolEnded ? LIQUIDATION_ENDED_REASON : undefined
 	const pendingOperationInput = manualPendingOperationId.trim() !== '' ? manualPendingOperationId.trim() : selectedPendingOperationId > 0n ? selectedPendingOperationId.toString() : ''
 	const resolvedPendingOperationId =
 		pendingOperationInput === ''
@@ -364,7 +378,16 @@ export function SecurityPoolWorkflowSection({
 
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Selected Pool'>
-			<StickyObjectContext {...(loadedSelectedPool === undefined ? {} : { badge: <span className={`badge ${getSecurityPoolStatusBadgeTone(loadedSelectedPool.systemState)}`}>{loadedSelectedPool.systemState}</span> })} sticky={false} title={getSelectedPoolCardTitle()} items={[]}>
+			<StickyObjectContext
+				{...(loadedSelectedPool === undefined || selectedPoolDisplayState === undefined
+					? {}
+					: {
+							badge: <span className={`badge ${getSecurityPoolStatusBadgeTone(selectedPoolDisplayState)}`}>{getSecurityPoolDisplayStateLabel(selectedPoolDisplayState)}</span>,
+						})}
+				sticky={false}
+				title={getSelectedPoolCardTitle()}
+				items={[]}
+			>
 				<div className='selected-pool-context-controls'>
 					<div className='selected-pool-context-lookup'>
 						<LookupFieldRow
@@ -496,7 +519,8 @@ export function SecurityPoolWorkflowSection({
 																<button
 																	className='destructive'
 																	onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
-																	disabled={accountState.address === undefined || !isMainnet || currentPoolOracleManagerDetails?.isPriceValid === false}
+																	disabled={accountState.address === undefined || !isMainnet || currentPoolOracleManagerDetails?.isPriceValid === false || liquidationDisabledReason !== undefined}
+																	title={liquidationDisabledReason}
 																>
 																	Liquidate Vault
 																</button>
@@ -518,8 +542,9 @@ export function SecurityPoolWorkflowSection({
 														actionLabel: 'Liquidate Vault',
 														description: 'Queue a high-risk liquidation against the selected vault.',
 														key: 'liquidate-vault',
-														readiness: 'ready',
+														readiness: liquidationDisabledReason === undefined ? 'ready' : 'blocked',
 														title: 'Liquidate Vault',
+														...(liquidationDisabledReason === undefined ? {} : { blocker: liquidationDisabledReason }),
 														...(selectedPool === undefined || selectedVaultDetails === undefined ? { blocker: 'Refresh the selected vault first.' } : selectedVaultAddress === '' ? { blocker: 'Select a pool and vault first.' } : {}),
 														...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === ''
 															? {}
@@ -531,6 +556,7 @@ export function SecurityPoolWorkflowSection({
 												modalFirst
 												onViewStagedOperations={() => onSelectedPoolViewChange('staged-operations')}
 												oracleManagerDetails={currentPoolOracleManagerDetails}
+												poolActionLockReason={selectedPoolActionLockReason}
 												selectedPoolTotalRepDeposit={selectedPool?.totalRepDeposit}
 												selectedPoolTotalSecurityBondAllowance={selectedPool?.totalSecurityBondAllowance}
 												showHeader={false}
@@ -633,7 +659,7 @@ export function SecurityPoolWorkflowSection({
 													}}
 													pending={poolOracleActiveAction === 'executeStagedOperation'}
 													tone='secondary'
-													availability={{ disabled: executePendingOperationGuardMessage !== undefined, reason: executePendingOperationGuardMessage }}
+													availability={{ disabled: executePendingOperationGuardMessage !== undefined || selectedPoolActionLockReason !== undefined, reason: executePendingOperationGuardMessage ?? selectedPoolActionLockReason }}
 												/>
 											)}
 										</div>

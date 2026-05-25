@@ -8,6 +8,7 @@ import type { ListedSecurityPool, MarketDetails } from '../types/contracts.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
@@ -51,7 +52,7 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		marketDetails: createMarketDetails(),
 		migratedRep: 0n,
 		parent: zeroAddress,
-		questionOutcome: 'yes',
+		questionOutcome: 'none',
 		questionId: '0x01',
 		securityMultiplier: 2n,
 		securityPoolAddress: zeroAddress,
@@ -135,5 +136,56 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.getByText('Check State')).not.toBeNull()
 		expect(documentQueries.getByText('0x1234000000000000000000000000000000000000000000000000000000000000')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Submitted' }).closest('.actions')).toBeNull()
+	})
+
+	test('shows Ended for resolved operational pools', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					securityPools: [
+						createSecurityPool({
+							questionOutcome: 'yes',
+						}),
+					],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const badgeTexts = Array.from(document.body.querySelectorAll('.entity-card .badge')).map(element => element.textContent?.trim() ?? '')
+		expect(badgeTexts).toContain('Ended')
+	})
+
+	test('filters the registry by the derived Ended state', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					securityPools: [
+						createSecurityPool({
+							marketDetails: createMarketDetails({ title: 'Operational pool' }),
+							questionOutcome: 'none',
+							securityPoolAddress: '0x0000000000000000000000000000000000000001',
+						}),
+						createSecurityPool({
+							marketDetails: createMarketDetails({ title: 'Ended pool' }),
+							questionOutcome: 'yes',
+							securityPoolAddress: '0x0000000000000000000000000000000000000002',
+						}),
+					],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const systemStateSelect = documentQueries.getByLabelText('System State')
+		if (!(systemStateSelect instanceof window.HTMLSelectElement)) throw new Error('Expected system state filter')
+		systemStateSelect.value = 'ended'
+		await act(() => {
+			systemStateSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
+		})
+
+		expect(documentQueries.queryByText('Operational pool')).toBeNull()
+		expect(documentQueries.getAllByText('Ended pool').length).toBeGreaterThan(0)
 	})
 })

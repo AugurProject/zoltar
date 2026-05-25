@@ -23,21 +23,6 @@ type ForkAuctionStageSource = {
 	truthAuctionStartedAt: bigint
 }
 
-export function getSystemStateLabel(state: SecurityPoolSystemState) {
-	switch (state) {
-		case 'operational':
-			return 'Operational'
-		case 'poolForked':
-			return 'Pool Forked'
-		case 'forkMigration':
-			return 'Fork Migration'
-		case 'forkTruthAuction':
-			return 'Truth Auction'
-		default:
-			return assertNever(state)
-	}
-}
-
 export function getOutcomeActionLabel(outcome: ReportingOutcomeKey) {
 	return getReportingOutcomeLabel(outcome)
 }

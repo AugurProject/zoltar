@@ -189,7 +189,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		marketDetails: createMarketDetails(),
 		migratedRep: 0n,
 		parent: zeroAddress,
-		questionOutcome: 'yes',
+		questionOutcome: 'none',
 		questionId: '0x01',
 		securityMultiplier: 2n,
 		securityPoolAddress: zeroAddress,
@@ -724,18 +724,20 @@ void describe('SecurityPoolsSection', () => {
 		expect(metricLabels.includes('Truth Auction')).toBe(false)
 	})
 
-	void test('filters the browse registry by search text and system state', async () => {
+	void test('filters the browse registry by search text and the derived ended state', async () => {
 		const operationalPool = createSelectedPool({
 			marketDetails: createMarketDetails({ title: 'First pool question' }),
+			questionOutcome: 'none',
 			questionId: '0x01',
 			securityPoolAddress: '0x0000000000000000000000000000000000000001',
 			systemState: 'operational',
 		})
-		const forkedPool = createSelectedPool({
+		const endedPool = createSelectedPool({
 			marketDetails: createMarketDetails({ title: 'Second pool question' }),
+			questionOutcome: 'yes',
 			questionId: '0x02',
 			securityPoolAddress: '0x0000000000000000000000000000000000000002',
-			systemState: 'poolForked',
+			systemState: 'operational',
 		})
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -743,7 +745,7 @@ void describe('SecurityPoolsSection', () => {
 				createSecurityPoolsSectionProps({
 					overview: createOverviewProps({
 						hasLoadedSecurityPools: true,
-						securityPools: [operationalPool, forkedPool],
+						securityPools: [operationalPool, endedPool],
 					}),
 				}),
 			),
@@ -760,13 +762,18 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('First pool question')).toBeNull()
 		expect(documentQueries.getAllByText('Second pool question').length).toBeGreaterThan(0)
 
+		searchInput.value = ''
+		await act(() => {
+			searchInput.dispatchEvent(new window.Event('input', { bubbles: true }))
+		})
+
 		const systemStateSelect = documentQueries.getByLabelText('System State')
 		if (!(systemStateSelect instanceof window.HTMLSelectElement)) throw new Error('Expected system state filter')
-		systemStateSelect.value = 'operational'
+		systemStateSelect.value = 'ended'
 		await act(() => {
 			systemStateSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
 		})
-		expect(documentQueries.queryByText('Second pool question')).toBeNull()
-		expect(documentQueries.getByText('No pools match the current search and filter settings.')).not.toBeNull()
+		expect(documentQueries.queryByText('First pool question')).toBeNull()
+		expect(documentQueries.getAllByText('Second pool question').length).toBeGreaterThan(0)
 	})
 })

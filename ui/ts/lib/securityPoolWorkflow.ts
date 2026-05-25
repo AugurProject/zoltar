@@ -60,7 +60,6 @@ export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddre
 
 	if (hasSelectedPoolAddress) {
 		return {
-			actionHint: 'Refresh this address after the pool is deployed.',
 			badgeLabel: 'Not found',
 			badgeTone: 'blocked',
 			detail: 'Pool not found.',

@@ -240,7 +240,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		marketDetails: createMarketDetails(),
 		migratedRep: 0n,
 		parent: zeroAddress,
-		questionOutcome: 'yes',
+		questionOutcome: 'none',
 		questionId: '0x01',
 		securityMultiplier: 2n,
 		securityPoolAddress: zeroAddress,
@@ -352,7 +352,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Pool Workflows' })).not.toBeNull()
 		expect(documentQueries.getByText('Pool not found.')).not.toBeNull()
-		expect(documentQueries.getByText('Refresh this address after the pool is deployed.')).not.toBeNull()
+		expect(documentQueries.queryByText('Refresh this address after the pool is deployed.')).toBeNull()
 	})
 
 	test('shows a pool not found card when the selected address does not resolve', async () => {
@@ -632,6 +632,51 @@ describe('SecurityPoolWorkflowSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 		expectTransactionButtonEnabled(document.body, 'Set Bond Allowance')
 		expectTransactionButtonEnabled(document.body, 'Claim Fees')
+	})
+
+	test('shows an Ended badge and blocks ended-pool collateral actions in the vault workflow', async () => {
+		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [
+						createSelectedPool({
+							questionOutcome: 'yes',
+							securityPoolAddress: selectedPoolAddress,
+						}),
+					],
+					securityVault: createSecurityVaultProps({
+						securityVaultDetails: createSecurityVaultDetails({
+							securityPoolAddress: selectedPoolAddress,
+						}),
+						securityVaultForm: {
+							depositAmount: '1',
+							repWithdrawAmount: '1',
+							securityBondAllowanceAmount: '1',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+						securityVaultRepBalance: 10n * 10n ** 18n,
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Ended')).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Deposit REP', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonEnabled(document.body, 'Claim Fees')
+		expectTransactionButtonDisabled(document.body, 'Liquidate Vault', 'Liquidation is unavailable after this pool has ended.')
 	})
 
 	test('allows selecting a vault from the directory within the current pool', async () => {
@@ -1817,6 +1862,49 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getByText('Withdraw REP')).not.toBeNull()
 		expect(documentQueries.getByText('7')).not.toBeNull()
 		expect(documentQueries.queryByText('Pending Price Request')).toBeNull()
+	})
+
+	test('blocks staged-operation execution after the selected pool has ended', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					poolOracleManagerDetails: {
+						callbackStateHash: undefined,
+						exactToken1Report: undefined,
+						isPriceValid: true,
+						lastPrice: 2n * 10n ** 18n,
+						lastSettlementTimestamp: 100n,
+						managerAddress: zeroAddress,
+						openOracleAddress: zeroAddress,
+						pendingOperation: {
+							amount: 5n * 10n ** 18n,
+							initiatorVault: zeroAddress,
+							operation: 'withdrawRep',
+							operationId: 7n,
+							targetVault: zeroAddress,
+						},
+						pendingOperationSlotId: 7n,
+						pendingReportId: 0n,
+						priceValidUntilTimestamp: 1000n,
+						requestPriceEthCost: 1n,
+						token1: zeroAddress,
+						token2: zeroAddress,
+					},
+					securityPoolAddress: zeroAddress,
+					securityPools: [
+						createSelectedPool({
+							questionOutcome: 'yes',
+						}),
+					],
+					selectedPoolView: 'staged-operations',
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Execute Staged Operation', 'Vault collateral operations are unavailable after this pool has ended.')
 	})
 
 	test('renders price oracle details and request controls in the price oracle tab', async () => {

@@ -28,6 +28,7 @@ import {
 	getReportingMaxProfitContribution,
 	getReportingMinimumOutcomeChangeContribution,
 	getReportingTimerPreview,
+	isReportingClosed,
 	previewReportingContribution,
 } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
@@ -183,6 +184,21 @@ function getEscalationGameStartTimestamp(activationTime: bigint | undefined) {
 	return activationTime > ESCALATION_GAME_ACTIVATION_DELAY ? activationTime - ESCALATION_GAME_ACTIVATION_DELAY : 0n
 }
 
+function getClosedReportingLockReason(escalationPhase: ReturnType<typeof getEscalationPhase> | undefined) {
+	switch (escalationPhase) {
+		case 'Resolved':
+			return 'Reporting is closed because escalation has resolved.'
+		case 'Fork Triggered':
+			return 'Reporting is closed because escalation reached non-decision and moved into the fork workflow.'
+		case 'Timed Out':
+			return 'Reporting is closed because the escalation timeout has been reached.'
+		case 'Pending Start':
+		case 'Active':
+		case undefined:
+			return undefined
+	}
+}
+
 function getEffectiveReportingDetails(reportingDetails: ReportingDetails | undefined, currentTimestamp: bigint | undefined) {
 	if (reportingDetails === undefined || currentTimestamp === undefined || reportingDetails.currentTime === currentTimestamp) {
 		return reportingDetails
@@ -223,10 +239,15 @@ export function ReportingSection({
 	const escalationGameStartTimestamp = getEscalationGameStartTimestamp(activeReportingDetails?.activationTime)
 	const reportingStatus: ReportingStatus = effectiveReportingDetails === undefined ? 'missing' : effectiveReportingDetails.status
 	const marketDetails = effectiveReportingDetails?.marketDetails ?? previewMarketDetails
-	const reportingLocked = lockedReason !== undefined
-	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const showFullReporting = mode === 'full-reporting'
 	const showWithdrawOnly = mode === 'withdraw-only'
+	const preOpenLockedReason = lockedReason
+	const closedReportingLockReason = activeReportingDetails !== undefined && isReportingClosed(activeReportingDetails) ? getClosedReportingLockReason(escalationPhase) : undefined
+	const reportControlsLockedReason = showFullReporting ? (preOpenLockedReason ?? closedReportingLockReason) : preOpenLockedReason
+	const reportControlsLocked = reportControlsLockedReason !== undefined
+	const withdrawControlsLockedReason = showWithdrawOnly && loadingReportingDetails ? 'Loading escalation deposits.' : preOpenLockedReason
+	const withdrawControlsLocked = withdrawControlsLockedReason !== undefined
+	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const selectedOutcome = reportingForm.selectedOutcome
 	const selectedSide = selectedOutcome === undefined ? undefined : activeReportingDetails?.sides.find(side => side.key === selectedOutcome)
 	const selectedWithdrawDepositIndexes = reportingForm.selectedWithdrawDepositIndexes
@@ -245,28 +266,68 @@ export function ReportingSection({
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, selectedOutcome, selectedAmount)
 	const timerPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : getReportingTimerPreview(effectiveReportingDetails, selectedOutcome, selectedAmount)
-	const projectedFinalizationNotice =
-		timerPreview === undefined
-			? undefined
-			: timerPreview.kind === 'not-started'
-				? `If no one disputes after this report, the market would finalize in ${formatDuration(timerPreview.timeUntilEnd)}.`
-				: activeReportingDetails === undefined
-					? undefined
-					: timerPreview.actualState === 'ends-immediately'
-						? 'If no one disputes after this contribution, the market would finalize immediately.'
-						: `If no one disputes after this contribution, the market would finalize in ${formatDuration(getEscalationTimeRemaining(activeReportingDetails) + (timerPreview.timerIncrease ?? 0n))}.`
 	const selectedOutcomeLabel = selectedOutcome === undefined ? 'Selected Side' : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
+	const getProjectedReportingPreview = () => {
+		if (activeReportingDetails !== undefined && isReportingClosed(activeReportingDetails)) return undefined
+
+		const finalizationReminder = `Check back later to confirm ${selectedOutcomeLabel} is still the leading outcome as finalization approaches.`
+		if (timerPreview === undefined) {
+			if (selectedEstimate === undefined) return undefined
+
+			return (
+				<>
+					If {selectedOutcomeLabel} wins and no one else contributes afterward, this amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit. {finalizationReminder}
+				</>
+			)
+		}
+
+		if (timerPreview.kind === 'not-started') {
+			return (
+				<>
+					If no one disputes after this report, the market would finalize in {formatDuration(timerPreview.timeUntilEnd)}. {finalizationReminder}
+				</>
+			)
+		}
+
+		if (selectedEstimate === undefined || activeReportingDetails === undefined) return undefined
+
+		if (timerPreview.actualState === 'ends-immediately') {
+			return (
+				<>
+					If {selectedOutcomeLabel} wins and no one else contributes afterward, this amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit. This contribution would end the escalation and finalize the market immediately. {finalizationReminder}
+				</>
+			)
+		}
+
+		const projectedFinalizationDuration = formatDuration(getEscalationTimeRemaining(activeReportingDetails) + (timerPreview.timerIncrease ?? 0n))
+		if (timerPreview.actualState === 'extends') {
+			return (
+				<>
+					If {selectedOutcomeLabel} wins and no one else contributes afterward, this amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit. This contribution would extend the timer by {formatDuration(timerPreview.timerIncrease ?? 0n)}, and if no one disputes after it, the
+					market would finalize in {projectedFinalizationDuration}. {finalizationReminder}
+				</>
+			)
+		}
+
+		return (
+			<>
+				If {selectedOutcomeLabel} wins and no one else contributes afterward, this amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit. This contribution would not extend the timer, and if no one disputes after it, the market would finalize in {projectedFinalizationDuration}
+				. {finalizationReminder}
+			</>
+		)
+	}
+	const projectedReportingPreview = getProjectedReportingPreview()
 	const reportButtonLabel = selectedOutcome === undefined ? 'Report / Contribute On Selected Side' : `Report / Contribute ${selectedOutcomeLabel}`
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
 	const maxProfitContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
-	const presetReasons = reportingLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && !isHiddenPresetReason(reason) && reasons.indexOf(reason) === index)
+	const presetReasons = reportControlsLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && !isHiddenPresetReason(reason) && reasons.indexOf(reason) === index)
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
 	const reportGuardMessage = getReportingReportGuardMessage({
 		actualDepositAmount: actualReportDepositAmount,
 		accountAddress: accountState.address,
 		contributionPreviewReason: reportContributionPreview?.reason,
 		isMainnet,
-		lockedReason,
+		lockedReason: preOpenLockedReason,
 		reportAmount: reportingForm.reportAmount,
 		reportingStatus,
 		selectedOutcome,
@@ -279,7 +340,7 @@ export function ReportingSection({
 		accountAddress: accountState.address,
 		hasUserDepositsOnSelectedSide: (selectedSide?.userDeposits.length ?? 0) > 0,
 		isMainnet,
-		lockedReason,
+		lockedReason: withdrawControlsLockedReason,
 		reportingStatus,
 		withdrawalEnabled: activeReportingDetails?.withdrawalEnabled ?? false,
 		withdrawalState: effectiveReportingDetails?.withdrawalState,
@@ -336,7 +397,7 @@ export function ReportingSection({
 							onInput={securityPoolAddress => onReportingFormChange({ securityPoolAddress })}
 							placeholder='0x...'
 							action={
-								<button className='secondary' onClick={onLoadReporting} disabled={loadingReportingDetails || reportingLocked} title={reportingLocked ? lockedReason : undefined}>
+								<button className='secondary' onClick={onLoadReporting} disabled={loadingReportingDetails || preOpenLockedReason !== undefined} title={preOpenLockedReason}>
 									{loadingReportingDetails ? <LoadingText>Loading escalation...</LoadingText> : 'Refresh reporting'}
 								</button>
 							}
@@ -387,7 +448,7 @@ export function ReportingSection({
 									key={side.key}
 									bindingCapital={displayBindingCapital}
 									chartScaleMax={chartScaleMax}
-									disabled={reportingLocked}
+									disabled={showWithdrawOnly ? withdrawControlsLocked : reportControlsLocked}
 									isLeading={leadingOutcome === side.key}
 									isSelected={selectedOutcome !== undefined && selectedOutcome === side.key}
 									onSelect={() => onReportingFormChange({ selectedOutcome: side.key, selectedWithdrawDepositIndexes: [] })}
@@ -403,7 +464,7 @@ export function ReportingSection({
 					)}
 					<label className='field'>
 						<span>Report / Contribution Amount (REP)</span>
-						<FormInput value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportingLocked} />
+						<FormInput value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportControlsLocked} />
 					</label>
 
 					<div className='actions'>
@@ -414,8 +475,8 @@ export function ReportingSection({
 								if (minimumOutcomeChangeContribution.amount === undefined) return
 								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(minimumOutcomeChangeContribution.amount) })
 							}}
-							disabled={reportingLocked || minimumOutcomeChangeContribution.amount === undefined}
-							title={reportingLocked ? lockedReason : minimumOutcomeChangeContribution.reason}
+							disabled={reportControlsLocked || minimumOutcomeChangeContribution.amount === undefined}
+							title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
 						>
 							Min to change proposed outcome
 						</button>
@@ -426,8 +487,8 @@ export function ReportingSection({
 								if (maxProfitContribution.amount === undefined) return
 								onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxProfitContribution.amount) })
 							}}
-							disabled={reportingLocked || maxProfitContribution.amount === undefined}
-							title={reportingLocked ? lockedReason : maxProfitContribution.reason}
+							disabled={reportControlsLocked || maxProfitContribution.amount === undefined}
+							title={reportControlsLocked ? reportControlsLockedReason : maxProfitContribution.reason}
 						>
 							Max profit
 						</button>
@@ -439,11 +500,6 @@ export function ReportingSection({
 						</p>
 					))}
 					{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
-					{selectedEstimate === undefined || selectedOutcome === undefined ? undefined : (
-						<p className='detail'>
-							If {selectedOutcomeLabel} wins and no one else contributes afterward, the current amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit.
-						</p>
-					)}
 					{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
 						<p className='detail'>
 							Based on the current escalation state, this action would lock <CurrencyValue value={actualReportDepositAmount} suffix='REP' /> instead of the full entered amount.
@@ -452,25 +508,17 @@ export function ReportingSection({
 					<div className='actions'>
 						<TransactionActionButton idleLabel={reportButtonLabel} pendingLabel='Submitting report...' onClick={onReportOutcome} pending={reportingActiveAction === 'reportOutcome'} availability={{ disabled: reportGuardMessage !== undefined, reason: reportGuardMessage }} />
 					</div>
-					{timerPreview === undefined ? undefined : timerPreview.kind === 'not-started' ? (
-						<p className='detail'>{projectedFinalizationNotice}</p>
-					) : (
-						<>
-							<p className='detail'>
-								{timerPreview.actualState === 'ends-immediately'
-									? 'This contribution would end the escalation immediately instead of extending the timer.'
-									: timerPreview.actualState === 'extends'
-										? `This contribution would extend the timer by ${formatDuration(timerPreview.timerIncrease ?? 0n)}.`
-										: 'This contribution would not extend the timer.'}
-							</p>
-							{projectedFinalizationNotice === undefined ? undefined : <p className='detail'>{projectedFinalizationNotice}</p>}
-						</>
-					)}
+					{projectedReportingPreview === undefined ? undefined : <p className='detail'>{projectedReportingPreview}</p>}
 				</SectionBlock>
 			) : undefined}
 
 			{showWithdrawOnly ? (
 				<SectionBlock title='Withdraw Escalation Deposits'>
+					{loadingReportingDetails ? (
+						<p className='detail'>
+							<LoadingText>Loading escalation deposits...</LoadingText>
+						</p>
+					) : undefined}
 					{selectedSide === undefined ? undefined : selectedSide.userDeposits.length === 0 ? <p className='detail'>Connected wallet has no unsettled deposits on the selected side.</p> : undefined}
 					{selectedSide === undefined || selectedSide.userDeposits.length === 0 ? undefined : (
 						<div className='field'>
@@ -485,7 +533,7 @@ export function ReportingSection({
 											<input
 												type='checkbox'
 												checked={isChecked}
-												disabled={reportingLocked}
+												disabled={withdrawControlsLocked}
 												onChange={event => {
 													const nextSelectedWithdrawDepositIndexes = event.currentTarget.checked ? [...selectedWithdrawDepositIndexes, deposit.depositIndex] : selectedWithdrawDepositIndexes.filter(index => index !== deposit.depositIndex)
 													onReportingFormChange({ selectedWithdrawDepositIndexes: nextSelectedWithdrawDepositIndexes })
