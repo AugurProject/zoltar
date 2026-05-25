@@ -7,11 +7,13 @@ import {
 	computeEscalationTimeSinceStartFromAttritionCost,
 	getEscalationBalanceTuple,
 	getEscalationBindingCapital,
+	getEscalationPhase,
 	getMaxProfitContribution,
 	getMinimumOutcomeChangeContribution,
 	getReportingMaxProfitContribution,
 	getReportingMinimumOutcomeChangeContribution,
 	getReportingTimerPreview,
+	isReportingClosed,
 	previewReportingContribution,
 	projectEscalationEndTime,
 } from '../lib/reportingDomain.js'
@@ -49,6 +51,7 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		currentTime: 150n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
+		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold: rep(100n),
 		questionOutcome: 'none',
@@ -116,6 +119,7 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		currentTime,
 		escalationEndTime,
 		escalationGameAddress: zeroAddress,
+		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold,
 		questionOutcome: 'none',
@@ -149,6 +153,46 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 }
 
 describe('reportingDomain', () => {
+	test('getEscalationPhase prioritizes non-decision before timeout', () => {
+		const details = createReportingDetails({
+			currentTime: 300n,
+			escalationEndTime: 300n,
+			hasReachedNonDecision: true,
+		})
+
+		expect(getEscalationPhase(details)).toBe('Fork Triggered')
+	})
+
+	test('getEscalationPhase treats the exact timeout boundary as Timed Out', () => {
+		const details = createReportingDetails({
+			currentTime: 300n,
+			escalationEndTime: 300n,
+		})
+
+		expect(getEscalationPhase(details)).toBe('Timed Out')
+	})
+
+	test('isReportingClosed treats non-decision and the exact timeout boundary as closed', () => {
+		expect(
+			isReportingClosed(
+				createReportingDetails({
+					currentTime: 200n,
+					escalationEndTime: 300n,
+					hasReachedNonDecision: true,
+				}),
+			),
+		).toBe(true)
+
+		expect(
+			isReportingClosed(
+				createReportingDetails({
+					currentTime: 300n,
+					escalationEndTime: 300n,
+				}),
+			),
+		).toBe(true)
+	})
+
 	test('getMinimumOutcomeChangeContribution returns the smallest strict lead', () => {
 		expect(getMinimumOutcomeChangeContribution(createReportingDetails(), 'yes')).toEqual({
 			amount: rep(4n),

@@ -379,6 +379,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		currentTime: block.timestamp,
 		escalationEndTime,
 		escalationGameAddress,
+		hasReachedNonDecision,
 		marketDetails,
 		nonDecisionThreshold,
 		questionOutcome: normalizedQuestionOutcome,

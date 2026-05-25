@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { fireEvent, within } from '@testing-library/dom'
-import { h } from 'preact'
+import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from 'viem'
 import { ReportingSection } from '../components/ReportingSection.js'
@@ -84,6 +84,7 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		currentTime: 150n,
 		escalationEndTime: 300n,
 		escalationGameAddress: zeroAddress,
+		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold: rep(20n),
 		questionOutcome: 'none',
@@ -129,6 +130,7 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		currentTime,
 		escalationEndTime,
 		escalationGameAddress: zeroAddress,
+		hasReachedNonDecision: false,
 		marketDetails: createMarketDetails(),
 		nonDecisionThreshold,
 		questionOutcome: 'none',
@@ -541,7 +543,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes(formatDuration(300n - 200n))).toBe(true)
 	})
 
-	test('shows Awaiting Resolution with zero time left once the escalation end time has passed', async () => {
+	test('shows Timed Out with zero time left once the escalation end time is reached', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -549,7 +551,7 @@ describe('ReportingSection', () => {
 					currentTimestamp: undefined,
 					reportingDetails: {
 						...createReportingDetails(),
-						currentTime: 301n,
+						currentTime: 300n,
 						escalationEndTime: 300n,
 					},
 				}),
@@ -558,16 +560,17 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Awaiting Resolution' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Timed Out' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Escalation ended by timeout. The winner is computed from the current stakes; refresh reporting if the resolved outcome is not loaded yet.')).toBe(true)
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
 	})
 
-	test('uses the live chain timestamp to flip the escalation phase once the end time passes', async () => {
+	test('uses the live chain timestamp to flip the escalation phase once the end time is reached', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
-					currentTimestamp: 301n,
+					currentTimestamp: 300n,
 					reportingDetails: {
 						...createReportingDetails(),
 						currentTime: 150n,
@@ -579,7 +582,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getAllByText('Awaiting Resolution').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('Timed Out').length).toBeGreaterThan(0)
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
 	})
 
@@ -601,7 +604,97 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Report / Contribute Yes', 'Reporting is closed because the escalation timer has ended.')
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute Yes', 'Reporting is closed because the escalation timeout has been reached.')
+	})
+
+	test('shows Fork Triggered instead of timeout when non-decision is reached first', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 300n,
+					reportingDetails: createReportingDetails({
+						currentTime: 300n,
+						escalationEndTime: 300n,
+						hasReachedNonDecision: true,
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Fork Triggered' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Escalation reached non-decision. Continue in the Fork workflow; this panel does not have a final-resolution action.')).toBe(true)
+	})
+
+	test('auto-refreshes reporting once when the live timestamp reaches an unresolved timeout boundary', async () => {
+		const onLoadReportingCalls: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 300n,
+					onLoadReporting: () => {
+						onLoadReportingCalls.push('refresh')
+					},
+					reportingDetails: createReportingDetails({
+						currentTime: 150n,
+						escalationEndTime: 300n,
+						securityPoolAddress: '0x00000000000000000000000000000000000000c1',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(onLoadReportingCalls).toEqual(['refresh'])
+
+		await act(() => {
+			render(
+				h(
+					ReportingSection,
+					createProps({
+						currentTimestamp: 300n,
+						onLoadReporting: () => {
+							onLoadReportingCalls.push('rerender')
+						},
+						reportingDetails: createReportingDetails({
+							currentTime: 150n,
+							escalationEndTime: 300n,
+							securityPoolAddress: '0x00000000000000000000000000000000000000c1',
+						}),
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		expect(onLoadReportingCalls).toEqual(['refresh'])
+	})
+
+	test('does not auto-refresh reporting when non-decision closes escalation before timeout handling', async () => {
+		const onLoadReportingCalls: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 300n,
+					onLoadReporting: () => {
+						onLoadReportingCalls.push('refresh')
+					},
+					reportingDetails: createReportingDetails({
+						currentTime: 150n,
+						escalationEndTime: 300n,
+						hasReachedNonDecision: true,
+						securityPoolAddress: '0x00000000000000000000000000000000000000c2',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(onLoadReportingCalls).toEqual([])
 	})
 
 	test('renders a reporting-open notice with zeroed pre-start diagram values before the first report', async () => {

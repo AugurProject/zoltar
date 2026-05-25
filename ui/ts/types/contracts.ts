@@ -341,6 +341,7 @@ export type ActiveReportingDetails = ReportingDetailsBase & {
 	currentRequiredBond: bigint
 	escalationEndTime: bigint
 	escalationGameAddress: Address
+	hasReachedNonDecision: boolean
 	sides: EscalationSide[]
 	startingTime: bigint
 	totalCost: bigint

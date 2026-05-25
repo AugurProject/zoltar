@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'preact/hooks'
 import { AddressValue } from './AddressValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -17,7 +18,7 @@ import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
-import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, getReportingTimerPreview, isReportingClosed, previewReportingContribution } from '../lib/reportingDomain.js'
+import { calculateEstimatedEscalationReturn, getEscalationPhase, getEscalationTimeRemaining, getLeadingEscalationOutcome, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, getReportingTimerPreview, previewReportingContribution } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
 import type { LifecycleStagePresentation, ReportingSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
@@ -126,13 +127,22 @@ function getReportingStagePresentation({
 				label: 'Active',
 				tone: 'default',
 			}
-		case 'Awaiting Resolution':
+		case 'Fork Triggered':
 			return {
 				availableActions: [],
 				blockedActions: [],
-				detail: 'Escalation has reached its end time and is waiting for final resolution.',
-				key: 'escalation-awaiting-resolution',
-				label: 'Awaiting Resolution',
+				detail: 'Escalation reached non-decision. Continue in the Fork workflow; this panel does not have a final-resolution action.',
+				key: 'escalation-fork-triggered',
+				label: 'Fork Triggered',
+				tone: 'default',
+			}
+		case 'Timed Out':
+			return {
+				availableActions: [],
+				blockedActions: [],
+				detail: 'Escalation ended by timeout. The winner is computed from the current stakes; refresh reporting if the resolved outcome is not loaded yet.',
+				key: 'escalation-timed-out',
+				label: 'Timed Out',
 				tone: 'default',
 			}
 		case 'Resolved':
@@ -193,10 +203,12 @@ export function ReportingSection({
 	showSecurityPoolAddressInput = true,
 	mode = 'full-reporting',
 }: ReportingSectionProps) {
+	const lastTimedOutRefreshBoundaryKey = useRef<string | undefined>(undefined)
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const effectiveCurrentTimestamp = currentTimestamp ?? reportingDetails?.currentTime
 	const effectiveReportingDetails = getEffectiveReportingDetails(reportingDetails, effectiveCurrentTimestamp)
 	const activeReportingDetails = effectiveReportingDetails?.status === 'active' ? effectiveReportingDetails : undefined
+	const escalationPhase = activeReportingDetails === undefined ? undefined : getEscalationPhase(activeReportingDetails)
 	const reportingStatus: ReportingStatus = effectiveReportingDetails === undefined ? 'missing' : effectiveReportingDetails.status
 	const marketDetails = effectiveReportingDetails?.marketDetails ?? previewMarketDetails
 	const reportingLocked = lockedReason !== undefined
@@ -219,7 +231,6 @@ export function ReportingSection({
 	const reportContributionPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : previewReportingContribution(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	const actualReportDepositAmount = reportContributionPreview?.actualDepositAmount
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, selectedOutcome, selectedAmount)
-	const reportingClosed = activeReportingDetails === undefined ? false : isReportingClosed(activeReportingDetails)
 	const timerPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : getReportingTimerPreview(effectiveReportingDetails, selectedOutcome, selectedAmount, effectiveCurrentTimestamp)
 	const selectedOutcomeLabel = selectedOutcome === undefined ? 'Selected Side' : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
 	const reportButtonLabel = selectedOutcome === undefined ? 'Report / Contribute On Selected Side' : `Report / Contribute ${selectedOutcomeLabel}`
@@ -234,12 +245,12 @@ export function ReportingSection({
 		isMainnet,
 		lockedReason,
 		reportAmount: reportingForm.reportAmount,
-		reportingClosed,
 		reportingStatus,
 		selectedOutcome,
 		selectedAmount,
 		viewerVaultAvailableEscalationRep: effectiveReportingDetails?.viewerVaultAvailableEscalationRep,
 		viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
+		...(activeReportingDetails === undefined ? {} : { activeReportingDetails }),
 	})
 	const withdrawGuardMessage = getReportingWithdrawGuardMessage({
 		accountAddress: accountState.address,
@@ -250,8 +261,22 @@ export function ReportingSection({
 		withdrawalEnabled: activeReportingDetails?.withdrawalEnabled ?? false,
 		withdrawalState: effectiveReportingDetails?.withdrawalState,
 		selectedOutcome,
+		...(activeReportingDetails === undefined ? {} : { activeReportingDetails }),
 	})
 	const reportingOpenNotice = showFullReporting && reportingStatus === 'not-started' ? 'Reporting is open.' : undefined
+
+	useEffect(() => {
+		if (activeReportingDetails === undefined) return
+		if (escalationPhase !== 'Timed Out') return
+		if (loadingReportingDetails) return
+		if (activeReportingDetails.resolution !== 'none' || activeReportingDetails.hasReachedNonDecision) return
+
+		const refreshBoundaryKey = `${activeReportingDetails.securityPoolAddress}:${activeReportingDetails.escalationEndTime.toString()}`
+		if (lastTimedOutRefreshBoundaryKey.current === refreshBoundaryKey) return
+
+		lastTimedOutRefreshBoundaryKey.current = refreshBoundaryKey
+		void onLoadReporting()
+	}, [activeReportingDetails, escalationPhase, loadingReportingDetails, onLoadReporting])
 	const reportingStage = showFullReporting
 		? getReportingStagePresentation({
 				effectiveCurrentTimestamp,
