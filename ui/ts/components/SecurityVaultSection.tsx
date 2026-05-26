@@ -41,17 +41,14 @@ import {
 } from '../lib/securityVault.js'
 import type { StagedOracleOperation } from '../types/contracts.js'
 import type { ReadinessAction, SecurityVaultSectionProps } from '../types/components.js'
-
 type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'selectedPoolSecurityMultiplier'> & {
 	securityBondAllowance: bigint
 	securityVaultDetails: NonNullable<SecurityVaultSectionProps['securityVaultDetails']>
 	selectedVaultIsOwnedByAccount: boolean
 	variant?: 'embedded' | 'record'
 }
-
 type VaultActionModal = 'claim-fees' | 'deposit-rep' | 'set-bond-allowance' | 'withdraw-rep' | undefined
 type QueuedVaultOperationStatus = 'executed' | 'failed' | 'missing' | 'queued' | 'refreshing' | undefined
-
 export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityVaultDetails, selectedPoolSecurityMultiplier, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
 	const content = (
 		<VaultMetricGrid
@@ -66,7 +63,6 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 			variant={variant}
 		/>
 	)
-
 	if (variant === 'embedded') {
 		return (
 			<SectionBlock density='compact' headingLevel={4} title='Vault Summary' variant='embedded'>
@@ -74,14 +70,12 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 			</SectionBlock>
 		)
 	}
-
 	return (
 		<EntityCard badge={<span className={`badge ${selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}`}>{selectedVaultIsOwnedByAccount ? 'Owned' : 'Read only'}</span>} title='Selected Vault' variant='record'>
 			{content}
 		</EntityCard>
 	)
 }
-
 export function getQueuedVaultOperation({ pendingOperation, selectedVaultAddress, securityVaultResult }: { pendingOperation: StagedOracleOperation | undefined; selectedVaultAddress: string; securityVaultResult: SecurityVaultSectionProps['securityVaultResult'] }) {
 	if (pendingOperation === undefined) return undefined
 	if (!sameAddress(pendingOperation.targetVault, selectedVaultAddress)) return undefined
@@ -89,7 +83,6 @@ export function getQueuedVaultOperation({ pendingOperation, selectedVaultAddress
 	if (securityVaultResult?.action === 'queueSetSecurityBondAllowance' && pendingOperation.operation === 'setSecurityBondsAllowance') return pendingOperation
 	return undefined
 }
-
 function getQueuedVaultOperationStatus({
 	currentPoolOracleManagerDetails,
 	loadingSecurityVault,
@@ -108,7 +101,6 @@ function getQueuedVaultOperationStatus({
 	if (currentPoolOracleManagerDetails.isPriceValid) return 'executed'
 	return 'missing'
 }
-
 function VaultQueuedOperationStatusCard({
 	executedTitle,
 	failedTitle,
@@ -137,7 +129,6 @@ function VaultQueuedOperationStatusCard({
 	successDescription: string
 }) {
 	if (status === undefined) return undefined
-
 	if (status === 'queued') {
 		return (
 			<WarningSurface as='section' variant='compact'>
@@ -160,7 +151,6 @@ function VaultQueuedOperationStatusCard({
 			</WarningSurface>
 		)
 	}
-
 	if (status === 'failed') {
 		return (
 			<section className='entity-card compact'>
@@ -174,7 +164,6 @@ function VaultQueuedOperationStatusCard({
 			</section>
 		)
 	}
-
 	if (status === 'executed') {
 		return (
 			<section className='entity-card compact'>
@@ -188,7 +177,6 @@ function VaultQueuedOperationStatusCard({
 			</section>
 		)
 	}
-
 	if (status === 'missing') {
 		return (
 			<WarningSurface as='section' variant='compact'>
@@ -201,7 +189,6 @@ function VaultQueuedOperationStatusCard({
 			</WarningSurface>
 		)
 	}
-
 	return (
 		<section className='entity-card compact'>
 			<div className='entity-card-header'>
@@ -214,7 +201,6 @@ function VaultQueuedOperationStatusCard({
 		</section>
 	)
 }
-
 export function SecurityVaultSection({
 	accountState,
 	compactLayout = false,
@@ -392,14 +378,20 @@ export function SecurityVaultSection({
 		queuedVaultOperation,
 		securityVaultResult,
 	})
-	const vaultLoadNotice = loadingSecurityVault ? (
-		<p className='detail'>
-			<LoadingText>Loading vault...</LoadingText>
-		</p>
-	) : securityVaultMissing ? (
-		<StateHint presentation={{ key: 'not_found', badgeLabel: 'Not found', badgeTone: 'blocked', detail: 'Try another pool address.' }} />
-	) : undefined
+	const vaultLoadNotice = (() => {
+		if (loadingSecurityVault) {
+			return (
+				<p className='detail'>
+					<LoadingText>Loading vault...</LoadingText>
+				</p>
+			)
+		}
+		if (securityVaultMissing) {
+			return <StateHint presentation={{ key: 'not_found', badgeLabel: 'Not found', badgeTone: 'blocked', detail: 'Try another pool address.' }} />
+		}
 
+		return undefined
+	})()
 	const latestAction =
 		securityVaultResult === undefined
 			? undefined
@@ -412,7 +404,6 @@ export function SecurityVaultSection({
 						{ label: 'Transaction', value: <TransactionHashLink hash={securityVaultResult.hash} /> },
 					],
 				}
-
 	useEffect(() => {
 		if (!autoLoadVault) return
 		if (accountState.address === undefined) return
@@ -422,7 +413,6 @@ export function SecurityVaultSection({
 		lastAutoLoadKey.current = autoLoadKey
 		void onLoadSecurityVault()
 	}, [accountState.address, autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault])
-
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
 		{
 			actionLabel: 'Deposit REP',
@@ -458,7 +448,6 @@ export function SecurityVaultSection({
 		},
 		...extraReadinessActions,
 	] satisfies ReadinessAction[])
-
 	const actionSections = modalFirst ? (
 		<>
 			<WorkflowTransactionStatus latestAction={latestAction} outcome={undefined} />
@@ -581,7 +570,20 @@ export function SecurityVaultSection({
 						/>
 						<div className='workflow-metric-grid'>
 							<MetricField label={effectiveRepExitMode === 'redeem' ? 'Redeemable REP' : 'Withdrawable REP'}>
-								{effectiveRepExitMode === 'redeem' ? redeemableRepAmount === undefined ? '—' : <CurrencyValue value={redeemableRepAmount} suffix='REP' /> : withdrawableRepAmount === undefined ? '—' : <CurrencyValue value={withdrawableRepAmount} suffix='REP' />}
+								{(() => {
+									if (effectiveRepExitMode === 'redeem') {
+										if (redeemableRepAmount === undefined) {
+											return '—'
+										}
+
+										return <CurrencyValue value={redeemableRepAmount} suffix='REP' />
+									}
+									if (withdrawableRepAmount === undefined) {
+										return '—'
+									}
+
+									return <CurrencyValue value={withdrawableRepAmount} suffix='REP' />
+								})()}
 							</MetricField>
 							{effectiveRepExitMode === 'redeem' ? (
 								<MetricField label='Locked REP'>
@@ -783,13 +785,20 @@ export function SecurityVaultSection({
 						availability={{ disabled: !depositRepEnabled || depositGuardMessage !== undefined, reason: depositRepEnabled ? depositGuardMessage : undefined }}
 					/>
 				</div>
-				{repBalanceGap !== undefined && repBalanceGap > 0n ? (
-					<ErrorNotice message={`Insufficient REP balance. Deposit amount exceeds your wallet balance by ${formatCurrencyBalance(repBalanceGap)} REP.`} />
-				) : isDepositBelowMinimum ? (
-					<p className='detail'>
-						New vaults require at least <CurrencyValue value={MIN_SECURITY_VAULT_REP_DEPOSIT} suffix='REP' copyable={false} /> in the first deposit.
-					</p>
-				) : undefined}
+				{(() => {
+					if (repBalanceGap !== undefined && repBalanceGap > 0n) {
+						return <ErrorNotice message={`Insufficient REP balance. Deposit amount exceeds your wallet balance by ${formatCurrencyBalance(repBalanceGap)} REP.`} />
+					}
+					if (isDepositBelowMinimum) {
+						return (
+							<p className='detail'>
+								New vaults require at least <CurrencyValue value={MIN_SECURITY_VAULT_REP_DEPOSIT} suffix='REP' copyable={false} /> in the first deposit.
+							</p>
+						)
+					}
+
+					return undefined
+				})()}
 			</SectionBlock>
 
 			<SectionBlock title='Set Security Bond Allowance'>
@@ -838,15 +847,24 @@ export function SecurityVaultSection({
 						<MetricField className='entity-metric' label={effectiveRepExitMode === 'redeem' ? 'Redeemable REP' : 'Withdrawable REP'}>
 							<CurrencyValue value={effectiveRepExitMode === 'redeem' ? redeemableRepAmount : withdrawableRepAmount} suffix='REP' />
 						</MetricField>
-						{effectiveRepExitMode === 'redeem' ? (
-							<MetricField className='entity-metric' label='Locked REP'>
-								<CurrencyValue value={currentSelectedVaultDetails?.lockedRepInEscalationGame} suffix='REP' />
-							</MetricField>
-						) : oraclePriceValidUntilTimestamp === undefined ? undefined : (
-							<MetricField className='entity-metric' label='Price Valid Until'>
-								<TimestampValue timestamp={oraclePriceValidUntilTimestamp} />
-							</MetricField>
-						)}
+						{(() => {
+							if (effectiveRepExitMode === 'redeem') {
+								return (
+									<MetricField className='entity-metric' label='Locked REP'>
+										<CurrencyValue value={currentSelectedVaultDetails?.lockedRepInEscalationGame} suffix='REP' />
+									</MetricField>
+								)
+							}
+							if (oraclePriceValidUntilTimestamp === undefined) {
+								return undefined
+							}
+
+							return (
+								<MetricField className='entity-metric' label='Price Valid Until'>
+									<TimestampValue timestamp={oraclePriceValidUntilTimestamp} />
+								</MetricField>
+							)
+						})()}
 					</div>
 				)}
 				{effectiveRepExitMode === 'redeem' ? null : (
@@ -884,7 +902,6 @@ export function SecurityVaultSection({
 			<ErrorNotice message={securityVaultError} />
 		</>
 	)
-
 	const sections = (
 		<>
 			{showLookupSection ? (
@@ -926,11 +943,9 @@ export function SecurityVaultSection({
 			{actionSections}
 		</>
 	)
-
 	if (compactLayout) {
 		return sections
 	}
-
 	return (
 		<RouteWorkflowPanel description='Browse vaults for the selected security pool, then manage REP, fees, and redemptions for the selected vault.' showHeader={showHeader} title='Security Vault'>
 			{sections}

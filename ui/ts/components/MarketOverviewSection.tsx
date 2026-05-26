@@ -18,7 +18,6 @@ import { getUniversePresentation } from '../lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../lib/universe.js'
 import type { ActionFeedback } from '../types/components.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
-
 type MarketOverviewSectionProps = {
 	accountAddress: Address | undefined
 	isMainnet: boolean
@@ -30,7 +29,6 @@ type MarketOverviewSectionProps = {
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseState: LoadableValueState
 }
-
 export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltarUniverse, onCreateChildUniverseForOutcomeIndex, zoltarChildUniverseError, zoltarChildUniverseFeedback, zoltarChildUniversePendingOutcomeIndex, zoltarUniverse, zoltarUniverseState }: MarketOverviewSectionProps) {
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
@@ -47,12 +45,10 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 		{ key: 'mainnet', label: 'Ethereum mainnet selected', resolved: isMainnet, ...(isMainnet ? {} : { detail: 'Switch to Ethereum mainnet before deploying a child universe.' }) },
 		{ key: 'exists', label: 'Child universe not already deployed', resolved: selectedChildUniverse?.exists !== true, ...(selectedChildUniverse?.exists === true ? { detail: 'This child universe is already deployed.' } : {}) },
 	]
-
 	if (universeMissing) {
 		const presentation = getUniversePresentation(zoltarUniverseState)
 		return presentation === undefined ? undefined : <StateHint presentation={presentation} />
 	}
-
 	return (
 		<>
 			{rootUniverse === undefined ? (
@@ -105,8 +101,25 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 							action={child => ({
 								availability: {
 									disabled: accountAddress === undefined || !isMainnet || !hasForked || child.exists,
-									reason:
-										accountAddress === undefined ? 'Connect a wallet before deploying a child universe.' : !isMainnet ? 'Switch to Ethereum mainnet before deploying a child universe.' : !hasForked ? 'Fork Zoltar before deploying child universes.' : child.exists ? 'This child universe is already deployed.' : undefined,
+									reason: (() => {
+										if (accountAddress === undefined) {
+											return 'Connect a wallet before deploying a child universe.'
+										}
+										if (!isMainnet) {
+											return 'Switch to Ethereum mainnet before deploying a child universe.'
+										}
+
+										return (() => {
+											if (!hasForked) {
+												return 'Fork Zoltar before deploying child universes.'
+											}
+											if (child.exists) {
+												return 'This child universe is already deployed.'
+											}
+
+											return undefined
+										})()
+									})(),
 								},
 								label: child.exists ? 'Deployed' : 'Create child universe',
 								onClick: () => setSelectedChildOutcomeIndex(child.outcomeIndex),
@@ -123,15 +136,25 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 							reason:
 								selectedChildUniverse === undefined
 									? 'Select a child universe to deploy.'
-									: accountAddress === undefined
-										? 'Connect a wallet before deploying a child universe.'
-										: !isMainnet
-											? 'Switch to Ethereum mainnet before deploying a child universe.'
-											: !hasForked
-												? 'Fork Zoltar before deploying child universes.'
-												: selectedChildUniverse.exists
-													? 'This child universe is already deployed.'
-													: undefined,
+									: (() => {
+											if (accountAddress === undefined) {
+												return 'Connect a wallet before deploying a child universe.'
+											}
+											if (!isMainnet) {
+												return 'Switch to Ethereum mainnet before deploying a child universe.'
+											}
+
+											return (() => {
+												if (!hasForked) {
+													return 'Fork Zoltar before deploying child universes.'
+												}
+												if (selectedChildUniverse.exists) {
+													return 'This child universe is already deployed.'
+												}
+
+												return undefined
+											})()
+										})(),
 						}}
 						description='Confirm the selected fork outcome and deploy its child universe in one bounded execution flow.'
 						idleLabel='Deploy Universe'

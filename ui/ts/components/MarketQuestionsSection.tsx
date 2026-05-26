@@ -4,7 +4,6 @@ import { Question, getQuestionTitle } from './Question.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import type { MarketDetails } from '../types/contracts.js'
-
 type MarketQuestionsSectionProps = {
 	hasForked: boolean
 	hasLoadedZoltarQuestions: boolean
@@ -17,10 +16,8 @@ type MarketQuestionsSectionProps = {
 	zoltarQuestionCount: bigint | undefined
 	zoltarQuestions: MarketDetails[]
 }
-
 export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, loadingZoltarQuestionCount, loadingZoltarQuestions, onLoadZoltarQuestions, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestionCount, zoltarQuestions }: MarketQuestionsSectionProps) {
 	const noQuestionsAvailable = zoltarQuestionCount === 0n
-
 	return (
 		<SectionBlock
 			density='compact'
@@ -33,26 +30,48 @@ export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, lo
 					}}
 					disabled={loadingZoltarQuestions || noQuestionsAvailable}
 				>
-					{loadingZoltarQuestions ? <LoadingText>Loading Questions...</LoadingText> : noQuestionsAvailable ? 'No Questions' : hasLoadedZoltarQuestions ? 'Refresh Questions' : 'Fetch Questions'}
+					{loadingZoltarQuestions ? (
+						<LoadingText>Loading Questions...</LoadingText>
+					) : (
+						(() => {
+							if (noQuestionsAvailable) {
+								return 'No Questions'
+							}
+							if (hasLoadedZoltarQuestions) {
+								return 'Refresh Questions'
+							}
+
+							return 'Fetch Questions'
+						})()
+					)}
 				</button>
 			}
 		>
 			{zoltarQuestions.length === 0 ? (
-				loadingZoltarQuestionCount || loadingZoltarQuestions ? (
-					<p className='detail'>
-						<LoadingText>Loading questions...</LoadingText>
-					</p>
-				) : noQuestionsAvailable ? (
-					<StateHint
-						presentation={{
-							key: 'empty',
-							badgeLabel: 'None yet',
-							badgeTone: 'muted',
-							detail: 'No questions are available in this universe yet.',
-						}}
-						title='No questions'
-					/>
-				) : undefined
+				(() => {
+					if (loadingZoltarQuestionCount || loadingZoltarQuestions) {
+						return (
+							<p className='detail'>
+								<LoadingText>Loading questions...</LoadingText>
+							</p>
+						)
+					}
+					if (noQuestionsAvailable) {
+						return (
+							<StateHint
+								presentation={{
+									key: 'empty',
+									badgeLabel: 'None yet',
+									badgeTone: 'muted',
+									detail: 'No questions are available in this universe yet.',
+								}}
+								title='No questions'
+							/>
+						)
+					}
+
+					return undefined
+				})()
 			) : (
 				<div className='entity-card-list'>
 					{zoltarQuestions.map(question => (

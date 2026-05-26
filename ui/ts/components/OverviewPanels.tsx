@@ -7,7 +7,6 @@ import { StateHint } from './StateHint.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { renderRepPriceSourceLabel } from '../lib/repPriceSource.js'
 import type { OverviewPanelsProps } from '../types/components.js'
-
 export function OverviewPanels({
 	accountState,
 	isConnectingWallet,
@@ -31,23 +30,27 @@ export function OverviewPanels({
 	const isWalletBootstrapLoading = !walletBootstrapComplete && accountState.address === undefined
 	const isWalletAddressLoading = isConnectingWallet || isWalletBootstrapLoading
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined
-
 	return (
 		<section className='overview-shell'>
 			<article className='overview-panel overview-wallet-panel'>
 				<RouteHeader eyebrow='Operations' title='Augur PLACEHOLDER' actions={accountState.address === undefined ? <TransactionActionButton idleLabel='Connect wallet' pendingLabel='Connecting...' onClick={onConnect} pending={isConnectingWallet} /> : undefined} />
 				<DataGrid className='overview-inline-metrics' columns='auto'>
 					<MetricField className='overview-address-metric' label='Address'>
-						{isWalletAddressLoading ? (
-							<span className='loading-value'>
-								<span className='spinner' aria-hidden='true' />
-								Connecting...
-							</span>
-						) : accountState.address === undefined ? (
-							'Not connected'
-						) : (
-							<AddressValue address={accountState.address} />
-						)}
+						{(() => {
+							if (isWalletAddressLoading) {
+								return (
+									<span className='loading-value'>
+										<span className='spinner' aria-hidden='true' />
+										Connecting...
+									</span>
+								)
+							}
+							if (accountState.address === undefined) {
+								return 'Not connected'
+							}
+
+							return <AddressValue address={accountState.address} />
+						})()}
 					</MetricField>
 					{showAccountBalances ? (
 						<>

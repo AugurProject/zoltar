@@ -7,11 +7,8 @@ import { getTimeRemaining } from './time.js'
 import type { UserMessagePresentation } from './userCopy.js'
 import { resolveEnumValue } from './viewState.js'
 import type { ListedSecurityPool, OracleManagerDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '../types/contracts.js'
-
 export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'withdraw-escalation-deposits' | 'fork' | 'staged-operations' | 'price-oracle'
-
 export const SELECTED_POOL_VIEWS: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting', 'withdraw-escalation-deposits', 'fork', 'staged-operations', 'price-oracle']
-
 export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 	switch (view) {
 		case 'vaults':
@@ -32,21 +29,35 @@ export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 			return assertNever(view)
 	}
 }
-
 export function resolveSelectedPoolView(value: string | undefined): SelectedPoolView {
-	const normalizedValue = value === 'resolution' ? 'reporting' : value === 'oracle' ? 'staged-operations' : value
+	const normalizedValue = (() => {
+		if (value === 'resolution') {
+			return 'reporting'
+		}
+		if (value === 'oracle') {
+			return 'staged-operations'
+		}
+
+		return value
+	})()
 	return resolveEnumValue<SelectedPoolView>(normalizedValue, 'vaults', SELECTED_POOL_VIEWS)
 }
-
 export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolUniverseMismatch: boolean }) {
 	return hasSelectedPoolAddress && selectedPoolExists && !selectedPoolUniverseMismatch
 }
-
 export function getSelectedPoolCardTitle() {
 	return 'Operate Security Pool'
 }
-
-export function applySelectedPoolWorkflowState(pool: ListedSecurityPool | undefined, { questionOutcome, systemState }: { questionOutcome: ReportingOutcomeKey | 'none' | undefined; systemState: SecurityPoolSystemState | undefined }) {
+export function applySelectedPoolWorkflowState(
+	pool: ListedSecurityPool | undefined,
+	{
+		questionOutcome,
+		systemState,
+	}: {
+		questionOutcome: ReportingOutcomeKey | 'none' | undefined
+		systemState: SecurityPoolSystemState | undefined
+	},
+) {
 	if (pool === undefined) return undefined
 	if (questionOutcome === undefined && systemState === undefined) return pool
 	return {
@@ -55,7 +66,6 @@ export function applySelectedPoolWorkflowState(pool: ListedSecurityPool | undefi
 		...(systemState === undefined ? {} : { systemState }),
 	}
 }
-
 export function getSelectedPoolWorkflowGuardMessage({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }) {
 	if (selectedPoolUniverseMismatch) return 'Switch to the same universe before using this pool workflow.'
 	if (selectedPoolLookupState === 'loading') return 'Wait for this pool to finish loading.'
@@ -63,7 +73,6 @@ export function getSelectedPoolWorkflowGuardMessage({ hasSelectedPoolAddress, se
 	if (!hasSelectedPoolAddress || selectedPoolLookupState === 'unknown') return 'Load a pool to open this workflow.'
 	return undefined
 }
-
 export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }): UserMessagePresentation {
 	if (selectedPoolUniverseMismatch) {
 		return {
@@ -74,7 +83,6 @@ export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddre
 			key: 'unavailable',
 		}
 	}
-
 	if (selectedPoolLookupState === 'loading') {
 		return {
 			detail: 'Loading...',
@@ -82,7 +90,6 @@ export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddre
 			key: 'loading',
 		}
 	}
-
 	if (selectedPoolLookupState === 'missing') {
 		return {
 			badgeLabel: 'Not found',
@@ -91,7 +98,6 @@ export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddre
 			key: 'not_found',
 		}
 	}
-
 	if (hasSelectedPoolAddress) {
 		return {
 			badgeLabel: 'Not found',
@@ -100,7 +106,6 @@ export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddre
 			key: 'not_found',
 		}
 	}
-
 	return {
 		badgeLabel: 'No pool selected',
 		badgeTone: 'muted',
@@ -108,22 +113,17 @@ export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddre
 		key: 'action_needed',
 	}
 }
-
 export function isForkWorkflowDisabled(selectedPoolState: SecurityPoolSystemState | undefined, selectedPoolHasForkActivity = false) {
 	return selectedPoolState === undefined || (selectedPoolState === 'operational' && !selectedPoolHasForkActivity)
 }
-
 export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }: { lastPrice: bigint; lastSettlementTimestamp: bigint }) {
 	if (lastSettlementTimestamp === 0n) return '-'
 	return `≈ ${formatRoundedCurrencyBalance(lastPrice, 18, 2)} REP / ETH`
 }
-
 export function getOraclePriceValidityPresentation({ currentTimestamp, lastSettlementTimestamp, priceValidUntilTimestamp }: { currentTimestamp: bigint; lastSettlementTimestamp: bigint; priceValidUntilTimestamp: bigint | undefined }) {
 	if (lastSettlementTimestamp === 0n) return undefined
-
 	const validUntilTimestamp = priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp)
 	if (validUntilTimestamp === undefined) return undefined
-
 	const timeRemaining = getTimeRemaining(validUntilTimestamp, currentTimestamp)
 	if (timeRemaining === undefined) return undefined
 	if (timeRemaining === 0n) {
@@ -132,12 +132,10 @@ export function getOraclePriceValidityPresentation({ currentTimestamp, lastSettl
 	}
 	return { text: `(Valid for ${formatDuration(timeRemaining)})`, tone: 'success' as const }
 }
-
 export function getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails, selectedPoolManagerAddress }: { poolOracleManagerDetails: OracleManagerDetails | undefined; selectedPoolManagerAddress: string | undefined }) {
 	if (!sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return undefined
 	return poolOracleManagerDetails
 }
-
 export function getSelectedPoolOracleMetricValues({ lastOraclePrice, lastOracleSettlementTimestamp }: Pick<ListedSecurityPool, 'lastOraclePrice' | 'lastOracleSettlementTimestamp'>) {
 	return {
 		lastPrice: lastOraclePrice ?? 0n,

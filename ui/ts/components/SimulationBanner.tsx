@@ -5,7 +5,6 @@ import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { parseDecimalInput } from '../lib/decimal.js'
 import { getSimulationScenarioDescription, getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
 import { TimestampValue } from './TimestampValue.js'
-
 const SIMULATION_TIME_PRESETS = [
 	{ label: '+1 hour', seconds: 60n * 60n },
 	{ label: '+1 day', seconds: 24n * 60n * 60n },
@@ -13,12 +12,10 @@ const SIMULATION_TIME_PRESETS = [
 	{ label: '+1 month', seconds: 30n * 24n * 60n * 60n },
 	{ label: '+1 year', seconds: 365n * 24n * 60n * 60n },
 ] as const
-
 type SimulationBannerProps = {
 	controller: SimulationController
 	onRefresh: () => Promise<void>
 }
-
 export function SimulationBanner({ controller, onRefresh }: SimulationBannerProps) {
 	const busy = useSignal(false)
 	const blockCountSinceReset = useSignal(controller.blockCountSinceReset)
@@ -35,7 +32,6 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 	const bootstrapProgress = useSignal(controller.bootstrapProgress)
 	const transactionCountSinceReset = useSignal(controller.transactionCountSinceReset)
 	const transactionDelayMilliseconds = useSignal(controller.transactionDelayMilliseconds.toString())
-
 	useEffect(
 		() =>
 			controller.subscribe(() => {
@@ -56,7 +52,6 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 			}),
 		[controller],
 	)
-
 	const runControl = async (work: () => Promise<void>) => {
 		if (busy.value) return
 		busy.value = true
@@ -67,7 +62,6 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 			busy.value = false
 		}
 	}
-
 	return (
 		<section className='panel contract-panel simulation-banner'>
 			<div className='contract-panel-header simulation-banner-header'>
@@ -80,7 +74,31 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 				<div className='contract-row simulation-banner-row'>
 					<div className='contract-copy'>
 						<div className='contract-topline'>
-							<span className={`badge ${bootstrapError.value === undefined ? (isBootstrapped.value ? 'ok' : 'pending') : 'error'}`}>{bootstrapError.value === undefined ? (isBootstrapped.value ? 'Ready' : 'Bootstrapping') : 'Error'}</span>
+							<span
+								className={`badge ${(() => {
+									if (bootstrapError.value === undefined) {
+										if (isBootstrapped.value) {
+											return 'ok'
+										}
+
+										return 'pending'
+									}
+
+									return 'error'
+								})()}`}
+							>
+								{(() => {
+									if (bootstrapError.value === undefined) {
+										if (isBootstrapped.value) {
+											return 'Ready'
+										}
+
+										return 'Bootstrapping'
+									}
+
+									return 'Error'
+								})()}
+							</span>
 							<h3>Scenario</h3>
 						</div>
 						<p className='detail'>{bootstrapError.value ?? getSimulationScenarioDescription(currentScenario.value)}</p>

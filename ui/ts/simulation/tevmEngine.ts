@@ -9,9 +9,7 @@ import { bootstrapSimulationChain, predictSimulationTokenAddresses, updateZoltar
 import { advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, mineNextSimulationBlock, minePendingSimulationTransactionAtTimestamp } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 import type { SimulationWorkerState } from './tevmWorkerProtocol.js'
-
 const QA_ACCOUNTS = [getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000b2'), getAddress('0x00000000000000000000000000000000000000c3')] as const satisfies readonly Address[]
-
 type MemoryClientLike = ReturnType<typeof createMemoryClient>
 type RequestArguments = {
 	method: string
@@ -31,25 +29,30 @@ type SimulationSendTransactionRequest = {
 	to?: Address | null | undefined
 	value?: bigint | undefined
 }
-
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const DEFAULT_SIMULATION_REP_PER_USDC_PRICE = 10n ** 6n
-
 function normalizeRpcBigInt(value: unknown) {
 	if (typeof value === 'bigint') return value
 	if (typeof value === 'number') return BigInt(value)
 	if (typeof value === 'string') return BigInt(value)
 	return undefined
 }
-
 function normalizeRpcAddress(value: unknown) {
 	if (typeof value !== 'string') return undefined
 	return getAddress(value)
 }
-
 function normalizeRpcTransactionRequest(value: Record<string, unknown>): SimulationSendTransactionRequest {
 	return {
-		account: 'account' in value ? value['account'] : 'from' in value ? value['from'] : undefined,
+		account: (() => {
+			if ('account' in value) {
+				return value['account']
+			}
+			if ('from' in value) {
+				return value['from']
+			}
+
+			return undefined
+		})(),
 		data: typeof value['data'] === 'string' ? (value['data'] as Hex) : undefined,
 		gas: normalizeRpcBigInt(value['gas']),
 		gasPrice: normalizeRpcBigInt(value['gasPrice']),
@@ -60,12 +63,10 @@ function normalizeRpcTransactionRequest(value: Record<string, unknown>): Simulat
 		value: normalizeRpcBigInt(value['value']),
 	}
 }
-
 function isMissingTransactionReceiptError(error: unknown) {
 	if (!(error instanceof Error)) return false
 	return error.message.includes('Transaction receipt with hash') && error.message.includes('could not be found')
 }
-
 function normalizeRequestedAccount(value: unknown, fallbackAccount: Address) {
 	if (typeof value === 'string') return getAddress(value)
 	if (typeof value === 'object' && value !== null && 'address' in value) {
@@ -74,19 +75,16 @@ function normalizeRequestedAccount(value: unknown, fallbackAccount: Address) {
 	}
 	return fallbackAccount
 }
-
 function requireTransactionHash(hash: Hex | undefined, label: string): Hash {
 	if (hash === undefined) {
 		throw new Error(`Simulation ${label} did not return a transaction hash`)
 	}
 	return hash
 }
-
 function normalizeNonce(value: bigint | number | undefined) {
 	if (value === undefined) return undefined
 	return typeof value === 'bigint' ? value : BigInt(value)
 }
-
 function createTevmTransactionRequest({
 	data,
 	from,
@@ -121,12 +119,10 @@ function createTevmTransactionRequest({
 		...(value === undefined ? {} : { value }),
 	} as TevmTransactionRequest
 }
-
 function clampDelayMilliseconds(value: number) {
 	if (!Number.isFinite(value) || value <= 0) return 0
-	return Math.min(Math.trunc(value), 30_000)
+	return Math.min(Math.trunc(value), 30000)
 }
-
 function createSimulationMemoryClient(profile: ReturnType<typeof createSimulationProfile>) {
 	return createMemoryClient({
 		common: createCommon({
@@ -137,21 +133,18 @@ function createSimulationMemoryClient(profile: ReturnType<typeof createSimulatio
 		},
 	})
 }
-
 async function delayMilliseconds(milliseconds: number) {
 	if (milliseconds <= 0) return
 	await new Promise(resolve => {
 		setTimeout(resolve, milliseconds)
 	})
 }
-
 function getRequiredBlockNumber(block: TevmBlock) {
 	if (block.number === undefined || block.number === null) {
 		throw new Error('Simulation block number was unavailable')
 	}
 	return block.number
 }
-
 async function getSimulationChainState(memoryClient: MemoryClientLike) {
 	const block = await memoryClient.getBlock()
 	return {
@@ -159,7 +152,6 @@ async function getSimulationChainState(memoryClient: MemoryClientLike) {
 		currentTimestamp: block.timestamp,
 	}
 }
-
 function createSimulationProvider({ getChainId, getQueryDelayMilliseconds, getSelectedAccount, requestRpc }: { getChainId: () => string; getQueryDelayMilliseconds: () => number; getSelectedAccount: () => Address; requestRpc: (parameters: RequestArguments) => Promise<unknown> }): InjectedEthereum {
 	const request = (async (parameters: RequestArguments) => {
 		if (parameters.method === 'eth_accounts' || parameters.method === 'eth_requestAccounts') {
@@ -171,33 +163,28 @@ function createSimulationProvider({ getChainId, getQueryDelayMilliseconds, getSe
 		await delayMilliseconds(getQueryDelayMilliseconds())
 		return await requestRpc(parameters)
 	}) as InjectedEthereum['request']
-
 	return {
 		on: () => undefined,
 		removeListener: () => undefined,
 		request,
 	}
 }
-
 function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWriteClientCallbacks): WriteClient {
 	const sendRawTransaction: typeof baseClient.sendRawTransaction = async parameters => {
 		const hash = await baseClient.sendRawTransaction(parameters)
 		callbacks.onTransactionSubmitted?.(hash)
 		return hash
 	}
-
 	const sendTransaction: typeof baseClient.sendTransaction = async parameters => {
 		const hash = await baseClient.sendTransaction(parameters)
 		callbacks.onTransactionSubmitted?.(hash)
 		return hash
 	}
-
 	const writeContract: typeof baseClient.writeContract = async parameters => {
 		const hash = await baseClient.writeContract(parameters)
 		callbacks.onTransactionSubmitted?.(hash)
 		return hash
 	}
-
 	return {
 		...baseClient,
 		sendRawTransaction,
@@ -205,7 +192,6 @@ function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWrit
 		writeContract,
 	}
 }
-
 type SimulationEngine = {
 	accounts: readonly Address[]
 	advanceTime(seconds: bigint): Promise<void>
@@ -228,7 +214,6 @@ type SimulationEngine = {
 	waitForTransactionReceipt(hash: Hash): Promise<Awaited<ReturnType<ReadClient['getTransactionReceipt']>>>
 	waitUntilReady(): Promise<void>
 }
-
 export async function createSimulationEngine({ scenario }: { scenario: SimulationScenario }): Promise<SimulationEngine> {
 	const primaryAccount = QA_ACCOUNTS[0]
 	if (primaryAccount === undefined) {
@@ -253,38 +238,32 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 	let repPerUsdcPrice = DEFAULT_SIMULATION_REP_PER_USDC_PRICE
 	let selectedAccount = primaryAccount
 	let transactionCountSinceReset = 0n
-	let transactionDelayMilliseconds = 1_000
-
+	let transactionDelayMilliseconds = 1000
 	const emitState = () => {
 		for (const listener of stateListeners) {
 			listener()
 		}
 	}
-
 	const ensureImpersonated = async (address: Address) => {
 		const normalizedAddress = address.toLowerCase()
 		if (impersonatedAccounts.has(normalizedAddress)) return
 		await memoryClient.impersonateAccount({ address })
 		impersonatedAccounts.add(normalizedAddress)
 	}
-
 	const initializeSimulationAccounts = async () => {
 		for (const account of QA_ACCOUNTS) {
 			await ensureImpersonated(account)
 		}
 	}
-
 	const mineSubmittedTransaction = async (hash: Hash) => {
 		const chainTimestamp = await getSimulationChainTimestamp(memoryClient)
 		await minePendingSimulationTransactionAtTimestamp(memoryClient, hash, getNextSimulationTimestamp(chainTimestamp))
 	}
-
 	const refreshSimulationState = async () => {
 		const chainState = await getSimulationChainState(memoryClient)
 		currentTimestamp = chainState.currentTimestamp
 		blockCountSinceReset = chainState.blockNumber
 	}
-
 	const sendRawTransactionInternal = async (serializedTransaction: SerializedTransaction) => {
 		const parsedTransaction = parseTransaction(serializedTransaction)
 		const recoveredAddress = await recoverTransactionAddress({
@@ -311,7 +290,6 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		emitState()
 		return hash
 	}
-
 	const sendTransactionInternal = async ({
 		account,
 		data,
@@ -355,7 +333,6 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		emitState()
 		return hash
 	}
-
 	const requestRpc = async (parameters: RequestArguments) => {
 		if (parameters.method === 'eth_sendRawTransaction') {
 			const params = Array.isArray(parameters.params) ? parameters.params : []
@@ -375,7 +352,6 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		}
 		return await (memoryClient.request as (parameters: RequestArguments) => Promise<unknown>)(parameters)
 	}
-
 	const provider = createSimulationProvider({
 		getChainId: () => profile.chainIdHex,
 		getQueryDelayMilliseconds: () => queryDelayMilliseconds,
@@ -388,25 +364,21 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		getSelectedAccount: () => selectedAccount,
 		requestRpc,
 	})
-
 	const receiptClient = createPublicClient({
 		chain: profile.chain,
 		transport: custom(provider),
 	}) as ReadClient
-
 	const createWriteClientForProvider = ({ accountAddress, callbacks, currentProvider, getTransactionDelay, onReceiptResolved }: { accountAddress: Address; callbacks: CreateWriteClientCallbacks; currentProvider: InjectedEthereum; getTransactionDelay: () => number; onReceiptResolved: () => Promise<void> }) => {
 		const baseClient = createWalletClient({
 			account: accountAddress,
 			chain: profile.chain,
 			transport: custom(currentProvider),
 		}).extend(publicActions) as WriteClient
-
 		const sendRawTransaction: typeof baseClient.sendRawTransaction = async parameters => {
 			const hash = await sendRawTransactionInternal(parameters.serializedTransaction as SerializedTransaction)
 			callbacks.onTransactionSubmitted?.(hash)
 			return hash
 		}
-
 		const sendTransaction: typeof baseClient.sendTransaction = async parameters => {
 			const senderAddress = normalizeRequestedAccount(parameters.account, accountAddress)
 			const hash = await sendTransactionInternal({
@@ -416,7 +388,6 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			callbacks.onTransactionSubmitted?.(hash)
 			return hash
 		}
-
 		const writeContract: typeof baseClient.writeContract = async parameters => {
 			const senderAddress = normalizeRequestedAccount(parameters.account, accountAddress)
 			const data = encodeFunctionData(parameters as Parameters<typeof encodeFunctionData>[0])
@@ -430,7 +401,6 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 				value: parameters.value,
 			})
 		}
-
 		const waitForTransactionReceipt: typeof baseClient.waitForTransactionReceipt = async parameters => {
 			await delayMilliseconds(getTransactionDelay())
 			for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -453,7 +423,6 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			await onReceiptResolved()
 			return receipt
 		}
-
 		return withTransactionCallbacks(
 			{
 				...baseClient,
@@ -474,15 +443,12 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			callbacks,
 		)
 	}
-
 	await initializeSimulationAccounts()
-
 	const createBootstrapReadClient = () =>
 		createPublicClient({
 			chain: profile.chain,
 			transport: custom(bootstrapProvider),
 		}) as ReadClient
-
 	const createBootstrapWriteClient = (accountAddress: Address) =>
 		createWriteClientForProvider({
 			accountAddress,
@@ -491,7 +457,6 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			getTransactionDelay: () => 0,
 			onReceiptResolved: async () => undefined,
 		})
-
 	const bootstrap = async () => {
 		if (bootstrapPromise !== undefined) return await bootstrapPromise
 		bootstrapping = true
@@ -534,7 +499,6 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		})()
 		return await bootstrapPromise
 	}
-
 	const getState = (): SimulationWorkerState => ({
 		bootstrapError,
 		bootstrapLabel,
@@ -551,7 +515,6 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		transactionCountSinceReset,
 		transactionDelayMilliseconds,
 	})
-
 	return {
 		accounts: QA_ACCOUNTS,
 		advanceTime: async seconds => {

@@ -38,9 +38,7 @@ import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, get
 import { deriveSecurityPoolReportingStage, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import type { LifecycleStagePresentation, ReportingSectionProps } from '../types/components.js'
 import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
-
 type ReportingStatus = 'active' | 'missing' | 'not-started'
-
 type EscalationSideDisplay = {
 	balance: bigint | undefined
 	key: ReportingOutcomeKey
@@ -48,14 +46,12 @@ type EscalationSideDisplay = {
 	userDeposits: EscalationDeposit[] | undefined
 	userStake: bigint | undefined
 }
-
 const MAX_PROFIT_NOT_STARTED_REASON = 'Max profit becomes available after the escalation game starts.'
 const LOAD_REPORTING_PRESETS_REASON = 'Load reporting details before using presets.'
 const SELECT_OUTCOME_PRESET_REASON = 'Select an outcome side before using presets.'
 const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
 const MAX_PROFIT_WINDOW_FILLED_REASON = 'Max profit preset unavailable because the reward window is already filled on the selected side.'
 const SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE = 'Select an outcome side above to enable reporting.'
-
 function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 	if (reportingDetails?.status === 'active') {
 		return reportingDetails.sides.map<EscalationSideDisplay>(side => ({
@@ -66,7 +62,6 @@ function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 			userStake: side.userDeposits.reduce((sum, deposit) => sum + deposit.amount, 0n),
 		}))
 	}
-
 	if (reportingDetails?.status === 'not-started') {
 		return REPORTING_OUTCOME_DROPDOWN_OPTIONS.map<EscalationSideDisplay>(option => ({
 			balance: 0n,
@@ -76,7 +71,6 @@ function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 			userStake: 0n,
 		}))
 	}
-
 	return REPORTING_OUTCOME_DROPDOWN_OPTIONS.map<EscalationSideDisplay>(option => ({
 		balance: undefined,
 		key: option.value,
@@ -85,25 +79,20 @@ function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 		userStake: undefined,
 	}))
 }
-
 function isHiddenPresetReason(reason: string | undefined) {
 	return reason === LOAD_REPORTING_PRESETS_REASON || reason === MAX_PROFIT_NOT_STARTED_REASON || reason === SELECT_OUTCOME_PRESET_REASON || reason === SELECTED_SIDE_ALREADY_LEADS_REASON || reason === MAX_PROFIT_WINDOW_FILLED_REASON
 }
-
 function getResolvedReportingOutcomeLabel(reportingDetails: ReportingDetails) {
 	const resolvedOutcome = reportingDetails.questionOutcome !== 'none' ? reportingDetails.questionOutcome : reportingDetails.resolution
 	return getReportingOutcomeLabel(resolvedOutcome)
 }
-
 function getWithdrawDepositClaimLabel(details: ReportingDetails | undefined, selectedOutcome: ReportingOutcomeKey) {
 	if (details === undefined || details.status !== 'active') return undefined
 	if (details.withdrawalState === 'canceled-by-external-fork') return 'External fork refund'
-
 	const resolvedOutcome = details.questionOutcome !== 'none' ? details.questionOutcome : details.resolution
 	if (resolvedOutcome === 'none') return undefined
 	return resolvedOutcome === selectedOutcome ? 'Winning payout' : 'Losing deposit settlement'
 }
-
 function getReportingStagePresentation({
 	effectiveCurrentTimestamp,
 	marketDetails,
@@ -114,7 +103,6 @@ function getReportingStagePresentation({
 	reportingDetails: ReportingDetails | undefined
 }): LifecycleStagePresentation | undefined {
 	if (effectiveCurrentTimestamp === undefined || marketDetails === undefined) return undefined
-
 	if (marketDetails.endTime > effectiveCurrentTimestamp) {
 		return {
 			availableActions: [],
@@ -125,7 +113,6 @@ function getReportingStagePresentation({
 			tone: 'warning',
 		}
 	}
-
 	if (reportingDetails === undefined) {
 		return {
 			availableActions: [],
@@ -136,11 +123,9 @@ function getReportingStagePresentation({
 			tone: 'default',
 		}
 	}
-
 	if (reportingDetails.status === 'not-started') {
 		return undefined
 	}
-
 	switch (getEscalationPhase(reportingDetails)) {
 		case 'Pending Start':
 			return undefined
@@ -182,17 +167,14 @@ function getReportingStagePresentation({
 			}
 	}
 }
-
 function getEscalationGameStartTimestamp(activationTime: bigint | undefined) {
 	if (activationTime === undefined) return undefined
 	return activationTime > ESCALATION_GAME_ACTIVATION_DELAY ? activationTime - ESCALATION_GAME_ACTIVATION_DELAY : 0n
 }
-
 function getLatestOutcomeReminder({ currentTimestamp, projectedFinalizationTimestamp, rewardWindowFillTimestamp, selectedOutcomeLabel }: { currentTimestamp: bigint | undefined; projectedFinalizationTimestamp: bigint | undefined; rewardWindowFillTimestamp: bigint | undefined; selectedOutcomeLabel: string }) {
 	if (projectedFinalizationTimestamp !== undefined && currentTimestamp !== undefined && projectedFinalizationTimestamp <= currentTimestamp) {
 		return <>Check back immediately to confirm the market finalized as {selectedOutcomeLabel}.</>
 	}
-
 	if (rewardWindowFillTimestamp !== undefined && currentTimestamp !== undefined && rewardWindowFillTimestamp > currentTimestamp) {
 		return (
 			<>
@@ -200,7 +182,6 @@ function getLatestOutcomeReminder({ currentTimestamp, projectedFinalizationTimes
 			</>
 		)
 	}
-
 	if (projectedFinalizationTimestamp !== undefined) {
 		return (
 			<>
@@ -208,21 +189,17 @@ function getLatestOutcomeReminder({ currentTimestamp, projectedFinalizationTimes
 			</>
 		)
 	}
-
 	return <>Check back later to confirm {selectedOutcomeLabel} is the leading outcome.</>
 }
-
 function getEffectiveReportingDetails(reportingDetails: ReportingDetails | undefined, currentTimestamp: bigint | undefined) {
 	if (reportingDetails === undefined || currentTimestamp === undefined || reportingDetails.currentTime === currentTimestamp) {
 		return reportingDetails
 	}
-
 	return {
 		...reportingDetails,
 		currentTime: currentTimestamp,
 	}
 }
-
 export function ReportingSection({
 	accountState,
 	currentTimestamp,
@@ -274,7 +251,16 @@ export function ReportingSection({
 	const selectedSide = selectedOutcome === undefined ? undefined : activeReportingDetails?.sides.find(side => side.key === selectedOutcome)
 	const selectedWithdrawDepositIndexes = reportingForm.selectedWithdrawDepositIndexes
 	const allWithdrawDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
-	const displayBindingCapital = effectiveReportingDetails === undefined ? undefined : effectiveReportingDetails.status === 'not-started' ? 0n : effectiveReportingDetails.bindingCapital
+	const displayBindingCapital = (() => {
+		if (effectiveReportingDetails === undefined) {
+			return undefined
+		}
+		if (effectiveReportingDetails.status === 'not-started') {
+			return 0n
+		}
+
+		return effectiveReportingDetails.bindingCapital
+	})()
 	const outcomeSides = getOutcomeSides(effectiveReportingDetails)
 	const chartScaleMax = outcomeSides.reduce(
 		(maxBalance, side) => {
@@ -289,20 +275,28 @@ export function ReportingSection({
 	const selectedEstimate = activeReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : calculateEstimatedEscalationReturn(activeReportingDetails, selectedOutcome, selectedAmount)
 	const timerPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : getReportingTimerPreview(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	const selectedOutcomeLabel = selectedOutcome === undefined ? 'Selected Side' : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
-	const projectedFinalizationTimestamp =
-		timerPreview === undefined || effectiveCurrentTimestamp === undefined
-			? undefined
-			: timerPreview.kind === 'not-started'
-				? effectiveCurrentTimestamp + timerPreview.timeUntilEnd
-				: timerPreview.actualState === 'ends-immediately'
-					? effectiveCurrentTimestamp
-					: activeReportingDetails === undefined
-						? undefined
-						: effectiveCurrentTimestamp + getEscalationTimeRemaining(activeReportingDetails) + (timerPreview.timerIncrease ?? 0n)
+	const projectedFinalizationTimestamp = (() => {
+		if (timerPreview === undefined || effectiveCurrentTimestamp === undefined) {
+			return undefined
+		}
+		if (timerPreview.kind === 'not-started') {
+			return effectiveCurrentTimestamp + timerPreview.timeUntilEnd
+		}
+
+		return (() => {
+			if (timerPreview.actualState === 'ends-immediately') {
+				return effectiveCurrentTimestamp
+			}
+			if (activeReportingDetails === undefined) {
+				return undefined
+			}
+
+			return effectiveCurrentTimestamp + getEscalationTimeRemaining(activeReportingDetails) + (timerPreview.timerIncrease ?? 0n)
+		})()
+	})()
 	const rewardWindowFillTimestamp = activeReportingDetails === undefined || selectedOutcome === undefined || actualReportDepositAmount === undefined ? undefined : getSelectedOutcomeRewardWindowFillTimestamp(activeReportingDetails, selectedOutcome, actualReportDepositAmount)
 	const getProjectedReportingPreview = () => {
 		if (activeReportingDetails !== undefined && isReportingClosed(activeReportingDetails)) return undefined
-
 		const finalizationReminder = getLatestOutcomeReminder({
 			currentTimestamp: effectiveCurrentTimestamp,
 			projectedFinalizationTimestamp,
@@ -311,14 +305,12 @@ export function ReportingSection({
 		})
 		if (timerPreview === undefined) {
 			if (selectedEstimate === undefined) return undefined
-
 			return (
 				<>
 					If {selectedOutcomeLabel} wins and no one else contributes afterward, this amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit. {finalizationReminder}
 				</>
 			)
 		}
-
 		if (timerPreview.kind === 'not-started') {
 			if (timerPreview.hypotheticalDuration > 0n) {
 				return (
@@ -328,16 +320,13 @@ export function ReportingSection({
 					</>
 				)
 			}
-
 			return (
 				<>
 					If no one disputes after this report, the market would finalize in {formatDuration(timerPreview.timeUntilStart)}. {finalizationReminder}
 				</>
 			)
 		}
-
 		if (selectedEstimate === undefined || activeReportingDetails === undefined) return undefined
-
 		if (timerPreview.actualState === 'ends-immediately') {
 			return (
 				<>
@@ -345,7 +334,6 @@ export function ReportingSection({
 				</>
 			)
 		}
-
 		const projectedFinalizationDuration = formatDuration(getEscalationTimeRemaining(activeReportingDetails) + (timerPreview.timerIncrease ?? 0n))
 		if (timerPreview.actualState === 'extends') {
 			return (
@@ -355,7 +343,6 @@ export function ReportingSection({
 				</>
 			)
 		}
-
 		return (
 			<>
 				If {selectedOutcomeLabel} wins and no one else contributes afterward, this amount projects roughly <CurrencyValue value={selectedEstimate.profit} suffix='REP' /> of profit. This contribution would not extend the timer, and if no one disputes after it, the market would finalize in {projectedFinalizationDuration}
@@ -392,19 +379,37 @@ export function ReportingSection({
 			reportingStatus,
 			selectedOutcome,
 		})
-	const withdrawSelectedGuardMessage = withdrawGuardMessage ?? (!withdrawEscalationEnabled ? undefined : selectedSide !== undefined && selectedSide.userDeposits.length > 0 && selectedWithdrawDepositIndexes.length === 0 ? 'Select at least one deposit to withdraw or use Withdraw all.' : undefined)
-	const reportOutcomeSelectionMessage = showFullReporting && reportingStatus !== 'missing' && selectedOutcome === undefined && !reportControlsLocked ? SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE : undefined
-	const reportingOpenNotice = showFullReporting && reportingStatus === 'not-started' ? (selectedOutcome === undefined ? 'Reporting is open. Select an outcome side below to enable reporting.' : 'Reporting is open.') : undefined
+	const withdrawSelectedGuardMessage =
+		withdrawGuardMessage ??
+		(() => {
+			if (!withdrawEscalationEnabled) {
+				return undefined
+			}
+			if (selectedSide !== undefined && selectedSide.userDeposits.length > 0 && selectedWithdrawDepositIndexes.length === 0) {
+				return 'Select at least one deposit to withdraw or use Withdraw all.'
+			}
 
+			return undefined
+		})()
+	const reportOutcomeSelectionMessage = showFullReporting && reportingStatus !== 'missing' && selectedOutcome === undefined && !reportControlsLocked ? SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE : undefined
+	const reportingOpenNotice = (() => {
+		if (showFullReporting && reportingStatus === 'not-started') {
+			if (selectedOutcome === undefined) {
+				return 'Reporting is open. Select an outcome side below to enable reporting.'
+			}
+
+			return 'Reporting is open.'
+		}
+
+		return undefined
+	})()
 	useEffect(() => {
 		if (activeReportingDetails === undefined) return
 		if (escalationPhase !== 'Timed Out') return
 		if (loadingReportingDetails) return
 		if (activeReportingDetails.resolution !== 'none' || activeReportingDetails.hasReachedNonDecision) return
-
 		const refreshBoundaryKey = `${activeReportingDetails.securityPoolAddress}:${activeReportingDetails.escalationEndTime.toString()}`
 		if (lastTimedOutRefreshBoundaryKey.current === refreshBoundaryKey) return
-
 		lastTimedOutRefreshBoundaryKey.current = refreshBoundaryKey
 		void onLoadReporting()
 	}, [activeReportingDetails, escalationPhase, loadingReportingDetails, onLoadReporting])
@@ -566,7 +571,16 @@ export function ReportingSection({
 							<LoadingText>Loading escalation deposits...</LoadingText>
 						</p>
 					) : undefined}
-					{selectedSide === undefined ? undefined : selectedSide.userDeposits.length === 0 ? <p className='detail'>Connected wallet has no unsettled deposits on the selected side.</p> : undefined}
+					{(() => {
+						if (selectedSide === undefined) {
+							return undefined
+						}
+						if (selectedSide.userDeposits.length === 0) {
+							return <p className='detail'>Connected wallet has no unsettled deposits on the selected side.</p>
+						}
+
+						return undefined
+					})()}
 					{selectedSide === undefined || selectedSide.userDeposits.length === 0 ? undefined : (
 						<div className='field'>
 							<span>Choose deposits to withdraw</span>
@@ -634,11 +648,9 @@ export function ReportingSection({
 			<ErrorNotice message={reportingError} />
 		</>
 	)
-
 	if (embedInCard) {
 		return sections
 	}
-
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Reporting & Escalation'>
 			{sections}

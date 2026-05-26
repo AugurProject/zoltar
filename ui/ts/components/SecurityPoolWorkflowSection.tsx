@@ -52,9 +52,7 @@ import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, isSelec
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../types/components.js'
-
 type SelectedVaultView = 'browse-vaults' | 'selected-vault'
-
 function getPendingOperationLabel(operation: 'liquidation' | 'setSecurityBondsAllowance' | 'withdrawRep') {
 	switch (operation) {
 		case 'liquidation':
@@ -65,7 +63,6 @@ function getPendingOperationLabel(operation: 'liquidation' | 'setSecurityBondsAl
 			return 'Set Bond Allowance'
 	}
 }
-
 function getSecurityPoolStatusBadgeTone(systemState: SecurityPoolLifecycleState | undefined) {
 	if (systemState === 'operational') return 'ok'
 	if (systemState === undefined) return 'muted'
@@ -113,7 +110,9 @@ export function SecurityPoolWorkflowSection({
 	onSelectedPoolViewChange,
 	showHeader = true,
 	trading,
-}: SecurityPoolWorkflowRouteContentProps & { showHeader?: boolean }) {
+}: SecurityPoolWorkflowRouteContentProps & {
+	showHeader?: boolean
+}) {
 	const view = resolveSelectedPoolView(selectedPoolView)
 	const chainCurrentTimestamp = useChainTimestamp()
 	const [manualPendingOperationId, setManualPendingOperationId] = useState('')
@@ -144,10 +143,28 @@ export function SecurityPoolWorkflowSection({
 		}),
 		universeHasForked: effectiveSelectedPool?.universeHasForked === true,
 	})
-	const selectedPoolHasForkActivity = selectedPool !== undefined ? hasForkActivity(selectedPool) : currentForkAuctionDetails !== undefined ? hasForkActivity(currentForkAuctionDetails) : false
+	const selectedPoolHasForkActivity = (() => {
+		if (selectedPool !== undefined) {
+			return hasForkActivity(selectedPool)
+		}
+		if (currentForkAuctionDetails !== undefined) {
+			return hasForkActivity(currentForkAuctionDetails)
+		}
+
+		return false
+	})()
 	const currentTimestamp = chainCurrentTimestamp ?? currentReportingDetails?.currentTime ?? currentForkAuctionDetails?.currentTime
 	const reportingReady = marketDetails !== undefined && currentTimestamp !== undefined && marketDetails.endTime <= currentTimestamp
-	const reportingLockedReason = reportingReady ? undefined : marketDetails === undefined ? 'Reporting opens after market end.' : getReportingLockedUntilMessage(marketDetails.endTime, currentTimestamp)
+	const reportingLockedReason = (() => {
+		if (reportingReady) {
+			return undefined
+		}
+		if (marketDetails === undefined) {
+			return 'Reporting opens after market end.'
+		}
+
+		return getReportingLockedUntilMessage(marketDetails.endTime, currentTimestamp)
+	})()
 	const forkWorkflowDisabled = isForkWorkflowDisabled(selectedPoolState, selectedPoolHasForkActivity)
 	const selectedPoolUniverseMismatch = selectedPool !== undefined && selectedPool.universeId !== activeUniverseId
 	const hasSelectedPoolAddress = securityPoolAddress.trim() !== ''
@@ -227,7 +244,16 @@ export function SecurityPoolWorkflowSection({
 	})
 	const selectedPendingOperationId = currentPoolOracleManagerDetails?.pendingOperationSlotId ?? 0n
 	const liquidationEnabled = selectedPoolStateModel.actions.queueLiquidation.enabled
-	const pendingOperationInput = manualPendingOperationId.trim() !== '' ? manualPendingOperationId.trim() : selectedPendingOperationId > 0n ? selectedPendingOperationId.toString() : ''
+	const pendingOperationInput = (() => {
+		if (manualPendingOperationId.trim() !== '') {
+			return manualPendingOperationId.trim()
+		}
+		if (selectedPendingOperationId > 0n) {
+			return selectedPendingOperationId.toString()
+		}
+
+		return ''
+	})()
 	const resolvedPendingOperationId =
 		pendingOperationInput === ''
 			? undefined
@@ -246,29 +272,40 @@ export function SecurityPoolWorkflowSection({
 		resolvedPendingOperationId,
 	})
 	const selectedPoolBrowsePresentation = selectedPool === undefined ? getPoolRegistryPresentation({ mode: 'selection', state: selectedPoolLookupState }) : undefined
-	const selectedVaultLoadNotice = securityVault.loadingSecurityVault ? (
-		<p className='detail'>
-			<LoadingText>Loading vault...</LoadingText>
-		</p>
-	) : securityVault.securityVaultMissing ? (
-		<StateHint presentation={{ key: 'not_found', badgeLabel: 'Not found', badgeTone: 'blocked', detail: 'Try another vault address.' }} />
-	) : undefined
-	const selectedPoolVaultDefaultKey = `${normalizeAddress(selectedPool?.securityPoolAddress) ?? ''}:${normalizeAddress(accountState.address) ?? ''}`
+	const selectedVaultLoadNotice = (() => {
+		if (securityVault.loadingSecurityVault) {
+			return (
+				<p className='detail'>
+					<LoadingText>Loading vault...</LoadingText>
+				</p>
+			)
+		}
+		if (securityVault.securityVaultMissing) {
+			return <StateHint presentation={{ key: 'not_found', badgeLabel: 'Not found', badgeTone: 'blocked', detail: 'Try another vault address.' }} />
+		}
 
+		return undefined
+	})()
+	const selectedPoolVaultDefaultKey = `${normalizeAddress(selectedPool?.securityPoolAddress) ?? ''}:${normalizeAddress(accountState.address) ?? ''}`
 	useEffect(() => {
 		if (selectedPoolManagerAddress === undefined) return
 		if (sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return
 		if (loadingPoolOracleManager) return
 		void onLoadPoolOracleManager(selectedPoolManagerAddress)
 	}, [loadingPoolOracleManager, onLoadPoolOracleManager, poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress])
-
 	useEffect(() => {
 		if (selectedPoolManagerAddress === undefined) return
 		if (loadingPoolOracleManager) return
+		const queuedOperationHash = (() => {
+			if (securityVault.securityVaultResult?.action === 'queueSetSecurityBondAllowance' || securityVault.securityVaultResult?.action === 'queueWithdrawRep') {
+				return securityVault.securityVaultResult.hash
+			}
+			if (securityPoolOverviewResult?.action === 'queueLiquidation') {
+				return securityPoolOverviewResult.hash
+			}
 
-		const queuedOperationHash =
-			securityVault.securityVaultResult?.action === 'queueSetSecurityBondAllowance' || securityVault.securityVaultResult?.action === 'queueWithdrawRep' ? securityVault.securityVaultResult.hash : securityPoolOverviewResult?.action === 'queueLiquidation' ? securityPoolOverviewResult.hash : undefined
-
+			return undefined
+		})()
 		if (queuedOperationHash === undefined) {
 			lastQueuedOperationRefreshHash.current = undefined
 			return
@@ -277,7 +314,6 @@ export function SecurityPoolWorkflowSection({
 		lastQueuedOperationRefreshHash.current = queuedOperationHash
 		void onLoadPoolOracleManager(selectedPoolManagerAddress)
 	}, [loadingPoolOracleManager, onLoadPoolOracleManager, securityPoolOverviewResult, securityVault.securityVaultResult, selectedPoolManagerAddress])
-
 	useEffect(() => {
 		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
 		if (normalizedSelectedPoolAddress === undefined) return
@@ -286,7 +322,6 @@ export function SecurityPoolWorkflowSection({
 		if (isSelectedVaultOwnedByAccountHelper(securityVault.securityVaultForm.selectedVaultAddress, accountState.address)) return
 		securityVault.onSecurityVaultFormChange({ selectedVaultAddress: accountState.address.toString() })
 	}, [accountState.address, securityVault.onSecurityVaultFormChange, securityVault.securityVaultForm.selectedVaultAddress, selectedPoolVaultDefaultKey])
-
 	useEffect(() => {
 		if (!showSelectedPoolWorkflowDetails || view !== 'vaults') return
 		if (accountState.address === undefined) return
@@ -297,7 +332,6 @@ export function SecurityPoolWorkflowSection({
 		lastSelectedVaultAutoLoadKey.current = selectedVaultAutoLoadKey
 		void securityVault.onLoadSecurityVault()
 	}, [accountState.address, hasLoadedCurrentVault, securityVault.loadingSecurityVault, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, selectedVaultAddress, selectedVaultAutoLoadKey, selectedVaultSecurityPoolAddress, showSelectedPoolWorkflowDetails, view])
-
 	useEffect(() => {
 		if ((view !== 'reporting' && view !== 'withdraw-escalation-deposits') || !reportingReady || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {
 			lastReportingAutoLoadKey.current = undefined
@@ -311,7 +345,6 @@ export function SecurityPoolWorkflowSection({
 		lastReportingAutoLoadKey.current = reportingAutoLoadKey
 		void reporting.onLoadReporting()
 	}, [normalizedReportingFormPoolAddress, normalizedSelectedPoolAddress, reporting.loadingReportingDetails, reporting.onLoadReporting, reporting.reportingDetails?.securityPoolAddress, reportingReady, showSelectedPoolWorkflowDetails, view])
-
 	useEffect(() => {
 		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
 		if (view !== 'fork' || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) return
@@ -319,7 +352,6 @@ export function SecurityPoolWorkflowSection({
 		if (forkAuction.loadingForkAuctionDetails) return
 		void forkAuction.onLoadForkAuction()
 	}, [forkAuction.forkAuctionDetails?.securityPoolAddress, forkAuction.loadingForkAuctionDetails, forkAuction.onLoadForkAuction, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
-
 	useEffect(() => {
 		const reportingRefreshHash = reporting.reportingResult?.hash
 		if (reportingRefreshHash === undefined) {
@@ -333,7 +365,6 @@ export function SecurityPoolWorkflowSection({
 			void securityVault.onLoadSecurityVault()
 		}
 	}, [hasLoadedCurrentVault, onRefreshSelectedPoolData, reporting.reportingResult, securityVault.onLoadSecurityVault, showSelectedPoolWorkflowDetails])
-
 	useEffect(() => {
 		const queuedOperationHash = securityVault.securityVaultResult?.action === 'queueSetSecurityBondAllowance' || securityVault.securityVaultResult?.action === 'queueWithdrawRep' ? securityVault.securityVaultResult.hash : undefined
 		if (queuedOperationHash === undefined) {
@@ -349,7 +380,6 @@ export function SecurityPoolWorkflowSection({
 			void securityVault.onLoadSecurityVault()
 		}
 	}, [currentPoolOracleManagerDetails, hasLoadedCurrentVault, loadingPoolOracleManager, onRefreshSelectedPoolData, queuedVaultOperation, securityVault.onLoadSecurityVault, securityVault.securityVaultResult, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
-
 	useEffect(() => {
 		const liquidationRefreshKey = securityPoolOverviewResult?.action !== 'queueLiquidation' || liquidationNoticeState === undefined || liquidationNoticeState === 'submitted' ? undefined : `${securityPoolOverviewResult.hash}:${liquidationNoticeState}`
 		if (liquidationRefreshKey === undefined) {
@@ -363,7 +393,6 @@ export function SecurityPoolWorkflowSection({
 			void securityVault.onLoadSecurityVault()
 		}
 	}, [hasLoadedCurrentVault, liquidationNoticeState, onRefreshSelectedPoolData, securityPoolOverviewResult, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
-
 	useEffect(() => {
 		if (poolPriceOracleResult?.action !== 'executeStagedOperation') {
 			lastExecutedOperationRefreshHash.current = undefined
@@ -380,7 +409,6 @@ export function SecurityPoolWorkflowSection({
 			void securityVault.onLoadSecurityVault()
 		}
 	}, [hasLoadedCurrentVault, onRefreshSelectedPoolData, poolPriceOracleResult, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
-
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Selected Pool'>
 			<StickyObjectContext
@@ -505,7 +533,17 @@ export function SecurityPoolWorkflowSection({
 										{vaultView === 'browse-vaults' ? (
 											<SectionBlock title='Vault Directory'>
 												<SecurityPoolVaultDirectory
-													emptyState={selectedPool === undefined ? selectedPoolBrowsePresentation === undefined ? undefined : <StateHint presentation={selectedPoolBrowsePresentation} /> : <StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />}
+													emptyState={(() => {
+														if (selectedPool === undefined) {
+															if (selectedPoolBrowsePresentation === undefined) {
+																return undefined
+															}
+
+															return <StateHint presentation={selectedPoolBrowsePresentation} />
+														}
+
+														return <StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />
+													})()}
 													pool={selectedPool}
 													renderActions={vault => {
 														if (selectedPool === undefined) return undefined
@@ -548,7 +586,16 @@ export function SecurityPoolWorkflowSection({
 														key: 'liquidate-vault',
 														readiness: liquidationEnabled ? 'ready' : 'blocked',
 														title: 'Liquidate Vault',
-														...(selectedPool === undefined || selectedVaultDetails === undefined ? { blocker: 'Refresh the selected vault first.' } : selectedVaultAddress === '' ? { blocker: 'Select a pool and vault first.' } : {}),
+														...(() => {
+															if (selectedPool === undefined || selectedVaultDetails === undefined) {
+																return { blocker: 'Refresh the selected vault first.' }
+															}
+															if (selectedVaultAddress === '') {
+																return { blocker: 'Select a pool and vault first.' }
+															}
+
+															return {}
+														})(),
 														...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === '' || !liquidationEnabled
 															? {}
 															: {
@@ -650,7 +697,16 @@ export function SecurityPoolWorkflowSection({
 										)}
 										<div className='actions'>
 											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
-												{loadingPoolOracleManager ? <LoadingText>Refreshing operations...</LoadingText> : currentPoolOracleManagerDetails === undefined ? 'Load Staged Operations' : 'Refresh Staged Operations'}
+												{(() => {
+													if (loadingPoolOracleManager) {
+														return <LoadingText>Refreshing operations...</LoadingText>
+													}
+													if (currentPoolOracleManagerDetails === undefined) {
+														return 'Load Staged Operations'
+													}
+
+													return 'Refresh Staged Operations'
+												})()}
 											</button>
 											{currentPoolOracleManagerDetails === undefined ? undefined : (
 												<TransactionActionButton
