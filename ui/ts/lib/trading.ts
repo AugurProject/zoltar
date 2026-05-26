@@ -4,7 +4,6 @@ import { parseBigIntListInput } from './inputs.js'
 import { parseTradingAmountInput } from './marketForm.js'
 import { getReportingOutcomeLabel } from './reporting.js'
 import { isValidScalarOutcomeIndex } from './scalarOutcome.js'
-import { MARKET_ALREADY_FINALIZED_MESSAGE, MARKET_NOT_FINALIZED_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE } from './securityPoolState/messages.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
 
@@ -14,7 +13,8 @@ const PERCENT_MULTIPLIER = 100n
 type CollateralizationDisplayState = 'value' | 'noActiveAllowance' | 'unavailable'
 type CollateralizationTone = 'success' | 'danger'
 
-export { MARKET_ALREADY_FINALIZED_MESSAGE, MARKET_NOT_FINALIZED_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE }
+export const MARKET_NOT_FINALIZED_MESSAGE = 'This market has not finalized yet.'
+export const SHARE_MIGRATION_AFTER_FORK_MESSAGE = 'Share migration is only available after this universe has forked.'
 export const NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE = 'No mint capacity. No active security bond allowance.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
 

@@ -21,7 +21,6 @@ import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { WarningSurface } from './WarningSurface.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
-import { pickFirstReason } from '../lib/actionAvailability.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { balanceShortage } from '../lib/inputs.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
@@ -320,80 +319,65 @@ export function SecurityVaultSection({
 	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && depositAmount !== undefined && depositAmount > 0n && approvalRequirement.hasSufficientApproval
 	const hasInsufficientRepBalance = repBalanceGap !== undefined && repBalanceGap > 0n
 	const redeemableRepAmount = currentSelectedVaultDetails?.repDepositShare
-	const effectivePoolActionLockReason = poolState?.actions.depositRep.reason
-	const effectiveRepExitMode = poolState?.actions.redeemRep.enabled ? 'redeem' : 'withdraw'
-	const repExitLifecycleReason = effectiveRepExitMode === 'redeem' ? poolState?.actions.redeemRep.reason : poolState?.actions.queueWithdrawRep.reason
-	const approvalLifecycleReason = poolState?.actions.approveRep.reason
-	const bondAllowanceLifecycleReason = poolState?.actions.queueSetSecurityBondAllowance.reason
-	const claimFeesLifecycleReason = poolState?.actions.redeemFees.reason
+	const depositRepEnabled = poolState?.actions.depositRep.enabled ?? true
+	const queueWithdrawRepEnabled = poolState?.actions.queueWithdrawRep.enabled ?? true
+	const redeemRepEnabled = poolState?.actions.redeemRep.enabled === true
+	const approveRepEnabled = poolState?.actions.approveRep.enabled ?? true
+	const bondAllowanceEnabled = poolState?.actions.queueSetSecurityBondAllowance.enabled ?? true
+	const claimFeesEnabled = poolState?.actions.redeemFees.enabled ?? true
+	const poolCollateralActionsEnabled = depositRepEnabled
+	const effectiveRepExitMode = redeemRepEnabled ? 'redeem' : 'withdraw'
+	const repExitEnabled = effectiveRepExitMode === 'redeem' ? redeemRepEnabled : queueWithdrawRepEnabled
 	const repExitActionLabel = effectiveRepExitMode === 'redeem' ? 'Redeem REP' : 'Withdraw REP'
-	const claimFeesGuardMessage = pickFirstReason(
-		claimFeesLifecycleReason,
-		getVaultClaimFeesGuardMessage({
-			hasClaimableFees,
-			isMainnet,
-			selectedVaultIsOwnedByAccount,
-		}),
-	)
-	const setSecurityBondAllowanceGuardMessage = pickFirstReason(
-		bondAllowanceLifecycleReason,
-		getVaultSetSecurityBondAllowanceGuardMessage({
-			hasValidOraclePrice,
-			isMainnet,
-			maxSecurityBondAllowanceAmount,
-			requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
-			securityBondAllowanceAmount,
-			selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
-			selectedVaultIsOwnedByAccount,
-			walletEthBalance: accountState.ethBalance,
-		}),
-	)
-	const depositGuardMessage = pickFirstReason(
-		effectivePoolActionLockReason,
-		getVaultDepositGuardMessage({
-			accountAddress: accountState.address,
-			approvalSatisfied: hasSufficientDepositAllowance,
-			isDepositBelowMinimum,
-			isMainnet,
-			repBalanceGap: hasInsufficientRepBalance ? repBalanceGap : undefined,
-			selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
-			selectedVaultIsOwnedByAccount,
-		}),
-	)
-	const withdrawRepGuardMessage = pickFirstReason(
-		repExitLifecycleReason,
-		getVaultWithdrawGuardMessage({
-			accountAddress: accountState.address,
-			hasValidOraclePrice,
-			isMainnet,
-			requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
-			selectedVaultIsOwnedByAccount,
-			withdrawAmount: hasWithdrawAmount ? withdrawAmount : undefined,
-			withdrawableRepAmount,
-			walletEthBalance: accountState.ethBalance,
-		}),
-	)
-	const redeemRepGuardMessage = pickFirstReason(
-		repExitLifecycleReason,
-		getVaultRedeemRepGuardMessage({
-			accountAddress: accountState.address,
-			isMainnet,
-			lockedRepInEscalationGame: currentSelectedVaultDetails?.lockedRepInEscalationGame,
-			redeemableRepAmount,
-			selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
-			selectedVaultIsOwnedByAccount,
-		}),
-	)
+	const claimFeesGuardMessage = getVaultClaimFeesGuardMessage({
+		hasClaimableFees,
+		isMainnet,
+		selectedVaultIsOwnedByAccount,
+	})
+	const setSecurityBondAllowanceGuardMessage = getVaultSetSecurityBondAllowanceGuardMessage({
+		hasValidOraclePrice,
+		isMainnet,
+		maxSecurityBondAllowanceAmount,
+		requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
+		securityBondAllowanceAmount,
+		selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
+		selectedVaultIsOwnedByAccount,
+		walletEthBalance: accountState.ethBalance,
+	})
+	const depositGuardMessage = getVaultDepositGuardMessage({
+		accountAddress: accountState.address,
+		approvalSatisfied: hasSufficientDepositAllowance,
+		isDepositBelowMinimum,
+		isMainnet,
+		repBalanceGap: hasInsufficientRepBalance ? repBalanceGap : undefined,
+		selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
+		selectedVaultIsOwnedByAccount,
+	})
+	const withdrawRepGuardMessage = getVaultWithdrawGuardMessage({
+		accountAddress: accountState.address,
+		hasValidOraclePrice,
+		isMainnet,
+		requestPriceEthCost: oracleManagerDetails?.requestPriceEthCost,
+		selectedVaultIsOwnedByAccount,
+		withdrawAmount: hasWithdrawAmount ? withdrawAmount : undefined,
+		withdrawableRepAmount,
+		walletEthBalance: accountState.ethBalance,
+	})
+	const redeemRepGuardMessage = getVaultRedeemRepGuardMessage({
+		accountAddress: accountState.address,
+		isMainnet,
+		lockedRepInEscalationGame: currentSelectedVaultDetails?.lockedRepInEscalationGame,
+		redeemableRepAmount,
+		selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
+		selectedVaultIsOwnedByAccount,
+	})
 	const repExitGuardMessage = effectiveRepExitMode === 'redeem' ? redeemRepGuardMessage : withdrawRepGuardMessage
-	const approvalGuardMessage = pickFirstReason(
-		approvalLifecycleReason,
-		getVaultApprovalGuardMessage({
-			accountAddress: accountState.address,
-			isMainnet,
-			selectedVaultDetailsLoaded: !securityVaultMissing && currentSelectedVaultDetails !== undefined,
-			selectedVaultIsOwnedByAccount,
-		}),
-	)
+	const approvalGuardMessage = getVaultApprovalGuardMessage({
+		accountAddress: accountState.address,
+		isMainnet,
+		selectedVaultDetailsLoaded: !securityVaultMissing && currentSelectedVaultDetails !== undefined,
+		selectedVaultIsOwnedByAccount,
+	})
 	const autoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = currentSelectedVaultDetails !== undefined && sameAddress(currentSelectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(currentSelectedVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
 	const lastAutoLoadKey = useRef<string | undefined>(undefined)
@@ -444,28 +428,25 @@ export function SecurityVaultSection({
 			actionLabel: 'Deposit REP',
 			description: 'Add REP to the selected vault.',
 			key: 'deposit-rep',
-			onAction: () => setVaultActionModal('deposit-rep'),
-			readiness: effectivePoolActionLockReason === undefined ? 'ready' : 'blocked',
+			...(depositRepEnabled ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
+			readiness: depositRepEnabled ? 'ready' : 'blocked',
 			title: 'Deposit REP',
-			...(effectivePoolActionLockReason === undefined ? {} : { blocker: effectivePoolActionLockReason }),
 		},
 		{
 			actionLabel: repExitActionLabel,
 			description: effectiveRepExitMode === 'redeem' ? 'Redeem REP from an ended pool after escalation deposits are settled.' : 'Queue a REP withdrawal once a valid oracle price exists.',
 			key: 'rep-exit',
-			onAction: () => setVaultActionModal('withdraw-rep'),
-			readiness: repExitLifecycleReason === undefined ? 'ready' : 'blocked',
+			...(repExitEnabled ? { onAction: () => setVaultActionModal('withdraw-rep') } : {}),
+			readiness: repExitEnabled ? 'ready' : 'blocked',
 			title: repExitActionLabel,
-			...(repExitLifecycleReason === undefined ? {} : { blocker: repExitLifecycleReason }),
 		},
 		{
 			actionLabel: 'Set Bond Allowance',
 			description: 'Queue a new security bond allowance using the current oracle price context.',
 			key: 'set-bond-allowance',
-			onAction: () => setVaultActionModal('set-bond-allowance'),
-			readiness: bondAllowanceLifecycleReason === undefined ? 'ready' : 'blocked',
+			...(bondAllowanceEnabled ? { onAction: () => setVaultActionModal('set-bond-allowance') } : {}),
+			readiness: bondAllowanceEnabled ? 'ready' : 'blocked',
 			title: 'Set Security Bond Allowance',
-			...(bondAllowanceLifecycleReason === undefined ? {} : { blocker: bondAllowanceLifecycleReason }),
 		},
 		{
 			actionLabel: 'Claim Fees',
@@ -506,7 +487,7 @@ export function SecurityVaultSection({
 						<label className='field'>
 							<span>REP Collateral Amount</span>
 							<div className='field-inline'>
-								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={effectivePoolActionLockReason !== undefined} />
+								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
 								<button
 									className='quiet field-inline-action'
 									type='button'
@@ -514,7 +495,7 @@ export function SecurityVaultSection({
 										if (securityVaultRepBalance === undefined) return
 										onSecurityVaultFormChange({ depositAmount: formatCurrencyInputBalance(securityVaultRepBalance) })
 									}}
-									disabled={securityVaultRepBalance === undefined || effectivePoolActionLockReason !== undefined}
+									disabled={securityVaultRepBalance === undefined || !poolCollateralActionsEnabled}
 								>
 									Max
 								</button>
@@ -530,7 +511,7 @@ export function SecurityVaultSection({
 							allowanceError={securityVaultRepApproval.error}
 							allowanceLoading={securityVaultRepApproval.loading}
 							approvedAmount={securityVaultRepApproval.value}
-							guardMessage={approvalGuardMessage}
+							guardMessage={approveRepEnabled ? approvalGuardMessage : undefined}
 							onApprove={amount => onApproveRep(amount)}
 							pending={securityVaultActiveAction === 'approveRep'}
 							pendingLabel='Approving REP...'
@@ -538,6 +519,7 @@ export function SecurityVaultSection({
 							resetKey={`${currentSelectedVaultDetails.repToken}:${currentSelectedVaultDetails.securityPoolAddress}:${depositAmount?.toString() ?? ''}`}
 							tokenSymbol='REP'
 							tokenUnits={18}
+							disabled={!approveRepEnabled}
 						/>
 						<RequirementsChecklist
 							items={[
@@ -550,7 +532,13 @@ export function SecurityVaultSection({
 							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
 								Cancel
 							</button>
-							<TransactionActionButton idleLabel='Create / Deposit REP' pendingLabel='Depositing REP...' onClick={onDepositRep} pending={securityVaultActiveAction === 'depositRep'} availability={{ disabled: depositGuardMessage !== undefined, reason: depositGuardMessage }} />
+							<TransactionActionButton
+								idleLabel='Create / Deposit REP'
+								pendingLabel='Depositing REP...'
+								onClick={onDepositRep}
+								pending={securityVaultActiveAction === 'depositRep'}
+								availability={{ disabled: !depositRepEnabled || depositGuardMessage !== undefined, reason: depositRepEnabled ? depositGuardMessage : undefined }}
+							/>
 						</div>
 					</>
 				)}
@@ -607,7 +595,7 @@ export function SecurityVaultSection({
 							<label className='field'>
 								<span>REP Withdraw Amount</span>
 								<div className='field-inline'>
-									<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={effectivePoolActionLockReason !== undefined} />
+									<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
 									<button
 										className='quiet field-inline-action'
 										type='button'
@@ -615,7 +603,7 @@ export function SecurityVaultSection({
 											if (withdrawableRepAmount === undefined) return
 											onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(withdrawableRepAmount) })
 										}}
-										disabled={withdrawableRepAmount === undefined || effectivePoolActionLockReason !== undefined}
+										disabled={withdrawableRepAmount === undefined || !poolCollateralActionsEnabled}
 									>
 										Max
 									</button>
@@ -652,7 +640,7 @@ export function SecurityVaultSection({
 								onClick={effectiveRepExitMode === 'redeem' ? onRedeemRep : onWithdrawRep}
 								pending={effectiveRepExitMode === 'redeem' ? securityVaultActiveAction === 'redeemRep' : securityVaultActiveAction === 'queueWithdrawRep'}
 								tone='secondary'
-								availability={{ disabled: repExitGuardMessage !== undefined, reason: repExitGuardMessage }}
+								availability={{ disabled: !repExitEnabled || repExitGuardMessage !== undefined, reason: repExitEnabled ? repExitGuardMessage : undefined }}
 							/>
 						</div>
 					</>
@@ -686,8 +674,8 @@ export function SecurityVaultSection({
 						<label className='field'>
 							<span>Security Bond Allowance Amount</span>
 							<div className='field-inline'>
-								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} disabled={effectivePoolActionLockReason !== undefined} />
-								<button className='quiet field-inline-action' type='button' onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n || effectivePoolActionLockReason !== undefined}>
+								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
+								<button className='quiet field-inline-action' type='button' onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n || !poolCollateralActionsEnabled}>
 									Max
 								</button>
 							</div>
@@ -709,7 +697,7 @@ export function SecurityVaultSection({
 								onClick={onSetSecurityBondAllowance}
 								pending={securityVaultActiveAction === 'queueSetSecurityBondAllowance'}
 								tone='secondary'
-								availability={{ disabled: setSecurityBondAllowanceGuardMessage !== undefined, reason: setSecurityBondAllowanceGuardMessage }}
+								availability={{ disabled: !bondAllowanceEnabled || setSecurityBondAllowanceGuardMessage !== undefined, reason: bondAllowanceEnabled ? setSecurityBondAllowanceGuardMessage : undefined }}
 							/>
 						</div>
 					</>
@@ -731,7 +719,7 @@ export function SecurityVaultSection({
 					<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
 						Cancel
 					</button>
-					<TransactionActionButton idleLabel='Claim Fees' pendingLabel='Claiming fees...' onClick={onRedeemFees} pending={securityVaultActiveAction === 'redeemFees'} availability={{ disabled: claimFeesGuardMessage !== undefined, reason: claimFeesGuardMessage }} />
+					<TransactionActionButton idleLabel='Claim Fees' pendingLabel='Claiming fees...' onClick={onRedeemFees} pending={securityVaultActiveAction === 'redeemFees'} availability={{ disabled: !claimFeesEnabled || claimFeesGuardMessage !== undefined, reason: claimFeesEnabled ? claimFeesGuardMessage : undefined }} />
 				</div>
 			</OperationModal>
 		</>
@@ -749,7 +737,7 @@ export function SecurityVaultSection({
 					</div>
 				)}
 				<div className='actions'>
-					<TransactionActionButton idleLabel='Claim Fees' pendingLabel='Claiming fees...' onClick={onRedeemFees} pending={securityVaultActiveAction === 'redeemFees'} availability={{ disabled: claimFeesGuardMessage !== undefined, reason: claimFeesGuardMessage }} />
+					<TransactionActionButton idleLabel='Claim Fees' pendingLabel='Claiming fees...' onClick={onRedeemFees} pending={securityVaultActiveAction === 'redeemFees'} availability={{ disabled: !claimFeesEnabled || claimFeesGuardMessage !== undefined, reason: claimFeesEnabled ? claimFeesGuardMessage : undefined }} />
 				</div>
 			</SectionBlock>
 
@@ -757,7 +745,7 @@ export function SecurityVaultSection({
 				<label className='field'>
 					<span>REP Collateral Amount</span>
 					<div className='field-inline'>
-						<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={effectivePoolActionLockReason !== undefined} />
+						<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.depositAmount} onInput={event => onSecurityVaultFormChange({ depositAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
 						<button
 							className='quiet field-inline-action'
 							type='button'
@@ -765,7 +753,7 @@ export function SecurityVaultSection({
 								if (securityVaultRepBalance === undefined) return
 								onSecurityVaultFormChange({ depositAmount: formatCurrencyInputBalance(securityVaultRepBalance) })
 							}}
-							disabled={securityVaultRepBalance === undefined || effectivePoolActionLockReason !== undefined}
+							disabled={securityVaultRepBalance === undefined || !poolCollateralActionsEnabled}
 						>
 							Max
 						</button>
@@ -776,7 +764,7 @@ export function SecurityVaultSection({
 					allowanceError={securityVaultRepApproval.error}
 					allowanceLoading={securityVaultRepApproval.loading}
 					approvedAmount={securityVaultRepApproval.value}
-					guardMessage={approvalGuardMessage}
+					guardMessage={approveRepEnabled ? approvalGuardMessage : undefined}
 					onApprove={amount => onApproveRep(amount)}
 					pending={securityVaultActiveAction === 'approveRep'}
 					pendingLabel='Approving REP...'
@@ -784,9 +772,16 @@ export function SecurityVaultSection({
 					resetKey={`${currentSelectedVaultDetails?.repToken ?? ''}:${currentSelectedVaultDetails?.securityPoolAddress ?? ''}:${depositAmount?.toString() ?? ''}`}
 					tokenSymbol='REP'
 					tokenUnits={18}
+					disabled={!approveRepEnabled}
 				/>
 				<div className='actions'>
-					<TransactionActionButton idleLabel='Create / Deposit REP' pendingLabel='Depositing REP...' onClick={onDepositRep} pending={securityVaultActiveAction === 'depositRep'} availability={{ disabled: depositGuardMessage !== undefined, reason: depositGuardMessage }} />
+					<TransactionActionButton
+						idleLabel='Create / Deposit REP'
+						pendingLabel='Depositing REP...'
+						onClick={onDepositRep}
+						pending={securityVaultActiveAction === 'depositRep'}
+						availability={{ disabled: !depositRepEnabled || depositGuardMessage !== undefined, reason: depositRepEnabled ? depositGuardMessage : undefined }}
+					/>
 				</div>
 				{repBalanceGap !== undefined && repBalanceGap > 0n ? (
 					<ErrorNotice message={`Insufficient REP balance. Deposit amount exceeds your wallet balance by ${formatCurrencyBalance(repBalanceGap)} REP.`} />
@@ -815,8 +810,8 @@ export function SecurityVaultSection({
 						<label className='field'>
 							<span>Security Bond Allowance Amount</span>
 							<div className='field-inline'>
-								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} disabled={effectivePoolActionLockReason !== undefined} />
-								<button className='quiet field-inline-action' type='button' onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n || effectivePoolActionLockReason !== undefined}>
+								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
+								<button className='quiet field-inline-action' type='button' onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n || !poolCollateralActionsEnabled}>
 									Max
 								</button>
 							</div>
@@ -828,7 +823,7 @@ export function SecurityVaultSection({
 								onClick={onSetSecurityBondAllowance}
 								pending={securityVaultActiveAction === 'queueSetSecurityBondAllowance'}
 								tone='secondary'
-								availability={{ disabled: setSecurityBondAllowanceGuardMessage !== undefined, reason: setSecurityBondAllowanceGuardMessage }}
+								availability={{ disabled: !bondAllowanceEnabled || setSecurityBondAllowanceGuardMessage !== undefined, reason: bondAllowanceEnabled ? setSecurityBondAllowanceGuardMessage : undefined }}
 							/>
 						</div>
 					</>
@@ -858,7 +853,7 @@ export function SecurityVaultSection({
 					<label className='field'>
 						<span>REP Withdraw Amount</span>
 						<div className='field-inline'>
-							<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={effectivePoolActionLockReason !== undefined} />
+							<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.repWithdrawAmount} onInput={event => onSecurityVaultFormChange({ repWithdrawAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
 							<button
 								className='quiet field-inline-action'
 								type='button'
@@ -866,7 +861,7 @@ export function SecurityVaultSection({
 									if (withdrawableRepAmount === undefined) return
 									onSecurityVaultFormChange({ repWithdrawAmount: formatCurrencyInputBalance(withdrawableRepAmount) })
 								}}
-								disabled={withdrawableRepAmount === undefined || effectivePoolActionLockReason !== undefined}
+								disabled={withdrawableRepAmount === undefined || !poolCollateralActionsEnabled}
 							>
 								Max
 							</button>
@@ -880,7 +875,7 @@ export function SecurityVaultSection({
 						onClick={effectiveRepExitMode === 'redeem' ? onRedeemRep : onWithdrawRep}
 						pending={effectiveRepExitMode === 'redeem' ? securityVaultActiveAction === 'redeemRep' : securityVaultActiveAction === 'queueWithdrawRep'}
 						tone='secondary'
-						availability={{ disabled: repExitGuardMessage !== undefined, reason: repExitGuardMessage }}
+						availability={{ disabled: !repExitEnabled || repExitGuardMessage !== undefined, reason: repExitEnabled ? repExitGuardMessage : undefined }}
 					/>
 				</div>
 				{effectiveRepExitMode === 'redeem' && currentSelectedVaultDetails?.lockedRepInEscalationGame !== undefined && currentSelectedVaultDetails.lockedRepInEscalationGame > 0n ? <p className='detail'>Withdraw escalation deposits before redeeming REP.</p> : undefined}

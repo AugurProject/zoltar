@@ -22,7 +22,7 @@ export function getTransactionButtonState(scope: HTMLElement, label: string): Bu
 	}
 }
 
-export function expectTransactionButtonDisabled(scope: HTMLElement, label: string, reason: string) {
+export function expectTransactionButtonDisabled(scope: HTMLElement, label: string, reason?: string) {
 	const state = getTransactionButtonState(scope, label)
 	expect(state.disabled).toBe(true)
 	expect(state.reason).toBe(reason)

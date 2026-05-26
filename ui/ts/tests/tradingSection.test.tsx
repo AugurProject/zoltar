@@ -6,7 +6,7 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { zeroAddress, zeroHash } from 'viem'
 import { TradingSection } from '../components/TradingSection.js'
-import { MARKET_ALREADY_FINALIZED_MESSAGE, MARKET_NOT_FINALIZED_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE } from '../lib/trading.js'
+import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE } from '../lib/trading.js'
 import type { AccountState, TradingFormState } from '../types/app.js'
 import type { ListedSecurityPool, MarketDetails, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
 import type { TradingSectionProps } from '../types/components.js'
@@ -331,7 +331,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const migrateButton = documentQueries.getByRole('button', { name: 'Migrate forked shares' }) as HTMLButtonElement
 		expect(migrateButton.disabled).toBe(true)
-		expect(migrateButton.title).toBe(SHARE_MIGRATION_AFTER_FORK_MESSAGE)
+		expect(migrateButton.title).toBe('')
 	})
 
 	void test('opens the migration modal with the shared outcome selector and target picker when migration is available', async () => {
@@ -369,7 +369,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Redeem resolved shares' }) as HTMLButtonElement
 		expect(redeemSharesButton.disabled).toBe(true)
-		expect(redeemSharesButton.title).toBe(MARKET_NOT_FINALIZED_MESSAGE)
+		expect(redeemSharesButton.title).toBe('')
 	})
 
 	void test('blocks minting once the selected market has finalized', async () => {
@@ -385,7 +385,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
-		expect(mintButton.title).toBe(MARKET_ALREADY_FINALIZED_MESSAGE)
+		expect(mintButton.title).toBe('')
 	})
 
 	void test('shows mint write failures inline in the modal', async () => {

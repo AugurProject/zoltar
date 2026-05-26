@@ -24,7 +24,6 @@ import { UniverseLink } from './UniverseLink.js'
 import { ViewTabs } from './ViewTabs.js'
 import { WarningSurface } from './WarningSurface.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
-import { createActionAvailability } from '../lib/actionAvailability.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import {
 	applySelectedPoolWorkflowState,
@@ -224,7 +223,7 @@ export function SecurityPoolWorkflowSection({
 		walletEthBalance: accountState.ethBalance,
 	})
 	const selectedPendingOperationId = currentPoolOracleManagerDetails?.pendingOperationSlotId ?? 0n
-	const liquidationDisabledReason = selectedPoolStateModel.actions.queueLiquidation.reason
+	const liquidationEnabled = selectedPoolStateModel.actions.queueLiquidation.enabled
 	const pendingOperationInput = manualPendingOperationId.trim() !== '' ? manualPendingOperationId.trim() : selectedPendingOperationId > 0n ? selectedPendingOperationId.toString() : ''
 	const resolvedPendingOperationId =
 		pendingOperationInput === ''
@@ -508,8 +507,7 @@ export function SecurityPoolWorkflowSection({
 																<button
 																	className='destructive'
 																	onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
-																	disabled={accountState.address === undefined || !isMainnet || currentPoolOracleManagerDetails?.isPriceValid === false || liquidationDisabledReason !== undefined}
-																	title={liquidationDisabledReason}
+																	disabled={accountState.address === undefined || !isMainnet || currentPoolOracleManagerDetails?.isPriceValid === false || !liquidationEnabled}
 																>
 																	Liquidate Vault
 																</button>
@@ -531,11 +529,10 @@ export function SecurityPoolWorkflowSection({
 														actionLabel: 'Liquidate Vault',
 														description: 'Queue a high-risk liquidation against the selected vault.',
 														key: 'liquidate-vault',
-														readiness: liquidationDisabledReason === undefined ? 'ready' : 'blocked',
+														readiness: liquidationEnabled ? 'ready' : 'blocked',
 														title: 'Liquidate Vault',
-														...(liquidationDisabledReason === undefined ? {} : { blocker: liquidationDisabledReason }),
 														...(selectedPool === undefined || selectedVaultDetails === undefined ? { blocker: 'Refresh the selected vault first.' } : selectedVaultAddress === '' ? { blocker: 'Select a pool and vault first.' } : {}),
-														...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === ''
+														...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === '' || !liquidationEnabled
 															? {}
 															: {
 																	onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress, selectedVaultDetails.securityBondAllowance),
@@ -648,7 +645,10 @@ export function SecurityPoolWorkflowSection({
 													}}
 													pending={poolOracleActiveAction === 'executeStagedOperation'}
 													tone='secondary'
-													availability={createActionAvailability(selectedPoolStateModel.actions.executeStagedOperation.reason, executePendingOperationGuardMessage)}
+													availability={{
+														disabled: !selectedPoolStateModel.actions.executeStagedOperation.enabled || executePendingOperationGuardMessage !== undefined,
+														reason: selectedPoolStateModel.actions.executeStagedOperation.enabled ? executePendingOperationGuardMessage : undefined,
+													}}
 												/>
 											)}
 										</div>
@@ -690,7 +690,10 @@ export function SecurityPoolWorkflowSection({
 												onClick={() => onRequestPoolPrice(loadedSelectedPool.managerAddress)}
 												pending={poolOracleActiveAction === 'requestPrice'}
 												tone='secondary'
-												availability={createActionAvailability(selectedPoolStateModel.actions.requestPrice.reason, requestPriceGuardMessage)}
+												availability={{
+													disabled: !selectedPoolStateModel.actions.requestPrice.enabled || requestPriceGuardMessage !== undefined,
+													reason: selectedPoolStateModel.actions.requestPrice.enabled ? requestPriceGuardMessage : undefined,
+												}}
 											/>
 										</div>
 									</SectionBlock>

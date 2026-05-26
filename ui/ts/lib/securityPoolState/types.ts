@@ -36,7 +36,6 @@ export type SecurityPoolActionId =
 
 export type SecurityPoolActionState = {
 	enabled: boolean
-	reason: string | undefined
 }
 
 export type SecurityPoolStateInput = {

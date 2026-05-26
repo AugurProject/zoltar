@@ -258,7 +258,7 @@ export function ForkAuctionSection({
 		truthAuction: forkAuctionDetails?.truthAuction,
 		walletEthBalance: accountState.ethBalance,
 	})
-	const createChildUniverseLifecycleReason = forkPoolState.actions.createChildUniverse.reason
+	const createChildUniverseEnabled = forkPoolState.actions.createChildUniverse.enabled
 	const childUniverseRequirements = [
 		{ key: 'pool', label: 'Forked pool loaded', resolved: hasLoadedPoolContext, ...(hasLoadedPoolContext ? {} : { detail: 'Load a forked pool before creating a child universe.' }) },
 		{ key: 'outcome', label: 'Outcome selected', resolved: forkAuctionForm.selectedOutcome !== undefined, ...(forkAuctionForm.selectedOutcome === undefined ? { detail: 'Select the outcome whose child universe you want to create.' } : {}) },
@@ -269,10 +269,10 @@ export function ForkAuctionSection({
 		actionLabel: 'Create child universe',
 		description: 'Review the selected outcome and confirm the child-universe creation in a bounded execution modal.',
 		key: 'create-child-universe',
-		...(hasLoadedPoolContext && createChildUniverseLifecycleReason === undefined ? { onAction: () => setChildUniverseModalOpen(true) } : {}),
-		readiness: hasLoadedPoolContext && createChildUniverseLifecycleReason === undefined ? 'ready' : 'blocked',
+		...(hasLoadedPoolContext && createChildUniverseEnabled ? { onAction: () => setChildUniverseModalOpen(true) } : {}),
+		readiness: hasLoadedPoolContext && createChildUniverseEnabled ? 'ready' : 'blocked',
 		title: `Create ${getOutcomeActionLabel(forkAuctionForm.selectedOutcome)} Child Universe`,
-		...(hasLoadedPoolContext && createChildUniverseLifecycleReason === undefined ? {} : { blocker: createChildUniverseLifecycleReason ?? 'Load fork details for this pool first.' }),
+		...(hasLoadedPoolContext ? {} : { blocker: 'Load fork details for this pool first.' }),
 	}
 
 	const renderStageActionButton = ({
@@ -291,8 +291,20 @@ export function ForkAuctionSection({
 		tone?: 'primary' | 'secondary'
 	}) => {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
-		const actionLifecycleReason = forkPoolState.actions[action].reason
-		return <TransactionActionButton idleLabel={idleLabel} pendingLabel={pendingLabel} onClick={onClick} pending={forkAuctionActiveAction === action} tone={tone} availability={createActionAvailability(interactionDisabledReason, actionLifecycleReason, resolvedAvailability.reason)} />
+		const actionEnabled = forkPoolState.actions[action].enabled
+		return (
+			<TransactionActionButton
+				idleLabel={idleLabel}
+				pendingLabel={pendingLabel}
+				onClick={onClick}
+				pending={forkAuctionActiveAction === action}
+				tone={tone}
+				availability={{
+					disabled: !actionEnabled || interactionDisabledReason !== undefined || resolvedAvailability.disabled,
+					reason: actionEnabled ? (interactionDisabledReason ?? resolvedAvailability.reason) : undefined,
+				}}
+			/>
+		)
 	}
 
 	useEffect(() => {
@@ -630,7 +642,10 @@ export function ForkAuctionSection({
 			{hasLoadedPoolContext ? stagePanel : undefined}
 
 			<ChildUniverseDeploymentModal
-				actionAvailability={createActionAvailability(interactionDisabledReason, createChildUniverseLifecycleReason)}
+				actionAvailability={{
+					disabled: !createChildUniverseEnabled || interactionDisabledReason !== undefined,
+					reason: createChildUniverseEnabled ? interactionDisabledReason : undefined,
+				}}
 				description='Confirm the selected fork outcome and create its child universe in one bounded transaction flow.'
 				idleLabel={`Create ${getOutcomeActionLabel(forkAuctionForm.selectedOutcome)} Child Universe`}
 				isOpen={childUniverseModalOpen}

@@ -13,7 +13,7 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { WarningSurface } from './WarningSurface.js'
 import { TransactionStatusCard } from './TransactionStatusCard.js'
 import { sameAddress } from '../lib/address.js'
-import { createActionAvailability, pickFirstReason } from '../lib/actionAvailability.js'
+import { pickFirstReason } from '../lib/actionAvailability.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { getLiquidationFailureReason, simulateLiquidation } from '../lib/liquidation.js'
@@ -254,10 +254,10 @@ export function LiquidationModal({
 					requestPriceEthCost: currentPoolOracleManagerDetails?.requestPriceEthCost,
 					walletEthBalance,
 				})
+	const liquidationEnabled = poolState?.actions.queueLiquidation.enabled ?? true
 	const liquidationActionReason = pickFirstReason(
 		accountAddress === undefined ? 'Connect a wallet before liquidating.' : undefined,
 		!isMainnet ? 'Switch to Ethereum mainnet before liquidating.' : undefined,
-		poolState?.actions.queueLiquidation.reason,
 		liquidationExecutionMode === 'refreshing' ? 'Refreshing Open Oracle validity before liquidation.' : undefined,
 		liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? 'Reload the selected pool before liquidating.' : undefined,
 		trimmedLiquidationTargetVault === '' ? 'Select a target vault first.' : undefined,
@@ -413,7 +413,7 @@ export function LiquidationModal({
 							onQueueLiquidation(liquidationManagerAddress, liquidationSecurityPoolAddress)
 						}}
 						pending={securityPoolOverviewActiveAction === 'queueLiquidation'}
-						availability={createActionAvailability(liquidationActionReason)}
+						availability={{ disabled: !liquidationEnabled || liquidationActionReason !== undefined, reason: liquidationEnabled ? liquidationActionReason : undefined }}
 						showDisabledReason={liquidationExecutionMode !== 'queue'}
 					/>
 				</div>

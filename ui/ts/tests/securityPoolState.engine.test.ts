@@ -3,16 +3,6 @@
 import { describe, expect, test } from 'bun:test'
 import { evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import { ALL_SECURITY_POOL_ACTIONS } from '../lib/securityPoolState/matrix.js'
-import {
-	MINT_AFTER_FORK_MESSAGE,
-	POOL_ACTION_LOCK_REASON,
-	REDEEM_COMPLETE_SETS_AFTER_FORK_MESSAGE,
-	REDEEM_RESOLVED_SHARES_AFTER_FORK_MESSAGE,
-	REPORTING_FORK_TRIGGERED_MESSAGE,
-	REPORTING_RESOLVED_MESSAGE,
-	WITHDRAW_ESCALATION_FORK_TRIGGERED_MESSAGE,
-	WITHDRAW_ESCALATION_NOT_FINALIZED_MESSAGE,
-} from '../lib/securityPoolState/messages.js'
 import type { SecurityPoolActionId, SecurityPoolStateModel } from '../lib/securityPoolState.js'
 
 function getEnabledActionIds(model: SecurityPoolStateModel) {
@@ -21,17 +11,10 @@ function getEnabledActionIds(model: SecurityPoolStateModel) {
 
 function expectActionEnabled(model: SecurityPoolStateModel, actionId: SecurityPoolActionId) {
 	expect(model.actions[actionId].enabled).toBe(true)
-	expect(model.actions[actionId].reason).toBeUndefined()
 }
 
-function expectActionBlocked(model: SecurityPoolStateModel, actionId: SecurityPoolActionId, reason?: string) {
+function expectActionBlocked(model: SecurityPoolStateModel, actionId: SecurityPoolActionId) {
 	expect(model.actions[actionId].enabled).toBe(false)
-	if (reason === undefined) {
-		expect(model.actions[actionId].reason).toBeDefined()
-		return
-	}
-
-	expect(model.actions[actionId].reason).toBe(reason)
 }
 
 describe('security pool state engine', () => {
@@ -87,8 +70,8 @@ describe('security pool state engine', () => {
 		expectActionEnabled(model, 'redeemFees')
 		expectActionEnabled(model, 'redeemCompleteSet')
 		expectActionEnabled(model, 'redeemShares')
-		expectActionBlocked(model, 'depositRep', POOL_ACTION_LOCK_REASON)
-		expectActionBlocked(model, 'executeStagedOperation', POOL_ACTION_LOCK_REASON)
+		expectActionBlocked(model, 'depositRep')
+		expectActionBlocked(model, 'executeStagedOperation')
 	})
 
 	test('applies the universe-forked overlay with higher precedence than lifecycle rules', () => {
@@ -98,9 +81,9 @@ describe('security pool state engine', () => {
 		})
 
 		expectActionEnabled(model, 'migrateShares')
-		expectActionBlocked(model, 'createCompleteSet', MINT_AFTER_FORK_MESSAGE)
-		expectActionBlocked(model, 'redeemCompleteSet', REDEEM_COMPLETE_SETS_AFTER_FORK_MESSAGE)
-		expectActionBlocked(model, 'redeemShares', REDEEM_RESOLVED_SHARES_AFTER_FORK_MESSAGE)
+		expectActionBlocked(model, 'createCompleteSet')
+		expectActionBlocked(model, 'redeemCompleteSet')
+		expectActionBlocked(model, 'redeemShares')
 	})
 
 	test('evaluates reporting stages through the shared model', () => {
@@ -111,7 +94,7 @@ describe('security pool state engine', () => {
 		})
 		expect(activeLocked.reportingStage).toBe('activeLocked')
 		expectActionEnabled(activeLocked, 'reportOutcome')
-		expectActionBlocked(activeLocked, 'withdrawEscalation', WITHDRAW_ESCALATION_NOT_FINALIZED_MESSAGE)
+		expectActionBlocked(activeLocked, 'withdrawEscalation')
 
 		const resolved = evaluateSecurityPoolState({
 			lifecycleState: 'ended',
@@ -119,7 +102,7 @@ describe('security pool state engine', () => {
 			universeHasForked: false,
 		})
 		expect(resolved.reportingStage).toBe('resolved')
-		expectActionBlocked(resolved, 'reportOutcome', REPORTING_RESOLVED_MESSAGE)
+		expectActionBlocked(resolved, 'reportOutcome')
 		expectActionEnabled(resolved, 'withdrawEscalation')
 
 		const forkTriggered = evaluateSecurityPoolState({
@@ -128,8 +111,8 @@ describe('security pool state engine', () => {
 			universeHasForked: false,
 		})
 		expect(forkTriggered.reportingStage).toBe('forkTriggered')
-		expectActionBlocked(forkTriggered, 'reportOutcome', REPORTING_FORK_TRIGGERED_MESSAGE)
-		expectActionBlocked(forkTriggered, 'withdrawEscalation', WITHDRAW_ESCALATION_FORK_TRIGGERED_MESSAGE)
+		expectActionBlocked(forkTriggered, 'reportOutcome')
+		expectActionBlocked(forkTriggered, 'withdrawEscalation')
 	})
 
 	test('evaluates fork-stage gating through the shared model', () => {
@@ -165,7 +148,7 @@ describe('security pool state engine', () => {
 		expectActionEnabled(model, 'submitBid')
 	})
 
-	test('keeps enabled actions reason-free and disabled actions explained', () => {
+	test('returns a pure enabled-map for every action', () => {
 		const scenarios = [
 			evaluateSecurityPoolState({
 				lifecycleState: 'operational',
@@ -185,12 +168,7 @@ describe('security pool state engine', () => {
 
 		for (const model of scenarios) {
 			for (const actionId of ALL_SECURITY_POOL_ACTIONS) {
-				if (model.actions[actionId].enabled) {
-					expect(model.actions[actionId].reason).toBeUndefined()
-					continue
-				}
-
-				expect(model.actions[actionId].reason).toBeDefined()
+				expect(typeof model.actions[actionId].enabled).toBe('boolean')
 			}
 		}
 	})

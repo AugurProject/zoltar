@@ -698,11 +698,11 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Ended')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Deposit REP', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expectTransactionButtonEnabled(document.body, 'Redeem REP')
-		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance')
 		expectTransactionButtonEnabled(document.body, 'Claim Fees')
-		expectTransactionButtonDisabled(document.body, 'Liquidate Vault', 'Liquidation is unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Liquidate Vault')
 	})
 
 	test('disables minting in trading when the workflow state shows the selected pool has ended', async () => {
@@ -733,7 +733,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Mint complete sets', 'This market has already finalized.')
+		expectTransactionButtonDisabled(document.body, 'Mint complete sets')
 	})
 
 	test('allows selecting a vault from the directory within the current pool', async () => {
@@ -1961,7 +1961,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Execute Staged Operation', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Execute Staged Operation')
 	})
 
 	test('renders price oracle details and request controls in the price oracle tab', async () => {

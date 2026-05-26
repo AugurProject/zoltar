@@ -148,7 +148,7 @@ export function SecurityPoolsOverviewSection({
 					<div className='entity-card-list'>
 						{filteredSecurityPools.map(({ pool, poolState }) => {
 							const displayState = poolState.lifecycleState
-							const liquidationDisabledReason = poolState.actions.queueLiquidation.reason
+							const liquidationEnabled = poolState.actions.queueLiquidation.enabled
 							const badgeTone = displayState === 'operational' ? 'ok' : displayState === undefined ? 'muted' : 'warning'
 							return (
 								<EntityCard
@@ -177,12 +177,7 @@ export function SecurityPoolsOverviewSection({
 											emptyState={<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />}
 											pool={pool}
 											renderActions={vault => (
-												<button
-													className='destructive'
-													onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
-													disabled={accountState.address === undefined || !isMainnet || liquidationDisabledReason !== undefined}
-													title={liquidationDisabledReason}
-												>
+												<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)} disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}>
 													Liquidate Vault
 												</button>
 											)}

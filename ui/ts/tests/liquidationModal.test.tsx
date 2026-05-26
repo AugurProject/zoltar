@@ -164,7 +164,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Execute Liquidation', 'Liquidation is unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Execute Liquidation')
 	})
 
 	test('disables queued liquidation when the selected pool has ended', async () => {
@@ -179,7 +179,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Queue Liquidation', 'Liquidation is unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Queue Liquidation')
 	})
 
 	test('traps focus while open and restores it when closed', async () => {

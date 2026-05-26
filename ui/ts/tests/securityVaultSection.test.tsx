@@ -270,9 +270,9 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create / Deposit REP', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Create / Deposit REP')
 		expectTransactionButtonEnabled(document.body, 'Redeem REP')
-		expectTransactionButtonDisabled(document.body, 'Set Security Bond Allowance', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Set Security Bond Allowance')
 		expectTransactionButtonEnabled(document.body, 'Claim Fees')
 	})
 
@@ -299,7 +299,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Approve REP', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Approve 1 REP')
 	})
 
 	test('keeps REP redemption blocked until escalation deposits are settled after the pool ends', async () => {

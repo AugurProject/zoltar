@@ -39,19 +39,7 @@ export function deriveSecurityPoolReportingStage({ reportingDetails, reportingRe
 export function deriveSecurityPoolForkStage({ currentStage, workflowDisabled }: { currentStage: ForkAuctionStageView | undefined; workflowDisabled: boolean | undefined }): SecurityPoolForkStage | undefined {
 	if (workflowDisabled === true) return 'disabled'
 	if (currentStage === undefined) return undefined
-
-	switch (currentStage) {
-		case 'initiate':
-			return 'initiate'
-		case 'migration':
-			return 'migration'
-		case 'auction':
-			return 'auction'
-		case 'settlement':
-			return 'settlement'
-		default:
-			return assertNever(currentStage)
-	}
+	return currentStage
 }
 
 export function evaluateSecurityPoolStateFromPool({ questionOutcome, systemState, universeHasForked }: { questionOutcome: ReportingOutcomeKey | 'none' | undefined; systemState: SecurityPoolSystemState | undefined; universeHasForked: boolean | undefined }): SecurityPoolStateModel {

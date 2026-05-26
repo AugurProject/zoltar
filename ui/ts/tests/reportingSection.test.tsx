@@ -544,8 +544,8 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Deposits', 'Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
-		expectTransactionButtonDisabled(document.body, 'Withdraw All', 'Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Deposits')
+		expectTransactionButtonDisabled(document.body, 'Withdraw All')
 	})
 
 	test('keeps finalized withdrawals enabled in withdraw-only mode after escalation closes', async () => {
@@ -721,7 +721,7 @@ describe('ReportingSection', () => {
 		expect((documentQueries.getByRole('textbox', { name: 'Report / Contribution Amount (REP)' }) as HTMLInputElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('button', { name: 'Min to change proposed outcome' }) as HTMLButtonElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('button', { name: 'Max profit' }) as HTMLButtonElement).disabled).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Report / Contribute Yes', 'Reporting is closed because the escalation timeout has been reached.')
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute Yes')
 	})
 
 	test('shows Fork Triggered instead of timeout when non-decision is reached first', async () => {
