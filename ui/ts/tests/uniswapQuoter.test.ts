@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 import { afterEach, describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress, type Address } from 'viem'
+import { createPublicClient, getAddress, http, zeroAddress, type Address } from 'viem'
 import {
 	DEFAULT_POOL_CONFIG,
 	ETH_ADDRESS,
@@ -23,6 +23,7 @@ import {
 } from '../lib/uniswapQuoter.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createConnectedReadClient, type ReadClient } from '../lib/clients.js'
+import { MAINNET_NETWORK_PROFILE } from '../lib/networkProfile.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 afterEach(() => {
 	resetActiveEnvironmentForTesting()
@@ -70,15 +71,20 @@ function extractParams(args: SimulateArgs): CapturedCall {
 	}
 }
 function createStubReadClient(): ReadClient {
-	const client: Pick<ReadClient, 'readContract' | 'simulateContract'> = {
-		readContract: async () => {
-			throw new Error('readContract should not be used in this test')
-		},
-		simulateContract: async () => {
-			throw new Error('simulateContract must be overridden in this test')
-		},
+	const readContract: ReadClient['readContract'] = async () => {
+		throw new Error('readContract should not be used in this test')
 	}
-	return client as ReadClient
+	const simulateContract: ReadClient['simulateContract'] = async () => {
+		throw new Error('simulateContract must be overridden in this test')
+	}
+	return {
+		...createPublicClient({
+			chain: MAINNET_NETWORK_PROFILE.chain,
+			transport: http('http://127.0.0.1:8545'),
+		}),
+		readContract,
+		simulateContract,
+	}
 }
 function createCapturingClient(amountOut: bigint): {
 	client: ReadClient

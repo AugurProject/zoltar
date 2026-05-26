@@ -19,6 +19,10 @@ const ETH = 10n ** 18n
 type TruthAuctionReadContractRequest = Parameters<ReadClient['readContract']>[0]
 type TruthAuctionReadContractHandler = (request: TruthAuctionReadContractRequest) => Promise<unknown>
 
+function createReadContractStub(handler: TruthAuctionReadContractHandler): ReadClient['readContract'] {
+	return async request => (await handler(request as TruthAuctionReadContractRequest)) as never
+}
+
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
@@ -151,7 +155,7 @@ function createTruthAuctionReadClient(
 	},
 ): Pick<ReadClient, 'readContract'> {
 	return {
-		readContract: readContract as ReadClient['readContract'],
+		readContract: createReadContractStub(readContract),
 	}
 }
 

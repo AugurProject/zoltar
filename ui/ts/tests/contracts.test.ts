@@ -16,12 +16,16 @@ type MockReadClient = Parameters<typeof loadEscalationDeposits>[0]
 type MockReadContractRequest = Parameters<MockReadClient['readContract']>[0]
 type MockReadContractHandler = (request: MockReadContractRequest) => Promise<unknown>
 
+function createReadContractStub(handler: MockReadContractHandler): ReadClient['readContract'] {
+	return async request => (await handler(request as MockReadContractRequest)) as never
+}
+
 function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undefined; gas?: bigint | undefined; to?: Address | null | undefined }) => void): MockWriteClient {
-	const readContract = (async request => {
+	const readContract = createReadContractStub(async request => {
 		if (request.functionName === 'universeId') return 12n
 		if (request.functionName === 'shareToken') return shareTokenAddress
 		throw new Error(`Unexpected readContract function: ${request.functionName}`)
-	}) as ReadClient['readContract']
+	})
 
 	return {
 		readContract,
@@ -35,7 +39,7 @@ function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undef
 
 function createMockReadClient(readContract: MockReadContractHandler): MockReadClient {
 	return {
-		readContract: readContract as MockReadClient['readContract'],
+		readContract: createReadContractStub(readContract),
 	}
 }
 
