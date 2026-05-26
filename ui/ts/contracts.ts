@@ -97,7 +97,6 @@ type TruthAuctionTickSummaryStruct = {
 type TruthAuctionBidViewStruct = {
 	tick: bigint
 	bidIndex: bigint
-	price: bigint
 	bidder: Address
 	ethAmount: bigint
 	cumulativeEth: bigint
@@ -1209,7 +1208,6 @@ function mapTruthAuctionBidView(bid: TruthAuctionBidViewStruct): TruthAuctionBid
 	return {
 		tick: bid.tick,
 		bidIndex: bid.bidIndex,
-		price: bid.price,
 		bidder: bid.bidder,
 		ethAmount: bid.ethAmount,
 		cumulativeEth: bid.cumulativeEth,
@@ -1255,7 +1253,7 @@ export async function loadTruthAuctionActiveTickPage(client: Pick<ReadClient, 'r
 	const offset = getTruthAuctionPageOffset(pageIndex, pageSize)
 	const tickCount = await client.readContract({
 		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'getActiveTickCount',
+		functionName: 'activeTickCount',
 		address: truthAuctionAddress,
 		args: [],
 	})

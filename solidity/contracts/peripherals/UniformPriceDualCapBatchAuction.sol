@@ -279,10 +279,6 @@ contract UniformPriceDualCapBatchAuction {
 		}
 	}
 
-	function getActiveTickCount() external view returns (uint256) {
-		return activeTickCount;
-	}
-
 	function getActiveTickPage(uint256 offset, uint256 limit) external view returns (IUniformPriceDualCapBatchAuction.TickSummary[] memory summaries) {
 		uint256 end = _sliceEnd(offset, limit, activeTickCount);
 		if (end <= offset) return new IUniformPriceDualCapBatchAuction.TickSummary[](0);
@@ -370,7 +366,6 @@ contract UniformPriceDualCapBatchAuction {
 		return IUniformPriceDualCapBatchAuction.BidView({
 			tick: tick,
 			bidIndex: bidIndex,
-			price: tickToPrice(tick),
 			bidder: bid.bidder,
 			ethAmount: bid.ethAmount,
 			cumulativeEth: bid.cumulativeEth,

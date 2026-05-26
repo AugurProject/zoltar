@@ -23,16 +23,12 @@ function createDeferred<T>() {
 	return { promise, reject, resolve }
 }
 
-async function flushAsyncUpdates() {
-	await Promise.resolve()
-	await Promise.resolve()
-}
-
 void describe('loadWalletState', () => {
 	void test('resolves after scheduling wallet loads and applies updates as each load completes', async () => {
 		const chainIdDeferred = createDeferred<string>()
 		const ethBalanceDeferred = createDeferred<bigint>()
 		const wethBalanceDeferred = createDeferred<bigint>()
+		const scheduledLoads: Promise<unknown>[] = []
 		let accountState: AccountState = {
 			address: zeroAddress,
 			chainId: undefined,
@@ -53,28 +49,30 @@ void describe('loadWalletState', () => {
 			setErrorMessage: message => {
 				errorMessage = message
 			},
-			trackLoad: async work => await work(),
+			trackLoad: async work => {
+				const scheduledLoad = work()
+				scheduledLoads.push(scheduledLoad)
+				return await scheduledLoad
+			},
 			wethBalancePromise: wethBalanceDeferred.promise,
 		}).then(() => {
 			resolved = true
 		})
 
 		expect(resolved).toBe(false)
-		await Promise.resolve()
+		await loadPromise
 		expect(resolved).toBe(true)
 
 		chainIdDeferred.resolve('0x1')
-		await Promise.resolve()
+		await (scheduledLoads[0] ?? Promise.reject(new Error('Expected chain ID load promise')))
 		expect(accountState.chainId).toBe('0x1')
 
 		ethBalanceDeferred.resolve(123n)
-		await Promise.resolve()
+		await (scheduledLoads[1] ?? Promise.reject(new Error('Expected ETH balance load promise')))
 		expect(accountState.ethBalance).toBe(123n)
 
 		wethBalanceDeferred.resolve(456n)
-		await flushAsyncUpdates()
-
-		await loadPromise
+		await (scheduledLoads[2] ?? Promise.reject(new Error('Expected WETH balance load promise')))
 		expect(errorMessage).toBe(undefined)
 		expect(accountState.address).toBe(zeroAddress)
 		expect(accountState.chainId).toBe('0x1')
@@ -87,6 +85,7 @@ void describe('loadWalletState', () => {
 		const ethBalanceDeferred = createDeferred<bigint>()
 		const wethBalanceDeferred = createDeferred<bigint>()
 		const controller = createLoadController()
+		const trackedLoads: Promise<unknown>[] = []
 		let accountState: AccountState = {
 			address: zeroAddress,
 			chainId: undefined,
@@ -104,22 +103,26 @@ void describe('loadWalletState', () => {
 				accountState = state
 			},
 			setErrorMessage: () => undefined,
-			trackLoad: controller.track,
+			trackLoad: async work => {
+				const trackedLoad = controller.track(work)
+				trackedLoads.push(trackedLoad)
+				return await trackedLoad
+			},
 			wethBalancePromise: wethBalanceDeferred.promise,
 		})
 
 		expect(controller.isLoading.value).toBe(true)
 
 		chainIdDeferred.resolve('0x1')
-		await Promise.resolve()
+		await (trackedLoads[0] ?? Promise.reject(new Error('Expected tracked chain ID load promise')))
 		expect(controller.isLoading.value).toBe(true)
 
 		ethBalanceDeferred.resolve(123n)
-		await Promise.resolve()
+		await (trackedLoads[1] ?? Promise.reject(new Error('Expected tracked ETH balance load promise')))
 		expect(controller.isLoading.value).toBe(true)
 
 		wethBalanceDeferred.resolve(456n)
-		await flushAsyncUpdates()
+		await (trackedLoads[2] ?? Promise.reject(new Error('Expected tracked WETH balance load promise')))
 		expect(controller.isLoading.value).toBe(false)
 		expect(accountState.chainId).toBe('0x1')
 		expect(accountState.ethBalance).toBe(123n)
@@ -196,9 +199,6 @@ void describe('useOnchainState', () => {
 
 		const renderedComponent = await renderIntoDocument(h(OnchainStateHarness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
-		await act(async () => {
-			await Promise.resolve()
-		})
 
 		const documentQueries = within(document.body)
 		const connectButton = documentQueries.getByRole('button', { name: 'Connect wallet' })

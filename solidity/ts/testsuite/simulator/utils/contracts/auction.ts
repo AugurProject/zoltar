@@ -15,7 +15,6 @@ type AuctionTickSummary = {
 type AuctionBidView = {
 	tick: bigint
 	bidIndex: bigint
-	price: bigint
 	bidder: Address
 	ethAmount: bigint
 	cumulativeEth: bigint
@@ -38,7 +37,6 @@ function mapAuctionBidView(bid: AuctionBidView): AuctionBidView {
 	return {
 		tick: bid.tick,
 		bidIndex: bid.bidIndex,
-		price: bid.price,
 		bidder: bid.bidder,
 		ethAmount: bid.ethAmount,
 		cumulativeEth: bid.cumulativeEth,
@@ -207,10 +205,10 @@ export const getTickPage = async (client: ReadClient, auctionAddress: Address, o
 		})
 	).map(summary => mapAuctionTickSummary(summary))
 
-export const getActiveTickCount = async (client: ReadClient, auctionAddress: Address) =>
+export const activeTickCount = async (client: ReadClient, auctionAddress: Address) =>
 	await client.readContract({
 		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'getActiveTickCount',
+		functionName: 'activeTickCount',
 		address: auctionAddress,
 		args: [],
 	})

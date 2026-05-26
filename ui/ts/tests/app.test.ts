@@ -13,8 +13,6 @@ describe('App', () => {
 		handleLoadSecurityVault()
 		handleLoadSecurityVault('0x123')
 
-		await Promise.resolve()
-
 		expect(calls).toEqual([undefined, '0x123'])
 	})
 })

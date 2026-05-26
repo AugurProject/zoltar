@@ -13,13 +13,15 @@ const transactionHash = '0x00000000000000000000000000000000000000000000000000000
 
 type MockWriteClient = Parameters<typeof migrateSharesFromUniverse>[0]
 type MockReadClient = Parameters<typeof loadEscalationDeposits>[0]
+type MockReadContractRequest = Parameters<MockReadClient['readContract']>[0]
+type MockReadContractHandler = (request: MockReadContractRequest) => Promise<unknown>
 
 function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undefined; gas?: bigint | undefined; to?: Address | null | undefined }) => void): MockWriteClient {
-	const readContract: ReadClient['readContract'] = async request => {
-		if (request.functionName === 'universeId') return 12n as never
-		if (request.functionName === 'shareToken') return shareTokenAddress as never
+	const readContract = (async request => {
+		if (request.functionName === 'universeId') return 12n
+		if (request.functionName === 'shareToken') return shareTokenAddress
 		throw new Error(`Unexpected readContract function: ${request.functionName}`)
-	}
+	}) as ReadClient['readContract']
 
 	return {
 		readContract,
@@ -31,9 +33,9 @@ function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undef
 	} satisfies MockWriteClient
 }
 
-function createMockReadClient(readContract: MockReadClient['readContract']): MockReadClient {
+function createMockReadClient(readContract: MockReadContractHandler): MockReadClient {
 	return {
-		readContract,
+		readContract: readContract as MockReadClient['readContract'],
 	}
 }
 
@@ -98,13 +100,13 @@ describe('contracts helpers', () => {
 				depositor,
 			},
 		]
-		const readContract: ReadClient['readContract'] = async request => {
+		const readContract: MockReadContractHandler = async request => {
 			const args = Reflect.get(request, 'args')
 			const startIndex = Array.isArray(args) ? args[1] : undefined
 			if (typeof startIndex !== 'bigint') throw new Error('Expected pagination start index')
 			readCalls.push(startIndex)
-			if (startIndex === 0n) return firstPage as never
-			if (startIndex === 30n) return secondPage as never
+			if (startIndex === 0n) return firstPage
+			if (startIndex === 30n) return secondPage
 			throw new Error(`Unexpected start index: ${startIndex.toString()}`)
 		}
 		const client = createMockReadClient(async request => {
@@ -139,8 +141,8 @@ describe('contracts helpers', () => {
 				functionName: String(request.functionName),
 				args: Array.isArray(request.args) ? [...request.args] : undefined,
 			})
-			if (request.functionName === 'getTickCount') return 1n as never
-			if (request.functionName === 'getTickPage') return [] as never
+			if (request.functionName === 'getTickCount') return 1n
+			if (request.functionName === 'getTickPage') return []
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
 
@@ -163,12 +165,12 @@ describe('contracts helpers', () => {
 				functionName: String(request.functionName),
 				args: Array.isArray(request.args) ? [...request.args] : undefined,
 			})
-			if (request.functionName === 'getTickCount') return 3n as never
+			if (request.functionName === 'getTickCount') return 3n
 			if (request.functionName === 'getTickPage')
 				return [
 					{ tick: 1n, price: 2n, currentTotalEth: 3n, submissionCount: 4n, active: true },
 					{ tick: 5n, price: 6n, currentTotalEth: 7n, submissionCount: 8n, active: false },
-				] as never
+				]
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
 
@@ -191,7 +193,7 @@ describe('contracts helpers', () => {
 
 	test('loadTruthAuctionTickSummary maps a direct tick summary read', async () => {
 		const client = createMockReadClient(async request => {
-			if (request.functionName === 'getTickSummary') return { tick: 9n, price: 10n, currentTotalEth: 11n, submissionCount: 12n, active: false } as never
+			if (request.functionName === 'getTickSummary') return { tick: 9n, price: 10n, currentTotalEth: 11n, submissionCount: 12n, active: false }
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
 
@@ -211,19 +213,19 @@ describe('contracts helpers', () => {
 				functionName: String(request.functionName),
 				args: Array.isArray(request.args) ? [...request.args] : undefined,
 			})
-			if (request.functionName === 'getActiveTickCount') return 4n as never
+			if (request.functionName === 'activeTickCount') return 4n
 			if (request.functionName === 'getActiveTickPage')
 				return [
 					{ tick: 12n, price: 7n, currentTotalEth: 6n, submissionCount: 2n, active: true },
 					{ tick: 10n, price: 5n, currentTotalEth: 4n, submissionCount: 1n, active: true },
-				] as never
+				]
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
 
 		const page = await loadTruthAuctionActiveTickPage(client, truthAuctionAddress, 1, 2)
 
 		expect(readCalls).toEqual([
-			{ functionName: 'getActiveTickCount', args: [] },
+			{ functionName: 'activeTickCount', args: [] },
 			{ functionName: 'getActiveTickPage', args: [2n, 2n] },
 		])
 		expect(page).toEqual({
@@ -244,8 +246,8 @@ describe('contracts helpers', () => {
 				functionName: String(request.functionName),
 				args: Array.isArray(request.args) ? [...request.args] : undefined,
 			})
-			if (request.functionName === 'getBidCountAtTick') return 2n as never
-			if (request.functionName === 'getBidPageAtTick') return [] as never
+			if (request.functionName === 'getBidCountAtTick') return 2n
+			if (request.functionName === 'getBidPageAtTick') return []
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
 
@@ -272,12 +274,12 @@ describe('contracts helpers', () => {
 				functionName: String(request.functionName),
 				args: Array.isArray(request.args) ? [...request.args] : undefined,
 			})
-			if (request.functionName === 'getBidderBidCount') return 4n as never
+			if (request.functionName === 'getBidderBidCount') return 4n
 			if (request.functionName === 'getBidderBidPage')
 				return [
-					{ tick: 10n, bidIndex: 0n, price: 2n, bidder, ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false },
-					{ tick: 11n, bidIndex: 1n, price: 4n, bidder, ethAmount: 5n, cumulativeEth: 8n, activeCumulativeEthBeforeBid: 3n, claimed: true, refunded: true },
-				] as never
+					{ tick: 10n, bidIndex: 0n, bidder, ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false },
+					{ tick: 11n, bidIndex: 1n, bidder, ethAmount: 5n, cumulativeEth: 8n, activeCumulativeEthBeforeBid: 3n, claimed: true, refunded: true },
+				]
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
 
@@ -293,8 +295,8 @@ describe('contracts helpers', () => {
 			pageSize: 2,
 			bidCount: 4n,
 			bids: [
-				{ tick: 10n, bidIndex: 0n, price: 2n, bidder, ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false },
-				{ tick: 11n, bidIndex: 1n, price: 4n, bidder, ethAmount: 5n, cumulativeEth: 8n, activeCumulativeEthBeforeBid: 3n, claimed: true, refunded: true },
+				{ tick: 10n, bidIndex: 0n, bidder, ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false },
+				{ tick: 11n, bidIndex: 1n, bidder, ethAmount: 5n, cumulativeEth: 8n, activeCumulativeEthBeforeBid: 3n, claimed: true, refunded: true },
 			],
 		})
 	})

@@ -392,7 +392,6 @@ export type TruthAuctionTickSummary = {
 export type TruthAuctionBidView = {
 	tick: bigint
 	bidIndex: bigint
-	price: bigint
 	bidder: Address
 	ethAmount: bigint
 	cumulativeEth: bigint

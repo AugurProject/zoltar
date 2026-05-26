@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, within } from '@testing-library/dom'
+import { fireEvent, waitFor, within } from '@testing-library/dom'
 import { act } from 'preact/test-utils'
 import { CurrencyValue } from '../components/CurrencyValue.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
@@ -136,9 +136,11 @@ describe('CurrencyValue', () => {
 		const copyButton = documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000' })
 
 		expect(copyButton.getAttribute('title')).toBe('999 999 990 000 ETH')
-		await act(async () => {
+		await act(() => {
 			fireEvent.click(copyButton)
-			await Promise.resolve()
+		})
+		await waitFor(() => {
+			expect(copyButton.textContent).toBe('Copied')
 		})
 		expect(copyButton.textContent).toBe('Copied')
 	})

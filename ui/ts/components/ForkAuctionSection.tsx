@@ -39,6 +39,28 @@ const UNAVAILABLE_UNTIL_FORK = 'Unavailable until fork'
 const TRUTH_AUCTION_TICK_PAGE_SIZE = 25
 const TRUTH_AUCTION_BID_PAGE_SIZE = 25
 const PRICE_PRECISION = 10n ** 18n
+const TRUTH_AUCTION_TICK_PRICE_POWERS = [
+	1000100000000000000n,
+	1000200010000000000n,
+	1000400060004000100n,
+	1000800280056007000n,
+	1001601200560182043n,
+	1003204964963598014n,
+	1006420201727613920n,
+	1012881622445451097n,
+	1025929181087729343n,
+	1052530684607338948n,
+	1107820842039993613n,
+	1227267018058200482n,
+	1506184333613467388n,
+	2268591246822644826n,
+	5146506245160322222n,
+	26486526531474198664n,
+	701536087702486644953n,
+	492152882348911033633683n,
+	242214459604341065650571799093n,
+	58667844441422969901301586347865591163491n,
+] as const
 const STAGE_VIEWS: readonly ForkAuctionStageView[] = ['initiate', 'migration', 'auction', 'settlement']
 const STAGE_LABELS: Record<ForkAuctionStageView, string> = {
 	initiate: 'Initiate',
@@ -175,6 +197,18 @@ function getTruthAuctionWinningThresholdPrice(truthAuction: TruthAuctionMetrics 
 	return (truthAuction.ethRaised * PRICE_PRECISION) / truthAuction.maxRepBeingSold
 }
 
+function getTruthAuctionPriceAtTick(tick: bigint) {
+	const absoluteTick = tick < 0n ? -tick : tick
+	let price = PRICE_PRECISION
+	for (let bitIndex = 0; bitIndex < TRUTH_AUCTION_TICK_PRICE_POWERS.length; bitIndex += 1) {
+		const bitMask = 1n << BigInt(bitIndex)
+		const pricePower = TRUTH_AUCTION_TICK_PRICE_POWERS[bitIndex]
+		if (pricePower === undefined) throw new Error(`Missing truth auction tick price power for bit ${bitIndex}`)
+		if ((absoluteTick & bitMask) !== 0n) price = (price * pricePower) / PRICE_PRECISION
+	}
+	return tick < 0n ? (PRICE_PRECISION * PRICE_PRECISION) / price : price
+}
+
 function getTickDisposition(tickSummary: TruthAuctionTickSummary, truthAuction: TruthAuctionMetrics | undefined): TruthAuctionDisposition {
 	if (tickSummary.currentTotalEth === 0n) return { label: 'Historical', tone: 'default' }
 	if (truthAuction === undefined) return { label: 'Live', tone: 'default' }
@@ -193,7 +227,7 @@ function getBidDisposition(bid: TruthAuctionBidView, truthAuction: TruthAuctionM
 
 	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuction)
 	if (winningThresholdPrice !== undefined) {
-		if (bid.price >= winningThresholdPrice) {
+		if (getTruthAuctionPriceAtTick(bid.tick) >= winningThresholdPrice) {
 			return {
 				label: truthAuction.finalized ? 'Winning' : 'Provisional',
 				tone: truthAuction.finalized ? 'success' : 'warning',
@@ -1040,7 +1074,7 @@ export function ForkAuctionSection({
 								</div>
 								<div className='truth-auction-bid-card-metrics'>
 									<span>
-										Price <CurrencyValue value={bid.price} suffix='ETH / REP' />
+										Price <CurrencyValue value={getTruthAuctionPriceAtTick(bid.tick)} suffix='ETH / REP' />
 									</span>
 									<span>
 										Amount <CurrencyValue value={bid.ethAmount} suffix='ETH' />
