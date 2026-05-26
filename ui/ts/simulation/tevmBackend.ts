@@ -283,6 +283,9 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 		hasWallet: () => true,
 		id: 'simulation',
 		isActive: true,
+		mintRep: async amount => {
+			await callWorker('mintRep', { amount })
+		},
 		mineBlock: async () => {
 			await callWorker('mineBlock', undefined)
 		},

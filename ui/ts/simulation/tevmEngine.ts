@@ -2,10 +2,11 @@ import { createMemoryClient } from 'tevm'
 import { createCommon } from 'tevm/common'
 import { createPublicClient, createWalletClient, custom, encodeFunctionData, parseTransaction, publicActions, recoverTransactionAddress, type Address, type Hash, type Hex } from 'viem'
 import { getAddress } from 'viem'
+import { getZoltarAddress } from '../contracts/deploymentHelpers.js'
 import type { InjectedEthereum } from '../injectedEthereum.js'
 import type { ChainBackend, CreateWriteClientCallbacks, ReadClient, WriteClient } from '../lib/chainBackend.js'
 import { createSimulationProfile } from '../lib/networkProfile.js'
-import { bootstrapSimulationChain, predictSimulationTokenAddresses, updateZoltarGenesisRepToken } from './bootstrap.js'
+import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, updateZoltarGenesisRepToken } from './bootstrap.js'
 import { advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, mineNextSimulationBlock, minePendingSimulationTransactionAtTimestamp } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 import type { SimulationWorkerState } from './tevmWorkerProtocol.js'
@@ -189,6 +190,7 @@ type SimulationEngine = {
 	getProfile(): ChainBackend['profile']
 	getState(): SimulationWorkerState
 	installSimulationProxyDeployer(parameters: { address: Address; runtimeCode: Hex }): Promise<void>
+	mintRep(amount: bigint): Promise<void>
 	mineBlock(): Promise<void>
 	patchSimulationGenesisRepToken(parameters: { repAddress: Address; zoltarAddress: Address }): Promise<void>
 	request(parameters: RequestArguments): Promise<unknown>
@@ -512,6 +514,28 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 				address,
 				bytecode: runtimeCode,
 			})
+		},
+		mintRep: async amount => {
+			if (!bootstrapped) {
+				throw new Error('Simulation scenario must be bootstrapped before minting REP')
+			}
+
+			const repCode = await memoryClient.getCode({
+				address: profile.genesisRepTokenAddress,
+			})
+			if (repCode === undefined || repCode === '0x') {
+				throw new Error('Simulation REP token is unavailable')
+			}
+
+			const zoltarAddress = getZoltarAddress()
+			await mintSimulationGenesisRep({
+				accountAddress: selectedAccount,
+				amount,
+				memoryClient,
+				repAddress: profile.genesisRepTokenAddress,
+				zoltarAddress,
+			})
+			emitState()
 		},
 		mineBlock: async () => {
 			await mineNextSimulationBlock(memoryClient)

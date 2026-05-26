@@ -8,6 +8,8 @@ import type { SimulationController } from '../simulation/controller.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
+const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
+
 function createSimulationController(overrides: Partial<SimulationController> = {}): SimulationController {
 	const selectedAccount = '0x00000000000000000000000000000000000000a1' as Address
 
@@ -24,6 +26,7 @@ function createSimulationController(overrides: Partial<SimulationController> = {
 		isActive: true,
 		isBootstrapped: true,
 		isBootstrapping: false,
+		mintRep: async () => undefined,
 		mineBlock: async () => undefined,
 		queryDelayMilliseconds: 0,
 		repPerEthPrice: 10n ** 18n,
@@ -104,6 +107,27 @@ describe('SimulationBanner', () => {
 
 			await waitFor(() => {
 				expect(setRepPerEthPrice).toHaveBeenCalledWith(2n * 10n ** 18n)
+				expect(onRefresh).toHaveBeenCalledTimes(1)
+			})
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('mints REP to the selected QA account and refreshes the app', async () => {
+		const domEnvironment = installDomEnvironment()
+		const mintRep = mock(async () => undefined)
+		const onRefresh = mock(async () => undefined)
+		const controller = createSimulationController({ mintRep })
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+
+		try {
+			const documentQueries = within(renderedComponent.container)
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint 1 million REP' }))
+
+			await waitFor(() => {
+				expect(mintRep).toHaveBeenCalledWith(SIMULATION_REP_MINT_AMOUNT)
 				expect(onRefresh).toHaveBeenCalledTimes(1)
 			})
 		} finally {

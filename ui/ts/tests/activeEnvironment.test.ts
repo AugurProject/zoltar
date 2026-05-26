@@ -2,7 +2,7 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from 'viem'
-import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadOracleManagerDetails, loadReportingDetails, loadSecurityVaultDetails, queueOracleManagerOperation } from '../contracts.js'
+import { loadAllSecurityPools, loadDeploymentStatusOracleSnapshot, loadErc20Balance, loadOracleManagerDetails, loadReportingDetails, loadSecurityVaultDetails, loadZoltarUniverseSummary, queueOracleManagerOperation } from '../contracts.js'
 import { getWrongNetworkMessage, isSupportedAppChain } from '../lib/network.js'
 import { getSecurityVaultWithdrawableRepAmount } from '../lib/securityVault.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../lib/activeEnvironment.js'
@@ -12,6 +12,7 @@ import type { SimulationScenario } from '../simulation/scenarios.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
+const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 const SEEDED_REP_DEPOSIT = 10_000n * 10n ** 18n
 const SEEDED_SECURITY_BOND_ALLOWANCE = SEEDED_REP_DEPOSIT / 4n
 const SEEDED_SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
@@ -213,6 +214,61 @@ void describe('simulation backend', () => {
 		expect(deploymentSnapshot.augurPlaceHolderDeployed).toBe(false)
 		expect(deploymentSnapshot.deploymentStatuses.every(step => step.deployed === false)).toBe(true)
 	}, 30_000)
+
+	void test('mints REP to the selected QA account without changing simulation block or transaction counters', async () => {
+		const backend = await createBootstrappedSimulationBackendWithRetry('baseline')
+
+		try {
+			const primaryAccount = backend.accounts[0]
+			const secondaryAccount = backend.accounts[1]
+			if (primaryAccount === undefined || secondaryAccount === undefined) {
+				throw new Error('Expected seeded simulation QA accounts')
+			}
+
+			const readClient = backend.createReadClient()
+			const primaryBalanceBefore = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
+			const secondaryBalanceBefore = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, secondaryAccount)
+			const blockCountBefore = backend.blockCountSinceReset
+			const transactionCountBefore = backend.transactionCountSinceReset
+
+			await backend.selectAccount(secondaryAccount)
+			await backend.mintRep(SIMULATION_REP_MINT_AMOUNT)
+
+			const primaryBalanceAfter = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
+			const secondaryBalanceAfter = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, secondaryAccount)
+
+			expect(primaryBalanceAfter).toBe(primaryBalanceBefore)
+			expect(secondaryBalanceAfter).toBe(secondaryBalanceBefore + SIMULATION_REP_MINT_AMOUNT)
+			expect(backend.blockCountSinceReset).toBe(blockCountBefore)
+			expect(backend.transactionCountSinceReset).toBe(transactionCountBefore)
+		} finally {
+			await backend.dispose()
+		}
+	}, 30_000)
+
+	void test('keeps the deployed-scenario fork threshold in sync after minting REP', async () => {
+		const backend = await createBootstrappedSimulationBackendWithRetry('deployed')
+
+		try {
+			const readClient = backend.createReadClient()
+			const universeSummaryBefore = await loadZoltarUniverseSummary(readClient, 0n)
+			if (universeSummaryBefore === undefined) {
+				throw new Error('Expected the genesis Zoltar universe to be available in the deployed scenario')
+			}
+
+			await backend.mintRep(SIMULATION_REP_MINT_AMOUNT)
+
+			const universeSummaryAfter = await loadZoltarUniverseSummary(readClient, 0n)
+			if (universeSummaryAfter === undefined) {
+				throw new Error('Expected the genesis Zoltar universe after minting REP')
+			}
+
+			expect(universeSummaryAfter.totalTheoreticalSupply).toBe(universeSummaryBefore.totalTheoreticalSupply + SIMULATION_REP_MINT_AMOUNT)
+			expect(universeSummaryAfter.forkThreshold).toBe(universeSummaryBefore.forkThreshold + SIMULATION_REP_MINT_AMOUNT / 20n)
+		} finally {
+			await backend.dispose()
+		}
+	}, 60_000)
 
 	void test('submits simulation writes without deprecated Tevm transaction RPC warnings', async () => {
 		const backend = await createSimulationBackend({ scenario: 'baseline' })
