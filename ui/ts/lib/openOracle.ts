@@ -1,5 +1,6 @@
 import { zeroAddress, type Address } from 'viem'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../types/contracts.js'
+import { assertNever } from './assert.js'
 import { parseDecimalInput } from './decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from './errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from './formatters.js'
@@ -76,6 +77,8 @@ function formatOpenOracleInitialReportLifecycleMessage(status: OpenOracleReportS
 			return 'This report is already settled and can no longer accept an initial report.'
 		case 'Awaiting Initial Report':
 			return undefined
+		default:
+			return assertNever(status)
 	}
 }
 export function formatOpenOracleInitialReportWriteErrorMessage(error: unknown, fallbackMessage = 'Failed to submit initial report') {
@@ -182,6 +185,8 @@ export function getOpenOracleReportStatusTone(status: OpenOracleReportStatus): '
 			return 'error'
 		case 'Settled':
 			return 'ok'
+		default:
+			return assertNever(status)
 	}
 }
 export function getOpenOracleSelectedReportActionMode(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>): OpenOracleSelectedReportActionMode {
@@ -198,6 +203,8 @@ export function getOpenOracleSelectedReportActionMode(report: Pick<OpenOracleRep
 			if (!disputeAvailability.canAct && settleAvailability.canAct) return 'settle'
 			return 'dispute'
 		}
+		default:
+			return assertNever(status)
 	}
 }
 function hasOpenOracleInitialReport(report: Pick<OpenOracleReportDetails, 'currentReporter' | 'reportTimestamp'>) {

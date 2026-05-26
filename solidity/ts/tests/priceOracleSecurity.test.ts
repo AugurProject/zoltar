@@ -1,5 +1,5 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
-import assert from 'node:assert'
+import assert from 'node:assert/strict'
 import type { Address } from 'viem'
 import { AnvilWindowEthereum } from '../testsuite/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'

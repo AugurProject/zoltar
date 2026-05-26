@@ -5,6 +5,7 @@ import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
 import { approveErc20, depositRepToSecurityPool, loadErc20Balance, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation, redeemRepFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../contracts.js'
+import { assertNever } from '../lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
@@ -56,6 +57,8 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				return 'Redeeming REP'
 			case 'updateVaultFees':
 				return 'Refreshing vault fees'
+			default:
+				return assertNever(actionName)
 		}
 	}
 	const getSuccessTitle = (actionName: SecurityVaultActionResult['action']) => {
@@ -74,6 +77,8 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				return 'REP redeemed'
 			case 'updateVaultFees':
 				return 'Vault fees refreshed'
+			default:
+				return assertNever(actionName)
 		}
 	}
 	const getFailureTitle = (actionName: SecurityVaultActionResult['action']) => {
@@ -92,6 +97,8 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				return 'REP redemption failed'
 			case 'updateVaultFees':
 				return 'Vault fee refresh failed'
+			default:
+				return assertNever(actionName)
 		}
 	}
 	const clearRepLoaders = () => {

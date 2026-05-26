@@ -1,4 +1,5 @@
 import type { OpenOracleSelectedReportActionMode } from './openOracle.js'
+import { assertNever } from './assert.js'
 import type { LifecycleStagePresentation } from '../types/components.js'
 
 export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedReportActionMode): LifecycleStagePresentation {
@@ -39,5 +40,7 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 				label: 'Settled',
 				tone: 'success',
 			}
+		default:
+			return assertNever(actionMode)
 	}
 }

@@ -1,4 +1,5 @@
 import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
+import { assertNever } from './assert.js'
 import { formatCurrencyBalance } from './formatters.js'
 import { requireDefined } from './required.js'
 import { getTimeRemaining } from './time.js'
@@ -434,6 +435,8 @@ function getOutcomeIndex(outcome: ReportingOutcomeKey) {
 			return 1
 		case 'no':
 			return 2
+		default:
+			return assertNever(outcome)
 	}
 }
 function getMaxEscalationBalance(balances: EscalationBalanceTuple) {

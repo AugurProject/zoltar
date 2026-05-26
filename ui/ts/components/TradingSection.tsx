@@ -15,6 +15,7 @@ import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
+import { assertNever } from '../lib/assert.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
@@ -64,6 +65,8 @@ function getTradingOutcomePresentation(action: TradingSectionProps['tradingResul
 				nextStep: 'Review the updated balances and proceed with any remaining resolved positions.',
 				title: 'Resolved Shares Redeemed',
 			}
+		default:
+			return assertNever(action.action)
 	}
 }
 export function TradingSection({
