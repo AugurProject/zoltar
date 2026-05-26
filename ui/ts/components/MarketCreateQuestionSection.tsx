@@ -15,18 +15,21 @@ import type { MarketFormState } from '../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../types/contracts.js'
 import type { TransactionActionStatus } from '../types/components.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
-
 const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] = [
 	{ value: 'binary', label: 'Binary' },
 	{ value: 'categorical', label: 'Categorical' },
 	{ value: 'scalar', label: 'Scalar' },
 ]
-
 type MarketCreateQuestionSectionProps = {
 	accountAddress: Address | undefined
 	hasForked: boolean
 	isMainnet: boolean
-	marketFeedback: { action: 'createMarket'; status: TransactionActionStatus } | undefined
+	marketFeedback:
+		| {
+				action: 'createMarket'
+				status: TransactionActionStatus
+		  }
+		| undefined
 	marketCreating: boolean
 	marketError: string | undefined
 	marketForm: MarketFormState
@@ -40,7 +43,6 @@ type MarketCreateQuestionSectionProps = {
 	onUseQuestionForPool: (questionId: string) => void
 	zoltarQuestions: MarketDetails[]
 }
-
 function getScalarCreatePreviewDetails(marketForm: MarketFormState): ScalarCreatePreviewDetails | undefined {
 	if (marketForm.marketType !== 'scalar') return undefined
 	try {
@@ -52,7 +54,6 @@ function getScalarCreatePreviewDetails(marketForm: MarketFormState): ScalarCreat
 		return undefined
 	}
 }
-
 export function MarketCreateQuestionSection({
 	accountAddress,
 	hasForked,
@@ -76,32 +77,27 @@ export function MarketCreateQuestionSection({
 	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(marketForm)
 	const marketFormValidation = validateMarketForm(marketForm)
 	const selectedQuestionTitle = selectedQuestionDetails === undefined ? 'Question' : getQuestionTitle(selectedQuestionDetails)
-
 	useEffect(() => {
 		if (scalarCreatePreviewDetails === undefined) return
 		const clampedTick = clampScalarTickIndex(BigInt(scalarCreatePreviewTick), scalarCreatePreviewDetails.numTicks).toString()
 		if (clampedTick === scalarCreatePreviewTick) return
 		setScalarCreatePreviewTick(clampedTick)
 	}, [scalarCreatePreviewDetails?.numTicks, scalarCreatePreviewTick])
-
 	const updateCategoricalOutcome = (outcomeIndex: number, value: string) => {
 		onMarketFormChange({
 			categoricalOutcomes: marketForm.categoricalOutcomes.map((outcome, index) => (index === outcomeIndex ? value : outcome)),
 		})
 	}
-
 	const addCategoricalOutcome = () => {
 		onMarketFormChange({
 			categoricalOutcomes: [...marketForm.categoricalOutcomes, ''],
 		})
 	}
-
 	const removeCategoricalOutcome = (outcomeIndex: number) => {
 		onMarketFormChange({
 			categoricalOutcomes: marketForm.categoricalOutcomes.filter((_, index) => index !== outcomeIndex),
 		})
 	}
-
 	return (
 		<>
 			{marketResult === undefined ? undefined : (
@@ -130,17 +126,20 @@ export function MarketCreateQuestionSection({
 					}
 				>
 					<div className='question-preview-body'>
-						{selectedQuestionDetails === undefined ? (
-							loadingZoltarQuestions ? (
-								<span className='loading-value' role='status' aria-label='Loading question details'>
-									<span className='spinner' aria-hidden='true' />
-								</span>
-							) : (
-								<p className='detail'>Question details are not loaded yet.</p>
-							)
-						) : (
-							<Question question={selectedQuestionDetails} showTitle={false} />
-						)}
+						{(() => {
+							if (selectedQuestionDetails === undefined) {
+								if (loadingZoltarQuestions)
+									return (
+										<span className='loading-value' role='status' aria-label='Loading question details'>
+											<span className='spinner' aria-hidden='true' />
+										</span>
+									)
+
+								return <p className='detail'>Question details are not loaded yet.</p>
+							}
+
+							return <Question question={selectedQuestionDetails} showTitle={false} />
+						})()}
 						<MetricField label='Creation transaction hash'>
 							<TransactionHashLink hash={marketResult.createQuestionHash} />
 						</MetricField>
@@ -222,13 +221,15 @@ export function MarketCreateQuestionSection({
 							</div>
 						) : undefined}
 
-						{marketForm.marketType === 'scalar' ? (
-							scalarCreatePreviewDetails === undefined ? (
-								<p className='detail'>Enter scalar min, max, and increment to preview the tick slider.</p>
-							) : (
-								<ScalarCreatePreview details={scalarCreatePreviewDetails} selectedTick={scalarCreatePreviewTick} onSelectedTickChange={setScalarCreatePreviewTick} />
-							)
-						) : undefined}
+						{(() => {
+							if (marketForm.marketType === 'scalar') {
+								if (scalarCreatePreviewDetails === undefined) return <p className='detail'>Enter scalar min, max, and increment to preview the tick slider.</p>
+
+								return <ScalarCreatePreview details={scalarCreatePreviewDetails} selectedTick={scalarCreatePreviewTick} onSelectedTickChange={setScalarCreatePreviewTick} />
+							}
+
+							return undefined
+						})()}
 
 						<div className='actions'>
 							<TransactionActionButton
@@ -239,7 +240,12 @@ export function MarketCreateQuestionSection({
 								status={marketFeedback?.status}
 								availability={{
 									disabled: accountAddress === undefined || !isMainnet || marketCreating || !marketFormValidation.isValid,
-									reason: accountAddress === undefined ? 'Connect a wallet before creating a question.' : !isMainnet ? 'Switch to Ethereum mainnet before creating a question.' : marketFormValidation.notice,
+									reason: (() => {
+										if (accountAddress === undefined) return 'Connect a wallet before creating a question.'
+										if (!isMainnet) return 'Switch to Ethereum mainnet before creating a question.'
+
+										return marketFormValidation.notice
+									})(),
 								}}
 							/>
 							{marketFormValidation.notice === undefined ? undefined : <p className='form-validation-inline'>{marketFormValidation.notice}</p>}

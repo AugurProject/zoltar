@@ -72,56 +72,36 @@ export function normalizeAnvilTransactionParams(params: unknown[]) {
 }
 
 function parseJsonRpcResponse(raw: unknown): JsonRpcSuccess {
-	if (typeof raw !== 'object' || raw === null) {
-		throw new Error('Invalid JSON-RPC response: not an object')
-	}
-	if (!hasJsonRpcBaseFields(raw)) {
-		throw new Error('Invalid JSON-RPC response: missing base fields')
-	}
-	if (raw.jsonrpc !== '2.0') {
-		throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${raw.jsonrpc}'`)
-	}
-	if ('error' in raw && raw.error !== undefined && !isJsonRpcError(raw.error)) {
-		throw new Error('Invalid JSON-RPC response: malformed error object')
-	}
+	if (typeof raw !== 'object' || raw === null) throw new Error('Invalid JSON-RPC response: not an object')
+	if (!hasJsonRpcBaseFields(raw)) throw new Error('Invalid JSON-RPC response: missing base fields')
+	if (raw.jsonrpc !== '2.0') throw new Error(`Invalid JSON-RPC version: expected '2.0', got '${raw.jsonrpc}'`)
+	if ('error' in raw && raw.error !== undefined && !isJsonRpcError(raw.error)) throw new Error('Invalid JSON-RPC response: malformed error object')
 
 	return raw
 }
 
 function parseSnapshotId(value: unknown) {
-	if (typeof value !== 'string') {
-		throw new Error('Invalid anvil_snapshot response: expected string snapshot id')
-	}
+	if (typeof value !== 'string') throw new Error('Invalid anvil_snapshot response: expected string snapshot id')
 	return value
 }
 
 function parseBlockTimestamp(value: unknown): bigint | undefined {
-	if (typeof value !== 'object' || value === null || !('timestamp' in value)) {
-		return undefined
-	}
+	if (typeof value !== 'object' || value === null || !('timestamp' in value)) return undefined
 	const { timestamp } = value as RpcBlock
-	if (typeof timestamp !== 'string') {
-		return undefined
-	}
+	if (typeof timestamp !== 'string') return undefined
 	return BigInt(timestamp)
 }
 
 function parseTransactionReceiptStatus(value: unknown): string | undefined {
-	if (typeof value !== 'object' || value === null || !('status' in value)) {
-		return undefined
-	}
+	if (typeof value !== 'object' || value === null || !('status' in value)) return undefined
 	const { status } = value as RpcTransactionReceipt
 	return typeof status === 'string' ? status : undefined
 }
 
 function parseTransactionBlockNumber(value: unknown): bigint | undefined {
-	if (typeof value !== 'object' || value === null || !('blockNumber' in value)) {
-		return undefined
-	}
+	if (typeof value !== 'object' || value === null || !('blockNumber' in value)) return undefined
 	const { blockNumber } = value as RpcTransaction
-	if (typeof blockNumber !== 'string') {
-		return undefined
-	}
+	if (typeof blockNumber !== 'string') return undefined
 	return BigInt(blockNumber)
 }
 
@@ -155,13 +135,9 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		try {
 			const parsed = new URL(url)
 			const allowedHosts = ['localhost', '127.0.0.1', '::1', 'host.docker.internal']
-			if (!allowedHosts.includes(parsed.hostname)) {
-				throw new Error(`ANVIL_RPC points to unauthorized host '${parsed.hostname}'. ` + `Test RPC endpoints must be local (localhost, 127.0.0.1, ::1, host.docker.internal). ` + `Set ANVIL_RPC to a local Anvil instance.`)
-			}
+			if (!allowedHosts.includes(parsed.hostname)) throw new Error(`ANVIL_RPC points to unauthorized host '${parsed.hostname}'. ` + `Test RPC endpoints must be local (localhost, 127.0.0.1, ::1, host.docker.internal). ` + `Set ANVIL_RPC to a local Anvil instance.`)
 		} catch (error) {
-			if (error instanceof Error && error.message.includes('unauthorized')) {
-				throw error
-			}
+			if (error instanceof Error && error.message.includes('unauthorized')) throw error
 			throw new Error(`Invalid ANVIL_RPC URL: ${url}. Must be a valid HTTP URL.`)
 		}
 	}
@@ -177,9 +153,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		// eth_sendTransaction behavior inside the same test.
 		if (args.method === 'eth_sendTransaction' && params[0]) {
 			const latestBlockTimestamp = parseBlockTimestamp(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
-			if (latestBlockTimestamp !== undefined) {
-				currentTimestamp = latestBlockTimestamp
-			}
+			if (latestBlockTimestamp !== undefined) currentTimestamp = latestBlockTimestamp
 			nextBlockTimestamp = currentTimestamp + 1n
 			await request({
 				method: 'evm_setNextBlockTimestamp',
@@ -205,16 +179,10 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		// Ensure exactly one of result or error is present (per JSON-RPC spec)
 		const hasResult = 'result' in json
 		const hasError = 'error' in json
-		if (hasResult && hasError) {
-			throw new Error('Invalid JSON-RPC response: both result and error present')
-		}
-		if (!hasResult && !hasError) {
-			throw new Error('Invalid JSON-RPC response: neither result nor error present')
-		}
+		if (hasResult && hasError) throw new Error('Invalid JSON-RPC response: both result and error present')
+		if (!hasResult && !hasError) throw new Error('Invalid JSON-RPC response: neither result nor error present')
 
-		if (json.error !== undefined) {
-			throw new Error(json.error.message || 'RPC error')
-		}
+		if (json.error !== undefined) throw new Error(json.error.message || 'RPC error')
 
 		const waitForReceiptStatus = async (hash: string) => {
 			let transactionBlockNumber: bigint | undefined
@@ -235,9 +203,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				}
 			}
 
-			if (transactionBlockNumber !== undefined) {
-				throw new Error(`Receipt not available for mined transaction ${hash}`)
-			}
+			if (transactionBlockNumber !== undefined) throw new Error(`Receipt not available for mined transaction ${hash}`)
 			return undefined
 		}
 
@@ -255,9 +221,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				throw new Error('Transaction reverted')
 			}
 		}
-		if (nextBlockTimestamp !== undefined) {
-			currentTimestamp = nextBlockTimestamp
-		}
+		if (nextBlockTimestamp !== undefined) currentTimestamp = nextBlockTimestamp
 		return json.result
 	}
 
@@ -275,32 +239,28 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		for (const address of Object.keys(stateOverrides)) {
 			const override = stateOverrides[address]
 			if (override === undefined) continue
-			if (override.stateDiff !== undefined) {
+			if (override.stateDiff !== undefined)
 				for (const [keyHex, value] of Object.entries(override.stateDiff)) {
 					await request({
 						method: 'anvil_setStorageAt',
 						params: [address, keyHex, `0x${value.toString(16).padStart(64, '0')}`],
 					})
 				}
-			}
-			if (override.balance !== undefined) {
+			if (override.balance !== undefined)
 				await request({
 					method: 'anvil_setBalance',
 					params: [address, `0x${override.balance.toString(16)}`],
 				})
-			}
-			if (override.code !== undefined) {
+			if (override.code !== undefined)
 				await request({
 					method: 'anvil_setCode',
 					params: [address, bytesToHex(override.code)],
 				})
-			}
-			if (override.nonce !== undefined) {
+			if (override.nonce !== undefined)
 				await request({
 					method: 'anvil_setNonce',
 					params: [address, `0x${override.nonce.toString(16)}`],
 				})
-			}
 		}
 	}
 
@@ -322,9 +282,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				})
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error)
-				if (!errorMessage.includes('timestamp is too big')) {
-					throw error
-				}
+				if (!errorMessage.includes('timestamp is too big')) throw error
 				await request({
 					method: 'evm_setNextBlockTimestamp',
 					params: [blockTimeManipulation.timeToSet.toString()],
@@ -359,9 +317,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 	}
 
 	const setBalance = async (address: string, amount: bigint) => {
-		if (amount < 0n) {
-			throw new RangeError('Balance cannot be negative')
-		}
+		if (amount < 0n) throw new RangeError('Balance cannot be negative')
 		await request({
 			method: 'anvil_setBalance',
 			params: [address, `0x${amount.toString(16)}`],

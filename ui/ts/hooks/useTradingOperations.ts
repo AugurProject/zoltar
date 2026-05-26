@@ -181,12 +181,11 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 		if (!enabled) return
 		nextTradingDetailsLoad()
 		targetOutcomeDefaultsKey.current = undefined
-		if (tradingForm.value.targetOutcomeIndexes !== '') {
+		if (tradingForm.value.targetOutcomeIndexes !== '')
 			tradingForm.value = {
 				...tradingForm.value,
 				targetOutcomeIndexes: '',
 			}
-		}
 		if (resolveTradingPoolAddressInput(tradingForm.value.securityPoolAddress) === undefined) {
 			tradingDetails.value = undefined
 			tradingForkUniverse.value = undefined

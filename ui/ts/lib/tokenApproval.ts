@@ -2,15 +2,12 @@ import { maxUint256 } from 'viem'
 import { parseDecimalInput } from './decimal.js'
 import { sanitizeErrorDetail } from './errors.js'
 import { formatCurrencyBalance } from './formatters.js'
-
 export const maxUint200 = 2n ** 200n - 1n
-
 export type TokenApprovalState = {
 	error: string | undefined
 	loading: boolean
 	value: bigint | undefined
 }
-
 export type TokenApprovalRequirement = {
 	approvedAmount: bigint | undefined
 	hasSufficientApproval: boolean
@@ -18,11 +15,20 @@ export type TokenApprovalRequirement = {
 	requiredAmount: bigint | undefined
 	targetAmount: bigint | undefined
 }
-
-type ParsedTokenApprovalAmount = { kind: 'custom'; amount: bigint } | { kind: 'default' } | { kind: 'max'; amount: typeof maxUint256 }
-
+type ParsedTokenApprovalAmount =
+	| {
+			kind: 'custom'
+			amount: bigint
+	  }
+	| {
+			kind: 'default'
+	  }
+	| {
+			kind: 'max'
+			amount: typeof maxUint256
+	  }
 export function deriveTokenApprovalRequirement(requiredAmount: bigint | undefined, approvedAmount: bigint | undefined): TokenApprovalRequirement {
-	if (requiredAmount === undefined) {
+	if (requiredAmount === undefined)
 		return {
 			approvedAmount,
 			hasSufficientApproval: false,
@@ -30,9 +36,7 @@ export function deriveTokenApprovalRequirement(requiredAmount: bigint | undefine
 			requiredAmount,
 			targetAmount: undefined,
 		}
-	}
-
-	if (requiredAmount <= 0n) {
+	if (requiredAmount <= 0n)
 		return {
 			approvedAmount,
 			hasSufficientApproval: true,
@@ -40,11 +44,13 @@ export function deriveTokenApprovalRequirement(requiredAmount: bigint | undefine
 			requiredAmount,
 			targetAmount: undefined,
 		}
-	}
-
 	const hasSufficientApproval = approvedAmount !== undefined && approvedAmount >= requiredAmount
-	const neededAmount = approvedAmount === undefined ? undefined : approvedAmount >= requiredAmount ? 0n : requiredAmount - approvedAmount
+	const neededAmount = (() => {
+		if (approvedAmount === undefined) return undefined
+		if (approvedAmount >= requiredAmount) return 0n
 
+		return requiredAmount - approvedAmount
+	})()
 	return {
 		approvedAmount,
 		hasSufficientApproval,
@@ -53,7 +59,6 @@ export function deriveTokenApprovalRequirement(requiredAmount: bigint | undefine
 		targetAmount: hasSufficientApproval ? undefined : requiredAmount,
 	}
 }
-
 export function parseTokenApprovalAmountInput(value: string, label: string, units: number): ParsedTokenApprovalAmount {
 	const trimmed = value.trim()
 	if (trimmed === '') return { kind: 'default' }
@@ -63,24 +68,17 @@ export function parseTokenApprovalAmountInput(value: string, label: string, unit
 		amount: parseDecimalInput(trimmed, label, units),
 	}
 }
-
 export function shouldDisplayMaxTokenApprovalAmount(amount: bigint | undefined) {
 	return amount !== undefined && amount > maxUint200
 }
-
 export function formatTokenApprovalUnavailableMessage({ actionLabel, reason, tokenLabel }: { actionLabel?: string | undefined; reason: string | undefined; tokenLabel: string | undefined }) {
 	const resolvedTokenLabel = tokenLabel?.trim() || 'token'
 	const sanitizedReason = sanitizeErrorDetail(reason)
 	const segments = [`Unable to verify ${resolvedTokenLabel} approval${actionLabel === undefined ? '' : ` before ${actionLabel}`}.`]
-
-	if (sanitizedReason !== undefined) {
-		segments.push(`Reason: ${sanitizedReason}.`)
-	}
+	if (sanitizedReason !== undefined) segments.push(`Reason: ${sanitizedReason}.`)
 	segments.push('Retry loading the approval status before continuing.')
-
 	return segments.join(' ')
 }
-
 export function resolveTokenApprovalStatusMessage({
 	actionLabel,
 	amountValidationMessage,
@@ -104,16 +102,14 @@ export function resolveTokenApprovalStatusMessage({
 }) {
 	if (guardMessage !== undefined) return guardMessage
 	if (amountValidationMessage !== undefined) return amountValidationMessage
-	if (draftAmount.trim() === '') {
+	if (draftAmount.trim() === '')
 		return formatTokenApprovalNeededMessage({
 			actionLabel,
 			requirement,
 			tokenLabel,
 			tokenUnits,
 		})
-	}
 	if (nextApprovalAmount === undefined || requiredAmount === undefined) return undefined
-
 	return formatTokenApprovalPartialMessage({
 		actionLabel,
 		nextApprovedAmount: nextApprovalAmount,
@@ -122,14 +118,12 @@ export function resolveTokenApprovalStatusMessage({
 		tokenUnits,
 	})
 }
-
 export function formatTokenApprovalNeededMessage({ actionLabel, requirement, tokenLabel, tokenUnits }: { actionLabel: string; requirement: TokenApprovalRequirement; tokenLabel: string; tokenUnits: number }) {
 	if (requirement.neededAmount === undefined || requirement.neededAmount <= 0n) return undefined
 	const targetAmount = requirement.targetAmount ?? requirement.requiredAmount
 	if (targetAmount === undefined) return undefined
 	return `Need ${formatCurrencyBalance(requirement.neededAmount, tokenUnits)} more ${tokenLabel} approved before ${actionLabel}.`
 }
-
 export function formatTokenApprovalPartialMessage({ actionLabel, nextApprovedAmount, requiredAmount, tokenLabel, tokenUnits }: { actionLabel: string; nextApprovedAmount: bigint; requiredAmount: bigint; tokenLabel: string; tokenUnits: number }) {
 	if (nextApprovedAmount >= requiredAmount) return undefined
 	return `Approving ${formatCurrencyBalance(nextApprovedAmount, tokenUnits)} ${tokenLabel} will still leave ${formatCurrencyBalance(requiredAmount - nextApprovedAmount, tokenUnits)} more ${tokenLabel} needed before ${actionLabel}.`

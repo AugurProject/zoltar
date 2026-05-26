@@ -88,9 +88,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 					const details = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
 					reportingDetails.value = details
 					setReportingForm(current => {
-						if (details.status !== 'active') {
-							return current.selectedWithdrawDepositIndexes.length === 0 ? current : { ...current, selectedWithdrawDepositIndexes: [] }
-						}
+						if (details.status !== 'active') return current.selectedWithdrawDepositIndexes.length === 0 ? current : { ...current, selectedWithdrawDepositIndexes: [] }
 						const selectedSide = details.sides.find(side => side.key === current.selectedOutcome)
 						const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 						const selectedWithdrawDepositIndexes = current.selectedWithdrawDepositIndexes.filter(index => availableDepositIndexes.includes(index))
@@ -115,16 +113,10 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 				const reportAmount = parseRepAmountInput(currentForm.reportAmount, 'Report amount')
 				const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
 				const contributionPreview = previewReportingContribution(latestDetails, selectedOutcome, reportAmount)
-				if (contributionPreview.actualDepositAmount === undefined) {
-					throw new Error(contributionPreview.reason ?? 'Unable to preview the REP that would be locked for this report.')
-				}
-				if (!latestDetails.viewerVaultExists) {
-					throw new Error('Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.')
-				}
+				if (contributionPreview.actualDepositAmount === undefined) throw new Error(contributionPreview.reason ?? 'Unable to preview the REP that would be locked for this report.')
+				if (!latestDetails.viewerVaultExists) throw new Error('Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.')
 				const availableVaultRep = latestDetails.viewerVaultAvailableEscalationRep ?? 0n
-				if (contributionPreview.actualDepositAmount > availableVaultRep) {
-					throw new Error(`Insufficient unlocked REP in your vault. Need ${formatCurrencyBalance(contributionPreview.actualDepositAmount - availableVaultRep)} more REP deposited and unlocked before reporting.`)
-				}
+				if (contributionPreview.actualDepositAmount > availableVaultRep) throw new Error(`Insufficient unlocked REP in your vault. Need ${formatCurrencyBalance(contributionPreview.actualDepositAmount - availableVaultRep)} more REP deposited and unlocked before reporting.`)
 
 				return await reportOutcomeInSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, selectedOutcome, reportAmount)
 			},
@@ -137,26 +129,18 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 			async (walletAddress, securityPoolAddress, currentForm) => {
 				const selectedOutcome = requireSelectedOutcome(currentForm.selectedOutcome, 'withdraw')
 				const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
-				if (latestDetails.status !== 'active') {
-					throw new Error('Withdrawals are unavailable until the first report or contribution deploys the escalation game.')
-				}
+				if (latestDetails.status !== 'active') throw new Error('Withdrawals are unavailable until the first report or contribution deploys the escalation game.')
 				const selectedSide = latestDetails.sides.find(side => side.key === selectedOutcome)
 				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 
-				if (!latestDetails.withdrawalEnabled) {
-					throw new Error('Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
-				}
+				if (!latestDetails.withdrawalEnabled) throw new Error('Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
 
 				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexes
 				const missingSelectedDepositIndex = requestedDepositIndexes.find(index => !availableDepositIndexes.includes(index))
-				if (missingSelectedDepositIndex !== undefined) {
-					throw new Error(`Selected deposit #${missingSelectedDepositIndex.toString()} is no longer available to withdraw on the selected side`)
-				}
+				if (missingSelectedDepositIndex !== undefined) throw new Error(`Selected deposit #${missingSelectedDepositIndex.toString()} is no longer available to withdraw on the selected side`)
 
 				const depositIndexes = requestedDepositIndexes
-				if (depositIndexes.length === 0) {
-					throw new Error('Select at least one deposit to withdraw or use Withdraw all.')
-				}
+				if (depositIndexes.length === 0) throw new Error('Select at least one deposit to withdraw or use Withdraw all.')
 
 				return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, selectedOutcome, depositIndexes)
 			},

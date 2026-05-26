@@ -66,20 +66,14 @@ describe('Auction', () => {
 
 	function assertClearing(clearing: { hitCap: boolean; foundTick: bigint; accumulatedEth: bigint }, expectedHitCap: boolean, expectedTick?: bigint, expectedAccumulatedEth?: bigint) {
 		strictEqualTypeSafe(clearing.hitCap, expectedHitCap, 'clearing.hitCap mismatch')
-		if (expectedHitCap && expectedTick !== undefined) {
-			strictEqualTypeSafe(clearing.foundTick, expectedTick, 'clearing.foundTick mismatch')
-		}
-		if (expectedAccumulatedEth !== undefined) {
-			strictEqualTypeSafe(clearing.accumulatedEth, expectedAccumulatedEth, 'clearing.accumulatedEth mismatch')
-		}
+		if (expectedHitCap && expectedTick !== undefined) strictEqualTypeSafe(clearing.foundTick, expectedTick, 'clearing.foundTick mismatch')
+		if (expectedAccumulatedEth !== undefined) strictEqualTypeSafe(clearing.accumulatedEth, expectedAccumulatedEth, 'clearing.accumulatedEth mismatch')
 	}
 
 	function assertExpectedClearing(clearing: { hitCap: boolean; foundTick: bigint; accumulatedEth: bigint }, expectedTick: bigint, expectedAccumulatedEth?: bigint): void {
 		assertClearing(clearing, true)
 		if (clearing.hitCap) strictEqualTypeSafe(clearing.foundTick, expectedTick, 'clearing tick mismatch')
-		if (expectedAccumulatedEth !== undefined) {
-			strictEqualTypeSafe(clearing.accumulatedEth, expectedAccumulatedEth, 'accumulatedEth mismatch')
-		}
+		if (expectedAccumulatedEth !== undefined) strictEqualTypeSafe(clearing.accumulatedEth, expectedAccumulatedEth, 'accumulatedEth mismatch')
 	}
 
 	async function finalizeAndVerify(client: WriteClient, auctionAddress: Address): Promise<void> {
@@ -1014,14 +1008,10 @@ describe('Auction', () => {
 
 				if (accumulatedEth > 0n) {
 					const repricedRep = (accumulatedEth * PRICE_PRECISION) / price
-					if (repricedRep > maxRepBeingSold) {
-						return { hitCap: true, foundTick: lastValidTick, accumulatedEth: lastValidEth }
-					}
+					if (repricedRep > maxRepBeingSold) return { hitCap: true, foundTick: lastValidTick, accumulatedEth: lastValidEth }
 				}
 
-				if (accumulatedEth >= ethRaiseCap) {
-					return { hitCap: true, foundTick: lastValidTick, accumulatedEth: lastValidEth }
-				}
+				if (accumulatedEth >= ethRaiseCap) return { hitCap: true, foundTick: lastValidTick, accumulatedEth: lastValidEth }
 
 				const remainingCap = ethRaiseCap - accumulatedEth
 				if (ethToTake > remainingCap) ethToTake = remainingCap
@@ -1036,9 +1026,7 @@ describe('Auction', () => {
 					return { hitCap: true, foundTick: bid.tick, accumulatedEth: accumulatedEth + ethUsedAtClearing }
 				}
 
-				if (newAccumulatedEth >= ethRaiseCap) {
-					return { hitCap: true, foundTick: bid.tick, accumulatedEth: newAccumulatedEth }
-				}
+				if (newAccumulatedEth >= ethRaiseCap) return { hitCap: true, foundTick: bid.tick, accumulatedEth: newAccumulatedEth }
 
 				accumulatedEth = newAccumulatedEth
 				lastValidTick = bid.tick

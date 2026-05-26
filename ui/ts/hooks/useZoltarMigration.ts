@@ -39,13 +39,9 @@ type RunZoltarMigrationActionParameters = {
 function resolvePrepareMigrationAmount(amount: bigint, preparedRepBalance: bigint | undefined, repBalance: bigint | undefined) {
 	const currentPreparedBalance = preparedRepBalance ?? 0n
 	const missingAmount = amount > currentPreparedBalance ? amount - currentPreparedBalance : 0n
-	if (missingAmount === 0n) {
-		throw new Error('Selected amount is already prepared')
-	}
+	if (missingAmount === 0n) throw new Error('Selected amount is already prepared')
 	const currentRepBalance = repBalance ?? 0n
-	if (currentRepBalance < missingAmount) {
-		throw new Error('Not enough REP in this universe to prepare the selected amount')
-	}
+	if (currentRepBalance < missingAmount) throw new Error('Not enough REP in this universe to prepare the selected amount')
 	return missingAmount
 }
 
@@ -83,13 +79,9 @@ export function useZoltarMigration({ accountAddress, ensureZoltarUniverse, onTra
 			try {
 				onTransactionRequested()
 				const universe = await ensureZoltarUniverse()
-				if (!universe.hasForked) {
-					throw new Error('Zoltar has not forked yet')
-				}
+				if (!universe.hasForked) throw new Error('Zoltar has not forked yet')
 				const amount = parseRepAmountInput(zoltarMigrationForm.value.amount, 'Migration amount')
-				if (amount <= 0n) {
-					throw new Error('Migration amount must be greater than zero')
-				}
+				if (amount <= 0n) throw new Error('Migration amount must be greater than zero')
 				const resolvedAmount = resolveAmount(amount, zoltarMigrationPreparedRepBalance, zoltarForkRepBalance)
 				const outcomeIndexes = requiresOutcomeIndexes ? parseBigIntListInput(zoltarMigrationForm.value.outcomeIndexes, 'Outcome indexes') : []
 				const result = await action(accountAddress, universe, resolvedAmount, outcomeIndexes)

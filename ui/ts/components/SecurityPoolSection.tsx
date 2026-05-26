@@ -48,13 +48,12 @@ export function SecurityPoolSection({
 	})
 	const isCreateDisabled = createDisabledReason !== undefined
 	let createdQuestionDetails = undefined
-	if (securityPoolResult !== undefined) {
+	if (securityPoolResult !== undefined)
 		if (marketDetails?.questionId === securityPoolResult.questionId) {
 			createdQuestionDetails = marketDetails
 		} else {
 			createdQuestionDetails = carriedPoolCreationMarketDetails
 		}
-	}
 
 	let createButtonLabel: ComponentChildren = 'Create Pool'
 	if (securityPoolCreating) {
@@ -63,9 +62,7 @@ export function SecurityPoolSection({
 		createButtonLabel = <LoadingText>Checking Duplicate...</LoadingText>
 	} else if (duplicateOriginPoolExists) {
 		createButtonLabel = 'Pool Already Exists'
-	} else if (zoltarUniverseHasForked) {
-		createButtonLabel = 'Pool Creation Locked'
-	}
+	} else if (zoltarUniverseHasForked) createButtonLabel = 'Pool Creation Locked'
 
 	const createdPoolResult =
 		securityPoolResult === undefined ? undefined : (

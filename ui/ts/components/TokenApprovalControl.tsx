@@ -9,7 +9,6 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../lib/tokenApproval.js'
 import type { TransactionActionStatus } from '../types/components.js'
-
 type TokenApprovalControlProps = {
 	actionLabel: string
 	allowanceError: string | undefined
@@ -26,7 +25,6 @@ type TokenApprovalControlProps = {
 	tokenSymbol: string
 	tokenUnits: number
 }
-
 function resolveApprovalButtonLabel({
 	guardMessage,
 	isCustomAmount,
@@ -54,15 +52,12 @@ function resolveApprovalButtonLabel({
 	if (isMaxAmount) return `Approve Max ${tokenSymbol}`
 	return `Approve ${formatCurrencyBalance(nextApprovalAmount, tokenUnits)} ${tokenSymbol}`
 }
-
 export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoading, approvedAmount, disabled = false, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, status, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
 	const [draftAmount, setDraftAmount] = useState('')
 	const requirement = useMemo(() => deriveTokenApprovalRequirement(requiredAmount, approvedAmount), [approvedAmount, requiredAmount])
-
 	useEffect(() => {
 		setDraftAmount('')
 	}, [resetKey])
-
 	const parsedAmount = useMemo(() => {
 		try {
 			return parseTokenApprovalAmountInput(draftAmount, 'Approval amount', tokenUnits)
@@ -73,8 +68,12 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 			}
 		}
 	}, [draftAmount, tokenUnits])
+	const nextApprovalAmount = (() => {
+		if (parsedAmount.kind === 'default') return requirement.targetAmount
+		if (parsedAmount.kind === 'invalid') return undefined
 
-	const nextApprovalAmount = parsedAmount.kind === 'default' ? requirement.targetAmount : parsedAmount.kind === 'invalid' ? undefined : parsedAmount.amount
+		return parsedAmount.amount
+	})()
 	const hasNonIncreasingCustomApproval = parsedAmount.kind === 'custom' && approvedAmount !== undefined && parsedAmount.amount <= approvedAmount
 	const amountValidationMessage = parsedAmount.kind === 'invalid' ? parsedAmount.error : undefined
 	const statusMessage = resolveTokenApprovalStatusMessage({
@@ -89,7 +88,6 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 		tokenUnits,
 	})
 	const visibleStatusMessage = disabled || hasNonIncreasingCustomApproval ? undefined : statusMessage
-
 	const allowanceMessage = allowanceError === undefined ? undefined : formatTokenApprovalUnavailableMessage({ actionLabel, reason: allowanceError, tokenLabel: tokenSymbol })
 	const controlsDisabled = pending || disabled
 	const canApprove =
@@ -114,7 +112,6 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 		tokenSymbol,
 		tokenUnits,
 	})
-
 	return (
 		<div className='form-grid'>
 			<div className='workflow-metric-grid'>

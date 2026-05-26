@@ -17,9 +17,7 @@ type Props = {
 }
 
 export function AppRouteContent({ deploy, market, openOracle, route, securityPools, wrongNetworkMessage }: Props) {
-	if (wrongNetworkMessage !== undefined) {
-		return null
-	}
+	if (wrongNetworkMessage !== undefined) return null
 
 	switch (route) {
 		case 'deploy':

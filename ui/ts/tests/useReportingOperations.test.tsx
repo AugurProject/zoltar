@@ -87,9 +87,7 @@ function createHarness(useReportingOperations: UseReportingOperations, onRender:
 }
 
 function requireHookState(state: UseReportingOperationsState | undefined) {
-	if (state === undefined) {
-		throw new Error('Hook state unavailable')
-	}
+	if (state === undefined) throw new Error('Hook state unavailable')
 
 	return state
 }

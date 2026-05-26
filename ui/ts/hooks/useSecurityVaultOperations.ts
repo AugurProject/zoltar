@@ -175,12 +175,11 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 			load: async () => {
 				const securityPoolAddress = parseAddressInput(securityVaultForm.value.securityPoolAddress, 'Security pool address')
 				const vaultAddress = vaultAddressInput?.trim() === '' || vaultAddressInput === undefined ? resolveSelectedVaultAddress() : parseAddressInput(vaultAddressInput, 'Selected vault address')
-				if (vaultAddressInput !== undefined) {
+				if (vaultAddressInput !== undefined)
 					securityVaultForm.value = {
 						...securityVaultForm.value,
 						selectedVaultAddress: vaultAddress.toString(),
 					}
-				}
 				const details = await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress)
 				if (!isCurrent()) return undefined
 				securityVaultDetails.value = details
@@ -231,13 +230,9 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				async walletAddress => {
 					const currentForm = securityVaultForm.value
 					securityPoolAddress = parseAddressInput(currentForm.securityPoolAddress, 'Security pool address')
-					if (securityVaultMissing.value) {
-						throw new Error('Security pool does not exist')
-					}
+					if (securityVaultMissing.value) throw new Error('Security pool does not exist')
 					const selectedVaultAddress = resolveSelectedVaultAddress()
-					if (!sameAddress(selectedVaultAddress, walletAddress)) {
-						throw new Error('Selected vault is read-only')
-					}
+					if (!sameAddress(selectedVaultAddress, walletAddress)) throw new Error('Selected vault is read-only')
 					securityVaultError.value = undefined
 					securityVaultResult.value = undefined
 					return await action(selectedVaultAddress, securityPoolAddress)
@@ -282,9 +277,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				if (details === undefined) return undefined
 				const currentRepBalance = await loadErc20Balance(createConnectedReadClient(), details.repToken, vaultAddress)
 				repBalanceLoader.signal.value = currentRepBalance
-				if (currentRepBalance < depositAmount) {
-					throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalance(currentRepBalance)} REP but the deposit amount is ${formatCurrencyBalance(depositAmount)} REP.`)
-				}
+				if (currentRepBalance < depositAmount) throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalance(currentRepBalance)} REP but the deposit amount is ${formatCurrencyBalance(depositAmount)} REP.`)
 				return await depositRepToSecurityPool(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, depositAmount)
 			},
 			'Failed to deposit REP',
@@ -314,9 +307,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 					requestPriceEthCost: managerDetails.requestPriceEthCost,
 					walletEthBalance,
 				})
-				if (setBondAllowanceGuardMessage !== undefined) {
-					throw new Error(setBondAllowanceGuardMessage)
-				}
+				if (setBondAllowanceGuardMessage !== undefined) throw new Error(setBondAllowanceGuardMessage)
 				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'setSecurityBondsAllowance', vaultAddress, amount)
 				return {
 					action: 'queueSetSecurityBondAllowance',
@@ -377,9 +368,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 					requestPriceEthCost: managerDetails.requestPriceEthCost,
 					walletEthBalance,
 				})
-				if (withdrawRepGuardMessage !== undefined) {
-					throw new Error(withdrawRepGuardMessage)
-				}
+				if (withdrawRepGuardMessage !== undefined) throw new Error(withdrawRepGuardMessage)
 				const result = await queueOracleManagerOperation(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), details.managerAddress, 'withdrawRep', vaultAddress, amount)
 				return {
 					action: 'queueWithdrawRep',

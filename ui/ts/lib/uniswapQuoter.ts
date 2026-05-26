@@ -160,17 +160,13 @@ async function isRepToken(client: ReadClient, token: Address) {
 
 function getMockRepPrice() {
 	const controller = getActiveSimulationController()
-	if (controller === undefined) {
-		throw new Error('Simulation REP/ETH mock pricing is unavailable')
-	}
+	if (controller === undefined) throw new Error('Simulation REP/ETH mock pricing is unavailable')
 	return controller.repPerEthPrice
 }
 
 function getMockRepUsdcPrice() {
 	const controller = getActiveSimulationController()
-	if (controller === undefined) {
-		throw new Error('Simulation REP/USDC mock pricing is unavailable')
-	}
+	if (controller === undefined) throw new Error('Simulation REP/USDC mock pricing is unavailable')
 	return controller.repPerUsdcPrice
 }
 
@@ -179,12 +175,8 @@ function calculateMockAmountOut(tokenIn: Address, tokenOut: Address, amountIn: b
 	const tokenInIsEth = tokenIn === ETH_ADDRESS || tokenIn === getWethAddress()
 	const tokenOutIsEth = tokenOut === ETH_ADDRESS || tokenOut === getWethAddress()
 
-	if (tokenInIsEth && !tokenOutIsEth) {
-		return (amountIn * repPerEthPrice) / 10n ** 18n
-	}
-	if (!tokenInIsEth && tokenOutIsEth) {
-		return (amountIn * 10n ** 18n) / repPerEthPrice
-	}
+	if (tokenInIsEth && !tokenOutIsEth) return (amountIn * repPerEthPrice) / 10n ** 18n
+	if (!tokenInIsEth && tokenOutIsEth) return (amountIn * 10n ** 18n) / repPerEthPrice
 	throw new Error('Simulation REP/ETH mock pricing only supports REP paired with ETH or WETH')
 }
 
@@ -193,12 +185,8 @@ function calculateMockUsdcAmountOut(tokenIn: Address, tokenOut: Address, amountI
 	const tokenInIsUsdc = tokenIn === USDC_ADDRESS
 	const tokenOutIsUsdc = tokenOut === USDC_ADDRESS
 
-	if (!tokenInIsUsdc && tokenOutIsUsdc) {
-		return (amountIn * repPerUsdcPrice) / 10n ** 18n
-	}
-	if (tokenInIsUsdc && !tokenOutIsUsdc) {
-		return (amountIn * 10n ** 18n) / repPerUsdcPrice
-	}
+	if (!tokenInIsUsdc && tokenOutIsUsdc) return (amountIn * repPerUsdcPrice) / 10n ** 18n
+	if (tokenInIsUsdc && !tokenOutIsUsdc) return (amountIn * 10n ** 18n) / repPerUsdcPrice
 	throw new Error('Simulation REP/USDC mock pricing only supports REP paired with USDC')
 }
 
@@ -230,9 +218,7 @@ async function maybeQuoteMockRepPair(client: ReadClient, tokenIn: Address, token
 async function assertMockPairSupported(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint) {
 	if (!isMockRepPricingEnabled()) return undefined
 	const mockResult = await maybeQuoteMockRepPair(client, tokenIn, tokenOut, amountIn)
-	if (mockResult !== undefined) {
-		return mockResult
-	}
+	if (mockResult !== undefined) return mockResult
 	throw new Error('Simulation mock pricing only supports REP / ETH, REP / WETH, and REP / USDC pairs.')
 }
 
@@ -255,9 +241,7 @@ export function buildUniswapV3PoolUrl(poolAddress: Address) {
 export async function quoteExactInput(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, poolConfig: PoolConfig = DEFAULT_POOL_CONFIG): Promise<bigint> {
 	assertRepPricingEnabled()
 	const mockResult = await assertMockPairSupported(client, tokenIn, tokenOut, amountIn)
-	if (mockResult !== undefined) {
-		return mockResult.amountOut
-	}
+	if (mockResult !== undefined) return mockResult.amountOut
 	const tokenInBig = BigInt(tokenIn)
 	const tokenOutBig = BigInt(tokenOut)
 	const zeroForOne = tokenInBig < tokenOutBig
@@ -288,9 +272,7 @@ export async function quoteExactInput(client: ReadClient, tokenIn: Address, toke
 export async function quoteBestExactInputWithSource(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, poolConfigs: readonly PoolConfig[] = COMMON_V4_POOL_CONFIGS): Promise<{ amountOut: bigint; source: UniswapV4QuoteSource | MockQuoteSource }> {
 	assertRepPricingEnabled()
 	const mockResult = await assertMockPairSupported(client, tokenIn, tokenOut, amountIn)
-	if (mockResult !== undefined) {
-		return mockResult
-	}
+	if (mockResult !== undefined) return mockResult
 	let bestAmountOut: bigint | undefined
 	let bestPoolConfig: PoolConfig | undefined
 	let lastError: unknown
@@ -414,9 +396,7 @@ async function loadUniswapV3PoolAddress(client: ReadClient, tokenIn: Address, to
 export async function quoteBestV3ExactInputWithSource(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, fees: readonly number[] = COMMON_V3_FEES): Promise<{ amountOut: bigint; source: UniswapV3QuoteSource | MockQuoteSource }> {
 	assertRepPricingEnabled()
 	const mockResult = await assertMockPairSupported(client, tokenIn, tokenOut, amountIn)
-	if (mockResult !== undefined) {
-		return mockResult
-	}
+	if (mockResult !== undefined) return mockResult
 	const normalizedTokenIn = normalizeV3Token(tokenIn)
 	const normalizedTokenOut = normalizeV3Token(tokenOut)
 

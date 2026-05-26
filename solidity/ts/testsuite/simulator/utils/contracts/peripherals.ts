@@ -79,9 +79,7 @@ export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bi
 		args: [extraDataId],
 	})
 
-	if (!isOpenOracleExtraData(result)) {
-		throw new Error('OpenOracle extraData returned an unexpected shape')
-	}
+	if (!isOpenOracleExtraData(result)) throw new Error('OpenOracle extraData returned an unexpected shape')
 
 	const [stateHash, callbackContract, numReports, callbackGasLimit, callbackSelector, protocolFeeRecipient, trackDisputes, keepFee, feeToken] = result
 
@@ -197,9 +195,7 @@ export const getLastPrice = async (client: ReadClient, priceOracleManagerAndOper
 	})
 
 export const participateAuction = async (client: WriteClient, auctionAddress: Address, repToBuy: bigint, ethToInvest: bigint): Promise<bigint> => {
-	if (repToBuy === 0n) {
-		throw new Error('repToBuy cannot be zero')
-	}
+	if (repToBuy === 0n) throw new Error('repToBuy cannot be zero')
 	// Compute price: ethToInvest / repToBuy in PRICE_PRECISION units
 	const price = (ethToInvest * 1_000_000_000_000_000_000n) / repToBuy
 	const tick = priceToClosestTick(price)

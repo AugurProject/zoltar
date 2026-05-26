@@ -84,23 +84,17 @@ function isSimulationNode(value: unknown): value is SimulationNode {
 
 function getSimulationNode(memoryClient: TevmLikeClient): SimulationNode {
 	const tevmNode = memoryClient.transport.tevm
-	if (!isSimulationNode(tevmNode)) {
-		throw new Error('Simulation transport did not expose a compatible Tevm node')
-	}
+	if (!isSimulationNode(tevmNode)) throw new Error('Simulation transport did not expose a compatible Tevm node')
 	return tevmNode
 }
 
 function requireSimulationTimestamp(timestamp: bigint | undefined) {
-	if (timestamp === undefined) {
-		throw new Error('Simulation block timestamp was unavailable')
-	}
+	if (timestamp === undefined) throw new Error('Simulation block timestamp was unavailable')
 	return timestamp
 }
 
 function requireSimulationTransaction<T>(tx: T | null, txHash: Hash) {
-	if (tx === null) {
-		throw new Error(`Simulation transaction ${txHash} was not found in the tx pool`)
-	}
+	if (tx === null) throw new Error(`Simulation transaction ${txHash} was not found in the tx pool`)
 	return tx
 }
 
@@ -108,9 +102,7 @@ async function syncSimulationVmState({ block, memoryClient, receiptsManager, vm 
 	const simulationNode = getSimulationNode(memoryClient)
 	const originalVm = await simulationNode.getVm()
 	const stateRootValue = vm.stateManager._baseState.stateRoots.get(bytesToHex(block.header.stateRoot))
-	if (stateRootValue === undefined) {
-		throw new Error('Simulation state root was not found after mining a block')
-	}
+	if (stateRootValue === undefined) throw new Error('Simulation state root was not found after mining a block')
 	originalVm.stateManager.saveStateRoot(block.header.stateRoot, stateRootValue)
 	originalVm.blockchain = vm.blockchain
 	originalVm.evm.blockchain = vm.evm.blockchain

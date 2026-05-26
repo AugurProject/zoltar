@@ -50,13 +50,12 @@ function getScalarSelectedTargetOutcomes(childUniverseByOutcomeIndex: Map<string
 	return selectedOutcomeIndexes.map(outcomeIndex => {
 		const childUniverse = childUniverseByOutcomeIndex.get(outcomeIndex.toString())
 		let label = childUniverse?.outcomeLabel
-		if (label === undefined) {
+		if (label === undefined)
 			try {
 				label = formatScalarOutcomeIndexLabel(scalarQuestion, outcomeIndex)
 			} catch {
 				label = `Malformed (${outcomeIndex.toString()})`
 			}
-		}
 		return {
 			exists: childUniverse?.exists === true,
 			label,
@@ -87,17 +86,11 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 		setScalarOutcomeTick(nextTick)
 	}, [scalarOutcomeTick, scalarQuestion, selectedScalarTick])
 
-	if (forkUniverse === undefined) {
-		return renderTargetSection('Target Child Universes', <p className='detail'>Loading fork target universes...</p>)
-	}
+	if (forkUniverse === undefined) return renderTargetSection('Target Child Universes', <p className='detail'>Loading fork target universes...</p>)
 
-	if (!forkUniverse.hasForked) {
-		return renderTargetSection('Target Child Universes', <p className='detail'>Child-universe targets unlock after this universe forks.</p>)
-	}
+	if (!forkUniverse.hasForked) return renderTargetSection('Target Child Universes', <p className='detail'>Child-universe targets unlock after this universe forks.</p>)
 
-	if (forkUniverse.forkQuestionDetails === undefined) {
-		return renderTargetSection('Target Child Universes', <p className='detail'>Loading fork question details...</p>)
-	}
+	if (forkUniverse.forkQuestionDetails === undefined) return renderTargetSection('Target Child Universes', <p className='detail'>Loading fork question details...</p>)
 
 	if (forkUniverse.forkQuestionDetails.marketType !== 'scalar') {
 		const childUniverses = forkUniverse.childUniverses.map(child => ({
@@ -121,9 +114,7 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 		)
 	}
 
-	if (scalarQuestion === undefined) {
-		return renderTargetSection('Target Child Universes', <p className='detail'>Loading scalar fork details...</p>)
-	}
+	if (scalarQuestion === undefined) return renderTargetSection('Target Child Universes', <p className='detail'>Loading scalar fork details...</p>)
 
 	const clampedSelectedScalarTick = clampScalarTickIndex(selectedScalarTick, scalarQuestion.numTicks)
 	const clampedScalarOutcomeTick = clampedSelectedScalarTick.toString()

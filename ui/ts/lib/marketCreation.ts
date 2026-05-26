@@ -5,26 +5,21 @@ import { assertNever } from './assert.js'
 import { parseBigIntInput, parseTimestampInput } from './marketForm.js'
 import { parseOpenInterestFeePerYearPercentInput } from './retentionRate.js'
 import { parseScalarFormInputs } from './scalarOutcome.js'
-
 type MarketFormField = keyof Pick<MarketFormState, 'categoricalOutcomes' | 'endTime' | 'scalarIncrement' | 'scalarMax' | 'scalarMin' | 'startTime' | 'title'>
-
 type MarketFormValidation = {
 	fieldErrors: Partial<Record<MarketFormField, string>>
 	isValid: boolean
 	notice: string | undefined
 }
-
 export function hasDeployedStep(steps: DeploymentStatus[], stepId: DeploymentStatus['id']) {
 	return steps.some(step => step.id === stepId && step.deployed)
 }
-
 function getScalarQuestionData(form: MarketFormState) {
 	return {
 		answerUnit: form.answerUnit.trim(),
 		...parseScalarFormInputs(form),
 	}
 }
-
 function createQuestionData(form: MarketFormState): QuestionData {
 	const questionData = {
 		title: form.title.trim(),
@@ -36,7 +31,6 @@ function createQuestionData(form: MarketFormState): QuestionData {
 		displayValueMax: 0n,
 		answerUnit: '',
 	}
-
 	switch (form.marketType) {
 		case 'binary':
 		case 'categorical':
@@ -52,36 +46,32 @@ function createQuestionData(form: MarketFormState): QuestionData {
 		default:
 			assertNever(form.marketType)
 	}
-
 	if (questionData.title === '') throw new Error('Title is required')
 	if (questionData.endTime <= questionData.startTime) throw new Error('End time must be after start time')
-
 	return questionData
 }
-
 function normalizeOutcomeLabel(label: string) {
 	return label.trim()
 }
-
 function getOutcomeLabelHash(label: string) {
 	return keccak256(encodeAbiParameters([{ type: 'string' }], [label]))
 }
-
 function compareOutcomeLabels(left: string, right: string) {
 	const leftHash = getOutcomeLabelHash(left)
 	const rightHash = getOutcomeLabelHash(right)
-	return leftHash > rightHash ? -1 : leftHash < rightHash ? 1 : 0
-}
+	return (() => {
+		if (leftHash > rightHash) return -1
+		if (leftHash < rightHash) return 1
 
+		return 0
+	})()
+}
 function getCategoricalOutcomeLabels(form: MarketFormState) {
 	const outcomeLabels = form.categoricalOutcomes.map(normalizeOutcomeLabel).filter(label => label !== '')
-
 	if (outcomeLabels.length < 2) throw new Error('Categorical markets require at least 2 outcomes')
 	if (new Set(outcomeLabels).size !== outcomeLabels.length) throw new Error('Outcomes must be unique')
-
 	return [...outcomeLabels].sort(compareOutcomeLabels)
 }
-
 function getOutcomeLabels(form: MarketFormState) {
 	switch (form.marketType) {
 		case 'binary':
@@ -94,32 +84,26 @@ function getOutcomeLabels(form: MarketFormState) {
 			return assertNever(form.marketType)
 	}
 }
-
 function setFieldError(fieldErrors: Partial<Record<MarketFormField, string>>, field: MarketFormField, message: string) {
 	if (fieldErrors[field] !== undefined) return
 	fieldErrors[field] = message
 }
-
 function formatFieldList(fields: string[]) {
 	return fields.join(', ')
 }
-
 export function validateMarketForm(form: MarketFormState): MarketFormValidation {
 	const fieldErrors: Partial<Record<MarketFormField, string>> = {}
 	const missingFields: string[] = []
 	const invalidMessages: string[] = []
-
 	if (form.title.trim() === '') {
 		setFieldError(fieldErrors, 'title', 'Title is required')
 		missingFields.push('Title')
 	}
-
 	const startTime = form.startTime.trim()
 	const endTime = form.endTime.trim()
 	let parsedStartTime: bigint | undefined
 	let parsedEndTime: bigint | undefined
-
-	if (startTime !== '') {
+	if (startTime !== '')
 		try {
 			parsedStartTime = parseTimestampInput(form.startTime, 'Start time')
 		} catch (error) {
@@ -127,8 +111,6 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 			setFieldError(fieldErrors, 'startTime', message)
 			invalidMessages.push(message)
 		}
-	}
-
 	if (endTime === '') {
 		setFieldError(fieldErrors, 'endTime', 'End time is required')
 		missingFields.push('End Time')
@@ -141,17 +123,14 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 			invalidMessages.push(message)
 		}
 	}
-
 	if (parsedEndTime !== undefined && parsedStartTime !== undefined && parsedEndTime <= parsedStartTime) {
 		const message = 'End time must be after start time'
 		setFieldError(fieldErrors, 'startTime', message)
 		setFieldError(fieldErrors, 'endTime', message)
 		invalidMessages.push(message)
 	}
-
 	if (form.marketType === 'categorical') {
 		const normalizedOutcomeLabels = form.categoricalOutcomes.map(normalizeOutcomeLabel).filter(label => label !== '')
-
 		if (normalizedOutcomeLabels.length === 0) {
 			setFieldError(fieldErrors, 'categoricalOutcomes', 'Outcomes are required')
 			missingFields.push('Outcomes')
@@ -165,21 +144,21 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 			}
 		}
 	}
-
 	if (form.marketType === 'scalar') {
-		const scalarFields: Array<{ key: 'scalarMin' | 'scalarMax' | 'scalarIncrement'; label: string }> = [
+		const scalarFields: Array<{
+			key: 'scalarMin' | 'scalarMax' | 'scalarIncrement'
+			label: string
+		}> = [
 			{ key: 'scalarMin', label: 'Scalar Min' },
 			{ key: 'scalarMax', label: 'Scalar Max' },
 			{ key: 'scalarIncrement', label: 'Scalar Increment' },
 		]
-
 		const missingScalarFields = scalarFields.filter(field => form[field.key].trim() === '')
 		for (const field of missingScalarFields) {
 			setFieldError(fieldErrors, field.key, `${field.label} is required`)
 			missingFields.push(field.label)
 		}
-
-		if (missingScalarFields.length === 0) {
+		if (missingScalarFields.length === 0)
 			try {
 				parseScalarFormInputs(form)
 			} catch (error) {
@@ -196,20 +175,16 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 				}
 				invalidMessages.push(message)
 			}
-		}
 	}
-
 	const noticeParts: string[] = []
 	if (missingFields.length > 0) noticeParts.push(`Missing required fields: ${formatFieldList(missingFields)}`)
 	if (invalidMessages.length > 0) noticeParts.push(`Fix invalid fields: ${[...new Set(invalidMessages)].join(', ')}`)
-
 	return {
 		fieldErrors,
 		isValid: missingFields.length === 0 && invalidMessages.length === 0,
 		notice: noticeParts.length === 0 ? undefined : noticeParts.join('. '),
 	}
 }
-
 export function createMarketParameters(form: MarketFormState) {
 	return {
 		marketType: form.marketType,
@@ -217,18 +192,15 @@ export function createMarketParameters(form: MarketFormState) {
 		questionData: createQuestionData(form),
 	}
 }
-
 function parseQuestionIdInput(value: string) {
 	const trimmed = value.trim()
 	if (trimmed === '') throw new Error('Question ID is required')
-
 	try {
 		return BigInt(trimmed)
 	} catch {
 		throw new Error('Question ID must be a valid decimal or hex bigint')
 	}
 }
-
 export function createSecurityPoolParameters(form: SecurityPoolFormState) {
 	return {
 		currentRetentionRate: parseOpenInterestFeePerYearPercentInput(form.currentRetentionRate, 'Open interest fee per year'),

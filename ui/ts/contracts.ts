@@ -71,21 +71,16 @@ export { createSecurityPool, loadSecurityVaultDetails, originSecurityPoolExists 
 export { createMarket, loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarUniverseSummary } from './contracts/zoltar.js'
 import { loadMarketDetails } from './contracts/zoltar.js'
 export { readOptionalMulticall } from './contracts/core.js'
-
 export { getMulticall3Address, getOpenOracleAddress, getZoltarAddress } from './contracts/deploymentHelpers.js'
 const LIQUIDATION_OPERATION_TYPE = 0
-const MIGRATION_TIME_LENGTH = 4_838_400n
-const TRUTH_AUCTION_TIME_LENGTH = 604_800n
+const MIGRATION_TIME_LENGTH = 4838400n
+const TRUTH_AUCTION_TIME_LENGTH = 604800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
-
 const CONTRACT_PAGE_SIZE = 30n
-
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
-
 type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 type ReportingBootstrapReadResult = readonly [bigint, Address, bigint, bigint, Address, bigint]
-
 type SecurityPoolDeploymentQueryResult = {
 	completeSetCollateralAmount: bigint
 	currentRetentionRate: bigint
@@ -98,7 +93,6 @@ type SecurityPoolDeploymentQueryResult = {
 	truthAuction: Address
 	universeId: bigint
 }
-
 function getOracleQueueOperationFromEventOperation(operation: bigint) {
 	switch (operation) {
 		case 0n:
@@ -111,7 +105,6 @@ function getOracleQueueOperationFromEventOperation(operation: bigint) {
 			throw new Error(`Unexpected staged oracle operation: ${operation.toString()}`)
 	}
 }
-
 function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOperation: OracleQueueOperation): StagedOracleExecutionResult | undefined {
 	for (const log of receipt.logs) {
 		try {
@@ -144,17 +137,14 @@ async function readSecurityPoolUniverseId(client: Pick<ReadClient, 'readContract
 		args: [],
 	})
 }
-
 function getDeploymentStep(id: DeploymentStepId) {
 	const step = getDeploymentSteps().find(candidate => candidate.id === id)
 	if (step === undefined) throw new Error(`Unknown deployment step: ${id}`)
 	return step
 }
-
 export async function loadEscalationDeposits(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
 	let currentIndex = 0n
 	const deposits: EscalationDeposit[] = []
-
 	while (true) {
 		const page = await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -162,7 +152,6 @@ export async function loadEscalationDeposits(client: Pick<ReadClient, 'readContr
 			functionName: 'getDepositsByOutcome',
 			args: [getReportingOutcomeValue(outcome), currentIndex, CONTRACT_PAGE_SIZE],
 		})
-
 		const normalizedPage = page
 			.map((deposit, index) => ({
 				amount: deposit.amount,
@@ -171,25 +160,20 @@ export async function loadEscalationDeposits(client: Pick<ReadClient, 'readContr
 				depositor: deposit.depositor,
 			}))
 			.filter(deposit => deposit.depositor !== zeroAddress && deposit.amount > 0n)
-
 		deposits.push(...normalizedPage)
 		if (BigInt(page.length) !== CONTRACT_PAGE_SIZE) break
 		currentIndex += CONTRACT_PAGE_SIZE
 	}
-
 	return deposits
 }
-
 async function loadViewerReportingVaultState(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined) {
-	if (accountAddress === undefined) {
+	if (accountAddress === undefined)
 		return {
 			viewerVaultAvailableEscalationRep: undefined,
 			viewerVaultExists: false,
 			viewerVaultLockedRepInEscalationGame: undefined,
 			viewerVaultRepDepositShare: undefined,
 		}
-	}
-
 	const viewerVaultTuple = await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'securityVaults',
@@ -198,10 +182,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 	})
 	const viewerVaultTuples = requireSecurityVaultTupleArray([viewerVaultTuple], 'viewer security vault tuple')
 	const [viewerPoolOwnership, viewerSecurityBondAllowance, viewerUnpaidEthFees, viewerFeeIndex, viewerLockedRepInEscalationGame] = viewerVaultTuples[0] ?? []
-	if (typeof viewerPoolOwnership !== 'bigint' || typeof viewerSecurityBondAllowance !== 'bigint' || typeof viewerUnpaidEthFees !== 'bigint' || typeof viewerFeeIndex !== 'bigint' || typeof viewerLockedRepInEscalationGame !== 'bigint') {
-		throw new Error('Unexpected viewer security vault tuple response')
-	}
-
+	if (typeof viewerPoolOwnership !== 'bigint' || typeof viewerSecurityBondAllowance !== 'bigint' || typeof viewerUnpaidEthFees !== 'bigint' || typeof viewerFeeIndex !== 'bigint' || typeof viewerLockedRepInEscalationGame !== 'bigint') throw new Error('Unexpected viewer security vault tuple response')
 	const viewerVaultRepDepositShare =
 		viewerPoolOwnership === 0n
 			? 0n
@@ -213,7 +194,6 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 				})
 	const viewerVaultExists = viewerPoolOwnership !== 0n || viewerSecurityBondAllowance !== 0n || viewerUnpaidEthFees !== 0n || viewerFeeIndex !== 0n || viewerLockedRepInEscalationGame !== 0n
 	const viewerVaultAvailableEscalationRep = viewerVaultRepDepositShare > viewerLockedRepInEscalationGame ? viewerVaultRepDepositShare - viewerLockedRepInEscalationGame : 0n
-
 	return {
 		viewerVaultAvailableEscalationRep,
 		viewerVaultExists,
@@ -221,7 +201,6 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 		viewerVaultRepDepositShare,
 	}
 }
-
 export async function loadReportingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
 	const reportingPoolReads: readonly ContractFunctionParameters[] = [
 		{
@@ -275,7 +254,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}),
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
-	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x') {
+	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x')
 		return {
 			completeSetCollateralAmount,
 			currentTime: block.timestamp,
@@ -292,8 +271,6 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			withdrawalState: 'not-finalized',
 			...viewerVaultState,
 		}
-	}
-
 	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -364,15 +341,18 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	])
 	if (!isBigintTriple(balances)) throw new Error('Unexpected escalation balances response')
 	const [invalidDeposits, yesDeposits, noDeposits] = await Promise.all([loadEscalationDeposits(client, escalationGameAddress, 'invalid'), loadEscalationDeposits(client, escalationGameAddress, 'yes'), loadEscalationDeposits(client, escalationGameAddress, 'no')])
-
 	const sides: EscalationSide[] = [
 		{ balance: balances[0] ?? 0n, deposits: invalidDeposits, key: 'invalid', label: getEscalationSideLabel('invalid'), userDeposits: accountAddress === undefined ? [] : invalidDeposits.filter(deposit => deposit.depositor === accountAddress) },
 		{ balance: balances[1] ?? 0n, deposits: yesDeposits, key: 'yes', label: getEscalationSideLabel('yes'), userDeposits: accountAddress === undefined ? [] : yesDeposits.filter(deposit => deposit.depositor === accountAddress) },
 		{ balance: balances[2] ?? 0n, deposits: noDeposits, key: 'no', label: getEscalationSideLabel('no'), userDeposits: accountAddress === undefined ? [] : noDeposits.filter(deposit => deposit.depositor === accountAddress) },
 	]
 	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcome)
-	const withdrawalState = normalizedQuestionOutcome !== 'none' ? 'resolved' : universeForkTime > 0n && hasReachedNonDecision === false ? 'canceled-by-external-fork' : 'not-finalized'
+	const withdrawalState = (() => {
+		if (normalizedQuestionOutcome !== 'none') return 'resolved'
+		if (universeForkTime > 0n && hasReachedNonDecision === false) return 'canceled-by-external-fork'
 
+		return 'not-finalized'
+	})()
 	return {
 		bindingCapital,
 		completeSetCollateralAmount,
@@ -398,7 +378,6 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		...viewerVaultState,
 	}
 }
-
 async function getSecurityPoolVaultCount(client: ReadClient, securityPoolAddress: Address) {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -407,7 +386,6 @@ async function getSecurityPoolVaultCount(client: ReadClient, securityPoolAddress
 		args: [],
 	})
 }
-
 async function getSecurityPoolVaults(client: ReadClient, securityPoolAddress: Address, startIndex: bigint, count: bigint) {
 	return await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -416,12 +394,16 @@ async function getSecurityPoolVaults(client: ReadClient, securityPoolAddress: Ad
 		args: [startIndex, count],
 	})
 }
-
-async function loadSecurityPoolVaultSummaries(client: ReadClient, securityPoolAddress: Address): Promise<{ vaultCount: bigint; vaults: SecurityPoolVaultSummary[] }> {
+async function loadSecurityPoolVaultSummaries(
+	client: ReadClient,
+	securityPoolAddress: Address,
+): Promise<{
+	vaultCount: bigint
+	vaults: SecurityPoolVaultSummary[]
+}> {
 	const vaultCount = await getSecurityPoolVaultCount(client, securityPoolAddress)
 	const vaultAddresses = vaultCount === 0n ? [] : await getSecurityPoolVaults(client, securityPoolAddress, 0n, vaultCount)
 	if (vaultAddresses.length === 0) return { vaultCount, vaults: [] }
-
 	const vaultDataContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'securityVaults',
@@ -430,7 +412,10 @@ async function loadSecurityPoolVaultSummaries(client: ReadClient, securityPoolAd
 	}))
 	const vaultDataResults = await readRequiredMulticall(client, vaultDataContracts)
 	const vaultData = requireSecurityVaultTupleArray(vaultDataResults, 'security vault tuple')
-	const poolOwnershipContracts: { contract: ContractFunctionParameters; index: number }[] = []
+	const poolOwnershipContracts: {
+		contract: ContractFunctionParameters
+		index: number
+	}[] = []
 	for (const [index, currentVaultData] of vaultData.entries()) {
 		const poolOwnership = currentVaultData[0]
 		if (poolOwnership === undefined || poolOwnership === 0n) continue
@@ -457,7 +442,6 @@ async function loadSecurityPoolVaultSummaries(client: ReadClient, securityPoolAd
 			repDeposits.set(poolOwnershipContract.index, repDepositShare)
 		}
 	}
-
 	const vaults = vaultAddresses.map((vaultAddress, index) => {
 		const currentVaultData = vaultData[index]
 		if (currentVaultData === undefined) throw new Error('Unexpected vault data response')
@@ -472,7 +456,6 @@ async function loadSecurityPoolVaultSummaries(client: ReadClient, securityPoolAd
 	})
 	return { vaultCount, vaults }
 }
-
 export async function approveErc20<Action extends SecurityVaultActionResult['action'] | OpenOracleActionResult['action'] | ZoltarForkActionResult['action']>(client: WriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: Action) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: tokenAddress,
@@ -482,7 +465,6 @@ export async function approveErc20<Action extends SecurityVaultActionResult['act
 	}))
 	return { action, hash }
 }
-
 export async function depositRepToSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
@@ -495,7 +477,6 @@ export async function depositRepToSecurityPool(client: WriteClient, securityPool
 		hash,
 	} satisfies SecurityVaultActionResult
 }
-
 export async function updateSecurityVaultFees(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
@@ -508,7 +489,6 @@ export async function updateSecurityVaultFees(client: WriteClient, securityPoolA
 		hash,
 	} satisfies SecurityVaultActionResult
 }
-
 export async function redeemSecurityVaultFees(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
@@ -521,7 +501,6 @@ export async function redeemSecurityVaultFees(client: WriteClient, securityPoolA
 		hash,
 	} satisfies SecurityVaultActionResult
 }
-
 export async function redeemRepFromSecurityPool(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
@@ -534,7 +513,6 @@ export async function redeemRepFromSecurityPool(client: WriteClient, securityPoo
 		hash,
 	} satisfies SecurityVaultActionResult
 }
-
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
 	const [lastPrice, pendingOperationSlotId, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp] = await readRequiredMulticall(client, [
 		{
@@ -574,15 +552,12 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 			args: [],
 		},
 	])
-
 	const resolvedOracleAddress = openOracleAddress ?? getInfraContractAddresses().openOracle
-
 	let callbackStateHash: Hex | undefined
 	let exactToken1Report: bigint | undefined
 	let pendingOperation: import('./types/contracts.js').StagedOracleOperation | undefined
 	let token1: Address | undefined
 	let token2: Address | undefined
-
 	if (pendingOperationSlotId > 0n) {
 		const stagedOperation = await client.readContract({
 			abi: peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator.abi,
@@ -590,8 +565,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 			address: managerAddress,
 			args: [],
 		})
-
-		if (stagedOperation.amount > 0n) {
+		if (stagedOperation.amount > 0n)
 			pendingOperation = {
 				amount: stagedOperation.amount,
 				initiatorVault: stagedOperation.initiatorVault,
@@ -599,9 +573,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 				operationId: pendingOperationSlotId,
 				targetVault: stagedOperation.targetVault,
 			}
-		}
 	}
-
 	if (pendingReportId > 0n) {
 		const [extraData, reportMeta] = await readRequiredMulticall(client, [
 			{
@@ -617,13 +589,11 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 				args: [pendingReportId],
 			},
 		])
-
 		callbackStateHash = extraData[0]
 		exactToken1Report = reportMeta[0]
 		token1 = reportMeta[4]
 		token2 = reportMeta[6]
 	}
-
 	return {
 		callbackStateHash,
 		exactToken1Report,
@@ -641,7 +611,6 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		token2,
 	}
 }
-
 function resolveOracleQueueOperation(operation: bigint | number): OracleQueueOperation {
 	switch (Number(operation)) {
 		case 0:
@@ -654,7 +623,6 @@ function resolveOracleQueueOperation(operation: bigint | number): OracleQueueOpe
 			throw new Error(`Unknown oracle operation: ${operation}`)
 	}
 }
-
 export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('./types/contracts.js').OpenOracleReportDetails> {
 	const [[meta, status, extra], block] = await Promise.all([
 		readRequiredMulticall(client, [
@@ -710,7 +678,6 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 			args: [],
 		},
 	])
-
 	return {
 		reportId,
 		openOracleAddress,
@@ -753,11 +720,9 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		token2Symbol: String(token2Symbol),
 	}
 }
-
 export async function loadOpenOracleReportSummaries(client: ReadClient, pageIndex: number, pageSize: number): Promise<OpenOracleReportSummaryPage> {
 	if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('Page index must be a non-negative integer')
 	if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error('Page size must be a positive integer')
-
 	const openOracleAddress = getOpenOracleAddress()
 	const nextReportId = await client.readContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
@@ -766,8 +731,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		args: [],
 	})
 	const reportCount = nextReportId > 0n ? nextReportId - 1n : 0n
-
-	if (reportCount === 0n) {
+	if (reportCount === 0n)
 		return {
 			nextReportId,
 			pageIndex,
@@ -775,13 +739,10 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			reportCount,
 			reports: [],
 		}
-	}
-
 	const pageSizeBigInt = BigInt(pageSize)
 	const pageIndexBigInt = BigInt(pageIndex)
 	const pageEndId = reportCount - pageIndexBigInt * pageSizeBigInt
-
-	if (pageEndId <= 0n) {
+	if (pageEndId <= 0n)
 		return {
 			nextReportId,
 			pageIndex,
@@ -789,8 +750,6 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			reportCount,
 			reports: [],
 		}
-	}
-
 	const pageStartId = pageEndId > pageSizeBigInt ? pageEndId - pageSizeBigInt + 1n : 1n
 	const reportIds: bigint[] = []
 	for (let reportId = pageEndId; reportId >= pageStartId; reportId--) {
@@ -825,7 +784,13 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		if (meta[6] !== zeroAddress) tokenAddresses.add(meta[6])
 	}
 	const uniqueTokenAddresses = [...tokenAddresses]
-	const tokenMetadata = new Map<Address, { decimals: number; symbol: string }>()
+	const tokenMetadata = new Map<
+		Address,
+		{
+			decimals: number
+			symbol: string
+		}
+	>()
 	if (uniqueTokenAddresses.length > 0) {
 		const tokenDecimals = await readRequiredMulticall(
 			client,
@@ -855,7 +820,6 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			})
 		}
 	}
-
 	const reports = reportIds.map((reportId, index) => {
 		const meta = metas[index]
 		const status = statuses[index]
@@ -882,7 +846,6 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			token2Symbol: token2Metadata.symbol,
 		} satisfies OpenOracleReportSummary
 	})
-
 	return {
 		nextReportId,
 		pageIndex,
@@ -891,7 +854,6 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		reports,
 	}
 }
-
 export async function createOpenOracleReportInstance(
 	client: WriteClient,
 	parameters: {
@@ -909,17 +871,13 @@ export async function createOpenOracleReportInstance(
 	},
 ) {
 	const assertSafeInteger = (value: number, label: string) => {
-		if (!Number.isSafeInteger(value)) {
-			throw new Error(`${label} exceeds the maximum safe integer range`)
-		}
+		if (!Number.isSafeInteger(value)) throw new Error(`${label} exceeds the maximum safe integer range`)
 	}
-
 	assertSafeInteger(parameters.disputeDelay, 'Dispute delay')
 	assertSafeInteger(parameters.feePercentage, 'Fee percentage')
 	assertSafeInteger(parameters.multiplier, 'Multiplier')
 	assertSafeInteger(parameters.protocolFee, 'Protocol fee')
 	assertSafeInteger(parameters.settlementTime, 'Settlement time')
-
 	const callParams = {
 		address: getOpenOracleAddress(),
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
@@ -928,13 +886,11 @@ export async function createOpenOracleReportInstance(
 		value: parameters.ethValue,
 	}
 	const hash = await writeContractAndWait(client, () => callParams)
-
 	return {
 		action: 'createReportInstance',
 		hash,
 	} satisfies OpenOracleActionResult
 }
-
 async function loadBufferedOracleRequestEthCost(client: WriteClient, managerAddress: Address) {
 	const requestPriceEthCost = await client.readContract({
 		address: managerAddress,
@@ -942,10 +898,8 @@ async function loadBufferedOracleRequestEthCost(client: WriteClient, managerAddr
 		functionName: 'getRequestPriceEthCost',
 		args: [],
 	})
-
 	return addOpenOracleBountyBuffer(requestPriceEthCost)
 }
-
 export async function requestOraclePrice(client: WriteClient, managerAddress: Address) {
 	const callParams = {
 		address: managerAddress,
@@ -960,7 +914,6 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 		hash,
 	} satisfies OpenOracleActionResult
 }
-
 export async function executeOracleManagerStagedOperation(client: WriteClient, managerAddress: Address, operationId: bigint) {
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => ({
 		address: managerAddress,
@@ -975,7 +928,6 @@ export async function executeOracleManagerStagedOperation(client: WriteClient, m
 		...(stagedExecution === undefined ? {} : { stagedExecution }),
 	} satisfies OpenOracleActionResult
 }
-
 export async function wrapWeth(client: WriteClient, amount: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: getWethAddress(),
@@ -996,7 +948,6 @@ export async function wrapWeth(client: WriteClient, amount: bigint) {
 		hash,
 	} satisfies OpenOracleActionResult
 }
-
 export async function submitInitialOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: Hex) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
@@ -1009,13 +960,12 @@ export async function submitInitialOracleReport(client: WriteClient, openOracleA
 		hash,
 	} satisfies OpenOracleActionResult
 }
-
 export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, reportId: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
-		gas: 5_000_000n,
+		gas: 5000000n,
 		args: [reportId],
 	}))
 	return {
@@ -1023,7 +973,6 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 		hash,
 	} satisfies OpenOracleActionResult
 }
-
 export async function disputeOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, amt2Expected: bigint, stateHash: Hex) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
@@ -1036,7 +985,6 @@ export async function disputeOracleReport(client: WriteClient, openOracleAddress
 		hash,
 	} satisfies OpenOracleActionResult
 }
-
 export async function loadForkAuctionDetails(client: ReadClient, securityPoolAddress: Address): Promise<ForkAuctionDetails> {
 	const [[questionId, parentSecurityPoolAddress, universeId, systemStateValue, truthAuctionAddress, completeSetCollateralAmount, forkData, questionOutcome], block] = await Promise.all([
 		readRequiredMulticall(client, [
@@ -1110,7 +1058,6 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 					])
 				)[0]
 	const migrationEndsAt = truthAuctionStartedAt > 0n || universeForkTime === undefined ? undefined : universeForkTime + MIGRATION_TIME_LENGTH
-
 	let truthAuction: TruthAuctionMetrics | undefined
 	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
 		const [computeClearingResult, ethRaiseCap, ethRaised, finalized, maxRepBeingSold, minBidSize, totalRepPurchased, underfunded] = await readRequiredMulticall(client, [
@@ -1174,7 +1121,6 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 						address: truthAuctionAddress,
 						args: [clearingTick],
 					})
-
 		truthAuction = {
 			accumulatedEth,
 			auctionEndsAt: truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH,
@@ -1188,12 +1134,16 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			maxRepBeingSold,
 			minBidSize,
 			repPurchasableAtBid: clearingPrice === undefined || clearingPrice === 0n ? undefined : (ethRaiseCap * 10n ** 18n) / clearingPrice,
-			timeRemaining: finalized ? 0n : block.timestamp >= truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH ? 0n : truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH - block.timestamp,
+			timeRemaining: (() => {
+				if (finalized) return 0n
+				if (block.timestamp >= truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH) return 0n
+
+				return truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH - block.timestamp
+			})(),
 			totalRepPurchased,
 			underfunded,
 		}
 	}
-
 	return {
 		auctionedSecurityBondAllowance,
 		claimingAvailable: systemState === 'operational' && truthAuctionAddress !== zeroAddress,
@@ -1215,7 +1165,6 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		universeId,
 	}
 }
-
 async function executeForkAuctionAction(client: WriteClient, action: ForkAuctionAction, securityPoolAddress: Address, universeId: bigint, request: () => Promise<Hash>) {
 	const hash = await request()
 	await client.waitForTransactionReceipt({ hash })
@@ -1226,7 +1175,6 @@ async function executeForkAuctionAction(client: WriteClient, action: ForkAuction
 		universeId,
 	} satisfies ForkAuctionActionResult
 }
-
 export async function forkZoltarWithOwnEscalation(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
 		client,
@@ -1242,7 +1190,6 @@ export async function forkZoltarWithOwnEscalation(client: WriteClient, securityP
 			})),
 	)
 }
-
 export async function initiateSecurityPoolFork(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
 		client,
@@ -1258,7 +1205,6 @@ export async function initiateSecurityPoolFork(client: WriteClient, securityPool
 			})),
 	)
 }
-
 export async function createChildUniverseFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
 	return await executeForkAuctionAction(
 		client,
@@ -1274,7 +1220,6 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 			})),
 	)
 }
-
 export async function createZoltarChildUniverse(client: WriteClient, universeId: bigint, outcomeIndex: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: getDeploymentStep('zoltar').address,
@@ -1289,7 +1234,6 @@ export async function createZoltarChildUniverse(client: WriteClient, universeId:
 		universeId,
 	} satisfies ZoltarChildUniverseActionResult
 }
-
 async function executeZoltarMigrationAction<TCallParams extends ContractRevertReasonParams>(client: WriteClient, action: ZoltarMigrationActionResult['action'], universeId: bigint, amount: bigint, outcomeIndexes: bigint[], callParams: TCallParams) {
 	const hash = await writeContractAndWait(client, () => callParams)
 	return {
@@ -1300,7 +1244,6 @@ async function executeZoltarMigrationAction<TCallParams extends ContractRevertRe
 		universeId,
 	} satisfies ZoltarMigrationActionResult
 }
-
 export async function prepareRepForMigrationInZoltar(client: WriteClient, universeId: bigint, amount: bigint) {
 	const callParams = {
 		address: getDeploymentStep('zoltar').address,
@@ -1310,7 +1253,6 @@ export async function prepareRepForMigrationInZoltar(client: WriteClient, univer
 	}
 	return await executeZoltarMigrationAction(client, 'addRepToMigrationBalance', universeId, amount, [], callParams)
 }
-
 export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) {
 	const callParams = {
 		address: getDeploymentStep('zoltar').address,
@@ -1320,7 +1262,6 @@ export async function migrateInternalRepInZoltar(client: WriteClient, universeId
 	}
 	return await executeZoltarMigrationAction(client, 'splitMigrationRep', universeId, amount, outcomeIndexes, callParams)
 }
-
 export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
 	return await executeForkAuctionAction(
 		client,
@@ -1336,7 +1277,6 @@ export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, se
 			})),
 	)
 }
-
 export async function migrateSecurityVault(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
 	return await executeForkAuctionAction(
 		client,
@@ -1352,7 +1292,6 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 			})),
 	)
 }
-
 export async function migrateEscalationDeposits(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
 	return await executeForkAuctionAction(
 		client,
@@ -1368,7 +1307,6 @@ export async function migrateEscalationDeposits(client: WriteClient, securityPoo
 			})),
 	)
 }
-
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
 		client,
@@ -1384,7 +1322,6 @@ export async function startTruthAuctionForSecurityPool(client: WriteClient, secu
 			})),
 	)
 }
-
 export async function submitTruthAuctionBid(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, amount: bigint) {
 	return await executeForkAuctionAction(client, 'submitBid', securityPoolAddress, universeId, async () => {
 		const callParams = {
@@ -1397,7 +1334,6 @@ export async function submitTruthAuctionBid(client: WriteClient, securityPoolAdd
 		return await writeContractAndWait(client, () => callParams)
 	})
 }
-
 export async function refundTruthAuctionBid(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, bidIndex: bigint) {
 	return await executeForkAuctionAction(
 		client,
@@ -1413,7 +1349,6 @@ export async function refundTruthAuctionBid(client: WriteClient, securityPoolAdd
 			})),
 	)
 }
-
 export async function finalizeSecurityPoolTruthAuction(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
 		client,
@@ -1429,7 +1364,6 @@ export async function finalizeSecurityPoolTruthAuction(client: WriteClient, secu
 			})),
 	)
 }
-
 export async function claimSecurityPoolAuctionProceeds(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, tick: bigint, bidIndex: bigint) {
 	return await executeForkAuctionAction(
 		client,
@@ -1445,7 +1379,6 @@ export async function claimSecurityPoolAuctionProceeds(client: WriteClient, secu
 			})),
 	)
 }
-
 export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSecurityPool[]> {
 	const deploymentCount = await client.readContract({
 		address: getInfraContractAddresses().securityPoolFactory,
@@ -1453,7 +1386,6 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 		functionName: 'securityPoolDeploymentCount',
 		args: [],
 	})
-
 	const deployments: readonly SecurityPoolDeploymentQueryResult[] =
 		deploymentCount === 0n
 			? []
@@ -1463,7 +1395,6 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 					functionName: 'securityPoolDeploymentsRange',
 					args: [0n, deploymentCount],
 				})
-
 	return await Promise.all(
 		deployments.map(async deployment => {
 			const { parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
@@ -1528,7 +1459,6 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 			])
 			const forkDataTuple: ForkDataTuple = forkData
 			const [, , truthAuctionStartedAt, migratedRep, , forkOwnSecurityPool, forkOutcomeIndex] = forkDataTuple
-
 			const { vaultCount, vaults } = await loadSecurityPoolVaultSummaries(client, securityPoolAddress)
 			const totalRepDeposit = vaults.reduce((sum, vault) => sum + vault.repDepositShare, 0n)
 			return {
@@ -1559,7 +1489,6 @@ export async function loadAllSecurityPools(client: ReadClient): Promise<ListedSe
 		}),
 	)
 }
-
 export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {
 	if (accountAddress === undefined) {
 		const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
@@ -1569,7 +1498,6 @@ export async function loadTradingDetails(client: ReadClient, securityPoolAddress
 			universeId,
 		}
 	}
-
 	const [universeId, shareTokenAddress] = await readRequiredMulticall(client, [
 		{
 			address: securityPoolAddress,
@@ -1584,29 +1512,24 @@ export async function loadTradingDetails(client: ReadClient, securityPoolAddress
 			args: [],
 		},
 	])
-
 	const shareBalancesResult = await client.readContract({
 		address: shareTokenAddress,
 		abi: peripherals_tokens_ShareToken_ShareToken.abi,
 		functionName: 'balanceOfShares',
 		args: [universeId, accountAddress],
 	})
-
 	if (!isBigintTriple(shareBalancesResult)) throw new Error('Unexpected trading share balances response')
-
 	const shareBalances: TradingShareBalances = {
 		invalid: shareBalancesResult[0],
 		no: shareBalancesResult[2],
 		yes: shareBalancesResult[1],
 	}
-
 	return {
 		maxRedeemableCompleteSets: getMinBigintValue([shareBalances.invalid, shareBalances.yes, shareBalances.no]),
 		shareBalances,
 		universeId,
 	}
 }
-
 export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint) {
 	const callParams = {
 		address: managerAddress,
@@ -1622,7 +1545,6 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 		...(stagedExecution === undefined ? {} : { stagedExecution }),
 	}
 }
-
 function getOracleOperationType(operation: OracleQueueOperation) {
 	switch (operation) {
 		case 'liquidation':
@@ -1635,7 +1557,6 @@ function getOracleOperationType(operation: OracleQueueOperation) {
 			return assertNever(operation)
 	}
 }
-
 function getShareMigrationOutcomeValue(outcome: ReportingOutcomeKey) {
 	switch (outcome) {
 		case 'invalid':
@@ -1648,12 +1569,10 @@ function getShareMigrationOutcomeValue(outcome: ReportingOutcomeKey) {
 			return assertNever(outcome)
 	}
 }
-
 function getShareTokenId(universeId: bigint, outcome: ReportingOutcomeKey) {
 	const universeMask = (1n << 248n) - 1n
 	return ((universeId & universeMask) << 8n) | (getShareMigrationOutcomeValue(outcome) & 255n)
 }
-
 export async function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint) {
 	const callParams = {
 		address: managerAddress,
@@ -1670,7 +1589,6 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 		...(stagedExecution === undefined ? {} : { stagedExecution }),
 	} satisfies OpenOracleActionResult
 }
-
 export async function redeemSharesInSecurityPool(client: WriteClient, securityPoolAddress: Address) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const hash = await writeContractAndWait(client, () => ({
@@ -1686,7 +1604,6 @@ export async function redeemSharesInSecurityPool(client: WriteClient, securityPo
 		universeId,
 	} satisfies TradingActionResult
 }
-
 export async function migrateSharesFromUniverse<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: ReadWriteContractClient<TReceipt>, securityPoolAddress: Address, shareOutcome: ReportingOutcomeKey, targetOutcomeIndexes: bigint[]) {
 	const sortedTargetOutcomeIndexes = sortBigIntsAscending(targetOutcomeIndexes)
 	const [universeId, shareTokenAddress] = await Promise.all([
@@ -1713,7 +1630,6 @@ export async function migrateSharesFromUniverse<TReceipt extends Pick<Transactio
 		universeId,
 	} satisfies TradingActionResult
 }
-
 export async function forkUniverseDirectly(client: WriteClient, universeId: bigint, questionId: bigint, securityPoolAddress: Address) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: getInfraContractAddresses().zoltar,
@@ -1728,7 +1644,6 @@ export async function forkUniverseDirectly(client: WriteClient, universeId: bigi
 		universeId,
 	} satisfies ForkAuctionActionResult
 }
-
 export async function forkZoltarUniverse(client: WriteClient, universeId: bigint, questionId: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: getInfraContractAddresses().zoltar,
@@ -1743,7 +1658,6 @@ export async function forkZoltarUniverse(client: WriteClient, universeId: bigint
 		universeId,
 	} satisfies ZoltarForkActionResult
 }
-
 export async function withdrawTruthAuctionBids(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, withdrawFor: Address, tick: bigint, bidIndex: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: truthAuctionAddress,
@@ -1758,7 +1672,6 @@ export async function withdrawTruthAuctionBids(client: WriteClient, securityPool
 		universeId,
 	} satisfies ForkAuctionActionResult
 }
-
 export async function createCompleteSetInSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const callParams = {
@@ -1776,7 +1689,6 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 		universeId,
 	} satisfies TradingActionResult
 }
-
 export async function redeemCompleteSetInSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const hash = await writeContractAndWait(client, () => ({
@@ -1792,7 +1704,6 @@ export async function redeemCompleteSetInSecurityPool(client: WriteClient, secur
 		universeId,
 	} satisfies TradingActionResult
 }
-
 export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amount: bigint) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const hash = await writeContractAndWait(client, () => ({
@@ -1809,7 +1720,6 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 		universeId,
 	} satisfies ReportingActionResult
 }
-
 export async function withdrawEscalationFromSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const hash = await writeContractAndWait(client, () => ({

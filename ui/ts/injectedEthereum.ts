@@ -14,8 +14,6 @@ declare global {
 }
 
 export function getInjectedEthereum(): InjectedEthereum | undefined {
-	if (typeof window === 'undefined') {
-		return undefined
-	}
+	if (typeof window === 'undefined') return undefined
 	return window.ethereum
 }

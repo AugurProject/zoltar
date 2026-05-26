@@ -176,6 +176,4 @@ export async function ensureContractArtifactsAreCurrent(): Promise<void> {
 const currentScriptPath = url.fileURLToPath(import.meta.url)
 const invokedScriptPath = process.argv[1]
 
-if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
-	await ensureContractArtifactsAreCurrent()
-}
+if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) await ensureContractArtifactsAreCurrent()

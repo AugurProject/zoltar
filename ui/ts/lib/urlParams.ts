@@ -127,9 +127,7 @@ export function writeOpenOracleViewQueryParam(search: string, view: string | und
 		params.set(OPEN_ORACLE_VIEW_QUERY_PARAM, view.trim())
 	}
 
-	if (view !== 'selected-report') {
-		params.delete(OPEN_ORACLE_REPORT_ID_QUERY_PARAM)
-	}
+	if (view !== 'selected-report') params.delete(OPEN_ORACLE_REPORT_ID_QUERY_PARAM)
 
 	const nextSearch = params.toString()
 	return nextSearch === '' ? '' : `?${nextSearch}`

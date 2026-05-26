@@ -488,9 +488,7 @@ void describe('OpenOracleSection', () => {
 		})
 
 		const settleButton = findButton(section, 'Settle Report')
-		if (settleButton === undefined) {
-			throw new Error('Expected settle action button to render')
-		}
+		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 
 		expect(getButtonDisabled(settleButton)).toBe(false)
 		expect(findButton(section, 'Dispute & Swap')).toBeUndefined()
@@ -511,9 +509,7 @@ void describe('OpenOracleSection', () => {
 		})
 
 		const disputeButton = findButton(section, 'Dispute & Swap')
-		if (disputeButton === undefined) {
-			throw new Error('Expected dispute action button to render')
-		}
+		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(findButton(section, 'Settle Report')).toBeUndefined()
@@ -564,9 +560,7 @@ void describe('OpenOracleSection', () => {
 		expect(getSectionTitles(section)).toContain('WETH Approval')
 		expect(getTextContent(section)).toContain('REPv2 approval required')
 		const disputeButton = findButton(section, 'Dispute & Swap')
-		if (disputeButton === undefined) {
-			throw new Error('Expected dispute action button to render')
-		}
+		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 	})
 
@@ -610,9 +604,7 @@ void describe('OpenOracleSection', () => {
 
 		expect(getTextContent(section)).toContain('Insufficient WETH balance for this dispute. Need 2, wallet has 1.')
 		const disputeButton = findButton(section, 'Dispute & Swap')
-		if (disputeButton === undefined) {
-			throw new Error('Expected dispute action button to render')
-		}
+		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabledReason(disputeButton)).toBe('Insufficient WETH balance for this dispute. Need 2, wallet has 1.')
 	})
 })

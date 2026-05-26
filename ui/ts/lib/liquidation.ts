@@ -97,9 +97,7 @@ export function getLiquidationFailureReason({
 	})
 	if (simulation.debtToMove <= 0n) return 'This vault has no debt available to move.'
 	if (isVaultLiquidatable(repPerEthPrice, simulation.callerAfter.securityBondAllowance, simulation.callerAfter.repDepositShare, securityMultiplier)) {
-		if (isVaultLiquidatable(repPerEthPrice, simulation.callerBefore.securityBondAllowance, simulation.callerBefore.repDepositShare, securityMultiplier)) {
-			return 'The caller vault would remain liquidatable after this liquidation.'
-		}
+		if (isVaultLiquidatable(repPerEthPrice, simulation.callerBefore.securityBondAllowance, simulation.callerBefore.repDepositShare, securityMultiplier)) return 'The caller vault would remain liquidatable after this liquidation.'
 		return 'The caller vault would become liquidatable after this liquidation.'
 	}
 	if (simulation.targetAfter.repDepositShare !== 0n && simulation.targetAfter.repDepositShare < MIN_REP_DEPOSIT) return 'The target vault would fall below the minimum REP collateral after liquidation.'

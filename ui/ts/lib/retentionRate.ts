@@ -35,9 +35,7 @@ export function parseOpenInterestFeePerYearPercentInput(value: string, label: st
 
 	const normalized = trimmed.endsWith('%') ? trimmed.slice(0, -1).trim() : trimmed
 	const annualFeePercent = Number(normalized)
-	if (!Number.isFinite(annualFeePercent) || annualFeePercent < 0 || annualFeePercent > 100) {
-		throw new Error(`${label} must be between 0 and 100`)
-	}
+	if (!Number.isFinite(annualFeePercent) || annualFeePercent < 0 || annualFeePercent > 100) throw new Error(`${label} must be between 0 and 100`)
 
 	const annualRetention = 1 - annualFeePercent / 100
 	if (annualRetention <= 0) return 0n

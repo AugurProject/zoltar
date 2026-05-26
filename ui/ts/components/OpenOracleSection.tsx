@@ -47,24 +47,18 @@ import { getReportPresentation } from '../lib/userCopy.js'
 import type { OpenOracleFormState } from '../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
 import type { OpenOracleSectionProps, WorkflowOutcomePresentation } from '../types/components.js'
-
 const BROWSE_PAGE_SIZE = 10
 type SelectedReportModal = 'dispute' | 'initial-report' | 'settle' | undefined
 type BrowseStatusFilter = 'all' | 'Awaiting Initial Report' | 'Pending' | 'Disputed' | 'Settled'
-
 function getEffectiveOpenOracleReportDetails(report: OpenOracleReportDetails | undefined, currentTimestamp: bigint | undefined, currentBlockNumber: bigint | undefined) {
 	if (report === undefined) return undefined
-	if ((currentTimestamp === undefined || report.currentTime === currentTimestamp) && (currentBlockNumber === undefined || report.currentBlockNumber === currentBlockNumber)) {
-		return report
-	}
-
+	if ((currentTimestamp === undefined || report.currentTime === currentTimestamp) && (currentBlockNumber === undefined || report.currentBlockNumber === currentBlockNumber)) return report
 	return {
 		...report,
 		currentBlockNumber: currentBlockNumber ?? report.currentBlockNumber,
 		currentTime: currentTimestamp ?? report.currentTime,
 	}
 }
-
 function resolveBrowseStatusFilter(value: string): BrowseStatusFilter {
 	switch (value) {
 		case 'Awaiting Initial Report':
@@ -77,7 +71,6 @@ function resolveBrowseStatusFilter(value: string): BrowseStatusFilter {
 			return 'all'
 	}
 }
-
 function renderReportField(label: string, value: ComponentChildren) {
 	return (
 		<MetricField key={label} label={label}>
@@ -85,20 +78,21 @@ function renderReportField(label: string, value: ComponentChildren) {
 		</MetricField>
 	)
 }
-
-function renderReportSection(title: string, fields: Array<{ label: string; value: ComponentChildren }>) {
+function renderReportSection(
+	title: string,
+	fields: Array<{
+		label: string
+		value: ComponentChildren
+	}>,
+) {
 	return (
 		<SectionBlock headingLevel={4} title={title} variant='embedded'>
 			<DataGrid className='question-summary-grid'>{fields.map(field => renderReportField(field.label, field.value))}</DataGrid>
 		</SectionBlock>
 	)
 }
-
 function renderInitialPriceSourceLabel(priceSource: string, priceSourceUrl: string | undefined) {
-	if (priceSourceUrl === undefined) {
-		return <strong>{priceSource}</strong>
-	}
-
+	if (priceSourceUrl === undefined) return <strong>{priceSource}</strong>
 	return (
 		<strong>
 			<a href={priceSourceUrl} target='_blank' rel='noreferrer'>
@@ -107,7 +101,6 @@ function renderInitialPriceSourceLabel(priceSource: string, priceSourceUrl: stri
 		</strong>
 	)
 }
-
 function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport: (reportId: bigint) => void) {
 	const status = getOpenOracleReportStatus(report)
 	const statusTone = getOpenOracleReportStatusTone(status)
@@ -142,7 +135,6 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 		</EntityCard>
 	)
 }
-
 export function renderSelectedReportActionSection({
 	actionMode,
 	disputeSubmission,
@@ -239,7 +231,12 @@ export function renderSelectedReportActionSection({
 								allowanceError={openOracleInitialReportState.token2Approval.error}
 								allowanceLoading={openOracleInitialReportState.token2Approval.loading}
 								approvedAmount={openOracleInitialReportState.token2Approval.value}
-								guardMessage={!isConnected ? 'Connect a wallet before approving tokens.' : initialReportSubmission.amount2 === undefined ? `Enter a valid ${token1Symbol} / ${token2Symbol} price before approving ${token2Symbol}.` : undefined}
+								guardMessage={(() => {
+									if (!isConnected) return 'Connect a wallet before approving tokens.'
+									if (initialReportSubmission.amount2 === undefined) return `Enter a valid ${token1Symbol} / ${token2Symbol} price before approving ${token2Symbol}.`
+
+									return undefined
+								})()}
 								onApprove={amount => onApproveToken2(amount)}
 								pending={openOracleActiveAction === 'approveToken2'}
 								pendingLabel={`Approving ${token2Symbol}...`}
@@ -267,7 +264,12 @@ export function renderSelectedReportActionSection({
 									tone='secondary'
 									availability={{
 										disabled: !isConnected || !initialReportSubmission.canWrapRequiredWeth,
-										reason: !isConnected ? 'Connect a wallet before wrapping ETH.' : initialReportSubmission.wrapRequiredWethMessage?.kind === 'visible' ? initialReportSubmission.wrapRequiredWethMessage.message : undefined,
+										reason: (() => {
+											if (!isConnected) return 'Connect a wallet before wrapping ETH.'
+											if (initialReportSubmission.wrapRequiredWethMessage?.kind === 'visible') return initialReportSubmission.wrapRequiredWethMessage.message
+
+											return undefined
+										})(),
 									}}
 								/>
 							)}
@@ -278,7 +280,12 @@ export function renderSelectedReportActionSection({
 								pending={openOracleActiveAction === 'submitInitialReport'}
 								availability={{
 									disabled: !isConnected || !initialReportSubmission.canSubmit,
-									reason: !isConnected ? 'Connect a wallet before submitting the initial report.' : initialReportSubmission.blockMessage?.kind === 'visible' ? initialReportSubmission.blockMessage.message : undefined,
+									reason: (() => {
+										if (!isConnected) return 'Connect a wallet before submitting the initial report.'
+										if (initialReportSubmission.blockMessage?.kind === 'visible') return initialReportSubmission.blockMessage.message
+
+										return undefined
+									})(),
 								}}
 							/>
 						</div>
@@ -286,9 +293,28 @@ export function renderSelectedReportActionSection({
 				</SectionBlock>
 			)
 		case 'dispute': {
-			const disputeDisabledMessage = !isConnected ? 'Connect a wallet before disputing reports.' : openOracleForm.reportId.trim() === '' ? 'Load a report first.' : disputeAvailability.message
-			const token1ApprovalGuardMessage = !isConnected ? 'Connect a wallet before approving tokens.' : openOracleReportDetails === undefined ? 'Load a report first.' : disputeSubmission?.token1ContributionAmount === undefined ? `Enter valid dispute amounts before approving ${token1Symbol}.` : undefined
-			const token2ApprovalGuardMessage = !isConnected ? 'Connect a wallet before approving tokens.' : openOracleReportDetails === undefined ? 'Load a report first.' : disputeSubmission?.token2ContributionAmount === undefined ? `Enter valid dispute amounts before approving ${token2Symbol}.` : undefined
+			const disputeDisabledMessage = (() => {
+				if (!isConnected) return 'Connect a wallet before disputing reports.'
+				if (openOracleForm.reportId.trim() === '') return 'Load a report first.'
+
+				return disputeAvailability.message
+			})()
+			const token1ApprovalGuardMessage = !isConnected
+				? 'Connect a wallet before approving tokens.'
+				: (() => {
+						if (openOracleReportDetails === undefined) return 'Load a report first.'
+						if (disputeSubmission?.token1ContributionAmount === undefined) return `Enter valid dispute amounts before approving ${token1Symbol}.`
+
+						return undefined
+					})()
+			const token2ApprovalGuardMessage = !isConnected
+				? 'Connect a wallet before approving tokens.'
+				: (() => {
+						if (openOracleReportDetails === undefined) return 'Load a report first.'
+						if (disputeSubmission?.token2ContributionAmount === undefined) return `Enter valid dispute amounts before approving ${token2Symbol}.`
+
+						return undefined
+					})()
 			return (
 				<SectionBlock headingLevel={4} title='Dispute Report' variant='embedded'>
 					<div className='form-grid'>
@@ -365,7 +391,12 @@ export function renderSelectedReportActionSection({
 			)
 		}
 		case 'settle': {
-			const settleDisabledMessage = !isConnected ? 'Connect a wallet before settling reports.' : openOracleForm.reportId.trim() === '' ? 'Load a report first.' : settleAvailability.message
+			const settleDisabledMessage = (() => {
+				if (!isConnected) return 'Connect a wallet before settling reports.'
+				if (openOracleForm.reportId.trim() === '') return 'Load a report first.'
+
+				return settleAvailability.message
+			})()
 			return (
 				<SectionBlock headingLevel={4} title='Settle Report' variant='embedded'>
 					<div className='form-grid'>
@@ -402,7 +433,6 @@ export function renderSelectedReportActionSection({
 			)
 	}
 }
-
 function renderReportDetailsCard(
 	openOracleReportDetails: OpenOracleReportDetails | undefined,
 	openOracleForm: OpenOracleFormState,
@@ -433,17 +463,26 @@ function renderReportDetailsCard(
 				onInput={reportId => onOpenOracleFormChange({ reportId })}
 				action={
 					<button className='secondary' onClick={() => onLoadOracleReport(openOracleForm.reportId)} disabled={loadingOracleReport}>
-						{loadingOracleReport ? <LoadingText>Loading...</LoadingText> : openOracleReportDetails === undefined ? 'Open report' : 'Refresh report'}
+						{(() => {
+							if (loadingOracleReport) return <LoadingText>Loading...</LoadingText>
+							if (openOracleReportDetails === undefined) return 'Open report'
+
+							return 'Refresh report'
+						})()}
 					</button>
 				}
 			/>
 		</div>
 	)
-
 	if (openOracleReportDetails === undefined) {
 		const reportPresentation = getReportPresentation({
 			kind: 'report',
-			state: loadingOracleReport ? 'loading' : openOracleForm.reportId.trim() === '' ? 'unknown' : 'missing',
+			state: (() => {
+				if (loadingOracleReport) return 'loading'
+				if (openOracleForm.reportId.trim() === '') return 'unknown'
+
+				return 'missing'
+			})(),
 		})
 		return (
 			<SectionBlock title='Selected Report'>
@@ -452,7 +491,6 @@ function renderReportDetailsCard(
 			</SectionBlock>
 		)
 	}
-
 	const status = getOpenOracleReportStatus({
 		currentReporter: openOracleReportDetails.currentReporter,
 		disputeOccurred: openOracleReportDetails.disputeOccurred,
@@ -473,15 +511,14 @@ function renderReportDetailsCard(
 	}).map(action =>
 		action.key === 'submit-initial-report'
 			? { ...action, onAction: () => onSelectedReportModalChange('initial-report') }
-			: action.key === 'dispute-report'
-				? { ...action, onAction: () => onSelectedReportModalChange('dispute') }
-				: action.key === 'settle-report'
-					? { ...action, onAction: () => onSelectedReportModalChange('settle') }
-					: action,
+			: (() => {
+					if (action.key === 'dispute-report') return { ...action, onAction: () => onSelectedReportModalChange('dispute') }
+					if (action.key === 'settle-report') return { ...action, onAction: () => onSelectedReportModalChange('settle') }
+
+					return action
+				})(),
 	)
-	if (openOracleInitialReportSubmission === undefined) {
-		return undefined
-	}
+	if (openOracleInitialReportSubmission === undefined) return undefined
 	return (
 		<>
 			<StickyObjectContext
@@ -737,10 +774,8 @@ function renderReportDetailsCard(
 		</>
 	)
 }
-
 function getLatestActionPresentation(action: OpenOracleSectionProps['openOracleResult']) {
 	if (action === undefined) return undefined
-
 	return {
 		dismissKey: action.hash,
 		title: 'Latest Oracle Action',
@@ -750,10 +785,8 @@ function getLatestActionPresentation(action: OpenOracleSectionProps['openOracleR
 		],
 	}
 }
-
 function getOpenOracleOutcomePresentation(action: OpenOracleSectionProps['openOracleResult']): WorkflowOutcomePresentation | undefined {
 	if (action === undefined) return undefined
-
 	switch (action.action) {
 		case 'approveToken1':
 			return {
@@ -805,7 +838,6 @@ function getOpenOracleOutcomePresentation(action: OpenOracleSectionProps['openOr
 				title: 'Open Oracle Game Created',
 			}
 	}
-
 	return undefined
 }
 export function OpenOracleSection({
@@ -858,12 +890,10 @@ export function OpenOracleSection({
 	const effectiveOpenOracleReportDetails = getEffectiveOpenOracleReportDetails(openOracleReportDetails, chainCurrentTimestamp, chainCurrentBlockNumber)
 	const latestOracleAction = getLatestActionPresentation(openOracleResult)
 	const openOracleOutcome = getOpenOracleOutcomePresentation(openOracleResult)
-
 	useEffect(() => {
 		let cancelled = false
 		const shouldLoadBrowse = view === 'browse' || openOracleResult?.action === 'createReportInstance'
 		if (!shouldLoadBrowse) return undefined
-
 		const loadBrowseReports = async () => {
 			await browseLoad.run({
 				isCurrent: () => !cancelled,
@@ -880,13 +910,11 @@ export function OpenOracleSection({
 				},
 			})
 		}
-
 		void loadBrowseReports()
 		return () => {
 			cancelled = true
 		}
 	}, [browsePageIndex, openOracleResult?.action, openOracleResult?.hash, view])
-
 	const loadingBrowse = browseLoad.isLoading.value
 	const normalizedBrowseSearchText = browseSearchText.trim().toLowerCase()
 	const browseReportCount = browsePage?.reportCount ?? 0n
@@ -911,7 +939,6 @@ export function OpenOracleSection({
 		onActiveViewChange('selected-report')
 		await onLoadOracleReport(reportId.toString())
 	}
-
 	return (
 		<div className='route-view-flow'>
 			<WorkflowTransactionStatus latestAction={latestOracleAction} outcome={openOracleOutcome} />
@@ -956,12 +983,13 @@ export function OpenOracleSection({
 						)}
 						{loadingBrowse ? (
 							<StateHint presentation={{ key: 'loading', badgeLabel: 'Loading', badgeTone: 'pending', detail: 'Refreshing report summaries.' }} />
-						) : browsePage === undefined || browsePage.reports.length === 0 ? (
-							<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No Open Oracle games found.' }} />
-						) : filteredBrowseReports.length === 0 ? (
-							<StateHint presentation={{ key: 'empty', badgeLabel: 'No matches', badgeTone: 'muted', detail: 'No reports match the current search and status filters.' }} />
 						) : (
-							<div className='entity-card-list'>{filteredBrowseReports.map(report => renderReportSummaryCard(report, reportId => void openBrowseReport(reportId)))}</div>
+							(() => {
+								if (browsePage === undefined || browsePage.reports.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No Open Oracle games found.' }} />
+								if (filteredBrowseReports.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: 'No matches', badgeTone: 'muted', detail: 'No reports match the current search and status filters.' }} />
+
+								return <div className='entity-card-list'>{filteredBrowseReports.map(report => renderReportSummaryCard(report, reportId => void openBrowseReport(reportId)))}</div>
+							})()
 						)}
 					</SectionBlock>
 				</div>

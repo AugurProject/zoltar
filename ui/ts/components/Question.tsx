@@ -50,21 +50,18 @@ export function getQuestionSummaryFields(question: MarketDetails): QuestionSumma
 		{ kind: 'text', label: 'Outcomes', value: getDisplayedOutcomes(question).join(', ') },
 	]
 
-	if (question.marketType === 'scalar') {
-		fields.push({ kind: 'text', label: 'Ticks', value: question.numTicks.toString() }, { kind: 'text', label: 'Display Range', value: getDisplayRange(question) }, { kind: 'text', label: 'Answer Unit', value: question.answerUnit === '' ? 'None' : question.answerUnit })
-	}
+	if (question.marketType === 'scalar') fields.push({ kind: 'text', label: 'Ticks', value: question.numTicks.toString() }, { kind: 'text', label: 'Display Range', value: getDisplayRange(question) }, { kind: 'text', label: 'Answer Unit', value: question.answerUnit === '' ? 'None' : question.answerUnit })
 
 	return fields
 }
 
 function renderQuestionSummaryField(field: QuestionSummaryField) {
-	if (field.kind === 'timestamp') {
+	if (field.kind === 'timestamp')
 		return (
 			<MetricField key={field.label} label={field.label}>
 				<TimestampValue timestamp={field.value} />
 			</MetricField>
 		)
-	}
 
 	return (
 		<MetricField key={field.label} label={field.label}>
@@ -74,7 +71,7 @@ function renderQuestionSummaryField(field: QuestionSummaryField) {
 }
 
 export function Question({ className = '', loading = false, question, showTitle = true }: QuestionProps) {
-	if (loading || question === undefined) {
+	if (loading || question === undefined)
 		return (
 			<div className={`question-summary ${className}`}>
 				<p className='detail'>
@@ -82,7 +79,6 @@ export function Question({ className = '', loading = false, question, showTitle 
 				</p>
 			</div>
 		)
-	}
 
 	const title = getQuestionTitle(question)
 	const description = getQuestionDescription(question)

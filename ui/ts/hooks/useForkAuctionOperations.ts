@@ -143,9 +143,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 					truthAuction: details.truthAuction,
 					walletEthBalance,
 				})
-				if (bidGuardMessage !== undefined) {
-					throw new Error(bidGuardMessage)
-				}
+				if (bidGuardMessage !== undefined) throw new Error(bidGuardMessage)
 				const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
 				return await submitTruthAuctionBid(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), details.securityPoolAddress, details.universeId, truthAuctionAddress, parseBigIntInput(forkAuctionForm.value.submitBidTick, 'Bid tick'), parseBigIntInput(forkAuctionForm.value.submitBidAmount, 'Bid amount'))
 			},

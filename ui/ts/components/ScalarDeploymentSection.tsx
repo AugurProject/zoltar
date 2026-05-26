@@ -11,7 +11,6 @@ import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../lib/scalarOutcome.js'
 import type { ActionFeedback } from '../types/components.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '../types/contracts.js'
-
 type ScalarDeploymentSectionProps = {
 	accountAddress: Address | undefined
 	childUniverses: ZoltarChildUniverseSummary[]
@@ -23,14 +22,12 @@ type ScalarDeploymentSectionProps = {
 	zoltarChildUniverseError: string | undefined
 	zoltarChildUniversePendingOutcomeIndex: bigint | undefined
 }
-
 export function ScalarDeploymentSection({ accountAddress, childUniverses, hasForked, isMainnet, onCreateChildUniverseForOutcomeIndex, questionDetails, zoltarChildUniverseError, zoltarChildUniverseFeedback, zoltarChildUniversePendingOutcomeIndex }: ScalarDeploymentSectionProps) {
 	const [scalarOutcomeTick, setScalarOutcomeTick] = useState('0')
 	const [scalarOutcomeInvalid, setScalarOutcomeInvalid] = useState(false)
 	const [scalarDeployError, setScalarDeployError] = useState<string | undefined>(undefined)
 	const [deployModalOpen, setDeployModalOpen] = useState(false)
-
-	if (questionDetails === undefined) {
+	if (questionDetails === undefined)
 		return (
 			<WorkflowSubsection title='Child Universes'>
 				<p className='detail'>
@@ -38,8 +35,6 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				</p>
 			</WorkflowSubsection>
 		)
-	}
-
 	const selectedScalarTick = BigInt(scalarOutcomeTick)
 	const clampedSelectedScalarTick = clampScalarTickIndex(selectedScalarTick, questionDetails.numTicks)
 	const clampedScalarOutcomeTick = clampedSelectedScalarTick.toString()
@@ -48,16 +43,17 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const selectedScalarChild = childUniverses.find(child => child.outcomeIndex === selectedScalarOutcomeIndex)
 	const selectedScalarChildExists = selectedScalarChild?.exists === true
 	const canDeployScalarChild = accountAddress !== undefined && isMainnet && hasForked && !selectedScalarChildExists
-	const deployReason =
-		accountAddress === undefined
-			? 'Connect a wallet before deploying a child universe.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before deploying a child universe.'
-				: !hasForked
-					? 'Fork Zoltar before deploying child universes.'
-					: selectedScalarChildExists
-						? 'This child universe is already deployed.'
-						: scalarDeployError
+	const deployReason = (() => {
+		if (accountAddress === undefined) return 'Connect a wallet before deploying a child universe.'
+		if (!isMainnet) return 'Switch to Ethereum mainnet before deploying a child universe.'
+
+		return (() => {
+			if (!hasForked) return 'Fork Zoltar before deploying child universes.'
+			if (selectedScalarChildExists) return 'This child universe is already deployed.'
+
+			return scalarDeployError
+		})()
+	})()
 	const scalarDeployPending = zoltarChildUniversePendingOutcomeIndex === selectedScalarOutcomeIndex
 	const scalarDeployRequirements = [
 		{ key: 'forked', label: 'Universe is forked', resolved: hasForked, ...(hasForked ? {} : { detail: 'Fork Zoltar before deploying child universes.' }) },
@@ -65,13 +61,11 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 		{ key: 'mainnet', label: 'Ethereum mainnet selected', resolved: isMainnet, ...(isMainnet ? {} : { detail: 'Switch to Ethereum mainnet before deploying a child universe.' }) },
 		{ key: 'exists', label: 'Child universe not already deployed', resolved: !selectedScalarChildExists, ...(selectedScalarChildExists ? { detail: 'This child universe is already deployed.' } : {}) },
 	]
-
 	useEffect(() => {
 		const nextTick = clampScalarTickIndex(selectedScalarTick, questionDetails.numTicks).toString()
 		if (nextTick === scalarOutcomeTick) return
 		setScalarOutcomeTick(nextTick)
 	}, [questionDetails.numTicks, scalarOutcomeTick, selectedScalarTick])
-
 	return (
 		<WorkflowSubsection badge={<span className='detail'>Scalar forks can deploy one outcome universe at a time.</span>} title='Child Universes'>
 			<ChildUniversesSection
@@ -84,7 +78,12 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 			<ScalarOutcomePicker
 				action={
 					<TransactionActionButton
-						idleLabel={selectedScalarChildExists ? 'Deployed' : scalarOutcomeInvalid ? 'Create invalid universe' : 'Create child universe'}
+						idleLabel={(() => {
+							if (selectedScalarChildExists) return 'Deployed'
+							if (scalarOutcomeInvalid) return 'Create invalid universe'
+
+							return 'Create child universe'
+						})()}
 						pendingLabel='Opening...'
 						onClick={() => {
 							try {

@@ -26,13 +26,12 @@ export function getApprovedAmountTone(value: bigint | undefined, requiredAmount:
 export function ApprovedAmountValue({ className = '', copyable = true, decimals = 2, loading = false, requiredAmount, suffix = '', units = 18, value }: ApprovedAmountValueProps) {
 	const toneClassName = getApprovedAmountTone(value, requiredAmount)
 
-	if (isApprovalAmountMaxDisplay(value)) {
+	if (isApprovalAmountMaxDisplay(value))
 		return (
 			<span className={['currency-value', 'approval-max', toneClassName === undefined ? '' : `approval-${toneClassName}`, className].filter(Boolean).join(' ')} title='Unlimited approval'>
 				{APPROVAL_MAX_LABEL}
 			</span>
 		)
-	}
 
 	return <CurrencyValue className={[toneClassName === undefined ? '' : `approval-${toneClassName}`, className].filter(Boolean).join(' ')} copyable={copyable} decimals={decimals} loading={loading} suffix={suffix} units={units} value={value} />
 }

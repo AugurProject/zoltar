@@ -99,9 +99,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 			isCurrent,
 			onStart: () => {
 				securityPoolError.value = undefined
-				if (options?.clearExisting === true) {
-					marketDetails.value = undefined
-				}
+				if (options?.clearExisting === true) marketDetails.value = undefined
 			},
 			load: async () => {
 				const questionId = parseQuestionIdInput(marketId)

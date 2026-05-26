@@ -80,13 +80,12 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 		const readClient = createConnectedReadClient()
 		const universeId = zoltarUniverse?.universeId ?? activeUniverseId
 		const childUniverses = (zoltarUniverse?.childUniverses ?? []).filter(child => child.reputationToken !== zeroAddress)
-		if (isCurrent()) {
+		if (isCurrent())
 			zoltarForkApproval.value = {
 				...zoltarForkApproval.value,
 				error: undefined,
 				loading: true,
 			}
-		}
 
 		await forkAccessLoad.track(async () => {
 			const accessResults = (await readOptionalMulticall(readClient, [
@@ -123,9 +122,7 @@ export function useZoltarFork({ accountAddress, activeUniverseId, ensureZoltarUn
 			})) as OptionalReadResult<bigint>[]
 			const [repBalanceResult, approvalResult, preparedRepBalanceResult, ...childBalanceResults] = accessResults
 			if (!isCurrent()) return
-			if (repBalanceResult?.status === 'success') {
-				zoltarForkRepBalance.value = repBalanceResult.result
-			}
+			if (repBalanceResult?.status === 'success') zoltarForkRepBalance.value = repBalanceResult.result
 			if (approvalResult?.status === 'success') {
 				zoltarForkApproval.value = {
 					error: undefined,

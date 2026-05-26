@@ -55,12 +55,11 @@ function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracl
 	const steps = getDeploymentSteps()
 	let maskIndex = 0n
 	const deploymentStatuses = steps.map(step => {
-		if (step.id === 'deploymentStatusOracle') {
+		if (step.id === 'deploymentStatusOracle')
 			return {
 				...step,
 				deployed: deploymentStatusOracleDeployed,
 			}
-		}
 
 		const deployed = (deployedMask & (1n << maskIndex)) !== 0n
 		maskIndex += 1n

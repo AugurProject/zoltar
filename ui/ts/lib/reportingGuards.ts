@@ -37,9 +37,7 @@ export function getReportingReportGuardMessage({
 	if (!viewerVaultExists) return 'Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.'
 	if (actualDepositAmount === undefined) return 'Unable to preview the REP that would be locked for this report.'
 	if (viewerVaultAvailableEscalationRep === undefined) return 'Loading available vault REP.'
-	if (actualDepositAmount > viewerVaultAvailableEscalationRep) {
-		return `Need ${formatCurrencyBalance(actualDepositAmount - viewerVaultAvailableEscalationRep)} more unlocked REP in your vault before reporting.`
-	}
+	if (actualDepositAmount > viewerVaultAvailableEscalationRep) return `Need ${formatCurrencyBalance(actualDepositAmount - viewerVaultAvailableEscalationRep)} more unlocked REP in your vault before reporting.`
 	return undefined
 }
 

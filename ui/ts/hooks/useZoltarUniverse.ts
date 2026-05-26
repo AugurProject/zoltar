@@ -69,9 +69,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		const clearCurrentState = options.clearCurrentState ?? true
 		const isCurrent = nextUniverseLoad()
 		const requestedUniverseId = activeUniverseId
-		if (clearCurrentState) {
-			resetZoltarUniverseState()
-		}
+		if (clearCurrentState) resetZoltarUniverseState()
 		return await universeLoad.run({
 			isCurrent,
 			load: async () => {
@@ -151,9 +149,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 		})
 
 		await Promise.allSettled([countTask, questionsTask])
-		if (loadError !== undefined) {
-			throw loadError
-		}
+		if (loadError !== undefined) throw loadError
 	}
 
 	const createChildUniverse = async (outcomeIndex: bigint) => {
@@ -165,9 +161,8 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 				},
 				'creating a child universe',
 			)
-		) {
+		)
 			return
-		}
 
 		zoltarChildUniverseError.value = undefined
 		zoltarChildUniverseFeedback.value = createPendingActionFeedback('createChildUniverse', 'Deploying child universe')
@@ -178,9 +173,7 @@ export function useZoltarUniverse({ accountAddress, activeUniverseId, autoLoadIn
 			try {
 				onTransactionRequested()
 				const universe = await ensureZoltarUniverse()
-				if (!universe.hasForked) {
-					throw new Error('Zoltar needs to fork before child universes can be deployed')
-				}
+				if (!universe.hasForked) throw new Error('Zoltar needs to fork before child universes can be deployed')
 				const result = await createZoltarChildUniverse(createWalletWriteClient(accountAddress, { onTransactionSubmitted }), universe.universeId, outcomeIndex)
 				resultHash = result.hash
 				zoltarChildUniverseFeedback.value = createSuccessActionFeedback('createChildUniverse', 'Child universe deployed', result.hash)

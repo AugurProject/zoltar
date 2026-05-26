@@ -443,9 +443,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getByText('Open Oracle Price')).not.toBeNull()
 		expect(documentQueries.queryByText('Oracle Expires In')).toBeNull()
 		const selectedPoolContext = document.body.querySelector('.sticky-object-context.static')
-		if (!(selectedPoolContext instanceof HTMLElement)) {
-			throw new Error('Expected a non-sticky selected pool context card')
-		}
+		if (!(selectedPoolContext instanceof HTMLElement)) throw new Error('Expected a non-sticky selected pool context card')
 		const lookupLabel = within(selectedPoolContext).getByText('Security Pool Address')
 		const firstSummaryMetric = within(selectedPoolContext).getByText('Total REP Collateral')
 		const lookupPosition = selectedPoolContext.textContent?.indexOf(lookupLabel.textContent ?? '') ?? -1
@@ -464,9 +462,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expect(documentQueries.getByRole('tab', { name: 'Open Oracle' })).not.toBeNull()
 		expect(documentQueries.getAllByRole('button', { name: 'Claim Fees' }).length).toBeGreaterThan(0)
 		const vaultSummarySection = vaultSummaryHeading.closest('section')
-		if (!(vaultSummarySection instanceof HTMLElement)) {
-			throw new Error('Expected a vault summary section')
-		}
+		if (!(vaultSummarySection instanceof HTMLElement)) throw new Error('Expected a vault summary section')
 		expect(within(vaultSummarySection).queryByText('Approved REP')).toBeNull()
 		expect(documentQueries.queryByText('Enter a deposit amount greater than zero.')).toBeNull()
 		expect(documentQueries.queryByText('Fork Flow')).toBeNull()
@@ -547,9 +543,7 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		const claimFeesButton = documentQueries.getAllByRole('button', { name: 'Claim Fees' })[0]
-		if (!(claimFeesButton instanceof HTMLElement)) {
-			throw new Error('Expected claim fees launcher button')
-		}
+		if (!(claimFeesButton instanceof HTMLElement)) throw new Error('Expected claim fees launcher button')
 
 		await act(() => {
 			fireEvent.click(claimFeesButton)
@@ -1455,9 +1449,7 @@ describe('SecurityPoolWorkflowSection', () => {
 
 		const documentQueries = within(document.body)
 		const depositLauncherButton = documentQueries.getByRole('button', { name: 'Deposit REP' })
-		if (!(depositLauncherButton instanceof HTMLElement)) {
-			throw new Error('Expected deposit launcher button')
-		}
+		if (!(depositLauncherButton instanceof HTMLElement)) throw new Error('Expected deposit launcher button')
 
 		expect(depositLauncherButton.hasAttribute('disabled')).toBe(false)
 
@@ -2043,9 +2035,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		const documentQueries = within(document.body)
 		expect((documentQueries.getByRole('tab', { name: 'Open Oracle' }) as HTMLElement).getAttribute('aria-selected')).toBe('true')
 		const priceOracleSection = documentQueries.getByRole('heading', { name: 'Open Oracle' }).closest('section')
-		if (!(priceOracleSection instanceof HTMLElement)) {
-			throw new Error('Expected the Open Oracle section to render')
-		}
+		if (!(priceOracleSection instanceof HTMLElement)) throw new Error('Expected the Open Oracle section to render')
 		const sectionQueries = within(priceOracleSection)
 		expect(sectionQueries.getByRole('heading', { name: 'Open Oracle' })).not.toBeNull()
 		expect(sectionQueries.getByText('Open Oracle Price')).not.toBeNull()

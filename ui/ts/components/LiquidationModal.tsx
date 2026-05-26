@@ -24,7 +24,6 @@ import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import type { ActionFeedback } from '../types/components.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
-
 type LiquidationModalProps = {
 	accountAddress: Address | undefined
 	closeLiquidationModal: () => void
@@ -54,12 +53,10 @@ type LiquidationModalProps = {
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 	walletEthBalance?: bigint | undefined
 }
-
 function getLiquidationExecutionMode(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
 	if (currentPoolOracleManagerDetails === undefined) return 'refreshing'
 	return currentPoolOracleManagerDetails.isPriceValid ? 'execute' : 'queue'
 }
-
 function getLiquidationModalTitle(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
 	switch (getLiquidationExecutionMode(currentPoolOracleManagerDetails)) {
 		case 'execute':
@@ -70,7 +67,6 @@ function getLiquidationModalTitle(currentPoolOracleManagerDetails: OracleManager
 			return 'Liquidate Vault'
 	}
 }
-
 function getLiquidationButtonLabels(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
 	switch (getLiquidationExecutionMode(currentPoolOracleManagerDetails)) {
 		case 'execute':
@@ -81,7 +77,6 @@ function getLiquidationButtonLabels(currentPoolOracleManagerDetails: OracleManag
 			return { idle: 'Liquidate Vault', pending: 'Submitting liquidation...' }
 	}
 }
-
 function renderQueuedLiquidationStatusCard({
 	onViewInStagedOperations,
 	queuedLiquidationOperation,
@@ -94,7 +89,6 @@ function renderQueuedLiquidationStatusCard({
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 }) {
 	if (queuedLiquidationStatus === undefined) return null
-
 	if (queuedLiquidationStatus === 'queued') {
 		if (queuedLiquidationOperation === undefined) return null
 		return (
@@ -117,19 +111,11 @@ function renderQueuedLiquidationStatusCard({
 			/>
 		)
 	}
-
-	if (queuedLiquidationStatus === 'failed') {
+	if (queuedLiquidationStatus === 'failed')
 		return <TransactionStatusCard title='Liquidation Failed' badge={<span className='badge blocked'>Failed</span>} detail={securityPoolOverviewResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the liquidation immediately, but the security pool rejected it.'} />
-	}
-
-	if (queuedLiquidationStatus === 'executed') {
-		return <TransactionStatusCard title='Liquidation Executed' badge={<span className='badge ok'>Executed</span>} detail='A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.' />
-	}
-
-	if (queuedLiquidationStatus === 'missing') {
+	if (queuedLiquidationStatus === 'executed') return <TransactionStatusCard title='Liquidation Executed' badge={<span className='badge ok'>Executed</span>} detail='A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.' />
+	if (queuedLiquidationStatus === 'missing')
 		return <TransactionStatusCard title='Liquidation Submitted' badge={<span className='badge warn'>Check State</span>} detail='The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.' />
-	}
-
 	return <TransactionStatusCard title='Refreshing Liquidation State' badge={<span className='badge muted'>Refreshing</span>} detail='Refreshing the oracle manager to determine whether the liquidation was queued or executed immediately.' />
 }
 export function LiquidationModal({
@@ -166,17 +152,14 @@ export function LiquidationModal({
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const onCloseRef = useRef(closeLiquidationModal)
 	const showLiquidationModal = liquidationModalOpen || securityPoolOverviewActiveAction === 'queueLiquidation' || securityPoolOverviewFeedback !== undefined || securityPoolOverviewResult?.action === 'queueLiquidation' || securityPoolOverviewError !== undefined
-
 	useEffect(() => {
 		onCloseRef.current = closeLiquidationModal
 	}, [closeLiquidationModal])
-
 	useEffect(() => {
 		if (!showLiquidationModal) return
 		if (liquidationManagerAddress === undefined || currentPoolOracleManagerDetails !== undefined || loadingPoolOracleManager) return
 		onLoadPoolOracleManager(liquidationManagerAddress)
 	}, [currentPoolOracleManagerDetails, liquidationManagerAddress, loadingPoolOracleManager, onLoadPoolOracleManager, showLiquidationModal])
-
 	useEffect(() => {
 		if (!showLiquidationModal) return
 		const previouslyFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -205,7 +188,6 @@ export function LiquidationModal({
 			previouslyFocusedElement?.focus()
 		}
 	}, [showLiquidationModal])
-
 	if (!showLiquidationModal) return undefined
 	const currentTimestamp = chainCurrentTimestamp
 	const liquidationAmountValue = (() => {
@@ -234,18 +216,18 @@ export function LiquidationModal({
 					repPerEthPrice: poolOraclePrice,
 					targetVaultSummary,
 				})
-	const directLiquidationReason =
-		liquidationExecutionMode !== 'execute'
-			? undefined
-			: selectedPool?.securityMultiplier === undefined
-				? 'Reload the selected pool before executing liquidation.'
-				: getLiquidationFailureReason({
-						callerVaultSummary,
-						liquidationAmount: liquidationAmountValue,
-						repPerEthPrice: poolOraclePrice,
-						securityMultiplier: selectedPool.securityMultiplier,
-						targetVaultSummary,
-					})
+	const directLiquidationReason = (() => {
+		if (liquidationExecutionMode !== 'execute') return undefined
+		if (selectedPool?.securityMultiplier === undefined) return 'Reload the selected pool before executing liquidation.'
+
+		return getLiquidationFailureReason({
+			callerVaultSummary,
+			liquidationAmount: liquidationAmountValue,
+			repPerEthPrice: poolOraclePrice,
+			securityMultiplier: selectedPool.securityMultiplier,
+			targetVaultSummary,
+		})
+	})()
 	const queueLiquidationEthGuardMessage =
 		liquidationExecutionMode !== 'queue'
 			? undefined
@@ -266,24 +248,26 @@ export function LiquidationModal({
 		directLiquidationReason,
 		queueLiquidationEthGuardMessage,
 	)
-
 	const queuedLiquidationOperation =
 		securityPoolOverviewResult?.action !== 'queueLiquidation' || currentPoolOracleManagerDetails?.pendingOperation?.operation !== 'liquidation' || currentPoolOracleManagerDetails.pendingOperation.targetVault !== liquidationTargetVault ? undefined : currentPoolOracleManagerDetails.pendingOperation
 	const queuedLiquidationStatus =
 		securityPoolOverviewResult?.action !== 'queueLiquidation'
 			? undefined
-			: securityPoolOverviewResult.stagedExecution !== undefined
-				? securityPoolOverviewResult.stagedExecution.success
-					? 'executed'
-					: 'failed'
-				: loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined
-					? 'refreshing'
-					: queuedLiquidationOperation !== undefined
-						? 'queued'
-						: currentPoolOracleManagerDetails.isPriceValid
-							? 'executed'
-							: 'missing'
+			: (() => {
+					if (securityPoolOverviewResult.stagedExecution !== undefined) {
+						if (securityPoolOverviewResult.stagedExecution.success) return 'executed'
 
+						return 'failed'
+					}
+					if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return 'refreshing'
+
+					return (() => {
+						if (queuedLiquidationOperation !== undefined) return 'queued'
+						if (currentPoolOracleManagerDetails.isPriceValid) return 'executed'
+
+						return 'missing'
+					})()
+				})()
 	return (
 		<div className='modal-backdrop' role='presentation' onClick={closeLiquidationModal}>
 			<section ref={dialogRef} className='modal-panel' role='dialog' aria-modal='true' aria-labelledby='liquidation-modal-title' onClick={event => event.stopPropagation()}>

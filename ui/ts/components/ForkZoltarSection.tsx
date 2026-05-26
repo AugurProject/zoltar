@@ -15,7 +15,6 @@ import { deriveTokenApprovalRequirement, type TokenApprovalState } from '../lib/
 import { getReportPresentation, getUniversePresentation, getWalletPresentation } from '../lib/userCopy.js'
 import type { ActionFeedback } from '../types/components.js'
 import type { MarketDetails, ZoltarForkActionResult, ZoltarUniverseSummary } from '../types/contracts.js'
-
 type ForkZoltarSectionProps = {
 	accountAddress: Address | undefined
 	hasLoadedZoltarQuestions: boolean
@@ -36,7 +35,6 @@ type ForkZoltarSectionProps = {
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseState: LoadableValueState
 }
-
 export function ForkZoltarSection({
 	accountAddress,
 	hasLoadedZoltarQuestions,
@@ -83,20 +81,22 @@ export function ForkZoltarSection({
 	const forkGuardMessage =
 		accountAddress === undefined
 			? 'Connect a wallet before forking Zoltar.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before forking Zoltar.'
-				: rootUniverse === undefined
-					? 'Refresh universe data before forking Zoltar.'
-					: hasForked
-						? 'Zoltar is already forked.'
-						: selectedQuestion === undefined
-							? 'Select a valid fork question before forking Zoltar.'
-							: !hasEnoughRep
-								? 'Insufficient REP to meet the fork threshold.'
-								: !hasEnoughApproval
-									? 'Approve enough REP before forking Zoltar.'
-									: undefined
+			: (() => {
+					if (!isMainnet) return 'Switch to Ethereum mainnet before forking Zoltar.'
+					if (rootUniverse === undefined) return 'Refresh universe data before forking Zoltar.'
 
+					return (() => {
+						if (hasForked) return 'Zoltar is already forked.'
+						if (selectedQuestion === undefined) return 'Select a valid fork question before forking Zoltar.'
+
+						return (() => {
+							if (!hasEnoughRep) return 'Insufficient REP to meet the fork threshold.'
+							if (!hasEnoughApproval) return 'Approve enough REP before forking Zoltar.'
+
+							return undefined
+						})()
+					})()
+				})()
 	if (universeMissing) {
 		const presentation = getUniversePresentation(zoltarUniverseState)
 		return (
@@ -106,7 +106,6 @@ export function ForkZoltarSection({
 			</>
 		)
 	}
-
 	return (
 		<>
 			<DataGrid>

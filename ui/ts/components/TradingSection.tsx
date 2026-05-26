@@ -32,12 +32,9 @@ import {
 } from '../lib/trading.js'
 import type { ReadinessAction } from '../types/components.js'
 import type { TradingSectionProps } from '../types/components.js'
-
 type TradingActionModal = 'mint' | 'redeem-complete-sets' | 'migrate-shares' | 'redeem-shares' | undefined
-
 function getTradingOutcomePresentation(action: TradingSectionProps['tradingResult']) {
 	if (action === undefined) return undefined
-
 	switch (action.action) {
 		case 'createCompleteSet':
 			return {
@@ -69,7 +66,6 @@ function getTradingOutcomePresentation(action: TradingSectionProps['tradingResul
 			}
 	}
 }
-
 export function TradingSection({
 	accountState,
 	embedInCard = false,
@@ -158,50 +154,70 @@ export function TradingSection({
 	})
 	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.totalSecurityBondAllowance, selectedPool?.completeSetCollateralAmount)
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, tradingForm.selectedShareOutcome)
-	const mintLauncherBlocker = !hasSelectedPool
-		? 'Load a pool before minting complete sets.'
-		: accountState.address === undefined
-			? 'Connect a wallet before minting complete sets.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before minting complete sets.'
-				: remainingMintCapacity === undefined
-					? 'Loading mint capacity.'
-					: remainingMintCapacity === 0n
-						? hasRepBackedPoolWithNoActiveAllowance(selectedPool?.totalRepDeposit, selectedPool?.totalSecurityBondAllowance)
-							? NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
-							: 'No mint capacity remaining.'
-						: undefined
-	const redeemCompleteSetsLauncherBlocker = !hasSelectedPool
-		? 'Load a pool before redeeming complete sets.'
-		: accountState.address === undefined
-			? 'Connect a wallet before redeeming complete sets.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before redeeming complete sets.'
-				: loadingTradingDetails
-					? 'Loading wallet share balances.'
-					: maxRedeemableCompleteSets === undefined
-						? 'Loading wallet share balances.'
-						: maxRedeemableCompleteSets === 0n
-							? NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
-							: undefined
-	const migrateSharesLauncherBlocker = !hasSelectedPool
-		? 'Load a pool before migrating shares.'
-		: accountState.address === undefined
-			? 'Connect a wallet before migrating shares.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before migrating shares.'
-				: loadingTradingForkUniverse
-					? 'Loading fork target universes.'
-					: tradingForkUniverse === undefined || !tradingForkUniverse.hasForked
-						? 'Refresh the fork target universes.'
-						: loadingTradingDetails
-							? 'Loading wallet share balances.'
-							: selectedOutcomeBalance === undefined
-								? 'Loading wallet share balances.'
-								: selectedOutcomeBalance === 0n
-									? `No ${getReportingOutcomeLabel(tradingForm.selectedShareOutcome)} shares available to migrate.`
-									: undefined
-	const redeemSharesLauncherBlocker = !hasSelectedPool ? 'Load a pool before redeeming shares.' : accountState.address === undefined ? 'Connect a wallet before redeeming shares.' : !isMainnet ? 'Switch to Ethereum mainnet before redeeming shares.' : undefined
+	const mintLauncherBlocker = (() => {
+		if (!hasSelectedPool) return 'Load a pool before minting complete sets.'
+		if (accountState.address === undefined) return 'Connect a wallet before minting complete sets.'
+
+		return (() => {
+			if (!isMainnet) return 'Switch to Ethereum mainnet before minting complete sets.'
+			if (remainingMintCapacity === undefined) return 'Loading mint capacity.'
+
+			return (() => {
+				if (remainingMintCapacity === 0n) {
+					if (hasRepBackedPoolWithNoActiveAllowance(selectedPool?.totalRepDeposit, selectedPool?.totalSecurityBondAllowance)) return NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
+
+					return 'No mint capacity remaining.'
+				}
+
+				return undefined
+			})()
+		})()
+	})()
+	const redeemCompleteSetsLauncherBlocker = (() => {
+		if (!hasSelectedPool) return 'Load a pool before redeeming complete sets.'
+		if (accountState.address === undefined) return 'Connect a wallet before redeeming complete sets.'
+
+		return (() => {
+			if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming complete sets.'
+			if (loadingTradingDetails) return 'Loading wallet share balances.'
+
+			return (() => {
+				if (maxRedeemableCompleteSets === undefined) return 'Loading wallet share balances.'
+				if (maxRedeemableCompleteSets === 0n) return NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
+
+				return undefined
+			})()
+		})()
+	})()
+	const migrateSharesLauncherBlocker = (() => {
+		if (!hasSelectedPool) return 'Load a pool before migrating shares.'
+		if (accountState.address === undefined) return 'Connect a wallet before migrating shares.'
+
+		return (() => {
+			if (!isMainnet) return 'Switch to Ethereum mainnet before migrating shares.'
+			if (loadingTradingForkUniverse) return 'Loading fork target universes.'
+
+			return (() => {
+				if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return 'Refresh the fork target universes.'
+				if (loadingTradingDetails) return 'Loading wallet share balances.'
+
+				return (() => {
+					if (selectedOutcomeBalance === undefined) return 'Loading wallet share balances.'
+					if (selectedOutcomeBalance === 0n) return `No ${getReportingOutcomeLabel(tradingForm.selectedShareOutcome)} shares available to migrate.`
+
+					return undefined
+				})()
+			})()
+		})()
+	})()
+	const redeemSharesLauncherBlocker = !hasSelectedPool
+		? 'Load a pool before redeeming shares.'
+		: (() => {
+				if (accountState.address === undefined) return 'Connect a wallet before redeeming shares.'
+				if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming shares.'
+
+				return undefined
+			})()
 	const effectiveMintLauncherBlocker = mintEnabled ? mintLauncherBlocker : undefined
 	const effectiveRedeemCompleteSetsLauncherBlocker = redeemCompleteSetsEnabled ? redeemCompleteSetsLauncherBlocker : undefined
 	const effectiveMigrateSharesLauncherBlocker = migrateSharesEnabled ? migrateSharesLauncherBlocker : undefined
@@ -287,7 +303,6 @@ export function TradingSection({
 			...(effectiveRedeemSharesLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemSharesLauncherBlocker }),
 		},
 	]
-
 	const sections = (
 		<>
 			<WorkflowTransactionStatus latestAction={latestTradingAction} outcome={tradingOutcome} />
@@ -425,11 +440,7 @@ export function TradingSection({
 			</OperationModal>
 		</>
 	)
-
-	if (embedInCard) {
-		return sections
-	}
-
+	if (embedInCard) return sections
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Trading'>
 			{sections}

@@ -17,9 +17,7 @@ export function resolveOptionalAddressInput(value: string | undefined, fallbackA
 
 export function parseBytes32Input(value: string, label: string): Hex {
 	const trimmed = value.trim()
-	if (!isHex(trimmed, { strict: true }) || trimmed.length !== 66) {
-		throw new Error(`${label} must be a 32-byte hex value`)
-	}
+	if (!isHex(trimmed, { strict: true }) || trimmed.length !== 66) throw new Error(`${label} must be a 32-byte hex value`)
 
 	return trimmed
 }

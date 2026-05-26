@@ -75,12 +75,11 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 const CHAIN_CLOCK_POLL_INTERVAL_MILLISECONDS = 12_000
 
 async function loadBackendChainClock(backend: ChainBackend): Promise<ChainClock> {
-	if (backend.isBootstrapped === false) {
+	if (backend.isBootstrapped === false)
 		return {
 			currentBlockNumber: undefined,
 			currentTimestamp: undefined,
 		}
-	}
 
 	try {
 		const block = await backend.createReadClient().getBlock()
@@ -135,12 +134,8 @@ export function useOnchainState() {
 		const isCurrent = nextChainClockRefresh()
 		const nextChainClock = await loadBackendChainClock(backend)
 		if (!isCurrent()) return
-		if (nextChainClock.currentTimestamp !== undefined) {
-			currentTimestamp.value = nextChainClock.currentTimestamp
-		}
-		if (nextChainClock.currentBlockNumber !== undefined) {
-			currentBlockNumber.value = nextChainClock.currentBlockNumber
-		}
+		if (nextChainClock.currentTimestamp !== undefined) currentTimestamp.value = nextChainClock.currentTimestamp
+		if (nextChainClock.currentBlockNumber !== undefined) currentBlockNumber.value = nextChainClock.currentBlockNumber
 	}
 
 	const refreshState = async (options: RefreshStateOptions = {}) => {
@@ -161,7 +156,7 @@ export function useOnchainState() {
 			environmentBootstrapError.value = undefined
 		}
 
-		if (backend.isBootstrapped !== false) {
+		if (backend.isBootstrapped !== false)
 			void deploymentStatusLoad.track(async () => {
 				try {
 					const snapshot = await loadDeploymentStatusOracleSnapshot(backend.createReadClient())
@@ -174,7 +169,6 @@ export function useOnchainState() {
 					errorMessage.value = getErrorMessage(error, 'Failed to refresh deployment status')
 				}
 			})
-		}
 
 		if (!shouldLoadWalletState) return
 
@@ -307,9 +301,7 @@ export function useOnchainState() {
 
 	useEffect(() => {
 		const backend = getActiveBackend()
-		if (backend.isBootstrapped === false) {
-			return
-		}
+		if (backend.isBootstrapped === false) return
 
 		void refreshChainClock(backend)
 		const intervalId = window.setInterval(() => {

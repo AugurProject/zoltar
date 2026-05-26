@@ -133,9 +133,7 @@ export function useAppRouteEffects({
 			route,
 			securityPoolAddress,
 		})
-		if (nextSelectedVaultAddress !== undefined) {
-			setSecurityVaultFormSelectedVaultAddress(nextSelectedVaultAddress)
-		}
+		if (nextSelectedVaultAddress !== undefined) setSecurityVaultFormSelectedVaultAddress(nextSelectedVaultAddress)
 		if (route !== 'security-pools') {
 			lastSelectedSecurityPoolAddress.current = undefined
 			return
@@ -153,9 +151,7 @@ export function useAppRouteEffects({
 				walletBootstrapComplete,
 			})
 		) {
-			if (route !== 'security-pools' || securityPoolAddress === '' || selectedPoolSecurityPoolAddress !== undefined || !environmentReady || !walletBootstrapComplete) {
-				lastRequestedSecurityPoolAddress.current = undefined
-			}
+			if (route !== 'security-pools' || securityPoolAddress === '' || selectedPoolSecurityPoolAddress !== undefined || !environmentReady || !walletBootstrapComplete) lastRequestedSecurityPoolAddress.current = undefined
 			return
 		}
 		if (lastRequestedSecurityPoolAddress.current === securityPoolAddress) return

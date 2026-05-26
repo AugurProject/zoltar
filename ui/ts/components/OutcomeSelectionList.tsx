@@ -1,9 +1,7 @@
 import type { OutcomeSelectionListProps } from '../types/components.js'
 
 export function OutcomeSelectionList({ className = '', emptyMessage, items }: OutcomeSelectionListProps) {
-	if (items.length === 0) {
-		return emptyMessage === undefined ? undefined : <p className='detail'>{emptyMessage}</p>
-	}
+	if (items.length === 0) return emptyMessage === undefined ? undefined : <p className='detail'>{emptyMessage}</p>
 
 	return (
 		<div className={['migration-outcome-list', className].filter(Boolean).join(' ')}>

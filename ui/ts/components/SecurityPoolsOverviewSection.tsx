@@ -20,7 +20,6 @@ import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
-
 export function SecurityPoolsOverviewSection({
 	accountState,
 	closeLiquidationModal,
@@ -81,10 +80,8 @@ export function SecurityPoolsOverviewSection({
 		if (vaultFilter === 'has-vaults' && pool.vaults.length === 0) return false
 		if (vaultFilter === 'empty' && pool.vaults.length > 0) return false
 		if (normalizedSearchText === '') return true
-
 		return pool.securityPoolAddress.toLowerCase().includes(normalizedSearchText) || pool.questionId.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.title.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.description.toLowerCase().includes(normalizedSearchText)
 	})
-
 	return (
 		<RouteWorkflowPanel showHeader={false} title='Pool Registry'>
 			<SectionBlock
@@ -140,59 +137,67 @@ export function SecurityPoolsOverviewSection({
 					</p>
 				) : undefined}
 
-				{securityPools.length === 0 ? (
-					registryPresentation === undefined ? undefined : (
-						<StateHint presentation={registryPresentation} />
-					)
-				) : filteredSecurityPools.length === 0 ? (
-					<StateHint presentation={{ key: 'empty', badgeLabel: 'No matches', badgeTone: 'muted', detail: 'No pools match the current search and filter settings.' }} />
-				) : (
-					<div className='entity-card-list'>
-						{filteredSecurityPools.map(({ pool, poolState }) => {
-							const displayState = poolState.lifecycleState
-							const liquidationEnabled = poolState.actions.queueLiquidation.enabled
-							const badgeTone = displayState === 'operational' ? 'ok' : displayState === undefined ? 'muted' : 'warning'
-							return (
-								<EntityCard
-									key={pool.securityPoolAddress}
-									title={getQuestionTitle(pool.marketDetails)}
-									variant='record'
-									badge={<span className={`badge ${badgeTone}`}>{getSecurityPoolLifecycleLabel(displayState)}</span>}
-									actions={
-										onSelectSecurityPool === undefined ? undefined : (
-											<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
-												Open Pool
-											</button>
-										)
-									}
-								>
-									<WorkflowSubsection title='Question'>
-										<Question question={pool.marketDetails} />
-									</WorkflowSubsection>
+				{(() => {
+					if (securityPools.length === 0) {
+						if (registryPresentation === undefined) return undefined
 
-									<WorkflowSubsection title='Pool'>
-										<SecurityPoolSummaryMetrics pool={pool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showPoolAddress showUniverse />
-									</WorkflowSubsection>
+						return <StateHint presentation={registryPresentation} />
+					}
+					if (filteredSecurityPools.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: 'No matches', badgeTone: 'muted', detail: 'No pools match the current search and filter settings.' }} />
 
-									<WorkflowSubsection title='Vaults'>
-										<SecurityPoolVaultDirectory
-											emptyState={<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />}
-											pool={pool}
-											renderActions={vault => (
-												<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)} disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}>
-													Liquidate Vault
+					return (
+						<div className='entity-card-list'>
+							{filteredSecurityPools.map(({ pool, poolState }) => {
+								const displayState = poolState.lifecycleState
+								const liquidationEnabled = poolState.actions.queueLiquidation.enabled
+								const badgeTone = (() => {
+									if (displayState === 'operational') return 'ok'
+									if (displayState === undefined) return 'muted'
+
+									return 'warning'
+								})()
+								return (
+									<EntityCard
+										key={pool.securityPoolAddress}
+										title={getQuestionTitle(pool.marketDetails)}
+										variant='record'
+										badge={<span className={`badge ${badgeTone}`}>{getSecurityPoolLifecycleLabel(displayState)}</span>}
+										actions={
+											onSelectSecurityPool === undefined ? undefined : (
+												<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
+													Open Pool
 												</button>
-											)}
-											repPerEthPrice={repPerEthPrice}
-											repPerEthSource={repPerEthSource}
-											repPerEthSourceUrl={repPerEthSourceUrl}
-										/>
-									</WorkflowSubsection>
-								</EntityCard>
-							)
-						})}
-					</div>
-				)}
+											)
+										}
+									>
+										<WorkflowSubsection title='Question'>
+											<Question question={pool.marketDetails} />
+										</WorkflowSubsection>
+
+										<WorkflowSubsection title='Pool'>
+											<SecurityPoolSummaryMetrics pool={pool} repPerEthPrice={repPerEthPrice} repPerEthSource={repPerEthSource} repPerEthSourceUrl={repPerEthSourceUrl} showPoolAddress showUniverse />
+										</WorkflowSubsection>
+
+										<WorkflowSubsection title='Vaults'>
+											<SecurityPoolVaultDirectory
+												emptyState={<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />}
+												pool={pool}
+												renderActions={vault => (
+													<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)} disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}>
+														Liquidate Vault
+													</button>
+												)}
+												repPerEthPrice={repPerEthPrice}
+												repPerEthSource={repPerEthSource}
+												repPerEthSourceUrl={repPerEthSourceUrl}
+											/>
+										</WorkflowSubsection>
+									</EntityCard>
+								)
+							})}
+						</div>
+					)
+				})()}
 			</SectionBlock>
 
 			<LiquidationModal

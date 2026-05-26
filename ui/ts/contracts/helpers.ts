@@ -35,9 +35,7 @@ export function getMinBigintValue(values: bigint[]) {
 
 	let minValue = firstValue
 	for (const value of restValues) {
-		if (value < minValue) {
-			minValue = value
-		}
+		if (value < minValue) minValue = value
 	}
 
 	return minValue
@@ -244,14 +242,10 @@ export function getMarketType(questionData: QuestionData, outcomeLabels: string[
 }
 
 function toUint8(value: bigint) {
-	if (value < 0n || value > 255n) {
-		throw new Error(`Deposit index out of range: ${value.toString()}`)
-	}
+	if (value < 0n || value > 255n) throw new Error(`Deposit index out of range: ${value.toString()}`)
 
 	const numberValue = Number(value)
-	if (!Number.isInteger(numberValue) || numberValue < 0 || numberValue > 255) {
-		throw new Error(`Deposit index out of range: ${value.toString()}`)
-	}
+	if (!Number.isInteger(numberValue) || numberValue < 0 || numberValue > 255) throw new Error(`Deposit index out of range: ${value.toString()}`)
 
 	return numberValue
 }

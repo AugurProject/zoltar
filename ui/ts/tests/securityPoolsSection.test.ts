@@ -550,9 +550,7 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('Pool status')).toBeNull()
 		expect(documentQueries.queryByText('Next step')).toBeNull()
 		const selectedPoolContext = document.body.querySelector('.sticky-object-context.static')
-		if (!(selectedPoolContext instanceof HTMLElement)) {
-			throw new Error('Expected operate mode to render the selected pool context card')
-		}
+		if (!(selectedPoolContext instanceof HTMLElement)) throw new Error('Expected operate mode to render the selected pool context card')
 		const contextQueries = within(selectedPoolContext)
 		expect(contextQueries.queryByRole('tab', { name: 'Browse' })).toBeNull()
 		expect(contextQueries.queryByRole('tab', { name: 'Create' })).toBeNull()
