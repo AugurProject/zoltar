@@ -1,4 +1,5 @@
 import { sameCaseInsensitiveText } from './caseInsensitive.js'
+import { getDefaultReportingWithdrawDepositIndexesByOutcome } from './marketForm.js'
 import type { ReportingFormState } from '../types/app.js'
 
 export function applyReportingFormUpdate(current: ReportingFormState, update: Partial<ReportingFormState>): ReportingFormState {
@@ -6,7 +7,12 @@ export function applyReportingFormUpdate(current: ReportingFormState, update: Pa
 	const nextForm = {
 		...current,
 		...update,
-		...(securityPoolAddressChanged ? { selectedOutcome: undefined } : {}),
+		...(securityPoolAddressChanged
+			? {
+					selectedOutcome: undefined,
+					selectedWithdrawDepositIndexesByOutcome: getDefaultReportingWithdrawDepositIndexesByOutcome(),
+				}
+			: {}),
 	}
 
 	const hasChanged = (Object.keys(update) as Array<keyof ReportingFormState>).some(key => {

@@ -62,7 +62,7 @@ function createReportingProps(overrides: Partial<ReportingRouteContentProps> = {
 		onLoadReporting: () => undefined,
 		onReportOutcome: () => undefined,
 		onReportingFormChange: () => undefined,
-		onWithdrawEscalation: () => undefined,
+		onWithdrawEscalation: (_outcome, _depositIndexes) => undefined,
 		reportingActiveAction: undefined,
 		reportingDetails: undefined,
 		reportingError: undefined,
@@ -70,7 +70,11 @@ function createReportingProps(overrides: Partial<ReportingRouteContentProps> = {
 			reportAmount: '',
 			securityPoolAddress: '',
 			selectedOutcome: undefined,
-			selectedWithdrawDepositIndexes: [],
+			selectedWithdrawDepositIndexesByOutcome: {
+				invalid: [],
+				yes: [],
+				no: [],
+			},
 		},
 		reportingResult: undefined,
 		...overrides,
@@ -2150,7 +2154,11 @@ describe('SecurityPoolWorkflowSection', () => {
 					reportAmount: '',
 					securityPoolAddress: '',
 					selectedOutcome: 'yes',
-					selectedWithdrawDepositIndexes: [],
+					selectedWithdrawDepositIndexesByOutcome: {
+						invalid: [],
+						yes: [],
+						no: [],
+					},
 				},
 			}),
 			securityPoolAddress: selectedPoolAddress,
@@ -2179,7 +2187,11 @@ describe('SecurityPoolWorkflowSection', () => {
 								reportAmount: '',
 								securityPoolAddress: stalePoolAddress,
 								selectedOutcome: 'yes',
-								selectedWithdrawDepositIndexes: [],
+								selectedWithdrawDepositIndexesByOutcome: {
+									invalid: [],
+									yes: [],
+									no: [],
+								},
 							},
 						})}
 						showHeader={false}
@@ -2204,7 +2216,11 @@ describe('SecurityPoolWorkflowSection', () => {
 								reportAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedOutcome: 'yes',
-								selectedWithdrawDepositIndexes: [],
+								selectedWithdrawDepositIndexesByOutcome: {
+									invalid: [],
+									yes: [],
+									no: [],
+								},
 							},
 						})}
 						showHeader={false}
@@ -2229,7 +2245,11 @@ describe('SecurityPoolWorkflowSection', () => {
 								reportAmount: '',
 								securityPoolAddress: selectedPoolAddress,
 								selectedOutcome: 'yes',
-								selectedWithdrawDepositIndexes: [],
+								selectedWithdrawDepositIndexesByOutcome: {
+									invalid: [],
+									yes: [],
+									no: [],
+								},
 							},
 						})}
 						showHeader={false}
@@ -2253,7 +2273,11 @@ describe('SecurityPoolWorkflowSection', () => {
 				reportAmount: '',
 				securityPoolAddress: selectedPoolAddress,
 				selectedOutcome: 'yes',
-				selectedWithdrawDepositIndexes: [],
+				selectedWithdrawDepositIndexesByOutcome: {
+					invalid: [],
+					yes: [],
+					no: [],
+				},
 			},
 		})
 		const baseProps = createSecurityPoolWorkflowProps({

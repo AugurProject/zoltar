@@ -33,6 +33,7 @@ import type {
 	ReportingActionResult,
 	ReportingDetails,
 	ReportingOutcomeKey,
+	ReportingWithdrawalState,
 	SecurityPoolVaultSummary,
 	StagedOracleExecutionResult,
 	SecurityVaultActionResult,
@@ -60,6 +61,7 @@ import {
 	hasTimestamp,
 	hasTimestampAndNumber,
 	isBigintTriple,
+	requireEscalationGameTuple,
 	requireOpenOracleExtraDataTuple,
 	requireOpenOracleReportMetaTuple,
 	requireOpenOracleReportMetaTupleArray,
@@ -301,75 +303,77 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			withdrawalState: 'not-finalized',
 			...viewerVaultState,
 		}
-	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = await readRequiredMulticall(client, [
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'startBond',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'nonDecisionThreshold',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'activationTime',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'totalCost',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getBindingCapital',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getBalances',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getQuestionResolution',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getEscalationGameEndDate',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: QUESTION_OUTCOME_ABI,
-			functionName: 'getQuestionOutcome',
-			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress],
-		},
-		{
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'getForkTime',
-			address: getInfraContractAddresses().zoltar,
-			args: [universeId],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'hasReachedNonDecision',
-			address: escalationGameAddress,
-			args: [],
-		},
-	])
-	if (!isBigintTriple(balances)) throw new Error('Unexpected escalation balances response')
+	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = requireEscalationGameTuple(
+		await readRequiredMulticall(client, [
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'startBond',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'nonDecisionThreshold',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'activationTime',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'totalCost',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getBindingCapital',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getBalances',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getQuestionResolution',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getEscalationGameEndDate',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: QUESTION_OUTCOME_ABI,
+				functionName: 'getQuestionOutcome',
+				address: getInfraContractAddresses().securityPoolForker,
+				args: [securityPoolAddress],
+			},
+			{
+				abi: Zoltar_Zoltar.abi,
+				functionName: 'getForkTime',
+				address: getInfraContractAddresses().zoltar,
+				args: [universeId],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'hasReachedNonDecision',
+				address: escalationGameAddress,
+				args: [],
+			},
+		]),
+		'escalation game',
+	)
 	const [invalidDeposits, yesDeposits, noDeposits] = await Promise.all([loadEscalationDeposits(client, escalationGameAddress, 'invalid'), loadEscalationDeposits(client, escalationGameAddress, 'yes'), loadEscalationDeposits(client, escalationGameAddress, 'no')])
 	const sides: EscalationSide[] = [
 		{ balance: balances[0] ?? 0n, deposits: invalidDeposits, key: 'invalid', label: getEscalationSideLabel('invalid'), userDeposits: accountAddress === undefined ? [] : invalidDeposits.filter(deposit => deposit.depositor === accountAddress) },
@@ -377,12 +381,12 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		{ balance: balances[2] ?? 0n, deposits: noDeposits, key: 'no', label: getEscalationSideLabel('no'), userDeposits: accountAddress === undefined ? [] : noDeposits.filter(deposit => deposit.depositor === accountAddress) },
 	]
 	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcome)
-	const withdrawalState = (() => {
-		if (normalizedQuestionOutcome !== 'none') return 'resolved'
-		if (universeForkTime > 0n && hasReachedNonDecision === false) return 'canceled-by-external-fork'
-
-		return 'not-finalized'
-	})()
+	let withdrawalState: ReportingWithdrawalState = 'not-finalized'
+	if (normalizedQuestionOutcome !== 'none') {
+		withdrawalState = 'resolved'
+	} else if (universeForkTime > 0n && hasReachedNonDecision === false) {
+		withdrawalState = 'canceled-by-external-fork'
+	}
 	return {
 		bindingCapital,
 		completeSetCollateralAmount,
@@ -1164,12 +1168,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			maxRepBeingSold,
 			minBidSize,
 			repPurchasableAtBid: clearingPrice === undefined || clearingPrice === 0n ? undefined : (ethRaiseCap * 10n ** 18n) / clearingPrice,
-			timeRemaining: (() => {
-				if (finalized) return 0n
-				if (block.timestamp >= truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH) return 0n
-
-				return truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH - block.timestamp
-			})(),
+			timeRemaining: finalized || block.timestamp >= truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH ? 0n : truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH - block.timestamp,
 			totalRepPurchased,
 			underfunded,
 		}

@@ -180,66 +180,54 @@ describe('reporting guards', () => {
 		).toBe('Reporting locks REP already deposited in your security vault. Deposit REP into your vault before reporting.')
 	})
 
-	test('blocks withdraw submission until an outcome is selected and that side has deposits', () => {
+	test('blocks withdraw submission when wallet or reporting prerequisites are missing', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
-				accountAddress: zeroAddress,
-				hasUserDepositsOnSelectedSide: false,
+				accountAddress: undefined,
 				isMainnet: true,
 				reportingStatus: 'active',
-				selectedOutcome: undefined,
 			}),
-		).toBe('Select an outcome side before withdrawing escalation deposits.')
+		).toBe('Connect a wallet before withdrawing escalation deposits.')
 
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				hasUserDepositsOnSelectedSide: false,
-				isMainnet: true,
+				isMainnet: false,
 				reportingStatus: 'active',
-				selectedOutcome: 'yes',
 			}),
-		).toBe('No deposits are available to withdraw on the selected side.')
+		).toBe('Switch to Ethereum mainnet before withdrawing escalation deposits.')
 
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				hasUserDepositsOnSelectedSide: true,
 				isMainnet: true,
-				reportingStatus: 'active',
-				selectedOutcome: 'yes',
+				reportingStatus: 'missing',
 			}),
-		).toBeUndefined()
+		).toBe('Load reporting details before withdrawing escalation deposits.')
 	})
 
 	test('leaves withdrawal lifecycle handling to the shared action matrix', () => {
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				hasUserDepositsOnSelectedSide: true,
 				isMainnet: true,
 				reportingStatus: 'active',
-				selectedOutcome: 'yes',
 			}),
 		).toBeUndefined()
 
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				hasUserDepositsOnSelectedSide: true,
 				isMainnet: true,
 				reportingStatus: 'active',
-				selectedOutcome: 'yes',
 			}),
 		).toBeUndefined()
 
 		expect(
 			getReportingWithdrawGuardMessage({
 				accountAddress: zeroAddress,
-				hasUserDepositsOnSelectedSide: true,
 				isMainnet: true,
 				reportingStatus: 'active',
-				selectedOutcome: 'yes',
 			}),
 		).toBeUndefined()
 	})

@@ -148,6 +148,7 @@ void describe('quoteExactInput', () => {
 				isActive: true,
 				isBootstrapped: true,
 				isBootstrapping: false,
+				mintRep: async () => undefined,
 				mineBlock: async () => undefined,
 				queryDelayMilliseconds: 0,
 				repPerEthPrice: 2n * 10n ** 18n,
