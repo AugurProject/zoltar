@@ -4,7 +4,7 @@ import { parseBigIntListInput } from './inputs.js'
 import { parseTradingAmountInput } from './marketForm.js'
 import { getReportingOutcomeLabel } from './reporting.js'
 import { isValidScalarOutcomeIndex } from './scalarOutcome.js'
-import { MARKET_ALREADY_FINALIZED_MESSAGE, MARKET_NOT_FINALIZED_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE } from './securityPoolState.js'
+import { MARKET_ALREADY_FINALIZED_MESSAGE, MARKET_NOT_FINALIZED_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE } from './securityPoolState/messages.js'
 import type { DeploymentStatus } from '../types/contracts.js'
 import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
 

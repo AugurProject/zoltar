@@ -32,6 +32,7 @@
 			},
 			"style": {
 				"useConst": "error",
+				"noNestedTernary": "warn",
 				"noUselessElse": "error",
 				"noNonNullAssertion": "error"
 			}

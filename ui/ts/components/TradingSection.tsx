@@ -11,13 +11,14 @@ import { RouteWorkflowPanel } from './RouteWorkflowPanel.js'
 import { SectionBlock } from './SectionBlock.js'
 import { ShareMigrationTargetsSection } from './ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
+import { createActionAvailability, pickFirstReason } from '../lib/actionAvailability.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
-import { deriveSecurityPoolUiCapabilities } from '../lib/securityPoolState.js'
+import { evaluateSecurityPoolStateFromPool } from '../lib/securityPoolState/adapters.js'
 import {
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getRemainingMintCapacity,
@@ -80,6 +81,7 @@ export function TradingSection({
 	onRedeemCompleteSet,
 	onRedeemShares,
 	onTradingFormChange,
+	poolState,
 	tradingDetails,
 	selectedPool,
 	tradingActiveAction,
@@ -95,15 +97,17 @@ export function TradingSection({
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const hasSelectedPool = selectedPool !== undefined
 	const poolUniverseHasForked = selectedPool?.universeHasForked === true || tradingForkUniverse?.hasForked === true
-	const poolUiCapabilities = deriveSecurityPoolUiCapabilities({
-		questionOutcome: selectedPool?.questionOutcome,
-		systemState: selectedPool?.systemState,
-		universeHasForked: poolUniverseHasForked,
-	})
-	const mintLifecycleReason = poolUiCapabilities.actions.createCompleteSet.lifecycleReason
-	const redeemCompleteSetsLifecycleReason = poolUiCapabilities.actions.redeemCompleteSet.lifecycleReason
-	const migrateSharesLifecycleReason = poolUiCapabilities.actions.migrateShares.lifecycleReason
-	const redeemSharesLifecycleReason = poolUiCapabilities.actions.redeemShares.lifecycleReason
+	const resolvedPoolState =
+		poolState ??
+		evaluateSecurityPoolStateFromPool({
+			questionOutcome: selectedPool?.questionOutcome,
+			systemState: selectedPool?.systemState,
+			universeHasForked: poolUniverseHasForked,
+		})
+	const mintLifecycleReason = resolvedPoolState.actions.createCompleteSet.reason
+	const redeemCompleteSetsLifecycleReason = resolvedPoolState.actions.redeemCompleteSet.reason
+	const migrateSharesLifecycleReason = resolvedPoolState.actions.migrateShares.reason
+	const redeemSharesLifecycleReason = resolvedPoolState.actions.redeemShares.reason
 	const shareBalances = tradingDetails?.shareBalances
 	const maxRedeemableCompleteSets = tradingDetails?.maxRedeemableCompleteSets
 	let selectedTargetOutcomeIndexes: bigint[] = []
@@ -151,10 +155,10 @@ export function TradingSection({
 		hasSelectedPool,
 		isMainnet,
 	})
-	const mintActionDisabledReason = mintLifecycleReason ?? mintGuardMessage
-	const redeemCompleteSetActionDisabledReason = redeemCompleteSetsLifecycleReason ?? redeemCompleteSetGuardMessage
-	const migrateSharesActionDisabledReason = migrateSharesLifecycleReason ?? migrateSharesGuardMessage
-	const redeemSharesActionDisabledReason = redeemSharesLifecycleReason ?? redeemSharesGuardMessage
+	const mintActionDisabledReason = pickFirstReason(mintLifecycleReason, mintGuardMessage)
+	const redeemCompleteSetActionDisabledReason = pickFirstReason(redeemCompleteSetsLifecycleReason, redeemCompleteSetGuardMessage)
+	const migrateSharesActionDisabledReason = pickFirstReason(migrateSharesLifecycleReason, migrateSharesGuardMessage)
+	const redeemSharesActionDisabledReason = pickFirstReason(redeemSharesLifecycleReason, redeemSharesGuardMessage)
 	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.totalSecurityBondAllowance, selectedPool?.completeSetCollateralAmount)
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, tradingForm.selectedShareOutcome)
 	const mintLauncherBlocker = !hasSelectedPool
@@ -335,14 +339,7 @@ export function TradingSection({
 				</label>
 				{mintGuardMessage === undefined ? undefined : <p className='detail'>{mintGuardMessage}</p>}
 				<div className='actions'>
-					<TransactionActionButton
-						idleLabel='Mint Complete Sets'
-						pendingLabel='Minting complete sets...'
-						onClick={onCreateCompleteSet}
-						pending={tradingActiveAction === 'createCompleteSet'}
-						status={getTradingActionStatus('createCompleteSet')}
-						availability={{ disabled: mintActionDisabledReason !== undefined, reason: mintActionDisabledReason }}
-					/>
+					<TransactionActionButton idleLabel='Mint Complete Sets' pendingLabel='Minting complete sets...' onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} status={getTradingActionStatus('createCompleteSet')} availability={createActionAvailability(mintActionDisabledReason)} />
 				</div>
 			</OperationModal>
 
@@ -373,7 +370,7 @@ export function TradingSection({
 						pending={tradingActiveAction === 'redeemCompleteSet'}
 						status={getTradingActionStatus('redeemCompleteSet')}
 						tone='secondary'
-						availability={{ disabled: redeemCompleteSetActionDisabledReason !== undefined, reason: redeemCompleteSetActionDisabledReason }}
+						availability={createActionAvailability(redeemCompleteSetActionDisabledReason)}
 					/>
 				</div>
 			</OperationModal>
@@ -394,30 +391,14 @@ export function TradingSection({
 				/>
 				{migrateSharesGuardMessage === undefined ? undefined : <p className='detail'>{migrateSharesGuardMessage}</p>}
 				<div className='actions'>
-					<TransactionActionButton
-						idleLabel='Migrate Shares'
-						pendingLabel='Migrating shares...'
-						onClick={onMigrateShares}
-						pending={tradingActiveAction === 'migrateShares'}
-						status={getTradingActionStatus('migrateShares')}
-						tone='secondary'
-						availability={{ disabled: migrateSharesActionDisabledReason !== undefined, reason: migrateSharesActionDisabledReason }}
-					/>
+					<TransactionActionButton idleLabel='Migrate Shares' pendingLabel='Migrating shares...' onClick={onMigrateShares} pending={tradingActiveAction === 'migrateShares'} status={getTradingActionStatus('migrateShares')} tone='secondary' availability={createActionAvailability(migrateSharesActionDisabledReason)} />
 				</div>
 			</OperationModal>
 
 			<OperationModal description='Redeem finalized winning shares once the selected pool has resolved.' isOpen={activeModal === 'redeem-shares'} onClose={() => setActiveModal(undefined)} title='Redeem Resolved Shares'>
 				{redeemSharesGuardMessage === undefined ? undefined : <p className='detail'>{redeemSharesGuardMessage}</p>}
 				<div className='actions'>
-					<TransactionActionButton
-						idleLabel='Redeem Shares'
-						pendingLabel='Redeeming shares...'
-						onClick={onRedeemShares}
-						pending={tradingActiveAction === 'redeemShares'}
-						status={getTradingActionStatus('redeemShares')}
-						tone='secondary'
-						availability={{ disabled: redeemSharesActionDisabledReason !== undefined, reason: redeemSharesActionDisabledReason }}
-					/>
+					<TransactionActionButton idleLabel='Redeem Shares' pendingLabel='Redeeming shares...' onClick={onRedeemShares} pending={tradingActiveAction === 'redeemShares'} status={getTradingActionStatus('redeemShares')} tone='secondary' availability={createActionAvailability(redeemSharesActionDisabledReason)} />
 				</div>
 			</OperationModal>
 		</>

@@ -15,6 +15,7 @@ import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { UniverseLink } from './UniverseLink.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
+import { createActionAvailability, pickFirstReason } from '../lib/actionAvailability.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
@@ -34,7 +35,7 @@ import {
 } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel } from '../lib/reporting.js'
-import { deriveSecurityPoolReportingPhase, deriveSecurityPoolUiCapabilities } from '../lib/securityPoolState.js'
+import { evaluateSecurityPoolStateFromReporting } from '../lib/securityPoolState/adapters.js'
 import type { LifecycleStagePresentation, ReportingSectionProps } from '../types/components.js'
 import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
@@ -255,24 +256,15 @@ export function ReportingSection({
 	const showWithdrawOnly = mode === 'withdraw-only'
 	const reportingReady = marketDetails !== undefined && effectiveCurrentTimestamp !== undefined ? marketDetails.endTime <= effectiveCurrentTimestamp : undefined
 	const preOpenLockedReason = lockedReason ?? (reportingReady === false && marketDetails !== undefined && effectiveCurrentTimestamp !== undefined ? getReportingLockedUntilMessage(marketDetails.endTime, effectiveCurrentTimestamp) : undefined)
-	const reportingPhase = deriveSecurityPoolReportingPhase({
+	const reportingState = evaluateSecurityPoolStateFromReporting({
 		reportingDetails: effectiveReportingDetails,
 		reportingReady,
 	})
-	const effectiveReportingPhase = reportingPhase === 'unknown' && preOpenLockedReason !== undefined ? 'preOpen' : reportingPhase
-	const reportingUiCapabilities = deriveSecurityPoolUiCapabilities({
-		questionOutcome: effectiveReportingDetails?.questionOutcome,
-		reportingPhase: effectiveReportingPhase,
-		reportingPreOpenReason: preOpenLockedReason,
-		reportingWorkflowLockedReason: lockedReason,
-		reportingWithdrawalEnabled: activeReportingDetails?.withdrawalEnabled,
-		reportingWithdrawalState: effectiveReportingDetails?.withdrawalState,
-		systemState: undefined,
-		universeHasForked: undefined,
-	})
-	const reportControlsLockedReason = showFullReporting ? reportingUiCapabilities.actions.reportOutcome.lifecycleReason : preOpenLockedReason
+	const reportOutcomeLifecycleReason = pickFirstReason(lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined, reportingState.actions.reportOutcome.reason)
+	const withdrawEscalationLifecycleReason = pickFirstReason(lockedReason, reportingState.reportingStage === 'preOpen' ? preOpenLockedReason : undefined, reportingState.actions.withdrawEscalation.reason)
+	const reportControlsLockedReason = showFullReporting ? reportOutcomeLifecycleReason : preOpenLockedReason
 	const reportControlsLocked = reportControlsLockedReason !== undefined
-	const withdrawControlsLockedReason = showWithdrawOnly && loadingReportingDetails ? 'Loading escalation deposits.' : reportingUiCapabilities.actions.withdrawEscalation.lifecycleReason
+	const withdrawControlsLockedReason = showWithdrawOnly && loadingReportingDetails ? 'Loading escalation deposits.' : withdrawEscalationLifecycleReason
 	const withdrawControlsLocked = withdrawControlsLockedReason !== undefined
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const selectedOutcome = reportingForm.selectedOutcome
@@ -558,7 +550,7 @@ export function ReportingSection({
 						</p>
 					)}
 					<div className='actions'>
-						<TransactionActionButton idleLabel={reportButtonLabel} pendingLabel='Submitting report...' onClick={onReportOutcome} pending={reportingActiveAction === 'reportOutcome'} availability={{ disabled: reportGuardMessage !== undefined, reason: reportGuardMessage }} />
+						<TransactionActionButton idleLabel={reportButtonLabel} pendingLabel='Submitting report...' onClick={onReportOutcome} pending={reportingActiveAction === 'reportOutcome'} availability={createActionAvailability(reportGuardMessage)} />
 					</div>
 					{projectedReportingPreview === undefined ? undefined : <p className='detail'>{projectedReportingPreview}</p>}
 				</SectionBlock>
@@ -622,16 +614,9 @@ export function ReportingSection({
 							onClick={() => onWithdrawEscalation(selectedWithdrawDepositIndexes)}
 							pending={reportingActiveAction === 'withdrawEscalation'}
 							tone='secondary'
-							availability={{ disabled: withdrawSelectedGuardMessage !== undefined, reason: withdrawSelectedGuardMessage }}
+							availability={createActionAvailability(withdrawSelectedGuardMessage)}
 						/>
-						<TransactionActionButton
-							idleLabel='Withdraw All'
-							pendingLabel='Withdrawing deposits...'
-							onClick={() => onWithdrawEscalation(allWithdrawDepositIndexes)}
-							pending={reportingActiveAction === 'withdrawEscalation'}
-							tone='secondary'
-							availability={{ disabled: withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
-						/>
+						<TransactionActionButton idleLabel='Withdraw All' pendingLabel='Withdrawing deposits...' onClick={() => onWithdrawEscalation(allWithdrawDepositIndexes)} pending={reportingActiveAction === 'withdrawEscalation'} tone='secondary' availability={createActionAvailability(withdrawGuardMessage)} />
 					</div>
 				</SectionBlock>
 			) : undefined}

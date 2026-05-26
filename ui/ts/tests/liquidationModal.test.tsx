@@ -8,6 +8,7 @@ import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from 'viem'
 import { LiquidationModal } from '../components/LiquidationModal.js'
 import { ChainTimestampContext } from '../lib/chainTimestamp.js'
+import { evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -94,6 +95,13 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	}
 }
 
+function createEndedPoolState() {
+	return evaluateSecurityPoolState({
+		lifecycleState: 'ended',
+		universeHasForked: false,
+	})
+}
+
 describe('LiquidationModal', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -149,6 +157,7 @@ describe('LiquidationModal', () => {
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
 			}),
+			poolState: createEndedPoolState(),
 			selectedPool: createSelectedPool({
 				questionOutcome: 'yes',
 			}),
@@ -163,6 +172,7 @@ describe('LiquidationModal', () => {
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: false,
 			}),
+			poolState: createEndedPoolState(),
 			selectedPool: createSelectedPool({
 				questionOutcome: 'yes',
 			}),

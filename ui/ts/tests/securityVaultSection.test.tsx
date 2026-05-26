@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '@testing-library/dom'
 import { zeroAddress } from 'viem'
 import { SecurityVaultSection } from '../components/SecurityVaultSection.js'
+import { evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import type { AccountState } from '../types/app.js'
 import type { SecurityVaultDetails } from '../types/contracts.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
@@ -97,6 +98,13 @@ function createOracleManagerDetails(): NonNullable<SecurityVaultSectionProps['or
 		token1: undefined,
 		token2: undefined,
 	}
+}
+
+function createEndedPoolState() {
+	return evaluateSecurityPoolState({
+		lifecycleState: 'ended',
+		universeHasForked: false,
+	})
 }
 
 describe('SecurityVaultSection', () => {
@@ -245,8 +253,7 @@ describe('SecurityVaultSection', () => {
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
 					oracleManagerDetails: createOracleManagerDetails(),
-					poolActionLockReason: 'Vault collateral operations are unavailable after this pool has ended.',
-					repExitMode: 'redeem',
+					poolState: createEndedPoolState(),
 					securityVaultDetails: createSecurityVaultDetails({
 						lockedRepInEscalationGame: 0n,
 					}),
@@ -273,8 +280,7 @@ describe('SecurityVaultSection', () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
-					poolActionLockReason: 'Vault collateral operations are unavailable after this pool has ended.',
-					repExitMode: 'redeem',
+					poolState: createEndedPoolState(),
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '',
@@ -300,8 +306,7 @@ describe('SecurityVaultSection', () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
-					poolActionLockReason: 'Vault collateral operations are unavailable after this pool has ended.',
-					repExitMode: 'redeem',
+					poolState: createEndedPoolState(),
 				})}
 			/>,
 		)

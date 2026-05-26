@@ -20,11 +20,13 @@ import { UniverseLink } from './UniverseLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { ViewTabs } from './ViewTabs.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
+import { createActionAvailability } from '../lib/actionAvailability.js'
 import { AUCTION_TIME_SECONDS, type ForkAuctionStageView, estimateRepPurchased, getForkAuctionStageView, getForkStageDescription, getForkStageDescriptionForState, getOutcomeActionLabel, getTimeRemaining, getTruthAuctionBidGuardMessage, hasForkActivity, MIGRATION_TIME_SECONDS } from '../lib/forkAuction.js'
 import { formatDuration } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
-import { deriveSecurityPoolForkStage, deriveSecurityPoolUiCapabilities, getSecurityPoolDisplayState, getSecurityPoolDisplayStateLabel } from '../lib/securityPoolState.js'
+import { evaluateSecurityPoolStateFromFork } from '../lib/securityPoolState/adapters.js'
+import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
 import type { ForkAuctionSectionProps, ReadinessAction } from '../types/components.js'
 
@@ -192,10 +194,6 @@ export function ForkAuctionSection({
 	const truthAuctionAddress = forkAuctionDetails?.truthAuctionAddress ?? previewPool?.truthAuctionAddress
 	const hasPreviewForkActivity = previewPool === undefined ? false : hasForkActivity(previewPool)
 	const forkOnlyFallbackText = getForkOnlyFallbackText(hasPreviewForkActivity)
-	const displaySystemState = getSecurityPoolDisplayState({
-		questionOutcome,
-		systemState,
-	})
 	const forkStageDescription = forkAuctionDetails === undefined ? (systemState === undefined ? undefined : getForkStageDescriptionForState(systemState)) : getForkStageDescription(forkAuctionDetails)
 	const migrationSummaryText = forkAuctionDetails === undefined ? getPreviewMigrationSummary(previewPool, hasPreviewForkActivity) : undefined
 	const hasLoadedPoolContext = securityPoolAddress !== undefined && systemState !== undefined
@@ -246,22 +244,13 @@ export function ForkAuctionSection({
 	const underfundedDisplay = forkAuctionDetails?.truthAuction === undefined ? forkOnlyFallbackText : forkAuctionDetails.truthAuction.underfunded ? 'Yes' : 'No'
 	const claimingAvailableDisplay = forkAuctionDetails === undefined ? (hasPreviewForkActivity ? UNKNOWN_VALUE : UNAVAILABLE_UNTIL_FORK) : forkAuctionDetails.claimingAvailable ? 'Yes' : 'No'
 	const interactionDisabledReason = accountState.address === undefined ? 'Connect a wallet before using fork and auction actions.' : !isMainnet ? 'Switch to Ethereum mainnet before using fork and auction actions.' : undefined
-	const forkStage = deriveSecurityPoolForkStage({
+	const forkPoolState = evaluateSecurityPoolStateFromFork({
+		questionOutcome,
+		systemState,
+		universeHasForked: previewPool?.universeHasForked,
 		currentStage,
 		workflowDisabled: disabled,
 	})
-	const forkUiCapabilities = deriveSecurityPoolUiCapabilities({
-		forkStage,
-		forkWorkflowDisabledReason: disabled ? disabledMessage : undefined,
-		questionOutcome,
-		selectedForkStage: selectedStage,
-		systemState,
-		universeHasForked: previewPool?.universeHasForked,
-	})
-	const initiateStageVisible = forkUiCapabilities.actions.initiateFork.visible
-	const migrationStageVisible = forkUiCapabilities.actions.createChildUniverse.visible
-	const auctionStageVisible = forkUiCapabilities.actions.startTruthAuction.visible
-	const settlementStageVisible = forkUiCapabilities.actions.finalizeTruthAuction.visible
 	const truthAuctionBidGuardMessage = getTruthAuctionBidGuardMessage({
 		accountAddress: accountState.address,
 		isMainnet,
@@ -269,7 +258,7 @@ export function ForkAuctionSection({
 		truthAuction: forkAuctionDetails?.truthAuction,
 		walletEthBalance: accountState.ethBalance,
 	})
-	const createChildUniverseLifecycleReason = forkUiCapabilities.actions.createChildUniverse.lifecycleReason
+	const createChildUniverseLifecycleReason = forkPoolState.actions.createChildUniverse.reason
 	const childUniverseRequirements = [
 		{ key: 'pool', label: 'Forked pool loaded', resolved: hasLoadedPoolContext, ...(hasLoadedPoolContext ? {} : { detail: 'Load a forked pool before creating a child universe.' }) },
 		{ key: 'outcome', label: 'Outcome selected', resolved: forkAuctionForm.selectedOutcome !== undefined, ...(forkAuctionForm.selectedOutcome === undefined ? { detail: 'Select the outcome whose child universe you want to create.' } : {}) },
@@ -302,20 +291,8 @@ export function ForkAuctionSection({
 		tone?: 'primary' | 'secondary'
 	}) => {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
-		const actionLifecycleReason = forkUiCapabilities.actions[action].lifecycleReason
-		return (
-			<TransactionActionButton
-				idleLabel={idleLabel}
-				pendingLabel={pendingLabel}
-				onClick={onClick}
-				pending={forkAuctionActiveAction === action}
-				tone={tone}
-				availability={{
-					disabled: disabled || accountState.address === undefined || !isMainnet || actionLifecycleReason !== undefined || resolvedAvailability.disabled,
-					reason: interactionDisabledReason ?? actionLifecycleReason ?? resolvedAvailability.reason,
-				}}
-			/>
-		)
+		const actionLifecycleReason = forkPoolState.actions[action].reason
+		return <TransactionActionButton idleLabel={idleLabel} pendingLabel={pendingLabel} onClick={onClick} pending={forkAuctionActiveAction === action} tone={tone} availability={createActionAvailability(interactionDisabledReason, actionLifecycleReason, resolvedAvailability.reason)} />
 	}
 
 	useEffect(() => {
@@ -346,7 +323,7 @@ export function ForkAuctionSection({
 		{ label: 'Security Pool', value: renderAddress(securityPoolAddress) },
 		{ label: 'Universe', value: universeId === undefined ? UNKNOWN_VALUE : <UniverseLink universeId={universeId} /> },
 		{ label: 'Parent Pool', value: renderAddress(parentSecurityPoolAddress) },
-		{ label: 'System State', value: displaySystemState === undefined ? UNKNOWN_VALUE : getSecurityPoolDisplayStateLabel(displaySystemState) },
+		{ label: 'System State', value: getSecurityPoolLifecycleLabel(forkPoolState.lifecycleState) },
 		{ label: 'Fork Type', value: forkAuctionDetails === undefined ? getPreviewForkType(previewPool, hasPreviewForkActivity) : forkAuctionDetails.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent/Zoltar fork' },
 		{ label: 'Question Outcome', value: questionOutcome === undefined ? UNKNOWN_VALUE : getReportingOutcomeLabel(questionOutcome) },
 		{ label: 'Fork Outcome', value: forkOutcome === undefined ? UNKNOWN_VALUE : getReportingOutcomeLabel(forkOutcome) },
@@ -396,218 +373,217 @@ export function ForkAuctionSection({
 		{ label: 'REP Purchased', value: truthAuctionStatus === undefined ? forkOnlyFallbackText : <CurrencyValue value={truthAuctionStatus.totalRepPurchased} suffix='REP' /> },
 	]
 
-	const liveSnapshotMetrics: DisplayMetric[] = initiateStageVisible
-		? [
-				{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
-				{ label: 'Fork Type', value: forkAuctionDetails === undefined ? getPreviewForkType(previewPool, hasPreviewForkActivity) : forkAuctionDetails.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent/Zoltar fork' },
-				{ label: 'Parent Pool', value: renderAddress(parentSecurityPoolAddress) },
-				{ label: 'Migration Window', value: formatDuration(MIGRATION_TIME_SECONDS) },
-			]
-		: migrationStageVisible
+	const liveSnapshotMetrics: DisplayMetric[] =
+		selectedStage === 'initiate'
 			? [
 					{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
-					{ label: 'Migrated REP', value: renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, 'REP', UNKNOWN_VALUE) },
-					{
-						label: 'Migration Ends',
-						value: forkAuctionDetails === undefined ? migrationSummaryText : forkAuctionDetails.migrationEndsAt === undefined ? 'Started/finished' : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={forkAuctionDetails.migrationEndsAt} />,
-					},
-					{ label: 'Time Left', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : migrationTimeRemaining === undefined ? formatDuration(MIGRATION_TIME_SECONDS) : formatDuration(migrationTimeRemaining) },
+					{ label: 'Fork Type', value: forkAuctionDetails === undefined ? getPreviewForkType(previewPool, hasPreviewForkActivity) : forkAuctionDetails.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent/Zoltar fork' },
+					{ label: 'Parent Pool', value: renderAddress(parentSecurityPoolAddress) },
+					{ label: 'Migration Window', value: formatDuration(MIGRATION_TIME_SECONDS) },
 				]
-			: auctionStageVisible
+			: selectedStage === 'migration'
 				? [
-						{ label: 'Started', value: startedDisplay },
-						{ label: 'Ends', value: endsDisplay },
-						{ label: 'ETH Raised / Cap', value: ethRaisedCapDisplay },
-						{ label: 'Clearing Price', value: clearingPriceDisplay },
+						{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
+						{ label: 'Migrated REP', value: renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, 'REP', UNKNOWN_VALUE) },
+						{
+							label: 'Migration Ends',
+							value: forkAuctionDetails === undefined ? migrationSummaryText : forkAuctionDetails.migrationEndsAt === undefined ? 'Started/finished' : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={forkAuctionDetails.migrationEndsAt} />,
+						},
+						{ label: 'Time Left', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : migrationTimeRemaining === undefined ? formatDuration(MIGRATION_TIME_SECONDS) : formatDuration(migrationTimeRemaining) },
 					]
-				: settlementStageVisible
+				: selectedStage === 'auction'
 					? [
-							{ label: 'Finalized', value: finalizedDisplay },
-							{ label: 'Underfunded', value: underfundedDisplay },
-							{ label: 'Auctioned Allowance', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.auctionedSecurityBondAllowance} suffix='ETH' /> },
-							{ label: 'Claiming Available', value: claimingAvailableDisplay },
+							{ label: 'Started', value: startedDisplay },
+							{ label: 'Ends', value: endsDisplay },
+							{ label: 'ETH Raised / Cap', value: ethRaisedCapDisplay },
+							{ label: 'Clearing Price', value: clearingPriceDisplay },
 						]
-					: initiateStatusMetrics
+					: selectedStage === 'settlement'
+						? [
+								{ label: 'Finalized', value: finalizedDisplay },
+								{ label: 'Underfunded', value: underfundedDisplay },
+								{ label: 'Auctioned Allowance', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.auctionedSecurityBondAllowance} suffix='ETH' /> },
+								{ label: 'Claiming Available', value: claimingAvailableDisplay },
+							]
+						: initiateStatusMetrics
 
-	const stagePanel = initiateStageVisible ? (
-		<fieldset className='fork-stage-panel' disabled={disabled}>
-			<SectionBlock title='Fork Trigger'>{renderWorkflowMetricGrid(initiateStatusMetrics)}</SectionBlock>
+	const stagePanel =
+		selectedStage === 'initiate' ? (
+			<fieldset className='fork-stage-panel' disabled={disabled}>
+				<SectionBlock title='Fork Trigger'>{renderWorkflowMetricGrid(initiateStatusMetrics)}</SectionBlock>
 
-			<SectionBlock title='Fork With Own Escalation'>
-				<div className='actions'>{renderStageActionButton({ action: 'forkWithOwnEscalation', idleLabel: 'Fork With Own Escalation', onClick: onForkWithOwnEscalation, pendingLabel: 'Forking with own escalation...', tone: 'primary' })}</div>
-			</SectionBlock>
+				<SectionBlock title='Fork With Own Escalation'>
+					<div className='actions'>{renderStageActionButton({ action: 'forkWithOwnEscalation', idleLabel: 'Fork With Own Escalation', onClick: onForkWithOwnEscalation, pendingLabel: 'Forking with own escalation...', tone: 'primary' })}</div>
+				</SectionBlock>
 
-			<SectionBlock title='Initiate Pool Fork'>
-				<div className='actions'>{renderStageActionButton({ action: 'initiateFork', idleLabel: 'Initiate Pool Fork', onClick: onInitiateFork, pendingLabel: 'Initiating pool fork...' })}</div>
-			</SectionBlock>
+				<SectionBlock title='Initiate Pool Fork'>
+					<div className='actions'>{renderStageActionButton({ action: 'initiateFork', idleLabel: 'Initiate Pool Fork', onClick: onInitiateFork, pendingLabel: 'Initiating pool fork...' })}</div>
+				</SectionBlock>
 
-			<SectionBlock title='Direct Universe Fork'>
-				<div className='form-grid'>
-					<div className='field-row'>
-						<label className='field'>
-							<span>Direct Fork Universe ID</span>
-							<FormInput value={forkAuctionForm.directForkUniverseId} onInput={event => onForkAuctionFormChange({ directForkUniverseId: event.currentTarget.value })} />
-						</label>
-						<label className='field'>
-							<span>Direct Fork Question ID</span>
-							<FormInput value={forkAuctionForm.directForkQuestionId} onInput={event => onForkAuctionFormChange({ directForkQuestionId: event.currentTarget.value })} placeholder='0x...' />
-						</label>
+				<SectionBlock title='Direct Universe Fork'>
+					<div className='form-grid'>
+						<div className='field-row'>
+							<label className='field'>
+								<span>Direct Fork Universe ID</span>
+								<FormInput value={forkAuctionForm.directForkUniverseId} onInput={event => onForkAuctionFormChange({ directForkUniverseId: event.currentTarget.value })} />
+							</label>
+							<label className='field'>
+								<span>Direct Fork Question ID</span>
+								<FormInput value={forkAuctionForm.directForkQuestionId} onInput={event => onForkAuctionFormChange({ directForkQuestionId: event.currentTarget.value })} placeholder='0x...' />
+							</label>
+						</div>
+						<div className='actions'>{renderStageActionButton({ action: 'forkUniverse', idleLabel: 'Fork Universe Directly', onClick: onForkUniverse, pendingLabel: 'Forking universe directly...' })}</div>
 					</div>
-					<div className='actions'>{renderStageActionButton({ action: 'forkUniverse', idleLabel: 'Fork Universe Directly', onClick: onForkUniverse, pendingLabel: 'Forking universe directly...' })}</div>
-				</div>
-			</SectionBlock>
-		</fieldset>
-	) : migrationStageVisible ? (
-		<fieldset className='fork-stage-panel' disabled={disabled}>
-			<SectionBlock title='Migration Status'>{renderWorkflowMetricGrid(migrationStatusMetrics)}</SectionBlock>
+				</SectionBlock>
+			</fieldset>
+		) : selectedStage === 'migration' ? (
+			<fieldset className='fork-stage-panel' disabled={disabled}>
+				<SectionBlock title='Migration Status'>{renderWorkflowMetricGrid(migrationStatusMetrics)}</SectionBlock>
 
-			<SectionBlock title='Create Child Universe'>
-				<div className='form-grid'>
-					<label className='field'>
-						<span>Outcome</span>
-						<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
-					</label>
-					<ActionLauncherCard action={createChildUniverseLauncherAction}>
-						<p className='detail'>Selected outcome: {getReportingOutcomeLabel(forkAuctionForm.selectedOutcome)}</p>
-					</ActionLauncherCard>
-				</div>
-			</SectionBlock>
-
-			<SectionBlock title='Migrate REP'>
-				<div className='form-grid'>
-					<label className='field'>
-						<span>REP Migration Outcomes</span>
-						<FormInput value={forkAuctionForm.repMigrationOutcomes} onInput={event => onForkAuctionFormChange({ repMigrationOutcomes: event.currentTarget.value })} placeholder='yes,no,invalid' />
-					</label>
-					<div className='actions'>{renderStageActionButton({ action: 'migrateRepToZoltar', idleLabel: 'Migrate REP To Zoltar', onClick: onMigrateRepToZoltar, pendingLabel: 'Migrating REP to Zoltar...' })}</div>
-				</div>
-			</SectionBlock>
-
-			<SectionBlock title='Migrate Vault'>
-				<div className='form-grid'>
-					<label className='field'>
-						<span>Outcome</span>
-						<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
-					</label>
-					<label className='field'>
-						<span>Vault Address</span>
-						<FormInput value={forkAuctionForm.vaultAddress} onInput={event => onForkAuctionFormChange({ vaultAddress: event.currentTarget.value })} placeholder='Leave empty to use connected wallet' />
-					</label>
-					<div className='actions'>{renderStageActionButton({ action: 'migrateVault', idleLabel: 'Migrate Vault', onClick: onMigrateVault, pendingLabel: 'Migrating vault...', tone: 'primary' })}</div>
-				</div>
-			</SectionBlock>
-
-			<SectionBlock title='Migrate Escalation Deposits'>
-				<div className='form-grid'>
-					<label className='field'>
-						<span>Outcome</span>
-						<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
-					</label>
-					<label className='field'>
-						<span>Escalation Deposit Indexes</span>
-						<FormInput value={forkAuctionForm.depositIndexes} onInput={event => onForkAuctionFormChange({ depositIndexes: event.currentTarget.value })} placeholder='0,1,2' />
-					</label>
-					<div className='actions'>{renderStageActionButton({ action: 'migrateEscalationDeposits', idleLabel: 'Migrate Escalation Deposits', onClick: onMigrateEscalationDeposits, pendingLabel: 'Migrating escalation deposits...' })}</div>
-				</div>
-			</SectionBlock>
-		</fieldset>
-	) : auctionStageVisible ? (
-		<fieldset className='fork-stage-panel' disabled={disabled}>
-			<SectionBlock title='Auction Status'>{renderWorkflowMetricGrid(auctionStatusMetrics)}</SectionBlock>
-
-			<SectionBlock title='Start Truth Auction'>
-				<div className='actions'>{renderStageActionButton({ action: 'startTruthAuction', idleLabel: 'Start Truth Auction', onClick: onStartTruthAuction, pendingLabel: 'Starting truth auction...', tone: 'primary' })}</div>
-			</SectionBlock>
-
-			<SectionBlock title='Submit Bid'>
-				<div className='form-grid'>
-					<label className='field'>
-						<span>Bid Tick</span>
-						<FormInput value={forkAuctionForm.submitBidTick} onInput={event => onForkAuctionFormChange({ submitBidTick: event.currentTarget.value })} />
-					</label>
-					<label className='field'>
-						<span>Bid Amount (ETH)</span>
-						<FormInput value={forkAuctionForm.submitBidAmount} onInput={event => onForkAuctionFormChange({ submitBidAmount: event.currentTarget.value })} />
-					</label>
-					{selectedAuctionPrice === undefined ? undefined : <p className='detail'>At the current clearing price, this bid would buy roughly {estimatedRep === undefined ? UNKNOWN_VALUE : <CurrencyValue value={estimatedRep} suffix='REP' />} if it clears.</p>}
-					<div className='actions'>
-						{renderStageActionButton({
-							action: 'submitBid',
-							availability: {
-								disabled: truthAuctionBidGuardMessage !== undefined,
-								reason: truthAuctionBidGuardMessage,
-							},
-							idleLabel: 'Submit Bid',
-							onClick: onSubmitBid,
-							pendingLabel: 'Submitting bid...',
-						})}
+				<SectionBlock title='Create Child Universe'>
+					<div className='form-grid'>
+						<label className='field'>
+							<span>Outcome</span>
+							<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
+						</label>
+						<ActionLauncherCard action={createChildUniverseLauncherAction}>
+							<p className='detail'>Selected outcome: {getReportingOutcomeLabel(forkAuctionForm.selectedOutcome)}</p>
+						</ActionLauncherCard>
 					</div>
-				</div>
-			</SectionBlock>
-		</fieldset>
-	) : settlementStageVisible ? (
-		<fieldset className='fork-stage-panel' disabled={disabled}>
-			<SectionBlock title='Settlement Status'>{renderWorkflowMetricGrid(settlementStatusMetrics)}</SectionBlock>
+				</SectionBlock>
 
-			<SectionBlock title='Finalize Truth Auction'>
-				<div className='actions'>{renderStageActionButton({ action: 'finalizeTruthAuction', idleLabel: 'Finalize Truth Auction', onClick: onFinalizeTruthAuction, pendingLabel: 'Finalizing truth auction...' })}</div>
-			</SectionBlock>
-
-			<SectionBlock title='Refund Losing Bid'>
-				<div className='form-grid'>
-					<label className='field'>
-						<span>Refund Tick</span>
-						<FormInput value={forkAuctionForm.refundTick} onInput={event => onForkAuctionFormChange({ refundTick: event.currentTarget.value })} />
-					</label>
-					<label className='field'>
-						<span>Refund Bid Index</span>
-						<FormInput value={forkAuctionForm.refundBidIndex} onInput={event => onForkAuctionFormChange({ refundBidIndex: event.currentTarget.value })} />
-					</label>
-					<div className='actions'>{renderStageActionButton({ action: 'refundLosingBids', idleLabel: 'Refund Losing Bid', onClick: onRefundLosingBids, pendingLabel: 'Refunding losing bid...', tone: 'primary' })}</div>
-				</div>
-			</SectionBlock>
-
-			<SectionBlock title='Claim Auction Proceeds'>
-				<div className='form-grid'>
-					<label className='field'>
-						<span>Vault Address</span>
-						<FormInput value={forkAuctionForm.vaultAddress} onInput={event => onForkAuctionFormChange({ vaultAddress: event.currentTarget.value })} placeholder='Leave empty to use connected wallet' />
-					</label>
-					<div className='field-row'>
+				<SectionBlock title='Migrate REP'>
+					<div className='form-grid'>
 						<label className='field'>
-							<span>Claim Bid Tick</span>
-							<FormInput value={forkAuctionForm.claimBidTick} onInput={event => onForkAuctionFormChange({ claimBidTick: event.currentTarget.value })} />
+							<span>REP Migration Outcomes</span>
+							<FormInput value={forkAuctionForm.repMigrationOutcomes} onInput={event => onForkAuctionFormChange({ repMigrationOutcomes: event.currentTarget.value })} placeholder='yes,no,invalid' />
 						</label>
-						<label className='field'>
-							<span>Claim Bid Index</span>
-							<FormInput value={forkAuctionForm.claimBidIndex} onInput={event => onForkAuctionFormChange({ claimBidIndex: event.currentTarget.value })} />
-						</label>
+						<div className='actions'>{renderStageActionButton({ action: 'migrateRepToZoltar', idleLabel: 'Migrate REP To Zoltar', onClick: onMigrateRepToZoltar, pendingLabel: 'Migrating REP to Zoltar...' })}</div>
 					</div>
-					<div className='actions'>{renderStageActionButton({ action: 'claimAuctionProceeds', idleLabel: 'Claim Auction Proceeds', onClick: onClaimAuctionProceeds, pendingLabel: 'Claiming auction proceeds...', tone: 'primary' })}</div>
-				</div>
-			</SectionBlock>
+				</SectionBlock>
 
-			<SectionBlock title='Withdraw Bids'>
-				<div className='form-grid'>
-					<div className='field-row'>
+				<SectionBlock title='Migrate Vault'>
+					<div className='form-grid'>
 						<label className='field'>
-							<span>Withdraw For Address</span>
-							<FormInput value={forkAuctionForm.withdrawForAddress} onInput={event => onForkAuctionFormChange({ withdrawForAddress: event.currentTarget.value })} placeholder='Leave empty to use connected wallet' />
+							<span>Outcome</span>
+							<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
 						</label>
 						<label className='field'>
-							<span>Withdraw Tick</span>
-							<FormInput value={forkAuctionForm.withdrawTick} onInput={event => onForkAuctionFormChange({ withdrawTick: event.currentTarget.value })} />
+							<span>Vault Address</span>
+							<FormInput value={forkAuctionForm.vaultAddress} onInput={event => onForkAuctionFormChange({ vaultAddress: event.currentTarget.value })} placeholder='Leave empty to use connected wallet' />
 						</label>
+						<div className='actions'>{renderStageActionButton({ action: 'migrateVault', idleLabel: 'Migrate Vault', onClick: onMigrateVault, pendingLabel: 'Migrating vault...', tone: 'primary' })}</div>
 					</div>
-					<label className='field'>
-						<span>Withdraw Bid Index</span>
-						<FormInput value={forkAuctionForm.withdrawBidIndex} onInput={event => onForkAuctionFormChange({ withdrawBidIndex: event.currentTarget.value })} />
-					</label>
-					<div className='actions'>{renderStageActionButton({ action: 'withdrawBids', idleLabel: 'Withdraw Bids', onClick: onWithdrawBids, pendingLabel: 'Withdrawing bids...' })}</div>
-				</div>
-			</SectionBlock>
-		</fieldset>
-	) : undefined
+				</SectionBlock>
+
+				<SectionBlock title='Migrate Escalation Deposits'>
+					<div className='form-grid'>
+						<label className='field'>
+							<span>Outcome</span>
+							<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
+						</label>
+						<label className='field'>
+							<span>Escalation Deposit Indexes</span>
+							<FormInput value={forkAuctionForm.depositIndexes} onInput={event => onForkAuctionFormChange({ depositIndexes: event.currentTarget.value })} placeholder='0,1,2' />
+						</label>
+						<div className='actions'>{renderStageActionButton({ action: 'migrateEscalationDeposits', idleLabel: 'Migrate Escalation Deposits', onClick: onMigrateEscalationDeposits, pendingLabel: 'Migrating escalation deposits...' })}</div>
+					</div>
+				</SectionBlock>
+			</fieldset>
+		) : selectedStage === 'auction' ? (
+			<fieldset className='fork-stage-panel' disabled={disabled}>
+				<SectionBlock title='Auction Status'>{renderWorkflowMetricGrid(auctionStatusMetrics)}</SectionBlock>
+
+				<SectionBlock title='Start Truth Auction'>
+					<div className='actions'>{renderStageActionButton({ action: 'startTruthAuction', idleLabel: 'Start Truth Auction', onClick: onStartTruthAuction, pendingLabel: 'Starting truth auction...', tone: 'primary' })}</div>
+				</SectionBlock>
+
+				<SectionBlock title='Submit Bid'>
+					<div className='form-grid'>
+						<label className='field'>
+							<span>Bid Tick</span>
+							<FormInput value={forkAuctionForm.submitBidTick} onInput={event => onForkAuctionFormChange({ submitBidTick: event.currentTarget.value })} />
+						</label>
+						<label className='field'>
+							<span>Bid Amount (ETH)</span>
+							<FormInput value={forkAuctionForm.submitBidAmount} onInput={event => onForkAuctionFormChange({ submitBidAmount: event.currentTarget.value })} />
+						</label>
+						{selectedAuctionPrice === undefined ? undefined : <p className='detail'>At the current clearing price, this bid would buy roughly {estimatedRep === undefined ? UNKNOWN_VALUE : <CurrencyValue value={estimatedRep} suffix='REP' />} if it clears.</p>}
+						<div className='actions'>
+							{renderStageActionButton({
+								action: 'submitBid',
+								availability: createActionAvailability(truthAuctionBidGuardMessage),
+								idleLabel: 'Submit Bid',
+								onClick: onSubmitBid,
+								pendingLabel: 'Submitting bid...',
+							})}
+						</div>
+					</div>
+				</SectionBlock>
+			</fieldset>
+		) : selectedStage === 'settlement' ? (
+			<fieldset className='fork-stage-panel' disabled={disabled}>
+				<SectionBlock title='Settlement Status'>{renderWorkflowMetricGrid(settlementStatusMetrics)}</SectionBlock>
+
+				<SectionBlock title='Finalize Truth Auction'>
+					<div className='actions'>{renderStageActionButton({ action: 'finalizeTruthAuction', idleLabel: 'Finalize Truth Auction', onClick: onFinalizeTruthAuction, pendingLabel: 'Finalizing truth auction...' })}</div>
+				</SectionBlock>
+
+				<SectionBlock title='Refund Losing Bid'>
+					<div className='form-grid'>
+						<label className='field'>
+							<span>Refund Tick</span>
+							<FormInput value={forkAuctionForm.refundTick} onInput={event => onForkAuctionFormChange({ refundTick: event.currentTarget.value })} />
+						</label>
+						<label className='field'>
+							<span>Refund Bid Index</span>
+							<FormInput value={forkAuctionForm.refundBidIndex} onInput={event => onForkAuctionFormChange({ refundBidIndex: event.currentTarget.value })} />
+						</label>
+						<div className='actions'>{renderStageActionButton({ action: 'refundLosingBids', idleLabel: 'Refund Losing Bid', onClick: onRefundLosingBids, pendingLabel: 'Refunding losing bid...', tone: 'primary' })}</div>
+					</div>
+				</SectionBlock>
+
+				<SectionBlock title='Claim Auction Proceeds'>
+					<div className='form-grid'>
+						<label className='field'>
+							<span>Vault Address</span>
+							<FormInput value={forkAuctionForm.vaultAddress} onInput={event => onForkAuctionFormChange({ vaultAddress: event.currentTarget.value })} placeholder='Leave empty to use connected wallet' />
+						</label>
+						<div className='field-row'>
+							<label className='field'>
+								<span>Claim Bid Tick</span>
+								<FormInput value={forkAuctionForm.claimBidTick} onInput={event => onForkAuctionFormChange({ claimBidTick: event.currentTarget.value })} />
+							</label>
+							<label className='field'>
+								<span>Claim Bid Index</span>
+								<FormInput value={forkAuctionForm.claimBidIndex} onInput={event => onForkAuctionFormChange({ claimBidIndex: event.currentTarget.value })} />
+							</label>
+						</div>
+						<div className='actions'>{renderStageActionButton({ action: 'claimAuctionProceeds', idleLabel: 'Claim Auction Proceeds', onClick: onClaimAuctionProceeds, pendingLabel: 'Claiming auction proceeds...', tone: 'primary' })}</div>
+					</div>
+				</SectionBlock>
+
+				<SectionBlock title='Withdraw Bids'>
+					<div className='form-grid'>
+						<div className='field-row'>
+							<label className='field'>
+								<span>Withdraw For Address</span>
+								<FormInput value={forkAuctionForm.withdrawForAddress} onInput={event => onForkAuctionFormChange({ withdrawForAddress: event.currentTarget.value })} placeholder='Leave empty to use connected wallet' />
+							</label>
+							<label className='field'>
+								<span>Withdraw Tick</span>
+								<FormInput value={forkAuctionForm.withdrawTick} onInput={event => onForkAuctionFormChange({ withdrawTick: event.currentTarget.value })} />
+							</label>
+						</div>
+						<label className='field'>
+							<span>Withdraw Bid Index</span>
+							<FormInput value={forkAuctionForm.withdrawBidIndex} onInput={event => onForkAuctionFormChange({ withdrawBidIndex: event.currentTarget.value })} />
+						</label>
+						<div className='actions'>{renderStageActionButton({ action: 'withdrawBids', idleLabel: 'Withdraw Bids', onClick: onWithdrawBids, pendingLabel: 'Withdrawing bids...' })}</div>
+					</div>
+				</SectionBlock>
+			</fieldset>
+		) : undefined
 
 	const content = (
 		<>
@@ -654,10 +630,7 @@ export function ForkAuctionSection({
 			{hasLoadedPoolContext ? stagePanel : undefined}
 
 			<ChildUniverseDeploymentModal
-				actionAvailability={{
-					disabled: disabled || accountState.address === undefined || !isMainnet || createChildUniverseLifecycleReason !== undefined,
-					reason: interactionDisabledReason ?? createChildUniverseLifecycleReason,
-				}}
+				actionAvailability={createActionAvailability(interactionDisabledReason, createChildUniverseLifecycleReason)}
 				description='Confirm the selected fork outcome and create its child universe in one bounded transaction flow.'
 				idleLabel={`Create ${getOutcomeActionLabel(forkAuctionForm.selectedOutcome)} Child Universe`}
 				isOpen={childUniverseModalOpen}

@@ -16,7 +16,8 @@ import { TransactionStatusCard } from './TransactionStatusCard.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { sameAddress } from '../lib/address.js'
 import { isMainnetChain } from '../lib/network.js'
-import { deriveSecurityPoolUiCapabilities, getSecurityPoolDisplayStateLabel, type SecurityPoolDisplayState } from '../lib/securityPoolState.js'
+import { evaluateSecurityPoolStateFromPool } from '../lib/securityPoolState/adapters.js'
+import { getSecurityPoolLifecycleLabel, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 
@@ -50,7 +51,7 @@ export function SecurityPoolsOverviewSection({
 }: SecurityPoolsOverviewSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const [searchText, setSearchText] = useState('')
-	const [systemStateFilter, setSystemStateFilter] = useState<'all' | SecurityPoolDisplayState>('all')
+	const [systemStateFilter, setSystemStateFilter] = useState<'all' | SecurityPoolLifecycleState>('all')
 	const [vaultFilter, setVaultFilter] = useState<'all' | 'has-vaults' | 'empty'>('all')
 	const registryPresentation = getPoolRegistryPresentation({
 		hasLoaded: hasLoadedSecurityPools,
@@ -58,21 +59,22 @@ export function SecurityPoolsOverviewSection({
 		mode: 'collection',
 		poolCount: securityPools.length,
 	})
-	const selectedPool = securityPools.find(pool => sameAddress(pool.securityPoolAddress, liquidationSecurityPoolAddress))
-	const currentPoolOracleManagerDetails = selectedPool === undefined || liquidationManagerAddress === undefined || !sameAddress(poolOracleManagerDetails?.managerAddress, liquidationManagerAddress) ? undefined : poolOracleManagerDetails
-	const targetVaultSummary = selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))
-	const callerVaultSummary = accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
-	const normalizedSearchText = searchText.trim().toLowerCase()
-	const securityPoolsWithCapabilities = securityPools.map(pool => ({
+	const securityPoolsWithState = securityPools.map(pool => ({
 		pool,
-		uiCapabilities: deriveSecurityPoolUiCapabilities({
+		poolState: evaluateSecurityPoolStateFromPool({
 			questionOutcome: pool.questionOutcome,
 			systemState: pool.systemState,
 			universeHasForked: pool.universeHasForked,
 		}),
 	}))
-	const filteredSecurityPools = securityPoolsWithCapabilities.filter(({ pool, uiCapabilities }) => {
-		const displayState = uiCapabilities.lifecycleState
+	const selectedPoolWithState = securityPoolsWithState.find(({ pool }) => sameAddress(pool.securityPoolAddress, liquidationSecurityPoolAddress))
+	const selectedPool = selectedPoolWithState?.pool
+	const currentPoolOracleManagerDetails = selectedPool === undefined || liquidationManagerAddress === undefined || !sameAddress(poolOracleManagerDetails?.managerAddress, liquidationManagerAddress) ? undefined : poolOracleManagerDetails
+	const targetVaultSummary = selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))
+	const callerVaultSummary = accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
+	const normalizedSearchText = searchText.trim().toLowerCase()
+	const filteredSecurityPools = securityPoolsWithState.filter(({ pool, poolState }) => {
+		const displayState = poolState.lifecycleState
 		if (systemStateFilter !== 'all' && displayState !== systemStateFilter) return false
 		if (vaultFilter === 'has-vaults' && pool.vaults.length === 0) return false
 		if (vaultFilter === 'empty' && pool.vaults.length > 0) return false
@@ -112,7 +114,7 @@ export function SecurityPoolsOverviewSection({
 					</label>
 					<label className='field'>
 						<span>System State</span>
-						<select value={systemStateFilter} onChange={event => setSystemStateFilter(event.currentTarget.value as 'all' | SecurityPoolDisplayState)}>
+						<select value={systemStateFilter} onChange={event => setSystemStateFilter(event.currentTarget.value as 'all' | SecurityPoolLifecycleState)}>
 							<option value='all'>All states</option>
 							<option value='operational'>Operational</option>
 							<option value='ended'>Ended</option>
@@ -144,15 +146,16 @@ export function SecurityPoolsOverviewSection({
 					<StateHint presentation={{ key: 'empty', badgeLabel: 'No matches', badgeTone: 'muted', detail: 'No pools match the current search and filter settings.' }} />
 				) : (
 					<div className='entity-card-list'>
-						{filteredSecurityPools.map(({ pool, uiCapabilities: poolUiCapabilities }) => {
-							const displayState = poolUiCapabilities.lifecycleState
-							const liquidationDisabledReason = poolUiCapabilities.actions.queueLiquidation.lifecycleReason
+						{filteredSecurityPools.map(({ pool, poolState }) => {
+							const displayState = poolState.lifecycleState
+							const liquidationDisabledReason = poolState.actions.queueLiquidation.reason
+							const badgeTone = displayState === 'operational' ? 'ok' : displayState === undefined ? 'muted' : 'warning'
 							return (
 								<EntityCard
 									key={pool.securityPoolAddress}
 									title={getQuestionTitle(pool.marketDetails)}
 									variant='record'
-									badge={<span className={`badge ${displayState === 'operational' ? 'ok' : 'warning'}`}>{displayState === undefined ? 'Unknown' : getSecurityPoolDisplayStateLabel(displayState)}</span>}
+									badge={<span className={`badge ${badgeTone}`}>{getSecurityPoolLifecycleLabel(displayState)}</span>}
 									actions={
 										onSelectSecurityPool === undefined ? undefined : (
 											<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
@@ -209,6 +212,7 @@ export function SecurityPoolsOverviewSection({
 				liquidationTargetVault={liquidationTargetVault}
 				onLoadPoolOracleManager={onLoadPoolOracleManager}
 				onSelectedPoolViewChange={() => undefined}
+				poolState={selectedPoolWithState?.poolState}
 				repPerEthPrice={repPerEthPrice}
 				repPerEthSource={repPerEthSource}
 				repPerEthSourceUrl={repPerEthSourceUrl}

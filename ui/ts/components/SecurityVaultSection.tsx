@@ -21,6 +21,7 @@ import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { WarningSurface } from './WarningSurface.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
+import { pickFirstReason } from '../lib/actionAvailability.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../lib/formatters.js'
 import { balanceShortage } from '../lib/inputs.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
@@ -232,8 +233,6 @@ export function SecurityVaultSection({
 	oracleManagerDetails,
 	onViewStagedOperations,
 	onWithdrawRep,
-	poolActionLockReason,
-	repExitMode = 'withdraw',
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
@@ -252,7 +251,7 @@ export function SecurityVaultSection({
 	showLookupSection = true,
 	showSecurityPoolAddressInput = true,
 	showSummarySection = true,
-	uiCapabilities,
+	poolState,
 }: SecurityVaultSectionProps) {
 	const [vaultActionModal, setVaultActionModal] = useState<VaultActionModal>(undefined)
 	const isMainnet = isMainnetChain(accountState?.chainId)
@@ -321,22 +320,23 @@ export function SecurityVaultSection({
 	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && depositAmount !== undefined && depositAmount > 0n && approvalRequirement.hasSufficientApproval
 	const hasInsufficientRepBalance = repBalanceGap !== undefined && repBalanceGap > 0n
 	const redeemableRepAmount = currentSelectedVaultDetails?.repDepositShare
-	const effectivePoolActionLockReason = uiCapabilities?.actions.depositRep.lifecycleReason ?? poolActionLockReason
-	const effectiveRepExitMode = uiCapabilities?.actions.redeemRep.lifecycleAllowed ? 'redeem' : repExitMode
-	const repExitLifecycleReason = effectiveRepExitMode === 'redeem' ? uiCapabilities?.actions.redeemRep.lifecycleReason : uiCapabilities?.actions.queueWithdrawRep.lifecycleReason
-	const approvalLifecycleReason = uiCapabilities?.actions.approveRep.lifecycleReason ?? effectivePoolActionLockReason
-	const bondAllowanceLifecycleReason = uiCapabilities?.actions.queueSetSecurityBondAllowance.lifecycleReason ?? effectivePoolActionLockReason
-	const claimFeesLifecycleReason = uiCapabilities?.actions.redeemFees.lifecycleReason
+	const effectivePoolActionLockReason = poolState?.actions.depositRep.reason
+	const effectiveRepExitMode = poolState?.actions.redeemRep.enabled ? 'redeem' : 'withdraw'
+	const repExitLifecycleReason = effectiveRepExitMode === 'redeem' ? poolState?.actions.redeemRep.reason : poolState?.actions.queueWithdrawRep.reason
+	const approvalLifecycleReason = poolState?.actions.approveRep.reason
+	const bondAllowanceLifecycleReason = poolState?.actions.queueSetSecurityBondAllowance.reason
+	const claimFeesLifecycleReason = poolState?.actions.redeemFees.reason
 	const repExitActionLabel = effectiveRepExitMode === 'redeem' ? 'Redeem REP' : 'Withdraw REP'
-	const claimFeesGuardMessage =
-		claimFeesLifecycleReason ??
+	const claimFeesGuardMessage = pickFirstReason(
+		claimFeesLifecycleReason,
 		getVaultClaimFeesGuardMessage({
 			hasClaimableFees,
 			isMainnet,
 			selectedVaultIsOwnedByAccount,
-		})
-	const setSecurityBondAllowanceGuardMessage =
-		bondAllowanceLifecycleReason ??
+		}),
+	)
+	const setSecurityBondAllowanceGuardMessage = pickFirstReason(
+		bondAllowanceLifecycleReason,
 		getVaultSetSecurityBondAllowanceGuardMessage({
 			hasValidOraclePrice,
 			isMainnet,
@@ -346,9 +346,10 @@ export function SecurityVaultSection({
 			selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
 			selectedVaultIsOwnedByAccount,
 			walletEthBalance: accountState.ethBalance,
-		})
-	const depositGuardMessage =
-		effectivePoolActionLockReason ??
+		}),
+	)
+	const depositGuardMessage = pickFirstReason(
+		effectivePoolActionLockReason,
 		getVaultDepositGuardMessage({
 			accountAddress: accountState.address,
 			approvalSatisfied: hasSufficientDepositAllowance,
@@ -357,9 +358,10 @@ export function SecurityVaultSection({
 			repBalanceGap: hasInsufficientRepBalance ? repBalanceGap : undefined,
 			selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
 			selectedVaultIsOwnedByAccount,
-		})
-	const withdrawRepGuardMessage =
-		repExitLifecycleReason ??
+		}),
+	)
+	const withdrawRepGuardMessage = pickFirstReason(
+		repExitLifecycleReason,
 		getVaultWithdrawGuardMessage({
 			accountAddress: accountState.address,
 			hasValidOraclePrice,
@@ -369,9 +371,10 @@ export function SecurityVaultSection({
 			withdrawAmount: hasWithdrawAmount ? withdrawAmount : undefined,
 			withdrawableRepAmount,
 			walletEthBalance: accountState.ethBalance,
-		})
-	const redeemRepGuardMessage =
-		repExitLifecycleReason ??
+		}),
+	)
+	const redeemRepGuardMessage = pickFirstReason(
+		repExitLifecycleReason,
 		getVaultRedeemRepGuardMessage({
 			accountAddress: accountState.address,
 			isMainnet,
@@ -379,16 +382,18 @@ export function SecurityVaultSection({
 			redeemableRepAmount,
 			selectedVaultDetailsLoaded: currentSelectedVaultDetails !== undefined,
 			selectedVaultIsOwnedByAccount,
-		})
+		}),
+	)
 	const repExitGuardMessage = effectiveRepExitMode === 'redeem' ? redeemRepGuardMessage : withdrawRepGuardMessage
-	const approvalGuardMessage =
-		approvalLifecycleReason ??
+	const approvalGuardMessage = pickFirstReason(
+		approvalLifecycleReason,
 		getVaultApprovalGuardMessage({
 			accountAddress: accountState.address,
 			isMainnet,
 			selectedVaultDetailsLoaded: !securityVaultMissing && currentSelectedVaultDetails !== undefined,
 			selectedVaultIsOwnedByAccount,
-		})
+		}),
+	)
 	const autoLoadKey = `${normalizeAddress(selectedVaultAddress) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = currentSelectedVaultDetails !== undefined && sameAddress(currentSelectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(currentSelectedVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
 	const lastAutoLoadKey = useRef<string | undefined>(undefined)

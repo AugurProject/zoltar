@@ -6,7 +6,7 @@ import { getOracleManagerPriceValidUntilTimestamp } from './securityVault.js'
 import { getTimeRemaining } from './time.js'
 import type { UserMessagePresentation } from './userCopy.js'
 import { resolveEnumValue } from './viewState.js'
-import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolSystemState } from '../types/contracts.js'
+import type { ListedSecurityPool, OracleManagerDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '../types/contracts.js'
 
 export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'withdraw-escalation-deposits' | 'fork' | 'staged-operations' | 'price-oracle'
 
@@ -44,6 +44,16 @@ export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, 
 
 export function getSelectedPoolCardTitle() {
 	return 'Operate Security Pool'
+}
+
+export function applySelectedPoolWorkflowState(pool: ListedSecurityPool | undefined, { questionOutcome, systemState }: { questionOutcome: ReportingOutcomeKey | 'none' | undefined; systemState: SecurityPoolSystemState | undefined }) {
+	if (pool === undefined) return undefined
+	if (questionOutcome === undefined && systemState === undefined) return pool
+	return {
+		...pool,
+		...(questionOutcome === undefined ? {} : { questionOutcome }),
+		...(systemState === undefined ? {} : { systemState }),
+	}
 }
 
 export function getSelectedPoolWorkflowGuardMessage({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }) {

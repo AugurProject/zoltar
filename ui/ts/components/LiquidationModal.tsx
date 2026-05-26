@@ -13,15 +13,16 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { WarningSurface } from './WarningSurface.js'
 import { TransactionStatusCard } from './TransactionStatusCard.js'
 import { sameAddress } from '../lib/address.js'
+import { createActionAvailability, pickFirstReason } from '../lib/actionAvailability.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { getLiquidationFailureReason, simulateLiquidation } from '../lib/liquidation.js'
 import { parseRepAmountInput } from '../lib/marketForm.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
-import { deriveSecurityPoolUiCapabilities } from '../lib/securityPoolState.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import type { ActionFeedback } from '../types/components.js'
+import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
 
 type LiquidationModalProps = {
@@ -40,6 +41,7 @@ type LiquidationModalProps = {
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: RepPriceSource | undefined
 	repPerEthSourceUrl: string | undefined
+	poolState?: SecurityPoolStateModel | undefined
 	selectedPool: ListedSecurityPool | undefined
 	securityPoolOverviewActiveAction: 'queueLiquidation' | undefined
 	securityPoolOverviewError: string | undefined
@@ -144,6 +146,7 @@ export function LiquidationModal({
 	liquidationTargetVault,
 	onLoadPoolOracleManager,
 	onSelectedPoolViewChange,
+	poolState,
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
@@ -221,11 +224,6 @@ export function LiquidationModal({
 	const liquidationExecutionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
 	const buttonLabels = getLiquidationButtonLabels(currentPoolOracleManagerDetails)
 	const trimmedLiquidationTargetVault = liquidationTargetVault.trim()
-	const selectedPoolUiCapabilities = deriveSecurityPoolUiCapabilities({
-		questionOutcome: selectedPool?.questionOutcome,
-		systemState: selectedPool?.systemState,
-		universeHasForked: selectedPool?.universeHasForked,
-	})
 	const sameVaultWarning = accountAddress === undefined || trimmedLiquidationTargetVault === '' || !sameAddress(accountAddress, trimmedLiquidationTargetVault) ? undefined : 'Select a target vault that is different from the caller vault.'
 	const liquidationSimulation =
 		targetVaultSummary === undefined || poolOraclePrice === undefined || selectedPool?.securityMultiplier === undefined || liquidationAmountValue === undefined
@@ -256,24 +254,18 @@ export function LiquidationModal({
 					requestPriceEthCost: currentPoolOracleManagerDetails?.requestPriceEthCost,
 					walletEthBalance,
 				})
-	const liquidationActionReason =
-		accountAddress === undefined
-			? 'Connect a wallet before liquidating.'
-			: !isMainnet
-				? 'Switch to Ethereum mainnet before liquidating.'
-				: selectedPoolUiCapabilities.actions.queueLiquidation.lifecycleReason !== undefined
-					? selectedPoolUiCapabilities.actions.queueLiquidation.lifecycleReason
-					: liquidationExecutionMode === 'refreshing'
-						? 'Refreshing Open Oracle validity before liquidation.'
-						: liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined
-							? 'Reload the selected pool before liquidating.'
-							: trimmedLiquidationTargetVault === ''
-								? 'Select a target vault first.'
-								: sameVaultWarning !== undefined
-									? sameVaultWarning
-									: liquidationAmount.trim() === ''
-										? 'Enter a liquidation amount.'
-										: (directLiquidationReason ?? queueLiquidationEthGuardMessage)
+	const liquidationActionReason = pickFirstReason(
+		accountAddress === undefined ? 'Connect a wallet before liquidating.' : undefined,
+		!isMainnet ? 'Switch to Ethereum mainnet before liquidating.' : undefined,
+		poolState?.actions.queueLiquidation.reason,
+		liquidationExecutionMode === 'refreshing' ? 'Refreshing Open Oracle validity before liquidation.' : undefined,
+		liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? 'Reload the selected pool before liquidating.' : undefined,
+		trimmedLiquidationTargetVault === '' ? 'Select a target vault first.' : undefined,
+		sameVaultWarning,
+		liquidationAmount.trim() === '' ? 'Enter a liquidation amount.' : undefined,
+		directLiquidationReason,
+		queueLiquidationEthGuardMessage,
+	)
 
 	const queuedLiquidationOperation =
 		securityPoolOverviewResult?.action !== 'queueLiquidation' || currentPoolOracleManagerDetails?.pendingOperation?.operation !== 'liquidation' || currentPoolOracleManagerDetails.pendingOperation.targetVault !== liquidationTargetVault ? undefined : currentPoolOracleManagerDetails.pendingOperation
@@ -421,7 +413,7 @@ export function LiquidationModal({
 							onQueueLiquidation(liquidationManagerAddress, liquidationSecurityPoolAddress)
 						}}
 						pending={securityPoolOverviewActiveAction === 'queueLiquidation'}
-						availability={{ disabled: liquidationActionReason !== undefined, reason: liquidationActionReason }}
+						availability={createActionAvailability(liquidationActionReason)}
 						showDisabledReason={liquidationExecutionMode !== 'queue'}
 					/>
 				</div>
