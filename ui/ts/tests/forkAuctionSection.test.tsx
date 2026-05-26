@@ -8,7 +8,7 @@ import { ForkAuctionSection } from '../components/ForkAuctionSection.js'
 import { AUCTION_TIME_SECONDS } from '../lib/forkAuction.js'
 import { formatDuration } from '../lib/formatters.js'
 import type { AccountState, ForkAuctionFormState } from '../types/app.js'
-import type { ForkAuctionDetails, MarketDetails } from '../types/contracts.js'
+import type { ForkAuctionDetails, MarketDetails, ReadClient } from '../types/contracts.js'
 import type { ForkAuctionSectionProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -108,6 +108,29 @@ function createForkAuctionForm(): ForkAuctionFormState {
 	}
 }
 
+function createTruthAuctionReadClient(
+	readContract: ReadClient['readContract'] = async request => {
+		if (request.functionName === 'getTickCount') return 0n as never
+		if (request.functionName === 'getTickPage') return [] as never
+		if (request.functionName === 'getBidCountAtTick') return 0n as never
+		if (request.functionName === 'getBidPageAtTick') return [] as never
+		if (request.functionName === 'getBidderBidCount') return 0n as never
+		if (request.functionName === 'getBidderBidPage') return [] as never
+		throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
+	},
+): Pick<ReadClient, 'readContract'> {
+	return {
+		readContract,
+	}
+}
+
+async function flushTruthAuctionLoads() {
+	await Promise.resolve()
+	await Promise.resolve()
+	await Promise.resolve()
+	await Promise.resolve()
+}
+
 function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuctionSectionProps {
 	return {
 		accountState: createAccountState(),
@@ -135,6 +158,7 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 		onWithdrawBids: () => undefined,
 		showHeader: false,
 		showSecurityPoolAddressInput: false,
+		truthAuctionReadClient: createTruthAuctionReadClient(),
 		...overrides,
 	}
 }
@@ -378,5 +402,113 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Submit Bid', 'Need 1 more ETH in this wallet to bid the selected amount.')
+	})
+
+	test('renders the bid ladder, selected price level, and wallet bids from contract-backed auction pages', async () => {
+		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
+			if (request.functionName === 'getTickCount') return 2n as never
+			if (request.functionName === 'getTickPage')
+				return [
+					{ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 2n, active: true },
+					{ tick: 10n, price: 2n * ETH, currentTotalEth: 5n * ETH, submissionCount: 3n, active: true },
+				] as never
+			if (request.functionName === 'getBidCountAtTick') return 2n as never
+			if (request.functionName === 'getBidPageAtTick')
+				return [
+					{ tick: 10n, bidIndex: 0n, price: 2n * ETH, bidder: zeroAddress, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH, claimed: false, refunded: false },
+					{ tick: 10n, bidIndex: 1n, price: 2n * ETH, bidder: '0x0000000000000000000000000000000000000001', ethAmount: 3n * ETH, cumulativeEth: 5n * ETH, claimed: false, refunded: false },
+				] as never
+			if (request.functionName === 'getBidderBidCount') return 1n as never
+			if (request.functionName === 'getBidderBidPage') return [{ tick: 10n, bidIndex: 0n, price: 2n * ETH, bidder: zeroAddress, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH, claimed: false, refunded: false }] as never
+			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ ethBalance: 10n * ETH }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'forkTruthAuction',
+						truthAuction: {
+							...createTruthAuctionMetrics(),
+							clearingPrice: 2n * ETH,
+							clearingTick: 10n,
+							ethAtClearingTick: 5n * ETH,
+							ethRaised: 9n * ETH,
+							hitCap: true,
+						},
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 1n,
+					},
+					truthAuctionReadClient,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await flushTruthAuctionLoads()
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Bid Ladder' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Tick 12')).toBe(true)
+		expect(documentQueries.getByText('Selected Price Level')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'My Bids' })).not.toBeNull()
+		expect(document.body.textContent?.includes('2 submissions')).toBe(true)
+	})
+
+	test('prefills claim inputs from wallet bid shortcuts in settlement mode', async () => {
+		const formUpdates: Partial<ForkAuctionFormState>[] = []
+		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
+			if (request.functionName === 'getTickCount') return 1n as never
+			if (request.functionName === 'getTickPage') return [{ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true }] as never
+			if (request.functionName === 'getBidCountAtTick') return 1n as never
+			if (request.functionName === 'getBidPageAtTick') return [{ tick: 12n, bidIndex: 0n, price: 3n * ETH, bidder: zeroAddress, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH, claimed: false, refunded: false }] as never
+			if (request.functionName === 'getBidderBidCount') return 1n as never
+			if (request.functionName === 'getBidderBidPage') return [{ tick: 12n, bidIndex: 0n, price: 3n * ETH, bidder: zeroAddress, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH, claimed: false, refunded: false }] as never
+			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ ethBalance: 10n * ETH }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'operational',
+						truthAuction: {
+							...createTruthAuctionMetrics(),
+							clearingPrice: 2n * ETH,
+							clearingTick: 10n,
+							ethAtClearingTick: 5n * ETH,
+							finalized: true,
+							hitCap: true,
+						},
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 1n,
+					},
+					onForkAuctionFormChange: update => {
+						formUpdates.push(update)
+					},
+					truthAuctionReadClient,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await flushTruthAuctionLoads()
+
+		const documentQueries = within(document.body)
+		fireEvent.click(
+			documentQueries.getAllByRole('button', { name: 'Prefill Claim' })[0] ??
+				(() => {
+					throw new Error('Expected at least one Prefill Claim button')
+				})(),
+		)
+
+		expect(formUpdates).toContainEqual({
+			claimBidIndex: '0',
+			claimBidTick: '12',
+		})
 	})
 })

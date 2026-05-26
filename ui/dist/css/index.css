@@ -2243,6 +2243,240 @@ strong.metric-value-danger {
 	line-height: 1.45;
 }
 
+.truth-auction-hero,
+.truth-auction-book-layout,
+.truth-auction-level-detail,
+.truth-auction-progress-group,
+.truth-auction-ladder,
+.truth-auction-bid-list,
+.truth-auction-manual-tools {
+	display: grid;
+}
+
+.truth-auction-hero {
+	grid-template-columns: minmax(0, 1.3fr) minmax(16rem, 1fr);
+	gap: 1rem 1.25rem;
+}
+
+.truth-auction-hero-primary,
+.truth-auction-level-detail,
+.truth-auction-bid-card {
+	padding: 1rem;
+	border: 1px solid var(--border-default);
+	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-card-end) 100%);
+	box-shadow:
+		var(--glow-inset-subtle),
+		0 12px 28px rgba(0, 0, 0, 0.12);
+}
+
+.truth-auction-hero-primary,
+.truth-auction-level-detail,
+.truth-auction-progress-group,
+.truth-auction-bid-card,
+.truth-auction-bid-card-header,
+.truth-auction-bid-card-actions,
+.truth-auction-level-header,
+.truth-auction-price-row-copy {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.truth-auction-hero-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+	gap: 0.9rem 1rem;
+	align-content: start;
+}
+
+.truth-auction-progress-copy {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 0.75rem;
+	font-family: "IBM Plex Sans", sans-serif;
+}
+
+.truth-auction-progress-copy span {
+	color: var(--muted);
+}
+
+.truth-auction-progress-copy strong {
+	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-size: var(--font-value);
+	color: var(--value);
+}
+
+.truth-auction-progress-track {
+	overflow: hidden;
+	height: 0.7rem;
+	border-radius: 999px;
+	border: 1px solid var(--border-default);
+	background: color-mix(in srgb, var(--surface-card-end) 82%, #08121f 18%);
+}
+
+.truth-auction-progress-fill {
+	height: 100%;
+	border-radius: inherit;
+}
+
+.truth-auction-progress-fill.is-eth {
+	background: linear-gradient(90deg, #e8a644 0%, #f3d17b 100%);
+}
+
+.truth-auction-progress-fill.is-rep {
+	background: linear-gradient(90deg, #3e9f78 0%, #89d0a8 100%);
+}
+
+.truth-auction-book-layout {
+	grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.9fr);
+	gap: 1rem 1.25rem;
+}
+
+.truth-auction-ladder,
+.truth-auction-bid-list,
+.truth-auction-manual-tools {
+	gap: 0.75rem;
+}
+
+.truth-auction-price-row {
+	position: relative;
+	display: block;
+	overflow: hidden;
+	padding: 0;
+	border: 1px solid var(--border-default);
+	border-radius: 1rem;
+	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-card-end) 100%);
+	color: inherit;
+	text-align: left;
+	box-shadow:
+		var(--glow-inset-subtle),
+		0 10px 24px rgba(0, 0, 0, 0.1);
+}
+
+.truth-auction-price-row:hover {
+	transform: translateY(-1px);
+	box-shadow:
+		var(--glow-inset-subtle),
+		0 14px 28px rgba(0, 0, 0, 0.14);
+}
+
+.truth-auction-price-row-bar {
+	position: absolute;
+	inset: auto auto 0 0;
+	height: 100%;
+	min-width: 0;
+	opacity: 0.17;
+	background: linear-gradient(90deg, #e8a644 0%, #3e9f78 100%);
+}
+
+.truth-auction-price-row-copy {
+	position: relative;
+	padding: 0.95rem 1rem;
+}
+
+.truth-auction-price-row-main,
+.truth-auction-price-row-meta,
+.truth-auction-level-header,
+.truth-auction-bid-card-metrics {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem 0.75rem;
+}
+
+.truth-auction-price-row-main strong,
+.truth-auction-level-header h4,
+.truth-auction-bid-card-header strong {
+	font-size: var(--font-base);
+}
+
+.truth-auction-price-row-price,
+.truth-auction-bid-card-address {
+	color: var(--muted);
+	font-size: var(--font-small);
+}
+
+.truth-auction-price-row-meta,
+.truth-auction-bid-card-metrics {
+	color: var(--muted);
+	font-size: var(--font-small);
+}
+
+.truth-auction-status-pill {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.24rem 0.6rem;
+	border: 1px solid var(--border-default);
+	border-radius: 999px;
+	font-size: 0.74rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+}
+
+.truth-auction-status-pill.is-success,
+.truth-auction-price-row.is-success {
+	border-color: color-mix(in srgb, var(--success) 42%, var(--border-default) 58%);
+}
+
+.truth-auction-status-pill.is-success {
+	color: var(--success);
+	background: color-mix(in srgb, var(--success) 12%, transparent 88%);
+}
+
+.truth-auction-status-pill.is-warning,
+.truth-auction-price-row.is-warning {
+	border-color: color-mix(in srgb, #e8a644 55%, var(--border-default) 45%);
+}
+
+.truth-auction-status-pill.is-warning {
+	color: #f0bf5d;
+	background: rgba(232, 166, 68, 0.12);
+}
+
+.truth-auction-status-pill.is-danger,
+.truth-auction-price-row.is-danger {
+	border-color: color-mix(in srgb, var(--danger) 42%, var(--border-default) 58%);
+}
+
+.truth-auction-status-pill.is-danger {
+	color: var(--danger);
+	background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+}
+
+.truth-auction-status-pill.is-default {
+	color: var(--muted);
+	background: color-mix(in srgb, var(--surface-card-end) 82%, #08121f 18%);
+}
+
+.truth-auction-price-row.is-selected {
+	outline: 2px solid color-mix(in srgb, #e8a644 65%, transparent 35%);
+	outline-offset: 2px;
+}
+
+.truth-auction-price-row.is-preview .truth-auction-price-row-copy {
+	box-shadow: inset 0 0 0 1px rgba(62, 159, 120, 0.45);
+}
+
+.truth-auction-level-detail h4 {
+	margin: 0;
+}
+
+.truth-auction-bid-card-header {
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: start;
+}
+
+.truth-auction-bid-card-actions {
+	grid-auto-flow: column;
+	justify-content: flex-start;
+}
+
+.truth-auction-book-error {
+	color: var(--danger);
+}
+
 .workflow-create-section {
 	border-top-color: var(--border-strong);
 	padding-top: 1.25rem;
@@ -3283,6 +3517,18 @@ button:focus-visible {
 	.field-row,
 	.market-grid {
 		grid-template-columns: 1fr;
+	}
+
+	.truth-auction-hero,
+	.truth-auction-book-layout {
+		grid-template-columns: 1fr;
+	}
+
+	.truth-auction-level-header,
+	.truth-auction-price-row-main,
+	.truth-auction-price-row-meta,
+	.truth-auction-bid-card-metrics {
+		align-items: flex-start;
 	}
 
 	.lookup-field-controls.has-action {
