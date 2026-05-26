@@ -6,7 +6,7 @@ import { createWriteClient, WriteClient, writeContractAndWait } from '../testsui
 import { TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { contractExists, setupTestAccounts } from '../testsuite/simulator/utils/utilities'
 import { QuestionOutcome } from '../testsuite/simulator/types/types'
-import assert from 'node:assert'
+import assert from 'node:assert/strict'
 import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution } from '../testsuite/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getZoltarAddress } from '../testsuite/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testsuite/simulator/utils/contracts/deployPeripherals'

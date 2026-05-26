@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { assertNever } from '../lib/assert.js'
 import { createSimulationEngine } from './tevmEngine.js'
 import type { SimulationWorkerCallMessage, SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerRpcMessage } from './tevmWorkerProtocol.js'
 
@@ -28,7 +29,8 @@ async function getEngine() {
 
 async function handleCall(message: SimulationWorkerCallMessage) {
 	const engine = await getEngine()
-	switch (message.method) {
+	const { method } = message
+	switch (method) {
 		case 'advanceTime':
 			await engine.advanceTime(message.params.seconds)
 			return undefined
@@ -74,6 +76,8 @@ async function handleCall(message: SimulationWorkerCallMessage) {
 		case 'waitUntilReady':
 			await engine.waitUntilReady()
 			return undefined
+		default:
+			return assertNever(method)
 	}
 }
 

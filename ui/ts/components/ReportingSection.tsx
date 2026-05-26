@@ -15,6 +15,7 @@ import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { UniverseLink } from './UniverseLink.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
+import { assertNever } from '../lib/assert.js'
 import { pickFirstReason } from '../lib/actionAvailability.js'
 import { formatCurrencyInputBalance, formatDuration } from '../lib/formatters.js'
 import { parseOptionalRepAmountInput } from '../lib/marketForm.js'
@@ -133,7 +134,8 @@ function getReportingStagePresentation({
 			tone: 'default',
 		}
 	if (reportingDetails.status === 'not-started') return undefined
-	switch (getEscalationPhase(reportingDetails)) {
+	const escalationPhase = getEscalationPhase(reportingDetails)
+	switch (escalationPhase) {
 		case 'Pending Start':
 			return undefined
 		case 'Active':
@@ -172,6 +174,8 @@ function getReportingStagePresentation({
 				label: 'Resolved',
 				tone: 'success',
 			}
+		default:
+			return assertNever(escalationPhase)
 	}
 }
 function getEscalationGameStartTimestamp(activationTime: bigint | undefined) {

@@ -23,6 +23,7 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { UniverseLink } from './UniverseLink.js'
 import { ViewTabs } from './ViewTabs.js'
 import { WarningSurface } from './WarningSurface.js'
+import { assertNever } from '../lib/assert.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import {
@@ -61,6 +62,8 @@ function getPendingOperationLabel(operation: 'liquidation' | 'setSecurityBondsAl
 			return 'Withdraw REP'
 		case 'setSecurityBondsAllowance':
 			return 'Set Bond Allowance'
+		default:
+			return assertNever(operation)
 	}
 }
 function getSecurityPoolStatusBadgeTone(systemState: SecurityPoolLifecycleState | undefined) {

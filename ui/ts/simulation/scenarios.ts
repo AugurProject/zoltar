@@ -1,3 +1,5 @@
+import { assertNever } from '../lib/assert.js'
+
 export const SIMULATION_SCENARIOS = ['baseline', 'deployed', 'security-pool', 'securitypoolx2'] as const
 
 export type SimulationScenario = (typeof SIMULATION_SCENARIOS)[number]
@@ -20,6 +22,8 @@ export function getSimulationScenarioLabel(scenario: SimulationScenario) {
 			return 'Security pool'
 		case 'securitypoolx2':
 			return 'Security pool x2'
+		default:
+			return assertNever(scenario)
 	}
 }
 
@@ -33,5 +37,7 @@ export function getSimulationScenarioDescription(scenario: SimulationScenario) {
 			return 'One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool workflows and liquidation paths.'
 		case 'securitypoolx2':
 			return 'Two seeded markets with two security pools and two funded vaults in each pool. Use it to test multi-pool selection and repeated pool workflows.'
+		default:
+			return assertNever(scenario)
 	}
 }

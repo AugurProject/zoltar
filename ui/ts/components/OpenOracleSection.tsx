@@ -24,6 +24,7 @@ import { TransactionHashLink } from './TransactionHashLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { useLoadController } from '../hooks/useLoadController.js'
+import { assertNever } from '../lib/assert.js'
 import { createConnectedReadClient } from '../lib/clients.js'
 import { useChainBlockNumber, useChainTimestamp } from '../lib/chainTimestamp.js'
 import {
@@ -431,6 +432,8 @@ export function renderSelectedReportActionSection({
 					<p className='detail'>This report is settled. No write actions are available.</p>
 				</SectionBlock>
 			)
+		default:
+			return assertNever(actionMode)
 	}
 }
 function renderReportDetailsCard(
@@ -837,8 +840,13 @@ function getOpenOracleOutcomePresentation(action: OpenOracleSectionProps['openOr
 				nextStep: 'Open the new report to continue its lifecycle.',
 				title: 'Open Oracle Game Created',
 			}
+		case 'executeStagedOperation':
+		case 'queueOperation':
+		case 'requestPrice':
+			return undefined
+		default:
+			return assertNever(action.action)
 	}
-	return undefined
 }
 export function OpenOracleSection({
 	activeView,

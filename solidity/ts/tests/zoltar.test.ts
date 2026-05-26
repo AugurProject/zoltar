@@ -4,7 +4,7 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/us
 import { createWriteClient, WriteClient } from '../testsuite/simulator/utils/viem'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testsuite/simulator/utils/constants'
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testsuite/simulator/utils/utilities'
-import assert from 'node:assert'
+import assert from 'node:assert/strict'
 import { addressString } from '../testsuite/simulator/utils/bigint'
 import { addRepToMigrationBalance, deployChild, ensureZoltarDeployed, forkUniverse, getMigrationRepBalance, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, getZoltarForkThreshold, isZoltarDeployed, splitMigrationRep } from '../testsuite/simulator/utils/contracts/zoltar'
 import { createQuestion, getAnswerOptionName, getQuestionId } from '../testsuite/simulator/utils/contracts/zoltarQuestionData'
