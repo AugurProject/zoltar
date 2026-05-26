@@ -855,9 +855,7 @@ export function SecurityVaultSection({
 									</MetricField>
 								)
 							}
-							if (oraclePriceValidUntilTimestamp === undefined) {
-								return undefined
-							}
+							if (oraclePriceValidUntilTimestamp === undefined) return undefined
 
 							return (
 								<MetricField className='entity-metric' label='Price Valid Until'>

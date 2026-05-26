@@ -123,9 +123,7 @@ function getReportingStagePresentation({
 			tone: 'default',
 		}
 	}
-	if (reportingDetails.status === 'not-started') {
-		return undefined
-	}
+	if (reportingDetails.status === 'not-started') return undefined
 	switch (getEscalationPhase(reportingDetails)) {
 		case 'Pending Start':
 			return undefined
@@ -252,9 +250,7 @@ export function ReportingSection({
 	const selectedWithdrawDepositIndexes = reportingForm.selectedWithdrawDepositIndexes
 	const allWithdrawDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 	const displayBindingCapital = (() => {
-		if (effectiveReportingDetails === undefined) {
-			return undefined
-		}
+		if (effectiveReportingDetails === undefined) return undefined
 		if (effectiveReportingDetails.status === 'not-started') {
 			return 0n
 		}
@@ -276,9 +272,7 @@ export function ReportingSection({
 	const timerPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : getReportingTimerPreview(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	const selectedOutcomeLabel = selectedOutcome === undefined ? 'Selected Side' : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
 	const projectedFinalizationTimestamp = (() => {
-		if (timerPreview === undefined || effectiveCurrentTimestamp === undefined) {
-			return undefined
-		}
+		if (timerPreview === undefined || effectiveCurrentTimestamp === undefined) return undefined
 		if (timerPreview.kind === 'not-started') {
 			return effectiveCurrentTimestamp + timerPreview.timeUntilEnd
 		}
@@ -287,9 +281,7 @@ export function ReportingSection({
 			if (timerPreview.actualState === 'ends-immediately') {
 				return effectiveCurrentTimestamp
 			}
-			if (activeReportingDetails === undefined) {
-				return undefined
-			}
+			if (activeReportingDetails === undefined) return undefined
 
 			return effectiveCurrentTimestamp + getEscalationTimeRemaining(activeReportingDetails) + (timerPreview.timerIncrease ?? 0n)
 		})()
@@ -382,9 +374,7 @@ export function ReportingSection({
 	const withdrawSelectedGuardMessage =
 		withdrawGuardMessage ??
 		(() => {
-			if (!withdrawEscalationEnabled) {
-				return undefined
-			}
+			if (!withdrawEscalationEnabled) return undefined
 			if (selectedSide !== undefined && selectedSide.userDeposits.length > 0 && selectedWithdrawDepositIndexes.length === 0) {
 				return 'Select at least one deposit to withdraw or use Withdraw all.'
 			}
@@ -572,9 +562,7 @@ export function ReportingSection({
 						</p>
 					) : undefined}
 					{(() => {
-						if (selectedSide === undefined) {
-							return undefined
-						}
+						if (selectedSide === undefined) return undefined
 						if (selectedSide.userDeposits.length === 0) {
 							return <p className='detail'>Connected wallet has no unsettled deposits on the selected side.</p>
 						}

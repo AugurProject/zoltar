@@ -72,9 +72,7 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 		if (parsedAmount.kind === 'default') {
 			return requirement.targetAmount
 		}
-		if (parsedAmount.kind === 'invalid') {
-			return undefined
-		}
+		if (parsedAmount.kind === 'invalid') return undefined
 
 		return parsedAmount.amount
 	})()

@@ -48,9 +48,7 @@ export function deriveTokenApprovalRequirement(requiredAmount: bigint | undefine
 	}
 	const hasSufficientApproval = approvedAmount !== undefined && approvedAmount >= requiredAmount
 	const neededAmount = (() => {
-		if (approvedAmount === undefined) {
-			return undefined
-		}
+		if (approvedAmount === undefined) return undefined
 		if (approvedAmount >= requiredAmount) {
 			return 0n
 		}

@@ -10,9 +10,7 @@ export function TransactionActionButton({ availability, className = '', disabled
 				{pending ? <LoadingText>{pendingLabel}</LoadingText> : idleLabel}
 			</button>
 			{(() => {
-				if (showDisabledReason && disabledReason === undefined) {
-					return undefined
-				}
+				if (showDisabledReason && disabledReason === undefined) return undefined
 				if (showDisabledReason && isDisabled) {
 					return <p className='detail disabled-reason'>{disabledReason}</p>
 				}

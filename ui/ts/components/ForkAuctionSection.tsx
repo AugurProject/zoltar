@@ -179,9 +179,7 @@ export function ForkAuctionSection({
 	const forkOnlyFallbackText = getForkOnlyFallbackText(hasPreviewForkActivity)
 	const forkStageDescription = (() => {
 		if (forkAuctionDetails === undefined) {
-			if (systemState === undefined) {
-				return undefined
-			}
+			if (systemState === undefined) return undefined
 
 			return getForkStageDescriptionForState(systemState)
 		}

@@ -562,9 +562,7 @@ function renderReportDetailsCard(
 					return action
 				})(),
 	)
-	if (openOracleInitialReportSubmission === undefined) {
-		return undefined
-	}
+	if (openOracleInitialReportSubmission === undefined) return undefined
 	return (
 		<>
 			<StickyObjectContext

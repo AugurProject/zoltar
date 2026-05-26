@@ -139,9 +139,7 @@ export function SecurityPoolsOverviewSection({
 
 				{(() => {
 					if (securityPools.length === 0) {
-						if (registryPresentation === undefined) {
-							return undefined
-						}
+						if (registryPresentation === undefined) return undefined
 
 						return <StateHint presentation={registryPresentation} />
 					}

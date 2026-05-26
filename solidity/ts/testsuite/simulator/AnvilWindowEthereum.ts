@@ -96,32 +96,22 @@ function parseSnapshotId(value: unknown) {
 }
 
 function parseBlockTimestamp(value: unknown): bigint | undefined {
-	if (typeof value !== 'object' || value === null || !('timestamp' in value)) {
-		return undefined
-	}
+	if (typeof value !== 'object' || value === null || !('timestamp' in value)) return undefined
 	const { timestamp } = value as RpcBlock
-	if (typeof timestamp !== 'string') {
-		return undefined
-	}
+	if (typeof timestamp !== 'string') return undefined
 	return BigInt(timestamp)
 }
 
 function parseTransactionReceiptStatus(value: unknown): string | undefined {
-	if (typeof value !== 'object' || value === null || !('status' in value)) {
-		return undefined
-	}
+	if (typeof value !== 'object' || value === null || !('status' in value)) return undefined
 	const { status } = value as RpcTransactionReceipt
 	return typeof status === 'string' ? status : undefined
 }
 
 function parseTransactionBlockNumber(value: unknown): bigint | undefined {
-	if (typeof value !== 'object' || value === null || !('blockNumber' in value)) {
-		return undefined
-	}
+	if (typeof value !== 'object' || value === null || !('blockNumber' in value)) return undefined
 	const { blockNumber } = value as RpcTransaction
-	if (typeof blockNumber !== 'string') {
-		return undefined
-	}
+	if (typeof blockNumber !== 'string') return undefined
 	return BigInt(blockNumber)
 }
 

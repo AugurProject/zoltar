@@ -156,9 +156,7 @@ export function SecurityPoolWorkflowSection({
 	const currentTimestamp = chainCurrentTimestamp ?? currentReportingDetails?.currentTime ?? currentForkAuctionDetails?.currentTime
 	const reportingReady = marketDetails !== undefined && currentTimestamp !== undefined && marketDetails.endTime <= currentTimestamp
 	const reportingLockedReason = (() => {
-		if (reportingReady) {
-			return undefined
-		}
+		if (reportingReady) return undefined
 		if (marketDetails === undefined) {
 			return 'Reporting opens after market end.'
 		}
@@ -535,9 +533,7 @@ export function SecurityPoolWorkflowSection({
 												<SecurityPoolVaultDirectory
 													emptyState={(() => {
 														if (selectedPool === undefined) {
-															if (selectedPoolBrowsePresentation === undefined) {
-																return undefined
-															}
+															if (selectedPoolBrowsePresentation === undefined) return undefined
 
 															return <StateHint presentation={selectedPoolBrowsePresentation} />
 														}

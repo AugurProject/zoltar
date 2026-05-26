@@ -221,9 +221,7 @@ export function LiquidationModal({
 					targetVaultSummary,
 				})
 	const directLiquidationReason = (() => {
-		if (liquidationExecutionMode !== 'execute') {
-			return undefined
-		}
+		if (liquidationExecutionMode !== 'execute') return undefined
 		if (selectedPool?.securityMultiplier === undefined) {
 			return 'Reload the selected pool before executing liquidation.'
 		}
