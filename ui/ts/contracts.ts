@@ -39,6 +39,11 @@ import type {
 	TradingActionResult,
 	TradingDetails,
 	TradingShareBalances,
+	TruthAuctionBidView,
+	TruthAuctionBidderBidPage,
+	TruthAuctionTickSummary,
+	TruthAuctionTickBidPage,
+	TruthAuctionTickPage,
 	TruthAuctionMetrics,
 	WriteClient,
 	ZoltarChildUniverseActionResult,
@@ -77,9 +82,27 @@ const MIGRATION_TIME_LENGTH = 4838400n
 const TRUTH_AUCTION_TIME_LENGTH = 604800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
 const CONTRACT_PAGE_SIZE = 30n
+const MAX_TRUTH_AUCTION_PAGE_SIZE = 100
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
+type TruthAuctionTickSummaryStruct = {
+	tick: bigint
+	price: bigint
+	currentTotalEth: bigint
+	submissionCount: bigint
+	active: boolean
+}
+type TruthAuctionBidViewStruct = {
+	tick: bigint
+	bidIndex: bigint
+	price: bigint
+	bidder: Address
+	ethAmount: bigint
+	cumulativeEth: bigint
+	claimed: boolean
+	refunded: boolean
+}
 type ReportingBootstrapReadResult = readonly [bigint, Address, bigint, bigint, Address, bigint]
 type SecurityPoolDeploymentQueryResult = {
 	completeSetCollateralAmount: bigint
@@ -129,6 +152,13 @@ function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOpe
 	}
 	return undefined
 }
+
+function getTruthAuctionPageOffset(pageIndex: number, pageSize: number) {
+	if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('Page index must be a non-negative integer')
+	if (!Number.isInteger(pageSize) || pageSize <= 0 || pageSize > MAX_TRUTH_AUCTION_PAGE_SIZE) throw new Error(`Page size must be between 1 and ${MAX_TRUTH_AUCTION_PAGE_SIZE}`)
+	return BigInt(pageIndex) * BigInt(pageSize)
+}
+
 async function readSecurityPoolUniverseId(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address) {
 	return await client.readContract({
 		address: securityPoolAddress,
@@ -1165,6 +1195,98 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		universeId,
 	}
 }
+
+function mapTruthAuctionTickSummary(summary: TruthAuctionTickSummaryStruct): TruthAuctionTickSummary {
+	return {
+		tick: summary.tick,
+		price: summary.price,
+		currentTotalEth: summary.currentTotalEth,
+		submissionCount: summary.submissionCount,
+		active: summary.active,
+	}
+}
+
+function mapTruthAuctionBidView(bid: TruthAuctionBidViewStruct): TruthAuctionBidView {
+	return {
+		tick: bid.tick,
+		bidIndex: bid.bidIndex,
+		price: bid.price,
+		bidder: bid.bidder,
+		ethAmount: bid.ethAmount,
+		cumulativeEth: bid.cumulativeEth,
+		claimed: bid.claimed,
+		refunded: bid.refunded,
+	}
+}
+
+export async function loadTruthAuctionTickPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, pageIndex: number, pageSize: number): Promise<TruthAuctionTickPage> {
+	const offset = getTruthAuctionPageOffset(pageIndex, pageSize)
+	const tickCount = await client.readContract({
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'getTickCount',
+		address: truthAuctionAddress,
+		args: [],
+	})
+	const tickPage = (await client.readContract({
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'getTickPage',
+		address: truthAuctionAddress,
+		args: [offset, BigInt(pageSize)],
+	})) as readonly TruthAuctionTickSummaryStruct[]
+	return {
+		pageIndex,
+		pageSize,
+		tickCount,
+		ticks: tickPage.map(summary => mapTruthAuctionTickSummary(summary)),
+	}
+}
+
+export async function loadTruthAuctionTickBidPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, tick: bigint, pageIndex: number, pageSize: number): Promise<TruthAuctionTickBidPage> {
+	const offset = getTruthAuctionPageOffset(pageIndex, pageSize)
+	const bidCount = await client.readContract({
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'getBidCountAtTick',
+		address: truthAuctionAddress,
+		args: [tick],
+	})
+	const bidPage = (await client.readContract({
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'getBidPageAtTick',
+		address: truthAuctionAddress,
+		args: [tick, offset, BigInt(pageSize)],
+	})) as readonly TruthAuctionBidViewStruct[]
+	return {
+		tick,
+		pageIndex,
+		pageSize,
+		bidCount,
+		bids: bidPage.map(bid => mapTruthAuctionBidView(bid)),
+	}
+}
+
+export async function loadTruthAuctionBidderBidPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, bidder: Address, pageIndex: number, pageSize: number): Promise<TruthAuctionBidderBidPage> {
+	const offset = getTruthAuctionPageOffset(pageIndex, pageSize)
+	const bidCount = await client.readContract({
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'getBidderBidCount',
+		address: truthAuctionAddress,
+		args: [bidder],
+	})
+	const bidPage = (await client.readContract({
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'getBidderBidPage',
+		address: truthAuctionAddress,
+		args: [bidder, offset, BigInt(pageSize)],
+	})) as readonly TruthAuctionBidViewStruct[]
+	return {
+		bidder,
+		pageIndex,
+		pageSize,
+		bidCount,
+		bids: bidPage.map(bid => mapTruthAuctionBidView(bid)),
+	}
+}
+
 async function executeForkAuctionAction(client: WriteClient, action: ForkAuctionAction, securityPoolAddress: Address, universeId: bigint, request: () => Promise<Hash>) {
 	const hash = await request()
 	await client.waitForTransactionReceipt({ hash })

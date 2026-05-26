@@ -2,12 +2,13 @@
 
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, type Address, type Hash, type Hex } from 'viem'
-import { getOpenOracleAddress, loadEscalationDeposits, migrateSharesFromUniverse, settleOracleReport } from '../contracts.js'
+import { getOpenOracleAddress, loadEscalationDeposits, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickPage, migrateSharesFromUniverse, settleOracleReport } from '../contracts.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import type { ReadClient } from '../types/contracts.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
+const truthAuctionAddress = getAddress('0x00000000000000000000000000000000000000f6')
 const transactionHash = '0x00000000000000000000000000000000000000000000000000000000000000c3' satisfies Hash
 
 type MockWriteClient = Parameters<typeof migrateSharesFromUniverse>[0]
@@ -117,5 +118,111 @@ describe('contracts helpers', () => {
 		expect(deposits.some(deposit => deposit.amount === 0n)).toBe(false)
 		expect(deposits[28]?.depositIndex).toBe(28n)
 		expect(deposits[29]?.depositIndex).toBe(30n)
+	})
+
+	test('truth auction page loaders validate page inputs before reading', async () => {
+		const client = createMockReadClient(async () => {
+			throw new Error('readContract should not be called for invalid pagination')
+		})
+
+		await expect(loadTruthAuctionTickPage(client, truthAuctionAddress, -1, 10)).rejects.toThrow('Page index must be a non-negative integer')
+		await expect(loadTruthAuctionTickPage(client, truthAuctionAddress, 0, 0)).rejects.toThrow('Page size must be between 1 and 100')
+		await expect(loadTruthAuctionTickBidPage(client, truthAuctionAddress, 1n, 0, 101)).rejects.toThrow('Page size must be between 1 and 100')
+		await expect(loadTruthAuctionBidderBidPage(client, truthAuctionAddress, securityPoolAddress, -1, 10)).rejects.toThrow('Page index must be a non-negative integer')
+	})
+
+	test('loadTruthAuctionTickPage maps tuple responses and converts page indexes to offsets', async () => {
+		const readCalls: Array<{ functionName: string; args: unknown[] | undefined }> = []
+		const client = createMockReadClient(async request => {
+			readCalls.push({
+				functionName: String(request.functionName),
+				args: Array.isArray(request.args) ? [...request.args] : undefined,
+			})
+			if (request.functionName === 'getTickCount') return 3n as never
+			if (request.functionName === 'getTickPage')
+				return [
+					{ tick: 1n, price: 2n, currentTotalEth: 3n, submissionCount: 4n, active: true },
+					{ tick: 5n, price: 6n, currentTotalEth: 7n, submissionCount: 8n, active: false },
+				] as never
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		const page = await loadTruthAuctionTickPage(client, truthAuctionAddress, 2, 5)
+
+		expect(readCalls).toEqual([
+			{ functionName: 'getTickCount', args: [] },
+			{ functionName: 'getTickPage', args: [10n, 5n] },
+		])
+		expect(page).toEqual({
+			pageIndex: 2,
+			pageSize: 5,
+			tickCount: 3n,
+			ticks: [
+				{ tick: 1n, price: 2n, currentTotalEth: 3n, submissionCount: 4n, active: true },
+				{ tick: 5n, price: 6n, currentTotalEth: 7n, submissionCount: 8n, active: false },
+			],
+		})
+	})
+
+	test('loadTruthAuctionTickBidPage maps per-tick bid tuples and preserves empty pages', async () => {
+		const readCalls: Array<{ functionName: string; args: unknown[] | undefined }> = []
+		const client = createMockReadClient(async request => {
+			readCalls.push({
+				functionName: String(request.functionName),
+				args: Array.isArray(request.args) ? [...request.args] : undefined,
+			})
+			if (request.functionName === 'getBidCountAtTick') return 2n as never
+			if (request.functionName === 'getBidPageAtTick') return [] as never
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		const page = await loadTruthAuctionTickBidPage(client, truthAuctionAddress, 11n, 1, 10)
+
+		expect(readCalls).toEqual([
+			{ functionName: 'getBidCountAtTick', args: [11n] },
+			{ functionName: 'getBidPageAtTick', args: [11n, 10n, 10n] },
+		])
+		expect(page).toEqual({
+			tick: 11n,
+			pageIndex: 1,
+			pageSize: 10,
+			bidCount: 2n,
+			bids: [],
+		})
+	})
+
+	test('loadTruthAuctionBidderBidPage maps bidder bid tuples and converts bidder pages to offsets', async () => {
+		const readCalls: Array<{ functionName: string; args: unknown[] | undefined }> = []
+		const bidder = getAddress('0x00000000000000000000000000000000000000a7')
+		const client = createMockReadClient(async request => {
+			readCalls.push({
+				functionName: String(request.functionName),
+				args: Array.isArray(request.args) ? [...request.args] : undefined,
+			})
+			if (request.functionName === 'getBidderBidCount') return 4n as never
+			if (request.functionName === 'getBidderBidPage')
+				return [
+					{ tick: 10n, bidIndex: 0n, price: 2n, bidder, ethAmount: 3n, cumulativeEth: 3n, claimed: false, refunded: false },
+					{ tick: 11n, bidIndex: 1n, price: 4n, bidder, ethAmount: 5n, cumulativeEth: 8n, claimed: true, refunded: true },
+				] as never
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		const page = await loadTruthAuctionBidderBidPage(client, truthAuctionAddress, bidder, 1, 2)
+
+		expect(readCalls).toEqual([
+			{ functionName: 'getBidderBidCount', args: [bidder] },
+			{ functionName: 'getBidderBidPage', args: [bidder, 2n, 2n] },
+		])
+		expect(page).toEqual({
+			bidder,
+			pageIndex: 1,
+			pageSize: 2,
+			bidCount: 4n,
+			bids: [
+				{ tick: 10n, bidIndex: 0n, price: 2n, bidder, ethAmount: 3n, cumulativeEth: 3n, claimed: false, refunded: false },
+				{ tick: 11n, bidIndex: 1n, price: 4n, bidder, ethAmount: 5n, cumulativeEth: 8n, claimed: true, refunded: true },
+			],
+		})
 	})
 })
