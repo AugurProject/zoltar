@@ -56,6 +56,7 @@ import {
 	hasTimestamp,
 	hasTimestampAndNumber,
 	isBigintTriple,
+	requireEscalationGameTuple,
 	requireOpenOracleExtraDataTuple,
 	requireOpenOracleReportMetaTuple,
 	requireOpenOracleReportMetaTupleArray,
@@ -272,89 +273,77 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			withdrawalState: 'not-finalized',
 			...viewerVaultState,
 		}
-	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = await readRequiredMulticall(client, [
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'startBond',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'nonDecisionThreshold',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'activationTime',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'totalCost',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getBindingCapital',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getBalances',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getQuestionResolution',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'getEscalationGameEndDate',
-			address: escalationGameAddress,
-			args: [],
-		},
-		{
-			abi: QUESTION_OUTCOME_ABI,
-			functionName: 'getQuestionOutcome',
-			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress],
-		},
-		{
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'getForkTime',
-			address: getInfraContractAddresses().zoltar,
-			args: [universeId],
-		},
-		{
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'hasReachedNonDecision',
-			address: escalationGameAddress,
-			args: [],
-		},
-	])
-	if (
-		typeof startBond !== 'bigint' ||
-		typeof nonDecisionThreshold !== 'bigint' ||
-		typeof activationTime !== 'bigint' ||
-		typeof totalCost !== 'bigint' ||
-		typeof bindingCapital !== 'bigint' ||
-		(typeof resolution !== 'bigint' && typeof resolution !== 'number') ||
-		typeof escalationEndTime !== 'bigint' ||
-		(typeof questionOutcome !== 'bigint' && typeof questionOutcome !== 'number') ||
-		typeof universeForkTime !== 'bigint' ||
-		typeof hasReachedNonDecision !== 'boolean'
-	) {
-		throw new Error('Unexpected escalation game response')
-	}
-	if (!isBigintTriple(balances)) throw new Error('Unexpected escalation balances response')
+	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = requireEscalationGameTuple(
+		await readRequiredMulticall(client, [
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'startBond',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'nonDecisionThreshold',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'activationTime',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'totalCost',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getBindingCapital',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getBalances',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getQuestionResolution',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'getEscalationGameEndDate',
+				address: escalationGameAddress,
+				args: [],
+			},
+			{
+				abi: QUESTION_OUTCOME_ABI,
+				functionName: 'getQuestionOutcome',
+				address: getInfraContractAddresses().securityPoolForker,
+				args: [securityPoolAddress],
+			},
+			{
+				abi: Zoltar_Zoltar.abi,
+				functionName: 'getForkTime',
+				address: getInfraContractAddresses().zoltar,
+				args: [universeId],
+			},
+			{
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				functionName: 'hasReachedNonDecision',
+				address: escalationGameAddress,
+				args: [],
+			},
+		]),
+		'escalation game',
+	)
 	const [invalidDeposits, yesDeposits, noDeposits] = await Promise.all([loadEscalationDeposits(client, escalationGameAddress, 'invalid'), loadEscalationDeposits(client, escalationGameAddress, 'yes'), loadEscalationDeposits(client, escalationGameAddress, 'no')])
 	const sides: EscalationSide[] = [
 		{ balance: balances[0] ?? 0n, deposits: invalidDeposits, key: 'invalid', label: getEscalationSideLabel('invalid'), userDeposits: accountAddress === undefined ? [] : invalidDeposits.filter(deposit => deposit.depositor === accountAddress) },
