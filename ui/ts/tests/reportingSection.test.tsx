@@ -204,12 +204,21 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 	}
 }
 
+function createSelectedWithdrawDepositIndexesByOutcome(overrides: Partial<ReportingFormState['selectedWithdrawDepositIndexesByOutcome']> = {}): ReportingFormState['selectedWithdrawDepositIndexesByOutcome'] {
+	return {
+		invalid: [],
+		yes: [],
+		no: [],
+		...overrides,
+	}
+}
+
 function createReportingForm(overrides: Partial<ReportingFormState> = {}): ReportingFormState {
 	return {
 		reportAmount: '1',
 		securityPoolAddress: zeroAddress,
 		selectedOutcome: undefined,
-		selectedWithdrawDepositIndexes: [],
+		selectedWithdrawDepositIndexesByOutcome: createSelectedWithdrawDepositIndexesByOutcome(),
 		...overrides,
 	}
 }
@@ -223,7 +232,7 @@ function createProps(overrides: Partial<ReportingSectionProps> = {}): ReportingS
 		onLoadReporting: () => undefined,
 		onReportOutcome: () => undefined,
 		onReportingFormChange: () => undefined,
-		onWithdrawEscalation: () => undefined,
+		onWithdrawEscalation: (_outcome, _depositIndexes) => undefined,
 		previewMarketDetails: createMarketDetails(),
 		reportingActiveAction: undefined,
 		reportingDetails: createReportingDetails(),
@@ -531,9 +540,6 @@ describe('ReportingSection', () => {
 				ReportingSection,
 				createProps({
 					mode: 'withdraw-only',
-					reportingForm: createReportingForm({
-						selectedOutcome: 'yes',
-					}),
 				}),
 			),
 		)
@@ -544,8 +550,8 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Withdraw Escalation Deposits' })).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Deposits')
-		expectTransactionButtonDisabled(document.body, 'Withdraw All')
+		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Yes Deposits')
+		expectTransactionButtonDisabled(document.body, 'Withdraw All Yes Deposits')
 	})
 
 	test('keeps finalized withdrawals enabled in withdraw-only mode after escalation closes', async () => {
@@ -561,8 +567,9 @@ describe('ReportingSection', () => {
 						withdrawalState: 'resolved',
 					}),
 					reportingForm: createReportingForm({
-						selectedOutcome: 'yes',
-						selectedWithdrawDepositIndexes: [0n],
+						selectedWithdrawDepositIndexesByOutcome: createSelectedWithdrawDepositIndexesByOutcome({
+							yes: [0n],
+						}),
 					}),
 				}),
 			),
@@ -572,8 +579,8 @@ describe('ReportingSection', () => {
 		const withdrawCheckbox = document.body.querySelector("input[type='checkbox']") as HTMLInputElement | null
 		if (!(withdrawCheckbox instanceof HTMLInputElement)) throw new Error('Expected withdraw checkbox')
 		expect(withdrawCheckbox.disabled).toBe(false)
-		expectTransactionButtonEnabled(document.body, 'Withdraw Selected Deposits')
-		expectTransactionButtonEnabled(document.body, 'Withdraw All')
+		expectTransactionButtonEnabled(document.body, 'Withdraw Selected Yes Deposits')
+		expectTransactionButtonEnabled(document.body, 'Withdraw All Yes Deposits')
 	})
 
 	test('shows a loading notice and disables withdraw-only controls while deposits refresh', async () => {
@@ -589,9 +596,6 @@ describe('ReportingSection', () => {
 						withdrawalEnabled: true,
 						withdrawalState: 'resolved',
 					}),
-					reportingForm: createReportingForm({
-						selectedOutcome: 'yes',
-					}),
 				}),
 			),
 		)
@@ -601,8 +605,8 @@ describe('ReportingSection', () => {
 		const withdrawCheckbox = document.body.querySelector("input[type='checkbox']") as HTMLInputElement | null
 		if (!(withdrawCheckbox instanceof HTMLInputElement)) throw new Error('Expected withdraw checkbox')
 		expect(withdrawCheckbox.disabled).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Deposits', 'Loading escalation deposits.')
-		expectTransactionButtonDisabled(document.body, 'Withdraw All', 'Loading escalation deposits.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Yes Deposits', 'Loading escalation deposits.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw All Yes Deposits', 'Loading escalation deposits.')
 	})
 
 	test('shows the time-left metric inside Escalation Metrics', async () => {
@@ -1160,9 +1164,6 @@ describe('ReportingSection', () => {
 				ReportingSection,
 				createProps({
 					mode: 'withdraw-only',
-					reportingForm: createReportingForm({
-						selectedOutcome: 'yes',
-					}),
 					reportingDetails: createReportingDetails({
 						questionOutcome: 'yes',
 						withdrawalEnabled: true,
@@ -1172,23 +1173,27 @@ describe('ReportingSection', () => {
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Deposits', 'Select at least one deposit to withdraw or use Withdraw all.')
-		expectTransactionButtonEnabled(document.body, 'Withdraw All')
+		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Yes Deposits', 'Select at least one deposit to withdraw or use Withdraw all for this side.')
+		expectTransactionButtonEnabled(document.body, 'Withdraw All Yes Deposits')
 		expect(within(document.body).getByRole('checkbox', { name: /Deposit #0/i })).toBeDefined()
 		expect(document.body.textContent?.includes('Current claim type: Winning payout')).toBe(true)
 		expect(document.body.textContent?.includes('Initially deposited:')).toBe(true)
 		expect(document.body.textContent?.includes('Worth now:')).toBe(true)
 	})
 
-	test('renders withdraw-only empty state when the selected side has no deposits', async () => {
+	test('renders withdraw-only empty state when the connected wallet has no deposits on any side', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
 					mode: 'withdraw-only',
-					reportingForm: createReportingForm({ selectedOutcome: 'no' }),
 					reportingDetails: createReportingDetails({
 						questionOutcome: 'yes',
+						sides: [
+							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
 						withdrawalEnabled: true,
 						withdrawalState: 'resolved',
 					}),
@@ -1197,9 +1202,9 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Connected wallet has no unsettled deposits on the selected side.')).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Deposits', 'No deposits are available to withdraw on the selected side.')
-		expectTransactionButtonDisabled(document.body, 'Withdraw All', 'No deposits are available to withdraw on the selected side.')
+		expect(document.body.textContent?.includes('Connected wallet has no unsettled escalation deposits.')).toBe(true)
+		expect(within(document.body).queryByRole('button', { name: /Withdraw Selected/i })).toBeNull()
+		expect(within(document.body).queryByRole('button', { name: /Withdraw All/i })).toBeNull()
 	})
 
 	test('updates selected withdrawal indexes from deposit checkboxes in withdraw-only mode', async () => {
@@ -1212,9 +1217,6 @@ describe('ReportingSection', () => {
 					onReportingFormChange: update => {
 						onReportingFormChangeCalls.push(update)
 					},
-					reportingForm: createReportingForm({
-						selectedOutcome: 'yes',
-					}),
 					reportingDetails: createReportingDetails({
 						questionOutcome: 'yes',
 						sides: [
@@ -1240,7 +1242,48 @@ describe('ReportingSection', () => {
 		fireEvent.click(depositCheckbox)
 		fireEvent.click(depositCheckbox)
 
-		expect(onReportingFormChangeCalls).toEqual([{ selectedWithdrawDepositIndexes: [1n] }, { selectedWithdrawDepositIndexes: [] }])
+		expect(onReportingFormChangeCalls).toEqual([{ selectedWithdrawDepositIndexesByOutcome: createSelectedWithdrawDepositIndexesByOutcome({ yes: [1n] }) }, { selectedWithdrawDepositIndexesByOutcome: createSelectedWithdrawDepositIndexesByOutcome() }])
+	})
+
+	test('renders grouped withdraw sections for every side with deposits and keeps duplicate indexes distinct', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					mode: 'withdraw-only',
+					reportingForm: createReportingForm({
+						selectedWithdrawDepositIndexesByOutcome: createSelectedWithdrawDepositIndexesByOutcome({
+							yes: [0n],
+						}),
+					}),
+					reportingDetails: createReportingDetails({
+						questionOutcome: 'yes',
+						sides: [
+							{ balance: rep(1n), deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [createDeposit()] },
+							{ balance: rep(5n), deposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+							{ balance: rep(8n), deposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+						withdrawalEnabled: true,
+						withdrawalState: 'resolved',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Invalid' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Yes' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'No' })).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Withdraw Selected Invalid Deposits', 'Select at least one deposit to withdraw or use Withdraw all for this side.')
+		expectTransactionButtonEnabled(document.body, 'Withdraw All Invalid Deposits')
+		expectTransactionButtonEnabled(document.body, 'Withdraw Selected Yes Deposits')
+		expectTransactionButtonEnabled(document.body, 'Withdraw All Yes Deposits')
+
+		const depositLabels = document.body.querySelectorAll('.withdraw-deposit-option')
+		expect(depositLabels).toHaveLength(2)
+		const checkedCheckboxes = document.body.querySelectorAll("input[type='checkbox']:checked")
+		expect(checkedCheckboxes).toHaveLength(1)
 	})
 
 	test('autofills the minimum-outcome-change preset with 1001 REP when another side has 1000 REP', async () => {
@@ -1381,7 +1424,7 @@ describe('ReportingSection', () => {
 			fireEvent.click(noButton)
 		})
 
-		expect(updates).toEqual([{ selectedOutcome: 'no', selectedWithdrawDepositIndexes: [] }])
+		expect(updates).toEqual([{ selectedOutcome: 'no' }])
 		expect((documentQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement).getAttribute('aria-pressed')).toBe('false')
 		expect((documentQueries.getByRole('button', { name: /^No/ }) as HTMLButtonElement).getAttribute('aria-pressed')).toBe('true')
 		expect(documentQueries.getByRole('button', { name: 'Report / Contribute No' })).not.toBeNull()

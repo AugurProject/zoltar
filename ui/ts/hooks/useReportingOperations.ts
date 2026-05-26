@@ -7,16 +7,44 @@ import { createConnectedReadClient, createWalletWriteClient } from '../lib/clien
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput } from '../lib/inputs.js'
-import { getDefaultReportingFormState, parseRepAmountInput } from '../lib/marketForm.js'
+import { getDefaultReportingFormState, getDefaultReportingWithdrawDepositIndexesByOutcome, parseRepAmountInput } from '../lib/marketForm.js'
 import { previewReportingContribution } from '../lib/reportingDomain.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../lib/actionFeedback.js'
 import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
-import type { ReportingFormState, WriteOperationsParameters } from '../types/app.js'
+import type { ReportingFormState, ReportingWithdrawDepositIndexesByOutcome, WriteOperationsParameters } from '../types/app.js'
 import type { ActionFeedback } from '../types/components.js'
-import type { ReportingActionResult, ReportingDetails } from '../types/contracts.js'
+import type { ReportingActionResult, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
 type UseReportingOperationsParameters = WriteOperationsParameters
+
+function getAvailableWithdrawDepositIndexes(details: ReportingDetails, outcome: ReportingOutcomeKey) {
+	if (details.status !== 'active') return []
+	const side = details.sides.find(candidate => candidate.key === outcome)
+	return side?.userDeposits.map(deposit => deposit.depositIndex) ?? []
+}
+
+function filterAvailableWithdrawDepositIndexes(selectedDepositIndexes: bigint[], availableDepositIndexes: bigint[]) {
+	return selectedDepositIndexes.filter(index => availableDepositIndexes.includes(index))
+}
+
+function sameSelectedWithdrawDepositIndexes(left: bigint[], right: bigint[]) {
+	return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+function sameSelectedWithdrawDepositIndexesByOutcome(left: ReportingWithdrawDepositIndexesByOutcome, right: ReportingWithdrawDepositIndexesByOutcome) {
+	return sameSelectedWithdrawDepositIndexes(left.invalid, right.invalid) && sameSelectedWithdrawDepositIndexes(left.yes, right.yes) && sameSelectedWithdrawDepositIndexes(left.no, right.no)
+}
+
+function pruneSelectedWithdrawDepositIndexesByOutcome(currentSelections: ReportingWithdrawDepositIndexesByOutcome, details: ReportingDetails) {
+	if (details.status !== 'active') return getDefaultReportingWithdrawDepositIndexesByOutcome()
+
+	return {
+		invalid: filterAvailableWithdrawDepositIndexes(currentSelections.invalid, getAvailableWithdrawDepositIndexes(details, 'invalid')),
+		yes: filterAvailableWithdrawDepositIndexes(currentSelections.yes, getAvailableWithdrawDepositIndexes(details, 'yes')),
+		no: filterAvailableWithdrawDepositIndexes(currentSelections.no, getAvailableWithdrawDepositIndexes(details, 'no')),
+	}
+}
 
 export function useReportingOperations({ accountAddress, onTransaction, onTransactionFinished, onTransactionRequested, onTransactionSubmitted, refreshState }: UseReportingOperationsParameters) {
 	const reportingLoad = useLoadController()
@@ -32,10 +60,9 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 	const getSuccessTitle = (actionName: ReportingActionResult['action']) => (actionName === 'reportOutcome' ? 'Report submitted' : 'Escalation deposits withdrawn')
 	const getFailureTitle = (actionName: ReportingActionResult['action']) => (actionName === 'reportOutcome' ? 'Report failed' : 'Withdrawal failed')
 
-	const requireSelectedOutcome = (selectedOutcome: ReportingFormState['selectedOutcome'], action: 'report' | 'withdraw') => {
+	const requireSelectedOutcome = (selectedOutcome: ReportingFormState['selectedOutcome']) => {
 		if (selectedOutcome !== undefined) return selectedOutcome
-		if (action === 'report') throw new Error('Select an outcome side before reporting on a market.')
-		throw new Error('Select an outcome side before withdrawing escalation deposits.')
+		throw new Error('Select an outcome side before reporting on a market.')
 	}
 
 	const loadReporting = async () => {
@@ -88,14 +115,11 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 					const details = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress)
 					reportingDetails.value = details
 					setReportingForm(current => {
-						if (details.status !== 'active') return current.selectedWithdrawDepositIndexes.length === 0 ? current : { ...current, selectedWithdrawDepositIndexes: [] }
-						const selectedSide = details.sides.find(side => side.key === current.selectedOutcome)
-						const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
-						const selectedWithdrawDepositIndexes = current.selectedWithdrawDepositIndexes.filter(index => availableDepositIndexes.includes(index))
-						if (selectedWithdrawDepositIndexes.length === current.selectedWithdrawDepositIndexes.length) return current
+						const selectedWithdrawDepositIndexesByOutcome = pruneSelectedWithdrawDepositIndexesByOutcome(current.selectedWithdrawDepositIndexesByOutcome, details)
+						if (sameSelectedWithdrawDepositIndexesByOutcome(current.selectedWithdrawDepositIndexesByOutcome, selectedWithdrawDepositIndexesByOutcome)) return current
 						return {
 							...current,
-							selectedWithdrawDepositIndexes,
+							selectedWithdrawDepositIndexesByOutcome,
 						}
 					})
 				},
@@ -109,7 +133,7 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 		await runReportingAction(
 			'reportOutcome',
 			async (walletAddress, securityPoolAddress, currentForm) => {
-				const selectedOutcome = requireSelectedOutcome(currentForm.selectedOutcome, 'report')
+				const selectedOutcome = requireSelectedOutcome(currentForm.selectedOutcome)
 				const reportAmount = parseRepAmountInput(currentForm.reportAmount, 'Report amount')
 				const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
 				const contributionPreview = previewReportingContribution(latestDetails, selectedOutcome, reportAmount)
@@ -123,26 +147,34 @@ export function useReportingOperations({ accountAddress, onTransaction, onTransa
 			'Failed to report on outcome',
 		)
 
-	const withdrawEscalation = async (depositIndexesOverride?: bigint[]) =>
+	const withdrawEscalation = async (outcome: ReportingOutcomeKey, depositIndexesOverride?: bigint[]) =>
 		await runReportingAction(
 			'withdrawEscalation',
 			async (walletAddress, securityPoolAddress, currentForm) => {
-				const selectedOutcome = requireSelectedOutcome(currentForm.selectedOutcome, 'withdraw')
 				const latestDetails = await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, walletAddress)
-				if (latestDetails.status !== 'active') throw new Error('Withdrawals are unavailable until the first report or contribution deploys the escalation game.')
-				const selectedSide = latestDetails.sides.find(side => side.key === selectedOutcome)
+				if (latestDetails.status !== 'active') {
+					throw new Error('Withdrawals are unavailable until the first report or contribution deploys the escalation game.')
+				}
+				const selectedSide = latestDetails.sides.find(side => side.key === outcome)
+				if (selectedSide === undefined) {
+					throw new Error('Unable to load deposits for the requested outcome side.')
+				}
 				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 
 				if (!latestDetails.withdrawalEnabled) throw new Error('Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.')
 
-				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexes
+				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexesByOutcome[outcome]
 				const missingSelectedDepositIndex = requestedDepositIndexes.find(index => !availableDepositIndexes.includes(index))
-				if (missingSelectedDepositIndex !== undefined) throw new Error(`Selected deposit #${missingSelectedDepositIndex.toString()} is no longer available to withdraw on the selected side`)
+				if (missingSelectedDepositIndex !== undefined) {
+					throw new Error(`Selected deposit #${missingSelectedDepositIndex.toString()} is no longer available to withdraw on ${selectedSide.label}.`)
+				}
 
 				const depositIndexes = requestedDepositIndexes
-				if (depositIndexes.length === 0) throw new Error('Select at least one deposit to withdraw or use Withdraw all.')
+				if (depositIndexes.length === 0) {
+					throw new Error('Select at least one deposit to withdraw or use Withdraw all for this side.')
+				}
 
-				return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, selectedOutcome, depositIndexes)
+				return await withdrawEscalationFromSecurityPool(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), securityPoolAddress, outcome, depositIndexes)
 			},
 			'Failed to withdraw escalation deposits',
 		)

@@ -1,4 +1,5 @@
 import { useSignal } from '@preact/signals'
+import type { ComponentChildren } from 'preact'
 import type { Address, Hash } from 'viem'
 import { AppHeaderShell } from './components/AppHeaderShell.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
@@ -556,7 +557,7 @@ export function App() {
 				onLoadReporting: () => void loadReporting(),
 				onReportOutcome: () => void onReportOutcome(),
 				onReportingFormChange: update => updateReportingForm(update),
-				onWithdrawEscalation: depositIndexes => void withdrawEscalation(depositIndexes),
+				onWithdrawEscalation: (outcome, depositIndexes) => void withdrawEscalation(outcome, depositIndexes),
 				reportingActiveAction,
 				reportingDetails,
 				reportingError,
@@ -646,8 +647,9 @@ export function App() {
 		openOracleReportDetails,
 		openOracleResult,
 	}
-	const routeSubNavigation =
-		route === 'zoltar' ? (
+	let routeSubNavigation: ComponentChildren = undefined
+	if (route === 'zoltar') {
+		routeSubNavigation = (
 			<RouteSubNavigation
 				ariaLabel='Zoltar views'
 				value={activeZoltarView}
@@ -664,38 +666,35 @@ export function App() {
 					},
 				]}
 			/>
-		) : (
-			(() => {
-				if (route === 'security-pools')
-					return (
-						<RouteSubNavigation
-							ariaLabel='Security Pools views'
-							value={activeSecurityPoolsView}
-							onChange={view => setSecurityPoolsView(view)}
-							options={[
-								{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse', value: 'browse' },
-								{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create', value: 'create' },
-								{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: 'Operate', value: 'operate' },
-							]}
-						/>
-					)
-				if (route === 'open-oracle')
-					return (
-						<RouteSubNavigation
-							ariaLabel='Open Oracle views'
-							value={activeOpenOracleView}
-							onChange={view => setOpenOracleView(view)}
-							options={[
-								{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse', value: 'browse' },
-								{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create', value: 'create' },
-								{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: 'Selected Report', value: 'selected-report' },
-							]}
-						/>
-					)
-
-				return undefined
-			})()
 		)
+	} else if (route === 'security-pools') {
+		routeSubNavigation = (
+			<RouteSubNavigation
+				ariaLabel='Security Pools views'
+				value={activeSecurityPoolsView}
+				onChange={view => setSecurityPoolsView(view)}
+				options={[
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse', value: 'browse' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create', value: 'create' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: 'Operate', value: 'operate' },
+				]}
+			/>
+		)
+	} else if (route === 'open-oracle') {
+		routeSubNavigation = (
+			<RouteSubNavigation
+				ariaLabel='Open Oracle views'
+				value={activeOpenOracleView}
+				onChange={view => setOpenOracleView(view)}
+				options={[
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: 'Browse', value: 'browse' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: 'Create', value: 'create' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: 'Selected Report', value: 'selected-report' },
+				]}
+			/>
+		)
+	}
+
 	return (
 		<ChainBlockNumberContext.Provider value={currentBlockNumber}>
 			<ChainTimestampContext.Provider value={currentTimestamp}>

@@ -1,4 +1,4 @@
-import type { ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
+import type { ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, ReportingWithdrawDepositIndexesByOutcome, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../types/app.js'
 import { parseDecimalInput } from './decimal.js'
 
 const DEFAULT_CURRENT_RETENTION_RATE = '10'
@@ -75,12 +75,20 @@ export function getDefaultTradingFormState(): TradingFormState {
 	}
 }
 
+export function getDefaultReportingWithdrawDepositIndexesByOutcome(): ReportingWithdrawDepositIndexesByOutcome {
+	return {
+		invalid: [],
+		yes: [],
+		no: [],
+	}
+}
+
 export function getDefaultReportingFormState(): ReportingFormState {
 	return {
 		reportAmount: '0',
 		securityPoolAddress: '',
 		selectedOutcome: undefined,
-		selectedWithdrawDepositIndexes: [],
+		selectedWithdrawDepositIndexesByOutcome: getDefaultReportingWithdrawDepositIndexesByOutcome(),
 	}
 }
 

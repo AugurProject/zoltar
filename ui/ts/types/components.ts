@@ -14,6 +14,7 @@ import type {
 	OracleManagerDetails,
 	ReportingActionResult,
 	ReportingDetails,
+	ReportingOutcomeKey,
 	SecurityPoolCreationResult,
 	SecurityPoolOverviewActionResult,
 	SecurityPoolVaultSummary,
@@ -579,7 +580,7 @@ export type ReportingRouteContentProps = {
 	onLoadReporting: () => void
 	onReportOutcome: () => void
 	onReportingFormChange: (update: Partial<ReportingFormState>) => void
-	onWithdrawEscalation: (depositIndexes?: bigint[]) => void
+	onWithdrawEscalation: (outcome: ReportingOutcomeKey, depositIndexes?: bigint[]) => void
 	reportingActiveAction: ReportingActionResult['action'] | undefined
 	reportingDetails: ReportingDetails | undefined
 	reportingError: string | undefined
