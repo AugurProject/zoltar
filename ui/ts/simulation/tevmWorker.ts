@@ -42,6 +42,9 @@ async function handleCall(message: SimulationWorkerCallMessage) {
 		case 'installSimulationProxyDeployer':
 			await engine.installSimulationProxyDeployer(message.params)
 			return undefined
+		case 'mintRep':
+			await engine.mintRep(message.params.amount)
+			return undefined
 		case 'mineBlock':
 			await engine.mineBlock()
 			return undefined

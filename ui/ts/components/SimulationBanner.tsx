@@ -12,6 +12,7 @@ const SIMULATION_TIME_PRESETS = [
 	{ label: '+1 month', seconds: 30n * 24n * 60n * 60n },
 	{ label: '+1 year', seconds: 365n * 24n * 60n * 60n },
 ] as const
+const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 type SimulationBannerProps = {
 	controller: SimulationController
 	onRefresh: () => Promise<void>
@@ -268,6 +269,9 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 								</button>
 								<button className='secondary' onClick={() => void runControl(async () => await controller.mineBlock())} disabled={busy.value || !isBootstrapped.value}>
 									Mine block
+								</button>
+								<button className='secondary' onClick={() => void runControl(async () => await controller.mintRep(SIMULATION_REP_MINT_AMOUNT))} disabled={busy.value || !isBootstrapped.value}>
+									Mint 1 million REP
 								</button>
 							</div>
 						</div>

@@ -87,6 +87,17 @@ function storageValue(value: bigint) {
 	return toHex(value, { size: 32 })
 }
 
+async function readStorageValue(memoryClient: TevmLikeClient, address: Address, slot: Hex) {
+	const storageValueHex = await memoryClient.getStorageAt({
+		address,
+		slot,
+	})
+	if (storageValueHex === undefined || storageValueHex === '0x') {
+		return 0n
+	}
+	return BigInt(storageValueHex)
+}
+
 function requireReceiptContractAddress(code: Hex | undefined, address: Address, label: string) {
 	if (code === undefined || code === '0x') throw new Error(`Failed to deploy ${label} at ${address}`)
 }
@@ -145,11 +156,7 @@ async function seedGenesisRepTokenState(memoryClient: TevmLikeClient, repAddress
 
 export async function updateZoltarGenesisRepToken(memoryClient: TevmLikeClient, zoltarAddress: Address, repAddress: Address) {
 	const universeBaseSlot = getZoltarUniverseBaseSlot(GENESIS_UNIVERSE_ID)
-	const genesisTheoreticalSupplyHex = await memoryClient.getStorageAt({
-		address: repAddress,
-		slot: storageIndex(REP_TOTAL_THEORETICAL_SUPPLY_SLOT),
-	})
-	const genesisTheoreticalSupply = genesisTheoreticalSupplyHex === undefined ? 0n : BigInt(genesisTheoreticalSupplyHex)
+	const genesisTheoreticalSupply = await readStorageValue(memoryClient, repAddress, storageIndex(REP_TOTAL_THEORETICAL_SUPPLY_SLOT))
 
 	await memoryClient.setStorageAt({
 		address: zoltarAddress,
@@ -161,6 +168,44 @@ export async function updateZoltarGenesisRepToken(memoryClient: TevmLikeClient, 
 		index: storageIndex(getZoltarUniverseTheoreticalSupplySlot(GENESIS_UNIVERSE_ID)),
 		value: storageValue(genesisTheoreticalSupply),
 	})
+}
+
+export async function mintSimulationGenesisRep({ accountAddress, amount, memoryClient, repAddress, zoltarAddress }: { accountAddress: Address; amount: bigint; memoryClient: TevmLikeClient; repAddress: Address; zoltarAddress: Address }) {
+	if (amount <= 0n) {
+		throw new Error('Simulation REP mint amount must be greater than zero')
+	}
+
+	const balanceSlot = getErc20BalanceSlot(accountAddress)
+	const totalSupplySlot = storageIndex(ERC20_TOTAL_SUPPLY_SLOT)
+	const theoreticalSupplySlot = storageIndex(REP_TOTAL_THEORETICAL_SUPPLY_SLOT)
+	const currentBalance = await readStorageValue(memoryClient, repAddress, balanceSlot)
+	const currentTotalSupply = await readStorageValue(memoryClient, repAddress, totalSupplySlot)
+	const currentTheoreticalSupply = await readStorageValue(memoryClient, repAddress, theoreticalSupplySlot)
+
+	await memoryClient.setStorageAt({
+		address: repAddress,
+		index: balanceSlot,
+		value: storageValue(currentBalance + amount),
+	})
+	await memoryClient.setStorageAt({
+		address: repAddress,
+		index: totalSupplySlot,
+		value: storageValue(currentTotalSupply + amount),
+	})
+	await memoryClient.setStorageAt({
+		address: repAddress,
+		index: theoreticalSupplySlot,
+		value: storageValue(currentTheoreticalSupply + amount),
+	})
+
+	const zoltarCode = await memoryClient.getCode({
+		address: zoltarAddress,
+	})
+	if (zoltarCode === undefined || zoltarCode === '0x') {
+		return
+	}
+
+	await updateZoltarGenesisRepToken(memoryClient, zoltarAddress, repAddress)
 }
 
 async function deploySimulationTokens({
