@@ -396,6 +396,7 @@ export type TruthAuctionBidView = {
 	bidder: Address
 	ethAmount: bigint
 	cumulativeEth: bigint
+	activeCumulativeEthBeforeBid: bigint
 	claimed: boolean
 	refunded: boolean
 }

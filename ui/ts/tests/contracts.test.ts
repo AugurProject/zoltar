@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, type Address, type Hash, type Hex } from 'viem'
-import { getOpenOracleAddress, loadEscalationDeposits, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickPage, migrateSharesFromUniverse, settleOracleReport } from '../contracts.js'
+import { getOpenOracleAddress, loadEscalationDeposits, loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickPage, loadTruthAuctionTickSummary, migrateSharesFromUniverse, settleOracleReport } from '../contracts.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import type { ReadClient } from '../types/contracts.js'
 
@@ -126,9 +126,34 @@ describe('contracts helpers', () => {
 		})
 
 		await expect(loadTruthAuctionTickPage(client, truthAuctionAddress, -1, 10)).rejects.toThrow('Page index must be a non-negative integer')
-		await expect(loadTruthAuctionTickPage(client, truthAuctionAddress, 0, 0)).rejects.toThrow('Page size must be between 1 and 100')
-		await expect(loadTruthAuctionTickBidPage(client, truthAuctionAddress, 1n, 0, 101)).rejects.toThrow('Page size must be between 1 and 100')
+		await expect(loadTruthAuctionActiveTickPage(client, truthAuctionAddress, -1, 10)).rejects.toThrow('Page index must be a non-negative integer')
+		await expect(loadTruthAuctionTickPage(client, truthAuctionAddress, 0, 0)).rejects.toThrow('Page size must be a positive integer')
+		await expect(loadTruthAuctionTickBidPage(client, truthAuctionAddress, 1n, 0, 0)).rejects.toThrow('Page size must be a positive integer')
 		await expect(loadTruthAuctionBidderBidPage(client, truthAuctionAddress, securityPoolAddress, -1, 10)).rejects.toThrow('Page index must be a non-negative integer')
+	})
+
+	test('truth auction page loaders allow large requested page sizes', async () => {
+		const readCalls: Array<{ functionName: string; args: unknown[] | undefined }> = []
+		const client = createMockReadClient(async request => {
+			readCalls.push({
+				functionName: String(request.functionName),
+				args: Array.isArray(request.args) ? [...request.args] : undefined,
+			})
+			if (request.functionName === 'getTickCount') return 1n as never
+			if (request.functionName === 'getTickPage') return [] as never
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		await expect(loadTruthAuctionTickPage(client, truthAuctionAddress, 0, 500)).resolves.toEqual({
+			pageIndex: 0,
+			pageSize: 500,
+			tickCount: 1n,
+			ticks: [],
+		})
+		expect(readCalls).toEqual([
+			{ functionName: 'getTickCount', args: [] },
+			{ functionName: 'getTickPage', args: [0n, 500n] },
+		])
 	})
 
 	test('loadTruthAuctionTickPage maps tuple responses and converts page indexes to offsets', async () => {
@@ -160,6 +185,54 @@ describe('contracts helpers', () => {
 			ticks: [
 				{ tick: 1n, price: 2n, currentTotalEth: 3n, submissionCount: 4n, active: true },
 				{ tick: 5n, price: 6n, currentTotalEth: 7n, submissionCount: 8n, active: false },
+			],
+		})
+	})
+
+	test('loadTruthAuctionTickSummary maps a direct tick summary read', async () => {
+		const client = createMockReadClient(async request => {
+			if (request.functionName === 'getTickSummary') return { tick: 9n, price: 10n, currentTotalEth: 11n, submissionCount: 12n, active: false } as never
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		await expect(loadTruthAuctionTickSummary(client, truthAuctionAddress, 9n)).resolves.toEqual({
+			tick: 9n,
+			price: 10n,
+			currentTotalEth: 11n,
+			submissionCount: 12n,
+			active: false,
+		})
+	})
+
+	test('loadTruthAuctionActiveTickPage maps active ladder pages and converts page indexes to offsets', async () => {
+		const readCalls: Array<{ functionName: string; args: unknown[] | undefined }> = []
+		const client = createMockReadClient(async request => {
+			readCalls.push({
+				functionName: String(request.functionName),
+				args: Array.isArray(request.args) ? [...request.args] : undefined,
+			})
+			if (request.functionName === 'getActiveTickCount') return 4n as never
+			if (request.functionName === 'getActiveTickPage')
+				return [
+					{ tick: 12n, price: 7n, currentTotalEth: 6n, submissionCount: 2n, active: true },
+					{ tick: 10n, price: 5n, currentTotalEth: 4n, submissionCount: 1n, active: true },
+				] as never
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		})
+
+		const page = await loadTruthAuctionActiveTickPage(client, truthAuctionAddress, 1, 2)
+
+		expect(readCalls).toEqual([
+			{ functionName: 'getActiveTickCount', args: [] },
+			{ functionName: 'getActiveTickPage', args: [2n, 2n] },
+		])
+		expect(page).toEqual({
+			pageIndex: 1,
+			pageSize: 2,
+			tickCount: 4n,
+			ticks: [
+				{ tick: 12n, price: 7n, currentTotalEth: 6n, submissionCount: 2n, active: true },
+				{ tick: 10n, price: 5n, currentTotalEth: 4n, submissionCount: 1n, active: true },
 			],
 		})
 	})
@@ -202,8 +275,8 @@ describe('contracts helpers', () => {
 			if (request.functionName === 'getBidderBidCount') return 4n as never
 			if (request.functionName === 'getBidderBidPage')
 				return [
-					{ tick: 10n, bidIndex: 0n, price: 2n, bidder, ethAmount: 3n, cumulativeEth: 3n, claimed: false, refunded: false },
-					{ tick: 11n, bidIndex: 1n, price: 4n, bidder, ethAmount: 5n, cumulativeEth: 8n, claimed: true, refunded: true },
+					{ tick: 10n, bidIndex: 0n, price: 2n, bidder, ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false },
+					{ tick: 11n, bidIndex: 1n, price: 4n, bidder, ethAmount: 5n, cumulativeEth: 8n, activeCumulativeEthBeforeBid: 3n, claimed: true, refunded: true },
 				] as never
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		})
@@ -220,8 +293,8 @@ describe('contracts helpers', () => {
 			pageSize: 2,
 			bidCount: 4n,
 			bids: [
-				{ tick: 10n, bidIndex: 0n, price: 2n, bidder, ethAmount: 3n, cumulativeEth: 3n, claimed: false, refunded: false },
-				{ tick: 11n, bidIndex: 1n, price: 4n, bidder, ethAmount: 5n, cumulativeEth: 8n, claimed: true, refunded: true },
+				{ tick: 10n, bidIndex: 0n, price: 2n, bidder, ethAmount: 3n, cumulativeEth: 3n, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false },
+				{ tick: 11n, bidIndex: 1n, price: 4n, bidder, ethAmount: 5n, cumulativeEth: 8n, activeCumulativeEthBeforeBid: 3n, claimed: true, refunded: true },
 			],
 		})
 	})

@@ -9,6 +9,8 @@ import {
 	computeClearing,
 	deployUniformPriceDualCapBatchAuction,
 	finalize,
+	getActiveTickCount,
+	getActiveTickPage,
 	getBidCountAtTick,
 	getBidPageAtTick,
 	getBidderBidCount,
@@ -16,6 +18,7 @@ import {
 	getClearingTick,
 	getMinBidSize,
 	getTickCount,
+	getTickSummary,
 	getTickPage,
 	getTotalRepPurchased,
 	simulateWithdrawBids,
@@ -881,6 +884,46 @@ describe('Auction', () => {
 			strictEqualTypeSafe(activeSummary?.active, true, 'winning tick should remain active')
 		})
 
+		test('active tick pages stay sorted by descending tick and exclude refunded-away historical levels', async () => {
+			const ethRaiseCap = 20n * ATTOETH_PER_ETH
+			const maxRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+			const lowTick = -20_000n
+			const middleTick = 0n
+			const highTick = 20_000n
+
+			await submitBid(client, auctionAddress, lowTick, 2n * ATTOETH_PER_ETH)
+			await submitBid(client, auctionAddress, middleTick, 4n * ATTOETH_PER_ETH)
+			await submitBid(client, auctionAddress, highTick, 6n * ATTOETH_PER_ETH)
+			await refundLosingBids(client, auctionAddress, [{ tick: lowTick, bidIndex: 0n }])
+
+			strictEqualTypeSafe(await getActiveTickCount(client, auctionAddress), 2n, 'active tick count mismatch after refund')
+			assert.deepStrictEqual(
+				(await getActiveTickPage(client, auctionAddress, 0n, 100n)).map(summary => summary.tick),
+				[highTick, middleTick],
+			)
+		})
+
+		test('getTickSummary returns historical summaries even after a tick is fully refunded away', async () => {
+			const ethRaiseCap = 20n * ATTOETH_PER_ETH
+			const maxRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+			const losingTick = -20_000n
+			const winningTick = 0n
+
+			await submitBid(client, auctionAddress, losingTick, 2n * ATTOETH_PER_ETH)
+			await submitBid(client, auctionAddress, winningTick, 12n * ATTOETH_PER_ETH)
+			await refundLosingBids(client, auctionAddress, [{ tick: losingTick, bidIndex: 0n }])
+
+			const summary = await getTickSummary(client, auctionAddress, losingTick)
+			strictEqualTypeSafe(summary.tick, losingTick, 'historical tick mismatch')
+			strictEqualTypeSafe(summary.currentTotalEth, 0n, 'historical tick should have zero active ETH')
+			strictEqualTypeSafe(summary.submissionCount, 1n, 'historical tick should retain submission count')
+			strictEqualTypeSafe(summary.active, false, 'historical tick should be inactive')
+		})
+
 		test('getBidPageAtTick returns bid indices, cumulative ETH, and refund state while preserving refunded bid amounts', async () => {
 			const ethRaiseCap = 20n * ATTOETH_PER_ETH
 			const maxRepBeingSold = 10n * ATTOETH_PER_ETH
@@ -915,6 +958,31 @@ describe('Auction', () => {
 			strictEqualTypeSafe(secondBidView.cumulativeEth, firstLosingBid + secondLosingBid, 'second cumulative ETH mismatch')
 			strictEqualTypeSafe(secondBidView.claimed, true, 'refunded bid should be marked claimed')
 			strictEqualTypeSafe(secondBidView.refunded, true, 'refunded bid should be marked refunded')
+		})
+
+		test('bid views expose active cumulative ETH before each bid after same-tick predecessor refunds', async () => {
+			const ethRaiseCap = 20n * ATTOETH_PER_ETH
+			const maxRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+			const losingTick = -20_000n
+			const winningTick = 0n
+			const firstLosingBid = 2n * ATTOETH_PER_ETH
+			const secondLosingBid = 3n * ATTOETH_PER_ETH
+			const winningBid = 12n * ATTOETH_PER_ETH
+
+			await submitBid(client, auctionAddress, losingTick, firstLosingBid)
+			await submitBid(client, auctionAddress, losingTick, secondLosingBid)
+			await submitBid(client, auctionAddress, winningTick, winningBid)
+			await refundLosingBids(client, auctionAddress, [{ tick: losingTick, bidIndex: 0n }])
+
+			const losingBidPage = await getBidPageAtTick(client, auctionAddress, losingTick, 0n, 100n)
+			const firstBidView = ensureDefined(losingBidPage[0], 'missing first losing bid view after refund')
+			const secondBidView = ensureDefined(losingBidPage[1], 'missing second losing bid view after refund')
+
+			strictEqualTypeSafe(firstBidView.activeCumulativeEthBeforeBid, 0n, 'refunded first bid should have zero active predecessor ETH')
+			strictEqualTypeSafe(secondBidView.activeCumulativeEthBeforeBid, 0n, 'second bid should not count refunded predecessors ahead of it')
+			strictEqualTypeSafe(secondBidView.refunded, false, 'second bid should remain active after predecessor refund')
 		})
 
 		test('getBidderBidPage returns bidder bids in submission order across ticks', async () => {
@@ -964,24 +1032,28 @@ describe('Auction', () => {
 			strictEqualTypeSafe(winningBidView.refunded, false, 'withdrawn bid should not be marked refunded')
 		})
 
-		test('enumeration views handle empty pages and reject oversized pages', async () => {
-			const ethRaiseCap = 20n * ATTOETH_PER_ETH
-			const maxRepBeingSold = 10n * ATTOETH_PER_ETH
-			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+			test('enumeration views handle empty pages and allow oversized limits', async () => {
+				const ethRaiseCap = 20n * ATTOETH_PER_ETH
+				const maxRepBeingSold = 10n * ATTOETH_PER_ETH
+				await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
 
 			const tick = 0n
 			await submitBid(client, auctionAddress, tick, 2n * ATTOETH_PER_ETH)
 
 			assert.strictEqual((await getTickPage(client, auctionAddress, 5n, 10n)).length, 0, 'tick page should be empty past the end')
 			assert.strictEqual((await getTickPage(client, auctionAddress, 0n, 0n)).length, 0, 'tick page should be empty for zero limit')
-			assert.strictEqual((await getBidPageAtTick(client, auctionAddress, tick, 5n, 10n)).length, 0, 'tick bid page should be empty past the end')
-			assert.strictEqual((await getBidPageAtTick(client, auctionAddress, tick, 0n, 0n)).length, 0, 'tick bid page should be empty for zero limit')
-			assert.strictEqual((await getBidderBidPage(client, auctionAddress, client.account.address, 5n, 10n)).length, 0, 'bidder bid page should be empty past the end')
-			assert.strictEqual((await getBidderBidPage(client, auctionAddress, client.account.address, 0n, 0n)).length, 0, 'bidder bid page should be empty for zero limit')
-
-			await assert.rejects(async () => await getTickPage(client, auctionAddress, 0n, 101n), 'page too large')
+			assert.strictEqual((await getActiveTickPage(client, auctionAddress, 5n, 10n)).length, 0, 'active tick page should be empty past the end')
+				assert.strictEqual((await getActiveTickPage(client, auctionAddress, 0n, 0n)).length, 0, 'active tick page should be empty for zero limit')
+				assert.strictEqual((await getBidPageAtTick(client, auctionAddress, tick, 5n, 10n)).length, 0, 'tick bid page should be empty past the end')
+				assert.strictEqual((await getBidPageAtTick(client, auctionAddress, tick, 0n, 0n)).length, 0, 'tick bid page should be empty for zero limit')
+				assert.strictEqual((await getBidderBidPage(client, auctionAddress, client.account.address, 5n, 10n)).length, 0, 'bidder bid page should be empty past the end')
+				assert.strictEqual((await getBidderBidPage(client, auctionAddress, client.account.address, 0n, 0n)).length, 0, 'bidder bid page should be empty for zero limit')
+				assert.strictEqual((await getTickPage(client, auctionAddress, 0n, 101n)).length, 1, 'tick page should allow limits above prior caps')
+				assert.strictEqual((await getActiveTickPage(client, auctionAddress, 0n, 101n)).length, 1, 'active tick page should allow limits above prior caps')
+				assert.strictEqual((await getBidPageAtTick(client, auctionAddress, tick, 0n, 101n)).length, 1, 'tick bid page should allow limits above prior caps')
+				assert.strictEqual((await getBidderBidPage(client, auctionAddress, client.account.address, 0n, 101n)).length, 1, 'bidder bid page should allow limits above prior caps')
+			})
 		})
-	})
 
 	describe('Clearing & Pro-Rata', () => {
 		test('both caps enforced: ETH cap binds and limits REP sold', async () => {

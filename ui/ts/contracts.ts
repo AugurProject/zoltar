@@ -84,7 +84,6 @@ const MIGRATION_TIME_LENGTH = 4838400n
 const TRUTH_AUCTION_TIME_LENGTH = 604800n
 const QUESTION_OUTCOME_ABI = [parseAbiItem('function getQuestionOutcome(address securityPool) view returns (uint8 outcome)')]
 const CONTRACT_PAGE_SIZE = 30n
-const MAX_TRUTH_AUCTION_PAGE_SIZE = 100
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type ForkDataTuple = readonly [bigint, Address, bigint, bigint, bigint, boolean, number]
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
@@ -102,6 +101,7 @@ type TruthAuctionBidViewStruct = {
 	bidder: Address
 	ethAmount: bigint
 	cumulativeEth: bigint
+	activeCumulativeEthBeforeBid: bigint
 	claimed: boolean
 	refunded: boolean
 }
@@ -157,7 +157,7 @@ function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOpe
 
 function getTruthAuctionPageOffset(pageIndex: number, pageSize: number) {
 	if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('Page index must be a non-negative integer')
-	if (!Number.isInteger(pageSize) || pageSize <= 0 || pageSize > MAX_TRUTH_AUCTION_PAGE_SIZE) throw new Error(`Page size must be between 1 and ${MAX_TRUTH_AUCTION_PAGE_SIZE}`)
+	if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error('Page size must be a positive integer')
 	return BigInt(pageIndex) * BigInt(pageSize)
 }
 
@@ -1213,9 +1213,20 @@ function mapTruthAuctionBidView(bid: TruthAuctionBidViewStruct): TruthAuctionBid
 		bidder: bid.bidder,
 		ethAmount: bid.ethAmount,
 		cumulativeEth: bid.cumulativeEth,
+		activeCumulativeEthBeforeBid: bid.activeCumulativeEthBeforeBid,
 		claimed: bid.claimed,
 		refunded: bid.refunded,
 	}
+}
+
+export async function loadTruthAuctionTickSummary(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, tick: bigint): Promise<TruthAuctionTickSummary> {
+	const summary = (await client.readContract({
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'getTickSummary',
+		address: truthAuctionAddress,
+		args: [tick],
+	})) as TruthAuctionTickSummaryStruct
+	return mapTruthAuctionTickSummary(summary)
 }
 
 export async function loadTruthAuctionTickPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, pageIndex: number, pageSize: number): Promise<TruthAuctionTickPage> {
@@ -1229,6 +1240,28 @@ export async function loadTruthAuctionTickPage(client: Pick<ReadClient, 'readCon
 	const tickPage = (await client.readContract({
 		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'getTickPage',
+		address: truthAuctionAddress,
+		args: [offset, BigInt(pageSize)],
+	})) as readonly TruthAuctionTickSummaryStruct[]
+	return {
+		pageIndex,
+		pageSize,
+		tickCount,
+		ticks: tickPage.map(summary => mapTruthAuctionTickSummary(summary)),
+	}
+}
+
+export async function loadTruthAuctionActiveTickPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, pageIndex: number, pageSize: number): Promise<TruthAuctionTickPage> {
+	const offset = getTruthAuctionPageOffset(pageIndex, pageSize)
+	const tickCount = await client.readContract({
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'getActiveTickCount',
+		address: truthAuctionAddress,
+		args: [],
+	})
+	const tickPage = (await client.readContract({
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'getActiveTickPage',
 		address: truthAuctionAddress,
 		args: [offset, BigInt(pageSize)],
 	})) as readonly TruthAuctionTickSummaryStruct[]

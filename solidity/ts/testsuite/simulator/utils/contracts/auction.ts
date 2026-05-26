@@ -19,6 +19,7 @@ type AuctionBidView = {
 	bidder: Address
 	ethAmount: bigint
 	cumulativeEth: bigint
+	activeCumulativeEthBeforeBid: bigint
 	claimed: boolean
 	refunded: boolean
 }
@@ -41,6 +42,7 @@ function mapAuctionBidView(bid: AuctionBidView): AuctionBidView {
 		bidder: bid.bidder,
 		ethAmount: bid.ethAmount,
 		cumulativeEth: bid.cumulativeEth,
+		activeCumulativeEthBeforeBid: bid.activeCumulativeEthBeforeBid,
 		claimed: bid.claimed,
 		refunded: bid.refunded,
 	}
@@ -185,11 +187,39 @@ export const getTickCount = async (client: ReadClient, auctionAddress: Address) 
 		args: [],
 	})
 
+export const getTickSummary = async (client: ReadClient, auctionAddress: Address, tick: bigint) =>
+	mapAuctionTickSummary(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'getTickSummary',
+			address: auctionAddress,
+			args: [tick],
+		}),
+	)
+
 export const getTickPage = async (client: ReadClient, auctionAddress: Address, offset: bigint, limit: bigint) =>
 	(
 		await client.readContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'getTickPage',
+			address: auctionAddress,
+			args: [offset, limit],
+		})
+	).map(summary => mapAuctionTickSummary(summary))
+
+export const getActiveTickCount = async (client: ReadClient, auctionAddress: Address) =>
+	await client.readContract({
+		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+		functionName: 'getActiveTickCount',
+		address: auctionAddress,
+		args: [],
+	})
+
+export const getActiveTickPage = async (client: ReadClient, auctionAddress: Address, offset: bigint, limit: bigint) =>
+	(
+		await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'getActiveTickPage',
 			address: auctionAddress,
 			args: [offset, limit],
 		})

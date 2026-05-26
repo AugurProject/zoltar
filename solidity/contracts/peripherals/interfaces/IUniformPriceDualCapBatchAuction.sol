@@ -23,6 +23,7 @@ interface IUniformPriceDualCapBatchAuction {
 		address bidder;
 		uint256 ethAmount;
 		uint256 cumulativeEth;
+		uint256 activeCumulativeEthBeforeBid;
 		bool claimed;
 		bool refunded;
 	}
@@ -75,8 +76,11 @@ interface IUniformPriceDualCapBatchAuction {
 	function refundLosingBids(TickIndex[] calldata tickIndices) external;
 
 	function tickToPrice(int256 tick) external pure returns (uint256 price);
+	function getTickSummary(int256 tick) external view returns (TickSummary memory);
 	function getTickCount() external view returns (uint256);
 	function getTickPage(uint256 offset, uint256 limit) external view returns (TickSummary[] memory);
+	function getActiveTickCount() external view returns (uint256);
+	function getActiveTickPage(uint256 offset, uint256 limit) external view returns (TickSummary[] memory);
 	function getBidCountAtTick(int256 tick) external view returns (uint256);
 	function getBidPageAtTick(int256 tick, uint256 offset, uint256 limit) external view returns (BidView[] memory);
 	function getBidderBidCount(address bidder) external view returns (uint256);

@@ -2,7 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '@testing-library/dom'
-import { h } from 'preact'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { zeroAddress } from 'viem'
 import { ForkAuctionSection } from '../components/ForkAuctionSection.js'
 import { AUCTION_TIME_SECONDS } from '../lib/forkAuction.js'
@@ -110,6 +111,9 @@ function createForkAuctionForm(): ForkAuctionFormState {
 
 function createTruthAuctionReadClient(
 	readContract: ReadClient['readContract'] = async request => {
+		if (request.functionName === 'getTickSummary') return { tick: 0n, price: ETH, currentTotalEth: 0n, submissionCount: 0n, active: false } as never
+		if (request.functionName === 'getActiveTickCount') return 0n as never
+		if (request.functionName === 'getActiveTickPage') return [] as never
 		if (request.functionName === 'getTickCount') return 0n as never
 		if (request.functionName === 'getTickPage') return [] as never
 		if (request.functionName === 'getBidCountAtTick') return 0n as never
@@ -125,6 +129,8 @@ function createTruthAuctionReadClient(
 }
 
 async function flushTruthAuctionLoads() {
+	await Promise.resolve()
+	await Promise.resolve()
 	await Promise.resolve()
 	await Promise.resolve()
 	await Promise.resolve()
@@ -242,7 +248,7 @@ describe('ForkAuctionSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Finalize Truth Auction')
 		expectTransactionButtonDisabled(document.body, 'Refund Losing Bid')
 		expectTransactionButtonDisabled(document.body, 'Claim Auction Proceeds')
-		expectTransactionButtonDisabled(document.body, 'Withdraw Bids')
+		expect(documentQueries.queryByRole('button', { name: 'Withdraw Bids' })).toBeNull()
 	})
 
 	test('gates disabled fork-workflow write controls while keeping the workflow banner visible', async () => {
@@ -274,7 +280,7 @@ describe('ForkAuctionSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Finalize Truth Auction')
 		expectTransactionButtonDisabled(document.body, 'Refund Losing Bid')
 		expectTransactionButtonDisabled(document.body, 'Claim Auction Proceeds')
-		expectTransactionButtonDisabled(document.body, 'Withdraw Bids')
+		expect(documentQueries.queryByRole('button', { name: 'Withdraw Bids' })).toBeNull()
 	})
 
 	test('prefers the live chain timestamp over the loaded snapshot for migration time left', async () => {
@@ -406,20 +412,21 @@ describe('ForkAuctionSection', () => {
 
 	test('renders the bid ladder, selected price level, and wallet bids from contract-backed auction pages', async () => {
 		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
-			if (request.functionName === 'getTickCount') return 2n as never
-			if (request.functionName === 'getTickPage')
+			if (request.functionName === 'getActiveTickCount') return 2n as never
+			if (request.functionName === 'getActiveTickPage')
 				return [
 					{ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 2n, active: true },
 					{ tick: 10n, price: 2n * ETH, currentTotalEth: 5n * ETH, submissionCount: 3n, active: true },
 				] as never
+			if (request.functionName === 'getTickSummary') return { tick: 10n, price: 2n * ETH, currentTotalEth: 5n * ETH, submissionCount: 3n, active: true } as never
 			if (request.functionName === 'getBidCountAtTick') return 2n as never
 			if (request.functionName === 'getBidPageAtTick')
 				return [
-					{ tick: 10n, bidIndex: 0n, price: 2n * ETH, bidder: zeroAddress, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH, claimed: false, refunded: false },
-					{ tick: 10n, bidIndex: 1n, price: 2n * ETH, bidder: '0x0000000000000000000000000000000000000001', ethAmount: 3n * ETH, cumulativeEth: 5n * ETH, claimed: false, refunded: false },
+					{ tick: 10n, bidIndex: 0n, price: 2n * ETH, bidder: zeroAddress, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false },
+					{ tick: 10n, bidIndex: 1n, price: 2n * ETH, bidder: '0x0000000000000000000000000000000000000001', ethAmount: 3n * ETH, cumulativeEth: 5n * ETH, activeCumulativeEthBeforeBid: 2n * ETH, claimed: false, refunded: false },
 				] as never
 			if (request.functionName === 'getBidderBidCount') return 1n as never
-			if (request.functionName === 'getBidderBidPage') return [{ tick: 10n, bidIndex: 0n, price: 2n * ETH, bidder: zeroAddress, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH, claimed: false, refunded: false }] as never
+			if (request.functionName === 'getBidderBidPage') return [{ tick: 10n, bidIndex: 0n, price: 2n * ETH, bidder: zeroAddress, ethAmount: 2n * ETH, cumulativeEth: 2n * ETH, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false }] as never
 			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
 		})
 		const renderedComponent = await renderIntoDocument(
@@ -452,20 +459,133 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Bid Ladder' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Tick 12')).toBe(true)
+		fireEvent.click(documentQueries.getByText('Tick 12'))
+		await Promise.resolve()
 		expect(documentQueries.getByText('Selected Price Level')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'My Bids' })).not.toBeNull()
 		expect(document.body.textContent?.includes('2 submissions')).toBe(true)
 	})
 
+	test('reloads the paged bidbook after a successful fork-auction action result changes', async () => {
+		let activeTickPageCalls = 0
+		let bidderBidPageCalls = 0
+		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
+			if (request.functionName === 'getActiveTickCount') return 1n as never
+			if (request.functionName === 'getActiveTickPage') {
+				activeTickPageCalls += 1
+				return [{ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true }] as never
+			}
+			if (request.functionName === 'getTickSummary') return { tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true } as never
+			if (request.functionName === 'getBidCountAtTick') return 1n as never
+			if (request.functionName === 'getBidPageAtTick') return [{ tick: 12n, bidIndex: 0n, price: 3n * ETH, bidder: zeroAddress, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false }] as never
+			if (request.functionName === 'getBidderBidCount') return 1n as never
+			if (request.functionName === 'getBidderBidPage') {
+				bidderBidPageCalls += 1
+				return [{ tick: 12n, bidIndex: 0n, price: 3n * ETH, bidder: zeroAddress, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false }] as never
+			}
+			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
+		})
+		const baseProps = createProps({
+			accountState: createAccountState({ ethBalance: 10n * ETH }),
+			forkAuctionDetails: {
+				...createForkAuctionDetails(),
+				systemState: 'forkTruthAuction',
+				truthAuction: {
+					...createTruthAuctionMetrics(),
+					clearingPrice: 2n * ETH,
+					clearingTick: 10n,
+					ethAtClearingTick: 5n * ETH,
+					hitCap: true,
+				},
+				truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+				truthAuctionStartedAt: 1n,
+			},
+			truthAuctionReadClient,
+		})
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, baseProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await flushTruthAuctionLoads()
+
+		const initialActiveTickPageCalls = activeTickPageCalls
+		const initialBidderBidPageCalls = bidderBidPageCalls
+
+		await act(() => {
+			render(
+				h(ForkAuctionSection, {
+					...baseProps,
+					forkAuctionResult: {
+						action: 'submitBid',
+						hash: '0x00000000000000000000000000000000000000000000000000000000000000d4',
+						securityPoolAddress: zeroAddress,
+						universeId: 1n,
+					},
+				}),
+				renderedComponent.container,
+			)
+		})
+		await flushTruthAuctionLoads()
+
+		expect(activeTickPageCalls).toBeGreaterThan(initialActiveTickPageCalls)
+		expect(bidderBidPageCalls).toBeGreaterThan(initialBidderBidPageCalls)
+	})
+
+	test('uses active cumulative ETH before the bid when classifying clearing-tick bids', async () => {
+		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
+			if (request.functionName === 'getActiveTickCount') return 1n as never
+			if (request.functionName === 'getActiveTickPage') return [{ tick: 10n, price: 2n * ETH, currentTotalEth: 3n * ETH, submissionCount: 2n, active: true }] as never
+			if (request.functionName === 'getTickSummary') return { tick: 10n, price: 2n * ETH, currentTotalEth: 3n * ETH, submissionCount: 2n, active: true } as never
+			if (request.functionName === 'getBidCountAtTick') return 1n as never
+			if (request.functionName === 'getBidPageAtTick') return [{ tick: 10n, bidIndex: 1n, price: 2n * ETH, bidder: zeroAddress, ethAmount: 3n * ETH, cumulativeEth: 5n * ETH, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false }] as never
+			if (request.functionName === 'getBidderBidCount') return 1n as never
+			if (request.functionName === 'getBidderBidPage') return [{ tick: 10n, bidIndex: 1n, price: 2n * ETH, bidder: zeroAddress, ethAmount: 3n * ETH, cumulativeEth: 5n * ETH, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false }] as never
+			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ ethBalance: 10n * ETH }),
+					forkAuctionDetails: {
+						...createForkAuctionDetails(),
+						systemState: 'operational',
+						truthAuction: {
+							...createTruthAuctionMetrics(),
+							clearingPrice: 2n * ETH,
+							clearingTick: 10n,
+							ethAtClearingTick: 3n * ETH,
+							finalized: true,
+							hitCap: true,
+						},
+						truthAuctionAddress: '0x0000000000000000000000000000000000000001',
+						truthAuctionStartedAt: 1n,
+					},
+					truthAuctionReadClient,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		fireEvent.click(within(document.body).getByRole('tab', { name: 'Auction' }))
+		await Promise.resolve()
+
+		await flushTruthAuctionLoads()
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Partial')).toBeNull()
+		expect(documentQueries.getAllByText('Winning').length).toBeGreaterThan(0)
+	})
+
 	test('prefills claim inputs from wallet bid shortcuts in settlement mode', async () => {
 		const formUpdates: Partial<ForkAuctionFormState>[] = []
 		const truthAuctionReadClient = createTruthAuctionReadClient(async request => {
-			if (request.functionName === 'getTickCount') return 1n as never
-			if (request.functionName === 'getTickPage') return [{ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true }] as never
+			if (request.functionName === 'getActiveTickCount') return 1n as never
+			if (request.functionName === 'getActiveTickPage') return [{ tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true }] as never
+			if (request.functionName === 'getTickSummary') return { tick: 12n, price: 3n * ETH, currentTotalEth: 4n * ETH, submissionCount: 1n, active: true } as never
 			if (request.functionName === 'getBidCountAtTick') return 1n as never
-			if (request.functionName === 'getBidPageAtTick') return [{ tick: 12n, bidIndex: 0n, price: 3n * ETH, bidder: zeroAddress, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH, claimed: false, refunded: false }] as never
+			if (request.functionName === 'getBidPageAtTick') return [{ tick: 12n, bidIndex: 0n, price: 3n * ETH, bidder: zeroAddress, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false }] as never
 			if (request.functionName === 'getBidderBidCount') return 1n as never
-			if (request.functionName === 'getBidderBidPage') return [{ tick: 12n, bidIndex: 0n, price: 3n * ETH, bidder: zeroAddress, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH, claimed: false, refunded: false }] as never
+			if (request.functionName === 'getBidderBidPage') return [{ tick: 12n, bidIndex: 0n, price: 3n * ETH, bidder: zeroAddress, ethAmount: 4n * ETH, cumulativeEth: 4n * ETH, activeCumulativeEthBeforeBid: 0n, claimed: false, refunded: false }] as never
 			throw new Error(`Unexpected truth auction read: ${String(request.functionName)}`)
 		})
 		const renderedComponent = await renderIntoDocument(
