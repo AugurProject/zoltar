@@ -9,12 +9,16 @@ function createReportingFormState(): ReportingFormState {
 		reportAmount: '10',
 		securityPoolAddress: '0x0000000000000000000000000000000000000001',
 		selectedOutcome: 'yes',
-		selectedWithdrawDepositIndexes: [1n, 2n],
+		selectedWithdrawDepositIndexesByOutcome: {
+			invalid: [3n],
+			yes: [1n, 2n],
+			no: [4n],
+		},
 	}
 }
 
 describe('reporting form updates', () => {
-	test('clears the selected outcome when the reporting pool address changes', () => {
+	test('clears the selected outcome and withdraw selections when the reporting pool address changes', () => {
 		expect(
 			applyReportingFormUpdate(createReportingFormState(), {
 				securityPoolAddress: '0x0000000000000000000000000000000000000002',
@@ -23,11 +27,15 @@ describe('reporting form updates', () => {
 			reportAmount: '10',
 			securityPoolAddress: '0x0000000000000000000000000000000000000002',
 			selectedOutcome: undefined,
-			selectedWithdrawDepositIndexes: [1n, 2n],
+			selectedWithdrawDepositIndexesByOutcome: {
+				invalid: [],
+				yes: [],
+				no: [],
+			},
 		})
 	})
 
-	test('keeps the selected outcome when the reporting pool address is unchanged', () => {
+	test('keeps the selected outcome and withdraw selections when the reporting pool address is unchanged', () => {
 		expect(
 			applyReportingFormUpdate(createReportingFormState(), {
 				reportAmount: '12',
@@ -37,7 +45,28 @@ describe('reporting form updates', () => {
 			reportAmount: '12',
 			securityPoolAddress: '0x0000000000000000000000000000000000000001',
 			selectedOutcome: 'yes',
-			selectedWithdrawDepositIndexes: [1n, 2n],
+			selectedWithdrawDepositIndexesByOutcome: {
+				invalid: [3n],
+				yes: [1n, 2n],
+				no: [4n],
+			},
+		})
+	})
+
+	test('preserves withdraw selections when only the selected outcome changes', () => {
+		expect(
+			applyReportingFormUpdate(createReportingFormState(), {
+				selectedOutcome: 'no',
+			}),
+		).toEqual({
+			reportAmount: '10',
+			securityPoolAddress: '0x0000000000000000000000000000000000000001',
+			selectedOutcome: 'no',
+			selectedWithdrawDepositIndexesByOutcome: {
+				invalid: [3n],
+				yes: [1n, 2n],
+				no: [4n],
+			},
 		})
 	})
 

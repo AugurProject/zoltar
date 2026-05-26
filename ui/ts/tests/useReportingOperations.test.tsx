@@ -21,7 +21,7 @@ function createDeferred<T>() {
 	return { promise, reject, resolve }
 }
 
-function createReportingDetails(securityPoolAddress: Address): ReportingDetails {
+function createReportingDetails(securityPoolAddress: Address, overrides: Partial<ReportingDetails> = {}): ReportingDetails {
 	return {
 		bindingCapital: 10n,
 		completeSetCollateralAmount: 1n,
@@ -66,6 +66,7 @@ function createReportingDetails(securityPoolAddress: Address): ReportingDetails 
 		viewerVaultExists: true,
 		viewerVaultLockedRepInEscalationGame: 2n,
 		viewerVaultRepDepositShare: 10n,
+		...overrides,
 	}
 }
 
@@ -188,5 +189,169 @@ describe('useReportingOperations', () => {
 		expect(requireHookState(hookState).reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
 		expect(requireHookState(hookState).reportingDetails?.viewerVaultAvailableEscalationRep).toBe(8n)
 		expect(requireHookState(hookState).reportingDetails?.viewerVaultRepDepositShare).toBe(10n)
+	})
+
+	test('withdrawEscalation validates requested deposit indexes against the provided outcome', async () => {
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d1')
+		const loadReportingDetails = mock(async () =>
+			createReportingDetails(securityPoolAddress, {
+				sides: [
+					{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+					{ balance: 5n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
+					{ balance: 2n, deposits: [], key: 'no', label: 'No', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 1n, depositor: zeroAddress }] },
+				],
+				withdrawalEnabled: true,
+				withdrawalState: 'resolved',
+			}),
+		)
+		const withdrawEscalationFromSecurityPool = mock(async () => {
+			throw new Error('withdrawEscalationFromSecurityPool should not be called when indexes mismatch the requested side')
+		})
+
+		mock.module('../contracts.js', () => ({
+			loadReportingDetails,
+			reportOutcomeInSecurityPool: mock(async () => {
+				throw new Error('reportOutcomeInSecurityPool should not be called in this test')
+			}),
+			withdrawEscalationFromSecurityPool,
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(useReportingOperations, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({
+				...current,
+				securityPoolAddress,
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).withdrawEscalation('no', [0n])
+		})
+
+		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
+		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(0)
+		expect(requireHookState(hookState).reportingResult).toBeUndefined()
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Selected deposit #0 is no longer available to withdraw on No')
+	})
+
+	test('withdrawEscalation prunes selections per side after a successful refresh', async () => {
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
+		const latestDetails = createReportingDetails(securityPoolAddress, {
+			sides: [
+				{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
+				{
+					balance: 5n,
+					deposits: [],
+					key: 'yes',
+					label: 'Yes',
+					userDeposits: [
+						{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress },
+						{ amount: 2n, cumulativeAmount: 3n, depositIndex: 1n, depositor: zeroAddress },
+					],
+				},
+				{ balance: 2n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+			withdrawalEnabled: true,
+			withdrawalState: 'resolved',
+		})
+		const refreshedDetails = createReportingDetails(securityPoolAddress, {
+			sides: [
+				{ balance: 1n, deposits: [], key: 'invalid', label: 'Invalid', userDeposits: [{ amount: 1n, cumulativeAmount: 1n, depositIndex: 0n, depositor: zeroAddress }] },
+				{ balance: 3n, deposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amount: 2n, cumulativeAmount: 3n, depositIndex: 1n, depositor: zeroAddress }] },
+				{ balance: 2n, deposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+			withdrawalEnabled: true,
+			withdrawalState: 'resolved',
+		})
+		const loadResponses = [latestDetails, refreshedDetails]
+		const loadReportingDetails = mock(async () => {
+			const response = loadResponses.shift()
+			if (response === undefined) throw new Error('Unexpected loadReportingDetails call')
+			return response
+		})
+		const withdrawEscalationCalls: { depositIndexes: bigint[]; outcome: string; securityPoolAddress: Address }[] = []
+		const withdrawEscalationFromSecurityPool = mock(async (_client: unknown, requestedSecurityPoolAddress: Address, outcome: string, depositIndexes: bigint[]) => {
+			withdrawEscalationCalls.push({
+				depositIndexes,
+				outcome,
+				securityPoolAddress: requestedSecurityPoolAddress,
+			})
+			return {
+				action: 'withdrawEscalation' as const,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000ef',
+				outcome: 'yes' as const,
+				securityPoolAddress,
+				universeId: 1n,
+			}
+		})
+
+		mock.module('../contracts.js', () => ({
+			loadReportingDetails,
+			reportOutcomeInSecurityPool: mock(async () => {
+				throw new Error('reportOutcomeInSecurityPool should not be called in this test')
+			}),
+			withdrawEscalationFromSecurityPool,
+		}))
+		mock.module('../lib/clients.js', () => ({
+			createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
+			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
+		}))
+
+		const { useReportingOperations } = await import(`../hooks/useReportingOperations.js?case=${crypto.randomUUID()}`)
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(useReportingOperations, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({
+				...current,
+				securityPoolAddress,
+				selectedWithdrawDepositIndexesByOutcome: {
+					invalid: [0n],
+					yes: [0n, 1n],
+					no: [2n],
+				},
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).withdrawEscalation('yes', [0n])
+		})
+
+		expect(loadReportingDetails).toHaveBeenCalledTimes(2)
+		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(1)
+		expect(withdrawEscalationCalls).toEqual([
+			{
+				depositIndexes: [0n],
+				outcome: 'yes',
+				securityPoolAddress,
+			},
+		])
+		expect(requireHookState(hookState).reportingResult).toEqual({
+			action: 'withdrawEscalation',
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000ef',
+			outcome: 'yes',
+			securityPoolAddress,
+			universeId: 1n,
+		})
+		expect(requireHookState(hookState).reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
+			invalid: [0n],
+			yes: [1n],
+			no: [],
+		})
 	})
 })

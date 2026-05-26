@@ -317,6 +317,8 @@ export type EscalationSide = {
 	userDeposits: EscalationDeposit[]
 }
 
+export type ReportingWithdrawalState = 'not-finalized' | 'resolved' | 'canceled-by-external-fork'
+
 type ReportingDetailsBase = {
 	completeSetCollateralAmount: bigint
 	currentTime: bigint
@@ -329,7 +331,7 @@ type ReportingDetailsBase = {
 	startBond: bigint
 	universeId: bigint
 	withdrawalEnabled: boolean
-	withdrawalState: 'not-finalized' | 'resolved' | 'canceled-by-external-fork'
+	withdrawalState: ReportingWithdrawalState
 	viewerVaultAvailableEscalationRep: bigint | undefined
 	viewerVaultExists: boolean
 	viewerVaultLockedRepInEscalationGame: bigint | undefined

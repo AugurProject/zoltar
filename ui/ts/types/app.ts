@@ -79,11 +79,17 @@ export type TradingFormState = {
 	targetOutcomeIndexes: string
 }
 
+export type ReportingWithdrawDepositIndexesByOutcome = {
+	invalid: bigint[]
+	yes: bigint[]
+	no: bigint[]
+}
+
 export type ReportingFormState = {
 	reportAmount: string
 	securityPoolAddress: string
 	selectedOutcome: ReportingOutcomeKey | undefined
-	selectedWithdrawDepositIndexes: bigint[]
+	selectedWithdrawDepositIndexesByOutcome: ReportingWithdrawDepositIndexesByOutcome
 }
 
 export type ForkAuctionFormState = {

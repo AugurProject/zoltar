@@ -33,6 +33,7 @@ import type {
 	ReportingActionResult,
 	ReportingDetails,
 	ReportingOutcomeKey,
+	ReportingWithdrawalState,
 	SecurityPoolVaultSummary,
 	StagedOracleExecutionResult,
 	SecurityVaultActionResult,
@@ -339,6 +340,20 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			args: [],
 		},
 	])
+	if (
+		typeof startBond !== 'bigint' ||
+		typeof nonDecisionThreshold !== 'bigint' ||
+		typeof activationTime !== 'bigint' ||
+		typeof totalCost !== 'bigint' ||
+		typeof bindingCapital !== 'bigint' ||
+		(typeof resolution !== 'bigint' && typeof resolution !== 'number') ||
+		typeof escalationEndTime !== 'bigint' ||
+		(typeof questionOutcome !== 'bigint' && typeof questionOutcome !== 'number') ||
+		typeof universeForkTime !== 'bigint' ||
+		typeof hasReachedNonDecision !== 'boolean'
+	) {
+		throw new Error('Unexpected escalation game response')
+	}
 	if (!isBigintTriple(balances)) throw new Error('Unexpected escalation balances response')
 	const [invalidDeposits, yesDeposits, noDeposits] = await Promise.all([loadEscalationDeposits(client, escalationGameAddress, 'invalid'), loadEscalationDeposits(client, escalationGameAddress, 'yes'), loadEscalationDeposits(client, escalationGameAddress, 'no')])
 	const sides: EscalationSide[] = [
@@ -347,12 +362,12 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		{ balance: balances[2] ?? 0n, deposits: noDeposits, key: 'no', label: getEscalationSideLabel('no'), userDeposits: accountAddress === undefined ? [] : noDeposits.filter(deposit => deposit.depositor === accountAddress) },
 	]
 	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcome)
-	const withdrawalState = (() => {
-		if (normalizedQuestionOutcome !== 'none') return 'resolved'
-		if (universeForkTime > 0n && hasReachedNonDecision === false) return 'canceled-by-external-fork'
-
-		return 'not-finalized'
-	})()
+	let withdrawalState: ReportingWithdrawalState = 'not-finalized'
+	if (normalizedQuestionOutcome !== 'none') {
+		withdrawalState = 'resolved'
+	} else if (universeForkTime > 0n && hasReachedNonDecision === false) {
+		withdrawalState = 'canceled-by-external-fork'
+	}
 	return {
 		bindingCapital,
 		completeSetCollateralAmount,
@@ -1134,12 +1149,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			maxRepBeingSold,
 			minBidSize,
 			repPurchasableAtBid: clearingPrice === undefined || clearingPrice === 0n ? undefined : (ethRaiseCap * 10n ** 18n) / clearingPrice,
-			timeRemaining: (() => {
-				if (finalized) return 0n
-				if (block.timestamp >= truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH) return 0n
-
-				return truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH - block.timestamp
-			})(),
+			timeRemaining: finalized || block.timestamp >= truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH ? 0n : truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH - block.timestamp,
 			totalRepPurchased,
 			underfunded,
 		}
