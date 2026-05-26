@@ -199,6 +199,7 @@ export function SecurityPoolWorkflowSection({
 	const hasLoadedCurrentVault = selectedVaultDetails !== undefined && sameAddress(selectedVaultDetails.vaultAddress, selectedVaultAddress) && sameAddress(selectedVaultDetails.securityPoolAddress, selectedPool?.securityPoolAddress)
 	const lastSelectedVaultAutoLoadKey = useRef<string | undefined>(undefined)
 	const lastReportingAutoLoadKey = useRef<string | undefined>(undefined)
+	const lastReportingOutcomeRefreshHash = useRef<string | undefined>(undefined)
 	const lastQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastImmediateQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastLiquidationOutcomeRefreshKey = useRef<string | undefined>(undefined)
@@ -318,6 +319,20 @@ export function SecurityPoolWorkflowSection({
 		if (forkAuction.loadingForkAuctionDetails) return
 		void forkAuction.onLoadForkAuction()
 	}, [forkAuction.forkAuctionDetails?.securityPoolAddress, forkAuction.loadingForkAuctionDetails, forkAuction.onLoadForkAuction, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
+
+	useEffect(() => {
+		const reportingRefreshHash = reporting.reportingResult?.hash
+		if (reportingRefreshHash === undefined) {
+			lastReportingOutcomeRefreshHash.current = undefined
+			return
+		}
+		if (lastReportingOutcomeRefreshHash.current === reportingRefreshHash) return
+		lastReportingOutcomeRefreshHash.current = reportingRefreshHash
+		void onRefreshSelectedPoolData(reporting.reportingResult?.securityPoolAddress)
+		if (showSelectedPoolWorkflowDetails && hasLoadedCurrentVault) {
+			void securityVault.onLoadSecurityVault()
+		}
+	}, [hasLoadedCurrentVault, onRefreshSelectedPoolData, reporting.reportingResult, securityVault.onLoadSecurityVault, showSelectedPoolWorkflowDetails])
 
 	useEffect(() => {
 		const queuedOperationHash = securityVault.securityVaultResult?.action === 'queueSetSecurityBondAllowance' || securityVault.securityVaultResult?.action === 'queueWithdrawRep' ? securityVault.securityVaultResult.hash : undefined
