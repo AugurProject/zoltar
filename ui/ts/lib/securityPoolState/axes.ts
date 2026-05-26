@@ -1,8 +1,7 @@
 import { assertNever } from '../assert.js'
 import type { ForkAuctionStageView } from '../forkAuction.js'
 import { getEscalationPhase } from '../reportingDomain.js'
-import { evaluateSecurityPoolState } from './engine.js'
-import type { SecurityPoolForkStage, SecurityPoolLifecycleState, SecurityPoolReportingStage, SecurityPoolStateModel } from './types.js'
+import type { SecurityPoolForkStage, SecurityPoolLifecycleState, SecurityPoolReportingStage } from './types.js'
 import type { ReportingDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '../../types/contracts.js'
 
 export function isSecurityPoolEnded({ questionOutcome, systemState }: { questionOutcome: ReportingOutcomeKey | 'none' | undefined; systemState: SecurityPoolSystemState | undefined }) {
@@ -40,50 +39,4 @@ export function deriveSecurityPoolForkStage({ currentStage, workflowDisabled }: 
 	if (workflowDisabled === true) return 'disabled'
 	if (currentStage === undefined) return undefined
 	return currentStage
-}
-
-export function evaluateSecurityPoolStateFromPool({ questionOutcome, systemState, universeHasForked }: { questionOutcome: ReportingOutcomeKey | 'none' | undefined; systemState: SecurityPoolSystemState | undefined; universeHasForked: boolean | undefined }): SecurityPoolStateModel {
-	return evaluateSecurityPoolState({
-		lifecycleState: deriveSecurityPoolLifecycleState({
-			questionOutcome,
-			systemState,
-		}),
-		universeHasForked: universeHasForked === true,
-	})
-}
-
-export function evaluateSecurityPoolStateFromReporting({ reportingDetails, reportingReady }: { reportingDetails: ReportingDetails | undefined; reportingReady: boolean | undefined }): SecurityPoolStateModel {
-	return evaluateSecurityPoolState({
-		reportingStage: deriveSecurityPoolReportingStage({
-			reportingDetails,
-			reportingReady,
-		}),
-		universeHasForked: false,
-	})
-}
-
-export function evaluateSecurityPoolStateFromFork({
-	currentStage,
-	questionOutcome,
-	systemState,
-	universeHasForked,
-	workflowDisabled,
-}: {
-	currentStage: ForkAuctionStageView | undefined
-	questionOutcome: ReportingOutcomeKey | 'none' | undefined
-	systemState: SecurityPoolSystemState | undefined
-	universeHasForked: boolean | undefined
-	workflowDisabled: boolean | undefined
-}): SecurityPoolStateModel {
-	return evaluateSecurityPoolState({
-		forkStage: deriveSecurityPoolForkStage({
-			currentStage,
-			workflowDisabled,
-		}),
-		lifecycleState: deriveSecurityPoolLifecycleState({
-			questionOutcome,
-			systemState,
-		}),
-		universeHasForked: universeHasForked === true,
-	})
 }

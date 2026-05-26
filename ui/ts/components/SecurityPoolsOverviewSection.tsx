@@ -16,8 +16,8 @@ import { TransactionStatusCard } from './TransactionStatusCard.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { sameAddress } from '../lib/address.js'
 import { isMainnetChain } from '../lib/network.js'
-import { evaluateSecurityPoolStateFromPool } from '../lib/securityPoolState/adapters.js'
-import { getSecurityPoolLifecycleLabel, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
+import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolLabels.js'
+import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
 
@@ -61,9 +61,11 @@ export function SecurityPoolsOverviewSection({
 	})
 	const securityPoolsWithState = securityPools.map(pool => ({
 		pool,
-		poolState: evaluateSecurityPoolStateFromPool({
-			questionOutcome: pool.questionOutcome,
-			systemState: pool.systemState,
+		poolState: evaluateSecurityPoolState({
+			lifecycleState: deriveSecurityPoolLifecycleState({
+				questionOutcome: pool.questionOutcome,
+				systemState: pool.systemState,
+			}),
 			universeHasForked: pool.universeHasForked,
 		}),
 	}))

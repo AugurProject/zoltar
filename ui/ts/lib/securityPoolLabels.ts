@@ -1,5 +1,5 @@
-import { assertNever } from '../assert.js'
-import type { SecurityPoolLifecycleState } from './types.js'
+import { assertNever } from './assert.js'
+import type { SecurityPoolLifecycleState } from './securityPoolState.js'
 
 export function getSecurityPoolLifecycleLabel(state: SecurityPoolLifecycleState | undefined) {
 	if (state === undefined) return 'Unknown'

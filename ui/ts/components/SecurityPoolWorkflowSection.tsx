@@ -45,8 +45,8 @@ import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../lib/loadState.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingLockedUntilMessage } from '../lib/reporting.js'
-import { evaluateSecurityPoolStateFromPool } from '../lib/securityPoolState/adapters.js'
-import { getSecurityPoolLifecycleLabel, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
+import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolLabels.js'
+import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
 import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
@@ -137,10 +137,12 @@ export function SecurityPoolWorkflowSection({
 		questionOutcome: selectedPoolQuestionOutcome,
 		systemState: selectedPoolState,
 	})
-	const selectedPoolStateModel = evaluateSecurityPoolStateFromPool({
-		questionOutcome: selectedPoolQuestionOutcome,
-		systemState: selectedPoolState,
-		universeHasForked: effectiveSelectedPool?.universeHasForked,
+	const selectedPoolStateModel = evaluateSecurityPoolState({
+		lifecycleState: deriveSecurityPoolLifecycleState({
+			questionOutcome: selectedPoolQuestionOutcome,
+			systemState: selectedPoolState,
+		}),
+		universeHasForked: effectiveSelectedPool?.universeHasForked === true,
 	})
 	const selectedPoolHasForkActivity = selectedPool !== undefined ? hasForkActivity(selectedPool) : currentForkAuctionDetails !== undefined ? hasForkActivity(currentForkAuctionDetails) : false
 	const currentTimestamp = chainCurrentTimestamp ?? currentReportingDetails?.currentTime ?? currentForkAuctionDetails?.currentTime

@@ -17,7 +17,7 @@ import { UniverseLink } from './UniverseLink.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
-import { evaluateSecurityPoolStateFromPool } from '../lib/securityPoolState/adapters.js'
+import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import {
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getRemainingMintCapacity,
@@ -98,9 +98,11 @@ export function TradingSection({
 	const poolUniverseHasForked = selectedPool?.universeHasForked === true || tradingForkUniverse?.hasForked === true
 	const resolvedPoolState =
 		poolState ??
-		evaluateSecurityPoolStateFromPool({
-			questionOutcome: selectedPool?.questionOutcome,
-			systemState: selectedPool?.systemState,
+		evaluateSecurityPoolState({
+			lifecycleState: deriveSecurityPoolLifecycleState({
+				questionOutcome: selectedPool?.questionOutcome,
+				systemState: selectedPool?.systemState,
+			}),
 			universeHasForked: poolUniverseHasForked,
 		})
 	const mintEnabled = resolvedPoolState.actions.createCompleteSet.enabled

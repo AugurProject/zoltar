@@ -1,8 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, isSecurityPoolEnded } from '../lib/securityPoolState/adapters.js'
-import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolState.js'
+import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolLabels.js'
+import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, isSecurityPoolEnded } from '../lib/securityPoolState.js'
 import type { ActiveReportingDetails } from '../types/contracts.js'
 
 function createActiveReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {

@@ -25,8 +25,8 @@ import { AUCTION_TIME_SECONDS, type ForkAuctionStageView, estimateRepPurchased, 
 import { formatDuration } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
-import { evaluateSecurityPoolStateFromFork } from '../lib/securityPoolState/adapters.js'
-import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolState.js'
+import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolLabels.js'
+import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
 import type { ForkAuctionSectionProps, ReadinessAction } from '../types/components.js'
 
@@ -244,12 +244,16 @@ export function ForkAuctionSection({
 	const underfundedDisplay = forkAuctionDetails?.truthAuction === undefined ? forkOnlyFallbackText : forkAuctionDetails.truthAuction.underfunded ? 'Yes' : 'No'
 	const claimingAvailableDisplay = forkAuctionDetails === undefined ? (hasPreviewForkActivity ? UNKNOWN_VALUE : UNAVAILABLE_UNTIL_FORK) : forkAuctionDetails.claimingAvailable ? 'Yes' : 'No'
 	const interactionDisabledReason = accountState.address === undefined ? 'Connect a wallet before using fork and auction actions.' : !isMainnet ? 'Switch to Ethereum mainnet before using fork and auction actions.' : undefined
-	const forkPoolState = evaluateSecurityPoolStateFromFork({
-		questionOutcome,
-		systemState,
-		universeHasForked: previewPool?.universeHasForked,
-		currentStage,
-		workflowDisabled: disabled,
+	const forkPoolState = evaluateSecurityPoolState({
+		forkStage: deriveSecurityPoolForkStage({
+			currentStage,
+			workflowDisabled: disabled,
+		}),
+		lifecycleState: deriveSecurityPoolLifecycleState({
+			questionOutcome,
+			systemState,
+		}),
+		universeHasForked: previewPool?.universeHasForked === true,
 	})
 	const truthAuctionBidGuardMessage = getTruthAuctionBidGuardMessage({
 		accountAddress: accountState.address,

@@ -35,7 +35,7 @@ import {
 } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel } from '../lib/reporting.js'
-import { evaluateSecurityPoolStateFromReporting } from '../lib/securityPoolState/adapters.js'
+import { deriveSecurityPoolReportingStage, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import type { LifecycleStagePresentation, ReportingSectionProps } from '../types/components.js'
 import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
@@ -256,9 +256,12 @@ export function ReportingSection({
 	const showWithdrawOnly = mode === 'withdraw-only'
 	const reportingReady = marketDetails !== undefined && effectiveCurrentTimestamp !== undefined ? marketDetails.endTime <= effectiveCurrentTimestamp : undefined
 	const preOpenLockedReason = lockedReason ?? (reportingReady === false && marketDetails !== undefined && effectiveCurrentTimestamp !== undefined ? getReportingLockedUntilMessage(marketDetails.endTime, effectiveCurrentTimestamp) : undefined)
-	const reportingState = evaluateSecurityPoolStateFromReporting({
-		reportingDetails: effectiveReportingDetails,
-		reportingReady,
+	const reportingState = evaluateSecurityPoolState({
+		reportingStage: deriveSecurityPoolReportingStage({
+			reportingDetails: effectiveReportingDetails,
+			reportingReady,
+		}),
+		universeHasForked: false,
 	})
 	const reportOutcomeEnabled = reportingState.actions.reportOutcome.enabled
 	const withdrawEscalationEnabled = reportingState.actions.withdrawEscalation.enabled
