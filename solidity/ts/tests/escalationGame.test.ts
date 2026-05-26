@@ -404,9 +404,7 @@ describe('Escalation Game Test Suite', () => {
 		for (let i = 1; i < costs.length; i++) {
 			const prev = costs[i - 1]
 			const curr = costs[i]
-			if (prev === undefined || curr === undefined) {
-				throw new Error(`costs array element is undefined at index ${i}`)
-			}
+			if (prev === undefined || curr === undefined) throw new Error(`costs array element is undefined at index ${i}`)
 			assert.ok(curr >= prev, `Costs should be non-decreasing: ${prev} vs ${curr}`)
 		}
 
@@ -414,9 +412,7 @@ describe('Escalation Game Test Suite', () => {
 		let prevRecoveredT = 0n
 		for (let i = 0; i < costs.length; i++) {
 			const cost = costs[i]
-			if (cost === undefined) {
-				throw new Error(`costs array element is undefined at index ${i}`)
-			}
+			if (cost === undefined) throw new Error(`costs array element is undefined at index ${i}`)
 			const recoveredT = await readTimeSinceStartFromAttritionCost(escalationGame, cost)
 
 			assert.ok(recoveredT >= prevRecoveredT, `Recovered time should be non-decreasing with cost: ${prevRecoveredT} -> ${recoveredT}`)

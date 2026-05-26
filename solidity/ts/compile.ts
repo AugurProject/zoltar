@@ -116,9 +116,7 @@ async function computeContractHash(sourceFiles: Map<string, string>): Promise<st
 	const hasher = createHash('sha256')
 
 	// Include compiler version to detect solc upgrades
-	if (!('version' in solc) || typeof solc.version !== 'function') {
-		throw new Error('solc.version is unavailable')
-	}
+	if (!('version' in solc) || typeof solc.version !== 'function') throw new Error('solc.version is unavailable')
 	hasher.update(solc.version())
 	hasher.update('\n')
 
@@ -157,18 +155,14 @@ async function saveHashCache(contractHash: string): Promise<void> {
 
 const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[] = [], visited?: Set<string>): Promise<string[]> => {
 	// Set base directory on first call and resolve to absolute canonical path (resolve symlinks)
-	if (!baseDir) {
-		baseDir = await fs.realpath(dirPath)
-	}
+	if (!baseDir) baseDir = await fs.realpath(dirPath)
 	// Initialize visited set on first call
 	const visitedSet = visited ?? new Set<string>()
 
 	// Get canonical path of current directory to detect cycles
 	const canonicalDir = await fs.realpath(dirPath)
 	// Skip if already visited (symlink loop detection)
-	if (visitedSet.has(canonicalDir)) {
-		return fileList
-	}
+	if (visitedSet.has(canonicalDir)) return fileList
 	visitedSet.add(canonicalDir)
 
 	const files = await fs.readdir(dirPath, { withFileTypes: true })
@@ -188,9 +182,7 @@ const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[]
 
 		// Security check: ensure targetPath is within baseDir
 		const relative = path.relative(baseDir, targetPath)
-		if (relative.startsWith('..') || path.isAbsolute(relative)) {
-			throw new Error(`Path traversal detected: ${filePath} resolves outside allowed directory`)
-		}
+		if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`Path traversal detected: ${filePath} resolves outside allowed directory`)
 
 		// Recurse into directories (including symlinked directories that passed the check)
 		if (file.isDirectory() || (file.isSymbolicLink() && (await fs.stat(targetPath)).isDirectory())) {
@@ -204,9 +196,7 @@ const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[]
 
 const copySolidityContractArtifact = async (contractLocation: string) => {
 	const solidityContract = CompileResult.parse(JSON.parse(await fs.readFile(contractLocation, 'utf8')))
-	if (!solidityContract.contracts) {
-		throw new Error('No contracts compiled')
-	}
+	if (!solidityContract.contracts) throw new Error('No contracts compiled')
 	const contracts = Object.entries(solidityContract.contracts).flatMap(([filename, contract]) => {
 		if (!isObjectRecord(contract)) throw new Error('missing contract')
 		return Object.entries(contract).map(([contractName, contractData]) => ({

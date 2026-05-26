@@ -10,9 +10,7 @@ export function applyReportingFormUpdate(current: ReportingFormState, update: Pa
 	}
 
 	const hasChanged = (Object.keys(update) as Array<keyof ReportingFormState>).some(key => {
-		if (key === 'securityPoolAddress' && update.securityPoolAddress !== undefined) {
-			return securityPoolAddressChanged || !sameCaseInsensitiveText(current.securityPoolAddress, nextForm.securityPoolAddress)
-		}
+		if (key === 'securityPoolAddress' && update.securityPoolAddress !== undefined) return securityPoolAddressChanged || !sameCaseInsensitiveText(current.securityPoolAddress, nextForm.securityPoolAddress)
 		return current[key] !== nextForm[key]
 	})
 

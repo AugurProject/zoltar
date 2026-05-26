@@ -100,9 +100,7 @@ function createPoolAwareClient(amountsByFee: Partial<Record<number, bigint>>): R
 		const typedArgs = args as SimulateArgs
 		const { fee } = extractParams(typedArgs)
 		const amountOut = amountsByFee[fee]
-		if (amountOut === undefined) {
-			throw new Error(`no pool for fee ${fee}`)
-		}
+		if (amountOut === undefined) throw new Error(`no pool for fee ${fee}`)
 		return { result: [amountOut, 100000n], request: {} as never } as never
 	}
 	client.simulateContract = simulateContract
@@ -114,9 +112,7 @@ function createV3FeeAwareClient(amountsByFee: Partial<Record<number, bigint>>): 
 		const typedArgs = args as SimulateArgs
 		const [param] = typedArgs.args as [RawV3SimulateParam]
 		const amountOut = amountsByFee[param.fee]
-		if (amountOut === undefined) {
-			throw new Error(`no v3 pool for fee ${param.fee}`)
-		}
+		if (amountOut === undefined) throw new Error(`no v3 pool for fee ${param.fee}`)
 		return { result: [amountOut, 0n, 0, 0n], request: {} as never } as never
 	}
 	client.simulateContract = simulateContract
@@ -318,18 +314,12 @@ void describe('quoteBestV3ExactInputWithSource', () => {
 			const typedArgs = args as SimulateArgs
 			const [param] = typedArgs.args as [RawV3SimulateParam]
 			const amountOut = (() => {
-				if (param.fee === 500) {
-					return 9n
-				}
-				if (param.fee === 3000) {
-					return 12n
-				}
+				if (param.fee === 500) return 9n
+				if (param.fee === 3000) return 12n
 
 				return undefined
 			})()
-			if (amountOut === undefined) {
-				throw new Error(`no v3 pool for fee ${param.fee}`)
-			}
+			if (amountOut === undefined) throw new Error(`no v3 pool for fee ${param.fee}`)
 			return { result: [amountOut, 0n, 0, 0n], request: {} as never } as never
 		}
 		const readContract: ReadClient['readContract'] = async args => {

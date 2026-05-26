@@ -16,9 +16,7 @@ export const TEST_TIMEOUT_MS = 300_000
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 function getAddressPort(address: string | AddressInfo | undefined) {
-	if (address === undefined || typeof address === 'string') {
-		throw new Error('Failed to resolve TCP port for Anvil')
-	}
+	if (address === undefined || typeof address === 'string') throw new Error('Failed to resolve TCP port for Anvil')
 	return address.port
 }
 
@@ -48,9 +46,7 @@ type AnvilConnectionMode = { readonly type: 'spawn-isolated'; readonly rpcUrl: s
 
 const resolveAnvilBinary = (): string => {
 	const explicitAnvilBin = process.env['ANVIL_BIN']?.trim()
-	if (explicitAnvilBin !== undefined && explicitAnvilBin !== '') {
-		return explicitAnvilBin
-	}
+	if (explicitAnvilBin !== undefined && explicitAnvilBin !== '') return explicitAnvilBin
 
 	const homeDirectory = process.env['USERPROFILE'] ?? process.env['HOME']
 	if (homeDirectory !== undefined) {
@@ -68,13 +64,9 @@ const DEFAULT_ANVIL_BIN = resolveAnvilBinary()
 
 export const getAnvilConnectionMode = (): AnvilConnectionMode => {
 	const anvilRpc = process.env['ANVIL_RPC']
-	if (anvilRpc !== undefined && anvilRpc.trim() !== '') {
-		return { type: 'use-existing', rpcUrl: anvilRpc }
-	}
+	if (anvilRpc !== undefined && anvilRpc.trim() !== '') return { type: 'use-existing', rpcUrl: anvilRpc }
 
-	if (process.platform === 'win32') {
-		return { type: 'use-existing', rpcUrl: getDefaultAnvilRpcUrl() }
-	}
+	if (process.platform === 'win32') return { type: 'use-existing', rpcUrl: getDefaultAnvilRpcUrl() }
 
 	return {
 		type: 'spawn-isolated',

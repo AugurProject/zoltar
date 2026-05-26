@@ -24,13 +24,12 @@ function createPresentation(key: UserMessageKey, presentation: Omit<UserMessageP
 
 export function getMetricPlaceholderPresentation(value: unknown, options?: { loading?: boolean }) {
 	if (value !== undefined) return undefined
-	if (options?.loading === true) {
+	if (options?.loading === true)
 		return createPresentation('loading', {
 			badgeLabel: 'Loading',
 			badgeTone: 'pending',
 			placeholder: 'Loading...',
 		})
-	}
 	return createPresentation('unavailable', {
 		placeholder: METRIC_PLACEHOLDER,
 	})
@@ -51,21 +50,19 @@ export function getPoolRegistryPresentation(
 ) {
 	if (input.mode === 'collection') {
 		if (input.poolCount > 0) return undefined
-		if (input.isLoading) {
+		if (input.isLoading)
 			return createPresentation('loading', {
 				badgeLabel: 'Loading',
 				badgeTone: 'pending',
 				detail: 'Refreshing pools.',
 			})
-		}
-		if (!input.hasLoaded) {
+		if (!input.hasLoaded)
 			return createPresentation('not_checked', {
 				actionHint: 'Refresh pools',
 				badgeLabel: 'Not checked',
 				badgeTone: 'muted',
 				detail: 'Refresh pools to check again.',
 			})
-		}
 		return createPresentation('empty', {
 			badgeLabel: 'None yet',
 			badgeTone: 'muted',
@@ -126,27 +123,24 @@ export function getWalletPresentation({ accountAddress, hasInjectedWallet, hasWa
 	const walletAvailable = hasWallet ?? hasInjectedWallet ?? true
 	const supportedChain = isSupportedChain ?? isMainnet ?? true
 
-	if (!walletAvailable) {
+	if (!walletAvailable)
 		return createPresentation('wallet_disconnected', {
 			badgeLabel: 'Connect wallet',
 			badgeTone: 'blocked',
 			detail: 'Install or enable a wallet to continue.',
 		})
-	}
-	if (accountAddress === undefined) {
+	if (accountAddress === undefined)
 		return createPresentation('wallet_disconnected', {
 			badgeLabel: 'Connect wallet',
 			badgeTone: 'blocked',
 			detail: 'Connect wallet to continue.',
 		})
-	}
-	if (!supportedChain) {
+	if (!supportedChain)
 		return createPresentation('wrong_network', {
 			badgeLabel: 'Wrong network',
 			badgeTone: 'blocked',
 			detail: getWrongNetworkMessage() ?? 'Switch to Ethereum mainnet.',
 		})
-	}
 	return undefined
 }
 

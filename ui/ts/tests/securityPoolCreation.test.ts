@@ -20,9 +20,7 @@ setDefaultTimeout(TEST_TIMEOUT_MS)
 
 function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
 	const globalWindow = globalThis as typeof globalThis & { window?: Window }
-	if (globalWindow.window === undefined) {
-		globalWindow.window = globalThis as Window & typeof globalThis
-	}
+	if (globalWindow.window === undefined) globalWindow.window = globalThis as Window & typeof globalThis
 	globalWindow.window.ethereum = mockWindow as InjectedEthereum
 }
 

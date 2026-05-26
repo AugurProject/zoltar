@@ -16,21 +16,16 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 	const chainCurrentTimestamp = useChainTimestamp()
 	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp
 
-	if (loading) {
-		return <span className={`timestamp-value loading ${className}`}>Loading...</span>
-	}
+	if (loading) return <span className={`timestamp-value loading ${className}`}>Loading...</span>
 
-	if (timestamp === undefined) {
-		return <span className={`timestamp-value unavailable ${className}`}>{undefinedText}</span>
-	}
+	if (timestamp === undefined) return <span className={`timestamp-value unavailable ${className}`}>{undefinedText}</span>
 
-	if (timestamp === 0n) {
+	if (timestamp === 0n)
 		return (
 			<span className={`timestamp-value zero ${className}`} title={typeof zeroText === 'string' ? zeroText : undefined}>
 				{zeroText ?? formatTimestamp(timestamp)}
 			</span>
 		)
-	}
 
 	const absoluteTimestamp = formatTimestamp(timestamp)
 	const relativeTimestamp = resolvedCurrentTimestamp === undefined ? undefined : formatRelativeTimestamp(timestamp, resolvedCurrentTimestamp)

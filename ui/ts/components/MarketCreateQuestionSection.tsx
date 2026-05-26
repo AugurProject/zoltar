@@ -128,13 +128,12 @@ export function MarketCreateQuestionSection({
 					<div className='question-preview-body'>
 						{(() => {
 							if (selectedQuestionDetails === undefined) {
-								if (loadingZoltarQuestions) {
+								if (loadingZoltarQuestions)
 									return (
 										<span className='loading-value' role='status' aria-label='Loading question details'>
 											<span className='spinner' aria-hidden='true' />
 										</span>
 									)
-								}
 
 								return <p className='detail'>Question details are not loaded yet.</p>
 							}
@@ -224,9 +223,7 @@ export function MarketCreateQuestionSection({
 
 						{(() => {
 							if (marketForm.marketType === 'scalar') {
-								if (scalarCreatePreviewDetails === undefined) {
-									return <p className='detail'>Enter scalar min, max, and increment to preview the tick slider.</p>
-								}
+								if (scalarCreatePreviewDetails === undefined) return <p className='detail'>Enter scalar min, max, and increment to preview the tick slider.</p>
 
 								return <ScalarCreatePreview details={scalarCreatePreviewDetails} selectedTick={scalarCreatePreviewTick} onSelectedTickChange={setScalarCreatePreviewTick} />
 							}
@@ -244,12 +241,8 @@ export function MarketCreateQuestionSection({
 								availability={{
 									disabled: accountAddress === undefined || !isMainnet || marketCreating || !marketFormValidation.isValid,
 									reason: (() => {
-										if (accountAddress === undefined) {
-											return 'Connect a wallet before creating a question.'
-										}
-										if (!isMainnet) {
-											return 'Switch to Ethereum mainnet before creating a question.'
-										}
+										if (accountAddress === undefined) return 'Connect a wallet before creating a question.'
+										if (!isMainnet) return 'Switch to Ethereum mainnet before creating a question.'
 
 										return marketFormValidation.notice
 									})(),

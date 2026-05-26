@@ -4,9 +4,7 @@ import type { TabNavigationProps } from '../types/components.js'
 export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDeployed, deployRoute, marketRoute, openOracleRoute, securityPoolsRoute, onRouteChange }: TabNavigationProps) {
 	const disabledTabReason = 'Deploy Augur PLACEHOLDER contracts before using this tab.'
 	const options: Array<{ disabled?: boolean; href: string; label: string; reason?: string; value: Exclude<TabNavigationProps['route'], 'not-found'> }> = []
-	if (showDeployTab) {
-		options.push({ value: 'deploy', label: 'Deploy', href: deployRoute })
-	}
+	if (showDeployTab) options.push({ value: 'deploy', label: 'Deploy', href: deployRoute })
 	options.push({
 		value: 'zoltar',
 		label: 'Zoltar',

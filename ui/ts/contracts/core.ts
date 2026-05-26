@@ -55,18 +55,14 @@ async function getContractRevertReason<TCallParams extends ContractRevertReasonP
 		})
 		return undefined
 	} catch (error) {
-		if (error instanceof RpcError) {
-			return error.shortMessage ?? error.message ?? (error.cause instanceof Error ? error.cause.message : undefined)
-		}
+		if (error instanceof RpcError) return error.shortMessage ?? error.message ?? (error.cause instanceof Error ? error.cause.message : undefined)
 		if (error instanceof Error) return error.message
 		return undefined
 	}
 }
 
 function getOriginalErrorMessage(error: unknown) {
-	if (error instanceof RpcError) {
-		return error.shortMessage ?? error.message ?? (error.cause instanceof Error ? error.cause.message : undefined)
-	}
+	if (error instanceof RpcError) return error.shortMessage ?? error.message ?? (error.cause instanceof Error ? error.cause.message : undefined)
 	if (error instanceof Error) return error.message
 	return undefined
 }

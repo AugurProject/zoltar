@@ -80,9 +80,7 @@ describe('OverviewPanels', () => {
 		})
 
 		domEnvironment.window.HTMLElement.prototype.getBoundingClientRect = function () {
-			if (this.classList.contains('currency-value-measure')) {
-				return new domEnvironment.window.DOMRect(0, 0, resolveMeasureWidth(this), 0)
-			}
+			if (this.classList.contains('currency-value-measure')) return new domEnvironment.window.DOMRect(0, 0, resolveMeasureWidth(this), 0)
 			return originalGetBoundingClientRect.call(this)
 		}
 

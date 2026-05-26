@@ -87,9 +87,7 @@ export function parseScalarFormInputs({ scalarIncrement, scalarMax, scalarMin }:
 	if (displayValueMax <= displayValueMin) throw new Error('Scalar max must be greater than scalar min')
 
 	const range = displayValueMax - displayValueMin
-	if (range % increment !== 0n) {
-		throw new Error('Scalar min, max, and increment do not produce a whole number of ticks')
-	}
+	if (range % increment !== 0n) throw new Error('Scalar min, max, and increment do not produce a whole number of ticks')
 
 	const numTicks = range / increment
 	if (numTicks <= 1n) throw new Error('Scalar inputs must produce more than 1 tick')
@@ -118,9 +116,7 @@ export function getScalarOutcomeIndexDescriptor(question: ScalarQuestionDetails,
 	if (question.numTicks <= 0n) return { kind: 'malformed' }
 
 	const { invalid, firstPart, secondPart } = splitScalarOutcomeIndex(outcomeIndex)
-	if (invalid) {
-		return firstPart === 0n && secondPart === 0n ? { kind: 'invalid' } : { kind: 'malformed' }
-	}
+	if (invalid) return firstPart === 0n && secondPart === 0n ? { kind: 'invalid' } : { kind: 'malformed' }
 
 	const tickIndex = secondPart
 	if (firstPart + secondPart !== question.numTicks) return { kind: 'malformed' }

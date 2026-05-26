@@ -111,15 +111,11 @@ function renderQueuedLiquidationStatusCard({
 			/>
 		)
 	}
-	if (queuedLiquidationStatus === 'failed') {
+	if (queuedLiquidationStatus === 'failed')
 		return <TransactionStatusCard title='Liquidation Failed' badge={<span className='badge blocked'>Failed</span>} detail={securityPoolOverviewResult?.stagedExecution?.errorMessage ?? 'The oracle manager attempted the liquidation immediately, but the security pool rejected it.'} />
-	}
-	if (queuedLiquidationStatus === 'executed') {
-		return <TransactionStatusCard title='Liquidation Executed' badge={<span className='badge ok'>Executed</span>} detail='A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.' />
-	}
-	if (queuedLiquidationStatus === 'missing') {
+	if (queuedLiquidationStatus === 'executed') return <TransactionStatusCard title='Liquidation Executed' badge={<span className='badge ok'>Executed</span>} detail='A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.' />
+	if (queuedLiquidationStatus === 'missing')
 		return <TransactionStatusCard title='Liquidation Submitted' badge={<span className='badge warn'>Check State</span>} detail='The transaction succeeded, but no matching staged operation is currently visible for this vault. Refresh staged operations to confirm the latest manager state.' />
-	}
 	return <TransactionStatusCard title='Refreshing Liquidation State' badge={<span className='badge muted'>Refreshing</span>} detail='Refreshing the oracle manager to determine whether the liquidation was queued or executed immediately.' />
 }
 export function LiquidationModal({
@@ -222,9 +218,7 @@ export function LiquidationModal({
 				})
 	const directLiquidationReason = (() => {
 		if (liquidationExecutionMode !== 'execute') return undefined
-		if (selectedPool?.securityMultiplier === undefined) {
-			return 'Reload the selected pool before executing liquidation.'
-		}
+		if (selectedPool?.securityMultiplier === undefined) return 'Reload the selected pool before executing liquidation.'
 
 		return getLiquidationFailureReason({
 			callerVaultSummary,
@@ -261,23 +255,15 @@ export function LiquidationModal({
 			? undefined
 			: (() => {
 					if (securityPoolOverviewResult.stagedExecution !== undefined) {
-						if (securityPoolOverviewResult.stagedExecution.success) {
-							return 'executed'
-						}
+						if (securityPoolOverviewResult.stagedExecution.success) return 'executed'
 
 						return 'failed'
 					}
-					if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) {
-						return 'refreshing'
-					}
+					if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return 'refreshing'
 
 					return (() => {
-						if (queuedLiquidationOperation !== undefined) {
-							return 'queued'
-						}
-						if (currentPoolOracleManagerDetails.isPriceValid) {
-							return 'executed'
-						}
+						if (queuedLiquidationOperation !== undefined) return 'queued'
+						if (currentPoolOracleManagerDetails.isPriceValid) return 'executed'
 
 						return 'missing'
 					})()

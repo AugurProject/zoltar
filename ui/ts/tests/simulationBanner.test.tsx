@@ -91,9 +91,7 @@ describe('SimulationBanner', () => {
 			const documentQueries = within(renderedComponent.container)
 			const repPerEthLabel = documentQueries.getByText('REP / ETH mock price')
 			const repPerEthInput = repPerEthLabel.parentElement?.querySelector('input')
-			if (!(repPerEthInput instanceof HTMLInputElement)) {
-				throw new Error('Expected a REP / ETH mock price input')
-			}
+			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP / ETH mock price input')
 
 			fireEvent.input(repPerEthInput, {
 				currentTarget: { value: '2' },

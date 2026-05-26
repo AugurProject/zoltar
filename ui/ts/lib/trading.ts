@@ -130,9 +130,7 @@ export function getTradingMintGuardMessage({
 	const remainingCapacity = getRemainingMintCapacity(totalSecurityBondAllowance, completeSetCollateralAmount)
 	if (remainingCapacity === undefined) return 'Loading mint capacity.'
 	if (remainingCapacity === 0n) {
-		if (hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit, totalSecurityBondAllowance)) {
-			return NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
-		}
+		if (hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit, totalSecurityBondAllowance)) return NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
 
 		return 'No mint capacity remaining.'
 	}

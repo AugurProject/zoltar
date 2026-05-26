@@ -144,12 +144,8 @@ export function SecurityPoolWorkflowSection({
 		universeHasForked: effectiveSelectedPool?.universeHasForked === true,
 	})
 	const selectedPoolHasForkActivity = (() => {
-		if (selectedPool !== undefined) {
-			return hasForkActivity(selectedPool)
-		}
-		if (currentForkAuctionDetails !== undefined) {
-			return hasForkActivity(currentForkAuctionDetails)
-		}
+		if (selectedPool !== undefined) return hasForkActivity(selectedPool)
+		if (currentForkAuctionDetails !== undefined) return hasForkActivity(currentForkAuctionDetails)
 
 		return false
 	})()
@@ -157,9 +153,7 @@ export function SecurityPoolWorkflowSection({
 	const reportingReady = marketDetails !== undefined && currentTimestamp !== undefined && marketDetails.endTime <= currentTimestamp
 	const reportingLockedReason = (() => {
 		if (reportingReady) return undefined
-		if (marketDetails === undefined) {
-			return 'Reporting opens after market end.'
-		}
+		if (marketDetails === undefined) return 'Reporting opens after market end.'
 
 		return getReportingLockedUntilMessage(marketDetails.endTime, currentTimestamp)
 	})()
@@ -243,12 +237,8 @@ export function SecurityPoolWorkflowSection({
 	const selectedPendingOperationId = currentPoolOracleManagerDetails?.pendingOperationSlotId ?? 0n
 	const liquidationEnabled = selectedPoolStateModel.actions.queueLiquidation.enabled
 	const pendingOperationInput = (() => {
-		if (manualPendingOperationId.trim() !== '') {
-			return manualPendingOperationId.trim()
-		}
-		if (selectedPendingOperationId > 0n) {
-			return selectedPendingOperationId.toString()
-		}
+		if (manualPendingOperationId.trim() !== '') return manualPendingOperationId.trim()
+		if (selectedPendingOperationId > 0n) return selectedPendingOperationId.toString()
 
 		return ''
 	})()
@@ -271,16 +261,13 @@ export function SecurityPoolWorkflowSection({
 	})
 	const selectedPoolBrowsePresentation = selectedPool === undefined ? getPoolRegistryPresentation({ mode: 'selection', state: selectedPoolLookupState }) : undefined
 	const selectedVaultLoadNotice = (() => {
-		if (securityVault.loadingSecurityVault) {
+		if (securityVault.loadingSecurityVault)
 			return (
 				<p className='detail'>
 					<LoadingText>Loading vault...</LoadingText>
 				</p>
 			)
-		}
-		if (securityVault.securityVaultMissing) {
-			return <StateHint presentation={{ key: 'not_found', badgeLabel: 'Not found', badgeTone: 'blocked', detail: 'Try another vault address.' }} />
-		}
+		if (securityVault.securityVaultMissing) return <StateHint presentation={{ key: 'not_found', badgeLabel: 'Not found', badgeTone: 'blocked', detail: 'Try another vault address.' }} />
 
 		return undefined
 	})()
@@ -295,12 +282,8 @@ export function SecurityPoolWorkflowSection({
 		if (selectedPoolManagerAddress === undefined) return
 		if (loadingPoolOracleManager) return
 		const queuedOperationHash = (() => {
-			if (securityVault.securityVaultResult?.action === 'queueSetSecurityBondAllowance' || securityVault.securityVaultResult?.action === 'queueWithdrawRep') {
-				return securityVault.securityVaultResult.hash
-			}
-			if (securityPoolOverviewResult?.action === 'queueLiquidation') {
-				return securityPoolOverviewResult.hash
-			}
+			if (securityVault.securityVaultResult?.action === 'queueSetSecurityBondAllowance' || securityVault.securityVaultResult?.action === 'queueWithdrawRep') return securityVault.securityVaultResult.hash
+			if (securityPoolOverviewResult?.action === 'queueLiquidation') return securityPoolOverviewResult.hash
 
 			return undefined
 		})()
@@ -359,9 +342,7 @@ export function SecurityPoolWorkflowSection({
 		if (lastReportingOutcomeRefreshHash.current === reportingRefreshHash) return
 		lastReportingOutcomeRefreshHash.current = reportingRefreshHash
 		void onRefreshSelectedPoolData(reporting.reportingResult?.securityPoolAddress)
-		if (showSelectedPoolWorkflowDetails && hasLoadedCurrentVault) {
-			void securityVault.onLoadSecurityVault()
-		}
+		if (showSelectedPoolWorkflowDetails && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
 	}, [hasLoadedCurrentVault, onRefreshSelectedPoolData, reporting.reportingResult, securityVault.onLoadSecurityVault, showSelectedPoolWorkflowDetails])
 	useEffect(() => {
 		const queuedOperationHash = securityVault.securityVaultResult?.action === 'queueSetSecurityBondAllowance' || securityVault.securityVaultResult?.action === 'queueWithdrawRep' ? securityVault.securityVaultResult.hash : undefined
@@ -374,9 +355,7 @@ export function SecurityPoolWorkflowSection({
 		if (lastImmediateQueuedOperationRefreshHash.current === queuedOperationHash) return
 		lastImmediateQueuedOperationRefreshHash.current = queuedOperationHash
 		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
-		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) {
-			void securityVault.onLoadSecurityVault()
-		}
+		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
 	}, [currentPoolOracleManagerDetails, hasLoadedCurrentVault, loadingPoolOracleManager, onRefreshSelectedPoolData, queuedVaultOperation, securityVault.onLoadSecurityVault, securityVault.securityVaultResult, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
 	useEffect(() => {
 		const liquidationRefreshKey = securityPoolOverviewResult?.action !== 'queueLiquidation' || liquidationNoticeState === undefined || liquidationNoticeState === 'submitted' ? undefined : `${securityPoolOverviewResult.hash}:${liquidationNoticeState}`
@@ -387,9 +366,7 @@ export function SecurityPoolWorkflowSection({
 		if (lastLiquidationOutcomeRefreshKey.current === liquidationRefreshKey) return
 		lastLiquidationOutcomeRefreshKey.current = liquidationRefreshKey
 		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
-		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) {
-			void securityVault.onLoadSecurityVault()
-		}
+		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
 	}, [hasLoadedCurrentVault, liquidationNoticeState, onRefreshSelectedPoolData, securityPoolOverviewResult, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
 	useEffect(() => {
 		if (poolPriceOracleResult?.action !== 'executeStagedOperation') {
@@ -403,9 +380,7 @@ export function SecurityPoolWorkflowSection({
 		if (lastExecutedOperationRefreshHash.current === poolPriceOracleResult.hash) return
 		lastExecutedOperationRefreshHash.current = poolPriceOracleResult.hash
 		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
-		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) {
-			void securityVault.onLoadSecurityVault()
-		}
+		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
 	}, [hasLoadedCurrentVault, onRefreshSelectedPoolData, poolPriceOracleResult, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, showSelectedPoolWorkflowDetails, view])
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title='Selected Pool'>
@@ -583,12 +558,8 @@ export function SecurityPoolWorkflowSection({
 														readiness: liquidationEnabled ? 'ready' : 'blocked',
 														title: 'Liquidate Vault',
 														...(() => {
-															if (selectedPool === undefined || selectedVaultDetails === undefined) {
-																return { blocker: 'Refresh the selected vault first.' }
-															}
-															if (selectedVaultAddress === '') {
-																return { blocker: 'Select a pool and vault first.' }
-															}
+															if (selectedPool === undefined || selectedVaultDetails === undefined) return { blocker: 'Refresh the selected vault first.' }
+															if (selectedVaultAddress === '') return { blocker: 'Select a pool and vault first.' }
 
 															return {}
 														})(),
@@ -694,12 +665,8 @@ export function SecurityPoolWorkflowSection({
 										<div className='actions'>
 											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
 												{(() => {
-													if (loadingPoolOracleManager) {
-														return <LoadingText>Refreshing operations...</LoadingText>
-													}
-													if (currentPoolOracleManagerDetails === undefined) {
-														return 'Load Staged Operations'
-													}
+													if (loadingPoolOracleManager) return <LoadingText>Refreshing operations...</LoadingText>
+													if (currentPoolOracleManagerDetails === undefined) return 'Load Staged Operations'
 
 													return 'Refresh Staged Operations'
 												})()}

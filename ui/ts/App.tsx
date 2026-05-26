@@ -666,7 +666,7 @@ export function App() {
 			/>
 		) : (
 			(() => {
-				if (route === 'security-pools') {
+				if (route === 'security-pools')
 					return (
 						<RouteSubNavigation
 							ariaLabel='Security Pools views'
@@ -679,8 +679,7 @@ export function App() {
 							]}
 						/>
 					)
-				}
-				if (route === 'open-oracle') {
+				if (route === 'open-oracle')
 					return (
 						<RouteSubNavigation
 							ariaLabel='Open Oracle views'
@@ -693,7 +692,6 @@ export function App() {
 							]}
 						/>
 					)
-				}
 
 				return undefined
 			})()

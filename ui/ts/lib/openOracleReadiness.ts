@@ -5,7 +5,7 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 	const baseBlocker = !hasReport ? 'Load a report first.' : undefined
 	const actions: ReadinessAction[] = []
 
-	if (actionMode === 'initial-report') {
+	if (actionMode === 'initial-report')
 		actions.push({
 			actionLabel: 'Initial Report',
 			description: 'Provide price, approvals, and submission details for the initial report.',
@@ -14,7 +14,6 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 			title: reportId === '' ? 'Submit Initial Report' : `Submit Initial Report For #${reportId}`,
 			...(baseBlocker === undefined ? {} : { blocker: baseBlocker }),
 		})
-	}
 	if (actionMode === 'dispute') {
 		const disputeBlocker = baseBlocker ?? disputeMessage
 		actions.push({
@@ -46,7 +45,7 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 			...(settleBlocker === undefined ? {} : { blocker: settleBlocker }),
 		})
 	}
-	if (actionMode === 'read-only') {
+	if (actionMode === 'read-only')
 		actions.push({
 			actionLabel: 'No write action',
 			description: 'This report has completed its lifecycle.',
@@ -54,7 +53,6 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 			readiness: 'ready',
 			title: 'Settled Report',
 		})
-	}
 
 	return actions
 }

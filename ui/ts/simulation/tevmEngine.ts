@@ -44,12 +44,8 @@ function normalizeRpcAddress(value: unknown) {
 function normalizeRpcTransactionRequest(value: Record<string, unknown>): SimulationSendTransactionRequest {
 	return {
 		account: (() => {
-			if ('account' in value) {
-				return value['account']
-			}
-			if ('from' in value) {
-				return value['from']
-			}
+			if ('account' in value) return value['account']
+			if ('from' in value) return value['from']
 
 			return undefined
 		})(),
@@ -76,9 +72,7 @@ function normalizeRequestedAccount(value: unknown, fallbackAccount: Address) {
 	return fallbackAccount
 }
 function requireTransactionHash(hash: Hex | undefined, label: string): Hash {
-	if (hash === undefined) {
-		throw new Error(`Simulation ${label} did not return a transaction hash`)
-	}
+	if (hash === undefined) throw new Error(`Simulation ${label} did not return a transaction hash`)
 	return hash
 }
 function normalizeNonce(value: bigint | number | undefined) {
@@ -140,9 +134,7 @@ async function delayMilliseconds(milliseconds: number) {
 	})
 }
 function getRequiredBlockNumber(block: TevmBlock) {
-	if (block.number === undefined || block.number === null) {
-		throw new Error('Simulation block number was unavailable')
-	}
+	if (block.number === undefined || block.number === null) throw new Error('Simulation block number was unavailable')
 	return block.number
 }
 async function getSimulationChainState(memoryClient: MemoryClientLike) {
@@ -154,12 +146,8 @@ async function getSimulationChainState(memoryClient: MemoryClientLike) {
 }
 function createSimulationProvider({ getChainId, getQueryDelayMilliseconds, getSelectedAccount, requestRpc }: { getChainId: () => string; getQueryDelayMilliseconds: () => number; getSelectedAccount: () => Address; requestRpc: (parameters: RequestArguments) => Promise<unknown> }): InjectedEthereum {
 	const request = (async (parameters: RequestArguments) => {
-		if (parameters.method === 'eth_accounts' || parameters.method === 'eth_requestAccounts') {
-			return [getSelectedAccount()]
-		}
-		if (parameters.method === 'eth_chainId') {
-			return getChainId()
-		}
+		if (parameters.method === 'eth_accounts' || parameters.method === 'eth_requestAccounts') return [getSelectedAccount()]
+		if (parameters.method === 'eth_chainId') return getChainId()
 		await delayMilliseconds(getQueryDelayMilliseconds())
 		return await requestRpc(parameters)
 	}) as InjectedEthereum['request']
@@ -216,9 +204,7 @@ type SimulationEngine = {
 }
 export async function createSimulationEngine({ scenario }: { scenario: SimulationScenario }): Promise<SimulationEngine> {
 	const primaryAccount = QA_ACCOUNTS[0]
-	if (primaryAccount === undefined) {
-		throw new Error('No simulation QA accounts configured')
-	}
+	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
 	const predictedTokenAddresses = predictSimulationTokenAddresses(primaryAccount)
 	const profile = createSimulationProfile(predictedTokenAddresses)
 	let memoryClient = createSimulationMemoryClient(profile)
@@ -337,17 +323,13 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		if (parameters.method === 'eth_sendRawTransaction') {
 			const params = Array.isArray(parameters.params) ? parameters.params : []
 			const serializedTransaction = params[0]
-			if (typeof serializedTransaction !== 'string') {
-				throw new Error('Simulation raw transaction payload was invalid')
-			}
+			if (typeof serializedTransaction !== 'string') throw new Error('Simulation raw transaction payload was invalid')
 			return await sendRawTransactionInternal(serializedTransaction as SerializedTransaction)
 		}
 		if (parameters.method === 'eth_sendTransaction') {
 			const params = Array.isArray(parameters.params) ? parameters.params : []
 			const request = params[0]
-			if (typeof request !== 'object' || request === null) {
-				throw new Error('Simulation transaction payload was invalid')
-			}
+			if (typeof request !== 'object' || request === null) throw new Error('Simulation transaction payload was invalid')
 			return await sendTransactionInternal(normalizeRpcTransactionRequest(request as Record<string, unknown>))
 		}
 		return await (memoryClient.request as (parameters: RequestArguments) => Promise<unknown>)(parameters)
@@ -411,9 +393,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 					await onReceiptResolved()
 					return receipt
 				} catch (error) {
-					if (!isMissingTransactionReceiptError(error)) {
-						throw error
-					}
+					if (!isMissingTransactionReceiptError(error)) throw error
 					await mineNextSimulationBlock(memoryClient)
 				}
 			}
@@ -573,24 +553,18 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 			emitState()
 		},
 		selectAccount: async address => {
-			if (!QA_ACCOUNTS.includes(address)) {
-				throw new Error(`Unknown simulation account: ${address}`)
-			}
+			if (!QA_ACCOUNTS.includes(address)) throw new Error(`Unknown simulation account: ${address}`)
 			selectedAccount = address
 			await ensureImpersonated(address)
 			emitState()
 		},
 		setRepPerEthPrice: value => {
-			if (value <= 0n) {
-				throw new Error('Simulation REP/ETH price must be greater than zero')
-			}
+			if (value <= 0n) throw new Error('Simulation REP/ETH price must be greater than zero')
 			repPerEthPrice = value
 			emitState()
 		},
 		setRepPerUsdcPrice: value => {
-			if (value <= 0n) {
-				throw new Error('Simulation REP/USDC price must be greater than zero')
-			}
+			if (value <= 0n) throw new Error('Simulation REP/USDC price must be greater than zero')
 			repPerUsdcPrice = value
 			emitState()
 		},

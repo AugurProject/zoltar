@@ -69,9 +69,7 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 		}
 	}, [draftAmount, tokenUnits])
 	const nextApprovalAmount = (() => {
-		if (parsedAmount.kind === 'default') {
-			return requirement.targetAmount
-		}
+		if (parsedAmount.kind === 'default') return requirement.targetAmount
 		if (parsedAmount.kind === 'invalid') return undefined
 
 		return parsedAmount.amount

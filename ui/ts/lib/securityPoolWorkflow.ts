@@ -31,12 +31,8 @@ export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 }
 export function resolveSelectedPoolView(value: string | undefined): SelectedPoolView {
 	const normalizedValue = (() => {
-		if (value === 'resolution') {
-			return 'reporting'
-		}
-		if (value === 'oracle') {
-			return 'staged-operations'
-		}
+		if (value === 'resolution') return 'reporting'
+		if (value === 'oracle') return 'staged-operations'
 
 		return value
 	})()
@@ -74,7 +70,7 @@ export function getSelectedPoolWorkflowGuardMessage({ hasSelectedPoolAddress, se
 	return undefined
 }
 export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }): UserMessagePresentation {
-	if (selectedPoolUniverseMismatch) {
+	if (selectedPoolUniverseMismatch)
 		return {
 			actionHint: 'Switch to the matching universe first.',
 			badgeLabel: 'Unavailable',
@@ -82,30 +78,26 @@ export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddre
 			detail: 'Switch to the same universe before using vault, trading, reporting, and fork workflows.',
 			key: 'unavailable',
 		}
-	}
-	if (selectedPoolLookupState === 'loading') {
+	if (selectedPoolLookupState === 'loading')
 		return {
 			detail: 'Loading...',
 			detailIsLoading: true,
 			key: 'loading',
 		}
-	}
-	if (selectedPoolLookupState === 'missing') {
+	if (selectedPoolLookupState === 'missing')
 		return {
 			badgeLabel: 'Not found',
 			badgeTone: 'blocked',
 			detail: 'This security pool address was not found.',
 			key: 'not_found',
 		}
-	}
-	if (hasSelectedPoolAddress) {
+	if (hasSelectedPoolAddress)
 		return {
 			badgeLabel: 'Not found',
 			badgeTone: 'blocked',
 			detail: 'Pool not found.',
 			key: 'not_found',
 		}
-	}
 	return {
 		badgeLabel: 'No pool selected',
 		badgeTone: 'muted',

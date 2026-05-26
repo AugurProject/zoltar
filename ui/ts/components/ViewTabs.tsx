@@ -12,20 +12,12 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', onC
 	}
 	const handleKeyDown = (currentIndex: number, event: KeyboardEvent) => {
 		const navigationKey = (() => {
-			if (event.key === (orientation === 'vertical' ? 'ArrowDown' : 'ArrowRight')) {
-				return 'next'
-			}
-			if (event.key === (orientation === 'vertical' ? 'ArrowUp' : 'ArrowLeft')) {
-				return 'previous'
-			}
+			if (event.key === (orientation === 'vertical' ? 'ArrowDown' : 'ArrowRight')) return 'next'
+			if (event.key === (orientation === 'vertical' ? 'ArrowUp' : 'ArrowLeft')) return 'previous'
 
 			return (() => {
-				if (event.key === 'Home') {
-					return 'first'
-				}
-				if (event.key === 'End') {
-					return 'last'
-				}
+				if (event.key === 'Home') return 'first'
+				if (event.key === 'End') return 'last'
 
 				return undefined
 			})()
@@ -58,13 +50,12 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', onC
 					},
 					onKeyDown: (event: KeyboardEvent) => handleKeyDown(index, event),
 				} as const
-				if (option.href !== undefined && option.disabled !== true) {
+				if (option.href !== undefined && option.disabled !== true)
 					return (
 						<a key={option.value} {...commonProps} href={option.href}>
 							{option.label}
 						</a>
 					)
-				}
 				return (
 					<button key={option.value} {...commonProps} type='button' disabled={option.disabled}>
 						{option.label}

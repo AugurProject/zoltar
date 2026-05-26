@@ -56,9 +56,7 @@ function formatScientificCurrencyBalance(value: bigint, units: number, decimals:
 	while (true) {
 		const divisor = 10n ** BigInt(exponent) * unitBase
 		const rounded = formatRoundedScaledValue(absoluteValue, divisor, decimals)
-		if (rounded.integerPart < 10n) {
-			return `${isNegative ? '-' : ''}${rounded.text}E${exponent}`
-		}
+		if (rounded.integerPart < 10n) return `${isNegative ? '-' : ''}${rounded.text}E${exponent}`
 		exponent += 1
 	}
 }
@@ -104,9 +102,7 @@ export function formatRoundedCurrencyBalance(value: bigint | undefined, units: n
 	const rounded = (absoluteValue * scale + base / 2n) / base
 	const integerPart = rounded / scale
 
-	if (effectiveDecimals === 0) {
-		return `${prefix}${formatGroupedInteger(integerPart)}`
-	}
+	if (effectiveDecimals === 0) return `${prefix}${formatGroupedInteger(integerPart)}`
 
 	const fractionalPart = rounded % scale
 	return `${prefix}${formatGroupedInteger(integerPart)}.${fractionalPart.toString().padStart(effectiveDecimals, '0')}`
@@ -122,9 +118,7 @@ export function formatCompactCurrencyBalance(value: bigint | undefined, units: n
 	const absoluteValue = isNegative ? -value : value
 	const unitBase = 10n ** BigInt(units)
 
-	if (absoluteValue < 1000n * unitBase) {
-		return formatRoundedCurrencyBalance(value, units, decimals)
-	}
+	if (absoluteValue < 1000n * unitBase) return formatRoundedCurrencyBalance(value, units, decimals)
 
 	const wholeUnits = absoluteValue / unitBase
 	let suffixIndex = Math.floor((wholeUnits.toString().length - 1) / 3) - 1
@@ -132,9 +126,7 @@ export function formatCompactCurrencyBalance(value: bigint | undefined, units: n
 	while (suffixIndex < SI_SUFFIXES.length) {
 		const divisor = 1000n ** BigInt(suffixIndex + 1) * unitBase
 		const rounded = formatRoundedScaledValue(absoluteValue, divisor, decimals)
-		if (rounded.integerPart < 1000n) {
-			return `${isNegative ? '-' : ''}${rounded.text}${SI_SUFFIXES[suffixIndex]}`
-		}
+		if (rounded.integerPart < 1000n) return `${isNegative ? '-' : ''}${rounded.text}${SI_SUFFIXES[suffixIndex]}`
 		suffixIndex += 1
 	}
 
@@ -147,21 +139,15 @@ export function formatTimestamp(timestamp: bigint) {
 }
 
 function formatRelativeDuration(seconds: bigint) {
-	if (seconds < SECONDS_PER_MINUTE) {
-		return 'less than a minute'
-	}
+	if (seconds < SECONDS_PER_MINUTE) return 'less than a minute'
 
 	const days = seconds / SECONDS_PER_DAY
 	const hours = (seconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR
 	const minutes = (seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE
 
-	if (days > 0n) {
-		return `${days}d ${hours}h ${minutes}m`
-	}
+	if (days > 0n) return `${days}d ${hours}h ${minutes}m`
 
-	if (hours > 0n) {
-		return `${hours}h ${minutes}m`
-	}
+	if (hours > 0n) return `${hours}h ${minutes}m`
 
 	return `${minutes}m`
 }

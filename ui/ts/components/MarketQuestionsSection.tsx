@@ -34,12 +34,8 @@ export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, lo
 						<LoadingText>Loading Questions...</LoadingText>
 					) : (
 						(() => {
-							if (noQuestionsAvailable) {
-								return 'No Questions'
-							}
-							if (hasLoadedZoltarQuestions) {
-								return 'Refresh Questions'
-							}
+							if (noQuestionsAvailable) return 'No Questions'
+							if (hasLoadedZoltarQuestions) return 'Refresh Questions'
 
 							return 'Fetch Questions'
 						})()
@@ -49,14 +45,13 @@ export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, lo
 		>
 			{zoltarQuestions.length === 0 ? (
 				(() => {
-					if (loadingZoltarQuestionCount || loadingZoltarQuestions) {
+					if (loadingZoltarQuestionCount || loadingZoltarQuestions)
 						return (
 							<p className='detail'>
 								<LoadingText>Loading questions...</LoadingText>
 							</p>
 						)
-					}
-					if (noQuestionsAvailable) {
+					if (noQuestionsAvailable)
 						return (
 							<StateHint
 								presentation={{
@@ -68,7 +63,6 @@ export function MarketQuestionsSection({ hasForked, hasLoadedZoltarQuestions, lo
 								title='No questions'
 							/>
 						)
-					}
 
 					return undefined
 				})()

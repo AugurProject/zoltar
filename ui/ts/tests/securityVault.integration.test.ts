@@ -18,9 +18,7 @@ import { getSecurityVault, getVaultCount, getVaults, poolOwnershipToRep } from '
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
-	if (!Reflect.has(globalThis, 'window')) {
-		Reflect.set(globalThis, 'window', globalThis)
-	}
+	if (!Reflect.has(globalThis, 'window')) Reflect.set(globalThis, 'window', globalThis)
 	const windowObject = globalThis.window
 	Reflect.set(windowObject, 'ethereum', mockWindow)
 }

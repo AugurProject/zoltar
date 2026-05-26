@@ -77,9 +77,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 							<span
 								className={`badge ${(() => {
 									if (bootstrapError.value === undefined) {
-										if (isBootstrapped.value) {
-											return 'ok'
-										}
+										if (isBootstrapped.value) return 'ok'
 
 										return 'pending'
 									}
@@ -89,9 +87,7 @@ export function SimulationBanner({ controller, onRefresh }: SimulationBannerProp
 							>
 								{(() => {
 									if (bootstrapError.value === undefined) {
-										if (isBootstrapped.value) {
-											return 'Ready'
-										}
+										if (isBootstrapped.value) return 'Ready'
 
 										return 'Bootstrapping'
 									}

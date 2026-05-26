@@ -21,24 +21,16 @@ export function CollateralizationMetricField({ className, collateralizationPerce
 	const displayState = getCollateralizationDisplayState(securityBondAllowance, collateralizationPercent)
 	const tone = displayState === 'noActiveAllowance' ? undefined : getCollateralizationTone(collateralizationPercent, securityMultiplier)
 	const valueClassName = (() => {
-		if (tone === 'success') {
-			return 'metric-value-success'
-		}
-		if (tone === 'danger') {
-			return 'metric-value-danger'
-		}
+		if (tone === 'success') return 'metric-value-success'
+		if (tone === 'danger') return 'metric-value-danger'
 
 		return undefined
 	})()
 	return (
 		<MetricField className={className} label={label ?? getDefaultLabel(repPerEthSource, repPerEthSourceUrl)} valueClassName={valueClassName}>
 			{(() => {
-				if (displayState === 'noActiveAllowance') {
-					return 'No active allowance'
-				}
-				if (displayState === 'unavailable') {
-					return unavailableCopy
-				}
+				if (displayState === 'noActiveAllowance') return 'No active allowance'
+				if (displayState === 'unavailable') return unavailableCopy
 
 				return <CurrencyValue value={collateralizationPercent} suffix='%' copyable={false} />
 			})()}

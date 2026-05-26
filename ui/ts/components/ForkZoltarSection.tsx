@@ -82,28 +82,16 @@ export function ForkZoltarSection({
 		accountAddress === undefined
 			? 'Connect a wallet before forking Zoltar.'
 			: (() => {
-					if (!isMainnet) {
-						return 'Switch to Ethereum mainnet before forking Zoltar.'
-					}
-					if (rootUniverse === undefined) {
-						return 'Refresh universe data before forking Zoltar.'
-					}
+					if (!isMainnet) return 'Switch to Ethereum mainnet before forking Zoltar.'
+					if (rootUniverse === undefined) return 'Refresh universe data before forking Zoltar.'
 
 					return (() => {
-						if (hasForked) {
-							return 'Zoltar is already forked.'
-						}
-						if (selectedQuestion === undefined) {
-							return 'Select a valid fork question before forking Zoltar.'
-						}
+						if (hasForked) return 'Zoltar is already forked.'
+						if (selectedQuestion === undefined) return 'Select a valid fork question before forking Zoltar.'
 
 						return (() => {
-							if (!hasEnoughRep) {
-								return 'Insufficient REP to meet the fork threshold.'
-							}
-							if (!hasEnoughApproval) {
-								return 'Approve enough REP before forking Zoltar.'
-							}
+							if (!hasEnoughRep) return 'Insufficient REP to meet the fork threshold.'
+							if (!hasEnoughApproval) return 'Approve enough REP before forking Zoltar.'
 
 							return undefined
 						})()

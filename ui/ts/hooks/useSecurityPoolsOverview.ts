@@ -83,12 +83,8 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 	const getLiquidationSubmittedFeedback = (hash: Hash) => createSuccessActionFeedback('queueLiquidation', 'Liquidation submitted', hash, 'Waiting for refreshed pool state.')
 
 	const getLiquidationFeedbackFromResult = (result: SecurityPoolOverviewActionResult) => {
-		if (result.stagedExecution?.success === false) {
-			return createErrorActionFeedback('queueLiquidation', 'Liquidation failed', result.stagedExecution.errorMessage ?? 'The liquidation execution failed.')
-		}
-		if (result.stagedExecution?.success === true) {
-			return createSuccessActionFeedback('queueLiquidation', 'Liquidation executed', result.hash, 'Execution completed immediately.')
-		}
+		if (result.stagedExecution?.success === false) return createErrorActionFeedback('queueLiquidation', 'Liquidation failed', result.stagedExecution.errorMessage ?? 'The liquidation execution failed.')
+		if (result.stagedExecution?.success === true) return createSuccessActionFeedback('queueLiquidation', 'Liquidation executed', result.hash, 'Execution completed immediately.')
 		return getLiquidationSubmittedFeedback(result.hash)
 	}
 
@@ -118,9 +114,7 @@ export function useSecurityPoolsOverview({ accountAddress, onTransaction, onTran
 						requestPriceEthCost: managerDetails.requestPriceEthCost,
 						walletEthBalance,
 					})
-					if (liquidationGuardMessage !== undefined) {
-						throw new Error(liquidationGuardMessage)
-					}
+					if (liquidationGuardMessage !== undefined) throw new Error(liquidationGuardMessage)
 					const targetVault = parseAddressInput(liquidationTargetVault.value, 'Target vault')
 					const amount = parseRepAmountInput(liquidationAmount.value, 'Liquidation amount')
 					return await queueSecurityPoolLiquidation(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress, targetVault, amount)

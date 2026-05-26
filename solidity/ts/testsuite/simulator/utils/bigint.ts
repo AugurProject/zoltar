@@ -22,9 +22,7 @@ export const rpow = (x: bigint, exponent: bigint, baseUnit: bigint) => {
 	let result = exponent % 2n !== 0n ? x : baseUnit
 	for (exponent = exponent / 2n; exponent !== 0n; exponent = exponent / 2n) {
 		x = (x * x) / baseUnit
-		if (exponent % 2n !== 0n) {
-			result = (result * x) / baseUnit
-		}
+		if (exponent % 2n !== 0n) result = (result * x) / baseUnit
 	}
 	return result
 }

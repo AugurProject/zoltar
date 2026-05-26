@@ -37,17 +37,14 @@ export function OverviewPanels({
 				<DataGrid className='overview-inline-metrics' columns='auto'>
 					<MetricField className='overview-address-metric' label='Address'>
 						{(() => {
-							if (isWalletAddressLoading) {
+							if (isWalletAddressLoading)
 								return (
 									<span className='loading-value'>
 										<span className='spinner' aria-hidden='true' />
 										Connecting...
 									</span>
 								)
-							}
-							if (accountState.address === undefined) {
-								return 'Not connected'
-							}
+							if (accountState.address === undefined) return 'Not connected'
 
 							return <AddressValue address={accountState.address} />
 						})()}

@@ -43,9 +43,7 @@ function emitListeners(listeners: ReturnType<typeof createListenerMap>, eventNam
 
 function resolveWorkerPath() {
 	const currentUrl = new URL(import.meta.url)
-	if (currentUrl.protocol === 'file:' && currentUrl.pathname.includes('/ui/ts/')) {
-		return new URL('./tevmWorker.ts', import.meta.url)
-	}
+	if (currentUrl.protocol === 'file:' && currentUrl.pathname.includes('/ui/ts/')) return new URL('./tevmWorker.ts', import.meta.url)
 	return new URL('./tevmWorker.worker.js', import.meta.url)
 }
 
@@ -60,9 +58,7 @@ function createSimulationProvider(requestRpc: (parameters: RequestArguments) => 
 
 export async function createSimulationBackend({ scenario }: { scenario: SimulationScenario }): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]
-	if (primaryAccount === undefined) {
-		throw new Error('No simulation QA accounts configured')
-	}
+	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
 	const profile = createSimulationProfile(predictSimulationTokenAddresses(primaryAccount))
 	const listeners = createListenerMap()
 	const workerPath = resolveWorkerPath()
@@ -117,9 +113,7 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 	const applyState = (nextState: SimulationWorkerState) => {
 		const previousSelectedAccount = currentState?.selectedAccount
 		currentState = nextState
-		if (previousSelectedAccount !== undefined && previousSelectedAccount !== nextState.selectedAccount) {
-			emitListeners(listeners, 'accountsChanged')
-		}
+		if (previousSelectedAccount !== undefined && previousSelectedAccount !== nextState.selectedAccount) emitListeners(listeners, 'accountsChanged')
 		emitListeners(listeners, 'state')
 	}
 
@@ -151,9 +145,7 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 			if (message.type === 'result') {
 				const requestId = message.id
 				const pendingRequest = pendingRequests.get(requestId)
-				if (pendingRequest === undefined) {
-					return
-				}
+				if (pendingRequest === undefined) return
 				pendingRequests.delete(requestId)
 				pendingRequest.resolve(message.value)
 				return
@@ -161,9 +153,7 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 			if (message.type === 'error' && message.id !== undefined) {
 				const requestId = message.id
 				const pendingRequest = pendingRequests.get(requestId)
-				if (pendingRequest === undefined) {
-					return
-				}
+				if (pendingRequest === undefined) return
 				pendingRequests.delete(requestId)
 				pendingRequest.reject(new Error(message.message))
 			}
@@ -184,9 +174,7 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 	await waitForReady
 
 	const requireState = () => {
-		if (currentState === undefined) {
-			throw new Error('Simulation worker state is unavailable')
-		}
+		if (currentState === undefined) throw new Error('Simulation worker state is unavailable')
 		return currentState
 	}
 

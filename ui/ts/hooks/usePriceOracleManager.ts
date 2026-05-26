@@ -77,9 +77,7 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 				},
 				async walletAddress => {
 					const currentManagerDetails = poolOracleManagerDetails.value
-					if (currentManagerDetails === undefined || !sameAddress(currentManagerDetails.managerAddress, managerAddress)) {
-						poolOracleManagerDetails.value = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
-					}
+					if (currentManagerDetails === undefined || !sameAddress(currentManagerDetails.managerAddress, managerAddress)) poolOracleManagerDetails.value = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
 					const refreshedManagerDetails = poolOracleManagerDetails.value
 					const walletEthBalance = await createConnectedReadClient().getBalance({ address: walletAddress })
 					const requestPriceGuardMessage = getOracleRequestEthGuardMessage({
@@ -87,9 +85,7 @@ export function usePriceOracleManager({ accountAddress, onTransaction, onTransac
 						requestPriceEthCost: refreshedManagerDetails?.requestPriceEthCost,
 						walletEthBalance,
 					})
-					if (requestPriceGuardMessage !== undefined) {
-						throw new Error(requestPriceGuardMessage)
-					}
+					if (requestPriceGuardMessage !== undefined) throw new Error(requestPriceGuardMessage)
 					return await requestOraclePrice(createWalletWriteClient(walletAddress, { onTransactionSubmitted }), managerAddress)
 				},
 				'Failed to request price',

@@ -7,7 +7,7 @@ type LifecycleStageBannerProps = {
 
 export function LifecycleStageBanner({ stage }: LifecycleStageBannerProps) {
 	if (stage === undefined) return undefined
-	if (stage.tone === 'warning') {
+	if (stage.tone === 'warning')
 		return (
 			<WarningSurface className='lifecycle-stage-banner'>
 				<div className='lifecycle-stage-banner-main'>
@@ -16,7 +16,6 @@ export function LifecycleStageBanner({ stage }: LifecycleStageBannerProps) {
 				</div>
 			</WarningSurface>
 		)
-	}
 
 	return (
 		<section className={`lifecycle-stage-banner ${stage.tone}`}>

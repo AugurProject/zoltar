@@ -16,9 +16,7 @@ type SecurityPoolVaultDirectoryProps = {
 }
 
 export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, renderBadge, renderTitle, repPerEthPrice, repPerEthSource, repPerEthSourceUrl }: SecurityPoolVaultDirectoryProps) {
-	if (pool === undefined || pool.vaults.length === 0) {
-		return <>{emptyState}</>
-	}
+	if (pool === undefined || pool.vaults.length === 0) return <>{emptyState}</>
 
 	return (
 		<div className='entity-card-list'>

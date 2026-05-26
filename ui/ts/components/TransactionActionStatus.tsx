@@ -22,13 +22,12 @@ export function TransactionActionStatus({ status }: TransactionActionStatusProps
 		</>
 	)
 
-	if (status.tone === 'warning') {
+	if (status.tone === 'warning')
 		return (
 			<WarningSurface as='div' className='transaction-action-status warning' role='status' variant='compact'>
 				{content}
 			</WarningSurface>
 		)
-	}
 
 	return (
 		<div className={`transaction-action-status ${status.tone}`} role={status.tone === 'error' ? 'alert' : 'status'}>

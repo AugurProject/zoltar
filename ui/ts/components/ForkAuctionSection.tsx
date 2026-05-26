@@ -207,18 +207,14 @@ export function ForkAuctionSection({
 	const truthAuctionStatus = forkAuctionDetails?.truthAuction
 	const startedDisplay = (() => {
 		if (forkAuctionDetails === undefined) {
-			if (previewPool?.truthAuctionStartedAt === undefined || previewPool.truthAuctionStartedAt === 0n) {
-				return 'Not started'
-			}
+			if (previewPool?.truthAuctionStartedAt === undefined || previewPool.truthAuctionStartedAt === 0n) return 'Not started'
 
 			return renderTimestamp({
 				displayTimestamp: previewPool.truthAuctionStartedAt,
 				fallbackText: 'Not started',
 			})
 		}
-		if (forkAuctionDetails.truthAuctionStartedAt === 0n) {
-			return 'Not started'
-		}
+		if (forkAuctionDetails.truthAuctionStartedAt === 0n) return 'Not started'
 
 		return renderTimestamp({
 			displayTimestamp: forkAuctionDetails.truthAuctionStartedAt,
@@ -228,12 +224,8 @@ export function ForkAuctionSection({
 	const endsDisplay = auctionWindow === undefined ? 'Not started' : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={auctionWindow.endsAt} />
 	const truthAuctionTimeRemaining = truthAuctionEndsAt === undefined || effectiveCurrentTimestamp === undefined ? forkAuctionDetails?.truthAuction?.timeRemaining : getTimeRemaining(truthAuctionEndsAt, effectiveCurrentTimestamp)
 	const timeLeftDisplay = (() => {
-		if (forkAuctionDetails?.truthAuction === undefined) {
-			return forkOnlyFallbackText
-		}
-		if (truthAuctionTimeRemaining === undefined) {
-			return formatDuration(AUCTION_TIME_SECONDS)
-		}
+		if (forkAuctionDetails?.truthAuction === undefined) return forkOnlyFallbackText
+		if (truthAuctionTimeRemaining === undefined) return formatDuration(AUCTION_TIME_SECONDS)
 
 		return formatDuration(truthAuctionTimeRemaining)
 	})()
@@ -247,46 +239,30 @@ export function ForkAuctionSection({
 		)
 	const clearingPriceDisplay = forkAuctionDetails?.truthAuction === undefined ? forkOnlyFallbackText : renderMetricValue(forkAuctionDetails.truthAuction.clearingPrice, 'REP', UNKNOWN_VALUE)
 	const finalizedDisplay = (() => {
-		if (forkAuctionDetails?.truthAuction === undefined) {
-			return forkOnlyFallbackText
-		}
-		if (forkAuctionDetails.truthAuction.finalized) {
-			return 'Yes'
-		}
+		if (forkAuctionDetails?.truthAuction === undefined) return forkOnlyFallbackText
+		if (forkAuctionDetails.truthAuction.finalized) return 'Yes'
 
 		return 'No'
 	})()
 	const underfundedDisplay = (() => {
-		if (forkAuctionDetails?.truthAuction === undefined) {
-			return forkOnlyFallbackText
-		}
-		if (forkAuctionDetails.truthAuction.underfunded) {
-			return 'Yes'
-		}
+		if (forkAuctionDetails?.truthAuction === undefined) return forkOnlyFallbackText
+		if (forkAuctionDetails.truthAuction.underfunded) return 'Yes'
 
 		return 'No'
 	})()
 	const claimingAvailableDisplay = (() => {
 		if (forkAuctionDetails === undefined) {
-			if (hasPreviewForkActivity) {
-				return UNKNOWN_VALUE
-			}
+			if (hasPreviewForkActivity) return UNKNOWN_VALUE
 
 			return UNAVAILABLE_UNTIL_FORK
 		}
-		if (forkAuctionDetails.claimingAvailable) {
-			return 'Yes'
-		}
+		if (forkAuctionDetails.claimingAvailable) return 'Yes'
 
 		return 'No'
 	})()
 	const interactionDisabledReason = (() => {
-		if (accountState.address === undefined) {
-			return 'Connect a wallet before using fork and auction actions.'
-		}
-		if (!isMainnet) {
-			return 'Switch to Ethereum mainnet before using fork and auction actions.'
-		}
+		if (accountState.address === undefined) return 'Connect a wallet before using fork and auction actions.'
+		if (!isMainnet) return 'Switch to Ethereum mainnet before using fork and auction actions.'
 
 		return undefined
 	})()
@@ -389,12 +365,8 @@ export function ForkAuctionSection({
 		{
 			label: 'Fork Type',
 			value: (() => {
-				if (forkAuctionDetails === undefined) {
-					return getPreviewForkType(previewPool, hasPreviewForkActivity)
-				}
-				if (forkAuctionDetails.forkOwnSecurityPool) {
-					return 'Own escalation fork'
-				}
+				if (forkAuctionDetails === undefined) return getPreviewForkType(previewPool, hasPreviewForkActivity)
+				if (forkAuctionDetails.forkOwnSecurityPool) return 'Own escalation fork'
 
 				return 'Parent/Zoltar fork'
 			})(),
@@ -409,12 +381,8 @@ export function ForkAuctionSection({
 		{
 			label: 'Fork Type',
 			value: (() => {
-				if (forkAuctionDetails === undefined) {
-					return getPreviewForkType(previewPool, hasPreviewForkActivity)
-				}
-				if (forkAuctionDetails.forkOwnSecurityPool) {
-					return 'Own escalation fork'
-				}
+				if (forkAuctionDetails === undefined) return getPreviewForkType(previewPool, hasPreviewForkActivity)
+				if (forkAuctionDetails.forkOwnSecurityPool) return 'Own escalation fork'
 
 				return 'Parent/Zoltar fork'
 			})(),
@@ -428,12 +396,8 @@ export function ForkAuctionSection({
 		{
 			label: 'Migration Ends',
 			value: (() => {
-				if (forkAuctionDetails === undefined) {
-					return migrationSummaryText
-				}
-				if (forkAuctionDetails.migrationEndsAt === undefined) {
-					return 'Started/finished'
-				}
+				if (forkAuctionDetails === undefined) return migrationSummaryText
+				if (forkAuctionDetails.migrationEndsAt === undefined) return 'Started/finished'
 
 				return <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={forkAuctionDetails.migrationEndsAt} />
 			})(),
@@ -441,12 +405,8 @@ export function ForkAuctionSection({
 		{
 			label: 'Time Left',
 			value: (() => {
-				if (forkAuctionDetails === undefined) {
-					return forkOnlyFallbackText
-				}
-				if (migrationTimeRemaining === undefined) {
-					return formatDuration(MIGRATION_TIME_SECONDS)
-				}
+				if (forkAuctionDetails === undefined) return forkOnlyFallbackText
+				if (migrationTimeRemaining === undefined) return formatDuration(MIGRATION_TIME_SECONDS)
 
 				return formatDuration(migrationTimeRemaining)
 			})(),
@@ -454,12 +414,8 @@ export function ForkAuctionSection({
 		{
 			label: 'Fork Type',
 			value: (() => {
-				if (forkAuctionDetails === undefined) {
-					return getPreviewForkType(previewPool, hasPreviewForkActivity)
-				}
-				if (forkAuctionDetails.forkOwnSecurityPool) {
-					return 'Own escalation fork'
-				}
+				if (forkAuctionDetails === undefined) return getPreviewForkType(previewPool, hasPreviewForkActivity)
+				if (forkAuctionDetails.forkOwnSecurityPool) return 'Own escalation fork'
 
 				return 'Parent/Zoltar fork'
 			})(),
@@ -488,18 +444,14 @@ export function ForkAuctionSection({
 		{ label: 'REP Purchased', value: truthAuctionStatus === undefined ? forkOnlyFallbackText : <CurrencyValue value={truthAuctionStatus.totalRepPurchased} suffix='REP' /> },
 	]
 	const liveSnapshotMetrics: DisplayMetric[] = (() => {
-		if (selectedStage === 'initiate') {
+		if (selectedStage === 'initiate')
 			return [
 				{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
 				{
 					label: 'Fork Type',
 					value: (() => {
-						if (forkAuctionDetails === undefined) {
-							return getPreviewForkType(previewPool, hasPreviewForkActivity)
-						}
-						if (forkAuctionDetails.forkOwnSecurityPool) {
-							return 'Own escalation fork'
-						}
+						if (forkAuctionDetails === undefined) return getPreviewForkType(previewPool, hasPreviewForkActivity)
+						if (forkAuctionDetails.forkOwnSecurityPool) return 'Own escalation fork'
 
 						return 'Parent/Zoltar fork'
 					})(),
@@ -507,20 +459,15 @@ export function ForkAuctionSection({
 				{ label: 'Parent Pool', value: renderAddress(parentSecurityPoolAddress) },
 				{ label: 'Migration Window', value: formatDuration(MIGRATION_TIME_SECONDS) },
 			]
-		}
-		if (selectedStage === 'migration') {
+		if (selectedStage === 'migration')
 			return [
 				{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
 				{ label: 'Migrated REP', value: renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, 'REP', UNKNOWN_VALUE) },
 				{
 					label: 'Migration Ends',
 					value: (() => {
-						if (forkAuctionDetails === undefined) {
-							return migrationSummaryText
-						}
-						if (forkAuctionDetails.migrationEndsAt === undefined) {
-							return 'Started/finished'
-						}
+						if (forkAuctionDetails === undefined) return migrationSummaryText
+						if (forkAuctionDetails.migrationEndsAt === undefined) return 'Started/finished'
 
 						return <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={forkAuctionDetails.migrationEndsAt} />
 					})(),
@@ -528,42 +475,35 @@ export function ForkAuctionSection({
 				{
 					label: 'Time Left',
 					value: (() => {
-						if (forkAuctionDetails === undefined) {
-							return forkOnlyFallbackText
-						}
-						if (migrationTimeRemaining === undefined) {
-							return formatDuration(MIGRATION_TIME_SECONDS)
-						}
+						if (forkAuctionDetails === undefined) return forkOnlyFallbackText
+						if (migrationTimeRemaining === undefined) return formatDuration(MIGRATION_TIME_SECONDS)
 
 						return formatDuration(migrationTimeRemaining)
 					})(),
 				},
 			]
-		}
 
 		return (() => {
-			if (selectedStage === 'auction') {
+			if (selectedStage === 'auction')
 				return [
 					{ label: 'Started', value: startedDisplay },
 					{ label: 'Ends', value: endsDisplay },
 					{ label: 'ETH Raised / Cap', value: ethRaisedCapDisplay },
 					{ label: 'Clearing Price', value: clearingPriceDisplay },
 				]
-			}
-			if (selectedStage === 'settlement') {
+			if (selectedStage === 'settlement')
 				return [
 					{ label: 'Finalized', value: finalizedDisplay },
 					{ label: 'Underfunded', value: underfundedDisplay },
 					{ label: 'Auctioned Allowance', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.auctionedSecurityBondAllowance} suffix='ETH' /> },
 					{ label: 'Claiming Available', value: claimingAvailableDisplay },
 				]
-			}
 
 			return initiateStatusMetrics
 		})()
 	})()
 	const stagePanel = (() => {
-		if (selectedStage === 'initiate') {
+		if (selectedStage === 'initiate')
 			return (
 				<fieldset className='fork-stage-panel' disabled={disabled}>
 					<SectionBlock title='Fork Trigger'>{renderWorkflowMetricGrid(initiateStatusMetrics)}</SectionBlock>
@@ -593,8 +533,7 @@ export function ForkAuctionSection({
 					</SectionBlock>
 				</fieldset>
 			)
-		}
-		if (selectedStage === 'migration') {
+		if (selectedStage === 'migration')
 			return (
 				<fieldset className='fork-stage-panel' disabled={disabled}>
 					<SectionBlock title='Migration Status'>{renderWorkflowMetricGrid(migrationStatusMetrics)}</SectionBlock>
@@ -650,10 +589,9 @@ export function ForkAuctionSection({
 					</SectionBlock>
 				</fieldset>
 			)
-		}
 
 		return (() => {
-			if (selectedStage === 'auction') {
+			if (selectedStage === 'auction')
 				return (
 					<fieldset className='fork-stage-panel' disabled={disabled}>
 						<SectionBlock title='Auction Status'>{renderWorkflowMetricGrid(auctionStatusMetrics)}</SectionBlock>
@@ -686,8 +624,7 @@ export function ForkAuctionSection({
 						</SectionBlock>
 					</fieldset>
 				)
-			}
-			if (selectedStage === 'settlement') {
+			if (selectedStage === 'settlement')
 				return (
 					<fieldset className='fork-stage-panel' disabled={disabled}>
 						<SectionBlock title='Settlement Status'>{renderWorkflowMetricGrid(settlementStatusMetrics)}</SectionBlock>
@@ -751,7 +688,6 @@ export function ForkAuctionSection({
 						</SectionBlock>
 					</fieldset>
 				)
-			}
 
 			return undefined
 		})()
@@ -829,9 +765,7 @@ export function ForkAuctionSection({
 			<ErrorNotice message={forkAuctionError} />
 		</>
 	)
-	if (embedInCard) {
-		return content
-	}
+	if (embedInCard) return content
 	return (
 		<RouteWorkflowPanel description='Open a pool to inspect fork progress, migration, and the truth auction.' showHeader={showHeader} title='Fork & Truth Auction'>
 			{content}

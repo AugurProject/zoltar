@@ -11,9 +11,7 @@ export function TransactionActionButton({ availability, className = '', disabled
 			</button>
 			{(() => {
 				if (showDisabledReason && disabledReason === undefined) return undefined
-				if (showDisabledReason && isDisabled) {
-					return <p className='detail disabled-reason'>{disabledReason}</p>
-				}
+				if (showDisabledReason && isDisabled) return <p className='detail disabled-reason'>{disabledReason}</p>
 
 				return undefined
 			})()}

@@ -103,39 +103,25 @@ void describe('simulation backend', () => {
 
 	beforeEach(async () => {
 		const coldPrimaryAccount = coldBaselineBackend.accounts[0]
-		if (coldPrimaryAccount !== undefined && coldBaselineBackend.selectedAccount !== coldPrimaryAccount) {
-			await coldBaselineBackend.selectAccount(coldPrimaryAccount)
-		}
+		if (coldPrimaryAccount !== undefined && coldBaselineBackend.selectedAccount !== coldPrimaryAccount) await coldBaselineBackend.selectAccount(coldPrimaryAccount)
 		const warmPrimaryAccount = warmBaselineBackend.accounts[0]
-		if (warmPrimaryAccount !== undefined && warmBaselineBackend.selectedAccount !== warmPrimaryAccount) {
-			await warmBaselineBackend.selectAccount(warmPrimaryAccount)
-		}
+		if (warmPrimaryAccount !== undefined && warmBaselineBackend.selectedAccount !== warmPrimaryAccount) await warmBaselineBackend.selectAccount(warmPrimaryAccount)
 		warmBaselineBackend.setTransactionDelayMilliseconds(0)
 		const deployedPrimaryAccount = deployedBackend.accounts[0]
-		if (deployedPrimaryAccount !== undefined && deployedBackend.selectedAccount !== deployedPrimaryAccount) {
-			await deployedBackend.selectAccount(deployedPrimaryAccount)
-		}
+		if (deployedPrimaryAccount !== undefined && deployedBackend.selectedAccount !== deployedPrimaryAccount) await deployedBackend.selectAccount(deployedPrimaryAccount)
 		deployedBackend.setTransactionDelayMilliseconds(0)
 	}, 30_000)
 
 	afterAll(async () => {
-		if (coldBaselineBackend !== undefined) {
-			await coldBaselineBackend.dispose()
-		}
-		if (warmBaselineBackend !== undefined) {
-			await warmBaselineBackend.dispose()
-		}
-		if (deployedBackend !== undefined) {
-			await deployedBackend.dispose()
-		}
+		if (coldBaselineBackend !== undefined) await coldBaselineBackend.dispose()
+		if (warmBaselineBackend !== undefined) await warmBaselineBackend.dispose()
+		if (deployedBackend !== undefined) await deployedBackend.dispose()
 	}, 30_000)
 
 	void test('reports wallet presence and returns the selected account', async () => {
 		const backend = coldBaselineBackend
 		const primaryAccount = backend.accounts[0]
-		if (primaryAccount === undefined) {
-			throw new Error('Expected a primary simulation QA account')
-		}
+		if (primaryAccount === undefined) throw new Error('Expected a primary simulation QA account')
 
 		expect(backend.id).toBe('simulation')
 		expect(backend.hasWallet()).toBe(true)
@@ -187,9 +173,7 @@ void describe('simulation backend', () => {
 	void test('emits account-change events when switching QA accounts', async () => {
 		const backend = coldBaselineBackend
 		const nextAccount = backend.accounts[1]
-		if (nextAccount === undefined) {
-			throw new Error('Expected a secondary simulation QA account')
-		}
+		if (nextAccount === undefined) throw new Error('Expected a secondary simulation QA account')
 
 		let notificationCount = 0
 		const unsubscribe = backend.subscribeAccountsChanged(() => {
@@ -209,9 +193,7 @@ void describe('simulation backend', () => {
 		const backend = warmBaselineBackend
 
 		const primaryAccount = backend.accounts[0]
-		if (primaryAccount === undefined) {
-			throw new Error('Expected seeded simulation QA accounts')
-		}
+		if (primaryAccount === undefined) throw new Error('Expected seeded simulation QA accounts')
 
 		const readClient = backend.createReadClient()
 		const repCode = await readClient.getCode({
@@ -239,9 +221,7 @@ void describe('simulation backend', () => {
 		try {
 			const fromAccount = backend.accounts[0]
 			const toAccount = backend.accounts[1]
-			if (fromAccount === undefined || toAccount === undefined) {
-				throw new Error('Expected seeded simulation QA accounts')
-			}
+			if (fromAccount === undefined || toAccount === undefined) throw new Error('Expected seeded simulation QA accounts')
 
 			const writeClient = backend.createWriteClient(fromAccount)
 			const hash = await writeClient.sendTransaction({
@@ -264,9 +244,7 @@ void describe('simulation backend', () => {
 		try {
 			const fromAccount = backend.accounts[0]
 			const toAccount = backend.accounts[1]
-			if (fromAccount === undefined || toAccount === undefined) {
-				throw new Error('Expected seeded simulation QA accounts')
-			}
+			if (fromAccount === undefined || toAccount === undefined) throw new Error('Expected seeded simulation QA accounts')
 
 			const initialTimestamp = backend.currentTimestamp
 			const initialBlockCount = backend.blockCountSinceReset
@@ -304,9 +282,7 @@ void describe('simulation backend', () => {
 		try {
 			const fromAccount = backend.accounts[0]
 			const toAccount = backend.accounts[1]
-			if (fromAccount === undefined || toAccount === undefined) {
-				throw new Error('Expected seeded simulation QA accounts')
-			}
+			if (fromAccount === undefined || toAccount === undefined) throw new Error('Expected seeded simulation QA accounts')
 
 			backend.setTransactionDelayMilliseconds(250)
 			expect(backend.transactionDelayMilliseconds).toBe(250)
@@ -371,20 +347,14 @@ void describe('simulation backend', () => {
 		const backend = await createSimulationBackend({ scenario: 'security-pool' })
 		await backend.bootstrap()
 		const primaryAccount = backend.accounts[0]
-		if (primaryAccount === undefined) {
-			throw new Error('Expected seeded simulation QA accounts')
-		}
+		if (primaryAccount === undefined) throw new Error('Expected seeded simulation QA accounts')
 
 		const readClient = backend.createReadClient()
 		const pools = await loadAllSecurityPools(readClient)
 		const seededPool = pools[0]
-		if (seededPool === undefined) {
-			throw new Error('Expected a seeded security pool')
-		}
+		if (seededPool === undefined) throw new Error('Expected a seeded security pool')
 		const seededVault = await loadSecurityVaultDetails(readClient, seededPool.securityPoolAddress, primaryAccount)
-		if (seededVault === undefined) {
-			throw new Error('Expected a seeded security vault')
-		}
+		if (seededVault === undefined) throw new Error('Expected a seeded security vault')
 
 		expect(backend.currentScenario).toBe('security-pool')
 		expect(pools).toHaveLength(1)
@@ -404,9 +374,7 @@ void describe('simulation backend', () => {
 		try {
 			const [poolA] = await loadAllSecurityPools(backendA.createReadClient())
 			const [poolB] = await loadAllSecurityPools(backendB.createReadClient())
-			if (poolA === undefined || poolB === undefined) {
-				throw new Error('Expected a seeded security pool in both simulation backends')
-			}
+			if (poolA === undefined || poolB === undefined) throw new Error('Expected a seeded security pool in both simulation backends')
 
 			const baselineTimestamp = backendA.currentTimestamp
 			expect(poolA.securityPoolAddress).toBe(poolB.securityPoolAddress)
@@ -414,9 +382,7 @@ void describe('simulation backend', () => {
 
 			const primaryAccount = backendA.accounts[0]
 			const secondaryAccount = backendA.accounts[1]
-			if (primaryAccount === undefined || secondaryAccount === undefined) {
-				throw new Error('Expected seeded simulation QA accounts')
-			}
+			if (primaryAccount === undefined || secondaryAccount === undefined) throw new Error('Expected seeded simulation QA accounts')
 
 			const writeClient = backendA.createWriteClient(primaryAccount)
 			const hash = await writeClient.sendTransaction({
@@ -427,9 +393,7 @@ void describe('simulation backend', () => {
 			await backendA.reset()
 
 			const [resetPool] = await loadAllSecurityPools(backendA.createReadClient())
-			if (resetPool === undefined) {
-				throw new Error('Expected a seeded security pool after resetting the simulation backend')
-			}
+			if (resetPool === undefined) throw new Error('Expected a seeded security pool after resetting the simulation backend')
 
 			expect(resetPool.securityPoolAddress).toBe(poolA.securityPoolAddress)
 			expect(resetPool.questionId).toBe(poolA.questionId)
@@ -447,9 +411,7 @@ void describe('simulation backend', () => {
 		try {
 			const primaryAccount = backend.accounts[0]
 			const secondaryAccount = backend.accounts[1]
-			if (primaryAccount === undefined || secondaryAccount === undefined) {
-				throw new Error('Expected seeded simulation QA accounts A1 and B2')
-			}
+			if (primaryAccount === undefined || secondaryAccount === undefined) throw new Error('Expected seeded simulation QA accounts A1 and B2')
 
 			const readClient = backend.createReadClient()
 			const pools = await loadAllSecurityPools(readClient)
@@ -462,9 +424,7 @@ void describe('simulation backend', () => {
 			for (const pool of pools) {
 				const primaryVault = await loadSecurityVaultDetails(readClient, pool.securityPoolAddress, primaryAccount)
 				const secondaryVault = await loadSecurityVaultDetails(readClient, pool.securityPoolAddress, secondaryAccount)
-				if (primaryVault === undefined || secondaryVault === undefined) {
-					throw new Error(`Expected seeded vaults for both A1 and B2 in pool ${pool.securityPoolAddress}`)
-				}
+				if (primaryVault === undefined || secondaryVault === undefined) throw new Error(`Expected seeded vaults for both A1 and B2 in pool ${pool.securityPoolAddress}`)
 
 				const managerDetails = await loadOracleManagerDetails(readClient, pool.managerAddress)
 
@@ -488,18 +448,14 @@ void describe('simulation backend', () => {
 
 		try {
 			const primaryAccount = backend.accounts[0]
-			if (primaryAccount === undefined) {
-				throw new Error('Expected seeded simulation QA account A1')
-			}
+			if (primaryAccount === undefined) throw new Error('Expected seeded simulation QA account A1')
 
 			await backend.advanceTime(366n * 24n * 60n * 60n)
 
 			const readClient = backend.createReadClient()
 			const pools = await loadAllSecurityPools(readClient)
 			const seededPool = pools[0]
-			if (seededPool === undefined) {
-				throw new Error('Expected a seeded security pool')
-			}
+			if (seededPool === undefined) throw new Error('Expected a seeded security pool')
 
 			const reportingDetails = await loadReportingDetails(readClient, seededPool.securityPoolAddress, primaryAccount)
 
@@ -518,22 +474,16 @@ void describe('simulation backend', () => {
 
 		try {
 			const primaryAccount = backend.accounts[0]
-			if (primaryAccount === undefined) {
-				throw new Error('Expected seeded simulation QA accounts')
-			}
+			if (primaryAccount === undefined) throw new Error('Expected seeded simulation QA accounts')
 
 			const readClient = backend.createReadClient()
 			const writeClient = backend.createWriteClient(primaryAccount)
 			const poolsBefore = await loadAllSecurityPools(readClient)
 			const seededPoolBefore = poolsBefore[0]
-			if (seededPoolBefore === undefined) {
-				throw new Error('Expected a seeded security pool')
-			}
+			if (seededPoolBefore === undefined) throw new Error('Expected a seeded security pool')
 
 			const seededVaultBefore = await loadSecurityVaultDetails(readClient, seededPoolBefore.securityPoolAddress, primaryAccount)
-			if (seededVaultBefore === undefined) {
-				throw new Error('Expected a seeded security vault')
-			}
+			if (seededVaultBefore === undefined) throw new Error('Expected a seeded security vault')
 
 			const managerBefore = await loadOracleManagerDetails(readClient, seededVaultBefore.managerAddress)
 			const walletRepBefore = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
@@ -556,14 +506,10 @@ void describe('simulation backend', () => {
 
 			const poolsAfterFailedFullWithdraw = await loadAllSecurityPools(readClient)
 			const seededPoolAfterFailedFullWithdraw = poolsAfterFailedFullWithdraw[0]
-			if (seededPoolAfterFailedFullWithdraw === undefined) {
-				throw new Error('Expected a seeded security pool after the failed full withdrawal')
-			}
+			if (seededPoolAfterFailedFullWithdraw === undefined) throw new Error('Expected a seeded security pool after the failed full withdrawal')
 
 			const seededVaultAfterFailedFullWithdraw = await loadSecurityVaultDetails(readClient, seededPoolAfterFailedFullWithdraw.securityPoolAddress, primaryAccount)
-			if (seededVaultAfterFailedFullWithdraw === undefined) {
-				throw new Error('Expected a seeded security vault after the failed full withdrawal')
-			}
+			if (seededVaultAfterFailedFullWithdraw === undefined) throw new Error('Expected a seeded security vault after the failed full withdrawal')
 
 			const walletRepAfterFailedFullWithdraw = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
 
@@ -571,22 +517,16 @@ void describe('simulation backend', () => {
 			expect(seededPoolAfterFailedFullWithdraw.totalRepDeposit).toBe(seededPoolBefore.totalRepDeposit)
 			expect(walletRepAfterFailedFullWithdraw).toBe(walletRepBefore)
 
-			if (maxWithdrawableRep === undefined || maxWithdrawableRep <= 0n) {
-				throw new Error('Expected a positive max withdrawable REP amount in the seeded scenario')
-			}
+			if (maxWithdrawableRep === undefined || maxWithdrawableRep <= 0n) throw new Error('Expected a positive max withdrawable REP amount in the seeded scenario')
 
 			await queueOracleManagerOperation(writeClient, seededVaultBefore.managerAddress, 'withdrawRep', primaryAccount, maxWithdrawableRep)
 
 			const poolsAfter = await loadAllSecurityPools(readClient)
 			const seededPoolAfter = poolsAfter[0]
-			if (seededPoolAfter === undefined) {
-				throw new Error('Expected a seeded security pool after the withdrawal')
-			}
+			if (seededPoolAfter === undefined) throw new Error('Expected a seeded security pool after the withdrawal')
 
 			const seededVaultAfter = await loadSecurityVaultDetails(readClient, seededPoolAfter.securityPoolAddress, primaryAccount)
-			if (seededVaultAfter === undefined) {
-				throw new Error('Expected a seeded security vault after the withdrawal')
-			}
+			if (seededVaultAfter === undefined) throw new Error('Expected a seeded security vault after the withdrawal')
 
 			const managerAfter = await loadOracleManagerDetails(readClient, seededVaultAfter.managerAddress)
 			const walletRepAfter = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)

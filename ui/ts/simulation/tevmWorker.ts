@@ -8,9 +8,7 @@ function isDedicatedWorkerGlobalScope(value: typeof globalThis): value is typeof
 }
 
 function getWorkerScope() {
-	if (!isDedicatedWorkerGlobalScope(globalThis)) {
-		throw new Error('Simulation worker was initialized outside a dedicated worker scope')
-	}
+	if (!isDedicatedWorkerGlobalScope(globalThis)) throw new Error('Simulation worker was initialized outside a dedicated worker scope')
 	return globalThis
 }
 
@@ -24,9 +22,7 @@ function postEvent(event: SimulationWorkerEvent) {
 
 async function getEngine() {
 	const currentEnginePromise = enginePromise
-	if (currentEnginePromise === undefined) {
-		throw new Error('Simulation worker has not been initialized')
-	}
+	if (currentEnginePromise === undefined) throw new Error('Simulation worker has not been initialized')
 	return await currentEnginePromise
 }
 
@@ -91,9 +87,7 @@ scope.onmessage = event => {
 		const message = event.data as SimulationWorkerMessage
 		try {
 			if (message.type === 'init') {
-				if (enginePromise !== undefined) {
-					throw new Error('Simulation worker was already initialized')
-				}
+				if (enginePromise !== undefined) throw new Error('Simulation worker was already initialized')
 				enginePromise = createSimulationEngine({
 					scenario: message.scenario,
 				})

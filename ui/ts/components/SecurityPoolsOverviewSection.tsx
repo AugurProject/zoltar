@@ -143,9 +143,7 @@ export function SecurityPoolsOverviewSection({
 
 						return <StateHint presentation={registryPresentation} />
 					}
-					if (filteredSecurityPools.length === 0) {
-						return <StateHint presentation={{ key: 'empty', badgeLabel: 'No matches', badgeTone: 'muted', detail: 'No pools match the current search and filter settings.' }} />
-					}
+					if (filteredSecurityPools.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: 'No matches', badgeTone: 'muted', detail: 'No pools match the current search and filter settings.' }} />
 
 					return (
 						<div className='entity-card-list'>
@@ -153,12 +151,8 @@ export function SecurityPoolsOverviewSection({
 								const displayState = poolState.lifecycleState
 								const liquidationEnabled = poolState.actions.queueLiquidation.enabled
 								const badgeTone = (() => {
-									if (displayState === 'operational') {
-										return 'ok'
-									}
-									if (displayState === undefined) {
-										return 'muted'
-									}
+									if (displayState === 'operational') return 'ok'
+									if (displayState === undefined) return 'muted'
 
 									return 'warning'
 								})()

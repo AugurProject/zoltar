@@ -63,13 +63,12 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 			variant={variant}
 		/>
 	)
-	if (variant === 'embedded') {
+	if (variant === 'embedded')
 		return (
 			<SectionBlock density='compact' headingLevel={4} title='Vault Summary' variant='embedded'>
 				{content}
 			</SectionBlock>
 		)
-	}
 	return (
 		<EntityCard badge={<span className={`badge ${selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}`}>{selectedVaultIsOwnedByAccount ? 'Owned' : 'Read only'}</span>} title='Selected Vault' variant='record'>
 			{content}
@@ -129,7 +128,7 @@ function VaultQueuedOperationStatusCard({
 	successDescription: string
 }) {
 	if (status === undefined) return undefined
-	if (status === 'queued') {
+	if (status === 'queued')
 		return (
 			<WarningSurface as='section' variant='compact'>
 				<div className='entity-card-header'>
@@ -150,8 +149,7 @@ function VaultQueuedOperationStatusCard({
 				)}
 			</WarningSurface>
 		)
-	}
-	if (status === 'failed') {
+	if (status === 'failed')
 		return (
 			<section className='entity-card compact'>
 				<div className='entity-card-header'>
@@ -163,8 +161,7 @@ function VaultQueuedOperationStatusCard({
 				<p className='detail'>{errorMessage ?? 'The security pool rejected the action.'}</p>
 			</section>
 		)
-	}
-	if (status === 'executed') {
+	if (status === 'executed')
 		return (
 			<section className='entity-card compact'>
 				<div className='entity-card-header'>
@@ -176,8 +173,7 @@ function VaultQueuedOperationStatusCard({
 				<p className='detail'>{successDescription}</p>
 			</section>
 		)
-	}
-	if (status === 'missing') {
+	if (status === 'missing')
 		return (
 			<WarningSurface as='section' variant='compact'>
 				<div className='entity-card-header'>
@@ -188,7 +184,6 @@ function VaultQueuedOperationStatusCard({
 				<p className='detail'>{missingDescription}</p>
 			</WarningSurface>
 		)
-	}
 	return (
 		<section className='entity-card compact'>
 			<div className='entity-card-header'>
@@ -379,16 +374,13 @@ export function SecurityVaultSection({
 		securityVaultResult,
 	})
 	const vaultLoadNotice = (() => {
-		if (loadingSecurityVault) {
+		if (loadingSecurityVault)
 			return (
 				<p className='detail'>
 					<LoadingText>Loading vault...</LoadingText>
 				</p>
 			)
-		}
-		if (securityVaultMissing) {
-			return <StateHint presentation={{ key: 'not_found', badgeLabel: 'Not found', badgeTone: 'blocked', detail: 'Try another pool address.' }} />
-		}
+		if (securityVaultMissing) return <StateHint presentation={{ key: 'not_found', badgeLabel: 'Not found', badgeTone: 'blocked', detail: 'Try another pool address.' }} />
 
 		return undefined
 	})()
@@ -572,15 +564,11 @@ export function SecurityVaultSection({
 							<MetricField label={effectiveRepExitMode === 'redeem' ? 'Redeemable REP' : 'Withdrawable REP'}>
 								{(() => {
 									if (effectiveRepExitMode === 'redeem') {
-										if (redeemableRepAmount === undefined) {
-											return '—'
-										}
+										if (redeemableRepAmount === undefined) return '—'
 
 										return <CurrencyValue value={redeemableRepAmount} suffix='REP' />
 									}
-									if (withdrawableRepAmount === undefined) {
-										return '—'
-									}
+									if (withdrawableRepAmount === undefined) return '—'
 
 									return <CurrencyValue value={withdrawableRepAmount} suffix='REP' />
 								})()}
@@ -786,16 +774,13 @@ export function SecurityVaultSection({
 					/>
 				</div>
 				{(() => {
-					if (repBalanceGap !== undefined && repBalanceGap > 0n) {
-						return <ErrorNotice message={`Insufficient REP balance. Deposit amount exceeds your wallet balance by ${formatCurrencyBalance(repBalanceGap)} REP.`} />
-					}
-					if (isDepositBelowMinimum) {
+					if (repBalanceGap !== undefined && repBalanceGap > 0n) return <ErrorNotice message={`Insufficient REP balance. Deposit amount exceeds your wallet balance by ${formatCurrencyBalance(repBalanceGap)} REP.`} />
+					if (isDepositBelowMinimum)
 						return (
 							<p className='detail'>
 								New vaults require at least <CurrencyValue value={MIN_SECURITY_VAULT_REP_DEPOSIT} suffix='REP' copyable={false} /> in the first deposit.
 							</p>
 						)
-					}
 
 					return undefined
 				})()}
@@ -848,13 +833,12 @@ export function SecurityVaultSection({
 							<CurrencyValue value={effectiveRepExitMode === 'redeem' ? redeemableRepAmount : withdrawableRepAmount} suffix='REP' />
 						</MetricField>
 						{(() => {
-							if (effectiveRepExitMode === 'redeem') {
+							if (effectiveRepExitMode === 'redeem')
 								return (
 									<MetricField className='entity-metric' label='Locked REP'>
 										<CurrencyValue value={currentSelectedVaultDetails?.lockedRepInEscalationGame} suffix='REP' />
 									</MetricField>
 								)
-							}
 							if (oraclePriceValidUntilTimestamp === undefined) return undefined
 
 							return (
@@ -941,9 +925,7 @@ export function SecurityVaultSection({
 			{actionSections}
 		</>
 	)
-	if (compactLayout) {
-		return sections
-	}
+	if (compactLayout) return sections
 	return (
 		<RouteWorkflowPanel description='Browse vaults for the selected security pool, then manage REP, fees, and redemptions for the selected vault.' showHeader={showHeader} title='Security Vault'>
 			{sections}

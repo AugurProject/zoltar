@@ -20,12 +20,11 @@ const ROUTE_BY_HASH = ROUTE_NAMES.reduce<Partial<Record<string, Route>>>((routeB
 
 function splitRouteHash(hash: string) {
 	const queryIndex = hash.indexOf('?')
-	if (queryIndex === -1) {
+	if (queryIndex === -1)
 		return {
 			routeHash: hash,
 			search: '',
 		}
-	}
 
 	return {
 		routeHash: hash.slice(0, queryIndex),
@@ -34,9 +33,7 @@ function splitRouteHash(hash: string) {
 }
 
 export function ensureRouteHash() {
-	if (window.location.hash === '') {
-		window.location.hash = ROUTE_HASHES[DEFAULT_ROUTE]
-	}
+	if (window.location.hash === '') window.location.hash = ROUTE_HASHES[DEFAULT_ROUTE]
 }
 
 export function getCurrentRoute() {

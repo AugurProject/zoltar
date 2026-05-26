@@ -26,9 +26,7 @@ export function EnumDropdown<T extends string>({ disabled = false, onChange, opt
 		}
 
 		const handleDocumentKeyDown = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') {
-				setOpen(false)
-			}
+			if (event.key === 'Escape') setOpen(false)
 		}
 
 		document.addEventListener('mousedown', handleDocumentMouseDown)

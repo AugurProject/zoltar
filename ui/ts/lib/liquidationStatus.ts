@@ -17,9 +17,7 @@ export function getLiquidationNoticeState({
 	if (securityPoolOverviewResult?.action !== 'queueLiquidation') return undefined
 	if (securityPoolOverviewResult.stagedExecution !== undefined) return securityPoolOverviewResult.stagedExecution.success ? 'successful' : 'failed'
 	if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return 'submitted'
-	if (currentPoolOracleManagerDetails.pendingOperation?.operation === 'liquidation' && sameAddress(currentPoolOracleManagerDetails.pendingOperation.targetVault, liquidationTargetVault)) {
-		return 'queued'
-	}
+	if (currentPoolOracleManagerDetails.pendingOperation?.operation === 'liquidation' && sameAddress(currentPoolOracleManagerDetails.pendingOperation.targetVault, liquidationTargetVault)) return 'queued'
 	if (currentPoolOracleManagerDetails.isPriceValid) return 'successful'
 	return 'submitted'
 }

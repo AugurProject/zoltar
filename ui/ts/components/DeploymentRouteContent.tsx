@@ -23,9 +23,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deploymentF
 	let buttonContent: ComponentChildren = 'Deploy Next Missing'
 	if (deployNextMissingPending) {
 		buttonContent = 'Deploying...'
-	} else if (busyStepId !== undefined) {
-		buttonContent = 'Deployment In Progress'
-	}
+	} else if (busyStepId !== undefined) buttonContent = 'Deployment In Progress'
 
 	return (
 		<>

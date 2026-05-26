@@ -9,12 +9,8 @@ type ButtonState = {
 export function getTransactionButtonState(scope: HTMLElement, label: string): ButtonState {
 	const buttons = within(scope).getAllByRole('button', { name: label })
 	const button = buttons[0]
-	if (button === undefined) {
-		throw new Error(`Expected button ${label}`)
-	}
-	if (!(button instanceof HTMLButtonElement)) {
-		throw new Error(`Expected button ${label}`)
-	}
+	if (button === undefined) throw new Error(`Expected button ${label}`)
+	if (!(button instanceof HTMLButtonElement)) throw new Error(`Expected button ${label}`)
 
 	return {
 		disabled: button.disabled,

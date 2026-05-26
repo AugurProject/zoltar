@@ -167,14 +167,13 @@ export async function loadEscalationDeposits(client: Pick<ReadClient, 'readContr
 	return deposits
 }
 async function loadViewerReportingVaultState(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined) {
-	if (accountAddress === undefined) {
+	if (accountAddress === undefined)
 		return {
 			viewerVaultAvailableEscalationRep: undefined,
 			viewerVaultExists: false,
 			viewerVaultLockedRepInEscalationGame: undefined,
 			viewerVaultRepDepositShare: undefined,
 		}
-	}
 	const viewerVaultTuple = await client.readContract({
 		abi: peripherals_SecurityPool_SecurityPool.abi,
 		functionName: 'securityVaults',
@@ -183,9 +182,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 	})
 	const viewerVaultTuples = requireSecurityVaultTupleArray([viewerVaultTuple], 'viewer security vault tuple')
 	const [viewerPoolOwnership, viewerSecurityBondAllowance, viewerUnpaidEthFees, viewerFeeIndex, viewerLockedRepInEscalationGame] = viewerVaultTuples[0] ?? []
-	if (typeof viewerPoolOwnership !== 'bigint' || typeof viewerSecurityBondAllowance !== 'bigint' || typeof viewerUnpaidEthFees !== 'bigint' || typeof viewerFeeIndex !== 'bigint' || typeof viewerLockedRepInEscalationGame !== 'bigint') {
-		throw new Error('Unexpected viewer security vault tuple response')
-	}
+	if (typeof viewerPoolOwnership !== 'bigint' || typeof viewerSecurityBondAllowance !== 'bigint' || typeof viewerUnpaidEthFees !== 'bigint' || typeof viewerFeeIndex !== 'bigint' || typeof viewerLockedRepInEscalationGame !== 'bigint') throw new Error('Unexpected viewer security vault tuple response')
 	const viewerVaultRepDepositShare =
 		viewerPoolOwnership === 0n
 			? 0n
@@ -257,7 +254,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}),
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
-	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x') {
+	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x')
 		return {
 			completeSetCollateralAmount,
 			currentTime: block.timestamp,
@@ -274,7 +271,6 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 			withdrawalState: 'not-finalized',
 			...viewerVaultState,
 		}
-	}
 	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, balances, resolution, escalationEndTime, questionOutcome, universeForkTime, hasReachedNonDecision] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -352,12 +348,8 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	]
 	const normalizedQuestionOutcome = getReportingOutcomeKey(questionOutcome)
 	const withdrawalState = (() => {
-		if (normalizedQuestionOutcome !== 'none') {
-			return 'resolved'
-		}
-		if (universeForkTime > 0n && hasReachedNonDecision === false) {
-			return 'canceled-by-external-fork'
-		}
+		if (normalizedQuestionOutcome !== 'none') return 'resolved'
+		if (universeForkTime > 0n && hasReachedNonDecision === false) return 'canceled-by-external-fork'
 
 		return 'not-finalized'
 	})()
@@ -573,7 +565,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 			address: managerAddress,
 			args: [],
 		})
-		if (stagedOperation.amount > 0n) {
+		if (stagedOperation.amount > 0n)
 			pendingOperation = {
 				amount: stagedOperation.amount,
 				initiatorVault: stagedOperation.initiatorVault,
@@ -581,7 +573,6 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 				operationId: pendingOperationSlotId,
 				targetVault: stagedOperation.targetVault,
 			}
-		}
 	}
 	if (pendingReportId > 0n) {
 		const [extraData, reportMeta] = await readRequiredMulticall(client, [
@@ -740,7 +731,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		args: [],
 	})
 	const reportCount = nextReportId > 0n ? nextReportId - 1n : 0n
-	if (reportCount === 0n) {
+	if (reportCount === 0n)
 		return {
 			nextReportId,
 			pageIndex,
@@ -748,11 +739,10 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			reportCount,
 			reports: [],
 		}
-	}
 	const pageSizeBigInt = BigInt(pageSize)
 	const pageIndexBigInt = BigInt(pageIndex)
 	const pageEndId = reportCount - pageIndexBigInt * pageSizeBigInt
-	if (pageEndId <= 0n) {
+	if (pageEndId <= 0n)
 		return {
 			nextReportId,
 			pageIndex,
@@ -760,7 +750,6 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			reportCount,
 			reports: [],
 		}
-	}
 	const pageStartId = pageEndId > pageSizeBigInt ? pageEndId - pageSizeBigInt + 1n : 1n
 	const reportIds: bigint[] = []
 	for (let reportId = pageEndId; reportId >= pageStartId; reportId--) {
@@ -882,9 +871,7 @@ export async function createOpenOracleReportInstance(
 	},
 ) {
 	const assertSafeInteger = (value: number, label: string) => {
-		if (!Number.isSafeInteger(value)) {
-			throw new Error(`${label} exceeds the maximum safe integer range`)
-		}
+		if (!Number.isSafeInteger(value)) throw new Error(`${label} exceeds the maximum safe integer range`)
 	}
 	assertSafeInteger(parameters.disputeDelay, 'Dispute delay')
 	assertSafeInteger(parameters.feePercentage, 'Fee percentage')
@@ -1148,12 +1135,8 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			minBidSize,
 			repPurchasableAtBid: clearingPrice === undefined || clearingPrice === 0n ? undefined : (ethRaiseCap * 10n ** 18n) / clearingPrice,
 			timeRemaining: (() => {
-				if (finalized) {
-					return 0n
-				}
-				if (block.timestamp >= truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH) {
-					return 0n
-				}
+				if (finalized) return 0n
+				if (block.timestamp >= truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH) return 0n
 
 				return truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH - block.timestamp
 			})(),

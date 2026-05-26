@@ -60,12 +60,8 @@ function compareOutcomeLabels(left: string, right: string) {
 	const leftHash = getOutcomeLabelHash(left)
 	const rightHash = getOutcomeLabelHash(right)
 	return (() => {
-		if (leftHash > rightHash) {
-			return -1
-		}
-		if (leftHash < rightHash) {
-			return 1
-		}
+		if (leftHash > rightHash) return -1
+		if (leftHash < rightHash) return 1
 
 		return 0
 	})()
@@ -107,7 +103,7 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 	const endTime = form.endTime.trim()
 	let parsedStartTime: bigint | undefined
 	let parsedEndTime: bigint | undefined
-	if (startTime !== '') {
+	if (startTime !== '')
 		try {
 			parsedStartTime = parseTimestampInput(form.startTime, 'Start time')
 		} catch (error) {
@@ -115,7 +111,6 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 			setFieldError(fieldErrors, 'startTime', message)
 			invalidMessages.push(message)
 		}
-	}
 	if (endTime === '') {
 		setFieldError(fieldErrors, 'endTime', 'End time is required')
 		missingFields.push('End Time')
@@ -163,7 +158,7 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 			setFieldError(fieldErrors, field.key, `${field.label} is required`)
 			missingFields.push(field.label)
 		}
-		if (missingScalarFields.length === 0) {
+		if (missingScalarFields.length === 0)
 			try {
 				parseScalarFormInputs(form)
 			} catch (error) {
@@ -180,7 +175,6 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 				}
 				invalidMessages.push(message)
 			}
-		}
 	}
 	const noticeParts: string[] = []
 	if (missingFields.length > 0) noticeParts.push(`Missing required fields: ${formatFieldList(missingFields)}`)

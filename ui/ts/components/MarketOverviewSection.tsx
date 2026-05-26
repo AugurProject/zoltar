@@ -102,20 +102,12 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 								availability: {
 									disabled: accountAddress === undefined || !isMainnet || !hasForked || child.exists,
 									reason: (() => {
-										if (accountAddress === undefined) {
-											return 'Connect a wallet before deploying a child universe.'
-										}
-										if (!isMainnet) {
-											return 'Switch to Ethereum mainnet before deploying a child universe.'
-										}
+										if (accountAddress === undefined) return 'Connect a wallet before deploying a child universe.'
+										if (!isMainnet) return 'Switch to Ethereum mainnet before deploying a child universe.'
 
 										return (() => {
-											if (!hasForked) {
-												return 'Fork Zoltar before deploying child universes.'
-											}
-											if (child.exists) {
-												return 'This child universe is already deployed.'
-											}
+											if (!hasForked) return 'Fork Zoltar before deploying child universes.'
+											if (child.exists) return 'This child universe is already deployed.'
 
 											return undefined
 										})()
@@ -137,20 +129,12 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 								selectedChildUniverse === undefined
 									? 'Select a child universe to deploy.'
 									: (() => {
-											if (accountAddress === undefined) {
-												return 'Connect a wallet before deploying a child universe.'
-											}
-											if (!isMainnet) {
-												return 'Switch to Ethereum mainnet before deploying a child universe.'
-											}
+											if (accountAddress === undefined) return 'Connect a wallet before deploying a child universe.'
+											if (!isMainnet) return 'Switch to Ethereum mainnet before deploying a child universe.'
 
 											return (() => {
-												if (!hasForked) {
-													return 'Fork Zoltar before deploying child universes.'
-												}
-												if (selectedChildUniverse.exists) {
-													return 'This child universe is already deployed.'
-												}
+												if (!hasForked) return 'Fork Zoltar before deploying child universes.'
+												if (selectedChildUniverse.exists) return 'This child universe is already deployed.'
 
 												return undefined
 											})()

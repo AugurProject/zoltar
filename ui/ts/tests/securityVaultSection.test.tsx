@@ -130,9 +130,7 @@ describe('SecurityVaultSection', () => {
 		const documentQueries = within(document.body)
 		const selectedVaultHeading = documentQueries.getByRole('heading', { name: 'Selected Vault' })
 		const selectedVaultCard = selectedVaultHeading.closest('.entity-card')
-		if (!(selectedVaultCard instanceof HTMLElement)) {
-			throw new Error('Expected a selected vault summary card')
-		}
+		if (!(selectedVaultCard instanceof HTMLElement)) throw new Error('Expected a selected vault summary card')
 		const selectedVaultQueries = within(selectedVaultCard)
 		expect(selectedVaultQueries.getByText('REP Collateral')).not.toBeNull()
 		expect(selectedVaultQueries.queryByText('Approved REP')).toBeNull()

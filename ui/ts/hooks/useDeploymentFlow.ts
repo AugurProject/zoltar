@@ -49,9 +49,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, onTransa
 		}
 
 		const step = deploymentStatuses[stepIndex]
-		if (step === undefined || step.deployed) {
-			return
-		}
+		if (step === undefined || step.deployed) return
 
 		busyStepId.value = step.id
 		errorMessage.value = undefined

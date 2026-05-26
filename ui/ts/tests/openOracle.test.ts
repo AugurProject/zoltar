@@ -41,9 +41,7 @@ setDefaultTimeout(TEST_TIMEOUT_MS)
 
 function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
 	const globalWindow = globalThis as typeof globalThis & { window?: Window }
-	if (globalWindow.window === undefined) {
-		globalWindow.window = globalThis as Window & typeof globalThis
-	}
+	if (globalWindow.window === undefined) globalWindow.window = globalThis as Window & typeof globalThis
 	globalWindow.window.ethereum = mockWindow as InjectedEthereum
 }
 
@@ -319,9 +317,7 @@ describe('Open Oracle helpers', () => {
 		const fallbackClient = createConnectedReadClient()
 		const simulateContract: Parameters<typeof loadOpenOracleInitialReportPrice>[0]['simulateContract'] = async () => {
 			callCount += 1
-			if (callCount <= 4) {
-				throw new Error('no v4 pool')
-			}
+			if (callCount <= 4) throw new Error('no v4 pool')
 			return { result: [200_000_000_000_000_000n, 0n, 0, 0n], request: {} as never } as never
 		}
 		fallbackClient.simulateContract = simulateContract
@@ -338,9 +334,7 @@ describe('Open Oracle helpers', () => {
 		const fallbackClient = createConnectedReadClient()
 		const simulateContract: Parameters<typeof loadOpenOracleInitialReportPrice>[0]['simulateContract'] = async () => {
 			callCount += 1
-			if (callCount <= 4) {
-				throw new Error('no v4 pool')
-			}
+			if (callCount <= 4) throw new Error('no v4 pool')
 			return { result: [50n, 0n, 0, 0n], request: {} as never } as never
 		}
 		fallbackClient.simulateContract = simulateContract

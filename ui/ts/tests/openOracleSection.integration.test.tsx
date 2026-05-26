@@ -33,9 +33,7 @@ const reportId = 1n
 
 function createInjectedWalletShim(mockWindow: AnvilWindowEthereum, accountAddress: Address): InjectedEthereum {
 	const request: InjectedEthereum['request'] = async parameters => {
-		if (parameters.method === 'eth_accounts' || parameters.method === 'eth_requestAccounts') {
-			return [accountAddress] as never
-		}
+		if (parameters.method === 'eth_accounts' || parameters.method === 'eth_requestAccounts') return [accountAddress] as never
 
 		return (await mockWindow.request({ method: parameters.method, params: parameters.params })) as never
 	}
@@ -111,9 +109,7 @@ function OpenOracleSectionHarness({ accountAddress }: { accountAddress: Address 
 function getSectionByTitle(name: string) {
 	const heading = within(document.body).getByRole('heading', { level: 3, name })
 	const section = heading.closest('section')
-	if (!(section instanceof HTMLElement)) {
-		throw new Error(`Expected section for ${name}`)
-	}
+	if (!(section instanceof HTMLElement)) throw new Error(`Expected section for ${name}`)
 	return section
 }
 
@@ -123,9 +119,7 @@ function getApprovalSections() {
 		.filter(heading => heading.textContent?.trim().endsWith('Approval') === true)
 		.map(heading => {
 			const section = heading.closest('section')
-			if (!(section instanceof HTMLElement)) {
-				throw new Error('Expected approval section container')
-			}
+			if (!(section instanceof HTMLElement)) throw new Error('Expected approval section container')
 			return section
 		})
 }
@@ -134,17 +128,13 @@ function getApproveButton(section: HTMLElement) {
 	const button = within(section)
 		.getAllByRole('button')
 		.find(candidate => candidate.textContent?.trim().startsWith('Approve') === true)
-	if (!(button instanceof HTMLButtonElement)) {
-		throw new Error('Expected approve button')
-	}
+	if (!(button instanceof HTMLButtonElement)) throw new Error('Expected approve button')
 	return button
 }
 
 function getRefreshReportButton() {
 	const button = within(document.body).getByText('Refresh report', { selector: 'button' })
-	if (!(button instanceof HTMLButtonElement)) {
-		throw new Error('Expected refresh report button')
-	}
+	if (!(button instanceof HTMLButtonElement)) throw new Error('Expected refresh report button')
 	return button
 }
 
@@ -260,17 +250,13 @@ describe.serial('OpenOracleSection integration', () => {
 
 		await waitFor(() => {
 			const [currentToken1ApprovalSection, currentToken2ApprovalSection] = getApprovalSections()
-			if (currentToken1ApprovalSection === undefined || currentToken2ApprovalSection === undefined) {
-				throw new Error('Expected both token approval sections to be rendered')
-			}
+			if (currentToken1ApprovalSection === undefined || currentToken2ApprovalSection === undefined) throw new Error('Expected both token approval sections to be rendered')
 			expect(getApproveButton(currentToken1ApprovalSection).disabled).toBe(false)
 			expect(getApproveButton(currentToken2ApprovalSection).disabled).toBe(false)
 		})
 
 		const [token1ApprovalSection, token2ApprovalSection] = getApprovalSections()
-		if (token1ApprovalSection === undefined || token2ApprovalSection === undefined) {
-			throw new Error('Expected both token approval sections to be rendered')
-		}
+		if (token1ApprovalSection === undefined || token2ApprovalSection === undefined) throw new Error('Expected both token approval sections to be rendered')
 
 		await clickElement(getApproveButton(token1ApprovalSection))
 		await waitForLatestAction('approveToken1')
@@ -280,9 +266,7 @@ describe.serial('OpenOracleSection integration', () => {
 
 		const refreshedApprovalSections = getApprovalSections()
 		const refreshedToken2ApprovalSection = refreshedApprovalSections[1]
-		if (refreshedToken2ApprovalSection === undefined) {
-			throw new Error('Expected the second token approval section to remain rendered')
-		}
+		if (refreshedToken2ApprovalSection === undefined) throw new Error('Expected the second token approval section to remain rendered')
 
 		await clickElement(getApproveButton(refreshedToken2ApprovalSection))
 		await waitForLatestAction('approveToken2')
@@ -380,9 +364,7 @@ describe.serial('OpenOracleSection integration', () => {
 		const expectedAmount2 = reportDetails.exactToken1Report / 4n
 
 		const [token1ApprovalSection, token2ApprovalSection] = getApprovalSections()
-		if (token1ApprovalSection === undefined || token2ApprovalSection === undefined) {
-			throw new Error('Expected both token approval sections to be rendered')
-		}
+		if (token1ApprovalSection === undefined || token2ApprovalSection === undefined) throw new Error('Expected both token approval sections to be rendered')
 
 		await clickElement(getApproveButton(token1ApprovalSection))
 		await waitForLatestAction('approveToken1')
@@ -392,9 +374,7 @@ describe.serial('OpenOracleSection integration', () => {
 
 		const refreshedApprovalSections = getApprovalSections()
 		const refreshedToken2ApprovalSection = refreshedApprovalSections[1]
-		if (refreshedToken2ApprovalSection === undefined) {
-			throw new Error('Expected the second token approval section to remain rendered')
-		}
+		if (refreshedToken2ApprovalSection === undefined) throw new Error('Expected the second token approval section to remain rendered')
 
 		await clickElement(getApproveButton(refreshedToken2ApprovalSection))
 		await waitForLatestAction('approveToken2')

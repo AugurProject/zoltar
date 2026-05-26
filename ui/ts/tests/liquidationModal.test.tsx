@@ -600,9 +600,7 @@ describe('LiquidationModal', () => {
 
 		await act(() => {
 			const maxButton = document.body.querySelector('.field-inline-action')
-			if (!(maxButton instanceof HTMLElement)) {
-				throw new Error('Expected liquidation Max button')
-			}
+			if (!(maxButton instanceof HTMLElement)) throw new Error('Expected liquidation Max button')
 			fireEvent.click(maxButton)
 		})
 
@@ -879,9 +877,7 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		const amountInput = container.querySelector("input[placeholder='0.0']")
-		if (!(amountInput instanceof HTMLInputElement)) {
-			throw new Error('Expected liquidation amount input')
-		}
+		if (!(amountInput instanceof HTMLInputElement)) throw new Error('Expected liquidation amount input')
 
 		const executeButton = documentQueries.getByRole('button', { name: 'Execute Liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(false)

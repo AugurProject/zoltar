@@ -27,7 +27,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const [scalarOutcomeInvalid, setScalarOutcomeInvalid] = useState(false)
 	const [scalarDeployError, setScalarDeployError] = useState<string | undefined>(undefined)
 	const [deployModalOpen, setDeployModalOpen] = useState(false)
-	if (questionDetails === undefined) {
+	if (questionDetails === undefined)
 		return (
 			<WorkflowSubsection title='Child Universes'>
 				<p className='detail'>
@@ -35,7 +35,6 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				</p>
 			</WorkflowSubsection>
 		)
-	}
 	const selectedScalarTick = BigInt(scalarOutcomeTick)
 	const clampedSelectedScalarTick = clampScalarTickIndex(selectedScalarTick, questionDetails.numTicks)
 	const clampedScalarOutcomeTick = clampedSelectedScalarTick.toString()
@@ -45,20 +44,12 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const selectedScalarChildExists = selectedScalarChild?.exists === true
 	const canDeployScalarChild = accountAddress !== undefined && isMainnet && hasForked && !selectedScalarChildExists
 	const deployReason = (() => {
-		if (accountAddress === undefined) {
-			return 'Connect a wallet before deploying a child universe.'
-		}
-		if (!isMainnet) {
-			return 'Switch to Ethereum mainnet before deploying a child universe.'
-		}
+		if (accountAddress === undefined) return 'Connect a wallet before deploying a child universe.'
+		if (!isMainnet) return 'Switch to Ethereum mainnet before deploying a child universe.'
 
 		return (() => {
-			if (!hasForked) {
-				return 'Fork Zoltar before deploying child universes.'
-			}
-			if (selectedScalarChildExists) {
-				return 'This child universe is already deployed.'
-			}
+			if (!hasForked) return 'Fork Zoltar before deploying child universes.'
+			if (selectedScalarChildExists) return 'This child universe is already deployed.'
 
 			return scalarDeployError
 		})()
@@ -88,12 +79,8 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				action={
 					<TransactionActionButton
 						idleLabel={(() => {
-							if (selectedScalarChildExists) {
-								return 'Deployed'
-							}
-							if (scalarOutcomeInvalid) {
-								return 'Create invalid universe'
-							}
+							if (selectedScalarChildExists) return 'Deployed'
+							if (scalarOutcomeInvalid) return 'Create invalid universe'
 
 							return 'Create child universe'
 						})()}

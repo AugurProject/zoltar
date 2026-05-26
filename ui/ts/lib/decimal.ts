@@ -3,12 +3,8 @@ function normalizeDecimalInput(value: string) {
 	const trimmed = value.trim()
 	if (trimmed === '') return trimmed
 	return (() => {
-		if (trimmed.startsWith('.')) {
-			return `0${trimmed}`
-		}
-		if (trimmed.endsWith('.')) {
-			return `${trimmed}0`
-		}
+		if (trimmed.startsWith('.')) return `0${trimmed}`
+		if (trimmed.endsWith('.')) return `${trimmed}0`
 
 		return trimmed
 	})()

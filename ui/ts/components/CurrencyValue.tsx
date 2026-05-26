@@ -67,20 +67,16 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 		}
 	}, [compactWhenOverflow, copiedValue, displayValue, value])
 
-	if (loading) {
-		return <LoadingText className={`currency-value loading ${className}`}>Loading...</LoadingText>
-	}
+	if (loading) return <LoadingText className={`currency-value loading ${className}`}>Loading...</LoadingText>
 
-	if (value === undefined || exactValue === undefined || displayValue === undefined || compactDisplayValue === undefined) {
-		return <span className={`currency-value unavailable ${className}`}>{getMetricPlaceholderPresentation(value)?.placeholder}</span>
-	}
+	if (value === undefined || exactValue === undefined || displayValue === undefined || compactDisplayValue === undefined) return <span className={`currency-value unavailable ${className}`}>{getMetricPlaceholderPresentation(value)?.placeholder}</span>
 
 	const resolvedDisplayValue = compactWhenOverflow && shouldCompact && !copiedValue ? compactDisplayValue : displayValue
 	const exactTitle = `${exactValue}${exactSuffix}`
 	const valueClassName = `currency-value${copyable ? ' copyable' : ''} ${className}`
 	const measureClassName = `currency-value currency-value-measure ${className}`
 
-	if (!copyable) {
+	if (!copyable)
 		return (
 			<span className='currency-value-wrap'>
 				<span ref={spanRef} className={valueClassName} title={exactTitle}>
@@ -89,7 +85,6 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 				<span ref={measureRef} aria-hidden='true' className={measureClassName} />
 			</span>
 		)
-	}
 
 	return (
 		<span className='currency-value-wrap'>

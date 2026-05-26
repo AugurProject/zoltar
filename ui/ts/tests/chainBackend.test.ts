@@ -11,9 +11,7 @@ function ensureWindowObject() {
 	const globalWindow = globalThis as typeof globalThis & {
 		window?: Window
 	}
-	if (globalWindow.window === undefined) {
-		globalWindow.window = globalThis as Window & typeof globalThis
-	}
+	if (globalWindow.window === undefined) globalWindow.window = globalThis as Window & typeof globalThis
 	return globalWindow.window
 }
 function createMockInjectedEthereum(requestHandler: (parameters: RequestParameters) => Promise<unknown>): InjectedEthereum {

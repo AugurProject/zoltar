@@ -44,9 +44,7 @@ function collectErrorDetails(error: unknown, seen = new Set<object>()): string[]
 	details.push(...readStringArrayValues(error['metaMessages']))
 
 	const cause = error['cause']
-	if (cause !== undefined) {
-		details.push(...collectErrorDetails(cause, seen))
-	}
+	if (cause !== undefined) details.push(...collectErrorDetails(cause, seen))
 
 	if (details.length > 0) return details
 
@@ -155,9 +153,7 @@ function appendReason(fallbackMessage: string, detail: string | undefined) {
 
 function rewriteWriteFallbackMessage(fallbackMessage: string) {
 	const normalizedFallback = normalizeWhitespace(fallbackMessage)
-	if (!normalizedFallback.toLowerCase().startsWith('failed to ')) {
-		return `Transaction failed. ${normalizedFallback}`
-	}
+	if (!normalizedFallback.toLowerCase().startsWith('failed to ')) return `Transaction failed. ${normalizedFallback}`
 
 	const action = normalizedFallback.slice('Failed to '.length)
 	return `Transaction failed while attempting to ${action}`

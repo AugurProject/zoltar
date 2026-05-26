@@ -28,7 +28,7 @@ type ParsedTokenApprovalAmount =
 			amount: typeof maxUint256
 	  }
 export function deriveTokenApprovalRequirement(requiredAmount: bigint | undefined, approvedAmount: bigint | undefined): TokenApprovalRequirement {
-	if (requiredAmount === undefined) {
+	if (requiredAmount === undefined)
 		return {
 			approvedAmount,
 			hasSufficientApproval: false,
@@ -36,8 +36,7 @@ export function deriveTokenApprovalRequirement(requiredAmount: bigint | undefine
 			requiredAmount,
 			targetAmount: undefined,
 		}
-	}
-	if (requiredAmount <= 0n) {
+	if (requiredAmount <= 0n)
 		return {
 			approvedAmount,
 			hasSufficientApproval: true,
@@ -45,13 +44,10 @@ export function deriveTokenApprovalRequirement(requiredAmount: bigint | undefine
 			requiredAmount,
 			targetAmount: undefined,
 		}
-	}
 	const hasSufficientApproval = approvedAmount !== undefined && approvedAmount >= requiredAmount
 	const neededAmount = (() => {
 		if (approvedAmount === undefined) return undefined
-		if (approvedAmount >= requiredAmount) {
-			return 0n
-		}
+		if (approvedAmount >= requiredAmount) return 0n
 
 		return requiredAmount - approvedAmount
 	})()
@@ -79,9 +75,7 @@ export function formatTokenApprovalUnavailableMessage({ actionLabel, reason, tok
 	const resolvedTokenLabel = tokenLabel?.trim() || 'token'
 	const sanitizedReason = sanitizeErrorDetail(reason)
 	const segments = [`Unable to verify ${resolvedTokenLabel} approval${actionLabel === undefined ? '' : ` before ${actionLabel}`}.`]
-	if (sanitizedReason !== undefined) {
-		segments.push(`Reason: ${sanitizedReason}.`)
-	}
+	if (sanitizedReason !== undefined) segments.push(`Reason: ${sanitizedReason}.`)
 	segments.push('Retry loading the approval status before continuing.')
 	return segments.join(' ')
 }
@@ -108,14 +102,13 @@ export function resolveTokenApprovalStatusMessage({
 }) {
 	if (guardMessage !== undefined) return guardMessage
 	if (amountValidationMessage !== undefined) return amountValidationMessage
-	if (draftAmount.trim() === '') {
+	if (draftAmount.trim() === '')
 		return formatTokenApprovalNeededMessage({
 			actionLabel,
 			requirement,
 			tokenLabel,
 			tokenUnits,
 		})
-	}
 	if (nextApprovalAmount === undefined || requiredAmount === undefined) return undefined
 	return formatTokenApprovalPartialMessage({
 		actionLabel,

@@ -11,41 +11,37 @@ type StepStatus = {
 }
 
 function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefined, isBusy: boolean, accountAddress: string | undefined, isMainnet: boolean): StepStatus {
-	if (stepDeployed) {
+	if (stepDeployed)
 		return {
 			badgeClass: 'ok',
 			detail: 'Code found at expected address.',
 			label: 'Deployed',
 			buttonLabel: 'Deployed',
 		}
-	}
 
-	if (isBusy) {
+	if (isBusy)
 		return {
 			badgeClass: 'pending',
 			detail: 'Deployment in progress.',
 			label: 'Deploying...',
 			buttonLabel: 'Deploying...',
 		}
-	}
 
 	if (prerequisiteLabel === undefined) {
-		if (accountAddress === undefined) {
+		if (accountAddress === undefined)
 			return {
 				badgeClass: 'pending',
 				detail: 'Connect wallet to continue.',
 				label: 'Not Deployed',
 				buttonLabel: 'Deploy',
 			}
-		}
-		if (!isMainnet) {
+		if (!isMainnet)
 			return {
 				badgeClass: 'pending',
 				detail: 'Switch to Ethereum mainnet.',
 				label: 'Not Deployed',
 				buttonLabel: 'Deploy',
 			}
-		}
 		return {
 			badgeClass: 'pending',
 			detail: 'Can deploy now.',
