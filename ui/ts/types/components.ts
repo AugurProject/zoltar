@@ -28,6 +28,7 @@ import type {
 } from './contracts.js'
 import type { OpenOracleDisputeSubmissionDetails, OpenOracleInitialReportPriceSource, OpenOracleInitialReportSubmissionDetails } from '../lib/openOracle.js'
 import type { LoadableValueState } from '../lib/loadState.js'
+import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 import type { OpenOracleInitialReportQuoteFailureKind, OpenOracleInitialReportQuoteSource } from '../lib/openOracle.js'
@@ -481,6 +482,7 @@ export type SecurityVaultRouteContentProps = {
 	onDepositRep: () => void
 	onLoadSecurityVault: (vaultAddress?: string) => void
 	onRedeemFees: () => void
+	onRedeemRep: () => void
 	onSetSecurityBondAllowance: () => void
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
 	onWithdrawRep: () => void
@@ -506,7 +508,7 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	modalFirst?: boolean
 	onViewStagedOperations?: () => void
 	oracleManagerDetails?: OracleManagerDetails | undefined
-	poolActionLockReason?: string | undefined
+	poolState?: SecurityPoolStateModel | undefined
 	selectedPoolTotalRepDeposit?: bigint | undefined
 	selectedPoolTotalSecurityBondAllowance?: bigint | undefined
 	autoLoadVault?: boolean
@@ -620,6 +622,7 @@ export type TradingRouteContentProps = {
 
 export type TradingSectionProps = TradingRouteContentProps & {
 	embedInCard?: boolean
+	poolState?: SecurityPoolStateModel | undefined
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean
 }

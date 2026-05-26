@@ -20,11 +20,13 @@ import { UniverseLink } from './UniverseLink.js'
 import { TimestampValue } from './TimestampValue.js'
 import { ViewTabs } from './ViewTabs.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
+import { createActionAvailability } from '../lib/actionAvailability.js'
 import { AUCTION_TIME_SECONDS, type ForkAuctionStageView, estimateRepPurchased, getForkAuctionStageView, getForkStageDescription, getForkStageDescriptionForState, getOutcomeActionLabel, getTimeRemaining, getTruthAuctionBidGuardMessage, hasForkActivity, MIGRATION_TIME_SECONDS } from '../lib/forkAuction.js'
 import { formatDuration } from '../lib/formatters.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
-import { getSecurityPoolDisplayState, getSecurityPoolDisplayStateLabel } from '../lib/securityPoolState.js'
+import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolLabels.js'
+import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
 import type { ForkAuctionSectionProps, ReadinessAction } from '../types/components.js'
 
@@ -192,10 +194,6 @@ export function ForkAuctionSection({
 	const truthAuctionAddress = forkAuctionDetails?.truthAuctionAddress ?? previewPool?.truthAuctionAddress
 	const hasPreviewForkActivity = previewPool === undefined ? false : hasForkActivity(previewPool)
 	const forkOnlyFallbackText = getForkOnlyFallbackText(hasPreviewForkActivity)
-	const displaySystemState = getSecurityPoolDisplayState({
-		questionOutcome,
-		systemState,
-	})
 	const forkStageDescription = forkAuctionDetails === undefined ? (systemState === undefined ? undefined : getForkStageDescriptionForState(systemState)) : getForkStageDescription(forkAuctionDetails)
 	const migrationSummaryText = forkAuctionDetails === undefined ? getPreviewMigrationSummary(previewPool, hasPreviewForkActivity) : undefined
 	const hasLoadedPoolContext = securityPoolAddress !== undefined && systemState !== undefined
@@ -245,7 +243,18 @@ export function ForkAuctionSection({
 	const finalizedDisplay = forkAuctionDetails?.truthAuction === undefined ? forkOnlyFallbackText : forkAuctionDetails.truthAuction.finalized ? 'Yes' : 'No'
 	const underfundedDisplay = forkAuctionDetails?.truthAuction === undefined ? forkOnlyFallbackText : forkAuctionDetails.truthAuction.underfunded ? 'Yes' : 'No'
 	const claimingAvailableDisplay = forkAuctionDetails === undefined ? (hasPreviewForkActivity ? UNKNOWN_VALUE : UNAVAILABLE_UNTIL_FORK) : forkAuctionDetails.claimingAvailable ? 'Yes' : 'No'
-	const baseDisabledReason = disabledMessage ?? (accountState.address === undefined ? 'Connect a wallet before using fork and auction actions.' : !isMainnet ? 'Switch to Ethereum mainnet before using fork and auction actions.' : undefined)
+	const interactionDisabledReason = accountState.address === undefined ? 'Connect a wallet before using fork and auction actions.' : !isMainnet ? 'Switch to Ethereum mainnet before using fork and auction actions.' : undefined
+	const forkPoolState = evaluateSecurityPoolState({
+		forkStage: deriveSecurityPoolForkStage({
+			currentStage,
+			workflowDisabled: disabled,
+		}),
+		lifecycleState: deriveSecurityPoolLifecycleState({
+			questionOutcome,
+			systemState,
+		}),
+		universeHasForked: previewPool?.universeHasForked === true,
+	})
 	const truthAuctionBidGuardMessage = getTruthAuctionBidGuardMessage({
 		accountAddress: accountState.address,
 		isMainnet,
@@ -253,6 +262,7 @@ export function ForkAuctionSection({
 		truthAuction: forkAuctionDetails?.truthAuction,
 		walletEthBalance: accountState.ethBalance,
 	})
+	const createChildUniverseEnabled = forkPoolState.actions.createChildUniverse.enabled
 	const childUniverseRequirements = [
 		{ key: 'pool', label: 'Forked pool loaded', resolved: hasLoadedPoolContext, ...(hasLoadedPoolContext ? {} : { detail: 'Load a forked pool before creating a child universe.' }) },
 		{ key: 'outcome', label: 'Outcome selected', resolved: forkAuctionForm.selectedOutcome !== undefined, ...(forkAuctionForm.selectedOutcome === undefined ? { detail: 'Select the outcome whose child universe you want to create.' } : {}) },
@@ -263,8 +273,8 @@ export function ForkAuctionSection({
 		actionLabel: 'Create child universe',
 		description: 'Review the selected outcome and confirm the child-universe creation in a bounded execution modal.',
 		key: 'create-child-universe',
-		...(hasLoadedPoolContext ? { onAction: () => setChildUniverseModalOpen(true) } : {}),
-		readiness: hasLoadedPoolContext ? 'ready' : 'blocked',
+		...(hasLoadedPoolContext && createChildUniverseEnabled ? { onAction: () => setChildUniverseModalOpen(true) } : {}),
+		readiness: hasLoadedPoolContext && createChildUniverseEnabled ? 'ready' : 'blocked',
 		title: `Create ${getOutcomeActionLabel(forkAuctionForm.selectedOutcome)} Child Universe`,
 		...(hasLoadedPoolContext ? {} : { blocker: 'Load fork details for this pool first.' }),
 	}
@@ -285,6 +295,7 @@ export function ForkAuctionSection({
 		tone?: 'primary' | 'secondary'
 	}) => {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
+		const actionEnabled = forkPoolState.actions[action].enabled
 		return (
 			<TransactionActionButton
 				idleLabel={idleLabel}
@@ -293,8 +304,8 @@ export function ForkAuctionSection({
 				pending={forkAuctionActiveAction === action}
 				tone={tone}
 				availability={{
-					disabled: disabled || accountState.address === undefined || !isMainnet || resolvedAvailability.disabled,
-					reason: baseDisabledReason ?? resolvedAvailability.reason,
+					disabled: !actionEnabled || interactionDisabledReason !== undefined || resolvedAvailability.disabled,
+					reason: actionEnabled ? (interactionDisabledReason ?? resolvedAvailability.reason) : undefined,
 				}}
 			/>
 		)
@@ -328,44 +339,12 @@ export function ForkAuctionSection({
 		{ label: 'Security Pool', value: renderAddress(securityPoolAddress) },
 		{ label: 'Universe', value: universeId === undefined ? UNKNOWN_VALUE : <UniverseLink universeId={universeId} /> },
 		{ label: 'Parent Pool', value: renderAddress(parentSecurityPoolAddress) },
-		{ label: 'System State', value: displaySystemState === undefined ? UNKNOWN_VALUE : getSecurityPoolDisplayStateLabel(displaySystemState) },
+		{ label: 'System State', value: getSecurityPoolLifecycleLabel(forkPoolState.lifecycleState) },
 		{ label: 'Fork Type', value: forkAuctionDetails === undefined ? getPreviewForkType(previewPool, hasPreviewForkActivity) : forkAuctionDetails.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent/Zoltar fork' },
 		{ label: 'Question Outcome', value: questionOutcome === undefined ? UNKNOWN_VALUE : getReportingOutcomeLabel(questionOutcome) },
 		{ label: 'Fork Outcome', value: forkOutcome === undefined ? UNKNOWN_VALUE : getReportingOutcomeLabel(forkOutcome) },
 		{ label: 'Collateral', value: renderMetricValue(forkAuctionDetails?.completeSetCollateralAmount ?? previewPool?.completeSetCollateralAmount, 'ETH', UNKNOWN_VALUE) },
 	]
-
-	const liveSnapshotMetrics: DisplayMetric[] =
-		selectedStage === 'initiate'
-			? [
-					{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
-					{ label: 'Fork Type', value: forkAuctionDetails === undefined ? getPreviewForkType(previewPool, hasPreviewForkActivity) : forkAuctionDetails.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent/Zoltar fork' },
-					{ label: 'Parent Pool', value: renderAddress(parentSecurityPoolAddress) },
-					{ label: 'Migration Window', value: formatDuration(MIGRATION_TIME_SECONDS) },
-				]
-			: selectedStage === 'migration'
-				? [
-						{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
-						{ label: 'Migrated REP', value: renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, 'REP', UNKNOWN_VALUE) },
-						{
-							label: 'Migration Ends',
-							value: forkAuctionDetails === undefined ? migrationSummaryText : forkAuctionDetails.migrationEndsAt === undefined ? 'Started/finished' : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={forkAuctionDetails.migrationEndsAt} />,
-						},
-						{ label: 'Time Left', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : migrationTimeRemaining === undefined ? formatDuration(MIGRATION_TIME_SECONDS) : formatDuration(migrationTimeRemaining) },
-					]
-				: selectedStage === 'auction'
-					? [
-							{ label: 'Started', value: startedDisplay },
-							{ label: 'Ends', value: endsDisplay },
-							{ label: 'ETH Raised / Cap', value: ethRaisedCapDisplay },
-							{ label: 'Clearing Price', value: clearingPriceDisplay },
-						]
-					: [
-							{ label: 'Finalized', value: finalizedDisplay },
-							{ label: 'Underfunded', value: underfundedDisplay },
-							{ label: 'Auctioned Allowance', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.auctionedSecurityBondAllowance} suffix='ETH' /> },
-							{ label: 'Claiming Available', value: claimingAvailableDisplay },
-						]
 
 	const initiateStatusMetrics: DisplayMetric[] = [
 		{ label: 'Current Stage', value: getStageLabel(currentStage) },
@@ -409,6 +388,40 @@ export function ForkAuctionSection({
 		{ label: 'ETH Raised / Cap', value: ethRaisedCapDisplay },
 		{ label: 'REP Purchased', value: truthAuctionStatus === undefined ? forkOnlyFallbackText : <CurrencyValue value={truthAuctionStatus.totalRepPurchased} suffix='REP' /> },
 	]
+
+	const liveSnapshotMetrics: DisplayMetric[] =
+		selectedStage === 'initiate'
+			? [
+					{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
+					{ label: 'Fork Type', value: forkAuctionDetails === undefined ? getPreviewForkType(previewPool, hasPreviewForkActivity) : forkAuctionDetails.forkOwnSecurityPool ? 'Own escalation fork' : 'Parent/Zoltar fork' },
+					{ label: 'Parent Pool', value: renderAddress(parentSecurityPoolAddress) },
+					{ label: 'Migration Window', value: formatDuration(MIGRATION_TIME_SECONDS) },
+				]
+			: selectedStage === 'migration'
+				? [
+						{ label: 'REP At Fork', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.repAtFork} suffix='REP' /> },
+						{ label: 'Migrated REP', value: renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, 'REP', UNKNOWN_VALUE) },
+						{
+							label: 'Migration Ends',
+							value: forkAuctionDetails === undefined ? migrationSummaryText : forkAuctionDetails.migrationEndsAt === undefined ? 'Started/finished' : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={forkAuctionDetails.migrationEndsAt} />,
+						},
+						{ label: 'Time Left', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : migrationTimeRemaining === undefined ? formatDuration(MIGRATION_TIME_SECONDS) : formatDuration(migrationTimeRemaining) },
+					]
+				: selectedStage === 'auction'
+					? [
+							{ label: 'Started', value: startedDisplay },
+							{ label: 'Ends', value: endsDisplay },
+							{ label: 'ETH Raised / Cap', value: ethRaisedCapDisplay },
+							{ label: 'Clearing Price', value: clearingPriceDisplay },
+						]
+					: selectedStage === 'settlement'
+						? [
+								{ label: 'Finalized', value: finalizedDisplay },
+								{ label: 'Underfunded', value: underfundedDisplay },
+								{ label: 'Auctioned Allowance', value: forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.auctionedSecurityBondAllowance} suffix='ETH' /> },
+								{ label: 'Claiming Available', value: claimingAvailableDisplay },
+							]
+						: initiateStatusMetrics
 
 	const stagePanel =
 		selectedStage === 'initiate' ? (
@@ -515,10 +528,7 @@ export function ForkAuctionSection({
 						<div className='actions'>
 							{renderStageActionButton({
 								action: 'submitBid',
-								availability: {
-									disabled: truthAuctionBidGuardMessage !== undefined,
-									reason: truthAuctionBidGuardMessage,
-								},
+								availability: createActionAvailability(truthAuctionBidGuardMessage),
 								idleLabel: 'Submit Bid',
 								onClick: onSubmitBid,
 								pendingLabel: 'Submitting bid...',
@@ -527,7 +537,7 @@ export function ForkAuctionSection({
 					</div>
 				</SectionBlock>
 			</fieldset>
-		) : (
+		) : selectedStage === 'settlement' ? (
 			<fieldset className='fork-stage-panel' disabled={disabled}>
 				<SectionBlock title='Settlement Status'>{renderWorkflowMetricGrid(settlementStatusMetrics)}</SectionBlock>
 
@@ -589,7 +599,7 @@ export function ForkAuctionSection({
 					</div>
 				</SectionBlock>
 			</fieldset>
-		)
+		) : undefined
 
 	const content = (
 		<>
@@ -636,7 +646,10 @@ export function ForkAuctionSection({
 			{hasLoadedPoolContext ? stagePanel : undefined}
 
 			<ChildUniverseDeploymentModal
-				actionAvailability={{ disabled: disabled || accountState.address === undefined || !isMainnet, reason: baseDisabledReason }}
+				actionAvailability={{
+					disabled: !createChildUniverseEnabled || interactionDisabledReason !== undefined,
+					reason: createChildUniverseEnabled ? interactionDisabledReason : undefined,
+				}}
 				description='Confirm the selected fork outcome and create its child universe in one bounded transaction flow.'
 				idleLabel={`Create ${getOutcomeActionLabel(forkAuctionForm.selectedOutcome)} Child Universe`}
 				isOpen={childUniverseModalOpen}

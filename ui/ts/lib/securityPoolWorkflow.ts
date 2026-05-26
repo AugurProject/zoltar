@@ -1,17 +1,41 @@
 import { sameAddress } from './address.js'
+import { assertNever } from './assert.js'
 import { formatDuration, formatRoundedCurrencyBalance } from './formatters.js'
 import type { LoadableValueState } from './loadState.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './securityVault.js'
 import { getTimeRemaining } from './time.js'
 import type { UserMessagePresentation } from './userCopy.js'
 import { resolveEnumValue } from './viewState.js'
-import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolSystemState } from '../types/contracts.js'
+import type { ListedSecurityPool, OracleManagerDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '../types/contracts.js'
 
 export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'withdraw-escalation-deposits' | 'fork' | 'staged-operations' | 'price-oracle'
 
+export const SELECTED_POOL_VIEWS: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting', 'withdraw-escalation-deposits', 'fork', 'staged-operations', 'price-oracle']
+
+export function getSelectedPoolViewLabel(view: SelectedPoolView) {
+	switch (view) {
+		case 'vaults':
+			return 'Vaults'
+		case 'trading':
+			return 'Trading'
+		case 'reporting':
+			return 'Reporting'
+		case 'withdraw-escalation-deposits':
+			return 'Withdraw Escalation Deposits'
+		case 'fork':
+			return 'Fork'
+		case 'staged-operations':
+			return 'Staged Operations'
+		case 'price-oracle':
+			return 'Open Oracle'
+		default:
+			return assertNever(view)
+	}
+}
+
 export function resolveSelectedPoolView(value: string | undefined): SelectedPoolView {
 	const normalizedValue = value === 'resolution' ? 'reporting' : value === 'oracle' ? 'staged-operations' : value
-	return resolveEnumValue<SelectedPoolView>(normalizedValue, 'vaults', ['vaults', 'trading', 'reporting', 'withdraw-escalation-deposits', 'fork', 'staged-operations', 'price-oracle'])
+	return resolveEnumValue<SelectedPoolView>(normalizedValue, 'vaults', SELECTED_POOL_VIEWS)
 }
 
 export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolUniverseMismatch: boolean }) {
@@ -20,6 +44,16 @@ export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, 
 
 export function getSelectedPoolCardTitle() {
 	return 'Operate Security Pool'
+}
+
+export function applySelectedPoolWorkflowState(pool: ListedSecurityPool | undefined, { questionOutcome, systemState }: { questionOutcome: ReportingOutcomeKey | 'none' | undefined; systemState: SecurityPoolSystemState | undefined }) {
+	if (pool === undefined) return undefined
+	if (questionOutcome === undefined && systemState === undefined) return pool
+	return {
+		...pool,
+		...(questionOutcome === undefined ? {} : { questionOutcome }),
+		...(systemState === undefined ? {} : { systemState }),
+	}
 }
 
 export function getSelectedPoolWorkflowGuardMessage({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }) {

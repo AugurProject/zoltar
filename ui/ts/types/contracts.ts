@@ -147,7 +147,7 @@ export type SecurityVaultDetails = {
 }
 
 export type SecurityVaultActionResult = ActionResult & {
-	action: 'approveRep' | 'depositRep' | 'queueSetSecurityBondAllowance' | 'queueWithdrawRep' | 'redeemFees' | 'updateVaultFees'
+	action: 'approveRep' | 'depositRep' | 'queueSetSecurityBondAllowance' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRep' | 'updateVaultFees'
 	stagedExecution?: StagedOracleExecutionResult
 }
 

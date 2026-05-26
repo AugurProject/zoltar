@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '@testing-library/dom'
 import { zeroAddress } from 'viem'
 import { SecurityVaultSection } from '../components/SecurityVaultSection.js'
+import { evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import type { AccountState } from '../types/app.js'
 import type { SecurityVaultDetails } from '../types/contracts.js'
 import type { SecurityVaultSectionProps } from '../types/components.js'
@@ -47,6 +48,7 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 		onDepositRep: () => undefined,
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,
+		onRedeemRep: () => undefined,
 		onSetSecurityBondAllowance: () => undefined,
 		onSecurityVaultFormChange: () => undefined,
 		onWithdrawRep: () => undefined,
@@ -96,6 +98,13 @@ function createOracleManagerDetails(): NonNullable<SecurityVaultSectionProps['or
 		token1: undefined,
 		token2: undefined,
 	}
+}
+
+function createEndedPoolState() {
+	return evaluateSecurityPoolState({
+		lifecycleState: 'ended',
+		universeHasForked: false,
+	})
 }
 
 describe('SecurityVaultSection', () => {
@@ -239,12 +248,15 @@ describe('SecurityVaultSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Latest Vault Action' }).closest('.actions')).toBeNull()
 	})
 
-	test('blocks collateral actions when the selected pool has ended but still allows fee claims', async () => {
+	test('allows REP redemption after the selected pool has ended while keeping collateral changes locked', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
 					oracleManagerDetails: createOracleManagerDetails(),
-					poolActionLockReason: 'Vault collateral operations are unavailable after this pool has ended.',
+					poolState: createEndedPoolState(),
+					securityVaultDetails: createSecurityVaultDetails({
+						lockedRepInEscalationGame: 0n,
+					}),
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
@@ -258,9 +270,48 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create / Deposit REP', 'Vault collateral operations are unavailable after this pool has ended.')
-		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Vault collateral operations are unavailable after this pool has ended.')
-		expectTransactionButtonDisabled(document.body, 'Set Security Bond Allowance', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonDisabled(document.body, 'Create / Deposit REP')
+		expectTransactionButtonEnabled(document.body, 'Redeem REP')
+		expectTransactionButtonDisabled(document.body, 'Set Security Bond Allowance')
 		expectTransactionButtonEnabled(document.body, 'Claim Fees')
+	})
+
+	test('disables REP approval after the selected pool has ended', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					poolState: createEndedPoolState(),
+					securityVaultForm: {
+						depositAmount: '1',
+						repWithdrawAmount: '',
+						securityBondAllowanceAmount: '',
+						securityPoolAddress: zeroAddress,
+						selectedVaultAddress: zeroAddress,
+					},
+					securityVaultRepApproval: {
+						error: undefined,
+						loading: false,
+						value: 0n,
+					},
+					securityVaultRepBalance: 10n * 10n ** 18n,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Approve 1 REP')
+	})
+
+	test('keeps REP redemption blocked until escalation deposits are settled after the pool ends', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					poolState: createEndedPoolState(),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Redeem REP', 'Settle escalation deposits before redeeming REP.')
 	})
 })

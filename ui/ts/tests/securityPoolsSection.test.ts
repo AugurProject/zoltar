@@ -83,6 +83,7 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 		onDepositRep: () => undefined,
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,
+		onRedeemRep: () => undefined,
 		onSetSecurityBondAllowance: () => undefined,
 		onSecurityVaultFormChange: () => undefined,
 		onWithdrawRep: () => undefined,

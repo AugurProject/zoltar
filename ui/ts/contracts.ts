@@ -522,6 +522,19 @@ export async function redeemSecurityVaultFees(client: WriteClient, securityPoolA
 	} satisfies SecurityVaultActionResult
 }
 
+export async function redeemRepFromSecurityPool(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
+	const hash = await writeContractAndWait(client, () => ({
+		address: securityPoolAddress,
+		abi: peripherals_SecurityPool_SecurityPool.abi,
+		functionName: 'redeemRep',
+		args: [vaultAddress],
+	}))
+	return {
+		action: 'redeemRep',
+		hash,
+	} satisfies SecurityVaultActionResult
+}
+
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
 	const [lastPrice, pendingOperationSlotId, pendingReportId, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp] = await readRequiredMulticall(client, [
 		{

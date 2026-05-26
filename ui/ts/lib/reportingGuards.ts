@@ -1,17 +1,14 @@
 import type { Address } from 'viem'
-import type { ActiveReportingDetails, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
+import type { ReportingOutcomeKey } from '../types/contracts.js'
 import { formatCurrencyBalance } from './formatters.js'
-import { getEscalationPhase } from './reportingDomain.js'
 
 type ReportingStatus = 'missing' | 'not-started' | 'active'
 
 export function getReportingReportGuardMessage({
 	actualDepositAmount,
-	activeReportingDetails,
 	accountAddress,
 	contributionPreviewReason,
 	isMainnet,
-	lockedReason,
 	reportAmount,
 	reportingStatus,
 	selectedOutcome,
@@ -20,11 +17,9 @@ export function getReportingReportGuardMessage({
 	viewerVaultExists,
 }: {
 	actualDepositAmount: bigint | undefined
-	activeReportingDetails?: ActiveReportingDetails
 	accountAddress: Address | undefined
 	contributionPreviewReason: string | undefined
 	isMainnet: boolean
-	lockedReason: string | undefined
 	reportAmount: string
 	reportingStatus: ReportingStatus
 	selectedOutcome: ReportingOutcomeKey | undefined
@@ -32,20 +27,6 @@ export function getReportingReportGuardMessage({
 	viewerVaultAvailableEscalationRep: bigint | undefined
 	viewerVaultExists: boolean
 }) {
-	if (lockedReason !== undefined) return lockedReason
-	if (activeReportingDetails !== undefined) {
-		switch (getEscalationPhase(activeReportingDetails)) {
-			case 'Resolved':
-				return 'Reporting is closed because escalation has resolved.'
-			case 'Fork Triggered':
-				return 'Reporting is closed because escalation reached non-decision and moved into the fork workflow.'
-			case 'Timed Out':
-				return 'Reporting is closed because the escalation timeout has been reached.'
-			case 'Pending Start':
-			case 'Active':
-				break
-		}
-	}
 	if (accountAddress === undefined) return 'Connect a wallet before reporting on a market.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before reporting on a market.'
 	if (reportingStatus === 'missing') return 'Load reporting details before reporting on an outcome.'
@@ -63,33 +44,21 @@ export function getReportingReportGuardMessage({
 }
 
 export function getReportingWithdrawGuardMessage({
-	activeReportingDetails,
 	accountAddress,
 	hasUserDepositsOnSelectedSide,
 	isMainnet,
-	lockedReason,
 	reportingStatus,
-	withdrawalEnabled,
-	withdrawalState,
 	selectedOutcome,
 }: {
-	activeReportingDetails?: ActiveReportingDetails
 	accountAddress: Address | undefined
 	hasUserDepositsOnSelectedSide: boolean
 	isMainnet: boolean
-	lockedReason: string | undefined
 	reportingStatus: ReportingStatus
-	withdrawalEnabled: boolean
-	withdrawalState: ReportingDetails['withdrawalState'] | undefined
 	selectedOutcome: ReportingOutcomeKey | undefined
 }) {
-	if (lockedReason !== undefined) return lockedReason
 	if (accountAddress === undefined) return 'Connect a wallet before withdrawing escalation deposits.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before withdrawing escalation deposits.'
 	if (reportingStatus === 'missing') return 'Load reporting details before withdrawing escalation deposits.'
-	if (reportingStatus === 'not-started') return 'Withdrawals are unavailable until the first report or contribution deploys the escalation game.'
-	if (!withdrawalEnabled && activeReportingDetails?.hasReachedNonDecision === true) return 'Escalation deposits move through the Fork workflow after non-decision; they cannot be withdrawn from this panel.'
-	if (!withdrawalEnabled && withdrawalState === 'not-finalized') return 'Escalation deposits cannot be withdrawn until the question is finalized or the game is canceled by an external fork.'
 	if (selectedOutcome === undefined) return 'Select an outcome side before withdrawing escalation deposits.'
 	if (!hasUserDepositsOnSelectedSide) return 'No deposits are available to withdraw on the selected side.'
 	return undefined

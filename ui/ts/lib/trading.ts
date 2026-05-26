@@ -5,7 +5,7 @@ import { parseTradingAmountInput } from './marketForm.js'
 import { getReportingOutcomeLabel } from './reporting.js'
 import { isValidScalarOutcomeIndex } from './scalarOutcome.js'
 import type { DeploymentStatus } from '../types/contracts.js'
-import type { ReportingOutcomeKey, SecurityPoolSystemState, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
+import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary } from '../types/contracts.js'
 
 const PRICE_PRECISION = 10n ** 18n
 const PERCENT_MULTIPLIER = 100n
@@ -13,13 +13,12 @@ const PERCENT_MULTIPLIER = 100n
 type CollateralizationDisplayState = 'value' | 'noActiveAllowance' | 'unavailable'
 type CollateralizationTone = 'success' | 'danger'
 
+export const MARKET_NOT_FINALIZED_MESSAGE = 'This market has not finalized yet.'
+export const SHARE_MIGRATION_AFTER_FORK_MESSAGE = 'Share migration is only available after this universe has forked.'
 export const NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE = 'No mint capacity. No active security bond allowance.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
-export const SHARE_MIGRATION_AFTER_FORK_MESSAGE = 'Share migration is only available after this universe has forked.'
-export const MARKET_NOT_FINALIZED_MESSAGE = 'This market has not finalized yet.'
-export const MARKET_ALREADY_FINALIZED_MESSAGE = 'This market has already finalized.'
 
-const HIDDEN_TRADING_GUARD_MESSAGES = [NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, SHARE_MIGRATION_AFTER_FORK_MESSAGE, MARKET_NOT_FINALIZED_MESSAGE]
+const HIDDEN_TRADING_GUARD_MESSAGES = [NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE]
 
 export function getRemainingMintCapacity(totalSecurityBondAllowance: bigint | undefined, completeSetCollateralAmount: bigint | undefined) {
 	if (totalSecurityBondAllowance === undefined || completeSetCollateralAmount === undefined) return undefined
@@ -112,11 +111,8 @@ export function getTradingMintGuardMessage({
 	hasSelectedPool,
 	isMainnet,
 	mintAmountInput,
-	questionOutcome,
-	systemState,
 	totalRepDeposit,
 	totalSecurityBondAllowance,
-	universeHasForked,
 }: {
 	accountAddress: Address | undefined
 	completeSetCollateralAmount: bigint | undefined
@@ -124,18 +120,12 @@ export function getTradingMintGuardMessage({
 	hasSelectedPool: boolean
 	isMainnet: boolean
 	mintAmountInput: string
-	questionOutcome?: ReportingOutcomeKey | 'none' | undefined
-	systemState: SecurityPoolSystemState | undefined
 	totalRepDeposit: bigint | undefined
 	totalSecurityBondAllowance: bigint | undefined
-	universeHasForked: boolean | undefined
 }) {
 	if (!hasSelectedPool) return 'Load a pool before minting.'
 	if (accountAddress === undefined) return 'Connect a wallet before minting complete sets.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before minting complete sets.'
-	if (universeHasForked === true) return 'Minting is unavailable after this universe has forked.'
-	if (questionOutcome !== undefined && questionOutcome !== 'none') return MARKET_ALREADY_FINALIZED_MESSAGE
-	if (systemState !== undefined && systemState !== 'operational') return 'Minting is only available while the pool is operational.'
 
 	const remainingCapacity = getRemainingMintCapacity(totalSecurityBondAllowance, completeSetCollateralAmount)
 	if (remainingCapacity === undefined) return 'Loading mint capacity.'
@@ -171,8 +161,6 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	loadingTradingDetails,
 	redeemAmountInput,
 	shareBalances,
-	systemState,
-	universeHasForked,
 }: {
 	accountAddress: Address | undefined
 	hasSelectedPool: boolean
@@ -180,14 +168,10 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	loadingTradingDetails: boolean
 	redeemAmountInput: string
 	shareBalances: TradingShareBalances | undefined
-	systemState: SecurityPoolSystemState | undefined
-	universeHasForked: boolean | undefined
 }) {
 	if (!hasSelectedPool) return 'Load a pool before redeeming complete sets.'
 	if (accountAddress === undefined) return 'Connect a wallet before redeeming complete sets.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming complete sets.'
-	if (universeHasForked === true) return 'Redeeming complete sets is unavailable after this universe has forked.'
-	if (systemState !== undefined && systemState !== 'operational') return 'Redeeming complete sets is only available while the pool is operational.'
 	if (loadingTradingDetails) return 'Loading wallet share balances.'
 
 	const maxRedeemableCompleteSets = getMaxRedeemableCompleteSets(shareBalances)
@@ -219,7 +203,6 @@ export function getTradingMigrateSharesGuardMessage({
 	shareBalances,
 	targetOutcomeIndexesInput,
 	tradingForkUniverse,
-	universeHasForked,
 }: {
 	accountAddress: Address | undefined
 	hasSelectedPool: boolean
@@ -230,12 +213,10 @@ export function getTradingMigrateSharesGuardMessage({
 	shareBalances: TradingShareBalances | undefined
 	targetOutcomeIndexesInput: string
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
-	universeHasForked: boolean | undefined
 }) {
 	if (!hasSelectedPool) return 'Load a pool before migrating shares.'
 	if (accountAddress === undefined) return 'Connect a wallet before migrating shares.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before migrating shares.'
-	if (universeHasForked !== true) return SHARE_MIGRATION_AFTER_FORK_MESSAGE
 	if (loadingTradingForkUniverse) return 'Loading fork target universes.'
 	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return 'Refresh the fork target universes.'
 
@@ -255,26 +236,9 @@ export function getTradingMigrateSharesGuardMessage({
 	return undefined
 }
 
-export function getTradingRedeemSharesGuardMessage({
-	accountAddress,
-	hasSelectedPool,
-	isMainnet,
-	questionOutcome,
-	systemState,
-	universeHasForked,
-}: {
-	accountAddress: Address | undefined
-	hasSelectedPool: boolean
-	isMainnet: boolean
-	questionOutcome: ReportingOutcomeKey | 'none' | undefined
-	systemState: SecurityPoolSystemState | undefined
-	universeHasForked: boolean | undefined
-}) {
+export function getTradingRedeemSharesGuardMessage({ accountAddress, hasSelectedPool, isMainnet }: { accountAddress: Address | undefined; hasSelectedPool: boolean; isMainnet: boolean }) {
 	if (!hasSelectedPool) return 'Load a pool before redeeming shares.'
 	if (accountAddress === undefined) return 'Connect a wallet before redeeming shares.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming shares.'
-	if (universeHasForked === true) return 'Redeeming shares is unavailable after this universe has forked.'
-	if (systemState !== undefined && systemState !== 'operational') return 'Redeeming shares is only available while the pool is operational.'
-	if (questionOutcome === undefined || questionOutcome === 'none') return MARKET_NOT_FINALIZED_MESSAGE
 	return undefined
 }

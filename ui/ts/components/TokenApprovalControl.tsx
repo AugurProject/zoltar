@@ -15,6 +15,7 @@ type TokenApprovalControlProps = {
 	allowanceError: string | undefined
 	allowanceLoading: boolean
 	approvedAmount: bigint | undefined
+	disabled?: boolean | undefined
 	guardMessage: string | undefined
 	onApprove: (amount?: bigint) => void
 	pending: boolean
@@ -54,7 +55,7 @@ function resolveApprovalButtonLabel({
 	return `Approve ${formatCurrencyBalance(nextApprovalAmount, tokenUnits)} ${tokenSymbol}`
 }
 
-export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoading, approvedAmount, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, status, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
+export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoading, approvedAmount, disabled = false, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, status, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
 	const [draftAmount, setDraftAmount] = useState('')
 	const requirement = useMemo(() => deriveTokenApprovalRequirement(requiredAmount, approvedAmount), [approvedAmount, requiredAmount])
 
@@ -87,11 +88,21 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 		tokenLabel: tokenSymbol,
 		tokenUnits,
 	})
-	const visibleStatusMessage = hasNonIncreasingCustomApproval ? undefined : statusMessage
+	const visibleStatusMessage = disabled || hasNonIncreasingCustomApproval ? undefined : statusMessage
 
 	const allowanceMessage = allowanceError === undefined ? undefined : formatTokenApprovalUnavailableMessage({ actionLabel, reason: allowanceError, tokenLabel: tokenSymbol })
+	const controlsDisabled = pending || disabled
 	const canApprove =
-		!pending && guardMessage === undefined && allowanceMessage === undefined && !allowanceLoading && requiredAmount !== undefined && amountValidationMessage === undefined && !hasNonIncreasingCustomApproval && nextApprovalAmount !== undefined && (parsedAmount.kind !== 'default' || !requirement.hasSufficientApproval)
+		!pending &&
+		!disabled &&
+		guardMessage === undefined &&
+		allowanceMessage === undefined &&
+		!allowanceLoading &&
+		requiredAmount !== undefined &&
+		amountValidationMessage === undefined &&
+		!hasNonIncreasingCustomApproval &&
+		nextApprovalAmount !== undefined &&
+		(parsedAmount.kind !== 'default' || !requirement.hasSufficientApproval)
 	const buttonLabel = resolveApprovalButtonLabel({
 		guardMessage,
 		isCustomAmount: parsedAmount.kind === 'custom',
@@ -118,8 +129,8 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 			<label className='field approval-amount-field'>
 				<span className='approval-amount-label'>{`${tokenSymbol} Approval Amount`}</span>
 				<div className='field-inline approval-amount-controls'>
-					<FormInput className='field-inline-input' value={draftAmount} onInput={event => setDraftAmount(event.currentTarget.value)} placeholder='Leave blank for required total' invalid={amountValidationMessage !== undefined} disabled={pending} />
-					<button className='quiet field-inline-action' type='button' onClick={() => setDraftAmount('max')} disabled={pending}>
+					<FormInput className='field-inline-input' value={draftAmount} onInput={event => setDraftAmount(event.currentTarget.value)} placeholder='Leave blank for required total' invalid={amountValidationMessage !== undefined} disabled={controlsDisabled} />
+					<button className='quiet field-inline-action' type='button' onClick={() => setDraftAmount('max')} disabled={controlsDisabled}>
 						Max
 					</button>
 				</div>

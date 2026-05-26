@@ -4,7 +4,7 @@ import { useErc20AllowanceLoader, useErc20BalanceLoader } from './useErc20Loader
 import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
 import type { Address } from 'viem'
-import { approveErc20, depositRepToSecurityPool, loadErc20Balance, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation, redeemSecurityVaultFees, updateSecurityVaultFees } from '../contracts.js'
+import { approveErc20, depositRepToSecurityPool, loadErc20Balance, loadOracleManagerDetails, loadSecurityVaultDetails, queueOracleManagerOperation, redeemRepFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../contracts.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { normalizeAddress, sameAddress } from '../lib/address.js'
@@ -52,6 +52,8 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				return 'Withdrawing REP'
 			case 'redeemFees':
 				return 'Claiming fees'
+			case 'redeemRep':
+				return 'Redeeming REP'
 			case 'updateVaultFees':
 				return 'Refreshing vault fees'
 		}
@@ -68,6 +70,8 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				return 'REP withdrawal queued'
 			case 'redeemFees':
 				return 'Fees claimed'
+			case 'redeemRep':
+				return 'REP redeemed'
 			case 'updateVaultFees':
 				return 'Vault fees refreshed'
 		}
@@ -84,6 +88,8 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 				return 'REP withdrawal failed'
 			case 'redeemFees':
 				return 'Fee claim failed'
+			case 'redeemRep':
+				return 'REP redemption failed'
 			case 'updateVaultFees':
 				return 'Vault fee refresh failed'
 		}
@@ -337,6 +343,23 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 			},
 		)
 
+	const redeemRep = async () =>
+		await runVaultAction(
+			'redeemRep',
+			async (vaultAddress, securityPoolAddress) => {
+				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist')
+				if (details === undefined) return undefined
+				return await redeemRepFromSecurityPool(createWalletWriteClient(vaultAddress, { onTransactionSubmitted }), securityPoolAddress, vaultAddress)
+			},
+			'Failed to redeem REP',
+			async (_result, securityPoolAddress, vaultAddress) => {
+				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress)
+				const details = securityVaultDetails.value
+				if (details === undefined) return
+				await reloadSecurityVaultRepBalance(details.repToken, vaultAddress)
+			},
+		)
+
 	const withdrawRep = async () =>
 		await runVaultAction(
 			'queueWithdrawRep',
@@ -410,6 +433,7 @@ export function useSecurityVaultOperations({ accountAddress, enabled, onTransact
 		loadSecurityVault,
 		loadingSecurityVault: securityVaultLoad.isLoading.value,
 		redeemFees,
+		redeemRep,
 		securityVaultActiveAction: securityVaultActiveAction.value,
 		securityVaultFeedback: securityVaultFeedback.value,
 		setSecurityBondAllowance,

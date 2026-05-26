@@ -16,11 +16,10 @@ import { TransactionStatusCard } from './TransactionStatusCard.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { sameAddress } from '../lib/address.js'
 import { isMainnetChain } from '../lib/network.js'
-import { getSecurityPoolDisplayState, getSecurityPoolDisplayStateLabel, type SecurityPoolDisplayState, isSecurityPoolEnded } from '../lib/securityPoolState.js'
+import { getSecurityPoolLifecycleLabel } from '../lib/securityPoolLabels.js'
+import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
-
-const LIQUIDATION_ENDED_REASON = 'Liquidation is unavailable after this pool has ended.'
 
 export function SecurityPoolsOverviewSection({
 	accountState,
@@ -52,7 +51,7 @@ export function SecurityPoolsOverviewSection({
 }: SecurityPoolsOverviewSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const [searchText, setSearchText] = useState('')
-	const [systemStateFilter, setSystemStateFilter] = useState<'all' | SecurityPoolDisplayState>('all')
+	const [systemStateFilter, setSystemStateFilter] = useState<'all' | SecurityPoolLifecycleState>('all')
 	const [vaultFilter, setVaultFilter] = useState<'all' | 'has-vaults' | 'empty'>('all')
 	const registryPresentation = getPoolRegistryPresentation({
 		hasLoaded: hasLoadedSecurityPools,
@@ -60,16 +59,24 @@ export function SecurityPoolsOverviewSection({
 		mode: 'collection',
 		poolCount: securityPools.length,
 	})
-	const selectedPool = securityPools.find(pool => sameAddress(pool.securityPoolAddress, liquidationSecurityPoolAddress))
+	const securityPoolsWithState = securityPools.map(pool => ({
+		pool,
+		poolState: evaluateSecurityPoolState({
+			lifecycleState: deriveSecurityPoolLifecycleState({
+				questionOutcome: pool.questionOutcome,
+				systemState: pool.systemState,
+			}),
+			universeHasForked: pool.universeHasForked,
+		}),
+	}))
+	const selectedPoolWithState = securityPoolsWithState.find(({ pool }) => sameAddress(pool.securityPoolAddress, liquidationSecurityPoolAddress))
+	const selectedPool = selectedPoolWithState?.pool
 	const currentPoolOracleManagerDetails = selectedPool === undefined || liquidationManagerAddress === undefined || !sameAddress(poolOracleManagerDetails?.managerAddress, liquidationManagerAddress) ? undefined : poolOracleManagerDetails
 	const targetVaultSummary = selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))
 	const callerVaultSummary = accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const normalizedSearchText = searchText.trim().toLowerCase()
-	const filteredSecurityPools = securityPools.filter(pool => {
-		const displayState = getSecurityPoolDisplayState({
-			questionOutcome: pool.questionOutcome,
-			systemState: pool.systemState,
-		})
+	const filteredSecurityPools = securityPoolsWithState.filter(({ pool, poolState }) => {
+		const displayState = poolState.lifecycleState
 		if (systemStateFilter !== 'all' && displayState !== systemStateFilter) return false
 		if (vaultFilter === 'has-vaults' && pool.vaults.length === 0) return false
 		if (vaultFilter === 'empty' && pool.vaults.length > 0) return false
@@ -109,7 +116,7 @@ export function SecurityPoolsOverviewSection({
 					</label>
 					<label className='field'>
 						<span>System State</span>
-						<select value={systemStateFilter} onChange={event => setSystemStateFilter(event.currentTarget.value as 'all' | SecurityPoolDisplayState)}>
+						<select value={systemStateFilter} onChange={event => setSystemStateFilter(event.currentTarget.value as 'all' | SecurityPoolLifecycleState)}>
 							<option value='all'>All states</option>
 							<option value='operational'>Operational</option>
 							<option value='ended'>Ended</option>
@@ -141,23 +148,16 @@ export function SecurityPoolsOverviewSection({
 					<StateHint presentation={{ key: 'empty', badgeLabel: 'No matches', badgeTone: 'muted', detail: 'No pools match the current search and filter settings.' }} />
 				) : (
 					<div className='entity-card-list'>
-						{filteredSecurityPools.map(pool => {
-							const displayState = getSecurityPoolDisplayState({
-								questionOutcome: pool.questionOutcome,
-								systemState: pool.systemState,
-							})
-							const liquidationDisabledReason = isSecurityPoolEnded({
-								questionOutcome: pool.questionOutcome,
-								systemState: pool.systemState,
-							})
-								? LIQUIDATION_ENDED_REASON
-								: undefined
+						{filteredSecurityPools.map(({ pool, poolState }) => {
+							const displayState = poolState.lifecycleState
+							const liquidationEnabled = poolState.actions.queueLiquidation.enabled
+							const badgeTone = displayState === 'operational' ? 'ok' : displayState === undefined ? 'muted' : 'warning'
 							return (
 								<EntityCard
 									key={pool.securityPoolAddress}
 									title={getQuestionTitle(pool.marketDetails)}
 									variant='record'
-									badge={<span className={`badge ${displayState === 'operational' ? 'ok' : 'warning'}`}>{displayState === undefined ? 'Unknown' : getSecurityPoolDisplayStateLabel(displayState)}</span>}
+									badge={<span className={`badge ${badgeTone}`}>{getSecurityPoolLifecycleLabel(displayState)}</span>}
 									actions={
 										onSelectSecurityPool === undefined ? undefined : (
 											<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
@@ -179,12 +179,7 @@ export function SecurityPoolsOverviewSection({
 											emptyState={<StateHint presentation={{ key: 'empty', badgeLabel: 'None yet', badgeTone: 'muted', detail: 'No vaults in this pool yet.' }} />}
 											pool={pool}
 											renderActions={vault => (
-												<button
-													className='destructive'
-													onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
-													disabled={accountState.address === undefined || !isMainnet || liquidationDisabledReason !== undefined}
-													title={liquidationDisabledReason}
-												>
+												<button className='destructive' onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)} disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}>
 													Liquidate Vault
 												</button>
 											)}
@@ -214,6 +209,7 @@ export function SecurityPoolsOverviewSection({
 				liquidationTargetVault={liquidationTargetVault}
 				onLoadPoolOracleManager={onLoadPoolOracleManager}
 				onSelectedPoolViewChange={() => undefined}
+				poolState={selectedPoolWithState?.poolState}
 				repPerEthPrice={repPerEthPrice}
 				repPerEthSource={repPerEthSource}
 				repPerEthSourceUrl={repPerEthSourceUrl}

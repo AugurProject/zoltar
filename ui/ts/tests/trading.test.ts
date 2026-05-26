@@ -3,7 +3,6 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from 'viem'
 import {
-	MARKET_ALREADY_FINALIZED_MESSAGE,
 	MARKET_NOT_FINALIZED_MESSAGE,
 	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
 	NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE,
@@ -188,8 +187,8 @@ void describe('trading helpers', () => {
 	void test('suppresses only the targeted trading guard copy in the UI', () => {
 		expect(getTradingGuardDisplayMessage(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)).toBeUndefined()
 		expect(getTradingGuardDisplayMessage(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)).toBeUndefined()
-		expect(getTradingGuardDisplayMessage(SHARE_MIGRATION_AFTER_FORK_MESSAGE)).toBeUndefined()
-		expect(getTradingGuardDisplayMessage(MARKET_NOT_FINALIZED_MESSAGE)).toBeUndefined()
+		expect(getTradingGuardDisplayMessage(SHARE_MIGRATION_AFTER_FORK_MESSAGE)).toBe(SHARE_MIGRATION_AFTER_FORK_MESSAGE)
+		expect(getTradingGuardDisplayMessage(MARKET_NOT_FINALIZED_MESSAGE)).toBe(MARKET_NOT_FINALIZED_MESSAGE)
 		expect(getTradingGuardDisplayMessage('Loading wallet share balances.')).toBe('Loading wallet share balances.')
 		expect(getTradingGuardDisplayMessage(undefined)).toBeUndefined()
 	})
@@ -203,10 +202,8 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '1',
-				systemState: 'operational',
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n,
-				universeHasForked: false,
 			}),
 		).toBe('Connect a wallet before minting complete sets.')
 
@@ -218,10 +215,8 @@ void describe('trading helpers', () => {
 				hasSelectedPool: false,
 				isMainnet: true,
 				mintAmountInput: '1',
-				systemState: 'operational',
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n,
-				universeHasForked: false,
 			}),
 		).toBe('Load a pool before minting.')
 
@@ -233,46 +228,13 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: false,
 				mintAmountInput: '1',
-				systemState: 'operational',
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n,
-				universeHasForked: false,
 			}),
 		).toBe('Switch to Ethereum mainnet before minting complete sets.')
 	})
 
-	void test('surfaces the main mint block reasons before the transaction is sent', () => {
-		expect(
-			getTradingMintGuardMessage({
-				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 1n,
-				ethBalance: 10n ** 18n,
-				hasSelectedPool: true,
-				isMainnet: true,
-				mintAmountInput: '100',
-				questionOutcome: 'yes',
-				systemState: 'operational',
-				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n,
-				universeHasForked: false,
-			}),
-		).toBe(MARKET_ALREADY_FINALIZED_MESSAGE)
-
-		expect(
-			getTradingMintGuardMessage({
-				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 1n,
-				ethBalance: 10n ** 18n,
-				hasSelectedPool: true,
-				isMainnet: true,
-				mintAmountInput: '100',
-				systemState: 'forkMigration',
-				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n,
-				universeHasForked: false,
-			}),
-		).toBe('Minting is only available while the pool is operational.')
-
+	void test('surfaces the local mint block reasons before the transaction is sent', () => {
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
@@ -281,10 +243,8 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '100',
-				systemState: 'operational',
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n,
-				universeHasForked: false,
 			}),
 		).toBe('Loading mint capacity.')
 
@@ -296,10 +256,8 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '100',
-				systemState: 'operational',
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n,
-				universeHasForked: false,
 			}),
 		).toBe('No mint capacity remaining.')
 
@@ -311,10 +269,8 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '100',
-				systemState: 'operational',
 				totalRepDeposit: 20n * 10n ** 18n,
 				totalSecurityBondAllowance: 0n,
-				universeHasForked: false,
 			}),
 		).toBe('No mint capacity. No active security bond allowance.')
 
@@ -326,10 +282,8 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: 'abc',
-				systemState: 'operational',
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n ** 18n,
-				universeHasForked: false,
 			}),
 		).toBe('Enter a valid mint amount.')
 
@@ -341,10 +295,8 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '0',
-				systemState: 'operational',
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n ** 18n,
-				universeHasForked: false,
 			}),
 		).toBe('Enter a mint amount greater than zero.')
 
@@ -356,10 +308,8 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '0.3',
-				systemState: 'operational',
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n ** 18n,
-				universeHasForked: false,
 			}),
 		).toBe('Max mint capacity is 0.2 ETH.')
 
@@ -371,27 +321,10 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '1',
-				systemState: 'operational',
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 2n * 10n ** 18n,
-				universeHasForked: false,
 			}),
 		).toBe('Need 0.5 more ETH in this wallet to mint the selected amount.')
-
-		expect(
-			getTradingMintGuardMessage({
-				accountAddress: '0x1234567890123456789012345678901234567890',
-				completeSetCollateralAmount: 0n,
-				ethBalance: 5n * 10n ** 18n,
-				hasSelectedPool: true,
-				isMainnet: true,
-				mintAmountInput: '1',
-				systemState: 'operational',
-				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 2n * 10n ** 18n,
-				universeHasForked: true,
-			}),
-		).toBe('Minting is unavailable after this universe has forked.')
 	})
 
 	void test('allows minting when the pool has capacity and the wallet has enough ETH', () => {
@@ -403,10 +336,8 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: true,
 				mintAmountInput: '0.5',
-				systemState: 'operational',
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 2n * 10n ** 18n,
-				universeHasForked: false,
 			}),
 		).toBeUndefined()
 	})
@@ -420,8 +351,6 @@ void describe('trading helpers', () => {
 				loadingTradingDetails: false,
 				redeemAmountInput: '0',
 				shareBalances,
-				systemState: 'operational',
-				universeHasForked: false,
 			}),
 		).toBe('Enter a redeem amount greater than zero.')
 
@@ -433,8 +362,6 @@ void describe('trading helpers', () => {
 				loadingTradingDetails: true,
 				redeemAmountInput: '1',
 				shareBalances: undefined,
-				systemState: 'operational',
-				universeHasForked: false,
 			}),
 		).toBe('Loading wallet share balances.')
 
@@ -450,8 +377,6 @@ void describe('trading helpers', () => {
 					no: 2n * 10n ** 18n,
 					yes: 2n * 10n ** 18n,
 				},
-				systemState: 'operational',
-				universeHasForked: false,
 			}),
 		).toBe('Need matching Invalid, Yes, and No shares to redeem complete sets.')
 
@@ -463,8 +388,6 @@ void describe('trading helpers', () => {
 				loadingTradingDetails: false,
 				redeemAmountInput: 'abc',
 				shareBalances,
-				systemState: 'operational',
-				universeHasForked: false,
 			}),
 		).toBe('Enter a valid redeem amount.')
 
@@ -476,8 +399,6 @@ void describe('trading helpers', () => {
 				loadingTradingDetails: false,
 				redeemAmountInput: '2.1',
 				shareBalances,
-				systemState: 'operational',
-				universeHasForked: false,
 			}),
 		).toBe('Max redeemable amount is 2 complete sets.')
 
@@ -489,13 +410,11 @@ void describe('trading helpers', () => {
 				loadingTradingDetails: false,
 				redeemAmountInput: '2',
 				shareBalances,
-				systemState: 'operational',
-				universeHasForked: false,
 			}),
 		).toBeUndefined()
 	})
 
-	void test('only enables share migration after a fork with valid target universes and a positive share balance', () => {
+	void test('validates share migration targets and positive balances once migration is available', () => {
 		expect(
 			getTradingMigrateSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
@@ -507,9 +426,8 @@ void describe('trading helpers', () => {
 				shareBalances,
 				targetOutcomeIndexesInput: '0, 1, 2',
 				tradingForkUniverse: binaryForkUniverse,
-				universeHasForked: false,
 			}),
-		).toBe('Share migration is only available after this universe has forked.')
+		).toBeUndefined()
 
 		expect(
 			getTradingMigrateSharesGuardMessage({
@@ -526,7 +444,6 @@ void describe('trading helpers', () => {
 				},
 				targetOutcomeIndexesInput: '0, 1, 2',
 				tradingForkUniverse: binaryForkUniverse,
-				universeHasForked: true,
 			}),
 		).toBe('No Invalid shares available to migrate.')
 
@@ -541,7 +458,6 @@ void describe('trading helpers', () => {
 				shareBalances,
 				targetOutcomeIndexesInput: '',
 				tradingForkUniverse: binaryForkUniverse,
-				universeHasForked: true,
 			}),
 		).toBe('Select at least one target child universe.')
 
@@ -556,7 +472,6 @@ void describe('trading helpers', () => {
 				shareBalances,
 				targetOutcomeIndexesInput: '9',
 				tradingForkUniverse: binaryForkUniverse,
-				universeHasForked: true,
 			}),
 		).toBe('Select valid target child universes.')
 
@@ -571,7 +486,6 @@ void describe('trading helpers', () => {
 				shareBalances,
 				targetOutcomeIndexesInput: getScalarOutcomeIndex(scalarForkUniverse.forkQuestionDetails, 5n).toString(),
 				tradingForkUniverse: scalarForkUniverse,
-				universeHasForked: true,
 			}),
 		).toBeUndefined()
 
@@ -586,42 +500,48 @@ void describe('trading helpers', () => {
 				shareBalances,
 				targetOutcomeIndexesInput: '5',
 				tradingForkUniverse: scalarForkUniverse,
-				universeHasForked: true,
 			}),
 		).toBe('Select valid target child universes.')
 	})
 
-	void test('only enables resolved-share redemption after finalization', () => {
+	void test('only checks local prerequisites before resolved-share redemption', () => {
+		expect(
+			getTradingRedeemSharesGuardMessage({
+				accountAddress: undefined,
+				hasSelectedPool: true,
+				isMainnet: true,
+			}),
+		).toBe('Connect a wallet before redeeming shares.')
+
+		expect(
+			getTradingRedeemSharesGuardMessage({
+				accountAddress: '0x1234567890123456789012345678901234567890',
+				hasSelectedPool: false,
+				isMainnet: true,
+			}),
+		).toBe('Load a pool before redeeming shares.')
+
 		expect(
 			getTradingRedeemSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
-				isMainnet: true,
-				questionOutcome: 'none',
-				systemState: 'operational',
-				universeHasForked: false,
+				isMainnet: false,
 			}),
-		).toBe('This market has not finalized yet.')
+		).toBe('Switch to Ethereum mainnet before redeeming shares.')
 
 		expect(
 			getTradingRedeemSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
 				isMainnet: true,
-				questionOutcome: 'yes',
-				systemState: 'operational',
-				universeHasForked: true,
 			}),
-		).toBe('Redeeming shares is unavailable after this universe has forked.')
+		).toBeUndefined()
 
 		expect(
 			getTradingRedeemSharesGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				hasSelectedPool: true,
 				isMainnet: true,
-				questionOutcome: 'yes',
-				systemState: 'operational',
-				universeHasForked: false,
 			}),
 		).toBeUndefined()
 	})
