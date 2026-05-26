@@ -17,9 +17,9 @@ import { UniverseLink } from './UniverseLink.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { isMainnetChain } from '../lib/network.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
+import { deriveSecurityPoolUiCapabilities } from '../lib/securityPoolState.js'
 import {
 	getDefaultShareMigrationTargetOutcomeIndexes,
-	MARKET_ALREADY_FINALIZED_MESSAGE,
 	getRemainingMintCapacity,
 	getSelectedOutcomeShareBalance,
 	getTradingMigrateSharesGuardMessage,
@@ -29,7 +29,6 @@ import {
 	hasRepBackedPoolWithNoActiveAllowance,
 	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
 	NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE,
-	SHARE_MIGRATION_AFTER_FORK_MESSAGE,
 } from '../lib/trading.js'
 import type { ReadinessAction } from '../types/components.js'
 import type { TradingSectionProps } from '../types/components.js'
@@ -96,6 +95,15 @@ export function TradingSection({
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const hasSelectedPool = selectedPool !== undefined
 	const poolUniverseHasForked = selectedPool?.universeHasForked === true || tradingForkUniverse?.hasForked === true
+	const poolUiCapabilities = deriveSecurityPoolUiCapabilities({
+		questionOutcome: selectedPool?.questionOutcome,
+		systemState: selectedPool?.systemState,
+		universeHasForked: poolUniverseHasForked,
+	})
+	const mintLifecycleReason = poolUiCapabilities.actions.createCompleteSet.lifecycleReason
+	const redeemCompleteSetsLifecycleReason = poolUiCapabilities.actions.redeemCompleteSet.lifecycleReason
+	const migrateSharesLifecycleReason = poolUiCapabilities.actions.migrateShares.lifecycleReason
+	const redeemSharesLifecycleReason = poolUiCapabilities.actions.redeemShares.lifecycleReason
 	const shareBalances = tradingDetails?.shareBalances
 	const maxRedeemableCompleteSets = tradingDetails?.maxRedeemableCompleteSets
 	let selectedTargetOutcomeIndexes: bigint[] = []
@@ -116,11 +124,8 @@ export function TradingSection({
 		hasSelectedPool,
 		isMainnet,
 		mintAmountInput: tradingForm.completeSetAmount,
-		questionOutcome: selectedPool?.questionOutcome,
-		systemState: selectedPool?.systemState,
 		totalRepDeposit: selectedPool?.totalRepDeposit,
 		totalSecurityBondAllowance: selectedPool?.totalSecurityBondAllowance,
-		universeHasForked: poolUniverseHasForked,
 	})
 	const redeemCompleteSetGuardMessage = getTradingRedeemCompleteSetGuardMessage({
 		accountAddress: accountState.address,
@@ -129,8 +134,6 @@ export function TradingSection({
 		loadingTradingDetails,
 		redeemAmountInput: tradingForm.redeemAmount,
 		shareBalances,
-		systemState: selectedPool?.systemState,
-		universeHasForked: poolUniverseHasForked,
 	})
 	const migrateSharesGuardMessage = getTradingMigrateSharesGuardMessage({
 		accountAddress: accountState.address,
@@ -142,16 +145,16 @@ export function TradingSection({
 		shareBalances,
 		targetOutcomeIndexesInput: tradingForm.targetOutcomeIndexes,
 		tradingForkUniverse,
-		universeHasForked: poolUniverseHasForked,
 	})
 	const redeemSharesGuardMessage = getTradingRedeemSharesGuardMessage({
 		accountAddress: accountState.address,
 		hasSelectedPool,
 		isMainnet,
-		questionOutcome: selectedPool?.questionOutcome,
-		systemState: selectedPool?.systemState,
-		universeHasForked: poolUniverseHasForked,
 	})
+	const mintActionDisabledReason = mintLifecycleReason ?? mintGuardMessage
+	const redeemCompleteSetActionDisabledReason = redeemCompleteSetsLifecycleReason ?? redeemCompleteSetGuardMessage
+	const migrateSharesActionDisabledReason = migrateSharesLifecycleReason ?? migrateSharesGuardMessage
+	const redeemSharesActionDisabledReason = redeemSharesLifecycleReason ?? redeemSharesGuardMessage
 	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.totalSecurityBondAllowance, selectedPool?.completeSetCollateralAmount)
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, tradingForm.selectedShareOutcome)
 	const mintLauncherBlocker = !hasSelectedPool
@@ -160,44 +163,38 @@ export function TradingSection({
 			? 'Connect a wallet before minting complete sets.'
 			: !isMainnet
 				? 'Switch to Ethereum mainnet before minting complete sets.'
-				: poolUniverseHasForked === true
-					? 'Minting is unavailable after this universe has forked.'
-					: selectedPool?.questionOutcome !== undefined && selectedPool.questionOutcome !== 'none'
-						? MARKET_ALREADY_FINALIZED_MESSAGE
-						: selectedPool?.systemState !== undefined && selectedPool.systemState !== 'operational'
-							? 'Minting is only available while the pool is operational.'
-							: remainingMintCapacity === undefined
-								? 'Loading mint capacity.'
-								: remainingMintCapacity === 0n
-									? hasRepBackedPoolWithNoActiveAllowance(selectedPool?.totalRepDeposit, selectedPool?.totalSecurityBondAllowance)
-										? NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
-										: 'No mint capacity remaining.'
-									: undefined
+				: mintLifecycleReason !== undefined
+					? mintLifecycleReason
+					: remainingMintCapacity === undefined
+						? 'Loading mint capacity.'
+						: remainingMintCapacity === 0n
+							? hasRepBackedPoolWithNoActiveAllowance(selectedPool?.totalRepDeposit, selectedPool?.totalSecurityBondAllowance)
+								? NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
+								: 'No mint capacity remaining.'
+							: undefined
 	const redeemCompleteSetsLauncherBlocker = !hasSelectedPool
 		? 'Load a pool before redeeming complete sets.'
 		: accountState.address === undefined
 			? 'Connect a wallet before redeeming complete sets.'
 			: !isMainnet
 				? 'Switch to Ethereum mainnet before redeeming complete sets.'
-				: poolUniverseHasForked === true
-					? 'Redeeming complete sets is unavailable after this universe has forked.'
-					: selectedPool?.systemState !== undefined && selectedPool.systemState !== 'operational'
-						? 'Redeeming complete sets is only available while the pool is operational.'
-						: loadingTradingDetails
+				: redeemCompleteSetsLifecycleReason !== undefined
+					? redeemCompleteSetsLifecycleReason
+					: loadingTradingDetails
+						? 'Loading wallet share balances.'
+						: maxRedeemableCompleteSets === undefined
 							? 'Loading wallet share balances.'
-							: maxRedeemableCompleteSets === undefined
-								? 'Loading wallet share balances.'
-								: maxRedeemableCompleteSets === 0n
-									? NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
-									: undefined
+							: maxRedeemableCompleteSets === 0n
+								? NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
+								: undefined
 	const migrateSharesLauncherBlocker = !hasSelectedPool
 		? 'Load a pool before migrating shares.'
 		: accountState.address === undefined
 			? 'Connect a wallet before migrating shares.'
 			: !isMainnet
 				? 'Switch to Ethereum mainnet before migrating shares.'
-				: poolUniverseHasForked !== true
-					? SHARE_MIGRATION_AFTER_FORK_MESSAGE
+				: migrateSharesLifecycleReason !== undefined
+					? migrateSharesLifecycleReason
 					: loadingTradingForkUniverse
 						? 'Loading fork target universes.'
 						: tradingForkUniverse === undefined || !tradingForkUniverse.hasForked
@@ -209,6 +206,7 @@ export function TradingSection({
 									: selectedOutcomeBalance === 0n
 										? `No ${getReportingOutcomeLabel(tradingForm.selectedShareOutcome)} shares available to migrate.`
 										: undefined
+	const redeemSharesLauncherBlocker = !hasSelectedPool ? 'Load a pool before redeeming shares.' : accountState.address === undefined ? 'Connect a wallet before redeeming shares.' : !isMainnet ? 'Switch to Ethereum mainnet before redeeming shares.' : redeemSharesLifecycleReason
 	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
 	const setAllTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse) })
@@ -281,9 +279,9 @@ export function TradingSection({
 			actionLabel: 'Redeem resolved shares',
 			description: 'Redeem finalized winning shares once the selected pool has resolved.',
 			key: 'redeem-shares',
-			readiness: redeemSharesGuardMessage === undefined ? 'ready' : 'blocked',
+			readiness: redeemSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
 			title: 'Redeem Resolved Shares',
-			...(redeemSharesGuardMessage === undefined ? { onAction: () => setActiveModal('redeem-shares') } : { blocker: redeemSharesGuardMessage }),
+			...(redeemSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-shares') } : { blocker: redeemSharesLauncherBlocker }),
 		},
 	]
 
@@ -343,7 +341,7 @@ export function TradingSection({
 						onClick={onCreateCompleteSet}
 						pending={tradingActiveAction === 'createCompleteSet'}
 						status={getTradingActionStatus('createCompleteSet')}
-						availability={{ disabled: mintGuardMessage !== undefined, reason: mintGuardMessage }}
+						availability={{ disabled: mintActionDisabledReason !== undefined, reason: mintActionDisabledReason }}
 					/>
 				</div>
 			</OperationModal>
@@ -375,7 +373,7 @@ export function TradingSection({
 						pending={tradingActiveAction === 'redeemCompleteSet'}
 						status={getTradingActionStatus('redeemCompleteSet')}
 						tone='secondary'
-						availability={{ disabled: redeemCompleteSetGuardMessage !== undefined, reason: redeemCompleteSetGuardMessage }}
+						availability={{ disabled: redeemCompleteSetActionDisabledReason !== undefined, reason: redeemCompleteSetActionDisabledReason }}
 					/>
 				</div>
 			</OperationModal>
@@ -403,7 +401,7 @@ export function TradingSection({
 						pending={tradingActiveAction === 'migrateShares'}
 						status={getTradingActionStatus('migrateShares')}
 						tone='secondary'
-						availability={{ disabled: migrateSharesGuardMessage !== undefined, reason: migrateSharesGuardMessage }}
+						availability={{ disabled: migrateSharesActionDisabledReason !== undefined, reason: migrateSharesActionDisabledReason }}
 					/>
 				</div>
 			</OperationModal>
@@ -418,7 +416,7 @@ export function TradingSection({
 						pending={tradingActiveAction === 'redeemShares'}
 						status={getTradingActionStatus('redeemShares')}
 						tone='secondary'
-						availability={{ disabled: redeemSharesGuardMessage !== undefined, reason: redeemSharesGuardMessage }}
+						availability={{ disabled: redeemSharesActionDisabledReason !== undefined, reason: redeemSharesActionDisabledReason }}
 					/>
 				</div>
 			</OperationModal>

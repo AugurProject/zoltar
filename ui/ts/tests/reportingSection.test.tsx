@@ -293,6 +293,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect(documentQueries.queryByRole('button', { name: 'Outcome Side' })).toBeNull()
 		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(0)
+		expect(document.body.textContent?.includes('Select an outcome side above to enable reporting.')).toBe(true)
 	})
 
 	test('renders active reporting with a lifecycle banner and no reporting context card', async () => {
@@ -844,6 +845,47 @@ describe('ReportingSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Report / Contribute Yes')
 		expect(document.body.textContent?.includes('If no one disputes after this report, the market would finalize in 3d 0h 0m.')).toBe(true)
 		expect(document.body.textContent?.includes(`Check back no later than ${formatTimestamp(150n + ESCALATION_GAME_ACTIVATION_DELAY)} (in 3d 0h 0m) to confirm Yes is the leading outcome before finalization.`)).toBe(true)
+	})
+
+	test('separates the 3-day first-report window from the later check-back deadline for larger first reports', async () => {
+		const hypotheticalDuration = computeEscalationTimeSinceStartFromAttritionCost(rep(3n), rep(50n), rep(10n))
+		const latestCheckBackTimestamp = 150n + ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createNotStartedReportingDetails(),
+					reportingForm: createReportingForm({
+						reportAmount: '10',
+						selectedOutcome: 'invalid',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('If no one disputes after this report, the market would finalize in 3d 0h 0m.')).toBe(true)
+		expect(document.body.textContent?.includes(`Check back no later than ${formatTimestamp(latestCheckBackTimestamp)} (in ${formatDuration(ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration)}) to confirm Invalid is still leading if later disputes keep escalation open.`)).toBe(true)
+		expect(document.body.textContent?.includes(`If no one disputes after this report, the market would finalize in ${formatDuration(ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration)}.`)).toBe(false)
+	})
+
+	test('shows explicit outcome-selection guidance before the first report starts escalation', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createNotStartedReportingDetails(),
+					reportingForm: createReportingForm({
+						reportAmount: '3',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent?.includes('Reporting is open. Select an outcome side below to enable reporting.')).toBe(true)
+		expect(document.body.textContent?.includes('Select an outcome side above to enable reporting.')).toBe(true)
+		expectTransactionButtonDisabled(document.body, 'Report / Contribute On Selected Side', 'Select an outcome side before reporting on a market.')
 	})
 
 	test('disables report submission for a pre-start amount below the first-report minimum', async () => {

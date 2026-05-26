@@ -9,7 +9,7 @@ import { SecurityPoolWorkflowSection } from '../components/SecurityPoolWorkflowS
 import { ChainTimestampContext } from '../lib/chainTimestamp.js'
 import { getReportingLockedUntilMessage } from '../lib/reporting.js'
 import type { AccountState } from '../types/app.js'
-import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '../types/contracts.js'
+import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '../types/contracts.js'
 import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -85,6 +85,7 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 		onDepositRep: () => undefined,
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,
+		onRedeemRep: () => undefined,
 		onSetSecurityBondAllowance: () => undefined,
 		onSecurityVaultFormChange: () => undefined,
 		onWithdrawRep: () => undefined,
@@ -205,6 +206,30 @@ function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps>
 		onStartTruthAuction: () => undefined,
 		onSubmitBid: () => undefined,
 		onWithdrawBids: () => undefined,
+		...overrides,
+	}
+}
+
+function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
+	return {
+		auctionedSecurityBondAllowance: 0n,
+		claimingAvailable: false,
+		completeSetCollateralAmount: 0n,
+		currentTime: 3n,
+		forkOutcome: 'none',
+		forkOwnSecurityPool: false,
+		marketDetails: createMarketDetails(),
+		migratedRep: 0n,
+		migrationEndsAt: undefined,
+		parentSecurityPoolAddress: zeroAddress,
+		questionOutcome: 'none',
+		repAtFork: 0n,
+		securityPoolAddress: zeroAddress,
+		systemState: 'operational',
+		truthAuction: undefined,
+		truthAuctionAddress: zeroAddress,
+		truthAuctionStartedAt: 0n,
+		universeId: 1n,
 		...overrides,
 	}
 }
@@ -634,7 +659,7 @@ describe('SecurityPoolWorkflowSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Claim Fees')
 	})
 
-	test('shows an Ended badge and blocks ended-pool collateral actions in the vault workflow', async () => {
+	test('shows an Ended badge, allows REP redemption, and blocks ended-pool collateral actions in the vault workflow', async () => {
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -652,6 +677,7 @@ describe('SecurityPoolWorkflowSection', () => {
 					],
 					securityVault: createSecurityVaultProps({
 						securityVaultDetails: createSecurityVaultDetails({
+							lockedRepInEscalationGame: 0n,
 							securityPoolAddress: selectedPoolAddress,
 						}),
 						securityVaultForm: {
@@ -673,10 +699,41 @@ describe('SecurityPoolWorkflowSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Ended')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Deposit REP', 'Vault collateral operations are unavailable after this pool has ended.')
-		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Vault collateral operations are unavailable after this pool has ended.')
+		expectTransactionButtonEnabled(document.body, 'Redeem REP')
 		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance', 'Vault collateral operations are unavailable after this pool has ended.')
 		expectTransactionButtonEnabled(document.body, 'Claim Fees')
 		expectTransactionButtonDisabled(document.body, 'Liquidate Vault', 'Liquidation is unavailable after this pool has ended.')
+	})
+
+	test('disables minting in trading when the workflow state shows the selected pool has ended', async () => {
+		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
+		const selectedPool = createSelectedPool({
+			questionOutcome: 'none',
+			securityPoolAddress: selectedPoolAddress,
+		})
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					forkAuction: createForkAuctionProps({
+						forkAuctionDetails: createForkAuctionDetails({
+							questionOutcome: 'yes',
+							securityPoolAddress: selectedPoolAddress,
+						}),
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [selectedPool],
+					selectedPoolView: 'trading',
+					trading: createTradingProps({
+						selectedPool,
+					}),
+				})}
+				showHeader={false}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Mint complete sets', 'This market has already finalized.')
 	})
 
 	test('allows selecting a vault from the directory within the current pool', async () => {

@@ -196,6 +196,63 @@ describe('ForkAuctionSection', () => {
 		expect(createChildUniverseCallCount).toBe(1)
 	})
 
+	test('gates fork stage write buttons with shared action-matrix stage reasons', async () => {
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createProps()))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+
+		fireEvent.click(documentQueries.getByRole('tab', { name: 'Initiate' }))
+		await Promise.resolve()
+		expectTransactionButtonDisabled(document.body, 'Fork With Own Escalation', 'This action is only available during the initiate stage.')
+		expectTransactionButtonDisabled(document.body, 'Initiate Pool Fork', 'This action is only available during the initiate stage.')
+		expectTransactionButtonDisabled(document.body, 'Fork Universe Directly', 'This action is only available during the initiate stage.')
+
+		fireEvent.click(documentQueries.getByRole('tab', { name: 'Auction' }))
+		await Promise.resolve()
+		expectTransactionButtonDisabled(document.body, 'Start Truth Auction', 'This action is only available during the auction stage.')
+		expectTransactionButtonDisabled(document.body, 'Submit Bid', 'This action is only available during the auction stage.')
+
+		fireEvent.click(documentQueries.getByRole('tab', { name: 'Settlement' }))
+		await Promise.resolve()
+		expectTransactionButtonDisabled(document.body, 'Finalize Truth Auction', 'This action is only available during the settlement stage.')
+		expectTransactionButtonDisabled(document.body, 'Refund Losing Bid', 'This action is only available during the settlement stage.')
+		expectTransactionButtonDisabled(document.body, 'Claim Auction Proceeds', 'This action is only available during the settlement stage.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw Bids', 'This action is only available during the settlement stage.')
+	})
+
+	test('gates disabled fork-workflow write controls with the shared read-only reason', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					disabled: true,
+					disabledMessage: 'This pool is currently operational, so fork and truth auction actions are read only.',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+
+		expectTransactionButtonDisabled(document.body, 'Create child universe', 'This pool is currently operational, so fork and truth auction actions are read only.')
+		expectTransactionButtonDisabled(document.body, 'Migrate REP To Zoltar', 'This pool is currently operational, so fork and truth auction actions are read only.')
+		expectTransactionButtonDisabled(document.body, 'Migrate Vault', 'This pool is currently operational, so fork and truth auction actions are read only.')
+		expectTransactionButtonDisabled(document.body, 'Migrate Escalation Deposits', 'This pool is currently operational, so fork and truth auction actions are read only.')
+
+		fireEvent.click(documentQueries.getByRole('tab', { name: 'Auction' }))
+		await Promise.resolve()
+		expectTransactionButtonDisabled(document.body, 'Start Truth Auction', 'This pool is currently operational, so fork and truth auction actions are read only.')
+		expectTransactionButtonDisabled(document.body, 'Submit Bid', 'This pool is currently operational, so fork and truth auction actions are read only.')
+
+		fireEvent.click(documentQueries.getByRole('tab', { name: 'Settlement' }))
+		await Promise.resolve()
+		expectTransactionButtonDisabled(document.body, 'Finalize Truth Auction', 'This pool is currently operational, so fork and truth auction actions are read only.')
+		expectTransactionButtonDisabled(document.body, 'Refund Losing Bid', 'This pool is currently operational, so fork and truth auction actions are read only.')
+		expectTransactionButtonDisabled(document.body, 'Claim Auction Proceeds', 'This pool is currently operational, so fork and truth auction actions are read only.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw Bids', 'This pool is currently operational, so fork and truth auction actions are read only.')
+	})
+
 	test('prefers the live chain timestamp over the loaded snapshot for migration time left', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(

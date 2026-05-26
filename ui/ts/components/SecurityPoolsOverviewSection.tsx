@@ -16,11 +16,9 @@ import { TransactionStatusCard } from './TransactionStatusCard.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { sameAddress } from '../lib/address.js'
 import { isMainnetChain } from '../lib/network.js'
-import { getSecurityPoolDisplayState, getSecurityPoolDisplayStateLabel, type SecurityPoolDisplayState, isSecurityPoolEnded } from '../lib/securityPoolState.js'
+import { deriveSecurityPoolUiCapabilities, getSecurityPoolDisplayStateLabel, type SecurityPoolDisplayState } from '../lib/securityPoolState.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
-
-const LIQUIDATION_ENDED_REASON = 'Liquidation is unavailable after this pool has ended.'
 
 export function SecurityPoolsOverviewSection({
 	accountState,
@@ -65,11 +63,16 @@ export function SecurityPoolsOverviewSection({
 	const targetVaultSummary = selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))
 	const callerVaultSummary = accountState.address === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const normalizedSearchText = searchText.trim().toLowerCase()
-	const filteredSecurityPools = securityPools.filter(pool => {
-		const displayState = getSecurityPoolDisplayState({
+	const securityPoolsWithCapabilities = securityPools.map(pool => ({
+		pool,
+		uiCapabilities: deriveSecurityPoolUiCapabilities({
 			questionOutcome: pool.questionOutcome,
 			systemState: pool.systemState,
-		})
+			universeHasForked: pool.universeHasForked,
+		}),
+	}))
+	const filteredSecurityPools = securityPoolsWithCapabilities.filter(({ pool, uiCapabilities }) => {
+		const displayState = uiCapabilities.lifecycleState
 		if (systemStateFilter !== 'all' && displayState !== systemStateFilter) return false
 		if (vaultFilter === 'has-vaults' && pool.vaults.length === 0) return false
 		if (vaultFilter === 'empty' && pool.vaults.length > 0) return false
@@ -141,17 +144,9 @@ export function SecurityPoolsOverviewSection({
 					<StateHint presentation={{ key: 'empty', badgeLabel: 'No matches', badgeTone: 'muted', detail: 'No pools match the current search and filter settings.' }} />
 				) : (
 					<div className='entity-card-list'>
-						{filteredSecurityPools.map(pool => {
-							const displayState = getSecurityPoolDisplayState({
-								questionOutcome: pool.questionOutcome,
-								systemState: pool.systemState,
-							})
-							const liquidationDisabledReason = isSecurityPoolEnded({
-								questionOutcome: pool.questionOutcome,
-								systemState: pool.systemState,
-							})
-								? LIQUIDATION_ENDED_REASON
-								: undefined
+						{filteredSecurityPools.map(({ pool, uiCapabilities: poolUiCapabilities }) => {
+							const displayState = poolUiCapabilities.lifecycleState
+							const liquidationDisabledReason = poolUiCapabilities.actions.queueLiquidation.lifecycleReason
 							return (
 								<EntityCard
 									key={pool.securityPoolAddress}

@@ -117,6 +117,30 @@ export function getVaultClaimFeesGuardMessage({ hasClaimableFees, isMainnet, sel
 	return undefined
 }
 
+export function getVaultRedeemRepGuardMessage({
+	accountAddress,
+	isMainnet,
+	lockedRepInEscalationGame,
+	redeemableRepAmount,
+	selectedVaultDetailsLoaded,
+	selectedVaultIsOwnedByAccount,
+}: {
+	accountAddress: Address | undefined
+	isMainnet: boolean
+	lockedRepInEscalationGame: bigint | undefined
+	redeemableRepAmount: bigint | undefined
+	selectedVaultDetailsLoaded: boolean
+	selectedVaultIsOwnedByAccount: boolean
+}) {
+	if (!selectedVaultIsOwnedByAccount) return 'Select your own vault to redeem REP.'
+	if (accountAddress === undefined) return 'Connect a wallet before redeeming REP.'
+	if (!isMainnet) return 'Switch to Ethereum mainnet before redeeming REP.'
+	if (!selectedVaultDetailsLoaded) return 'Refresh the vault before redeeming REP.'
+	if (lockedRepInEscalationGame !== undefined && lockedRepInEscalationGame > 0n) return 'Settle escalation deposits before redeeming REP.'
+	if (redeemableRepAmount === undefined || redeemableRepAmount <= 0n) return 'No redeemable REP is available for this vault.'
+	return undefined
+}
+
 export function getVaultRequestPriceGuardMessage({
 	accountAddress,
 	hasLoadedSelectedPool,

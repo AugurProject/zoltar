@@ -34,6 +34,7 @@ import {
 } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel } from '../lib/reporting.js'
+import { deriveSecurityPoolReportingPhase, deriveSecurityPoolUiCapabilities } from '../lib/securityPoolState.js'
 import type { LifecycleStagePresentation, ReportingSectionProps } from '../types/components.js'
 import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '../types/contracts.js'
 
@@ -52,6 +53,7 @@ const LOAD_REPORTING_PRESETS_REASON = 'Load reporting details before using prese
 const SELECT_OUTCOME_PRESET_REASON = 'Select an outcome side before using presets.'
 const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
 const MAX_PROFIT_WINDOW_FILLED_REASON = 'Max profit preset unavailable because the reward window is already filled on the selected side.'
+const SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE = 'Select an outcome side above to enable reporting.'
 
 function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
 	if (reportingDetails?.status === 'active') {
@@ -185,21 +187,6 @@ function getEscalationGameStartTimestamp(activationTime: bigint | undefined) {
 	return activationTime > ESCALATION_GAME_ACTIVATION_DELAY ? activationTime - ESCALATION_GAME_ACTIVATION_DELAY : 0n
 }
 
-function getClosedReportingLockReason(escalationPhase: ReturnType<typeof getEscalationPhase> | undefined) {
-	switch (escalationPhase) {
-		case 'Resolved':
-			return 'Reporting is closed because escalation has resolved.'
-		case 'Fork Triggered':
-			return 'Reporting is closed because escalation reached non-decision and moved into the fork workflow.'
-		case 'Timed Out':
-			return 'Reporting is closed because the escalation timeout has been reached.'
-		case 'Pending Start':
-		case 'Active':
-		case undefined:
-			return undefined
-	}
-}
-
 function getLatestOutcomeReminder({ currentTimestamp, projectedFinalizationTimestamp, rewardWindowFillTimestamp, selectedOutcomeLabel }: { currentTimestamp: bigint | undefined; projectedFinalizationTimestamp: bigint | undefined; rewardWindowFillTimestamp: bigint | undefined; selectedOutcomeLabel: string }) {
 	if (projectedFinalizationTimestamp !== undefined && currentTimestamp !== undefined && projectedFinalizationTimestamp <= currentTimestamp) {
 		return <>Check back immediately to confirm the market finalized as {selectedOutcomeLabel}.</>
@@ -266,11 +253,26 @@ export function ReportingSection({
 	const marketDetails = effectiveReportingDetails?.marketDetails ?? previewMarketDetails
 	const showFullReporting = mode === 'full-reporting'
 	const showWithdrawOnly = mode === 'withdraw-only'
-	const preOpenLockedReason = lockedReason
-	const closedReportingLockReason = activeReportingDetails !== undefined && isReportingClosed(activeReportingDetails) ? getClosedReportingLockReason(escalationPhase) : undefined
-	const reportControlsLockedReason = showFullReporting ? (preOpenLockedReason ?? closedReportingLockReason) : preOpenLockedReason
+	const reportingReady = marketDetails !== undefined && effectiveCurrentTimestamp !== undefined ? marketDetails.endTime <= effectiveCurrentTimestamp : undefined
+	const preOpenLockedReason = lockedReason ?? (reportingReady === false && marketDetails !== undefined && effectiveCurrentTimestamp !== undefined ? getReportingLockedUntilMessage(marketDetails.endTime, effectiveCurrentTimestamp) : undefined)
+	const reportingPhase = deriveSecurityPoolReportingPhase({
+		reportingDetails: effectiveReportingDetails,
+		reportingReady,
+	})
+	const effectiveReportingPhase = reportingPhase === 'unknown' && preOpenLockedReason !== undefined ? 'preOpen' : reportingPhase
+	const reportingUiCapabilities = deriveSecurityPoolUiCapabilities({
+		questionOutcome: effectiveReportingDetails?.questionOutcome,
+		reportingPhase: effectiveReportingPhase,
+		reportingPreOpenReason: preOpenLockedReason,
+		reportingWorkflowLockedReason: lockedReason,
+		reportingWithdrawalEnabled: activeReportingDetails?.withdrawalEnabled,
+		reportingWithdrawalState: effectiveReportingDetails?.withdrawalState,
+		systemState: undefined,
+		universeHasForked: undefined,
+	})
+	const reportControlsLockedReason = showFullReporting ? reportingUiCapabilities.actions.reportOutcome.lifecycleReason : preOpenLockedReason
 	const reportControlsLocked = reportControlsLockedReason !== undefined
-	const withdrawControlsLockedReason = showWithdrawOnly && loadingReportingDetails ? 'Loading escalation deposits.' : preOpenLockedReason
+	const withdrawControlsLockedReason = showWithdrawOnly && loadingReportingDetails ? 'Loading escalation deposits.' : reportingUiCapabilities.actions.withdrawEscalation.lifecycleReason
 	const withdrawControlsLocked = withdrawControlsLockedReason !== undefined
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const selectedOutcome = reportingForm.selectedOutcome
@@ -323,9 +325,18 @@ export function ReportingSection({
 		}
 
 		if (timerPreview.kind === 'not-started') {
+			if (timerPreview.hypotheticalDuration > 0n) {
+				return (
+					<>
+						If no one disputes after this report, the market would finalize in {formatDuration(timerPreview.timeUntilStart)}. Check back no later than <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={projectedFinalizationTimestamp} /> to
+						confirm {selectedOutcomeLabel} is still leading if later disputes keep escalation open.
+					</>
+				)
+			}
+
 			return (
 				<>
-					If no one disputes after this report, the market would finalize in {formatDuration(timerPreview.timeUntilEnd)}. {finalizationReminder}
+					If no one disputes after this report, the market would finalize in {formatDuration(timerPreview.timeUntilStart)}. {finalizationReminder}
 				</>
 			)
 		}
@@ -363,33 +374,32 @@ export function ReportingSection({
 	const maxProfitContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
 	const presetReasons = reportControlsLocked ? [] : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].filter((reason, index, reasons): reason is string => reason !== undefined && !isHiddenPresetReason(reason) && reasons.indexOf(reason) === index)
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? 'Enter a valid report amount to preview profit.' : undefined
-	const reportGuardMessage = getReportingReportGuardMessage({
-		actualDepositAmount: actualReportDepositAmount,
-		accountAddress: accountState.address,
-		contributionPreviewReason: reportContributionPreview?.reason,
-		isMainnet,
-		lockedReason: preOpenLockedReason,
-		reportAmount: reportingForm.reportAmount,
-		reportingStatus,
-		selectedOutcome,
-		selectedAmount,
-		viewerVaultAvailableEscalationRep: effectiveReportingDetails?.viewerVaultAvailableEscalationRep,
-		viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
-		...(activeReportingDetails === undefined ? {} : { activeReportingDetails }),
-	})
-	const withdrawGuardMessage = getReportingWithdrawGuardMessage({
-		accountAddress: accountState.address,
-		hasUserDepositsOnSelectedSide: (selectedSide?.userDeposits.length ?? 0) > 0,
-		isMainnet,
-		lockedReason: withdrawControlsLockedReason,
-		reportingStatus,
-		withdrawalEnabled: activeReportingDetails?.withdrawalEnabled ?? false,
-		withdrawalState: effectiveReportingDetails?.withdrawalState,
-		selectedOutcome,
-		...(activeReportingDetails === undefined ? {} : { activeReportingDetails }),
-	})
+	const reportGuardMessage =
+		reportControlsLockedReason ??
+		getReportingReportGuardMessage({
+			actualDepositAmount: actualReportDepositAmount,
+			accountAddress: accountState.address,
+			contributionPreviewReason: reportContributionPreview?.reason,
+			isMainnet,
+			reportAmount: reportingForm.reportAmount,
+			reportingStatus,
+			selectedOutcome,
+			selectedAmount,
+			viewerVaultAvailableEscalationRep: effectiveReportingDetails?.viewerVaultAvailableEscalationRep,
+			viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
+		})
+	const withdrawGuardMessage =
+		withdrawControlsLockedReason ??
+		getReportingWithdrawGuardMessage({
+			accountAddress: accountState.address,
+			hasUserDepositsOnSelectedSide: (selectedSide?.userDeposits.length ?? 0) > 0,
+			isMainnet,
+			reportingStatus,
+			selectedOutcome,
+		})
 	const withdrawSelectedGuardMessage = withdrawGuardMessage ?? (selectedSide !== undefined && selectedSide.userDeposits.length > 0 && selectedWithdrawDepositIndexes.length === 0 ? 'Select at least one deposit to withdraw or use Withdraw all.' : undefined)
-	const reportingOpenNotice = showFullReporting && reportingStatus === 'not-started' ? 'Reporting is open.' : undefined
+	const reportOutcomeSelectionMessage = showFullReporting && reportingStatus !== 'missing' && selectedOutcome === undefined && !reportControlsLocked ? SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE : undefined
+	const reportingOpenNotice = showFullReporting && reportingStatus === 'not-started' ? (selectedOutcome === undefined ? 'Reporting is open. Select an outcome side below to enable reporting.' : 'Reporting is open.') : undefined
 
 	useEffect(() => {
 		if (activeReportingDetails === undefined) return
@@ -498,6 +508,7 @@ export function ReportingSection({
 							))}
 						</div>
 					</div>
+					{reportOutcomeSelectionMessage === undefined ? undefined : <p className='detail'>{reportOutcomeSelectionMessage}</p>}
 					{effectiveReportingDetails?.viewerVaultAvailableEscalationRep === undefined ? undefined : (
 						<p className='detail'>
 							Available unlocked vault REP for reporting: <CurrencyValue value={effectiveReportingDetails.viewerVaultAvailableEscalationRep} suffix='REP' />.
