@@ -1,7 +1,7 @@
 import { Fragment } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
-import { type Address, zeroAddress } from 'viem'
+import { type Address, isAddress, zeroAddress } from 'viem'
 import { AddressValue } from './AddressValue.js'
 import { ActionLauncherCard } from './ActionLauncherCard.js'
 import { ChildUniverseDeploymentModal } from './ChildUniverseDeploymentModal.js'
@@ -19,6 +19,7 @@ import { TransactionActionButton } from './TransactionActionButton.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { UniverseLink } from './UniverseLink.js'
 import { TimestampValue } from './TimestampValue.js'
+import { TruthAuctionDepthChart, type TruthAuctionDepthPoint } from './TruthAuctionDepthChart.js'
 import { ViewTabs } from './ViewTabs.js'
 import { WorkflowTransactionStatus } from './WorkflowTransactionStatus.js'
 import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickSummary } from '../contracts.js'
@@ -83,9 +84,12 @@ type TruthAuctionDisposition = {
 	tone: 'default' | 'danger' | 'success' | 'warning'
 }
 
+type TruthAuctionBidSummaryKind = 'claimed' | 'losing' | 'neutral' | 'partial' | 'refunded' | 'winning'
+
 type TruthAuctionBidDisposition = TruthAuctionDisposition & {
 	canPrefillClaim: boolean
 	canPrefillRefund: boolean
+	summaryKind: TruthAuctionBidSummaryKind
 }
 
 type TruthAuctionBookData = {
@@ -93,6 +97,14 @@ type TruthAuctionBookData = {
 	tickCount: bigint
 	viewerBids: TruthAuctionBidView[]
 	viewerBidCount: bigint
+}
+
+type TruthAuctionViewerBidSummary = {
+	claimableCount: number
+	losingCount: number
+	partialCount: number
+	refundedCount: number
+	winningCount: number
 }
 
 function getTruthAuctionWindow(startedAt: bigint | undefined) {
@@ -186,6 +198,42 @@ function parseOptionalBigInt(value: string) {
 	}
 }
 
+function getStartTruthAuctionGuardMessage({ currentTimestamp, migrationEndsAt }: { currentTimestamp: bigint | undefined; migrationEndsAt: bigint | undefined }) {
+	if (migrationEndsAt === undefined) return 'Migration timing is unavailable.'
+	if (currentTimestamp === undefined) return 'Loading current chain time.'
+	if (currentTimestamp <= migrationEndsAt) return 'Migration is still active. Truth auction can start once migration ends.'
+	return undefined
+}
+
+function getFinalizeTruthAuctionGuardMessage({ currentTimestamp, truthAuction, truthAuctionEndsAt }: { currentTimestamp: bigint | undefined; truthAuction: TruthAuctionMetrics | undefined; truthAuctionEndsAt: bigint | undefined }) {
+	if (truthAuction === undefined) return 'Load the truth auction before finalizing.'
+	if (truthAuction.finalized) return 'Truth auction is already finalized.'
+	if (truthAuctionEndsAt === undefined) return 'Truth auction end time is unavailable.'
+	if (currentTimestamp === undefined) return 'Loading current chain time.'
+	if (currentTimestamp <= truthAuctionEndsAt) return 'Truth auction is still ongoing.'
+	return undefined
+}
+
+function getRefundTruthAuctionBidGuardMessage({ refundBidIndexInput, refundTickInput, truthAuction }: { refundBidIndexInput: string; refundTickInput: string; truthAuction: TruthAuctionMetrics | undefined }) {
+	if (truthAuction === undefined) return 'Load the truth auction before refunding bids.'
+	if (truthAuction.finalized) return 'Refunds are only available before finalization.'
+	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined) return 'Losing bids cannot be refunded until the auction has a clearing tick.'
+	if (parseOptionalBigInt(refundTickInput) === undefined) return 'Enter a valid refund tick.'
+	if (parseOptionalBigInt(refundBidIndexInput) === undefined) return 'Enter a valid refund bid index.'
+	return undefined
+}
+
+function getClaimAuctionProceedsGuardMessage({ claimBidIndexInput, claimBidTickInput, claimingAvailable, truthAuction, vaultAddressInput }: { claimBidIndexInput: string; claimBidTickInput: string; claimingAvailable: boolean; truthAuction: TruthAuctionMetrics | undefined; vaultAddressInput: string }) {
+	if (truthAuction === undefined) return 'Load the truth auction before claiming proceeds.'
+	if (!truthAuction.finalized) return 'Claiming becomes available after the truth auction is finalized.'
+	if (!claimingAvailable) return 'Claiming is not yet available for this pool.'
+	if (parseOptionalBigInt(claimBidTickInput) === undefined) return 'Enter a valid claim bid tick.'
+	if (parseOptionalBigInt(claimBidIndexInput) === undefined) return 'Enter a valid claim bid index.'
+	const trimmedVaultAddress = vaultAddressInput.trim()
+	if (trimmedVaultAddress !== '' && !isAddress(trimmedVaultAddress)) return 'Enter a valid vault address.'
+	return undefined
+}
+
 function clampPercentage(value: bigint, maxValue: bigint) {
 	if (value <= 0n || maxValue <= 0n) return 0
 	const boundedValue = value > maxValue ? maxValue : value
@@ -221,9 +269,9 @@ function getTickDisposition(tickSummary: TruthAuctionTickSummary, truthAuction: 
 }
 
 function getBidDisposition(bid: TruthAuctionBidView, truthAuction: TruthAuctionMetrics | undefined): TruthAuctionBidDisposition {
-	if (bid.refunded) return { label: 'Refunded', tone: 'default', canPrefillClaim: false, canPrefillRefund: false }
-	if (bid.claimed) return { label: 'Claimed', tone: 'success', canPrefillClaim: false, canPrefillRefund: false }
-	if (truthAuction === undefined) return { label: 'Pending', tone: 'default', canPrefillClaim: false, canPrefillRefund: false }
+	if (bid.refunded) return { label: 'Refunded', tone: 'default', canPrefillClaim: false, canPrefillRefund: false, summaryKind: 'refunded' }
+	if (bid.claimed) return { label: 'Claimed', tone: 'success', canPrefillClaim: false, canPrefillRefund: false, summaryKind: 'claimed' }
+	if (truthAuction === undefined) return { label: 'Pending', tone: 'default', canPrefillClaim: false, canPrefillRefund: false, summaryKind: 'neutral' }
 
 	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuction)
 	if (winningThresholdPrice !== undefined) {
@@ -233,6 +281,7 @@ function getBidDisposition(bid: TruthAuctionBidView, truthAuction: TruthAuctionM
 				tone: truthAuction.finalized ? 'success' : 'warning',
 				canPrefillClaim: truthAuction.finalized,
 				canPrefillRefund: false,
+				summaryKind: truthAuction.finalized ? 'winning' : 'neutral',
 			}
 		}
 		return {
@@ -240,6 +289,7 @@ function getBidDisposition(bid: TruthAuctionBidView, truthAuction: TruthAuctionM
 			tone: truthAuction.finalized ? 'danger' : 'default',
 			canPrefillClaim: false,
 			canPrefillRefund: false,
+			summaryKind: truthAuction.finalized ? 'losing' : 'neutral',
 		}
 	}
 
@@ -249,6 +299,7 @@ function getBidDisposition(bid: TruthAuctionBidView, truthAuction: TruthAuctionM
 			tone: truthAuction.finalized ? 'success' : 'default',
 			canPrefillClaim: truthAuction.finalized,
 			canPrefillRefund: false,
+			summaryKind: truthAuction.finalized ? 'winning' : 'neutral',
 		}
 	}
 
@@ -258,6 +309,7 @@ function getBidDisposition(bid: TruthAuctionBidView, truthAuction: TruthAuctionM
 			tone: truthAuction.finalized ? 'success' : 'warning',
 			canPrefillClaim: truthAuction.finalized,
 			canPrefillRefund: false,
+			summaryKind: truthAuction.finalized ? 'winning' : 'neutral',
 		}
 	}
 	if (bid.tick < truthAuction.clearingTick) {
@@ -266,6 +318,7 @@ function getBidDisposition(bid: TruthAuctionBidView, truthAuction: TruthAuctionM
 			tone: 'danger',
 			canPrefillClaim: false,
 			canPrefillRefund: !truthAuction.finalized,
+			summaryKind: 'losing',
 		}
 	}
 
@@ -277,6 +330,7 @@ function getBidDisposition(bid: TruthAuctionBidView, truthAuction: TruthAuctionM
 			tone: 'danger',
 			canPrefillClaim: false,
 			canPrefillRefund: !truthAuction.finalized,
+			summaryKind: 'losing',
 		}
 	}
 	if (truthAuction.ethAtClearingTick >= activeCumulativeEth) {
@@ -285,6 +339,7 @@ function getBidDisposition(bid: TruthAuctionBidView, truthAuction: TruthAuctionM
 			tone: truthAuction.finalized ? 'success' : 'warning',
 			canPrefillClaim: truthAuction.finalized,
 			canPrefillRefund: false,
+			summaryKind: truthAuction.finalized ? 'winning' : 'neutral',
 		}
 	}
 	return {
@@ -292,6 +347,7 @@ function getBidDisposition(bid: TruthAuctionBidView, truthAuction: TruthAuctionM
 		tone: 'warning',
 		canPrefillClaim: truthAuction.finalized,
 		canPrefillRefund: false,
+		summaryKind: truthAuction.finalized ? 'partial' : 'neutral',
 	}
 }
 
@@ -308,6 +364,62 @@ function getTruthAuctionDispositionClassName(tone: TruthAuctionDisposition['tone
 		default:
 			return 'is-default'
 	}
+}
+
+function sortTruthAuctionTickSummariesDescending(tickSummaries: TruthAuctionTickSummary[]) {
+	return [...tickSummaries].sort((left, right) => {
+		if (left.tick === right.tick) return 0
+		return left.tick > right.tick ? -1 : 1
+	})
+}
+
+function buildTruthAuctionDepthPoints({ enteredBidTick, selectedBookTick, tickSummaries, truthAuction }: { enteredBidTick: bigint | undefined; selectedBookTick: bigint | undefined; tickSummaries: TruthAuctionTickSummary[]; truthAuction: TruthAuctionMetrics | undefined }): TruthAuctionDepthPoint[] {
+	let cumulativeEth = 0n
+
+	return tickSummaries
+		.filter(tickSummary => tickSummary.active || tickSummary.currentTotalEth > 0n)
+		.map(tickSummary => {
+			cumulativeEth += tickSummary.currentTotalEth
+			return {
+				tick: tickSummary.tick,
+				price: tickSummary.price,
+				currentTotalEth: tickSummary.currentTotalEth,
+				cumulativeEth,
+				disposition: getTickDisposition(tickSummary, truthAuction),
+				isSelected: selectedBookTick === tickSummary.tick,
+				isPreviewTick: enteredBidTick !== undefined && enteredBidTick === tickSummary.tick,
+			}
+		})
+}
+
+function summarizeViewerTruthAuctionBids(viewerBids: TruthAuctionBidView[], truthAuction: TruthAuctionMetrics | undefined): TruthAuctionViewerBidSummary {
+	return viewerBids.reduce<TruthAuctionViewerBidSummary>(
+		(summary, bid) => {
+			const disposition = getBidDisposition(bid, truthAuction)
+
+			if (disposition.summaryKind === 'refunded') {
+				summary.refundedCount += 1
+				return summary
+			}
+			if (disposition.summaryKind === 'winning') {
+				summary.winningCount += 1
+			} else if (disposition.summaryKind === 'partial') {
+				summary.partialCount += 1
+			} else if (disposition.summaryKind === 'losing') {
+				summary.losingCount += 1
+			}
+			if (disposition.canPrefillClaim) summary.claimableCount += 1
+
+			return summary
+		},
+		{
+			claimableCount: 0,
+			losingCount: 0,
+			partialCount: 0,
+			refundedCount: 0,
+			winningCount: 0,
+		},
+	)
 }
 
 async function loadTruthAuctionActiveTickPages(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, pageCount: number) {
@@ -476,10 +588,33 @@ export function ForkAuctionSection({
 	})()
 	const ethRaisedProgress = truthAuctionStatus === undefined ? 0 : clampPercentage(truthAuctionStatus.ethRaised, truthAuctionStatus.ethRaiseCap)
 	const repSoldProgress = truthAuctionStatus === undefined ? 0 : clampPercentage(truthAuctionStatus.totalRepPurchased, truthAuctionStatus.maxRepBeingSold)
-	const maxTickEth = truthAuctionBookData.tickSummaries.reduce((maximumEth, tickSummary) => (tickSummary.currentTotalEth > maximumEth ? tickSummary.currentTotalEth : maximumEth), 0n)
+	const activeTickSummaries = sortTruthAuctionTickSummariesDescending(truthAuctionBookData.tickSummaries)
+	const truthAuctionDepthPoints = buildTruthAuctionDepthPoints({
+		enteredBidTick,
+		selectedBookTick,
+		tickSummaries: activeTickSummaries,
+		truthAuction: truthAuctionStatus,
+	})
+	const viewerBidSummary = summarizeViewerTruthAuctionBids(truthAuctionBookData.viewerBids, truthAuctionStatus)
+	const selectedLoadedDepthPoint = selectedBookTick === undefined ? undefined : truthAuctionDepthPoints.find(point => point.tick === selectedBookTick)
+	const selectedLoadedTickSummary = selectedBookTick === undefined ? undefined : activeTickSummaries.find(tickSummary => tickSummary.tick === selectedBookTick)
+	const resolvedSelectedTickSummary = selectedBookTick === undefined ? undefined : (selectedLoadedTickSummary ?? (selectedTickSummary?.tick === selectedBookTick ? selectedTickSummary : undefined))
+	const resolvedSelectedTickBids = selectedBookTick === undefined ? [] : selectedTickBids.filter(bid => bid.tick === selectedBookTick)
+	const previewTickSummary = enteredBidTick === undefined ? undefined : activeTickSummaries.find(tickSummary => tickSummary.tick === enteredBidTick)
+	const submitBidPreviewTickSummary = previewTickSummary ?? (enteredBidTick !== undefined && selectedLoadedTickSummary?.tick === enteredBidTick ? selectedLoadedTickSummary : undefined) ?? (enteredBidTick !== undefined && resolvedSelectedTickSummary?.tick === enteredBidTick ? resolvedSelectedTickSummary : undefined)
+	const maxTickEth = truthAuctionDepthPoints.reduce((maximumEth, point) => (point.currentTotalEth > maximumEth ? point.currentTotalEth : maximumEth), 0n)
 	const hasMoreTickSummaries = BigInt(truthAuctionBookData.tickSummaries.length) < truthAuctionBookData.tickCount
 	const hasMoreViewerBids = BigInt(truthAuctionBookData.viewerBids.length) < truthAuctionBookData.viewerBidCount
-	const hasMoreSelectedTickBids = BigInt(selectedTickBids.length) < selectedTickBidCount
+	const hasMoreSelectedTickBids = selectedTickSummary?.tick === selectedBookTick && BigInt(resolvedSelectedTickBids.length) < selectedTickBidCount
+	const selectTruthAuctionTick = (tick: bigint) => {
+		if (selectedBookTick === tick) return
+		setSelectedBookTick(tick)
+		setSelectedTickBids([])
+		setSelectedTickBidCount(0n)
+		setLoadingSelectedTickBids(true)
+		const matchingSummary = activeTickSummaries.find(tickSummary => tickSummary.tick === tick)
+		setSelectedTickSummary(matchingSummary)
+	}
 	const timeLeftDisplay = (() => {
 		if (forkAuctionDetails?.truthAuction === undefined) return forkOnlyFallbackText
 		if (truthAuctionTimeRemaining === undefined) return formatDuration(AUCTION_TIME_SECONDS)
@@ -536,10 +671,32 @@ export function ForkAuctionSection({
 	})
 	const truthAuctionBidGuardMessage = getTruthAuctionBidGuardMessage({
 		accountAddress: accountState.address,
+		currentTimestamp: effectiveCurrentTimestamp,
 		isMainnet,
 		submitBidAmountInput: forkAuctionForm.submitBidAmount,
 		truthAuction: forkAuctionDetails?.truthAuction,
 		walletEthBalance: accountState.ethBalance,
+	})
+	const startTruthAuctionGuardMessage = getStartTruthAuctionGuardMessage({
+		currentTimestamp: effectiveCurrentTimestamp,
+		migrationEndsAt: forkAuctionDetails?.migrationEndsAt,
+	})
+	const finalizeTruthAuctionGuardMessage = getFinalizeTruthAuctionGuardMessage({
+		currentTimestamp: effectiveCurrentTimestamp,
+		truthAuction: truthAuctionStatus,
+		truthAuctionEndsAt,
+	})
+	const refundTruthAuctionBidGuardMessage = getRefundTruthAuctionBidGuardMessage({
+		refundBidIndexInput: forkAuctionForm.refundBidIndex,
+		refundTickInput: forkAuctionForm.refundTick,
+		truthAuction: truthAuctionStatus,
+	})
+	const claimAuctionProceedsGuardMessage = getClaimAuctionProceedsGuardMessage({
+		claimBidIndexInput: forkAuctionForm.claimBidIndex,
+		claimBidTickInput: forkAuctionForm.claimBidTick,
+		claimingAvailable: forkAuctionDetails?.claimingAvailable ?? false,
+		truthAuction: truthAuctionStatus,
+		vaultAddressInput: forkAuctionForm.vaultAddress,
 	})
 	const createChildUniverseEnabled = forkPoolState.actions.createChildUniverse.enabled
 	const childUniverseRequirements = [
@@ -577,6 +734,7 @@ export function ForkAuctionSection({
 	}) => {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
 		const actionEnabled = forkPoolState.actions[action].enabled
+		const disabledReason = interactionDisabledReason ?? resolvedAvailability.reason
 		return (
 			<TransactionActionButton
 				idleLabel={idleLabel}
@@ -586,7 +744,7 @@ export function ForkAuctionSection({
 				tone={tone}
 				availability={{
 					disabled: !actionEnabled || interactionDisabledReason !== undefined || resolvedAvailability.disabled,
-					reason: actionEnabled ? (interactionDisabledReason ?? resolvedAvailability.reason) : undefined,
+					reason: disabledReason,
 				}}
 			/>
 		)
@@ -596,6 +754,9 @@ export function ForkAuctionSection({
 		lastPoolKeyRef.current = securityPoolAddress
 		setSelectedStage(currentStage)
 	}, [currentStage, securityPoolAddress])
+	useEffect(() => {
+		setSelectedStage(currentSelectedStage => (STAGE_ORDER[currentStage] > STAGE_ORDER[currentSelectedStage] ? currentStage : currentSelectedStage))
+	}, [currentStage])
 	useEffect(() => {
 		if (forkAuctionResult?.action !== 'createChildUniverse') return
 		setChildUniverseModalOpen(false)
@@ -634,17 +795,18 @@ export function ForkAuctionSection({
 		void Promise.all([loadTruthAuctionActiveTickPages(client, truthAuctionAddress, loadedTickPageCount), accountState.address === undefined ? Promise.resolve({ bidCount: 0n, bids: [] }) : loadTruthAuctionBidderBidPages(client, truthAuctionAddress, accountState.address, loadedViewerBidPageCount)])
 			.then(([tickPageData, viewerBidData]) => {
 				if (cancelled) return
+				const sortedTickSummaries = sortTruthAuctionTickSummariesDescending(tickPageData.tickSummaries)
 				setTruthAuctionBookData({
-					tickSummaries: tickPageData.tickSummaries,
+					tickSummaries: sortedTickSummaries,
 					tickCount: tickPageData.tickCount,
 					viewerBids: viewerBidData.bids,
 					viewerBidCount: viewerBidData.bidCount,
 				})
 				setSelectedBookTick(currentSelection => {
-					if (currentSelection !== undefined && (tickPageData.tickSummaries.some(tickSummary => tickSummary.tick === currentSelection) || (selectedTickSummary?.tick === currentSelection && selectedTickSummary.submissionCount > 0n))) return currentSelection
-					if (enteredBidTick !== undefined && tickPageData.tickSummaries.some(tickSummary => tickSummary.tick === enteredBidTick)) return enteredBidTick
-					if (truthAuctionStatus?.clearingTick !== undefined && tickPageData.tickSummaries.some(tickSummary => tickSummary.tick === truthAuctionStatus.clearingTick)) return truthAuctionStatus.clearingTick
-					return tickPageData.tickSummaries[0]?.tick
+					if (currentSelection !== undefined && (sortedTickSummaries.some(tickSummary => tickSummary.tick === currentSelection) || (selectedTickSummary?.tick === currentSelection && selectedTickSummary.submissionCount > 0n))) return currentSelection
+					if (enteredBidTick !== undefined && sortedTickSummaries.some(tickSummary => tickSummary.tick === enteredBidTick)) return enteredBidTick
+					if (truthAuctionStatus?.clearingTick !== undefined && sortedTickSummaries.some(tickSummary => tickSummary.tick === truthAuctionStatus.clearingTick)) return truthAuctionStatus.clearingTick
+					return sortedTickSummaries[0]?.tick
 				})
 			})
 			.catch(error => {
@@ -904,107 +1066,143 @@ export function ForkAuctionSection({
 			</SectionBlock>
 		)
 	})()
-	const truthAuctionOrderBookSection = (() => {
+	const truthAuctionMarketViewSection = (() => {
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
+		const selectedTickDisposition = resolvedSelectedTickSummary === undefined ? undefined : getTickDisposition(resolvedSelectedTickSummary, truthAuctionStatus)
+
 		return (
-			<SectionBlock title='Bid Ladder' description={selectedStage === 'settlement' ? 'Review live price levels and the bids stacked at each level. Select a row to inspect the underlying bids.' : 'Live price levels are ordered from highest tick to lowest tick. Select a row to inspect the bids stacked there.'}>
+			<SectionBlock title='Market View' description={selectedStage === 'settlement' ? 'Review loaded visible depth, inspect the active ladder, and open an individual price level before settling bids.' : 'Review visible depth, inspect the active ladder, and choose a price level before placing a bid.'}>
 				{truthAuctionBookError === undefined ? undefined : <p className='detail truth-auction-book-error'>{truthAuctionBookError}</p>}
-				<div className='truth-auction-book-layout'>
-					<div className='truth-auction-ladder'>
-						{loadingTruthAuctionBook ? <p className='detail'>Loading order book…</p> : undefined}
-						{!loadingTruthAuctionBook && truthAuctionBookData.tickSummaries.length === 0 ? <p className='detail'>No live price levels are currently active for this auction.</p> : undefined}
-						{truthAuctionBookData.tickSummaries.map(tickSummary => {
-							const disposition = getTickDisposition(tickSummary, truthAuctionStatus)
-							const isSelected = selectedBookTick === tickSummary.tick
-							const isPreviewTick = enteredBidTick !== undefined && enteredBidTick === tickSummary.tick
-							return (
-								<button
-									className={`truth-auction-price-row ${getTruthAuctionDispositionClassName(disposition.tone)}${isSelected ? ' is-selected' : ''}${isPreviewTick ? ' is-preview' : ''}`}
-									key={tickSummary.tick.toString()}
-									onClick={() => {
-										setSelectedBookTick(tickSummary.tick)
-										setSelectedTickSummary(tickSummary)
-									}}
-									type='button'
-								>
-									<div className='truth-auction-price-row-bar' style={{ width: `${clampPercentage(tickSummary.currentTotalEth, maxTickEth)}%` }} />
-									<div className='truth-auction-price-row-copy'>
-										<div className='truth-auction-price-row-main'>
-											<div>
-												<strong>Tick {tickSummary.tick.toString()}</strong>
-												<span className='truth-auction-price-row-price'>{<CurrencyValue value={tickSummary.price} suffix='ETH / REP' />}</span>
-											</div>
-											<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(disposition.tone)}`}>{disposition.label}</span>
-										</div>
-										<div className='truth-auction-price-row-meta'>
-											<span>
-												Current size <CurrencyValue value={tickSummary.currentTotalEth} suffix='ETH' />
-											</span>
-											<span>{tickSummary.submissionCount.toString()} submissions</span>
-											{isPreviewTick ? <span>Current bid form tick</span> : undefined}
-										</div>
-									</div>
-								</button>
-							)
-						})}
-						{hasMoreTickSummaries ? (
-							<div className='actions'>
-								<button className='secondary' onClick={() => setLoadedTickPageCount(currentPageCount => currentPageCount + 1)} type='button'>
-									Load More Price Levels
-								</button>
+				<div className='truth-auction-market-board'>
+					<div className='truth-auction-market-stack'>
+						<div className='truth-auction-panel truth-auction-depth-panel'>
+							<div className='truth-auction-depth-header'>
+								<div>
+									<h4>Visible Depth</h4>
+									<p className='detail'>Loaded price levels only. Use Load More to extend the visible portion of the book.</p>
+								</div>
 							</div>
-						) : undefined}
+							{loadingTruthAuctionBook ? <p className='detail'>Loading order book…</p> : undefined}
+							{!loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <p className='detail'>No live price levels are currently active for this auction.</p> : undefined}
+							{truthAuctionDepthPoints.length === 0 ? undefined : (
+								<TruthAuctionDepthChart
+									loadedTickCount={truthAuctionDepthPoints.length}
+									onSelectTick={selectTruthAuctionTick}
+									points={truthAuctionDepthPoints}
+									totalActiveTickCount={truthAuctionBookData.tickCount}
+									{...(truthAuctionStatus.hitCap && truthAuctionStatus.clearingTick !== undefined ? { clearingTick: truthAuctionStatus.clearingTick } : {})}
+								/>
+							)}
+						</div>
+						<div className='truth-auction-panel'>
+							<div className='truth-auction-panel-header'>
+								<div>
+									<h4>Price Ladder</h4>
+									<p className='detail'>Highest tick first. Each row shows the live size at that level and the loaded depth above it.</p>
+								</div>
+							</div>
+							<div className='truth-auction-ladder'>
+								{loadingTruthAuctionBook ? <p className='detail'>Loading price levels…</p> : undefined}
+								{!loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <p className='detail'>No active levels are visible yet.</p> : undefined}
+								{truthAuctionDepthPoints.map(point => (
+									<button
+										aria-pressed={point.isSelected}
+										className={`truth-auction-price-row truth-auction-ladder-row ${getTruthAuctionDispositionClassName(point.disposition.tone)}${point.isSelected ? ' is-selected' : ''}${point.isPreviewTick ? ' is-preview' : ''}${truthAuctionStatus.clearingTick === point.tick ? ' is-clearing' : ''}`}
+										key={point.tick.toString()}
+										onClick={() => selectTruthAuctionTick(point.tick)}
+										type='button'
+									>
+										<div className='truth-auction-price-row-bar' style={{ width: `${clampPercentage(point.currentTotalEth, maxTickEth)}%` }} />
+										<div className='truth-auction-price-row-copy'>
+											<div className='truth-auction-price-row-main'>
+												<div>
+													<strong>Tick {point.tick.toString()}</strong>
+													<span className='truth-auction-price-row-price'>{<CurrencyValue value={point.price} suffix='ETH / REP' />}</span>
+												</div>
+												<div className='truth-auction-price-row-badges'>
+													{truthAuctionStatus.clearingTick === point.tick ? <span className='truth-auction-ladder-helper'>Clearing level</span> : undefined}
+													{point.isPreviewTick ? <span className='truth-auction-ladder-helper'>Current form tick</span> : undefined}
+													<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(point.disposition.tone)}`}>{point.disposition.label}</span>
+												</div>
+											</div>
+											<div className='truth-auction-price-row-meta'>
+												<span>
+													Current size <CurrencyValue value={point.currentTotalEth} suffix='ETH' />
+												</span>
+												<span className='truth-auction-ladder-row-cumulative'>
+													Loaded depth <CurrencyValue value={point.cumulativeEth} suffix='ETH' />
+												</span>
+												<span>{activeTickSummaries.find(tickSummary => tickSummary.tick === point.tick)?.submissionCount.toString() ?? '0'} submissions</span>
+											</div>
+										</div>
+									</button>
+								))}
+								{hasMoreTickSummaries ? (
+									<div className='actions'>
+										<button className='secondary' onClick={() => setLoadedTickPageCount(currentPageCount => currentPageCount + 1)} type='button'>
+											Load More Price Levels
+										</button>
+									</div>
+								) : undefined}
+							</div>
+						</div>
 					</div>
 					<div className='truth-auction-level-detail'>
-						{selectedTickSummary === undefined ? (
-							<p className='detail'>Select a price level to inspect the bids queued there.</p>
+						{resolvedSelectedTickSummary === undefined ? (
+							<p className='detail'>{loadingSelectedTickBids && selectedBookTick !== undefined ? 'Loading selected price level…' : 'Select a price level to inspect the bids queued there.'}</p>
 						) : (
 							<>
 								<div className='truth-auction-level-header'>
 									<div>
 										<h4>Selected Price Level</h4>
 										<p className='detail'>
-											Tick {selectedTickSummary.tick.toString()} at <CurrencyValue value={selectedTickSummary.price} suffix='ETH / REP' />
+											Tick {resolvedSelectedTickSummary.tick.toString()} at <CurrencyValue value={resolvedSelectedTickSummary.price} suffix='ETH / REP' />
 										</p>
 									</div>
 									{selectedStage !== 'settlement' ? (
-										<button className='secondary' onClick={() => onForkAuctionFormChange({ submitBidTick: selectedTickSummary.tick.toString() })} type='button'>
+										<button className='secondary' onClick={() => onForkAuctionFormChange({ submitBidTick: resolvedSelectedTickSummary.tick.toString() })} type='button'>
 											Use This Tick
 										</button>
 									) : undefined}
 								</div>
 								<div className='workflow-metric-grid'>
-									<MetricField label='Live ETH'>{<CurrencyValue value={selectedTickSummary.currentTotalEth} suffix='ETH' />}</MetricField>
-									<MetricField label='Historical Bids'>{selectedTickSummary.submissionCount.toString()}</MetricField>
-									<MetricField label='Status'>{getTickDisposition(selectedTickSummary, truthAuctionStatus).label}</MetricField>
+									<MetricField label='Live ETH'>{<CurrencyValue value={resolvedSelectedTickSummary.currentTotalEth} suffix='ETH' />}</MetricField>
+									<MetricField label='Loaded Depth'>{selectedLoadedDepthPoint === undefined ? 'Not in loaded ladder' : <CurrencyValue value={selectedLoadedDepthPoint.cumulativeEth} suffix='ETH' />}</MetricField>
+									<MetricField label='Historical Bids'>{resolvedSelectedTickSummary.submissionCount.toString()}</MetricField>
+									<MetricField label='Status'>{selectedTickDisposition?.label ?? UNKNOWN_VALUE}</MetricField>
 								</div>
 								{loadingSelectedTickBids ? <p className='detail'>Loading bids at this price level…</p> : undefined}
-								{!loadingSelectedTickBids && selectedTickBids.length === 0 ? <p className='detail'>No bids are currently indexed for this price level.</p> : undefined}
-								<div className='truth-auction-bid-list'>
-									{selectedTickBids.map(bid => {
-										const disposition = getBidDisposition(bid, truthAuctionStatus)
-										const isViewerBid = sameAddress(bid.bidder, accountState.address)
-										return (
-											<div className='truth-auction-bid-card' key={`${bid.tick.toString()}:${bid.bidIndex.toString()}`}>
-												<div className='truth-auction-bid-card-header'>
-													<div>
-														<strong>Bid #{bid.bidIndex.toString()}</strong>
-														<div className='truth-auction-bid-card-address'>
-															<AddressValue address={bid.bidder} />
-														</div>
+								{!loadingSelectedTickBids && resolvedSelectedTickBids.length === 0 ? <p className='detail'>No bids are currently indexed for this price level.</p> : undefined}
+								{resolvedSelectedTickBids.length === 0 ? undefined : (
+									<div className='truth-auction-bid-table'>
+										<div className='truth-auction-bid-row is-header'>
+											<span>Bid</span>
+											<span>Bidder</span>
+											<span>Amount</span>
+											<span>Cumulative</span>
+											<span>Status</span>
+											<span>Actions</span>
+										</div>
+										{resolvedSelectedTickBids.map(bid => {
+											const disposition = getBidDisposition(bid, truthAuctionStatus)
+											const isViewerBid = sameAddress(bid.bidder, accountState.address)
+											return (
+												<div className='truth-auction-bid-row' key={`${bid.tick.toString()}:${bid.bidIndex.toString()}`}>
+													<span className='truth-auction-bid-row-label'>Bid #{bid.bidIndex.toString()}</span>
+													<div className='truth-auction-bid-row-address'>
+														<AddressValue address={bid.bidder} />
 													</div>
-													<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(disposition.tone)}`}>{disposition.label}</span>
-												</div>
-												<div className='truth-auction-bid-card-metrics'>
 													<span>
-														Amount <CurrencyValue value={bid.ethAmount} suffix='ETH' />
+														<CurrencyValue value={bid.ethAmount} suffix='ETH' />
 													</span>
 													<span>
-														Cumulative <CurrencyValue value={bid.cumulativeEth} suffix='ETH' />
+														<CurrencyValue value={bid.cumulativeEth} suffix='ETH' />
 													</span>
-												</div>
-												{!isViewerBid ? undefined : (
-													<div className='truth-auction-bid-card-actions'>
+													<span className='truth-auction-bid-row-status'>
+														<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(disposition.tone)}`}>{disposition.label}</span>
+													</span>
+													<div className='truth-auction-bid-row-actions'>
+														{!isViewerBid ? <span className='truth-auction-row-empty'>—</span> : undefined}
 														{disposition.canPrefillRefund ? (
 															<button
 																className='secondary'
@@ -1034,11 +1232,11 @@ export function ForkAuctionSection({
 															</button>
 														) : undefined}
 													</div>
-												)}
-											</div>
-										)
-									})}
-								</div>
+												</div>
+											)
+										})}
+									</div>
+								)}
 								{hasMoreSelectedTickBids ? (
 									<div className='actions'>
 										<button className='secondary' onClick={() => setLoadedSelectedTickBidPageCount(currentPageCount => currentPageCount + 1)} type='button'>
@@ -1055,77 +1253,85 @@ export function ForkAuctionSection({
 	})()
 	const viewerTruthAuctionBidsSection = (() => {
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
+
 		return (
-			<SectionBlock title='My Bids' description='Your submitted bids and their current status. Use the row shortcuts to prefill claim or refund inputs.'>
+			<SectionBlock title='My Bids' description='Your submitted bids and their current status. Use the row shortcuts to jump to the price level or prefill settlement actions.'>
 				{accountState.address === undefined ? <p className='detail'>Connect a wallet to inspect your submitted truth auction bids.</p> : undefined}
+				{accountState.address !== undefined ? (
+					<div className='truth-auction-wallet-summary'>
+						<MetricField label='Winning'>{viewerBidSummary.winningCount.toString()}</MetricField>
+						<MetricField label='Partial'>{viewerBidSummary.partialCount.toString()}</MetricField>
+						<MetricField label='Losing'>{viewerBidSummary.losingCount.toString()}</MetricField>
+						<MetricField label='Claimable'>{viewerBidSummary.claimableCount.toString()}</MetricField>
+						<MetricField label='Refunded'>{viewerBidSummary.refundedCount.toString()}</MetricField>
+					</div>
+				) : undefined}
 				{accountState.address !== undefined && loadingTruthAuctionBook ? <p className='detail'>Loading your bids…</p> : undefined}
 				{accountState.address !== undefined && !loadingTruthAuctionBook && truthAuctionBookData.viewerBids.length === 0 ? <p className='detail'>No bids from this wallet are indexed for the current auction.</p> : undefined}
-				<div className='truth-auction-bid-list'>
-					{truthAuctionBookData.viewerBids.map(bid => {
-						const disposition = getBidDisposition(bid, truthAuctionStatus)
-						return (
-							<div className='truth-auction-bid-card' key={`viewer:${bid.tick.toString()}:${bid.bidIndex.toString()}`}>
-								<div className='truth-auction-bid-card-header'>
-									<div>
-										<strong>Tick {bid.tick.toString()}</strong>
-										<div className='truth-auction-bid-card-address'>Bid #{bid.bidIndex.toString()}</div>
+				{truthAuctionBookData.viewerBids.length === 0 ? undefined : (
+					<div className='truth-auction-bid-table'>
+						<div className='truth-auction-bid-row is-header is-wallet'>
+							<span>Tick</span>
+							<span>Price</span>
+							<span>Amount</span>
+							<span>Status</span>
+							<span>Actions</span>
+						</div>
+						{truthAuctionBookData.viewerBids.map(bid => {
+							const disposition = getBidDisposition(bid, truthAuctionStatus)
+							return (
+								<div className='truth-auction-bid-row is-wallet' key={`viewer:${bid.tick.toString()}:${bid.bidIndex.toString()}`}>
+									<span className='truth-auction-bid-row-label'>
+										Tick {bid.tick.toString()}
+										<small>Bid #{bid.bidIndex.toString()}</small>
+									</span>
+									<span>
+										<CurrencyValue value={getTruthAuctionPriceAtTick(bid.tick)} suffix='ETH / REP' />
+									</span>
+									<span>
+										<CurrencyValue value={bid.ethAmount} suffix='ETH' />
+									</span>
+									<span className='truth-auction-bid-row-status'>
+										<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(disposition.tone)}`}>{disposition.label}</span>
+									</span>
+									<div className='truth-auction-bid-row-actions'>
+										<button className='secondary' onClick={() => selectTruthAuctionTick(bid.tick)} type='button'>
+											Show Price Level
+										</button>
+										{disposition.canPrefillRefund ? (
+											<button
+												className='secondary'
+												onClick={() =>
+													onForkAuctionFormChange({
+														refundBidIndex: bid.bidIndex.toString(),
+														refundTick: bid.tick.toString(),
+													})
+												}
+												type='button'
+											>
+												Prefill Refund
+											</button>
+										) : undefined}
+										{disposition.canPrefillClaim ? (
+											<button
+												className='secondary'
+												onClick={() =>
+													onForkAuctionFormChange({
+														claimBidIndex: bid.bidIndex.toString(),
+														claimBidTick: bid.tick.toString(),
+													})
+												}
+												type='button'
+											>
+												Prefill Claim
+											</button>
+										) : undefined}
 									</div>
-									<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(disposition.tone)}`}>{disposition.label}</span>
 								</div>
-								<div className='truth-auction-bid-card-metrics'>
-									<span>
-										Price <CurrencyValue value={getTruthAuctionPriceAtTick(bid.tick)} suffix='ETH / REP' />
-									</span>
-									<span>
-										Amount <CurrencyValue value={bid.ethAmount} suffix='ETH' />
-									</span>
-									<span>
-										Cumulative <CurrencyValue value={bid.cumulativeEth} suffix='ETH' />
-									</span>
-								</div>
-								<div className='truth-auction-bid-card-actions'>
-									<button
-										className='secondary'
-										onClick={() => {
-											setSelectedBookTick(bid.tick)
-										}}
-										type='button'
-									>
-										Show Price Level
-									</button>
-									{disposition.canPrefillRefund ? (
-										<button
-											className='secondary'
-											onClick={() =>
-												onForkAuctionFormChange({
-													refundBidIndex: bid.bidIndex.toString(),
-													refundTick: bid.tick.toString(),
-												})
-											}
-											type='button'
-										>
-											Prefill Refund
-										</button>
-									) : undefined}
-									{disposition.canPrefillClaim ? (
-										<button
-											className='secondary'
-											onClick={() =>
-												onForkAuctionFormChange({
-													claimBidIndex: bid.bidIndex.toString(),
-													claimBidTick: bid.tick.toString(),
-												})
-											}
-											type='button'
-										>
-											Prefill Claim
-										</button>
-									) : undefined}
-								</div>
-							</div>
-						)
-					})}
-				</div>
+							)
+						})}
+					</div>
+				)}
 				{accountState.address !== undefined && hasMoreViewerBids ? (
 					<div className='actions'>
 						<button className='secondary' onClick={() => setLoadedViewerBidPageCount(currentPageCount => currentPageCount + 1)} type='button'>
@@ -1134,6 +1340,105 @@ export function ForkAuctionSection({
 					</div>
 				) : undefined}
 			</SectionBlock>
+		)
+	})()
+	const truthAuctionSettlementSection = (() => {
+		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
+		return (
+			<SectionBlock title='Settle Selected Bid' description='Use My Bids or the selected price level to prefill a claim or refund, then settle it here.'>
+				<div className='truth-auction-settlement-grid'>
+					<div className='truth-auction-panel truth-auction-settlement-panel'>
+						<div className='truth-auction-panel-header'>
+							<div>
+								<h4>Refund Losing Bid</h4>
+								<p className='detail'>Refund a losing bid before finalization when the selected row indicates it is below clearing.</p>
+							</div>
+						</div>
+						<div className='form-grid'>
+							<div className='field-row'>
+								<label className='field'>
+									<span>Refund Tick</span>
+									<FormInput value={forkAuctionForm.refundTick} onInput={event => onForkAuctionFormChange({ refundTick: event.currentTarget.value })} />
+								</label>
+								<label className='field'>
+									<span>Refund Bid Index</span>
+									<FormInput value={forkAuctionForm.refundBidIndex} onInput={event => onForkAuctionFormChange({ refundBidIndex: event.currentTarget.value })} />
+								</label>
+							</div>
+							<div className='actions'>{renderStageActionButton({ action: 'refundLosingBids', availability: createActionAvailability(refundTruthAuctionBidGuardMessage), idleLabel: 'Refund Losing Bid', onClick: onRefundLosingBids, pendingLabel: 'Refunding losing bid...', tone: 'primary' })}</div>
+						</div>
+					</div>
+					<div className='truth-auction-panel truth-auction-settlement-panel'>
+						<div className='truth-auction-panel-header'>
+							<div>
+								<h4>Claim Auction Proceeds</h4>
+								<p className='detail'>Claim proceeds for a finalized winning or partial bid. Leave vault blank to use the connected wallet.</p>
+							</div>
+						</div>
+						<div className='form-grid'>
+							<label className='field'>
+								<span>Vault Address</span>
+								<FormInput value={forkAuctionForm.vaultAddress} onInput={event => onForkAuctionFormChange({ vaultAddress: event.currentTarget.value })} placeholder='Leave empty to use connected wallet' />
+							</label>
+							<div className='field-row'>
+								<label className='field'>
+									<span>Claim Bid Tick</span>
+									<FormInput value={forkAuctionForm.claimBidTick} onInput={event => onForkAuctionFormChange({ claimBidTick: event.currentTarget.value })} />
+								</label>
+								<label className='field'>
+									<span>Claim Bid Index</span>
+									<FormInput value={forkAuctionForm.claimBidIndex} onInput={event => onForkAuctionFormChange({ claimBidIndex: event.currentTarget.value })} />
+								</label>
+							</div>
+							<div className='actions'>{renderStageActionButton({ action: 'claimAuctionProceeds', availability: createActionAvailability(claimAuctionProceedsGuardMessage), idleLabel: 'Claim Auction Proceeds', onClick: onClaimAuctionProceeds, pendingLabel: 'Claiming auction proceeds...', tone: 'primary' })}</div>
+						</div>
+					</div>
+				</div>
+			</SectionBlock>
+		)
+	})()
+	const truthAuctionOperatorToolsSection = (() => {
+		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
+		return (
+			<ReadOnlyDetailAccordion defaultOpen={false} title='Operator Tools'>
+				<div className='truth-auction-manual-tools'>
+					<p className='detail'>Keep these raw fallback controls for operator workflows. End-user claim flows should go through the forker-mediated claim action rather than calling auction-owner withdrawals directly.</p>
+					<SectionBlock density='compact' headingLevel={4} title='Raw Refund Fallback' variant='embedded'>
+						<div className='form-grid'>
+							<div className='field-row'>
+								<label className='field'>
+									<span>Refund Tick</span>
+									<FormInput value={forkAuctionForm.refundTick} onInput={event => onForkAuctionFormChange({ refundTick: event.currentTarget.value })} />
+								</label>
+								<label className='field'>
+									<span>Refund Bid Index</span>
+									<FormInput value={forkAuctionForm.refundBidIndex} onInput={event => onForkAuctionFormChange({ refundBidIndex: event.currentTarget.value })} />
+								</label>
+							</div>
+							<div className='actions'>{renderStageActionButton({ action: 'refundLosingBids', availability: createActionAvailability(refundTruthAuctionBidGuardMessage), idleLabel: 'Run Raw Refund', onClick: onRefundLosingBids, pendingLabel: 'Refunding losing bid...' })}</div>
+						</div>
+					</SectionBlock>
+					<SectionBlock density='compact' headingLevel={4} title='Raw Claim Fallback' variant='embedded'>
+						<div className='form-grid'>
+							<label className='field'>
+								<span>Vault Address</span>
+								<FormInput value={forkAuctionForm.vaultAddress} onInput={event => onForkAuctionFormChange({ vaultAddress: event.currentTarget.value })} placeholder='Leave empty to use connected wallet' />
+							</label>
+							<div className='field-row'>
+								<label className='field'>
+									<span>Claim Bid Tick</span>
+									<FormInput value={forkAuctionForm.claimBidTick} onInput={event => onForkAuctionFormChange({ claimBidTick: event.currentTarget.value })} />
+								</label>
+								<label className='field'>
+									<span>Claim Bid Index</span>
+									<FormInput value={forkAuctionForm.claimBidIndex} onInput={event => onForkAuctionFormChange({ claimBidIndex: event.currentTarget.value })} />
+								</label>
+							</div>
+							<div className='actions'>{renderStageActionButton({ action: 'claimAuctionProceeds', availability: createActionAvailability(claimAuctionProceedsGuardMessage), idleLabel: 'Run Raw Claim', onClick: onClaimAuctionProceeds, pendingLabel: 'Claiming auction proceeds...' })}</div>
+						</div>
+					</SectionBlock>
+				</div>
+			</ReadOnlyDetailAccordion>
 		)
 	})()
 	const stagePanel = (() => {
@@ -1230,32 +1535,39 @@ export function ForkAuctionSection({
 					return (
 						<fieldset className='fork-stage-panel' disabled={disabled}>
 							{truthAuctionHero}
-							{truthAuctionOrderBookSection}
-							{viewerTruthAuctionBidsSection}
-							<SectionBlock title='Submit Bid' description='Enter the tick and ETH amount you want to place into the auction. The ladder above can prefill a tick directly into this form.'>
-								<div className='form-grid'>
-									<div className='field-row'>
-										<label className='field'>
-											<span>Bid Tick</span>
-											<FormInput value={forkAuctionForm.submitBidTick} onInput={event => onForkAuctionFormChange({ submitBidTick: event.currentTarget.value })} />
-										</label>
-										<label className='field'>
-											<span>Bid Amount (ETH)</span>
-											<FormInput value={forkAuctionForm.submitBidAmount} onInput={event => onForkAuctionFormChange({ submitBidAmount: event.currentTarget.value })} />
-										</label>
+							{truthAuctionMarketViewSection}
+							<div className='truth-auction-stage-actions'>
+								<SectionBlock title='Submit Bid' description='Enter the tick and ETH amount you want to place into the auction. The ladder above can prefill a tick directly into this form.'>
+									<div className='form-grid'>
+										{submitBidPreviewTickSummary === undefined ? undefined : (
+											<p className='detail'>
+												Selected ladder price: Tick {submitBidPreviewTickSummary.tick.toString()} at <CurrencyValue value={submitBidPreviewTickSummary.price} suffix='ETH / REP' />
+											</p>
+										)}
+										<div className='field-row'>
+											<label className='field'>
+												<span>Bid Tick</span>
+												<FormInput value={forkAuctionForm.submitBidTick} onInput={event => onForkAuctionFormChange({ submitBidTick: event.currentTarget.value })} />
+											</label>
+											<label className='field'>
+												<span>Bid Amount (ETH)</span>
+												<FormInput value={forkAuctionForm.submitBidAmount} onInput={event => onForkAuctionFormChange({ submitBidAmount: event.currentTarget.value })} />
+											</label>
+										</div>
+										{selectedAuctionPrice === undefined ? undefined : <p className='detail'>At the current clearing price, this bid would buy roughly {estimatedRep === undefined ? UNKNOWN_VALUE : <CurrencyValue value={estimatedRep} suffix='REP' />} if it clears.</p>}
+										<div className='actions'>
+											{renderStageActionButton({
+												action: 'submitBid',
+												availability: createActionAvailability(truthAuctionBidGuardMessage),
+												idleLabel: 'Submit Bid',
+												onClick: onSubmitBid,
+												pendingLabel: 'Submitting bid...',
+											})}
+										</div>
 									</div>
-									{selectedAuctionPrice === undefined ? undefined : <p className='detail'>At the current clearing price, this bid would buy roughly {estimatedRep === undefined ? UNKNOWN_VALUE : <CurrencyValue value={estimatedRep} suffix='REP' />} if it clears.</p>}
-									<div className='actions'>
-										{renderStageActionButton({
-											action: 'submitBid',
-											availability: createActionAvailability(truthAuctionBidGuardMessage),
-											idleLabel: 'Submit Bid',
-											onClick: onSubmitBid,
-											pendingLabel: 'Submitting bid...',
-										})}
-									</div>
-								</div>
-							</SectionBlock>
+								</SectionBlock>
+								{viewerTruthAuctionBidsSection}
+							</div>
 						</fieldset>
 					)
 				return (
@@ -1263,7 +1575,7 @@ export function ForkAuctionSection({
 						<SectionBlock title='Auction Status'>{renderWorkflowMetricGrid(auctionStatusMetrics)}</SectionBlock>
 
 						<SectionBlock title='Start Truth Auction'>
-							<div className='actions'>{renderStageActionButton({ action: 'startTruthAuction', idleLabel: 'Start Truth Auction', onClick: onStartTruthAuction, pendingLabel: 'Starting truth auction...', tone: 'primary' })}</div>
+							<div className='actions'>{renderStageActionButton({ action: 'startTruthAuction', availability: createActionAvailability(startTruthAuctionGuardMessage), idleLabel: 'Start Truth Auction', onClick: onStartTruthAuction, pendingLabel: 'Starting truth auction...', tone: 'primary' })}</div>
 						</SectionBlock>
 
 						<SectionBlock title='Submit Bid'>
@@ -1297,51 +1609,14 @@ export function ForkAuctionSection({
 						<fieldset className='fork-stage-panel' disabled={disabled}>
 							{truthAuctionHero}
 							{viewerTruthAuctionBidsSection}
-							{truthAuctionOrderBookSection}
 							{truthAuctionStatus?.finalized ? undefined : (
 								<SectionBlock title='Finalize Truth Auction' description='Finalize the auction once bidding has closed so vault claims can settle against the final clearing result.'>
-									<div className='actions'>{renderStageActionButton({ action: 'finalizeTruthAuction', idleLabel: 'Finalize Truth Auction', onClick: onFinalizeTruthAuction, pendingLabel: 'Finalizing truth auction...' })}</div>
+									<div className='actions'>{renderStageActionButton({ action: 'finalizeTruthAuction', availability: createActionAvailability(finalizeTruthAuctionGuardMessage), idleLabel: 'Finalize Truth Auction', onClick: onFinalizeTruthAuction, pendingLabel: 'Finalizing truth auction...' })}</div>
 								</SectionBlock>
 							)}
-							<ReadOnlyDetailAccordion defaultOpen={false} title='Manual Settlement Tools'>
-								<div className='truth-auction-manual-tools'>
-									<p className='detail'>Keep these raw controls for manual settlement and operator workflows. End-user claim flows should go through the forker-mediated claim action rather than calling auction-owner withdrawals directly.</p>
-									<SectionBlock title='Refund Losing Bid'>
-										<div className='form-grid'>
-											<div className='field-row'>
-												<label className='field'>
-													<span>Refund Tick</span>
-													<FormInput value={forkAuctionForm.refundTick} onInput={event => onForkAuctionFormChange({ refundTick: event.currentTarget.value })} />
-												</label>
-												<label className='field'>
-													<span>Refund Bid Index</span>
-													<FormInput value={forkAuctionForm.refundBidIndex} onInput={event => onForkAuctionFormChange({ refundBidIndex: event.currentTarget.value })} />
-												</label>
-											</div>
-											<div className='actions'>{renderStageActionButton({ action: 'refundLosingBids', idleLabel: 'Refund Losing Bid', onClick: onRefundLosingBids, pendingLabel: 'Refunding losing bid...', tone: 'primary' })}</div>
-										</div>
-									</SectionBlock>
-									<SectionBlock title='Claim Auction Proceeds'>
-										<div className='form-grid'>
-											<label className='field'>
-												<span>Vault Address</span>
-												<FormInput value={forkAuctionForm.vaultAddress} onInput={event => onForkAuctionFormChange({ vaultAddress: event.currentTarget.value })} placeholder='Leave empty to use connected wallet' />
-											</label>
-											<div className='field-row'>
-												<label className='field'>
-													<span>Claim Bid Tick</span>
-													<FormInput value={forkAuctionForm.claimBidTick} onInput={event => onForkAuctionFormChange({ claimBidTick: event.currentTarget.value })} />
-												</label>
-												<label className='field'>
-													<span>Claim Bid Index</span>
-													<FormInput value={forkAuctionForm.claimBidIndex} onInput={event => onForkAuctionFormChange({ claimBidIndex: event.currentTarget.value })} />
-												</label>
-											</div>
-											<div className='actions'>{renderStageActionButton({ action: 'claimAuctionProceeds', idleLabel: 'Claim Auction Proceeds', onClick: onClaimAuctionProceeds, pendingLabel: 'Claiming auction proceeds...', tone: 'primary' })}</div>
-										</div>
-									</SectionBlock>
-								</div>
-							</ReadOnlyDetailAccordion>
+							{truthAuctionSettlementSection}
+							{truthAuctionMarketViewSection}
+							{truthAuctionOperatorToolsSection}
 						</fieldset>
 					)
 				return (
@@ -1349,7 +1624,7 @@ export function ForkAuctionSection({
 						<SectionBlock title='Settlement Status'>{renderWorkflowMetricGrid(settlementStatusMetrics)}</SectionBlock>
 
 						<SectionBlock title='Finalize Truth Auction'>
-							<div className='actions'>{renderStageActionButton({ action: 'finalizeTruthAuction', idleLabel: 'Finalize Truth Auction', onClick: onFinalizeTruthAuction, pendingLabel: 'Finalizing truth auction...' })}</div>
+							<div className='actions'>{renderStageActionButton({ action: 'finalizeTruthAuction', availability: createActionAvailability(finalizeTruthAuctionGuardMessage), idleLabel: 'Finalize Truth Auction', onClick: onFinalizeTruthAuction, pendingLabel: 'Finalizing truth auction...' })}</div>
 						</SectionBlock>
 
 						<SectionBlock title='Refund Losing Bid'>
@@ -1362,7 +1637,7 @@ export function ForkAuctionSection({
 									<span>Refund Bid Index</span>
 									<FormInput value={forkAuctionForm.refundBidIndex} onInput={event => onForkAuctionFormChange({ refundBidIndex: event.currentTarget.value })} />
 								</label>
-								<div className='actions'>{renderStageActionButton({ action: 'refundLosingBids', idleLabel: 'Refund Losing Bid', onClick: onRefundLosingBids, pendingLabel: 'Refunding losing bid...', tone: 'primary' })}</div>
+								<div className='actions'>{renderStageActionButton({ action: 'refundLosingBids', availability: createActionAvailability(refundTruthAuctionBidGuardMessage), idleLabel: 'Refund Losing Bid', onClick: onRefundLosingBids, pendingLabel: 'Refunding losing bid...', tone: 'primary' })}</div>
 							</div>
 						</SectionBlock>
 
@@ -1382,7 +1657,7 @@ export function ForkAuctionSection({
 										<FormInput value={forkAuctionForm.claimBidIndex} onInput={event => onForkAuctionFormChange({ claimBidIndex: event.currentTarget.value })} />
 									</label>
 								</div>
-								<div className='actions'>{renderStageActionButton({ action: 'claimAuctionProceeds', idleLabel: 'Claim Auction Proceeds', onClick: onClaimAuctionProceeds, pendingLabel: 'Claiming auction proceeds...', tone: 'primary' })}</div>
+								<div className='actions'>{renderStageActionButton({ action: 'claimAuctionProceeds', availability: createActionAvailability(claimAuctionProceedsGuardMessage), idleLabel: 'Claim Auction Proceeds', onClick: onClaimAuctionProceeds, pendingLabel: 'Claiming auction proceeds...', tone: 'primary' })}</div>
 							</div>
 						</SectionBlock>
 					</fieldset>

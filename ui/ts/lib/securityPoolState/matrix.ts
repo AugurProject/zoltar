@@ -60,9 +60,9 @@ export const ENABLED_ACTIONS_BY_REPORTING_STAGE: Record<SecurityPoolReportingSta
 export const ENABLED_ACTIONS_BY_FORK_STAGE: Record<SecurityPoolForkStage, ActionList> = {
 	disabled: [],
 	initiate: ['forkWithOwnEscalation', 'initiateFork', 'forkUniverse'],
-	migration: ['createChildUniverse', 'migrateRepToZoltar', 'migrateVault', 'migrateEscalationDeposits'],
-	auction: ['startTruthAuction', 'submitBid'],
-	settlement: ['finalizeTruthAuction', 'refundLosingBids', 'claimAuctionProceeds', 'withdrawBids'],
+	migration: ['createChildUniverse', 'migrateRepToZoltar', 'migrateVault', 'migrateEscalationDeposits', 'startTruthAuction'],
+	auction: ['submitBid', 'finalizeTruthAuction', 'refundLosingBids'],
+	settlement: ['claimAuctionProceeds', 'withdrawBids'],
 }
 
 export const UNIVERSE_FORKED_ENABLE: ActionList = ['migrateShares']
