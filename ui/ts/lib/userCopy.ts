@@ -1,4 +1,5 @@
 import type { Address } from 'viem'
+import { assertNever } from './assert.js'
 import { getWrongNetworkMessage } from './network.js'
 import type { LoadableValueState } from './loadState.js'
 
@@ -90,6 +91,8 @@ export function getPoolRegistryPresentation(
 			})
 		case 'ready':
 			return undefined
+		default:
+			return assertNever(input.state)
 	}
 }
 
@@ -116,6 +119,8 @@ export function getUniversePresentation(state: LoadableValueState) {
 			})
 		case 'ready':
 			return undefined
+		default:
+			return assertNever(state)
 	}
 }
 
@@ -167,6 +172,8 @@ export function getReportPresentation({ kind, state }: { kind: 'question' | 'rep
 			})
 		case 'ready':
 			return undefined
+		default:
+			return assertNever(state)
 	}
 }
 

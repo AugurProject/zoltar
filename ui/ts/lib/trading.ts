@@ -1,4 +1,5 @@
 import type { Address } from 'viem'
+import { assertNever } from './assert.js'
 import { formatCurrencyBalance } from './formatters.js'
 import { parseBigIntListInput } from './inputs.js'
 import { parseTradingAmountInput } from './marketForm.js'
@@ -68,6 +69,8 @@ export function getSelectedOutcomeShareBalance(shareBalances: TradingShareBalanc
 			return shareBalances.yes
 		case 'no':
 			return shareBalances.no
+		default:
+			return assertNever(outcome)
 	}
 }
 

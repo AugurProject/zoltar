@@ -12,6 +12,7 @@ import { OpenOraclePriceValue } from './OpenOraclePriceValue.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { WarningSurface } from './WarningSurface.js'
 import { TransactionStatusCard } from './TransactionStatusCard.js'
+import { assertNever } from '../lib/assert.js'
 import { sameAddress } from '../lib/address.js'
 import { pickFirstReason } from '../lib/actionAvailability.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
@@ -58,23 +59,29 @@ function getLiquidationExecutionMode(currentPoolOracleManagerDetails: OracleMana
 	return currentPoolOracleManagerDetails.isPriceValid ? 'execute' : 'queue'
 }
 function getLiquidationModalTitle(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
-	switch (getLiquidationExecutionMode(currentPoolOracleManagerDetails)) {
+	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
+	switch (executionMode) {
 		case 'execute':
 			return 'Execute Vault Liquidation'
 		case 'queue':
 			return 'Queue Vault Liquidation'
 		case 'refreshing':
 			return 'Liquidate Vault'
+		default:
+			return assertNever(executionMode)
 	}
 }
 function getLiquidationButtonLabels(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
-	switch (getLiquidationExecutionMode(currentPoolOracleManagerDetails)) {
+	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
+	switch (executionMode) {
 		case 'execute':
 			return { idle: 'Execute Liquidation', pending: 'Executing liquidation...' }
 		case 'queue':
 			return { idle: 'Queue Liquidation', pending: 'Queueing liquidation...' }
 		case 'refreshing':
 			return { idle: 'Liquidate Vault', pending: 'Submitting liquidation...' }
+		default:
+			return assertNever(executionMode)
 	}
 }
 function renderQueuedLiquidationStatusCard({

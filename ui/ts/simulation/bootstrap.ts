@@ -16,6 +16,7 @@ import {
 	submitInitialOracleReport,
 } from '../contracts.js'
 import { ReputationToken_ReputationToken, peripherals_SecurityPoolOracleCoordinator_SecurityPoolOracleCoordinator, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
+import { assertNever } from '../lib/assert.js'
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
 import { MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
 import type { QuestionData } from '../types/contracts.js'
@@ -807,6 +808,8 @@ async function applyScenario({
 				profile,
 			})
 			return
+		default:
+			return assertNever(scenario)
 	}
 }
 

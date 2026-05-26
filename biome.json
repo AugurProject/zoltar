@@ -24,7 +24,8 @@
 				"noUnusedVariables": "error"
 			},
 			"nursery": {
-				"noFloatingPromises": "error"
+				"noFloatingPromises": "error",
+				"useExhaustiveSwitchCases": "error"
 			},
 			"suspicious": {
 				"noDoubleEquals": "error",
@@ -34,7 +35,9 @@
 				"useConst": "error",
 				"noNestedTernary": "error",
 				"noUselessElse": "error",
-				"noNonNullAssertion": "error"
+				"noNonNullAssertion": "error",
+				"useDefaultSwitchClause": "error",
+				"useNodeAssertStrict": "error"
 			}
 		}
 	},

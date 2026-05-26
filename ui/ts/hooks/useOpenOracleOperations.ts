@@ -5,6 +5,7 @@ import { useFormState } from './useFormState.js'
 import { useLoadController } from './useLoadController.js'
 import { ABIS } from '../abis.js'
 import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, loadOpenOracleReportDetails, readOptionalMulticall, settleOracleReport, submitInitialOracleReport, wrapWeth } from '../contracts.js'
+import { assertNever } from '../lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import {
@@ -128,6 +129,8 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 				return 'Submitting initial report'
 			case 'wrapWeth':
 				return 'Wrapping ETH to WETH'
+			default:
+				return assertNever(actionName)
 		}
 	}
 	const getSuccessTitle = (actionName: OpenOracleActionResult['action']) => {
@@ -152,6 +155,8 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 				return 'Initial report submitted'
 			case 'wrapWeth':
 				return 'ETH wrapped to WETH'
+			default:
+				return assertNever(actionName)
 		}
 	}
 	const getFailureTitle = (actionName: OpenOracleActionResult['action']) => {
@@ -176,6 +181,8 @@ export function useOpenOracleOperations({ accountAddress, enabled, onTransaction
 				return 'Initial report failed'
 			case 'wrapWeth':
 				return 'ETH wrap failed'
+			default:
+				return assertNever(actionName)
 		}
 	}
 

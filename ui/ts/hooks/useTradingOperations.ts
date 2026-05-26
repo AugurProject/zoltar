@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'preact/hooks'
 import type { Address } from 'viem'
 import { createCompleteSetInSecurityPool, loadTradingDetails as loadTradingDetailsForPool, loadZoltarUniverseSummary, migrateSharesFromUniverse, redeemCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '../contracts.js'
 import { useLoadController } from './useLoadController.js'
+import { assertNever } from '../lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../lib/clients.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { parseAddressInput, parseBigIntListInput, parseReportingOutcomeInput } from '../lib/inputs.js'
@@ -42,6 +43,8 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 				return 'Migrating shares'
 			case 'redeemShares':
 				return 'Redeeming shares'
+			default:
+				return assertNever(actionName)
 		}
 	}
 	const getSuccessTitle = (actionName: TradingActionResult['action']) => {
@@ -54,6 +57,8 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 				return 'Shares migrated'
 			case 'redeemShares':
 				return 'Shares redeemed'
+			default:
+				return assertNever(actionName)
 		}
 	}
 	const getFailureTitle = (actionName: TradingActionResult['action']) => {
@@ -66,6 +71,8 @@ export function useTradingOperations({ accountAddress, deploymentStatuses, enabl
 				return 'Share migration failed'
 			case 'redeemShares':
 				return 'Share redemption failed'
+			default:
+				return assertNever(actionName)
 		}
 	}
 
