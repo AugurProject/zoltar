@@ -75,6 +75,20 @@ const getMigrationProxyAddressAbi = [
 	},
 ] satisfies Abi
 
+const claimAuctionProceedsEventAbi = [
+	{
+		type: 'event',
+		name: 'ClaimAuctionProceeds',
+		inputs: [
+			{ indexed: false, internalType: 'address', name: 'vault', type: 'address' },
+			{ indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' },
+			{ indexed: false, internalType: 'uint256', name: 'poolOwnershipAmount', type: 'uint256' },
+			{ indexed: false, internalType: 'uint256', name: 'poolOwnershipDenominator', type: 'uint256' },
+		],
+		anonymous: false,
+	},
+] satisfies Abi
+
 describe('Peripherals Contract Test Suite', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
@@ -156,6 +170,56 @@ describe('Peripherals Contract Test Suite', () => {
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
 		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'question should finalize as yes')
+	}
+
+	const setupFinalizedTruthAuctionWithMixedBids = async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const openInterestAmount = 10n * 10n ** 18n
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+
+		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).repAtFork
+		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
+		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+		const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const winningBidder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		const losingEth = expectedEthToBuy / 10n
+		strictEqualTypeSafe(losingEth > 0n, true, 'losing bid should invest a positive amount')
+		const losingTick = await participateAuction(losingBidder, yesSecurityPool.truthAuction, repAtFork, losingEth)
+		const winningTick = await participateAuction(winningBidder, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
+
+		await mockWindow.advanceTime(7n * DAY + DAY)
+		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+		return {
+			yesSecurityPool,
+			repAtFork,
+			expectedEthToBuy,
+			losingBidder,
+			winningBidder,
+			losingEth,
+			losingTick,
+			winningTick,
+		}
 	}
 
 	const initializePeripheralsBaseline = async () => {
@@ -2124,6 +2188,187 @@ describe('Peripherals Contract Test Suite', () => {
 		const vault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
 		const repFromOwnership = await poolOwnershipToRep(client, yesSecurityPool.securityPool, vault.repDepositShare)
 		assert.ok(repFromOwnership > 0n, 'auction participant should have some rep')
+	})
+
+	test('claimAuctionProceeds releases ETH for a finalized losing bid without mutating vault accounting', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const openInterestAmount = 10n * 10n ** 18n
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+
+		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).repAtFork
+		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
+		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+		const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const winningBidder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		const losingEth = expectedEthToBuy / 10n
+		strictEqualTypeSafe(losingEth > 0n, true, 'losing bid should invest a positive amount')
+		const losingTick = await participateAuction(losingBidder, yesSecurityPool.truthAuction, repAtFork, losingEth)
+		await participateAuction(winningBidder, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
+
+		await mockWindow.advanceTime(7n * DAY + DAY)
+		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+		const totalRepPurchased = await getTotalRepPurchased(client, yesSecurityPool.truthAuction)
+		strictEqualTypeSafe(totalRepPurchased > 0n, true, 'setup should leave a finalized auction with purchased REP')
+
+		const vaultCountBeforeClaim = await getVaultCount(client, yesSecurityPool.securityPool)
+		const losingBidderBalanceBeforeClaim = await getETHBalance(client, losingBidder.account.address)
+		const losingVaultBeforeClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
+
+		await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+
+		const losingBidderBalanceAfterClaim = await getETHBalance(client, losingBidder.account.address)
+		const losingVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
+		const vaultCountAfterClaim = await getVaultCount(client, yesSecurityPool.securityPool)
+
+		strictEqualTypeSafe(losingBidderBalanceAfterClaim - losingBidderBalanceBeforeClaim, losingEth, 'finalized losing bidder should receive their full ETH refund')
+		strictEqualTypeSafe(losingVaultAfterClaim.repDepositShare, losingVaultBeforeClaim.repDepositShare, 'refund-only finalized claim should not mint pool ownership')
+		strictEqualTypeSafe(losingVaultAfterClaim.securityBondAllowance, losingVaultBeforeClaim.securityBondAllowance, 'refund-only finalized claim should not assign security bond allowance')
+		strictEqualTypeSafe(losingVaultAfterClaim.feeIndex, losingVaultBeforeClaim.feeIndex, 'refund-only finalized claim should not alter fee accounting')
+		strictEqualTypeSafe(vaultCountAfterClaim, vaultCountBeforeClaim, 'refund-only finalized claim should not create a new vault')
+	})
+
+	test('claimAuctionProceeds handles a zero-REP finalized refund path when totalRepPurchased is zero', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		const securityPoolAllowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+
+		const openInterestAmount = 10n * 10n ** 18n
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+
+		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).repAtFork
+		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
+		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+		const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const winningBidder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		const losingEth = expectedEthToBuy / 10n
+		strictEqualTypeSafe(losingEth > 0n, true, 'zero-REP refund test should invest a positive amount')
+		const losingTick = await participateAuction(losingBidder, yesSecurityPool.truthAuction, repAtFork, losingEth)
+		await participateAuction(winningBidder, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
+
+		await mockWindow.advanceTime(7n * DAY + DAY)
+		await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+
+		await mockWindow.addStateOverrides({
+			[yesSecurityPool.truthAuction]: {
+				stateDiff: {
+					[`0x${11n.toString(16)}`]: 0n,
+				},
+			},
+		})
+
+		strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), 0n, 'setup should finalize with zero purchased REP')
+
+		const vaultCountBeforeClaim = await getVaultCount(client, yesSecurityPool.securityPool)
+		const losingBidderBalanceBeforeClaim = await getETHBalance(client, losingBidder.account.address)
+		const losingVaultBeforeClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
+
+		await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+
+		const losingBidderBalanceAfterClaim = await getETHBalance(client, losingBidder.account.address)
+		const losingVaultAfterClaim = await getSecurityVault(client, yesSecurityPool.securityPool, losingBidder.account.address)
+		const vaultCountAfterClaim = await getVaultCount(client, yesSecurityPool.securityPool)
+
+		strictEqualTypeSafe(losingBidderBalanceAfterClaim - losingBidderBalanceBeforeClaim, losingEth, 'zero-REP finalized claim should release the full ETH refund')
+		strictEqualTypeSafe(losingVaultAfterClaim.repDepositShare, losingVaultBeforeClaim.repDepositShare, 'zero-REP finalized claim should not mint pool ownership')
+		strictEqualTypeSafe(losingVaultAfterClaim.securityBondAllowance, losingVaultBeforeClaim.securityBondAllowance, 'zero-REP finalized claim should not assign security bond allowance')
+		strictEqualTypeSafe(losingVaultAfterClaim.feeIndex, losingVaultBeforeClaim.feeIndex, 'zero-REP finalized claim should not alter fee accounting')
+		strictEqualTypeSafe(vaultCountAfterClaim, vaultCountBeforeClaim, 'zero-REP finalized claim should not create a new vault')
+	})
+
+	test('claimAuctionProceeds preserves winner accounting when a finalized losing refund is settled first', async () => {
+		const { yesSecurityPool, expectedEthToBuy, losingBidder, losingTick, winningBidder, winningTick } = await setupFinalizedTruthAuctionWithMixedBids()
+		const forkData = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
+
+		await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+		await claimAuctionProceeds(client, yesSecurityPool.securityPool, winningBidder.account.address, [{ tick: winningTick, bidIndex: 0n }])
+
+		const winningVault = await getSecurityVault(client, yesSecurityPool.securityPool, winningBidder.account.address)
+		const winningRep = await poolOwnershipToRep(client, yesSecurityPool.securityPool, winningVault.repDepositShare)
+		const expectedWinningRep = (expectedEthToBuy * PRICE_PRECISION) / tickToPrice(winningTick)
+
+		approximatelyEqual(winningRep, expectedWinningRep, 1_000n, 'winning claims should still receive the expected REP after a losing refund settles first')
+		strictEqualTypeSafe(winningVault.securityBondAllowance, forkData.auctionedSecurityBondAllowance, 'refund-only claims must not consume any auctioned allowance before the winner claims')
+	})
+
+	test('claimAuctionProceeds allows a third party to settle a finalized losing refund for the bidder', async () => {
+		const { yesSecurityPool, losingBidder, losingEth, losingTick } = await setupFinalizedTruthAuctionWithMixedBids()
+		const thirdParty = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
+		const thirdPartyBalanceBeforeClaim = await getETHBalance(client, thirdParty.account.address)
+		const losingBidderBalanceBeforeClaim = await getETHBalance(client, losingBidder.account.address)
+
+		await claimAuctionProceeds(thirdParty, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+
+		const thirdPartyBalanceAfterClaim = await getETHBalance(client, thirdParty.account.address)
+		const losingBidderBalanceAfterClaim = await getETHBalance(client, losingBidder.account.address)
+
+		strictEqualTypeSafe(losingBidderBalanceAfterClaim - losingBidderBalanceBeforeClaim, losingEth, 'permissionless callers should still refund ETH to the losing bidder')
+		strictEqualTypeSafe(thirdPartyBalanceAfterClaim, thirdPartyBalanceBeforeClaim, 'permissionless settlement should not redirect refund ETH to the caller')
+	})
+
+	test('claimAuctionProceeds does not emit ClaimAuctionProceeds for refund-only settlements', async () => {
+		const { yesSecurityPool, losingBidder, losingTick } = await setupFinalizedTruthAuctionWithMixedBids()
+		const claimHash = await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+		const receipt = await client.waitForTransactionReceipt({ hash: claimHash })
+		const claimLogs = receipt.logs
+			.map(log => {
+				try {
+					return decodeEventLog({
+						abi: claimAuctionProceedsEventAbi,
+						data: log.data,
+						topics: log.topics,
+					})
+				} catch {
+					return undefined
+				}
+			})
+			.filter(log => log?.eventName === 'ClaimAuctionProceeds')
+
+		strictEqualTypeSafe(claimLogs.length, 0, 'refund-only settlements should not emit ClaimAuctionProceeds')
+	})
+
+	test('claimAuctionProceeds cannot settle the same finalized losing bid twice', async () => {
+		const { yesSecurityPool, losingBidder, losingTick } = await setupFinalizedTruthAuctionWithMixedBids()
+
+		await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+		await assert.rejects(async () => await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }]), /already claimed/)
 	})
 
 	test('claimAuctionProceeds should add auctioned allowance on top of an existing migrated allowance', async () => {
