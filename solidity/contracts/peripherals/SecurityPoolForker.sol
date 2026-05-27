@@ -331,13 +331,15 @@ contract SecurityPoolForker is ISecurityPoolForker {
 		migrationProxy.forkUniverse(securityPool.questionId());
 	}
 
-	// accounts the purchased REP from truthAuction to the vault
-	// we should also move a share of bad debt in the system to this vault
-	// anyone can call these so that we can liquidate them if needed
+	// Settles finalized truth-auction bids through the forker-owned auction.
+	// Winning and partial bids credit purchased REP into the vault and assign the
+	// corresponding share of auctioned allowance. Finalized losing bids may still
+	// settle here as ETH-only refunds, in which case no vault accounting changes.
+	// Anyone can call this so that settlement is not blocked on the bidder.
 	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] memory tickIndices) public {
 		require(forkDataByPool[securityPool].truthAuction.finalized(), 'Auction needs to be finalized');
 		(uint256 amount, ) = forkDataByPool[securityPool].truthAuction.withdrawBids(vault, tickIndices);
-		require(amount > 0, 'Did not purchase anything'); // not really necessary, but good for testing
+		if (amount == 0) return;
 		uint256 poolOwnershipAmount = repToPoolOwnership(securityPool, amount);
 		(uint256 poolOwnership, uint256 currentSecurityBondAllowance, , uint256 currentFeeIndex, ) = securityPool.securityVaults(vault);
 		ForkData storage data = forkDataByPool[securityPool];
