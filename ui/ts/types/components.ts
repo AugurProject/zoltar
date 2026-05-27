@@ -12,6 +12,7 @@ import type {
 	OpenOracleActionResult,
 	OpenOracleReportDetails,
 	OracleManagerDetails,
+	ReadClient,
 	ReportingActionResult,
 	ReportingDetails,
 	ReportingOutcomeKey,
@@ -662,4 +663,5 @@ export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
 	previewPool?: ListedSecurityPool | undefined
 	showSecurityPoolAddressInput?: boolean
 	showHeader?: boolean
+	truthAuctionReadClient?: Pick<ReadClient, 'readContract'> | undefined
 }

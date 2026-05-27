@@ -1,6 +1,6 @@
 import { createPublicClient, createWalletClient, custom, publicActions, type Address } from 'viem'
 import type { InjectedEthereum } from '../injectedEthereum.js'
-import type { ChainBackend, ReadClient, WriteClient } from '../lib/chainBackend.js'
+import type { ChainBackend, WriteClient } from '../lib/chainBackend.js'
 import { normalizeAccount } from '../lib/chainBackend.js'
 import { createSimulationProfile } from '../lib/networkProfile.js'
 import type { SimulationController } from './controller.js'
@@ -216,7 +216,7 @@ export async function createSimulationBackend({ scenario }: { scenario: Simulati
 			createPublicClient({
 				chain: profile.chain,
 				transport: custom(provider),
-			}) as ReadClient,
+			}),
 		createWriteClient: (accountAddress, callbacks = {}) => {
 			const baseClient = createBaseWriteClient(accountAddress)
 

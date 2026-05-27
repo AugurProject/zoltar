@@ -1,5 +1,6 @@
 /// <reference types="bun-types" />
 
+import { waitFor } from '@testing-library/dom'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
@@ -150,9 +151,11 @@ describe('useReportingOperations', () => {
 		})
 
 		let firstLoadPromise = Promise.resolve()
-		await act(async () => {
+		await act(() => {
 			firstLoadPromise = requireHookState(hookState).loadReporting()
-			await Promise.resolve()
+		})
+		await waitFor(() => {
+			expect(deferredLoads).toHaveLength(1)
 		})
 
 		await act(async () => {
@@ -163,9 +166,11 @@ describe('useReportingOperations', () => {
 		})
 
 		let secondLoadPromise = Promise.resolve()
-		await act(async () => {
+		await act(() => {
 			secondLoadPromise = requireHookState(hookState).loadReporting()
-			await Promise.resolve()
+		})
+		await waitFor(() => {
+			expect(deferredLoads).toHaveLength(2)
 		})
 
 		expect(loadReportingDetails).toHaveBeenCalledTimes(2)

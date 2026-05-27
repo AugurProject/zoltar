@@ -13,6 +13,16 @@ import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, Security
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
+function createDeferred<T>() {
+	let resolve: (value: T) => void = () => undefined
+	let reject: (reason?: unknown) => void = () => undefined
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve
+		reject = promiseReject
+	})
+	return { promise, reject, resolve }
+}
+
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
@@ -487,6 +497,7 @@ void describe('SecurityPoolsSection', () => {
 
 	void test('retries the browse auto-load after an earlier automatic load fails', async () => {
 		const calls: string[] = []
+		const initialLoad = createDeferred<void>()
 		const renderedComponent = await renderIntoDocument(
 			h(
 				SecurityPoolsSection,
@@ -496,15 +507,18 @@ void describe('SecurityPoolsSection', () => {
 						loadingSecurityPools: false,
 						onLoadSecurityPools: () => {
 							calls.push('load')
-							return Promise.reject(new Error('temporary failure'))
+							return initialLoad.promise
 						},
 					}),
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		await Promise.resolve()
-		await Promise.resolve()
+		expect(calls).toEqual(['load'])
+		await act(async () => {
+			initialLoad.reject(new Error('temporary failure'))
+			await initialLoad.promise.catch(() => undefined)
+		})
 
 		await act(() => {
 			render(

@@ -381,6 +381,48 @@ export type TruthAuctionMetrics = {
 	underfunded: boolean
 }
 
+export type TruthAuctionTickSummary = {
+	tick: bigint
+	price: bigint
+	currentTotalEth: bigint
+	submissionCount: bigint
+	active: boolean
+}
+
+export type TruthAuctionBidView = {
+	tick: bigint
+	bidIndex: bigint
+	bidder: Address
+	ethAmount: bigint
+	cumulativeEth: bigint
+	activeCumulativeEthBeforeBid: bigint
+	claimed: boolean
+	refunded: boolean
+}
+
+export type TruthAuctionTickPage = {
+	pageIndex: number
+	pageSize: number
+	tickCount: bigint
+	ticks: TruthAuctionTickSummary[]
+}
+
+export type TruthAuctionTickBidPage = {
+	tick: bigint
+	pageIndex: number
+	pageSize: number
+	bidCount: bigint
+	bids: TruthAuctionBidView[]
+}
+
+export type TruthAuctionBidderBidPage = {
+	bidder: Address
+	pageIndex: number
+	pageSize: number
+	bidCount: bigint
+	bids: TruthAuctionBidView[]
+}
+
 export type ForkAuctionDetails = {
 	auctionedSecurityBondAllowance: bigint
 	claimingAvailable: boolean

@@ -138,6 +138,7 @@ export function useForkAuctionOperations({ accountAddress, onTransaction, onTran
 				const walletEthBalance = await createConnectedReadClient().getBalance({ address: walletAddress })
 				const bidGuardMessage = getTruthAuctionBidGuardMessage({
 					accountAddress: walletAddress,
+					currentTimestamp: details.currentTime,
 					isMainnet: true,
 					submitBidAmountInput: forkAuctionForm.value.submitBidAmount,
 					truthAuction: details.truthAuction,

@@ -96,18 +96,16 @@ describe('WorkflowTransactionStatus', () => {
 		)
 
 		const containerQueries = within(container as HTMLDivElement)
-		await act(async () => {
+		await act(() => {
 			fireEvent.click(containerQueries.getByRole('button', { name: 'Dismiss workflow outcome' }))
-			await Promise.resolve()
 		})
 		const statusStackAfterOutcomeDismiss = (container as HTMLDivElement).querySelector('.workflow-transaction-status')
 		if (!(statusStackAfterOutcomeDismiss instanceof HTMLElement)) throw new Error('Expected status stack to remain after dismissing the outcome')
 		expect(statusStackAfterOutcomeDismiss.children).toHaveLength(1)
 		expect(statusStackAfterOutcomeDismiss.textContent?.includes('Latest Vault Action')).toBe(true)
 
-		await act(async () => {
+		await act(() => {
 			fireEvent.click(containerQueries.getByRole('button', { name: 'Dismiss latest action' }))
-			await Promise.resolve()
 		})
 		expect((container as HTMLDivElement).textContent).toBe('')
 	})
@@ -122,9 +120,8 @@ describe('WorkflowTransactionStatus', () => {
 		render(<WorkflowTransactionStatus latestAction={latestAction} outcome={undefined} />, container as HTMLDivElement)
 
 		const containerQueries = within(container as HTMLDivElement)
-		await act(async () => {
+		await act(() => {
 			fireEvent.click(containerQueries.getByRole('button', { name: 'Dismiss latest action' }))
-			await Promise.resolve()
 		})
 		expect((container as HTMLDivElement).textContent).toBe('')
 

@@ -23,6 +23,11 @@ contract UniformPriceDualCapBatchAuction {
 		bool claimed;
 	}
 
+	struct BidRef {
+		int256 tick;
+		uint256 bidIndex;
+	}
+
 	int256 constant MIN_TICK = -524288;
 	int256 constant MAX_TICK = 524288;
 	uint256 constant AUCTION_TIME = 1 weeks;
@@ -53,6 +58,11 @@ contract UniformPriceDualCapBatchAuction {
 	uint256 public underfundedRemainder;
 	uint256 public underfundedThreshold;
 	uint256 public underfundedWinningEth;
+	uint256 public activeTickCount;
+
+	int256[] private seenTicks;
+	mapping(int256 => bool) private hasSeenTick;
+	mapping(address => BidRef[]) private bidderBidRefs;
 
 	event AuctionStarted(uint256 ethRaiseCap, uint256 maxRepBeingSold, uint256 minBidSize);
 	event SubmitBid(address bidder, int256 tick, uint256 amount);
@@ -225,8 +235,6 @@ contract UniformPriceDualCapBatchAuction {
 
 			uint256 originalEth = bid.ethAmount;
 
-			// Zero out bid to prevent double withdrawal
-			bid.ethAmount = 0;
 			bid.claimed = true;
 			_addRefundedBidPrefixAmount(tick, index + 1, originalEth);
 
@@ -253,6 +261,63 @@ contract UniformPriceDualCapBatchAuction {
 		if (tick < 0) price = PRICE_PRECISION * PRICE_PRECISION / price;
 	}
 
+	function getTickSummary(int256 tick) external view returns (IUniformPriceDualCapBatchAuction.TickSummary memory) {
+		return _buildTickSummary(tick);
+	}
+
+	function getTickCount() external view returns (uint256) {
+		return seenTicks.length;
+	}
+
+	function getTickPage(uint256 offset, uint256 limit) external view returns (IUniformPriceDualCapBatchAuction.TickSummary[] memory summaries) {
+		uint256 end = _sliceEnd(offset, limit, seenTicks.length);
+		if (end <= offset) return new IUniformPriceDualCapBatchAuction.TickSummary[](0);
+
+		summaries = new IUniformPriceDualCapBatchAuction.TickSummary[](end - offset);
+		for (uint256 i = offset; i < end; i++) {
+			summaries[i - offset] = _buildTickSummary(seenTicks[i]);
+		}
+	}
+
+	function getActiveTickPage(uint256 offset, uint256 limit) external view returns (IUniformPriceDualCapBatchAuction.TickSummary[] memory summaries) {
+		uint256 end = _sliceEnd(offset, limit, activeTickCount);
+		if (end <= offset) return new IUniformPriceDualCapBatchAuction.TickSummary[](0);
+
+		summaries = new IUniformPriceDualCapBatchAuction.TickSummary[](end - offset);
+		_fillActiveTickPage(root, offset, summaries, 0);
+	}
+
+	function getBidCountAtTick(int256 tick) external view returns (uint256) {
+		return bidsAtTick[tick].length;
+	}
+
+	function getBidPageAtTick(int256 tick, uint256 offset, uint256 limit) external view returns (IUniformPriceDualCapBatchAuction.BidView[] memory bidViews) {
+		uint256 total = bidsAtTick[tick].length;
+		uint256 end = _sliceEnd(offset, limit, total);
+		if (end <= offset) return new IUniformPriceDualCapBatchAuction.BidView[](0);
+
+		bidViews = new IUniformPriceDualCapBatchAuction.BidView[](end - offset);
+		for (uint256 i = offset; i < end; i++) {
+			bidViews[i - offset] = _buildBidView(tick, i);
+		}
+	}
+
+	function getBidderBidCount(address bidder) external view returns (uint256) {
+		return bidderBidRefs[bidder].length;
+	}
+
+	function getBidderBidPage(address bidder, uint256 offset, uint256 limit) external view returns (IUniformPriceDualCapBatchAuction.BidView[] memory bidViews) {
+		uint256 total = bidderBidRefs[bidder].length;
+		uint256 end = _sliceEnd(offset, limit, total);
+		if (end <= offset) return new IUniformPriceDualCapBatchAuction.BidView[](0);
+
+		bidViews = new IUniformPriceDualCapBatchAuction.BidView[](end - offset);
+		for (uint256 i = offset; i < end; i++) {
+			BidRef storage bidRef = bidderBidRefs[bidder][i];
+			bidViews[i - offset] = _buildBidView(bidRef.tick, bidRef.bidIndex);
+		}
+	}
+
 	// Internal/private functions below
 
 	function _wouldClear(uint256 candidateEth, int256 tick) internal view returns (bool) {
@@ -276,6 +341,68 @@ contract UniformPriceDualCapBatchAuction {
 		if (tick == node.tick) return node.totalEth;
 		if (tick < node.tick) return _getEthAtTick(node.left, tick);
 		return _getEthAtTick(node.right, tick);
+	}
+
+	function _isBidRefunded(int256 tick, uint256 bidIndex) internal view returns (bool) {
+		uint256 refundedBefore = _getRefundedCumulativeEthBeforeIndex(tick, bidIndex);
+		uint256 refundedAtOrBefore = _getRefundedCumulativeEthBeforeIndex(tick, bidIndex + 1);
+		return refundedAtOrBefore > refundedBefore;
+	}
+
+	function _buildTickSummary(int256 tick) internal view returns (IUniformPriceDualCapBatchAuction.TickSummary memory) {
+		uint256 currentTotalEth = _getEthAtTick(root, tick);
+		return IUniformPriceDualCapBatchAuction.TickSummary({
+			tick: tick,
+			price: tickToPrice(tick),
+			currentTotalEth: currentTotalEth,
+			submissionCount: bidsAtTick[tick].length,
+			active: currentTotalEth > 0
+		});
+	}
+
+	function _buildBidView(int256 tick, uint256 bidIndex) internal view returns (IUniformPriceDualCapBatchAuction.BidView memory) {
+		Bid storage bid = bidsAtTick[tick][bidIndex];
+		uint256 activeCumulativeEthBeforeBid = bid.cumulativeEth - bid.ethAmount - _getRefundedCumulativeEthBeforeIndex(tick, bidIndex);
+		return IUniformPriceDualCapBatchAuction.BidView({
+			tick: tick,
+			bidIndex: bidIndex,
+			bidder: bid.bidder,
+			ethAmount: bid.ethAmount,
+			cumulativeEth: bid.cumulativeEth,
+			activeCumulativeEthBeforeBid: activeCumulativeEthBeforeBid,
+			claimed: bid.claimed,
+			refunded: _isBidRefunded(tick, bidIndex)
+		});
+	}
+
+	function _fillActiveTickPage(
+		uint256 nodeId,
+		uint256 offset,
+		IUniformPriceDualCapBatchAuction.TickSummary[] memory summaries,
+		uint256 writeIndex
+	) internal view returns (uint256 remainingOffset, uint256 nextWriteIndex) {
+		if (nodeId == 0 || writeIndex >= summaries.length) return (offset, writeIndex);
+
+		Node storage node = nodes[nodeId];
+		(offset, writeIndex) = _fillActiveTickPage(node.right, offset, summaries, writeIndex);
+		if (writeIndex >= summaries.length) return (offset, writeIndex);
+
+		if (offset > 0) {
+			offset -= 1;
+		} else {
+			summaries[writeIndex] = _buildTickSummary(node.tick);
+			writeIndex += 1;
+			if (writeIndex >= summaries.length) return (offset, writeIndex);
+		}
+
+		return _fillActiveTickPage(node.left, offset, summaries, writeIndex);
+	}
+
+	function _sliceEnd(uint256 offset, uint256 limit, uint256 total) internal pure returns (uint256) {
+		if (limit == 0 || offset >= total) return offset;
+		uint256 end = offset + limit;
+		if (end < offset || end > total) return total;
+		return end;
 	}
 
 	function _compute(uint256 nodeId, uint256 accEth, int256 lastValidTick, uint256 lastValidEth, uint256 lastValidEthAtTick) internal view returns (bool, int256, uint256, uint256) {
@@ -356,7 +483,7 @@ contract UniformPriceDualCapBatchAuction {
 		}
 	}
 
- function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {
+	function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {
 		if (nodeId == 0) {
 			uint256 newId = nextId++;
 			uint256 nodeClearingEth = tickToPrice(tick) == 0 ? 0 : ethAmount;
@@ -370,8 +497,14 @@ contract UniformPriceDualCapBatchAuction {
 				subtreeClearingEth: nodeClearingEth,
 				minClearingTick: nodeClearingEth == 0 ? int256(0) : tick
 			});
+			activeTickCount += 1;
 
 			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: ethAmount, claimed: false }));
+			if (!hasSeenTick[tick]) {
+				hasSeenTick[tick] = true;
+				seenTicks.push(tick);
+			}
+			bidderBidRefs[bidder].push(BidRef({ tick: tick, bidIndex: bidsAtTick[tick].length - 1 }));
 
 			return newId;
 		}
@@ -381,6 +514,7 @@ contract UniformPriceDualCapBatchAuction {
 			node.totalEth += ethAmount;
 			uint256 cumulativeEth = bidsAtTick[tick].length == 0 ? ethAmount : bidsAtTick[tick][bidsAtTick[tick].length - 1].cumulativeEth + ethAmount;
 			bidsAtTick[tick].push(Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: cumulativeEth, claimed: false }));
+			bidderBidRefs[bidder].push(BidRef({ tick: tick, bidIndex: bidsAtTick[tick].length - 1 }));
 		} else if (tick < node.tick) {
 			node.left = _insert(node.left, tick, bidder, ethAmount);
 		} else {
@@ -520,6 +654,7 @@ contract UniformPriceDualCapBatchAuction {
 			}
 
 			// Node empty → delete
+			activeTickCount -= 1;
 			return _delete(nodeId, tick);
 		}
 

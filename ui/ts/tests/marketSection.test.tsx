@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '@testing-library/dom'
+import { fireEvent, waitFor, within } from '@testing-library/dom'
 import { h } from 'preact'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -14,6 +14,16 @@ import type { ZoltarUniverseSummary } from '../types/contracts.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled } from './testUtils/transactionActionButton.js'
+
+function createDeferred<T>() {
+	let resolve: (value: T) => void = () => undefined
+	let reject: (reason?: unknown) => void = () => undefined
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve
+		reject = promiseReject
+	})
+	return { promise, reject, resolve }
+}
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -301,6 +311,7 @@ describe('MarketSection', () => {
 
 	test('retries question auto-load when the previous automatic load fails', async () => {
 		const calls: string[] = []
+		const initialLoad = createDeferred<void>()
 		const renderedComponent = await renderIntoDocument(
 			h(
 				MarketSection,
@@ -310,7 +321,7 @@ describe('MarketSection', () => {
 					loadingZoltarQuestions: false,
 					onLoadZoltarQuestions: async () => {
 						calls.push('load')
-						return Promise.reject(new Error('temporary failure'))
+						return await initialLoad.promise
 					},
 					zoltarQuestionCount: 3n,
 					zoltarUniverse: undefined,
@@ -319,8 +330,13 @@ describe('MarketSection', () => {
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		await Promise.resolve()
-		await Promise.resolve()
+		await waitFor(() => {
+			expect(calls).toEqual(['load'])
+		})
+		await act(async () => {
+			initialLoad.reject(new Error('temporary failure'))
+			await initialLoad.promise.catch(() => undefined)
+		})
 
 		await act(() => {
 			render(
@@ -420,9 +436,7 @@ describe('MarketSection', () => {
 
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Create child universe' }))
-		await Promise.resolve()
-
-		const modal = documentQueries.getByRole('dialog')
+		const modal = await waitFor(() => documentQueries.getByRole('dialog'))
 		const modalQueries = within(modal)
 		expect(modalQueries.getByText('Create Child Universe')).not.toBeNull()
 		expect(modalQueries.getByText('Selected Child Universe')).not.toBeNull()

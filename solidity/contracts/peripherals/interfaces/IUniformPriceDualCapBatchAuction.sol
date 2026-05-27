@@ -8,6 +8,25 @@ interface IUniformPriceDualCapBatchAuction {
 		uint256 cumulativeEth;
 	}
 
+	struct TickSummary {
+		int256 tick;
+		uint256 price;
+		uint256 currentTotalEth;
+		uint256 submissionCount;
+		bool active;
+	}
+
+	struct BidView {
+		int256 tick;
+		uint256 bidIndex;
+		address bidder;
+		uint256 ethAmount;
+		uint256 cumulativeEth;
+		uint256 activeCumulativeEthBeforeBid;
+		bool claimed;
+		bool refunded;
+	}
+
 	struct TickIndex {
 		int256 tick;
 		uint256 bidIndex;
@@ -56,4 +75,13 @@ interface IUniformPriceDualCapBatchAuction {
 	function refundLosingBids(TickIndex[] calldata tickIndices) external;
 
 	function tickToPrice(int256 tick) external pure returns (uint256 price);
+	function activeTickCount() external view returns (uint256);
+	function getTickSummary(int256 tick) external view returns (TickSummary memory);
+	function getTickCount() external view returns (uint256);
+	function getTickPage(uint256 offset, uint256 limit) external view returns (TickSummary[] memory);
+	function getActiveTickPage(uint256 offset, uint256 limit) external view returns (TickSummary[] memory);
+	function getBidCountAtTick(int256 tick) external view returns (uint256);
+	function getBidPageAtTick(int256 tick, uint256 offset, uint256 limit) external view returns (BidView[] memory);
+	function getBidderBidCount(address bidder) external view returns (uint256);
+	function getBidderBidPage(address bidder, uint256 offset, uint256 limit) external view returns (BidView[] memory);
 }

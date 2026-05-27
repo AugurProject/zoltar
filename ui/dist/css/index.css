@@ -2243,6 +2243,463 @@ strong.metric-value-danger {
 	line-height: 1.45;
 }
 
+.truth-auction-hero,
+.truth-auction-market-board,
+.truth-auction-market-stack,
+.truth-auction-level-detail,
+.truth-auction-progress-group,
+.truth-auction-ladder,
+.truth-auction-manual-tools,
+.truth-auction-stage-actions,
+.truth-auction-settlement-grid {
+	display: grid;
+}
+
+.truth-auction-hero {
+	grid-template-columns: minmax(0, 1.3fr) minmax(16rem, 1fr);
+	gap: 1rem 1.25rem;
+}
+
+.truth-auction-hero-primary,
+.truth-auction-panel,
+.truth-auction-level-detail {
+	padding: 1rem;
+	border: 1px solid var(--border-default);
+	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-card-end) 100%);
+	box-shadow:
+		var(--glow-inset-subtle),
+		0 12px 28px rgba(0, 0, 0, 0.12);
+}
+
+.truth-auction-hero-primary,
+.truth-auction-panel,
+.truth-auction-level-detail,
+.truth-auction-progress-group,
+.truth-auction-depth-header,
+.truth-auction-panel-header,
+.truth-auction-level-header,
+.truth-auction-price-row-copy,
+.truth-auction-depth-legend,
+.truth-auction-depth-legend-copy,
+.truth-auction-bid-row-actions {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.truth-auction-hero-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+	gap: 0.9rem 1rem;
+	align-content: start;
+}
+
+.truth-auction-progress-copy {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 0.75rem;
+	font-family: "IBM Plex Sans", sans-serif;
+}
+
+.truth-auction-progress-copy span {
+	color: var(--muted);
+}
+
+.truth-auction-progress-copy strong {
+	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-size: var(--font-value);
+	color: var(--value);
+}
+
+.truth-auction-progress-track {
+	overflow: hidden;
+	height: 0.7rem;
+	border-radius: 999px;
+	border: 1px solid var(--border-default);
+	background: color-mix(in srgb, var(--surface-card-end) 82%, #08121f 18%);
+}
+
+.truth-auction-progress-fill {
+	height: 100%;
+	border-radius: inherit;
+}
+
+.truth-auction-progress-fill.is-eth {
+	background: linear-gradient(90deg, #e8a644 0%, #f3d17b 100%);
+}
+
+.truth-auction-progress-fill.is-rep {
+	background: linear-gradient(90deg, #3e9f78 0%, #89d0a8 100%);
+}
+
+.truth-auction-market-board {
+	grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.9fr);
+	gap: 1rem 1.25rem;
+}
+
+.truth-auction-market-stack,
+.truth-auction-ladder,
+.truth-auction-manual-tools,
+.truth-auction-stage-actions,
+.truth-auction-settlement-grid {
+	gap: 0.75rem;
+}
+
+.truth-auction-stage-actions,
+.truth-auction-settlement-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.truth-auction-wallet-summary {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+	gap: 0.9rem 1rem;
+}
+
+.truth-auction-wallet-summary > div {
+	padding-top: 0.65rem;
+	border-top: 1px solid var(--divider-subtle);
+}
+
+.truth-auction-panel-header,
+.truth-auction-level-header,
+.truth-auction-depth-legend-range,
+.truth-auction-price-row-main,
+.truth-auction-price-row-meta,
+.truth-auction-bid-row,
+.truth-auction-depth-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem 0.75rem;
+}
+
+.truth-auction-panel-header h4,
+.truth-auction-level-header h4,
+.truth-auction-depth-header h4 {
+	margin: 0;
+	font-size: var(--font-base);
+}
+
+.truth-auction-depth-chart {
+	position: relative;
+	min-height: 13rem;
+	border: 1px solid var(--border-default);
+	border-radius: 1rem;
+	background: linear-gradient(180deg, rgba(232, 166, 68, 0.04), rgba(62, 159, 120, 0.04)), color-mix(in srgb, var(--surface-card-end) 82%, #08121f 18%);
+	overflow: hidden;
+}
+
+.truth-auction-depth-chart svg {
+	display: block;
+	width: 100%;
+	height: 13rem;
+}
+
+.truth-auction-depth-base {
+	fill: rgba(7, 17, 31, 0.12);
+	stroke: rgba(255, 255, 255, 0.04);
+	stroke-width: 1px;
+}
+
+.truth-auction-depth-line {
+	fill: none;
+	stroke: rgba(232, 166, 68, 0.92);
+	stroke-width: 2.5px;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.truth-auction-depth-hit-targets {
+	position: absolute;
+	inset: 0;
+}
+
+.truth-auction-depth-hit-target {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+}
+
+.truth-auction-depth-hit-target:focus-visible {
+	outline: 2px solid var(--interactive-border-hover);
+	outline-offset: -2px;
+}
+
+.truth-auction-depth-marker {
+	position: absolute;
+	top: 0.55rem;
+	bottom: 0.55rem;
+	left: 50%;
+	width: 2px;
+	transform: translateX(-50%);
+	background: rgba(255, 255, 255, 0.16);
+}
+
+.truth-auction-depth-marker.is-clearing {
+	background: rgba(232, 166, 68, 0.78);
+}
+
+.truth-auction-depth-marker.is-selected {
+	background: rgba(62, 159, 120, 0.92);
+}
+
+.truth-auction-depth-marker.is-preview {
+	box-shadow: 0 0 0 1px rgba(232, 166, 68, 0.28);
+}
+
+.truth-auction-depth-marker-dot {
+	position: absolute;
+	left: 50%;
+	bottom: 0;
+	width: 0.62rem;
+	height: 0.62rem;
+	border: 2px solid rgba(7, 17, 31, 0.52);
+	border-radius: 999px;
+	background: currentColor;
+	transform: translate(-50%, 35%);
+}
+
+.truth-auction-depth-marker.is-clearing .truth-auction-depth-marker-dot {
+	color: #e8a644;
+}
+
+.truth-auction-depth-marker.is-selected .truth-auction-depth-marker-dot {
+	color: #3e9f78;
+}
+
+.truth-auction-depth-marker.is-preview .truth-auction-depth-marker-dot {
+	box-shadow: 0 0 0 2px rgba(232, 166, 68, 0.16);
+}
+
+.truth-auction-depth-legend {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.truth-auction-depth-legend-copy strong {
+	font-size: var(--font-small);
+	font-weight: 600;
+}
+
+.truth-auction-depth-legend-copy span,
+.truth-auction-depth-legend-range {
+	color: var(--muted);
+	font-size: var(--font-small);
+}
+
+.truth-auction-price-row {
+	position: relative;
+	display: block;
+	overflow: hidden;
+	padding: 0;
+	border: 1px solid var(--border-default);
+	border-radius: 1rem;
+	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-card-end) 100%);
+	color: inherit;
+	text-align: left;
+	box-shadow:
+		var(--glow-inset-subtle),
+		0 10px 24px rgba(0, 0, 0, 0.1);
+}
+
+.truth-auction-price-row:hover {
+	transform: translateY(-1px);
+	box-shadow:
+		var(--glow-inset-subtle),
+		0 14px 28px rgba(0, 0, 0, 0.14);
+}
+
+.truth-auction-price-row-bar {
+	position: absolute;
+	inset: auto auto 0 0;
+	height: 100%;
+	min-width: 0;
+	opacity: 0.17;
+	background: linear-gradient(90deg, #e8a644 0%, #3e9f78 100%);
+}
+
+.truth-auction-price-row-copy {
+	position: relative;
+	padding: 0.95rem 1rem;
+}
+
+.truth-auction-price-row-main strong {
+	font-size: var(--font-base);
+}
+
+.truth-auction-price-row-price,
+.truth-auction-bid-row-address,
+.truth-auction-bid-row-label small {
+	color: var(--muted);
+	font-size: var(--font-small);
+}
+
+.truth-auction-price-row-meta,
+.truth-auction-bid-row {
+	color: var(--muted);
+	font-size: var(--font-small);
+}
+
+.truth-auction-status-pill {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.24rem 0.6rem;
+	border: 1px solid var(--border-default);
+	border-radius: 999px;
+	font-size: 0.74rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+}
+
+.truth-auction-status-pill.is-success,
+.truth-auction-price-row.is-success {
+	border-color: color-mix(in srgb, var(--success) 42%, var(--border-default) 58%);
+}
+
+.truth-auction-status-pill.is-success {
+	color: var(--success);
+	background: color-mix(in srgb, var(--success) 12%, transparent 88%);
+}
+
+.truth-auction-status-pill.is-warning,
+.truth-auction-price-row.is-warning {
+	border-color: color-mix(in srgb, #e8a644 55%, var(--border-default) 45%);
+}
+
+.truth-auction-status-pill.is-warning {
+	color: #f0bf5d;
+	background: rgba(232, 166, 68, 0.12);
+}
+
+.truth-auction-status-pill.is-danger,
+.truth-auction-price-row.is-danger {
+	border-color: color-mix(in srgb, var(--danger) 42%, var(--border-default) 58%);
+}
+
+.truth-auction-status-pill.is-danger {
+	color: var(--danger);
+	background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
+}
+
+.truth-auction-status-pill.is-default {
+	color: var(--muted);
+	background: color-mix(in srgb, var(--surface-card-end) 82%, #08121f 18%);
+}
+
+.truth-auction-price-row.is-clearing {
+	outline: 1px solid rgba(232, 166, 68, 0.4);
+	outline-offset: -1px;
+}
+
+.truth-auction-price-row.is-selected {
+	outline: 2px solid color-mix(in srgb, #3e9f78 68%, transparent 32%);
+	outline-offset: 2px;
+}
+
+.truth-auction-price-row.is-preview .truth-auction-price-row-copy {
+	box-shadow: inset 0 0 0 1px rgba(232, 166, 68, 0.45);
+}
+
+.truth-auction-price-row-badges {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 0.35rem 0.5rem;
+}
+
+.truth-auction-ladder-helper {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.24rem 0.55rem;
+	border: 1px solid rgba(232, 166, 68, 0.24);
+	border-radius: 999px;
+	background: rgba(232, 166, 68, 0.08);
+	color: #f3d17b;
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+}
+
+.truth-auction-ladder-row-cumulative {
+	color: color-mix(in srgb, var(--text) 72%, var(--muted) 28%);
+}
+
+.truth-auction-bid-table {
+	display: grid;
+	gap: 0.45rem;
+}
+
+.truth-auction-bid-row {
+	display: grid;
+	grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 0.9fr) auto minmax(0, 1.15fr);
+	align-items: center;
+	padding: 0.72rem 0.85rem;
+	border: 1px solid var(--border-default);
+	border-radius: 0.85rem;
+	background: color-mix(in srgb, var(--surface-raised) 86%, transparent 14%);
+}
+
+.truth-auction-bid-row.is-wallet {
+	grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr) minmax(0, 0.85fr) auto minmax(0, 1.4fr);
+}
+
+.truth-auction-bid-row.is-header {
+	padding-top: 0;
+	padding-bottom: 0.35rem;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	color: var(--muted);
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.truth-auction-bid-row.is-header span {
+	overflow-wrap: anywhere;
+}
+
+.truth-auction-bid-row-label {
+	display: grid;
+	gap: 0.15rem;
+	color: var(--text);
+	font-weight: 600;
+}
+
+.truth-auction-bid-row-address {
+	min-width: 0;
+}
+
+.truth-auction-bid-row-status {
+	display: flex;
+	justify-content: flex-start;
+}
+
+.truth-auction-bid-row-actions {
+	grid-auto-flow: column;
+	grid-auto-columns: max-content;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 0.45rem;
+}
+
+.truth-auction-row-empty {
+	color: var(--muted);
+}
+
+.truth-auction-book-error {
+	color: var(--danger);
+}
+
 .workflow-create-section {
 	border-top-color: var(--border-strong);
 	padding-top: 1.25rem;
@@ -3283,6 +3740,47 @@ button:focus-visible {
 	.field-row,
 	.market-grid {
 		grid-template-columns: 1fr;
+	}
+
+	.truth-auction-hero,
+	.truth-auction-market-board,
+	.truth-auction-stage-actions,
+	.truth-auction-settlement-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.truth-auction-depth-chart {
+		min-height: 11rem;
+	}
+
+	.truth-auction-depth-chart svg {
+		height: 11rem;
+	}
+
+	.truth-auction-level-header,
+	.truth-auction-price-row-main,
+	.truth-auction-price-row-meta,
+	.truth-auction-depth-header,
+	.truth-auction-depth-legend-range {
+		align-items: flex-start;
+	}
+
+	.truth-auction-price-row-badges {
+		justify-content: flex-start;
+	}
+
+	.truth-auction-bid-row,
+	.truth-auction-bid-row.is-wallet {
+		grid-template-columns: 1fr;
+	}
+
+	.truth-auction-bid-row.is-header {
+		display: none;
+	}
+
+	.truth-auction-bid-row-actions {
+		grid-auto-flow: row;
+		grid-auto-columns: unset;
 	}
 
 	.lookup-field-controls.has-action {

@@ -351,7 +351,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 	const receiptClient = createPublicClient({
 		chain: profile.chain,
 		transport: custom(provider),
-	}) as ReadClient
+	})
 	const createWriteClientForProvider = ({ accountAddress, callbacks, currentProvider, getTransactionDelay, onReceiptResolved }: { accountAddress: Address; callbacks: CreateWriteClientCallbacks; currentProvider: InjectedEthereum; getTransactionDelay: () => number; onReceiptResolved: () => Promise<void> }) => {
 		const baseClient = createWalletClient({
 			account: accountAddress,
@@ -430,7 +430,7 @@ export async function createSimulationEngine({ scenario }: { scenario: Simulatio
 		createPublicClient({
 			chain: profile.chain,
 			transport: custom(bootstrapProvider),
-		}) as ReadClient
+		})
 	const createBootstrapWriteClient = (accountAddress: Address) =>
 		createWriteClientForProvider({
 			accountAddress,

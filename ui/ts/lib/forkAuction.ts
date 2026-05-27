@@ -72,10 +72,27 @@ export function estimateRepPurchased(ethAmount: bigint, price: bigint) {
 	return (ethAmount * PRICE_PRECISION) / price
 }
 
-export function getTruthAuctionBidGuardMessage({ accountAddress, isMainnet, submitBidAmountInput, truthAuction, walletEthBalance }: { accountAddress: Address | undefined; isMainnet: boolean; submitBidAmountInput: string; truthAuction: TruthAuctionMetrics | undefined; walletEthBalance: bigint | undefined }) {
+export function getTruthAuctionBidGuardMessage({
+	accountAddress,
+	currentTimestamp,
+	isMainnet,
+	submitBidAmountInput,
+	truthAuction,
+	walletEthBalance,
+}: {
+	accountAddress: Address | undefined
+	currentTimestamp?: bigint | undefined
+	isMainnet: boolean
+	submitBidAmountInput: string
+	truthAuction: TruthAuctionMetrics | undefined
+	walletEthBalance: bigint | undefined
+}) {
 	if (accountAddress === undefined) return 'Connect a wallet before submitting a truth auction bid.'
 	if (!isMainnet) return 'Switch to Ethereum mainnet before submitting a truth auction bid.'
 	if (truthAuction === undefined) return 'Load the truth auction before bidding.'
+	if (truthAuction.finalized) return 'Truth auction is already finalized.'
+	const auctionHasEndedByTimestamp = currentTimestamp !== undefined && truthAuction.auctionEndsAt !== undefined && currentTimestamp >= truthAuction.auctionEndsAt
+	if (auctionHasEndedByTimestamp || truthAuction.timeRemaining === 0n) return 'Truth auction has ended.'
 
 	const trimmedAmount = submitBidAmountInput.trim()
 	if (trimmedAmount === '') return 'Enter a bid amount greater than zero.'
