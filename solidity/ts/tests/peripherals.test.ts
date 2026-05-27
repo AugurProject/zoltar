@@ -49,7 +49,7 @@ import {
 	updateVaultFees,
 	withdrawFromEscalationGame,
 } from '../testsuite/simulator/utils/contracts/securityPool'
-import { peripherals_EscalationGame_EscalationGame, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
+import { peripherals_EscalationGame_EscalationGame, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_tokens_ShareToken_ShareToken } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -72,20 +72,6 @@ const getMigrationProxyAddressAbi = [
 		],
 		stateMutability: 'view',
 		type: 'function',
-	},
-] satisfies Abi
-
-const claimAuctionProceedsEventAbi = [
-	{
-		type: 'event',
-		name: 'ClaimAuctionProceeds',
-		inputs: [
-			{ indexed: false, internalType: 'address', name: 'vault', type: 'address' },
-			{ indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' },
-			{ indexed: false, internalType: 'uint256', name: 'poolOwnershipAmount', type: 'uint256' },
-			{ indexed: false, internalType: 'uint256', name: 'poolOwnershipDenominator', type: 'uint256' },
-		],
-		anonymous: false,
 	},
 ] satisfies Abi
 
@@ -2351,7 +2337,7 @@ describe('Peripherals Contract Test Suite', () => {
 			.map(log => {
 				try {
 					return decodeEventLog({
-						abi: claimAuctionProceedsEventAbi,
+						abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 						data: log.data,
 						topics: log.topics,
 					})
