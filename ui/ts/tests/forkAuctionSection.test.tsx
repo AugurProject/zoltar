@@ -437,7 +437,6 @@ describe('ForkAuctionSection', () => {
 
 		expect(getMetricValue(poolContextMetrics, 'Fork Type')).toBe('Not chosen yet')
 		expect(getMetricValue(poolContextMetrics, 'Fork Outcome')).toBe('Not chosen yet')
-		expect(document.body.textContent?.includes('If this pool is triggering a Zoltar fork from its own escalation game, use Trigger Zoltar Fork from Reporting first. Otherwise activate fork mode here, then move to Migration and run Migrate Escalation Deposits.')).toBe(true)
 		expect(documentQueries.queryByText('Parent/Zoltar fork')).toBeNull()
 	})
 

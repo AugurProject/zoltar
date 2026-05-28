@@ -600,13 +600,12 @@ export function ForkAuctionSection({
 		isSyntheticForkTriggerPreview,
 		previewPool,
 	})
-	const syntheticForkTriggerNextStep = !isSyntheticForkTriggerPreview ? undefined : 'If this pool is triggering a Zoltar fork from its own escalation game, use Trigger Zoltar Fork from Reporting first. Otherwise activate fork mode here, then move to Migration and run Migrate Escalation Deposits.'
 	const resolvedForkTypeLabel = forkAuctionDetails === undefined ? previewForkSummary.typeLabel : getForkTypeLabel(forkAuctionDetails.forkOwnSecurityPool)
 	const resolvedForkOutcomeLabel = forkAuctionDetails === undefined ? previewForkSummary.outcomeLabel : getForkOutcomeLabel(forkOutcome)
 	const forkOnlyFallbackText = getForkOnlyFallbackText(hasPreviewForkActivity)
 	const forkStageDescription = (() => {
 		if (forkAuctionDetails === undefined) {
-			if (lifecycleStateOverride === 'poolForked' && systemState === 'operational') return 'This pool reached non-decision in its escalation game. Trigger the Zoltar fork from Reporting if this pool should fork the universe, or use the initiate action below once Zoltar is already forked.'
+			if (lifecycleStateOverride === 'poolForked' && systemState === 'operational') return undefined
 			if (systemState === undefined) return undefined
 
 			return getForkStageDescriptionForState(systemState)
@@ -1434,14 +1433,13 @@ export function ForkAuctionSection({
 	const truthAuctionFinalizedSettlementSection = (() => {
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined || !truthAuctionStatus.finalized) return undefined
 		return (
-			<SectionBlock title='Settle Finalized Bid' description='Settle a finalized truth-auction bid. The bidder address must match the wallet that submitted the bid.'>
+			<SectionBlock title='Settle Finalized Bid'>
 				<div className='truth-auction-panel truth-auction-settlement-panel'>
 					<div className='form-grid'>
 						<label className='field'>
 							<span>Bidder Address</span>
 							<FormInput value={forkAuctionForm.settlementAddress} onInput={event => onForkAuctionFormChange({ settlementAddress: event.currentTarget.value })} placeholder='Leave empty to use connected wallet' />
 						</label>
-						<p className='detail'>This must match the address that submitted the bid. Leave empty to use the connected wallet when settling your own bids. Winning and partial bids credit REP into that vault, while losing finalized bids refund ETH to the same address.</p>
 						<div className='field-row'>
 							<label className='field'>
 								<span>Settlement Bid Tick</span>
@@ -1463,11 +1461,6 @@ export function ForkAuctionSection({
 		return (
 			<ReadOnlyDetailAccordion defaultOpen={false} title='Operator Tools'>
 				<div className='truth-auction-manual-tools'>
-					<p className='detail'>
-						{truthAuctionStatus.finalized
-							? 'Use this fallback to settle finalized truth-auction bids through the forker. The bidder address must match the wallet that submitted the bid. Winning and partial bids credit REP into that vault, while losing finalized bids refund ETH to the same address.'
-							: 'Before finalization, losing bids can still use this raw refund fallback when they are below clearing.'}
-					</p>
 					{truthAuctionStatus.finalized ? undefined : (
 						<SectionBlock density='compact' headingLevel={4} title='Raw Refund Fallback' variant='embedded'>
 							<div className='form-grid'>
@@ -1514,9 +1507,7 @@ export function ForkAuctionSection({
 		if (selectedStage === 'initiate')
 			return (
 				<fieldset className='fork-stage-panel' disabled={disabled}>
-					<SectionBlock description={syntheticForkTriggerNextStep} title='Fork Trigger'>
-						{renderWorkflowMetricGrid(initiateStatusMetrics)}
-					</SectionBlock>
+					<SectionBlock title='Fork Trigger'>{renderWorkflowMetricGrid(initiateStatusMetrics)}</SectionBlock>
 
 					<SectionBlock title='Initiate Pool Fork'>
 						<div className='actions'>{renderStageActionButton({ action: 'initiateFork', idleLabel: 'Initiate Pool Fork', onClick: onInitiateFork, pendingLabel: 'Initiating pool fork...' })}</div>
@@ -1714,13 +1705,12 @@ export function ForkAuctionSection({
 						)}
 
 						{!truthAuctionStatus?.finalized ? undefined : (
-							<SectionBlock title='Settle Finalized Bid' description='Settle a finalized truth-auction bid. The bidder address must match the wallet that submitted the bid.'>
+							<SectionBlock title='Settle Finalized Bid'>
 								<div className='form-grid'>
 									<label className='field'>
 										<span>Bidder Address</span>
 										<FormInput value={forkAuctionForm.settlementAddress} onInput={event => onForkAuctionFormChange({ settlementAddress: event.currentTarget.value })} placeholder='Leave empty to use connected wallet' />
 									</label>
-									<p className='detail'>This must match the address that submitted the bid. Leave empty to use the connected wallet when settling your own bids. Winning and partial bids credit REP into that vault, while losing finalized bids refund ETH to the same address.</p>
 									<div className='field-row'>
 										<label className='field'>
 											<span>Settlement Bid Tick</span>
